@@ -69,7 +69,7 @@ static duk_ret_t js_debug(duk_context *ctx) {
     return 0;
 }
 
-// JS API: novadesk.createWidgetWindow(options)
+// JS API: new widgetWindow(options)
 static duk_ret_t js_create_widget_window(duk_context *ctx) {
     Logging::Log(LogLevel::Debug, L"js_create_widget_window called");
     if (!duk_is_object(ctx, 0)) return DUK_RET_TYPE_ERROR;
@@ -166,8 +166,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // Register novadesk object and methods
     duk_push_object(ctx);
-    duk_push_c_function(ctx, js_create_widget_window, 1);
-    duk_put_prop_string(ctx, -2, "createWidgetWindow");
     duk_push_c_function(ctx, js_log, DUK_VARARGS);
     duk_put_prop_string(ctx, -2, "log");
     duk_push_c_function(ctx, js_error, DUK_VARARGS);
@@ -176,9 +174,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     duk_put_prop_string(ctx, -2, "debug");
     duk_put_global_string(ctx, "novadesk");
 
-    // Bootstrap widgetWindow class
-    const char* bootstrap = "var widgetWindow = function(options) { novadesk.createWidgetWindow(options); };";
-    duk_eval_string(ctx, bootstrap);
+    // Register widgetWindow constructor
+    duk_push_c_function(ctx, js_create_widget_window, 1);
+    duk_put_global_string(ctx, "widgetWindow");
 
     // Get executable path to find index.js
     wchar_t path[MAX_PATH];
