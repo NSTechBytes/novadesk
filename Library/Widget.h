@@ -28,6 +28,7 @@ public:
     bool Create();
     void Show();
     void ChangeZPos(ZPOSITION zPos, bool all = false);
+    void ChangeSingleZPos(ZPOSITION zPos, bool all = false);
     
     HWND GetWindow() const { return m_hWnd; }
     ZPOSITION GetWindowZPosition() const { return m_WindowZPosition; }
@@ -41,6 +42,8 @@ private:
     WidgetOptions m_Options;
     ZPOSITION m_WindowZPosition;
     HBRUSH m_hBackBrush;
+
+    static const UINT_PTR TIMER_TOPMOST = 2;
 };
 
 #endif

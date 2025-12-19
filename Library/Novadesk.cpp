@@ -101,6 +101,7 @@ static duk_ret_t js_create_widget_window(duk_context *ctx) {
         else if (zPosStr == "ontop") options.zPos = ZPOSITION_ONTOP;
         else if (zPosStr == "onbottom") options.zPos = ZPOSITION_ONBOTTOM;
         else if (zPosStr == "ontopmost") options.zPos = ZPOSITION_ONTOPMOST;
+        else if (zPosStr == "normal") options.zPos = ZPOSITION_NORMAL;
     }
     duk_pop(ctx);
     if (duk_get_prop_string(ctx, 0, "draggable")) options.draggable = duk_get_boolean(ctx, -1);

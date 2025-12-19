@@ -183,9 +183,26 @@ bool System::CheckDesktopState(HWND desktopIconsHostWindow)
     return stateChanged;
 }
 
+static BOOL CALLBACK EnumWidgetsProc(HWND hwnd, LPARAM lParam)
+{
+    std::vector<Widget*>* windowsInZOrder = (std::vector<Widget*>*)lParam;
+    Widget* widget = FindWidget(hwnd);
+    if (widget)
+    {
+        windowsInZOrder->push_back(widget);
+    }
+    return TRUE;
+}
+
 void System::ChangeZPosInOrder()
 {
-    for (auto w : widgets)
+    std::vector<Widget*> windowsInZOrder;
+    
+    // Enumerate all windows to get current Z-order
+    EnumWindows(EnumWidgetsProc, (LPARAM)(&windowsInZOrder));
+    
+    // Reapply Z-positions in the order they were found (preserves user's stacking)
+    for (auto w : windowsInZOrder)
     {
         w->ChangeZPos(w->GetWindowZPosition());
     }
@@ -211,9 +228,9 @@ HWND System::GetBackmostTopWindow()
     if (!winPos) return HWND_NOTOPMOST;
 
     // Skip all ZPOSITION_ONDESKTOP, ZPOSITION_ONBOTTOM, and ZPOSITION_NORMAL windows
-    while (HWND next = ::GetNextWindow(winPos, GW_HWNDPREV))
+    while (winPos = ::GetNextWindow(winPos, GW_HWNDPREV))
     {
-        Widget* wnd = FindWidget(next);
+        Widget* wnd = FindWidget(winPos);
         if (!wnd ||
             (wnd->GetWindowZPosition() != ZPOSITION_NORMAL &&
              wnd->GetWindowZPosition() != ZPOSITION_ONDESKTOP &&
@@ -221,7 +238,6 @@ HWND System::GetBackmostTopWindow()
         {
             break;
         }
-        winPos = next;
     }
 
     return winPos;

@@ -76,8 +76,13 @@ bool Widget::Create()
     // Set transparency
     SetLayeredWindowAttributes(m_hWnd, 0, m_Options.alpha, LWA_ALPHA);
 
-    // Initial Z-position
-    ChangeZPos(m_WindowZPosition);
+    // Initial Z-position - use ChangeSingleZPos to bring new widgets to front
+    ChangeSingleZPos(m_WindowZPosition);
+
+    if (m_WindowZPosition == ZPOSITION_ONTOPMOST)
+    {
+        SetTimer(m_hWnd, TIMER_TOPMOST, 500, nullptr);
+    }
 
     return true;
 }
@@ -93,6 +98,7 @@ void Widget::Show()
 
 void Widget::ChangeZPos(ZPOSITION zPos, bool all)
 {
+    ZPOSITION oldZPos = m_WindowZPosition;
     HWND winPos = HWND_NOTOPMOST;
     m_WindowZPosition = zPos;
 
@@ -122,7 +128,6 @@ void Widget::ChangeZPos(ZPOSITION zPos, bool all)
         break;
 
     case ZPOSITION_NORMAL:
-        // Rainmeter checks IsNormalStayDesktop here, we default to break (HWND_NOTOPMOST)
         break;
 
     case ZPOSITION_ONDESKTOP:
@@ -131,14 +136,13 @@ void Widget::ChangeZPos(ZPOSITION zPos, bool all)
             winPos = System::GetHelperWindow();
             if (!all)
             {
-                // Find the backmost topmost window above the helper
                 while (HWND prev = ::GetNextWindow(winPos, GW_HWNDPREV))
                 {
                     if (GetWindowLongPtr(prev, GWL_EXSTYLE) & WS_EX_TOPMOST)
                     {
                         if (SetWindowPos(m_hWnd, prev, 0, 0, 0, 0, ZPOS_FLAGS))
                         {
-                            return;
+                            goto timer_check;
                         }
                     }
                     winPos = prev;
@@ -160,6 +164,36 @@ void Widget::ChangeZPos(ZPOSITION zPos, bool all)
     }
 
     SetWindowPos(m_hWnd, winPos, 0, 0, 0, 0, ZPOS_FLAGS);
+
+timer_check:
+    if (oldZPos == ZPOSITION_ONTOPMOST && m_WindowZPosition != ZPOSITION_ONTOPMOST)
+    {
+        KillTimer(m_hWnd, TIMER_TOPMOST);
+    }
+    else if (oldZPos != ZPOSITION_ONTOPMOST && m_WindowZPosition == ZPOSITION_ONTOPMOST)
+    {
+        SetTimer(m_hWnd, TIMER_TOPMOST, 500, nullptr);
+    }
+}
+
+void Widget::ChangeSingleZPos(ZPOSITION zPos, bool all)
+{
+    if (zPos == ZPOSITION_NORMAL && System::GetShowDesktop())
+    {
+        m_WindowZPosition = zPos;
+        SetWindowPos(m_hWnd, System::GetBackmostTopWindow(), 0, 0, 0, 0, ZPOS_FLAGS);
+        BringWindowToTop(m_hWnd);
+    }
+    else if (zPos == ZPOSITION_ONDESKTOP)
+    {
+        m_WindowZPosition = zPos;
+        SetWindowPos(m_hWnd, System::GetBackmostTopWindow(), 0, 0, 0, 0, ZPOS_FLAGS);
+        BringWindowToTop(m_hWnd);
+    }
+    else
+    {
+        ChangeZPos(zPos, all);
+    }
 }
 
 Widget* Widget::GetWidgetFromHWND(HWND hWnd)
@@ -203,12 +237,18 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             return 0;
         }
     case WM_LBUTTONDOWN:
-        if (widget && widget->m_Options.draggable)
+        if (widget)
         {
-            Logging::Log(LogLevel::Debug, L"WM_LBUTTONDOWN: Starting drag");
-            ReleaseCapture();
-            SendMessage(hWnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
-            return 0;
+            // Bring widget to front when clicked (for ondesktop/normal)
+            widget->ChangeSingleZPos(widget->m_WindowZPosition);
+            
+            if (widget->m_Options.draggable)
+            {
+                Logging::Log(LogLevel::Debug, L"WM_LBUTTONDOWN: Starting drag");
+                ReleaseCapture();
+                SendMessage(hWnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+                return 0;
+            }
         }
         return DefWindowProc(hWnd, message, wParam, lParam);
 
@@ -222,10 +262,33 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
             return hit;
         }
+    case WM_TIMER:
+        if (wParam == TIMER_TOPMOST)
+        {
+            if (widget && widget->m_WindowZPosition == ZPOSITION_ONTOPMOST)
+            {
+                widget->ChangeZPos(ZPOSITION_ONTOPMOST);
+            }
+        }
+        return 0;
+
     case WM_WINDOWPOSCHANGING:
         if (widget)
         {
             LPWINDOWPOS wp = (LPWINDOWPOS)lParam;
+
+            if (widget->m_WindowZPosition == ZPOSITION_NORMAL && System::GetShowDesktop())
+            {
+                if (!(wp->flags & (SWP_NOOWNERZORDER | SWP_NOACTIVATE)))
+                {
+                    wp->hwndInsertAfter = System::GetBackmostTopWindow();
+                }
+            }
+            else if (widget->m_WindowZPosition == ZPOSITION_ONBOTTOM)
+            {
+                wp->flags |= SWP_NOZORDER;
+            }
+
             if (!(wp->flags & SWP_NOMOVE))
             {
                 // Snapping
