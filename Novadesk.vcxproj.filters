@@ -45,9 +45,6 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="assets\small.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="assets\Novadesk.ico">
       <Filter>Resource Files</Filter>
     </Image>
