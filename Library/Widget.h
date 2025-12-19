@@ -34,11 +34,13 @@ public:
 
 private:
     static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+    static bool Register();
     static Widget* GetWidgetFromHWND(HWND hWnd);
     
     HWND m_hWnd;
     WidgetOptions m_Options;
     ZPOSITION m_WindowZPosition;
+    HBRUSH m_hBackBrush;
 };
 
 #endif

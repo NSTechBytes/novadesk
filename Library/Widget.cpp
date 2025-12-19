@@ -13,18 +13,26 @@ extern std::vector<Widget*> widgets; // Defined in Novadesk.cpp
 Widget::Widget(const WidgetOptions& options) 
     : m_hWnd(nullptr), m_Options(options), m_WindowZPosition(options.zPos)
 {
+    m_hBackBrush = CreateSolidBrush(m_Options.color);
 }
 
 Widget::~Widget()
 {
+    if (m_hBackBrush)
+    {
+        DeleteObject(m_hBackBrush);
+    }
     if (m_hWnd)
     {
         DestroyWindow(m_hWnd);
     }
 }
 
-bool Widget::Create()
+bool Widget::Register()
 {
+    static bool registered = false;
+    if (registered) return true;
+
     HINSTANCE hInstance = GetModuleHandle(nullptr);
 
     WNDCLASSEXW wcex = { sizeof(WNDCLASSEX) };
@@ -32,10 +40,22 @@ bool Widget::Create()
     wcex.lpfnWndProc = WndProc;
     wcex.hInstance = hInstance;
     wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground = (HBRUSH)CreateSolidBrush(m_Options.color);
+    wcex.hbrBackground = nullptr; // We'll paint it ourselves
     wcex.lpszClassName = WIDGET_CLASS_NAME;
 
-    RegisterClassExW(&wcex);
+    if (RegisterClassExW(&wcex))
+    {
+        registered = true;
+        return true;
+    }
+    return false;
+}
+
+bool Widget::Create()
+{
+    if (!Register()) return false;
+
+    HINSTANCE hInstance = GetModuleHandle(nullptr);
 
     DWORD dwExStyle = WS_EX_TOOLWINDOW | WS_EX_LAYERED;
     if (m_Options.clickThrough)
@@ -164,6 +184,16 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
     switch (message)
     {
+    case WM_ERASEBKGND:
+        if (widget && widget->m_hBackBrush)
+        {
+            HDC hdc = (HDC)wParam;
+            RECT rect;
+            GetClientRect(hWnd, &rect);
+            FillRect(hdc, &rect, widget->m_hBackBrush);
+            return 1; // Handled
+        }
+        return 0;
     case WM_PAINT:
         {
             PAINTSTRUCT ps;
