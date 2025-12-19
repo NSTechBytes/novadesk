@@ -127,6 +127,8 @@
     <ClInclude Include="Library\Widget.h" />
     <ClInclude Include="Library\ColorUtil.h" />
     <ClInclude Include="Library\Logging.h" />
+    <ClInclude Include="Library\JSApi.h" />
+    <ClInclude Include="Library\Utils.h" />
     <ClInclude Include="Library\framework.h" />
     <ClInclude Include="Library\duktape\duktape.h" />
     <ClInclude Include="Library\Novadesk.h" />
@@ -136,6 +138,8 @@
   <ItemGroup>
     <ClCompile Include="Library\System.cpp" />
     <ClCompile Include="Library\Widget.cpp" />
+    <ClCompile Include="Library\JSApi.cpp" />
+    <ClCompile Include="Library\Utils.cpp" />
     <ClCompile Include="Library\duktape\duktape.c" />
     <ClCompile Include="Library\Novadesk.cpp" />
     <ClCompile Include="Library\Logging.cpp" />

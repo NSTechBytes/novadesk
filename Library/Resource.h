@@ -3,18 +3,19 @@
 // Used by Novadesk.rc
 
 #define IDS_APP_TITLE			103
-
-#define IDR_MAINFRAME			128
-#define IDD_NOVADESK_DIALOG	102
-#define IDD_ABOUTBOX			103
-#define IDM_ABOUT				104
-#define IDM_EXIT				105
 #define IDI_NOVADESK			107
 #define IDC_NOVADESK			109
 #define IDC_MYICON				2
 #ifndef IDC_STATIC
 #define IDC_STATIC				-1
 #endif
+
+// Tray icon
+#define IDI_TRAY				110
+#define WM_TRAYICON				(WM_USER + 1)
+
+// Tray menu items
+#define ID_TRAY_EXIT			201
 // Next default values for new objects
 //
 #ifdef APSTUDIO_INVOKED
