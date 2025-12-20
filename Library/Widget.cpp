@@ -358,28 +358,55 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                 }
 
-                // Keep on screen
+                // Keep on screen (using Rainmeter's robust multi-point algorithm)
                 if (widget->m_Options.keepOnScreen)
                 {
                     const auto& monitors = System::GetMultiMonitorInfo().monitors;
-                    RECT windowRect = { wp->x, wp->y, wp->x + widget->m_Options.width, wp->y + widget->m_Options.height };
-                    const RECT* targetWork = nullptr;
-
-                    // Find containing monitor (or primary)
-                    for (const auto& mon : monitors)
+                    const RECT* targetMonitor = nullptr;
+                    
+                    // Try 5 different points to find which monitor contains the window
+                    // This is more robust than just checking the center point
+                    POINT testPoints[5] = {
+                        { wp->x + widget->m_Options.width / 2, wp->y + widget->m_Options.height / 2 },  // Center
+                        { wp->x, wp->y },                                                                 // Top-left
+                        { wp->x + widget->m_Options.width, wp->y + widget->m_Options.height },           // Bottom-right
+                        { wp->x, wp->y + widget->m_Options.height },                                     // Bottom-left
+                        { wp->x + widget->m_Options.width, wp->y }                                       // Top-right
+                    };
+                    
+                    for (int i = 0; i < 5 && !targetMonitor; ++i)
                     {
-                        if (!mon.active) continue;
-                        if (PtInRect(&mon.screen, { wp->x + widget->m_Options.width / 2, wp->y + widget->m_Options.height / 2 }))
+                        for (const auto& mon : monitors)
                         {
-                            targetWork = &mon.work;
-                            break;
+                            if (!mon.active) continue;
+                            
+                            // Check if point is within monitor's screen area
+                            if (testPoints[i].x >= mon.screen.left && testPoints[i].x < mon.screen.right &&
+                                testPoints[i].y >= mon.screen.top && testPoints[i].y < mon.screen.bottom)
+                            {
+                                targetMonitor = &mon.screen;
+                                break;
+                            }
                         }
                     }
-
-                    if (targetWork)
+                    
+                    // If no monitor found, use primary monitor
+                    if (!targetMonitor)
                     {
-                        wp->x = (std::max)((int)targetWork->left, (std::min)(wp->x, (int)targetWork->right - widget->m_Options.width));
-                        wp->y = (std::max)((int)targetWork->top, (std::min)(wp->y, (int)targetWork->bottom - widget->m_Options.height));
+                        const int primaryIndex = System::GetMultiMonitorInfo().primary - 1;
+                        if (primaryIndex >= 0 && primaryIndex < (int)monitors.size())
+                        {
+                            targetMonitor = &monitors[primaryIndex].screen;
+                        }
+                    }
+                    
+                    // Constrain window position to monitor bounds
+                    if (targetMonitor)
+                    {
+                        wp->x = (std::min)(wp->x, (int)targetMonitor->right - widget->m_Options.width);
+                        wp->x = (std::max)(wp->x, (int)targetMonitor->left);
+                        wp->y = (std::min)(wp->y, (int)targetMonitor->bottom - widget->m_Options.height);
+                        wp->y = (std::max)(wp->y, (int)targetMonitor->top);
                     }
                 }
             }
