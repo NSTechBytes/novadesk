@@ -447,12 +447,12 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 // ============================================================================
 
 void Widget::AddImage(const std::wstring& id, int x, int y, int w, int h,
-                      const std::wstring& path, ScaleMode mode)
+                      const std::wstring& path)
 {
     // Remove existing if any
     RemoveContent(id);
 
-    ImageElement* element = new ImageElement(id, x, y, w, h, path, mode);
+    ImageElement* element = new ImageElement(id, x, y, w, h, path);
     m_Elements.push_back(element);
     
     Redraw();

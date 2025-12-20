@@ -12,9 +12,9 @@
 using namespace Gdiplus;
 
 ImageElement::ImageElement(const std::wstring& id, int x, int y, int w, int h,
-             const std::wstring& path, ScaleMode mode)
+             const std::wstring& path)
     : Element(ELEMENT_IMAGE, id, x, y, w, h),
-      m_ImagePath(path), m_ScaleMode(mode), m_Image(nullptr)
+      m_ImagePath(path), m_Image(nullptr)
 {
     LoadImage();
 }
@@ -55,53 +55,6 @@ void ImageElement::Render(Graphics& graphics)
 {
     if (!m_Image) return;
     
-    int imgWidth = m_Image->GetWidth();
-    int imgHeight = m_Image->GetHeight();
-    
     RectF destRect((REAL)m_X, (REAL)m_Y, (REAL)m_Width, (REAL)m_Height);
-    
-    switch (m_ScaleMode)
-    {
-    case SCALE_FILL:
-    case SCALE_STRETCH:
-        // Stretch to fill the entire bounds
-        graphics.DrawImage(m_Image, destRect);
-        break;
-        
-    case SCALE_CONTAIN:
-        {
-            // Fit inside bounds, maintain aspect ratio
-            float scaleX = (float)m_Width / imgWidth;
-            float scaleY = (float)m_Height / imgHeight;
-            float scale = (std::min)(scaleX, scaleY);
-            
-            int scaledW = (int)(imgWidth * scale);
-            int scaledH = (int)(imgHeight * scale);
-            int offsetX = (m_Width - scaledW) / 2;
-            int offsetY = (m_Height - scaledH) / 2;
-            
-            RectF fitRect((REAL)(m_X + offsetX), (REAL)(m_Y + offsetY),
-                         (REAL)scaledW, (REAL)scaledH);
-            graphics.DrawImage(m_Image, fitRect);
-        }
-        break;
-        
-    case SCALE_COVER:
-        {
-            // Cover bounds, maintain aspect ratio (may crop)
-            float scaleX = (float)m_Width / imgWidth;
-            float scaleY = (float)m_Height / imgHeight;
-            float scale = (std::max)(scaleX, scaleY);
-            
-            int scaledW = (int)(imgWidth * scale);
-            int scaledH = (int)(imgHeight * scale);
-            int offsetX = (m_Width - scaledW) / 2;
-            int offsetY = (m_Height - scaledH) / 2;
-            
-            RectF coverRect((REAL)(m_X + offsetX), (REAL)(m_Y + offsetY),
-                           (REAL)scaledW, (REAL)scaledH);
-            graphics.DrawImage(m_Image, coverRect);
-        }
-        break;
-    }
+    graphics.DrawImage(m_Image, destRect);
 }

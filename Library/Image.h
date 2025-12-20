@@ -10,19 +10,11 @@
 
 #include "Element.h"
 
-enum ScaleMode
-{
-    SCALE_FILL,      // Stretch to fill bounds (default)
-    SCALE_CONTAIN,   // Fit inside bounds, maintain aspect ratio
-    SCALE_COVER,     // Cover bounds, maintain aspect ratio (may crop)
-    SCALE_STRETCH    // Alias for SCALE_FILL
-};
-
 class ImageElement : public Element
 {
 public:
     ImageElement(const std::wstring& id, int x, int y, int w, int h,
-                 const std::wstring& path, ScaleMode mode);
+                 const std::wstring& path);
                  
     virtual ~ImageElement();
 
@@ -35,7 +27,6 @@ public:
 
 private:
     std::wstring m_ImagePath;
-    ScaleMode m_ScaleMode;
     Gdiplus::Image* m_Image;
     
     void LoadImage();

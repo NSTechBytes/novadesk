@@ -84,7 +84,7 @@ public:
     ** The image will be loaded and cached for rendering.
     */
     void AddImage(const std::wstring& id, int x, int y, int w, int h, 
-                  const std::wstring& path, ScaleMode mode = SCALE_FILL);
+                  const std::wstring& path);
 
     /*
     ** Add a text content item to the widget.

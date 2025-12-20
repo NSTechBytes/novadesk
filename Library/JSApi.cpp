@@ -152,7 +152,6 @@ namespace JSApi {
         // Defaults
         std::wstring id = L"", path = L"";
         int x = 0, y = 0, w = 100, h = 100;
-        ScaleMode mode = SCALE_FILL;
 
         if (duk_get_prop_string(ctx, 0, "id")) id = Utils::ToWString(duk_get_string(ctx, -1));
         duk_pop(ctx);
@@ -166,16 +165,8 @@ namespace JSApi {
         duk_pop(ctx);
         if (duk_get_prop_string(ctx, 0, "height")) h = duk_get_int(ctx, -1);
         duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "scaleMode")) {
-            std::string s = duk_get_string(ctx, -1);
-            if (s == "fill") mode = SCALE_FILL;
-            else if (s == "contain") mode = SCALE_CONTAIN;
-            else if (s == "cover") mode = SCALE_COVER;
-            else if (s == "stretch") mode = SCALE_STRETCH;
-        }
-        duk_pop(ctx);
 
-        widget->AddImage(id, x, y, w, h, path, mode);
+        widget->AddImage(id, x, y, w, h, path);
         
         // Return 'this' for chaining
         duk_push_this(ctx);
