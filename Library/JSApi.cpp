@@ -451,7 +451,7 @@ namespace JSApi {
         GetModuleFileNameW(NULL, path, MAX_PATH);
         std::wstring exePath = path;
         size_t lastBackslash = exePath.find_last_of(L"\\");
-        std::wstring scriptPath = exePath.substr(0, lastBackslash + 1) + L"index.js";
+        std::wstring scriptPath = exePath.substr(0, lastBackslash + 1) + L"Widgets\\index.js";
 
         Logging::Log(LogLevel::Info, L"Loading script from: %s", scriptPath.c_str());
 
@@ -472,19 +472,19 @@ namespace JSApi {
             return false;
         }
 
-        Logging::Log(LogLevel::Info, L"Script execution successful. Calling novadeskAppReady()...");
+        Logging::Log(LogLevel::Info, L"Script execution successful. Calling onAppReady()...");
 
-        // Call novadeskAppReady if defined
-        duk_get_global_string(ctx, "novadeskAppReady");
+        // Call onAppReady if defined
+        duk_get_global_string(ctx, "onAppReady");
         if (duk_is_function(ctx, -1)) {
             if (duk_pcall(ctx, 0) != 0) {
-                Logging::Log(LogLevel::Error, L"novadeskAppReady failed: %S", duk_safe_to_string(ctx, -1));
+                Logging::Log(LogLevel::Error, L"onAppReady failed: %S", duk_safe_to_string(ctx, -1));
                 duk_pop(ctx);
                 return false;
             }
         }
         else {
-            Logging::Log(LogLevel::Info, L"novadeskAppReady not defined.");
+            Logging::Log(LogLevel::Info, L"onAppReady not defined.");
         }
         duk_pop(ctx);
         duk_pop(ctx);

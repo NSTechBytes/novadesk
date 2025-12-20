@@ -101,7 +101,7 @@ function createContentDemoWindow() {
     novadesk.log("Content demo widget created");
 }
 
-function novadeskAppReady() {
+function onAppReady() {
     createMainWindow();
     createContentDemoWindow();
 }
