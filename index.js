@@ -1,5 +1,6 @@
 function createMainWindow() {
     mainWindow = new widgetWindow({
+        id: "mainWidget",
         width: 200,
         height: 200,
         backgroundColor: "rgba(10,10,10,200)",
@@ -13,6 +14,7 @@ function createMainWindow() {
 
 function createContentDemoWindow() {
     var demoWidget = new widgetWindow({
+        id: "demoWidget",
         width: 300,
         height: 400,
         backgroundColor: "rgba(30,30,40,240)",

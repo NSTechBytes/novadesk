@@ -18,6 +18,9 @@
 
 struct WidgetOptions
 {
+    std::wstring id;
+    int x;
+    int y;
     int width;
     int height;
     std::wstring backgroundColor;

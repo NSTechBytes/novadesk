@@ -7,6 +7,7 @@
 
 #include "JSApi.h"
 #include "Widget.h"
+#include "Settings.h"
 #include "Logging.h"
 #include "ColorUtil.h"
 #include "Utils.h"
@@ -61,6 +62,8 @@ namespace JSApi {
         if (!duk_is_object(ctx, 0)) return DUK_RET_TYPE_ERROR;
 
         WidgetOptions options;
+        options.x = CW_USEDEFAULT;
+        options.y = CW_USEDEFAULT;
         options.width = 400;
         options.height = 300;
         options.backgroundColor = L"rgba(255,255,255,255)";
@@ -72,6 +75,38 @@ namespace JSApi {
         options.clickThrough = false;
         options.keepOnScreen = false;
         options.snapEdges = false;
+
+        if (duk_get_prop_string(ctx, 0, "id")) options.id = Utils::ToWString(duk_get_string(ctx, -1));
+        duk_pop(ctx);
+
+        // Load saved setttings if ID exists
+        if (!options.id.empty()) {
+            Settings::LoadWidget(options.id, options);
+        }
+
+        // Override with explicit JS options if provided (users explicitly passing options usually want them to take effect, 
+        // BUT if it's a reload/restart, we usually want saved settings to persist for things like position.
+        // However, if the user changes the script to width: 500, they might expect it to update?
+        // Usually persistence overrides hardcoded defaults, but maybe not hardcoded changes?
+        // Rainmeter standard: Skin options are defaults, [Variables] or saved state overrides?
+        // Let's assume saved settings override defaults, but explicit JS arguments override saved settings IF we want strict control?
+        // No, typically restoration implies "restore last state". 
+        // If I change the code, I might want to force a change.
+        // Compromise: Load settings, then parse JS options again? No, that's wasteful.
+        // Actually, typical flow: 
+        // 1. Defaults.
+        // 2. JS Options (Code).
+        // 3. Saved Settings (User runtime changes).
+        // Saved settings should generally win for Position/Size/State.
+        // But maybe not for Color if I changed the color in code?
+        // Hard to distinguish code change vs old saved state.
+        // Let's stick to: JS Options are defaults/initial values. Saved State overrides them.
+        
+        // So:
+        // 1. Parse JS Options into 'options'.
+        // 2. LoadWidget(id, options) -> This updates 'options' with saved values.
+        
+        // Moving parsing block BEFORE LoadWidget.
 
         if (duk_get_prop_string(ctx, 0, "width")) options.width = duk_get_int(ctx, -1);
         duk_pop(ctx);
@@ -113,6 +148,11 @@ namespace JSApi {
         duk_pop(ctx);
         if (duk_get_prop_string(ctx, 0, "snapEdges")) options.snapEdges = duk_get_boolean(ctx, -1);
         duk_pop(ctx);
+        
+        // Finally, load settings to override with saved state
+        if (!options.id.empty()) {
+            Settings::LoadWidget(options.id, options);
+        }
 
         Widget* widget = new Widget(options);
         if (widget->Create()) {

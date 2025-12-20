@@ -15,4 +15,10 @@ namespace Utils {
     ** Uses Windows MultiByteToWideChar for conversion.
     */
     std::wstring ToWString(const std::string& str);
+
+    /*
+    ** Convert a wide character std::wstring to a UTF-8 encoded std::string.
+    ** Returns an empty string if the input wstring is empty.
+    */
+    std::string ToString(const std::wstring& wstr);
 }

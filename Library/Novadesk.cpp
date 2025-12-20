@@ -12,6 +12,7 @@
 #include "System.h"
 #include "Logging.h"
 #include "JSApi.h"
+#include "Settings.h"
 #include "Resource.h"
 #include <vector>
 #include <shellapi.h>
@@ -51,6 +52,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // Initialize GDI+
     GdiplusStartupInput gdiplusStartupInput;
     GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+
+    // Initialize Settings
+    Settings::Initialize();
 
     // Initialize global strings
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);

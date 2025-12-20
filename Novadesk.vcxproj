@@ -137,6 +137,8 @@
     <ClInclude Include="Library\Novadesk.h" />
     <ClInclude Include="Library\Resource.h" />
     <ClInclude Include="Library\targetver.h" />
+    <ClInclude Include="Library\Settings.h" />
+    <ClInclude Include="Library\json\json.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Library\Image.cpp" />
@@ -144,6 +146,7 @@
     <ClCompile Include="Library\Text.cpp" />
     <ClCompile Include="Library\Widget.cpp" />
     <ClCompile Include="Library\JSApi.cpp" />
+    <ClCompile Include="Library\Settings.cpp" />
     <ClCompile Include="Library\Utils.cpp" />
     <ClCompile Include="Library\duktape\duktape.c" />
     <ClCompile Include="Library\Novadesk.cpp" />

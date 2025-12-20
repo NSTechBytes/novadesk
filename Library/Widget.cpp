@@ -7,6 +7,7 @@
 
 #include "Widget.h"
 #include "Logging.h"
+#include "Settings.h"
 #include <vector>
 #include <windowsx.h>
 #include <algorithm>
@@ -82,7 +83,7 @@ bool Widget::Create()
         WIDGET_CLASS_NAME,
         L"Novadesk Widget",
         WS_POPUP,
-        CW_USEDEFAULT, 0, m_Options.width, m_Options.height,
+        m_Options.x, m_Options.y, m_Options.width, m_Options.height,
         nullptr, nullptr, hInstance, this);
 
     if (!m_hWnd) return false;
@@ -178,6 +179,9 @@ void Widget::ChangeZPos(ZPOSITION zPos, bool all)
     }
 
     SetWindowPos(m_hWnd, winPos, 0, 0, 0, 0, ZPOS_FLAGS);
+
+    // Save Z-Pos state
+    Settings::SaveWidget(m_Options.id, m_Options);
 
 timer_check:
     if (oldZPos == ZPOSITION_ONTOPMOST && m_WindowZPosition != ZPOSITION_ONTOPMOST)
@@ -409,6 +413,20 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                 }
             }
+        }
+        return 0;
+    case WM_EXITSIZEMOVE:
+        if (widget)
+        {
+            RECT rc;
+            GetWindowRect(hWnd, &rc);
+            widget->m_Options.x = rc.left;
+            widget->m_Options.y = rc.top;
+            // Width/Height might change if we allow resizing (not implemented yet for borderless but good to have)
+            // widget->m_Options.width = rc.right - rc.left; 
+            // widget->m_Options.height = rc.bottom - rc.top;
+            
+            Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
         }
         return 0;
     case WM_DESTROY:
