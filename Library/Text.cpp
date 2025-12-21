@@ -74,8 +74,42 @@ void Text::Render(Graphics& graphics)
     }
     
     // Draw text
-    RectF layoutRect((REAL)m_X, (REAL)m_Y, (REAL)m_Width, (REAL)m_Height);
+    RectF layoutRect((REAL)m_X, (REAL)m_Y, (REAL)GetWidth(), (REAL)GetHeight());
     graphics.DrawString(m_Text.c_str(), -1, &font, layoutRect, &format, &brush);
+}
+
+int Text::GetAutoWidth()
+{
+    HDC hdc = GetDC(NULL);
+    Graphics graphics(hdc);
+    
+    INT fontStyle = FontStyleRegular;
+    if (m_Bold) fontStyle |= FontStyleBold;
+    if (m_Italic) fontStyle |= FontStyleItalic;
+    Font font(m_FontFamily.c_str(), (REAL)m_FontSize, fontStyle, UnitPixel);
+
+    RectF boundingBox;
+    graphics.MeasureString(m_Text.c_str(), -1, &font, PointF(0, 0), &boundingBox);
+    
+    ReleaseDC(NULL, hdc);
+    return (int)ceil(boundingBox.Width);
+}
+
+int Text::GetAutoHeight()
+{
+    HDC hdc = GetDC(NULL);
+    Graphics graphics(hdc);
+    
+    INT fontStyle = FontStyleRegular;
+    if (m_Bold) fontStyle |= FontStyleBold;
+    if (m_Italic) fontStyle |= FontStyleItalic;
+    Font font(m_FontFamily.c_str(), (REAL)m_FontSize, fontStyle, UnitPixel);
+
+    RectF boundingBox;
+    graphics.MeasureString(m_Text.c_str(), -1, &font, PointF(0, 0), &boundingBox);
+    
+    ReleaseDC(NULL, hdc);
+    return (int)ceil(boundingBox.Height);
 }
 
 bool Text::HitTest(int x, int y)
@@ -83,9 +117,8 @@ bool Text::HitTest(int x, int y)
     // Bounding box check first (Element's layout rect)
     if (!Element::HitTest(x, y)) return false;
 
-    // To be more precise (like Rainmeter), we should measure the actual text size
-    // and see if the hit is within that. 
-    // Since we don't have a Graphics object here, we use a temporary one from the screen.
+    // Redundant but keeping it for now if we want tighter bounds
+    // Better: use the bounding box from MeasureString
     HDC hdc = GetDC(NULL);
     Graphics graphics(hdc);
     
@@ -113,14 +146,12 @@ bool Text::HitTest(int x, int y)
         format.SetLineAlignment(StringAlignmentFar); break;
     }
 
-    RectF layoutRect(0, 0, (REAL)m_Width, (REAL)m_Height);
+    RectF layoutRect(0, 0, (REAL)GetWidth(), (REAL)GetHeight());
     RectF boundingBox;
     graphics.MeasureString(m_Text.c_str(), -1, &font, layoutRect, &format, &boundingBox);
     
     ReleaseDC(NULL, hdc);
 
-    // MeasureString returns bounds relative to the layoutRect (0,0)
-    // We need to offset by m_X, m_Y
     boundingBox.X += m_X;
     boundingBox.Y += m_Y;
 

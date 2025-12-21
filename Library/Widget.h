@@ -32,6 +32,8 @@ struct WidgetOptions
     bool clickThrough;
     bool keepOnScreen;
     bool snapEdges;
+    bool m_WDefined;
+    bool m_HDefined;
 };
 
 class Widget

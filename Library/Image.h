@@ -20,6 +20,9 @@ public:
 
     virtual void Render(Gdiplus::Graphics& graphics) override;
     
+    virtual int GetAutoWidth() override;
+    virtual int GetAutoHeight() override;
+    
     // Returns true if image loaded successfully
     bool IsLoaded() const { return m_Image != nullptr && m_Image->GetLastStatus() == Gdiplus::Ok; }
     

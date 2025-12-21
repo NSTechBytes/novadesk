@@ -63,8 +63,10 @@ namespace JSApi {
         WidgetOptions options;
         options.x = CW_USEDEFAULT;
         options.y = CW_USEDEFAULT;
-        options.width = 400;
-        options.height = 300;
+        options.width = 0;              // Default to auto
+        options.height = 0;             // Default to auto
+        options.m_WDefined = false;
+        options.m_HDefined = false;
         options.backgroundColor = L"rgba(255,255,255,255)";
         options.zPos = ZPOSITION_ONDESKTOP;
         options.bgAlpha = 255;
@@ -78,42 +80,23 @@ namespace JSApi {
         if (duk_get_prop_string(ctx, 0, "id")) options.id = Utils::ToWString(duk_get_string(ctx, -1));
         duk_pop(ctx);
 
-        // Load saved setttings if ID exists
-        if (!options.id.empty()) {
-            Settings::LoadWidget(options.id, options);
-        }
-
-        // Override with explicit JS options if provided (users explicitly passing options usually want them to take effect, 
-        // BUT if it's a reload/restart, we usually want saved settings to persist for things like position.
-        // However, if the user changes the script to width: 500, they might expect it to update?
-        // Usually persistence overrides hardcoded defaults, but maybe not hardcoded changes?
-        // Rainmeter standard: Skin options are defaults, [Variables] or saved state overrides?
-        // Let's assume saved settings override defaults, but explicit JS arguments override saved settings IF we want strict control?
-        // No, typically restoration implies "restore last state". 
-        // If I change the code, I might want to force a change.
-        // Compromise: Load settings, then parse JS options again? No, that's wasteful.
-        // Actually, typical flow: 
-        // 1. Defaults.
-        // 2. JS Options (Code).
-        // 3. Saved Settings (User runtime changes).
-        // Saved settings should generally win for Position/Size/State.
-        // But maybe not for Color if I changed the color in code?
-        // Hard to distinguish code change vs old saved state.
-        // Let's stick to: JS Options are defaults/initial values. Saved State overrides them.
-        
-        if (duk_get_prop_string(ctx, 0, "id")) options.id = Utils::ToWString(duk_get_string(ctx, -1));
-        duk_pop(ctx);
-        
         // 1. Load settings FIRST to set defaults from saved state
         if (!options.id.empty()) {
             Settings::LoadWidget(options.id, options);
         }
 
         // 2. Overwrite with JS options if present
-        if (duk_get_prop_string(ctx, 0, "width")) options.width = duk_get_int(ctx, -1);
+        if (duk_get_prop_string(ctx, 0, "width")) {
+            options.width = duk_get_int(ctx, -1);
+            options.m_WDefined = (options.width > 0);
+        }
         duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "height")) options.height = duk_get_int(ctx, -1);
+        if (duk_get_prop_string(ctx, 0, "height")) {
+            options.height = duk_get_int(ctx, -1);
+            options.m_HDefined = (options.height > 0);
+        }
         duk_pop(ctx);
+        // ... (rest of the properties)
         if (duk_get_prop_string(ctx, 0, "backgroundcolor")) {
             options.backgroundColor = Utils::ToWString(duk_get_string(ctx, -1));
             ColorUtil::ParseRGBA(options.backgroundColor, options.color, options.bgAlpha);
@@ -254,7 +237,7 @@ namespace JSApi {
 
         // Defaults
         std::wstring id = L"", path = L"";
-        int x = 0, y = 0, w = 100, h = 100;
+        int x = 0, y = 0, w = 0, h = 0; // Default to auto
 
         if (duk_get_prop_string(ctx, 0, "id")) id = Utils::ToWString(duk_get_string(ctx, -1));
         duk_pop(ctx);
@@ -290,7 +273,7 @@ namespace JSApi {
 
         // Defaults
         std::wstring id = L"", text = L"", fontFamily = L"Arial";
-        int x = 0, y = 0, w = 100, h = 30;
+        int x = 0, y = 0, w = 0, h = 0; // Default to auto
         int fontSize = 12;
         COLORREF color = RGB(0, 0, 0);
         BYTE alpha = 255;

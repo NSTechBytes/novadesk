@@ -10,8 +10,8 @@ var demoWidget;
 function createContentDemoWindow() {
     demoWidget = new widgetWindow({
         id: "testWidget",
-        width: 400,
-        height: 300,
+        // width: 400,
+        // height: 300,
         backgroundcolor: "rgba(30,30,30,220)",
         zpos: "ondesktop",
         draggable: true,

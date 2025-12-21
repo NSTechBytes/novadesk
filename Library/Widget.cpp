@@ -698,7 +698,37 @@ void Widget::UpdateLayeredWindowContent()
 {
     if (!m_hWnd) return;
 
-    // Use m_Options dimensions as window size might not be fully updated yet
+    // 1. Calculate bounding box of all elements if widget size is not defined
+    int calcW = m_Options.width;
+    int calcH = m_Options.height;
+
+    if (!m_Options.m_WDefined || !m_Options.m_HDefined)
+    {
+        int maxX = 0;
+        int maxY = 0;
+        for (Element* element : m_Elements)
+        {
+            maxX = (std::max)(maxX, element->GetX() + element->GetWidth());
+            maxY = (std::max)(maxY, element->GetY() + element->GetHeight());
+        }
+        
+        if (!m_Options.m_WDefined) calcW = maxX;
+        if (!m_Options.m_HDefined) calcH = maxY;
+        
+        // Ensure at least 1x1
+        if (calcW <= 0) calcW = 1;
+        if (calcH <= 0) calcH = 1;
+        
+        // If size changed, update window and options
+        if (calcW != m_Options.width || calcH != m_Options.height)
+        {
+            m_Options.width = calcW;
+            m_Options.height = calcH;
+            SetWindowPos(m_hWnd, NULL, 0, 0, calcW, calcH, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+    }
+
+    // Use current dimensions
     int w = m_Options.width;
     int h = m_Options.height;
     if (w <= 0 || h <= 0) return;

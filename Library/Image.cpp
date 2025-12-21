@@ -55,8 +55,20 @@ void ImageElement::Render(Graphics& graphics)
 {
     if (!m_Image) return;
     
-    RectF destRect((REAL)m_X, (REAL)m_Y, (REAL)m_Width, (REAL)m_Height);
+    RectF destRect((REAL)m_X, (REAL)m_Y, (REAL)GetWidth(), (REAL)GetHeight());
     graphics.DrawImage(m_Image, destRect);
+}
+
+int ImageElement::GetAutoWidth()
+{
+    if (!m_Image) return 0;
+    return (int)m_Image->GetWidth();
+}
+
+int ImageElement::GetAutoHeight()
+{
+    if (!m_Image) return 0;
+    return (int)m_Image->GetHeight();
 }
 
 bool ImageElement::HitTest(int x, int y)
@@ -67,11 +79,12 @@ bool ImageElement::HitTest(int x, int y)
     if (!m_Image) return false;
 
     // Map widget coordinates to image coordinates
-    // Current approach: Uniform scaling inside m_Width x m_Height
-    // In Novadesk, we usually draw at (m_X, m_Y) with size (m_Width, m_Height)
-    
-    int imgX = (int)((x - m_X) * ((double)m_Image->GetWidth() / m_Width));
-    int imgY = (int)((y - m_Y) * ((double)m_Image->GetHeight() / m_Height));
+    int w = GetWidth();
+    int h = GetHeight();
+    if (w <= 0 || h <= 0) return false;
+
+    int imgX = (int)((x - m_X) * ((double)m_Image->GetWidth() / w));
+    int imgY = (int)((y - m_Y) * ((double)m_Image->GetHeight() / h));
     
     Color pixelColor;
     if (m_Image->GetPixel(imgX, imgY, &pixelColor) == Ok)

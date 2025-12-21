@@ -29,8 +29,12 @@ class Element
 {
 public:
     Element(ElementType type, const std::wstring& id, int x, int y, int width, int height)
-        : m_Type(type), m_Id(id), m_X(x), m_Y(y), m_Width(width), m_Height(height)
+        : m_Type(type), m_Id(id), m_X(x), m_Y(y)
     {
+        m_Width = (width > 0) ? width : 0;
+        m_Height = (height > 0) ? height : 0;
+        m_WDefined = (width > 0);
+        m_HDefined = (height > 0);
     }
 
     virtual ~Element() {}
@@ -47,20 +51,41 @@ public:
     const std::wstring& GetId() const { return m_Id; }
     int GetX() const { return m_X; }
     int GetY() const { return m_Y; }
-    int GetWidth() const { return m_Width; }
-    int GetHeight() const { return m_Height; }
+    
+    int GetWidth() { 
+        if (m_WDefined) return m_Width;
+        return GetAutoWidth();
+    }
+    
+    int GetHeight() { 
+        if (m_HDefined) return m_Height;
+        return GetAutoHeight();
+    }
 
     /*
     ** Setters
     */
     void SetPosition(int x, int y) { m_X = x; m_Y = y; }
-    void SetSize(int w, int h) { m_Width = w; m_Height = h; }
+    void SetSize(int w, int h) { 
+        m_Width = w; 
+        m_Height = h; 
+        m_WDefined = (w > 0);
+        m_HDefined = (h > 0);
+    }
+
+    /*
+    ** Auto-size calculation (to be overriden by subclasses)
+    */
+    virtual int GetAutoWidth() { return 0; }
+    virtual int GetAutoHeight() { return 0; }
 
     /*
     ** Check if a point is within the element's bounds.
     */
     virtual bool HitTest(int x, int y) {
-        return (x >= m_X && x < m_X + m_Width && y >= m_Y && y < m_Y + m_Height);
+        int w = GetWidth();
+        int h = GetHeight();
+        return (x >= m_X && x < m_X + w && y >= m_Y && y < m_Y + h);
     }
 
     /*
@@ -135,6 +160,7 @@ protected:
     std::wstring m_Id;
     int m_X, m_Y;
     int m_Width, m_Height;
+    bool m_WDefined, m_HDefined;
 };
 
 #endif
