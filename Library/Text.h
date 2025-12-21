@@ -43,6 +43,8 @@ public:
     void SetFontSize(int size) { m_FontSize = size; }
     void SetColor(COLORREF color, BYTE alpha) { m_Color = color; m_Alpha = alpha; }
 
+    virtual bool HitTest(int x, int y) override;
+
 private:
     std::wstring m_Text;
     std::wstring m_FontFamily;

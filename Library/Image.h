@@ -5,8 +5,8 @@
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
-#ifndef __NOVADESK_IMAGE_ELEMENT_H__
-#define __NOVADESK_IMAGE_ELEMENT_H__
+#ifndef __COSMOS_IMAGE_ELEMENT_H__
+#define __COSMOS_IMAGE_ELEMENT_H__
 
 #include "Element.h"
 
@@ -25,9 +25,11 @@ public:
     
     void UpdateImage(const std::wstring& path);
 
+    virtual bool HitTest(int x, int y) override;
+
 private:
     std::wstring m_ImagePath;
-    Gdiplus::Image* m_Image;
+    Gdiplus::Bitmap* m_Image;
     
     void LoadImage();
 };

@@ -36,7 +36,7 @@ void ImageElement::LoadImage()
         m_Image = nullptr;
     }
     
-    m_Image = Image::FromFile(m_ImagePath.c_str());
+    m_Image = Bitmap::FromFile(m_ImagePath.c_str());
     if (m_Image && m_Image->GetLastStatus() != Ok)
     {
         delete m_Image;
@@ -57,4 +57,28 @@ void ImageElement::Render(Graphics& graphics)
     
     RectF destRect((REAL)m_X, (REAL)m_Y, (REAL)m_Width, (REAL)m_Height);
     graphics.DrawImage(m_Image, destRect);
+}
+
+bool ImageElement::HitTest(int x, int y)
+{
+    // Bounding box check first
+    if (!Element::HitTest(x, y)) return false;
+    
+    if (!m_Image) return false;
+
+    // Map widget coordinates to image coordinates
+    // Current approach: Uniform scaling inside m_Width x m_Height
+    // In Novadesk, we usually draw at (m_X, m_Y) with size (m_Width, m_Height)
+    
+    int imgX = (int)((x - m_X) * ((double)m_Image->GetWidth() / m_Width));
+    int imgY = (int)((y - m_Y) * ((double)m_Image->GetHeight() / m_Height));
+    
+    Color pixelColor;
+    if (m_Image->GetPixel(imgX, imgY, &pixelColor) == Ok)
+    {
+        // Hit if pixel is not fully transparent
+        return pixelColor.GetAlpha() > 0;
+    }
+    
+    return false;
 }

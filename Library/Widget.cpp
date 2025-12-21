@@ -791,17 +791,27 @@ void Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
     // Find element at cursor (Front to Back)
     Element* hitElement = nullptr;
+    Element* actionElement = nullptr;
+
     for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it)
     {
-        if ((*it)->HitTest(x, y))
+        Element* el = *it;
+        if (el->HitTest(x, y))
         {
-            hitElement = *it;
-            break;
+            if (!hitElement) hitElement = el;
+
+            // Check if this element HANDLES the action
+            if (el->HasAction(message, wParam))
+            {
+                actionElement = el;
+                break;
+            }
+            
+            // If it hits but has no action, it FALLS THROUGH to elements below (Rainmeter behavior)
         }
     }
 
-
-    // Handle Hover/Leave
+    // Handle Hover/Leave logic (this always uses the top-most hit element, regardless of actions)
     if (message == WM_MOUSEMOVE)
     {
         if (hitElement != m_MouseOverElement)
@@ -841,39 +851,39 @@ void Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     }
 
     // Dispatch Actions
-    if (hitElement)
+    if (actionElement)
     {
         std::wstring action;
         switch (message)
         {
-        case WM_LBUTTONUP:     action = hitElement->m_OnLeftMouseUp; break;
-        case WM_LBUTTONDOWN:   action = hitElement->m_OnLeftMouseDown; break;
-        case WM_LBUTTONDBLCLK: action = hitElement->m_OnLeftDoubleClick; break;
-        case WM_RBUTTONUP:     action = hitElement->m_OnRightMouseUp; break;
-        case WM_RBUTTONDOWN:   action = hitElement->m_OnRightMouseDown; break;
-        case WM_RBUTTONDBLCLK: action = hitElement->m_OnRightDoubleClick; break;
-        case WM_MBUTTONUP:     action = hitElement->m_OnMiddleMouseUp; break;
-        case WM_MBUTTONDOWN:   action = hitElement->m_OnMiddleMouseDown; break;
-        case WM_MBUTTONDBLCLK: action = hitElement->m_OnMiddleDoubleClick; break;
+        case WM_LBUTTONUP:     action = actionElement->m_OnLeftMouseUp; break;
+        case WM_LBUTTONDOWN:   action = actionElement->m_OnLeftMouseDown; break;
+        case WM_LBUTTONDBLCLK: action = actionElement->m_OnLeftDoubleClick; break;
+        case WM_RBUTTONUP:     action = actionElement->m_OnRightMouseUp; break;
+        case WM_RBUTTONDOWN:   action = actionElement->m_OnRightMouseDown; break;
+        case WM_RBUTTONDBLCLK: action = actionElement->m_OnRightDoubleClick; break;
+        case WM_MBUTTONUP:     action = actionElement->m_OnMiddleMouseUp; break;
+        case WM_MBUTTONDOWN:   action = actionElement->m_OnMiddleMouseDown; break;
+        case WM_MBUTTONDBLCLK: action = actionElement->m_OnMiddleDoubleClick; break;
         case WM_XBUTTONUP:
-            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) action = hitElement->m_OnX1MouseUp;
-            else action = hitElement->m_OnX2MouseUp;
+            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) action = actionElement->m_OnX1MouseUp;
+            else action = actionElement->m_OnX2MouseUp;
             break;
         case WM_XBUTTONDOWN:
-            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) action = hitElement->m_OnX1MouseDown;
-            else action = hitElement->m_OnX2MouseDown;
+            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) action = actionElement->m_OnX1MouseDown;
+            else action = actionElement->m_OnX2MouseDown;
             break;
         case WM_XBUTTONDBLCLK:
-            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) action = hitElement->m_OnX1DoubleClick;
-            else action = hitElement->m_OnX2DoubleClick;
+            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) action = actionElement->m_OnX1DoubleClick;
+            else action = actionElement->m_OnX2DoubleClick;
             break;
         case WM_MOUSEWHEEL:
-            if (GET_WHEEL_DELTA_WPARAM(wParam) > 0) action = hitElement->m_OnScrollUp;
-            else action = hitElement->m_OnScrollDown;
+            if (GET_WHEEL_DELTA_WPARAM(wParam) > 0) action = actionElement->m_OnScrollUp;
+            else action = actionElement->m_OnScrollDown;
             break;
         case WM_MOUSEHWHEEL:
-            if (GET_WHEEL_DELTA_WPARAM(wParam) > 0) action = hitElement->m_OnScrollRight;
-            else action = hitElement->m_OnScrollLeft;
+            if (GET_WHEEL_DELTA_WPARAM(wParam) > 0) action = actionElement->m_OnScrollRight;
+            else action = actionElement->m_OnScrollLeft;
             break;
         }
 

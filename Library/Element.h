@@ -63,6 +63,48 @@ public:
         return (x >= m_X && x < m_X + m_Width && y >= m_Y && y < m_Y + m_Height);
     }
 
+    /*
+    ** Check if this element should be hit even if it's transparent.
+    ** (e.g. for SolidColor in Rainmeter)
+    */
+    virtual bool IsTransparentHit() const { return false; }
+
+    /*
+    ** Check if the element has an action associated with a specific mouse message.
+    */
+    bool HasAction(UINT message, WPARAM wParam) const {
+        switch (message)
+        {
+        case WM_LBUTTONUP:     return !m_OnLeftMouseUp.empty();
+        case WM_LBUTTONDOWN:   return !m_OnLeftMouseDown.empty();
+        case WM_LBUTTONDBLCLK: return !m_OnLeftDoubleClick.empty();
+        case WM_RBUTTONUP:     return !m_OnRightMouseUp.empty();
+        case WM_RBUTTONDOWN:   return !m_OnRightMouseDown.empty();
+        case WM_RBUTTONDBLCLK: return !m_OnRightDoubleClick.empty();
+        case WM_MBUTTONUP:     return !m_OnMiddleMouseUp.empty();
+        case WM_MBUTTONDOWN:   return !m_OnMiddleMouseDown.empty();
+        case WM_MBUTTONDBLCLK: return !m_OnMiddleDoubleClick.empty();
+        case WM_XBUTTONUP:
+            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) return !m_OnX1MouseUp.empty();
+            else return !m_OnX2MouseUp.empty();
+        case WM_XBUTTONDOWN:
+            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) return !m_OnX1MouseDown.empty();
+            else return !m_OnX2MouseDown.empty();
+        case WM_XBUTTONDBLCLK:
+            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) return !m_OnX1DoubleClick.empty();
+            else return !m_OnX2DoubleClick.empty();
+        case WM_MOUSEWHEEL:
+            if (GET_WHEEL_DELTA_WPARAM(wParam) > 0) return !m_OnScrollUp.empty();
+            else return !m_OnScrollDown.empty();
+        case WM_MOUSEHWHEEL:
+            if (GET_WHEEL_DELTA_WPARAM(wParam) > 0) return !m_OnScrollRight.empty();
+            else return !m_OnScrollLeft.empty();
+        case WM_MOUSEMOVE:
+            return !m_OnMouseOver.empty() || !m_OnMouseLeave.empty();
+        }
+        return false;
+    }
+
     // Mouse Actions
     std::wstring m_OnLeftMouseUp;
     std::wstring m_OnLeftMouseDown;

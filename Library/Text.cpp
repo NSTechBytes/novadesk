@@ -77,3 +77,53 @@ void Text::Render(Graphics& graphics)
     RectF layoutRect((REAL)m_X, (REAL)m_Y, (REAL)m_Width, (REAL)m_Height);
     graphics.DrawString(m_Text.c_str(), -1, &font, layoutRect, &format, &brush);
 }
+
+bool Text::HitTest(int x, int y)
+{
+    // Bounding box check first (Element's layout rect)
+    if (!Element::HitTest(x, y)) return false;
+
+    // To be more precise (like Rainmeter), we should measure the actual text size
+    // and see if the hit is within that. 
+    // Since we don't have a Graphics object here, we use a temporary one from the screen.
+    HDC hdc = GetDC(NULL);
+    Graphics graphics(hdc);
+    
+    INT fontStyle = FontStyleRegular;
+    if (m_Bold) fontStyle |= FontStyleBold;
+    if (m_Italic) fontStyle |= FontStyleItalic;
+    Font font(m_FontFamily.c_str(), (REAL)m_FontSize, fontStyle, UnitPixel);
+
+    StringFormat format;
+    // (Same alignment logic as in Render)
+    switch (m_Align) {
+    case ALIGN_LEFT_TOP: case ALIGN_LEFT_CENTER: case ALIGN_LEFT_BOTTOM:
+        format.SetAlignment(StringAlignmentNear); break;
+    case ALIGN_CENTER_TOP: case ALIGN_CENTER_CENTER: case ALIGN_CENTER_BOTTOM:
+        format.SetAlignment(StringAlignmentCenter); break;
+    case ALIGN_RIGHT_TOP: case ALIGN_RIGHT_CENTER: case ALIGN_RIGHT_BOTTOM:
+        format.SetAlignment(StringAlignmentFar); break;
+    }
+    switch (m_Align) {
+    case ALIGN_LEFT_TOP: case ALIGN_CENTER_TOP: case ALIGN_RIGHT_TOP:
+        format.SetLineAlignment(StringAlignmentNear); break;
+    case ALIGN_LEFT_CENTER: case ALIGN_CENTER_CENTER: case ALIGN_RIGHT_CENTER:
+        format.SetLineAlignment(StringAlignmentCenter); break;
+    case ALIGN_LEFT_BOTTOM: case ALIGN_CENTER_BOTTOM: case ALIGN_RIGHT_BOTTOM:
+        format.SetLineAlignment(StringAlignmentFar); break;
+    }
+
+    RectF layoutRect(0, 0, (REAL)m_Width, (REAL)m_Height);
+    RectF boundingBox;
+    graphics.MeasureString(m_Text.c_str(), -1, &font, layoutRect, &format, &boundingBox);
+    
+    ReleaseDC(NULL, hdc);
+
+    // MeasureString returns bounds relative to the layoutRect (0,0)
+    // We need to offset by m_X, m_Y
+    boundingBox.X += m_X;
+    boundingBox.Y += m_Y;
+
+    return (x >= boundingBox.X && x < boundingBox.X + boundingBox.Width &&
+            y >= boundingBox.Y && y < boundingBox.Y + boundingBox.Height);
+}
