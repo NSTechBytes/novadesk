@@ -13,7 +13,7 @@ function createContentDemoWindow() {
         width: 400,
         height: 300,
         backgroundcolor: "rgba(30,30,30,220)",
-        zpos: "ontop",
+        zpos: "ondesktop",
         draggable: true,
         keeponscreen: true
     });
@@ -56,7 +56,7 @@ function toggleTestState() {
             height: 300,
             opacity: 1.0,
             backgroundcolor: "rgba(30,30,30,220)",
-            zpos: "ontop"
+            zpos: "ondesktop"
         });
         demoWidget.updateText("statusText", "State: ORIGINAL\nClick to test setProperties!");
     }
