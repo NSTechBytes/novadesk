@@ -229,22 +229,33 @@ void Widget::SetWindowPosition(int x, int y, int w, int h)
 {
     if (x == CW_USEDEFAULT) x = m_Options.x;
     if (y == CW_USEDEFAULT) y = m_Options.y;
-    if (w <= 0) w = m_Options.width;
-    if (h <= 0) h = m_Options.height;
+
+    // Use -1 to indicate "keep current" for size
+    bool sizeProvided = false;
+    if (w != -1)
+    {
+        m_Options.width = w;
+        m_Options.m_WDefined = (w > 0);
+        sizeProvided = true;
+    }
+
+    if (h != -1)
+    {
+        m_Options.height = h;
+        m_Options.m_HDefined = (h > 0);
+        sizeProvided = true;
+    }
 
     bool moved = (x != m_Options.x || y != m_Options.y);
-    bool resized = (w != m_Options.width || h != m_Options.height);
 
-    if (moved || resized)
+    if (moved || sizeProvided)
     {
         m_Options.x = x;
         m_Options.y = y;
-        m_Options.width = w;
-        m_Options.height = h;
 
-        SetWindowPos(m_hWnd, NULL, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(m_hWnd, NULL, x, y, m_Options.width, m_Options.height, SWP_NOZORDER | SWP_NOACTIVATE);
         
-        if (resized)
+        if (sizeProvided)
         {
             Redraw();
         }

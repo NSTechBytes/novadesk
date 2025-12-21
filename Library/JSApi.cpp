@@ -20,6 +20,43 @@ extern std::vector<Widget*> widgets;
 
 namespace JSApi {
 
+    // Helper to read file content
+    std::string ReadFileContent(const std::wstring& path) {
+        std::ifstream t(path);
+        if (!t.is_open()) return "";
+        std::stringstream buffer;
+        buffer << t.rdbuf();
+        return buffer.str();
+    }
+
+    // Helper to get Widgets directory
+    std::wstring GetWidgetsDir() {
+        wchar_t path[MAX_PATH];
+        GetModuleFileNameW(NULL, path, MAX_PATH);
+        std::wstring exePath = path;
+        size_t lastBackslash = exePath.find_last_of(L"\\");
+        return exePath.substr(0, lastBackslash + 1) + L"Widgets\\";
+    }
+
+    // JS API: novadesk.include(filename)
+    duk_ret_t js_include(duk_context* ctx) {
+        std::wstring filename = Utils::ToWString(duk_require_string(ctx, 0));
+        std::wstring fullPath = GetWidgetsDir() + filename;
+
+        std::string content = ReadFileContent(fullPath);
+        if (content.empty()) {
+            return duk_error(ctx, DUK_ERR_ERROR, "Could not read file: %s", Utils::ToString(filename).c_str());
+        }
+
+        // Execute in global scope
+        if (duk_peval_string(ctx, content.c_str()) != 0) {
+            return duk_throw(ctx); // Re-throw error
+        }
+
+        duk_pop(ctx); // Pop result
+        return 0;
+    }
+
     // JS API: novadesk.log(...)
     duk_ret_t js_log(duk_context* ctx) {
         duk_idx_t n = duk_get_top(ctx);
@@ -409,7 +446,7 @@ namespace JSApi {
         if (!widget || !duk_is_object(ctx, 0)) return DUK_RET_TYPE_ERROR;
 
         // X, Y, Width, Height
-        int x = CW_USEDEFAULT, y = CW_USEDEFAULT, w = 0, h = 0;
+        int x = CW_USEDEFAULT, y = CW_USEDEFAULT, w = -1, h = -1;
         bool posChange = false;
 
         if (duk_get_prop_string(ctx, 0, "x")) { x = duk_get_int(ctx, -1); posChange = true; }
@@ -540,6 +577,8 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "error");
         duk_push_c_function(ctx, js_debug, DUK_VARARGS);
         duk_put_prop_string(ctx, -2, "debug");
+        duk_push_c_function(ctx, js_include, 1);
+        duk_put_prop_string(ctx, -2, "include");
         duk_put_global_string(ctx, "novadesk");
 
         // Register widgetWindow constructor
@@ -551,23 +590,15 @@ namespace JSApi {
 
     bool LoadAndExecuteScript(duk_context* ctx) {
         // Get executable path to find index.js
-        wchar_t path[MAX_PATH];
-        GetModuleFileNameW(NULL, path, MAX_PATH);
-        std::wstring exePath = path;
-        size_t lastBackslash = exePath.find_last_of(L"\\");
-        std::wstring scriptPath = exePath.substr(0, lastBackslash + 1) + L"Widgets\\index.js";
+        std::wstring scriptPath = GetWidgetsDir() + L"index.js";
 
         Logging::Log(LogLevel::Info, L"Loading script from: %s", scriptPath.c_str());
 
-        std::ifstream t(scriptPath);
-        if (!t.is_open()) {
+        std::string content = ReadFileContent(scriptPath);
+        if (content.empty()) {
             Logging::Log(LogLevel::Error, L"Failed to open index.js at %s", scriptPath.c_str());
             return false;
         }
-
-        std::stringstream buffer;
-        buffer << t.rdbuf();
-        std::string content = buffer.str();
         Logging::Log(LogLevel::Info, L"Script loaded, size: %zu", content.size());
 
         if (duk_peval_string(ctx, content.c_str()) != 0) {
