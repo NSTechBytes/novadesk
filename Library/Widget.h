@@ -72,6 +72,46 @@ public:
     ** Similar to ChangeZPos but only affects this specific widget.
     */
     void ChangeSingleZPos(ZPOSITION zPos, bool all = false);
+
+    /*
+    ** Set window position and size.
+    */
+    void SetWindowPosition(int x, int y, int w, int h);
+
+    /*
+    ** Set overall window opacity (0-255).
+    */
+    void SetWindowOpacity(BYTE opacity);
+
+    /*
+    ** Set background color and alpha.
+    */
+    void SetBackgroundColor(const std::wstring& colorStr);
+
+    /*
+    ** Enable/disable window dragging.
+    */
+    void SetDraggable(bool enable) { m_Options.draggable = enable; }
+
+    /*
+    ** Enable/disable click-through.
+    */
+    void SetClickThrough(bool enable);
+
+    /*
+    ** Enable/disable keep on screen.
+    */
+    void SetKeepOnScreen(bool enable) { m_Options.keepOnScreen = enable; }
+
+    /*
+    ** Enable/disable snap edges.
+    */
+    void SetSnapEdges(bool enable) { m_Options.snapEdges = enable; }
+
+    /*
+    ** Get current widget options.
+    */
+    const WidgetOptions& GetOptions() const { return m_Options; }
     
     /*
     ** Get the window handle for this widget.

@@ -186,6 +186,12 @@ namespace JSApi {
             
             duk_push_c_function(ctx, js_widget_clear_content, 0);
             duk_put_prop_string(ctx, -2, "clearContent");
+
+            duk_push_c_function(ctx, js_widget_set_properties, 1);
+            duk_put_prop_string(ctx, -2, "setProperties");
+
+            duk_push_c_function(ctx, js_widget_get_properties, 0);
+            duk_put_prop_string(ctx, -2, "getProperties");
             
             return 1; // Return the object
         }
@@ -408,6 +414,122 @@ namespace JSApi {
         
         // Return 'this' for chaining
         duk_push_this(ctx);
+        return 1;
+    }
+
+    duk_ret_t js_widget_set_properties(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "widgetPtr");
+        Widget* widget = (Widget*)duk_get_pointer(ctx, -1);
+        duk_pop_2(ctx);
+
+        if (!widget || !duk_is_object(ctx, 0)) return DUK_RET_TYPE_ERROR;
+
+        // X, Y, Width, Height
+        int x = CW_USEDEFAULT, y = CW_USEDEFAULT, w = 0, h = 0;
+        bool posChange = false;
+
+        if (duk_get_prop_string(ctx, 0, "x")) { x = duk_get_int(ctx, -1); posChange = true; }
+        duk_pop(ctx);
+        if (duk_get_prop_string(ctx, 0, "y")) { y = duk_get_int(ctx, -1); posChange = true; }
+        duk_pop(ctx);
+        if (duk_get_prop_string(ctx, 0, "width")) { w = duk_get_int(ctx, -1); posChange = true; }
+        duk_pop(ctx);
+        if (duk_get_prop_string(ctx, 0, "height")) { h = duk_get_int(ctx, -1); posChange = true; }
+        duk_pop(ctx);
+
+        if (posChange) widget->SetWindowPosition(x, y, w, h);
+
+        // Opacity
+        if (duk_get_prop_string(ctx, 0, "opacity")) {
+            BYTE alpha = 255;
+            if (duk_is_string(ctx, -1)) {
+                std::string s = duk_get_string(ctx, -1);
+                if (s.back() == '%') {
+                    int pct = std::stoi(s.substr(0, s.length() - 1));
+                    alpha = (BYTE)((pct / 100.0f) * 255);
+                }
+            } else {
+                alpha = (BYTE)(duk_get_number(ctx, -1) * 255);
+            }
+            widget->SetWindowOpacity(alpha);
+        }
+        duk_pop(ctx);
+
+        // Z-Pos
+        if (duk_get_prop_string(ctx, 0, "zpos")) {
+            std::string zPosStr = duk_get_string(ctx, -1);
+            ZPOSITION zPos = widget->GetWindowZPosition();
+            bool found = true;
+            if (zPosStr == "ondesktop") zPos = ZPOSITION_ONDESKTOP;
+            else if (zPosStr == "ontop") zPos = ZPOSITION_ONTOP;
+            else if (zPosStr == "onbottom") zPos = ZPOSITION_ONBOTTOM;
+            else if (zPosStr == "ontopmost") zPos = ZPOSITION_ONTOPMOST;
+            else if (zPosStr == "normal") zPos = ZPOSITION_NORMAL;
+            else found = false;
+            
+            if (found) widget->ChangeZPos(zPos);
+        }
+        duk_pop(ctx);
+
+        // Background Color
+        if (duk_get_prop_string(ctx, 0, "backgroundcolor")) {
+            widget->SetBackgroundColor(Utils::ToWString(duk_get_string(ctx, -1)));
+        }
+        duk_pop(ctx);
+
+        // Draggable
+        if (duk_get_prop_string(ctx, 0, "draggable")) widget->SetDraggable(duk_get_boolean(ctx, -1));
+        duk_pop(ctx);
+
+        // ClickThrough
+        if (duk_get_prop_string(ctx, 0, "clickthrough")) widget->SetClickThrough(duk_get_boolean(ctx, -1));
+        duk_pop(ctx);
+
+        // KeepOnScreen
+        if (duk_get_prop_string(ctx, 0, "keeponscreen")) widget->SetKeepOnScreen(duk_get_boolean(ctx, -1));
+        duk_pop(ctx);
+
+        // SnapEdges
+        if (duk_get_prop_string(ctx, 0, "snapedges")) widget->SetSnapEdges(duk_get_boolean(ctx, -1));
+        duk_pop(ctx);
+
+        duk_push_this(ctx);
+        return 1;
+    }
+
+    duk_ret_t js_widget_get_properties(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "widgetPtr");
+        Widget* widget = (Widget*)duk_get_pointer(ctx, -1);
+        duk_pop_2(ctx);
+
+        if (!widget) return DUK_RET_TYPE_ERROR;
+
+        const WidgetOptions& opt = widget->GetOptions();
+        
+        duk_push_object(ctx);
+        duk_push_int(ctx, opt.x); duk_put_prop_string(ctx, -2, "x");
+        duk_push_int(ctx, opt.y); duk_put_prop_string(ctx, -2, "y");
+        duk_push_int(ctx, opt.width); duk_put_prop_string(ctx, -2, "width");
+        duk_push_int(ctx, opt.height); duk_put_prop_string(ctx, -2, "height");
+        
+        const char* zPosStr = "normal";
+        switch (opt.zPos) {
+            case ZPOSITION_ONDESKTOP: zPosStr = "ondesktop"; break;
+            case ZPOSITION_ONTOP:     zPosStr = "ontop";     break;
+            case ZPOSITION_ONBOTTOM:  zPosStr = "onbottom";  break;
+            case ZPOSITION_ONTOPMOST: zPosStr = "ontopmost"; break;
+        }
+        duk_push_string(ctx, zPosStr); duk_put_prop_string(ctx, -2, "zpos");
+        
+        duk_push_number(ctx, opt.windowOpacity / 255.0); duk_put_prop_string(ctx, -2, "opacity");
+        duk_push_boolean(ctx, opt.draggable); duk_put_prop_string(ctx, -2, "draggable");
+        duk_push_boolean(ctx, opt.clickThrough); duk_put_prop_string(ctx, -2, "clickthrough");
+        duk_push_boolean(ctx, opt.keepOnScreen); duk_put_prop_string(ctx, -2, "keeponscreen");
+        duk_push_boolean(ctx, opt.snapEdges); duk_put_prop_string(ctx, -2, "snapedges");
+        duk_push_string(ctx, Utils::ToString(opt.backgroundColor).c_str()); duk_put_prop_string(ctx, -2, "backgroundcolor");
+
         return 1;
     }
 

@@ -14,6 +14,7 @@
 #include <gdiplus.h>
 
 #include "JSApi.h"
+#include "ColorUtil.h"
 #pragma comment(lib, "gdiplus.lib")
 
 using namespace Gdiplus;
@@ -221,6 +222,79 @@ void Widget::ChangeSingleZPos(ZPOSITION zPos, bool all)
         // For clicked widgets, we just want to re-assert z-order without necessarily saving
         // unless it's a new Z-position.
         ChangeZPos(zPos, all);
+    }
+}
+
+void Widget::SetWindowPosition(int x, int y, int w, int h)
+{
+    if (x == CW_USEDEFAULT) x = m_Options.x;
+    if (y == CW_USEDEFAULT) y = m_Options.y;
+    if (w <= 0) w = m_Options.width;
+    if (h <= 0) h = m_Options.height;
+
+    bool moved = (x != m_Options.x || y != m_Options.y);
+    bool resized = (w != m_Options.width || h != m_Options.height);
+
+    if (moved || resized)
+    {
+        m_Options.x = x;
+        m_Options.y = y;
+        m_Options.width = w;
+        m_Options.height = h;
+
+        SetWindowPos(m_hWnd, NULL, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+        
+        if (resized)
+        {
+            Redraw();
+        }
+
+        Settings::SaveWidget(m_Options.id, m_Options);
+    }
+}
+
+void Widget::SetWindowOpacity(BYTE opacity)
+{
+    if (m_Options.windowOpacity != opacity)
+    {
+        m_Options.windowOpacity = opacity;
+        Redraw();
+        Settings::SaveWidget(m_Options.id, m_Options);
+    }
+}
+
+void Widget::SetBackgroundColor(const std::wstring& colorStr)
+{
+    COLORREF color = m_Options.color;
+    BYTE alpha = m_Options.bgAlpha;
+    
+    if (ColorUtil::ParseRGBA(colorStr, color, alpha))
+    {
+        if (m_Options.backgroundColor != colorStr || m_Options.color != color || m_Options.bgAlpha != alpha)
+        {
+            m_Options.backgroundColor = colorStr;
+            m_Options.color = color;
+            m_Options.bgAlpha = alpha;
+            Redraw();
+            Settings::SaveWidget(m_Options.id, m_Options);
+        }
+    }
+}
+
+void Widget::SetClickThrough(bool enable)
+{
+    if (m_Options.clickThrough != enable)
+    {
+        m_Options.clickThrough = enable;
+        
+        LONG exStyle = GetWindowLong(m_hWnd, GWL_EXSTYLE);
+        if (enable)
+            exStyle |= WS_EX_TRANSPARENT;
+        else
+            exStyle &= ~WS_EX_TRANSPARENT;
+            
+        SetWindowLong(m_hWnd, GWL_EXSTYLE, exStyle);
+        Settings::SaveWidget(m_Options.id, m_Options);
     }
 }
 

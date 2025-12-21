@@ -68,6 +68,8 @@ namespace JSApi {
     duk_ret_t js_widget_update_text(duk_context* ctx);
     duk_ret_t js_widget_remove_content(duk_context* ctx);
     duk_ret_t js_widget_clear_content(duk_context* ctx);
+    duk_ret_t js_widget_set_properties(duk_context* ctx);
+    duk_ret_t js_widget_get_properties(duk_context* ctx);
 
     /*
     ** Execute a JavaScript string explicitly.
