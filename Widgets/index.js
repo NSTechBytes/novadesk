@@ -8,9 +8,11 @@
 // Use novadesk.include to load another script globally
 novadesk.include("testWidget.js");
 novadesk.include("timerDemo.js");
+novadesk.include("systemTest.js");
 
 function onAppReady() {
     novadesk.log("App ready, initializing widgets...");
     createContentDemoWindow();
     createClockWidget();
+    createSystemWidget();
 }

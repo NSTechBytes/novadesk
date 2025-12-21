@@ -11,6 +11,8 @@
 #include "Logging.h"
 #include "ColorUtil.h"
 #include "Utils.h"
+#include "CPUMonitor.h"
+#include "MemoryMonitor.h"
 #include <map>
 #include <fstream>
 #include <sstream>
@@ -150,6 +152,68 @@ namespace JSApi {
         PostMessage(s_MessageWindow, WM_NOVADESK_ACTION, id, 0);
 
         duk_push_int(ctx, (int)id);
+        return 1;
+    }
+
+    // CPU Monitor JS methods
+    duk_ret_t js_cpu_constructor(duk_context* ctx) {
+        if (!duk_is_constructor_call(ctx)) return DUK_RET_TYPE_ERROR;
+        int proc = 0;
+        if (duk_get_top(ctx) > 0 && duk_is_object(ctx, 0)) {
+            if (duk_get_prop_string(ctx, 0, "processor")) proc = duk_get_int(ctx, -1);
+            duk_pop(ctx);
+        }
+        CPUMonitor* monitor = new CPUMonitor(proc);
+        duk_push_this(ctx);
+        duk_push_pointer(ctx, monitor);
+        duk_put_prop_string(ctx, -2, "\xFF" "monitorPtr");
+        return 0;
+    }
+
+    duk_ret_t js_cpu_finalizer(duk_context* ctx) {
+        duk_get_prop_string(ctx, 0, "\xFF" "monitorPtr");
+        CPUMonitor* monitor = (CPUMonitor*)duk_get_pointer(ctx, -1);
+        if (monitor) delete monitor;
+        return 0;
+    }
+
+    duk_ret_t js_cpu_usage(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
+        CPUMonitor* monitor = (CPUMonitor*)duk_get_pointer(ctx, -1);
+        if (!monitor) return DUK_RET_TYPE_ERROR;
+        duk_push_number(ctx, monitor->GetUsage());
+        return 1;
+    }
+
+    // Memory Monitor JS methods
+    duk_ret_t js_memory_constructor(duk_context* ctx) {
+        if (!duk_is_constructor_call(ctx)) return DUK_RET_TYPE_ERROR;
+        MemoryMonitor* monitor = new MemoryMonitor();
+        duk_push_this(ctx);
+        duk_push_pointer(ctx, monitor);
+        duk_put_prop_string(ctx, -2, "\xFF" "monitorPtr");
+        return 0;
+    }
+
+    duk_ret_t js_memory_finalizer(duk_context* ctx) {
+        duk_get_prop_string(ctx, 0, "\xFF" "monitorPtr");
+        MemoryMonitor* monitor = (MemoryMonitor*)duk_get_pointer(ctx, -1);
+        if (monitor) delete monitor;
+        return 0;
+    }
+
+    duk_ret_t js_memory_stats(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
+        MemoryMonitor* monitor = (MemoryMonitor*)duk_get_pointer(ctx, -1);
+        if (!monitor) return DUK_RET_TYPE_ERROR;
+        MemoryMonitor::Stats stats = monitor->GetStats();
+        duk_push_object(ctx);
+        duk_push_number(ctx, (double)stats.usedPhys); duk_put_prop_string(ctx, -2, "used");
+        duk_push_number(ctx, (double)stats.totalPhys); duk_put_prop_string(ctx, -2, "total");
+        duk_push_number(ctx, (double)stats.availPhys); duk_put_prop_string(ctx, -2, "available");
+        duk_push_int(ctx, stats.memoryLoad); duk_put_prop_string(ctx, -2, "percent");
         return 1;
     }
 
@@ -715,6 +779,29 @@ namespace JSApi {
         duk_push_c_function(ctx, js_set_immediate, 1);
         duk_put_prop_string(ctx, -2, "nextTick");
         duk_put_prop_string(ctx, -2, "process");
+
+        // novadesk.system object with constructors
+        duk_push_object(ctx);
+
+        // CPU Class
+        duk_push_c_function(ctx, js_cpu_constructor, 1);
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_cpu_usage, 0); duk_put_prop_string(ctx, -2, "usage");
+        duk_put_prop_string(ctx, -2, "prototype");
+        duk_push_c_function(ctx, js_cpu_finalizer, 1);
+        duk_set_finalizer(ctx, -2);
+        duk_put_prop_string(ctx, -2, "CPU");
+
+        // Memory Class
+        duk_push_c_function(ctx, js_memory_constructor, 0);
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_memory_stats, 0); duk_put_prop_string(ctx, -2, "stats");
+        duk_put_prop_string(ctx, -2, "prototype");
+        duk_push_c_function(ctx, js_memory_finalizer, 1);
+        duk_set_finalizer(ctx, -2);
+        duk_put_prop_string(ctx, -2, "Memory");
+
+        duk_put_prop_string(ctx, -2, "system");
 
         duk_put_global_string(ctx, "novadesk");
 

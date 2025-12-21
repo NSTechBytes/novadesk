@@ -48,6 +48,12 @@
     <ClInclude Include="Library\Utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Library\CPUMonitor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Library\MemoryMonitor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Library\Image.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -81,6 +87,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Library\Utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Library\CPUMonitor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Library\MemoryMonitor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Library\Logging.cpp">
