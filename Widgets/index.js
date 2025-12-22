@@ -63,16 +63,11 @@ function testMonitors() {
     novadesk.log("Memory Monitor destroyed");
 }
 
-function onAppReady() {
+novadesk.onReady(function () {
     createClockWidget();
 
     // Test monitor cleanup after 2 seconds
     setTimeout(function () {
         testMonitors();
     }, 2000);
-
-    // --- API Examples ---
-    // 1. widget.refresh() - Clears all elements (flicker-free)
-    // 2. widget.close()   - Closes the widget window
-    // 3. novadesk.refresh() - Reloads all scripts and widgets
-}
+});

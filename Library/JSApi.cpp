@@ -36,6 +36,9 @@ namespace JSApi {
     duk_ret_t js_widget_close(duk_context* ctx);
     duk_ret_t js_novadesk_refresh(duk_context* ctx);
 
+    // Ready callback storage
+    static int s_ReadyCallbackIndex = -1;
+
     // Timer logic
     struct Timer {
         bool repeating;
@@ -362,13 +365,23 @@ namespace JSApi {
 
     // JS API: novadesk.debug(...)
     duk_ret_t js_debug(duk_context* ctx) {
-        duk_idx_t n = duk_get_top(ctx);
-        std::wstring msg;
-        for (duk_idx_t i = 0; i < n; i++) {
-            if (i > 0) msg += L" ";
-            msg += Utils::ToWString(duk_safe_to_string(ctx, i));
+        for (int i = 0; i < duk_get_top(ctx); i++) {
+            Logging::Log(LogLevel::Debug, L"%S", duk_safe_to_string(ctx, i));
         }
-        Logging::Log(LogLevel::Debug, L"%s", msg.c_str());
+        return 0;
+    }
+
+    duk_ret_t js_on_ready(duk_context* ctx) {
+        if (!duk_is_function(ctx, 0)) {
+            return DUK_RET_TYPE_ERROR;
+        }
+
+        // Store the callback
+        duk_push_global_stash(ctx);
+        duk_dup(ctx, 0); // Duplicate the callback function
+        duk_put_prop_string(ctx, -2, "readyCallback");
+        duk_pop(ctx);
+
         return 0;
     }
 
@@ -961,6 +974,8 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "debug");
         duk_push_c_function(ctx, js_include, 1);
         duk_put_prop_string(ctx, -2, "include");
+        duk_push_c_function(ctx, js_on_ready, 1);
+        duk_put_prop_string(ctx, -2, "onReady");
 
         // novadesk.system object with constructors
         duk_push_object(ctx);
@@ -1087,22 +1102,18 @@ namespace JSApi {
             return false;
         }
 
-        Logging::Log(LogLevel::Info, L"Script execution successful. Calling onAppReady()...");
+        Logging::Log(LogLevel::Info, L"Script execution successful. Calling ready callbacks...");
 
-        // Call onAppReady if defined
-        duk_get_global_string(ctx, "onAppReady");
-        if (duk_is_function(ctx, -1)) {
-            if (duk_pcall(ctx, 0) != 0) {
-                Logging::Log(LogLevel::Error, L"onAppReady failed: %S", duk_safe_to_string(ctx, -1));
-                duk_pop(ctx);
-                return false;
+        // Call ready callback if registered
+        duk_push_global_stash(ctx);
+        if (duk_get_prop_string(ctx, -1, "readyCallback")) {
+            if (duk_is_function(ctx, -1)) {
+                if (duk_pcall(ctx, 0) != 0) {
+                    Logging::Log(LogLevel::Error, L"Ready callback failed: %S", duk_safe_to_string(ctx, -1));
+                }
             }
         }
-        else {
-            Logging::Log(LogLevel::Info, L"onAppReady not defined.");
-        }
-        duk_pop(ctx);
-        duk_pop(ctx);
+        duk_pop_2(ctx); // Pop callback and stash
 
         return true;
     }
