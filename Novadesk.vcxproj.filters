@@ -72,6 +72,9 @@
     <ClInclude Include="Library\NetworkMonitor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Library\MouseMonitor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Library\Novadesk.cpp">
@@ -111,6 +114,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Library\NetworkMonitor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Library\MouseMonitor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

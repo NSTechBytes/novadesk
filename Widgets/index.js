@@ -51,6 +51,7 @@ function createClockWidget() {
 var cpu = new novadesk.system.CPU();
 var mem = new novadesk.system.Memory();
 var net = new novadesk.system.Network();
+var mouse = new novadesk.system.Mouse();
 
 function testMonitors() {
     // Use existing monitors (don't recreate each time)
@@ -62,6 +63,9 @@ function testMonitors() {
 
     var netStats = net.stats();
     novadesk.log("Network In: " + (netStats.netIn / 1024).toFixed(2) + " KB/s, Out: " + (netStats.netOut / 1024).toFixed(2) + " KB/s");
+
+    var mousePos = mouse.position();
+    novadesk.log("Mouse Position: X=" + mousePos.x + ", Y=" + mousePos.y);
 }
 
 novadesk.onReady(function () {

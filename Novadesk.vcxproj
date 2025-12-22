@@ -137,6 +137,7 @@
   <ItemGroup>
     <ClInclude Include="Library\Element.h" />
     <ClInclude Include="Library\Image.h" />
+    <ClInclude Include="Library\MouseMonitor.h" />
     <ClInclude Include="Library\NetworkMonitor.h" />
     <ClInclude Include="Library\System.h" />
     <ClInclude Include="Library\Text.h" />
@@ -157,6 +158,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Library\Image.cpp" />
+    <ClCompile Include="Library\MouseMonitor.cpp" />
     <ClCompile Include="Library\NetworkMonitor.cpp" />
     <ClCompile Include="Library\System.cpp" />
     <ClCompile Include="Library\Text.cpp" />

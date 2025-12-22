@@ -14,6 +14,7 @@
 #include "CPUMonitor.h"
 #include "MemoryMonitor.h"
 #include "NetworkMonitor.h"
+#include "MouseMonitor.h"
 #include <map>
 #include <fstream>
 #include <sstream>
@@ -295,6 +296,47 @@ namespace JSApi {
         duk_push_this(ctx);
         duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
         NetworkMonitor* monitor = (NetworkMonitor*)duk_get_pointer(ctx, -1);
+        if (monitor) {
+            delete monitor;
+            duk_push_pointer(ctx, nullptr);
+            duk_put_prop_string(ctx, -3, "\xFF" "monitorPtr");
+        }
+        return 0;
+    }
+
+    // Mouse Monitor JS methods
+    duk_ret_t js_mouse_constructor(duk_context* ctx) {
+        if (!duk_is_constructor_call(ctx)) return DUK_RET_TYPE_ERROR;
+        MouseMonitor* monitor = new MouseMonitor();
+        duk_push_this(ctx);
+        duk_push_pointer(ctx, monitor);
+        duk_put_prop_string(ctx, -2, "\xFF" "monitorPtr");
+        return 0;
+    }
+
+    duk_ret_t js_mouse_finalizer(duk_context* ctx) {
+        duk_get_prop_string(ctx, 0, "\xFF" "monitorPtr");
+        MouseMonitor* monitor = (MouseMonitor*)duk_get_pointer(ctx, -1);
+        if (monitor) delete monitor;
+        return 0;
+    }
+
+    duk_ret_t js_mouse_position(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
+        MouseMonitor* monitor = (MouseMonitor*)duk_get_pointer(ctx, -1);
+        if (!monitor) return DUK_RET_ERROR;
+        auto pos = monitor->GetPosition();
+        duk_push_object(ctx);
+        duk_push_int(ctx, pos.x); duk_put_prop_string(ctx, -2, "x");
+        duk_push_int(ctx, pos.y); duk_put_prop_string(ctx, -2, "y");
+        return 1;
+    }
+
+    duk_ret_t js_mouse_destroy(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
+        MouseMonitor* monitor = (MouseMonitor*)duk_get_pointer(ctx, -1);
         if (monitor) {
             delete monitor;
             duk_push_pointer(ctx, nullptr);
@@ -1053,6 +1095,16 @@ namespace JSApi {
         duk_push_c_function(ctx, js_network_finalizer, 1);
         duk_set_finalizer(ctx, -2);
         duk_put_prop_string(ctx, -2, "Network");
+
+        // Mouse Class
+        duk_push_c_function(ctx, js_mouse_constructor, 0);
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_mouse_position, 0); duk_put_prop_string(ctx, -2, "position");
+        duk_push_c_function(ctx, js_mouse_destroy, 0); duk_put_prop_string(ctx, -2, "destroy");
+        duk_put_prop_string(ctx, -2, "prototype");
+        duk_push_c_function(ctx, js_mouse_finalizer, 1);
+        duk_set_finalizer(ctx, -2);
+        duk_put_prop_string(ctx, -2, "Mouse");
         
         duk_push_c_function(ctx, js_system_get_workspace_variables, 0);
         duk_put_prop_string(ctx, -2, "getWorkspaceVariables");
