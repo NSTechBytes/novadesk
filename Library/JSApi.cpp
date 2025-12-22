@@ -15,6 +15,7 @@
 #include "MemoryMonitor.h"
 #include "NetworkMonitor.h"
 #include "MouseMonitor.h"
+#include "DiskMonitor.h"
 #include <map>
 #include <fstream>
 #include <sstream>
@@ -337,6 +338,60 @@ namespace JSApi {
         duk_push_this(ctx);
         duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
         MouseMonitor* monitor = (MouseMonitor*)duk_get_pointer(ctx, -1);
+        if (monitor) {
+            delete monitor;
+            duk_push_pointer(ctx, nullptr);
+            duk_put_prop_string(ctx, -3, "\xFF" "monitorPtr");
+        }
+        return 0;
+    }
+
+    // Disk Monitor JS methods
+    duk_ret_t js_disk_constructor(duk_context* ctx) {
+        if (!duk_is_constructor_call(ctx)) return DUK_RET_TYPE_ERROR;
+        
+        std::wstring driveLetter = L"C:";
+        if (duk_get_top(ctx) > 0 && duk_is_object(ctx, 0)) {
+            if (duk_get_prop_string(ctx, 0, "drive")) {
+                driveLetter = Utils::ToWString(duk_get_string(ctx, -1));
+            }
+            duk_pop(ctx);
+        }
+        
+        DiskMonitor* monitor = new DiskMonitor(driveLetter);
+        duk_push_this(ctx);
+        duk_push_pointer(ctx, monitor);
+        duk_put_prop_string(ctx, -2, "\xFF" "monitorPtr");
+        return 0;
+    }
+
+    duk_ret_t js_disk_finalizer(duk_context* ctx) {
+        duk_get_prop_string(ctx, 0, "\xFF" "monitorPtr");
+        DiskMonitor* monitor = (DiskMonitor*)duk_get_pointer(ctx, -1);
+        if (monitor) delete monitor;
+        return 0;
+    }
+
+    duk_ret_t js_disk_stats(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
+        DiskMonitor* monitor = (DiskMonitor*)duk_get_pointer(ctx, -1);
+        if (!monitor) return DUK_RET_ERROR;
+        auto stats = monitor->GetStats();
+        duk_push_object(ctx);
+        duk_push_number(ctx, (double)stats.totalSpace); duk_put_prop_string(ctx, -2, "total");
+        duk_push_number(ctx, (double)stats.freeSpace); duk_put_prop_string(ctx, -2, "free");
+        duk_push_number(ctx, (double)stats.usedSpace); duk_put_prop_string(ctx, -2, "used");
+        duk_push_int(ctx, stats.percentUsed); duk_put_prop_string(ctx, -2, "percent");
+        duk_push_number(ctx, stats.readBytesPerSec); duk_put_prop_string(ctx, -2, "readSpeed");
+        duk_push_number(ctx, stats.writeBytesPerSec); duk_put_prop_string(ctx, -2, "writeSpeed");
+        return 1;
+    }
+
+    duk_ret_t js_disk_destroy(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
+        DiskMonitor* monitor = (DiskMonitor*)duk_get_pointer(ctx, -1);
         if (monitor) {
             delete monitor;
             duk_push_pointer(ctx, nullptr);
@@ -1105,6 +1160,16 @@ namespace JSApi {
         duk_push_c_function(ctx, js_mouse_finalizer, 1);
         duk_set_finalizer(ctx, -2);
         duk_put_prop_string(ctx, -2, "Mouse");
+
+        // Disk Class
+        duk_push_c_function(ctx, js_disk_constructor, 1);
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_disk_stats, 0); duk_put_prop_string(ctx, -2, "stats");
+        duk_push_c_function(ctx, js_disk_destroy, 0); duk_put_prop_string(ctx, -2, "destroy");
+        duk_put_prop_string(ctx, -2, "prototype");
+        duk_push_c_function(ctx, js_disk_finalizer, 1);
+        duk_set_finalizer(ctx, -2);
+        duk_put_prop_string(ctx, -2, "Disk");
         
         duk_push_c_function(ctx, js_system_get_workspace_variables, 0);
         duk_put_prop_string(ctx, -2, "getWorkspaceVariables");
