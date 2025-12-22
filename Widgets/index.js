@@ -47,27 +47,28 @@ function createClockWidget() {
 
 }
 
+// Create monitors once and keep them alive
+var cpu = new novadesk.system.CPU();
+var mem = new novadesk.system.Memory();
+var net = new novadesk.system.Network();
+
 function testMonitors() {
-    // Test CPU Monitor
-    var cpu = new novadesk.system.CPU();
+    // Use existing monitors (don't recreate each time)
     var usage = cpu.usage();
     novadesk.log("CPU Usage: " + usage + "%");
-    cpu.destroy(); // Clean up
-    novadesk.log("CPU Monitor destroyed");
 
-    // Test Memory Monitor
-    var mem = new novadesk.system.Memory();
     var stats = mem.stats();
     novadesk.log("Memory Used: " + stats.used + " / " + stats.total + " (" + stats.percent + "%)");
-    mem.destroy(); // Clean up
-    novadesk.log("Memory Monitor destroyed");
+
+    var netStats = net.stats();
+    novadesk.log("Network In: " + (netStats.netIn / 1024).toFixed(2) + " KB/s, Out: " + (netStats.netOut / 1024).toFixed(2) + " KB/s");
 }
 
 novadesk.onReady(function () {
     createClockWidget();
 
-    // Test monitor cleanup after 2 seconds
-    setTimeout(function () {
+    // Call every second - monitors stay alive and track changes
+    setInterval(function () {
         testMonitors();
-    }, 2000);
+    }, 1000);
 });

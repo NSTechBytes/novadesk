@@ -13,6 +13,7 @@
 #include "Utils.h"
 #include "CPUMonitor.h"
 #include "MemoryMonitor.h"
+#include "NetworkMonitor.h"
 #include <map>
 #include <fstream>
 #include <sstream>
@@ -251,6 +252,49 @@ namespace JSApi {
         duk_push_this(ctx);
         duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
         MemoryMonitor* monitor = (MemoryMonitor*)duk_get_pointer(ctx, -1);
+        if (monitor) {
+            delete monitor;
+            duk_push_pointer(ctx, nullptr);
+            duk_put_prop_string(ctx, -3, "\xFF" "monitorPtr");
+        }
+        return 0;
+    }
+
+    // Network Monitor JS methods
+    duk_ret_t js_network_constructor(duk_context* ctx) {
+        if (!duk_is_constructor_call(ctx)) return DUK_RET_TYPE_ERROR;
+        NetworkMonitor* monitor = new NetworkMonitor();
+        duk_push_this(ctx);
+        duk_push_pointer(ctx, monitor);
+        duk_put_prop_string(ctx, -2, "\xFF" "monitorPtr");
+        return 0;
+    }
+
+    duk_ret_t js_network_finalizer(duk_context* ctx) {
+        duk_get_prop_string(ctx, 0, "\xFF" "monitorPtr");
+        NetworkMonitor* monitor = (NetworkMonitor*)duk_get_pointer(ctx, -1);
+        if (monitor) delete monitor;
+        return 0;
+    }
+
+    duk_ret_t js_network_stats(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
+        NetworkMonitor* monitor = (NetworkMonitor*)duk_get_pointer(ctx, -1);
+        if (!monitor) return DUK_RET_ERROR;
+        auto stats = monitor->GetStats();
+        duk_push_object(ctx);
+        duk_push_number(ctx, stats.inBytesPerSec); duk_put_prop_string(ctx, -2, "netIn");
+        duk_push_number(ctx, stats.outBytesPerSec); duk_put_prop_string(ctx, -2, "netOut");
+        duk_push_number(ctx, (double)stats.totalIn); duk_put_prop_string(ctx, -2, "totalIn");
+        duk_push_number(ctx, (double)stats.totalOut); duk_put_prop_string(ctx, -2, "totalOut");
+        return 1;
+    }
+
+    duk_ret_t js_network_destroy(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
+        NetworkMonitor* monitor = (NetworkMonitor*)duk_get_pointer(ctx, -1);
         if (monitor) {
             delete monitor;
             duk_push_pointer(ctx, nullptr);
@@ -999,6 +1043,16 @@ namespace JSApi {
         duk_push_c_function(ctx, js_memory_finalizer, 1);
         duk_set_finalizer(ctx, -2);
         duk_put_prop_string(ctx, -2, "Memory");
+
+        // Network Class
+        duk_push_c_function(ctx, js_network_constructor, 0);
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_network_stats, 0); duk_put_prop_string(ctx, -2, "stats");
+        duk_push_c_function(ctx, js_network_destroy, 0); duk_put_prop_string(ctx, -2, "destroy");
+        duk_put_prop_string(ctx, -2, "prototype");
+        duk_push_c_function(ctx, js_network_finalizer, 1);
+        duk_set_finalizer(ctx, -2);
+        duk_put_prop_string(ctx, -2, "Network");
         
         duk_push_c_function(ctx, js_system_get_workspace_variables, 0);
         duk_put_prop_string(ctx, -2, "getWorkspaceVariables");
