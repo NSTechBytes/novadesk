@@ -8,3 +8,7 @@
 #pragma once
 
 #include "Resource.h"
+
+// Tray icon control functions
+void ShowTrayIconDynamic();
+void HideTrayIconDynamic();

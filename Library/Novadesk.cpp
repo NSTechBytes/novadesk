@@ -36,6 +36,8 @@ ULONG_PTR gdiplusToken;
 void InitTrayIcon(HWND hWnd);
 void RemoveTrayIcon();
 void ShowTrayMenu(HWND hWnd);
+void ShowTrayIconDynamic();
+void HideTrayIconDynamic();
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -184,6 +186,24 @@ void ShowTrayMenu(HWND hWnd)
     SetForegroundWindow(hWnd);
     TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hWnd, NULL);
     DestroyMenu(hMenu);
+}
+
+void ShowTrayIconDynamic()
+{
+    if (nid.hWnd)
+    {
+        Shell_NotifyIcon(NIM_ADD, &nid);
+        Logging::Log(LogLevel::Info, L"Tray icon shown");
+    }
+}
+
+void HideTrayIconDynamic()
+{
+    if (nid.hWnd)
+    {
+        Shell_NotifyIcon(NIM_DELETE, &nid);
+        Logging::Log(LogLevel::Info, L"Tray icon hidden");
+    }
 }
 
 

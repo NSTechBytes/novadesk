@@ -19,6 +19,7 @@
 #include <Windows.h>
 #include <shlwapi.h>
 #pragma comment(lib, "shlwapi.lib")
+#include "Novadesk.h"
 
 extern std::vector<Widget*> widgets;
 
@@ -860,6 +861,68 @@ namespace JSApi {
         }
     }
 
+    std::string ParseConfigDirectives(const std::string& script) {
+        std::string result;
+        std::istringstream stream(script);
+        std::string line;
+
+        while (std::getline(stream, line)) {
+            // Trim whitespace
+            size_t start = line.find_first_not_of(" \t\r");
+            if (start == std::string::npos) {
+                result += line + "\n";
+                continue;
+            }
+
+            std::string trimmed = line.substr(start);
+
+            // Check if line starts with !
+            if (trimmed[0] == '!') {
+                std::string directive = trimmed.substr(1);
+                // Remove trailing semicolon if present
+                if (!directive.empty() && directive.back() == ';') {
+                    directive.pop_back();
+                }
+
+                // Process directives
+                if (directive == "enableDebugging") {
+                    Logging::SetLogLevel(LogLevel::Debug);
+                    Logging::Log(LogLevel::Info, L"Directive: Debug logging enabled");
+                }
+                else if (directive == "disableLogging") {
+                    Logging::SetConsoleLogging(false);
+                    Logging::SetFileLogging(L""); // Also disable file logging
+                    Logging::Log(LogLevel::Info, L"Directive: All logging disabled");
+                }
+                else if (directive == "logToFile") {
+                    // Get exe directory (parent of Widgets)
+                    wchar_t exePath[MAX_PATH];
+                    GetModuleFileNameW(NULL, exePath, MAX_PATH);
+                    std::wstring exeDir = exePath;
+                    size_t lastBackslash = exeDir.find_last_of(L"\\");
+                    exeDir = exeDir.substr(0, lastBackslash + 1);
+                    
+                    std::wstring logPath = exeDir + L"novadesk.log";
+                    Logging::SetFileLogging(logPath);
+                    Logging::Log(LogLevel::Info, L"Directive: File logging enabled to %s", logPath.c_str());
+                }
+                else if (directive == "hideTrayIcon") {
+                    HideTrayIconDynamic();
+                }
+                else {
+                    Logging::Log(LogLevel::Error, L"Unknown directive: !%S", directive.c_str());
+                }
+
+                // Skip this line (don't add to result)
+                continue;
+            }
+
+            result += line + "\n";
+        }
+
+        return result;
+    }
+
     void InitializeJavaScriptAPI(duk_context* ctx) {
         s_JsContext = ctx; // Store context for callbacks
 
@@ -939,6 +1002,11 @@ namespace JSApi {
     }
 
     bool LoadAndExecuteScript(duk_context* ctx) {
+        // Reset logging state to defaults before each load
+        Logging::SetConsoleLogging(true);
+        Logging::SetFileLogging(L"");
+        Logging::SetLogLevel(LogLevel::Info);
+
         // Get executable path to find index.js
         std::wstring scriptPath = GetWidgetsDir() + L"index.js";
 
@@ -951,7 +1019,11 @@ namespace JSApi {
         }
         Logging::Log(LogLevel::Info, L"Script loaded, size: %zu", content.size());
 
-        if (duk_peval_string(ctx, content.c_str()) != 0) {
+        // Parse and apply configuration directives
+        std::string processedScript = ParseConfigDirectives(content);
+
+        // Execute the processed script
+        if (duk_peval_string(ctx, processedScript.c_str()) != 0) {
             Logging::Log(LogLevel::Error, L"Script execution failed: %S", duk_safe_to_string(ctx, -1));
             duk_pop(ctx);
             return false;

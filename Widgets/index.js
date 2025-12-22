@@ -20,6 +20,7 @@
 // }
 // !enableDebugging;
 // !
+// !logToFile
 var clockWindow;
 
 function createClockWidget() {
