@@ -85,6 +85,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             {
                 DestroyWindow(hWnd);
             }
+            else if (wmId == ID_TRAY_REFRESH)
+            {
+                JSApi::TriggerFullRefresh();
+            }
         }
         break;
         case WM_DESTROY:
@@ -173,6 +177,8 @@ void ShowTrayMenu(HWND hWnd)
     GetCursorPos(&pt);
 
     HMENU hMenu = CreatePopupMenu();
+    AppendMenu(hMenu, MF_STRING, ID_TRAY_REFRESH, L"Refresh all");
+    AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hMenu, MF_STRING, ID_TRAY_EXIT, L"Exit");
 
     SetForegroundWindow(hWnd);

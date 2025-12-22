@@ -17,10 +17,23 @@
 #include <fstream>
 #include <sstream>
 #include <Windows.h>
+#include <shlwapi.h>
+#pragma comment(lib, "shlwapi.lib")
 
 extern std::vector<Widget*> widgets;
 
 namespace JSApi {
+    // Forward declarations
+    duk_ret_t js_widget_add_image(duk_context* ctx);
+    duk_ret_t js_widget_add_text(duk_context* ctx);
+    duk_ret_t js_widget_update_image(duk_context* ctx);
+    duk_ret_t js_widget_update_text(duk_context* ctx);
+    duk_ret_t js_widget_remove_content(duk_context* ctx);
+    duk_ret_t js_widget_clear_content(duk_context* ctx);
+    duk_ret_t js_widget_set_properties(duk_context* ctx);
+    duk_ret_t js_widget_get_properties(duk_context* ctx);
+    duk_ret_t js_widget_close(duk_context* ctx);
+    duk_ret_t js_novadesk_refresh(duk_context* ctx);
 
     // Timer logic
     struct Timer {
@@ -344,11 +357,11 @@ namespace JSApi {
         options.height = 0;             // Default to auto
         options.m_WDefined = false;
         options.m_HDefined = false;
-        options.backgroundColor = L"rgba(255,255,255,255)";
+        options.backgroundColor = L"rgba(0,0,0,0)";
         options.zPos = ZPOSITION_ONDESKTOP;
-        options.bgAlpha = 255;
+        options.bgAlpha = 0;
         options.windowOpacity = 255;
-        options.color = RGB(255, 255, 255);
+        options.color = RGB(0,0,0);
         options.draggable = true;
         options.clickThrough = false;
         options.keepOnScreen = false;
@@ -452,6 +465,12 @@ namespace JSApi {
 
             duk_push_c_function(ctx, js_widget_get_properties, 0);
             duk_put_prop_string(ctx, -2, "getProperties");
+
+            duk_push_c_function(ctx, js_widget_close, 0);
+            duk_put_prop_string(ctx, -2, "close");
+
+            duk_push_c_function(ctx, js_novadesk_refresh, 0); // Full reload like Rainmeter
+            duk_put_prop_string(ctx, -2, "refresh");
             
             return 1; // Return the object
         }
@@ -518,7 +537,12 @@ namespace JSApi {
 
         if (duk_get_prop_string(ctx, 0, "id")) id = Utils::ToWString(duk_get_string(ctx, -1));
         duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "path")) path = Utils::ToWString(duk_get_string(ctx, -1));
+        if (duk_get_prop_string(ctx, 0, "path")) {
+            path = Utils::ToWString(duk_get_string(ctx, -1));
+            if (!path.empty() && PathIsRelativeW(path.c_str())) {
+                path = GetWidgetsDir() + path;
+            }
+        }
         duk_pop(ctx);
         if (duk_get_prop_string(ctx, 0, "x")) x = duk_get_int(ctx, -1);
         duk_pop(ctx);
@@ -623,6 +647,10 @@ namespace JSApi {
 
         std::wstring id = Utils::ToWString(duk_get_string(ctx, 0));
         std::wstring path = Utils::ToWString(duk_get_string(ctx, 1));
+        
+        if (!path.empty() && PathIsRelativeW(path.c_str())) {
+            path = GetWidgetsDir() + path;
+        }
 
         bool result = widget->UpdateImage(id, path);
         duk_push_boolean(ctx, result);
@@ -791,6 +819,28 @@ namespace JSApi {
         return 1;
     }
 
+    duk_ret_t js_widget_close(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "widgetPtr");
+        Widget* widget = (Widget*)duk_get_pointer(ctx, -1);
+        duk_pop_2(ctx);
+
+        if (!widget) return DUK_RET_TYPE_ERROR;
+
+        delete widget;
+        
+        duk_push_this(ctx);
+        duk_del_prop_string(ctx, -1, "\xFF" "widgetPtr");
+        duk_pop(ctx);
+
+        return 0;
+    }
+
+    duk_ret_t js_novadesk_refresh(duk_context* ctx) {
+        ReloadScripts(ctx);
+        return 0;
+    }
+
     void ExecuteScript(const std::wstring& script) {
         if (!s_JsContext) {
             Logging::Log(LogLevel::Error, L"ExecuteScript: Context not set");
@@ -802,6 +852,12 @@ namespace JSApi {
             Logging::Log(LogLevel::Error, L"JS Error: %S", duk_safe_to_string(s_JsContext, -1));
         }
         duk_pop(s_JsContext); // pop result/error
+    }
+
+    void TriggerFullRefresh() {
+        if (s_JsContext) {
+            ReloadScripts(s_JsContext);
+        }
     }
 
     void InitializeJavaScriptAPI(duk_context* ctx) {
@@ -868,6 +924,12 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "system");
 
         duk_put_global_string(ctx, "novadesk");
+
+        // Add refresh method to novadesk
+        duk_get_global_string(ctx, "novadesk");
+        duk_push_c_function(ctx, js_novadesk_refresh, 0);
+        duk_put_prop_string(ctx, -2, "refresh");
+        duk_pop(ctx);
 
         // Register widgetWindow constructor
         duk_push_c_function(ctx, js_create_widget_window, 1);

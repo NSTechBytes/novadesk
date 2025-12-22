@@ -19,21 +19,21 @@
 struct WidgetOptions
 {
     std::wstring id;
-    int x;
-    int y;
-    int width;
-    int height;
-    std::wstring backgroundColor;
-    ZPOSITION zPos;
-    BYTE bgAlpha;        // Alpha component of background color (0-255)
-    BYTE windowOpacity;  // Overall window opacity (0-255)
-    COLORREF color;
-    bool draggable;
-    bool clickThrough;
-    bool keepOnScreen;
-    bool snapEdges;
-    bool m_WDefined;
-    bool m_HDefined;
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+    std::wstring backgroundColor = L"rgba(255,255,255,255)";
+    ZPOSITION zPos = ZPOSITION_NORMAL;
+    BYTE bgAlpha = 255;        // Alpha component of background color (0-255)
+    BYTE windowOpacity = 255;  // Overall window opacity (0-255)
+    COLORREF color = RGB(255, 255, 255);
+    bool draggable = true;
+    bool clickThrough = false;
+    bool keepOnScreen = false;
+    bool snapEdges = true;
+    bool m_WDefined = false;
+    bool m_HDefined = false;
 };
 
 class Widget

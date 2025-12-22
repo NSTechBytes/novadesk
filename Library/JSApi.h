@@ -82,4 +82,5 @@ namespace JSApi {
     void OnTimer(UINT_PTR id);
     void OnMessage(UINT message, WPARAM wParam, LPARAM lParam);
     void SetMessageWindow(HWND hWnd);
+    void TriggerFullRefresh();
 }

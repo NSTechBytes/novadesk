@@ -8,6 +8,7 @@
 #include "Widget.h"
 #include "Logging.h"
 #include "Settings.h"
+#include "Resource.h"
 #include <vector>
 #include <windowsx.h>
 #include <algorithm>
@@ -697,6 +698,7 @@ void Widget::ClearContent()
         delete element;
     }
     m_Elements.clear();
+    m_MouseOverElement = nullptr; // Fix dangling pointer
     Redraw();
 }
 
@@ -866,15 +868,29 @@ void Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             if (m_MouseOverElement)
             {
                 m_MouseOverElement->m_IsMouseOver = false;
-                if (!m_MouseOverElement->m_OnMouseLeave.empty())
-                    JSApi::ExecuteScript(m_MouseOverElement->m_OnMouseLeave);
+                std::wstring leaveAction = m_MouseOverElement->m_OnMouseLeave;
+                if (!leaveAction.empty())
+                    JSApi::ExecuteScript(leaveAction);
+                
+                // If ExecuteScript cleared the elements, m_MouseOverElement is now invalid
+                if (m_Elements.empty()) {
+                    m_MouseOverElement = nullptr;
+                    return; 
+                }
             }
 
             if (hitElement)
             {
                 hitElement->m_IsMouseOver = true;
-                if (!hitElement->m_OnMouseOver.empty())
-                    JSApi::ExecuteScript(hitElement->m_OnMouseOver);
+                std::wstring overAction = hitElement->m_OnMouseOver;
+                if (!overAction.empty())
+                    JSApi::ExecuteScript(overAction);
+
+                // If ExecuteScript cleared the elements, hitElement is now invalid
+                if (m_Elements.empty()) {
+                    m_MouseOverElement = nullptr;
+                    return;
+                }
             }
             m_MouseOverElement = hitElement;
         }
@@ -891,8 +907,9 @@ void Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         if (m_MouseOverElement)
         {
              m_MouseOverElement->m_IsMouseOver = false;
-             if (!m_MouseOverElement->m_OnMouseLeave.empty())
-                 JSApi::ExecuteScript(m_MouseOverElement->m_OnMouseLeave);
+             std::wstring leaveAction = m_MouseOverElement->m_OnMouseLeave;
+             if (!leaveAction.empty())
+                 JSApi::ExecuteScript(leaveAction);
              m_MouseOverElement = nullptr;
         }
     }
@@ -936,6 +953,7 @@ void Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
         if (!action.empty())
         {
+            // ExecuteScript might clear elements, so we must use our local copy of the action string
             JSApi::ExecuteScript(action);
         }
     }
