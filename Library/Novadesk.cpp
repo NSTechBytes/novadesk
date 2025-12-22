@@ -45,8 +45,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_ int       nCmdShow)
 {
     UNREFERENCED_PARAMETER(hPrevInstance);
-    UNREFERENCED_PARAMETER(lpCmdLine);
     UNREFERENCED_PARAMETER(nCmdShow);
+
+    // Single instance enforcement
+    HANDLE hMutex = CreateMutex(NULL, TRUE, L"Global\\NovadeskMutex");
+    if (GetLastError() == ERROR_ALREADY_EXISTS)
+    {
+        if (hMutex) CloseHandle(hMutex);
+        return 0;
+    }
 
     Logging::Log(LogLevel::Info, L"Application starting...");
     System::Initialize(hInstance);
@@ -130,8 +137,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // Initialize JavaScript API
     JSApi::InitializeJavaScriptAPI(ctx);
 
-    // Load and execute script
-    JSApi::LoadAndExecuteScript(ctx);
+    // Parse command line for custom script path
+    std::wstring scriptPath;
+    if (lpCmdLine && wcslen(lpCmdLine) > 0)
+    {
+        // Remove quotes if present
+        scriptPath = lpCmdLine;
+        if (!scriptPath.empty() && scriptPath.front() == L'"' && scriptPath.back() == L'"')
+        {
+            scriptPath = scriptPath.substr(1, scriptPath.length() - 2);
+        }
+        Logging::Log(LogLevel::Info, L"Using custom script: %s", scriptPath.c_str());
+    }
+
+    // Load and execute script (with optional custom path)
+    JSApi::LoadAndExecuteScript(ctx, scriptPath.empty() ? L"" : scriptPath);
 
     MSG msg;
 
@@ -149,6 +169,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     
     // Convert GDI+ shutdown
     GdiplusShutdown(gdiplusToken);
+
+    // Close mutex
+    if (hMutex) CloseHandle(hMutex);
 
     return (int) msg.wParam;
 }

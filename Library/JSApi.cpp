@@ -49,6 +49,7 @@ namespace JSApi {
 
     // Global context pointer for callbacks
     static duk_context* s_JsContext = nullptr;
+    static std::wstring s_CurrentScriptPath = L""; // Remember script path for reloads
 
     // Helper to read file content
     std::string ReadFileContent(const std::wstring& path) {
@@ -1001,20 +1002,50 @@ namespace JSApi {
         Logging::Log(LogLevel::Info, L"JavaScript API initialized");
     }
 
-    bool LoadAndExecuteScript(duk_context* ctx) {
+    bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath) {
         // Reset logging state to defaults before each load
         Logging::SetConsoleLogging(true);
         Logging::SetFileLogging(L"");
         Logging::SetLogLevel(LogLevel::Info);
 
-        // Get executable path to find index.js
-        std::wstring scriptPath = GetWidgetsDir() + L"index.js";
+        // Determine which script to load
+        std::wstring finalScriptPath;
+        if (!scriptPath.empty())
+        {
+            // Custom path provided
+            finalScriptPath = scriptPath;
+            // Check if it's a relative path
+            if (PathIsRelativeW(finalScriptPath.c_str()))
+            {
+                // Make it relative to exe directory
+                wchar_t exePath[MAX_PATH];
+                GetModuleFileNameW(NULL, exePath, MAX_PATH);
+                std::wstring exeDir = exePath;
+                size_t lastBackslash = exeDir.find_last_of(L"\\");
+                exeDir = exeDir.substr(0, lastBackslash + 1);
+                finalScriptPath = exeDir + scriptPath;
+            }
+            s_CurrentScriptPath = finalScriptPath; // Remember for reloads
+        }
+        else
+        {
+            // Use default or previously loaded path
+            if (s_CurrentScriptPath.empty())
+            {
+                finalScriptPath = GetWidgetsDir() + L"index.js";
+                s_CurrentScriptPath = finalScriptPath;
+            }
+            else
+            {
+                finalScriptPath = s_CurrentScriptPath;
+            }
+        }
 
-        Logging::Log(LogLevel::Info, L"Loading script from: %s", scriptPath.c_str());
+        Logging::Log(LogLevel::Info, L"Loading script from: %s", finalScriptPath.c_str());
 
-        std::string content = ReadFileContent(scriptPath);
+        std::string content = ReadFileContent(finalScriptPath);
         if (content.empty()) {
-            Logging::Log(LogLevel::Error, L"Failed to open index.js at %s", scriptPath.c_str());
+            Logging::Log(LogLevel::Error, L"Failed to open script at %s", finalScriptPath.c_str());
             return false;
         }
         Logging::Log(LogLevel::Info, L"Script loaded, size: %zu", content.size());

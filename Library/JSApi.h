@@ -19,16 +19,18 @@ namespace JSApi {
     void InitializeJavaScriptAPI(duk_context* ctx);
 
     /*
-    ** Load and execute the main JavaScript file (index.js).
-    ** Searches for index.js in the same directory as the executable.
-    ** Calls novadeskAppReady() function if defined in the script.
+    ** Load and execute the main JavaScript file.
+    ** If scriptPath is empty, uses default Widgets\index.js.
+    ** If scriptPath is provided, uses that path (supports relative and absolute).
+    ** Calls onAppReady() function if defined in the script.
     ** Returns true on success, false on failure.
     */
-    bool LoadAndExecuteScript(duk_context* ctx);
+    bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath = L"");
 
     /*
     ** Reload all JavaScript scripts.
-    ** Destroys all existing widgets and reloads index.js.
+    ** Destroys all existing widgets and reloads the script.
+    ** Uses the same script path that was initially loaded.
     ** Useful for development and testing without restarting the application.
     */
     void ReloadScripts(duk_context* ctx);
