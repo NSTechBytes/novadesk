@@ -383,8 +383,6 @@ namespace JSApi {
         duk_push_number(ctx, (double)stats.freeSpace); duk_put_prop_string(ctx, -2, "free");
         duk_push_number(ctx, (double)stats.usedSpace); duk_put_prop_string(ctx, -2, "used");
         duk_push_int(ctx, stats.percentUsed); duk_put_prop_string(ctx, -2, "percent");
-        duk_push_number(ctx, stats.readBytesPerSec); duk_put_prop_string(ctx, -2, "readSpeed");
-        duk_push_number(ctx, stats.writeBytesPerSec); duk_put_prop_string(ctx, -2, "writeSpeed");
         return 1;
     }
 

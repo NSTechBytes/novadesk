@@ -22,16 +22,10 @@ public:
         unsigned __int64 freeSpace;       // Free disk space in bytes
         unsigned __int64 usedSpace;       // Used disk space in bytes
         int percentUsed;                  // Percentage used
-        double readBytesPerSec;           // Read speed in bytes/sec
-        double writeBytesPerSec;          // Write speed in bytes/sec
     };
 
     Stats GetStats();
 
 private:
     std::wstring m_DriveLetter;
-    unsigned __int64 m_LastReadBytes;
-    unsigned __int64 m_LastWriteBytes;
-    ULONGLONG m_LastUpdateTime;
-    bool m_FirstUpdate;
 };
