@@ -47,9 +47,29 @@ function createClockWidget() {
 
 }
 
+function testMonitors() {
+    // Test CPU Monitor
+    var cpu = new novadesk.system.CPU();
+    var usage = cpu.usage();
+    novadesk.log("CPU Usage: " + usage + "%");
+    cpu.destroy(); // Clean up
+    novadesk.log("CPU Monitor destroyed");
+
+    // Test Memory Monitor
+    var mem = new novadesk.system.Memory();
+    var stats = mem.stats();
+    novadesk.log("Memory Used: " + stats.used + " / " + stats.total + " (" + stats.percent + "%)");
+    mem.destroy(); // Clean up
+    novadesk.log("Memory Monitor destroyed");
+}
 
 function onAppReady() {
     createClockWidget();
+
+    // Test monitor cleanup after 2 seconds
+    novadesk.setTimeout(function () {
+        testMonitors();
+    }, 2000);
 
     // --- API Examples ---
     // 1. widget.refresh() - Clears all elements (flicker-free)

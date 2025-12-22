@@ -196,9 +196,21 @@ namespace JSApi {
         duk_push_this(ctx);
         duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
         CPUMonitor* monitor = (CPUMonitor*)duk_get_pointer(ctx, -1);
-        if (!monitor) return DUK_RET_TYPE_ERROR;
+        if (!monitor) return DUK_RET_ERROR;
         duk_push_number(ctx, monitor->GetUsage());
         return 1;
+    }
+
+    duk_ret_t js_cpu_destroy(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
+        CPUMonitor* monitor = (CPUMonitor*)duk_get_pointer(ctx, -1);
+        if (monitor) {
+            delete monitor;
+            duk_push_pointer(ctx, nullptr);
+            duk_put_prop_string(ctx, -3, "\xFF" "monitorPtr");
+        }
+        return 0;
     }
 
     // Memory Monitor JS methods
@@ -222,14 +234,26 @@ namespace JSApi {
         duk_push_this(ctx);
         duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
         MemoryMonitor* monitor = (MemoryMonitor*)duk_get_pointer(ctx, -1);
-        if (!monitor) return DUK_RET_TYPE_ERROR;
-        MemoryMonitor::Stats stats = monitor->GetStats();
+        if (!monitor) return DUK_RET_ERROR;
+        auto stats = monitor->GetStats();
         duk_push_object(ctx);
-        duk_push_number(ctx, (double)stats.usedPhys); duk_put_prop_string(ctx, -2, "used");
         duk_push_number(ctx, (double)stats.totalPhys); duk_put_prop_string(ctx, -2, "total");
         duk_push_number(ctx, (double)stats.availPhys); duk_put_prop_string(ctx, -2, "available");
+        duk_push_number(ctx, (double)stats.usedPhys); duk_put_prop_string(ctx, -2, "used");
         duk_push_int(ctx, stats.memoryLoad); duk_put_prop_string(ctx, -2, "percent");
         return 1;
+    }
+
+    duk_ret_t js_memory_destroy(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
+        MemoryMonitor* monitor = (MemoryMonitor*)duk_get_pointer(ctx, -1);
+        if (monitor) {
+            delete monitor;
+            duk_push_pointer(ctx, nullptr);
+            duk_put_prop_string(ctx, -3, "\xFF" "monitorPtr");
+        }
+        return 0;
     }
 
     duk_ret_t js_system_get_workspace_variables(duk_context* ctx) {
@@ -968,6 +992,7 @@ namespace JSApi {
         duk_push_c_function(ctx, js_cpu_constructor, 1);
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_cpu_usage, 0); duk_put_prop_string(ctx, -2, "usage");
+        duk_push_c_function(ctx, js_cpu_destroy, 0); duk_put_prop_string(ctx, -2, "destroy");
         duk_put_prop_string(ctx, -2, "prototype");
         duk_push_c_function(ctx, js_cpu_finalizer, 1);
         duk_set_finalizer(ctx, -2);
@@ -977,6 +1002,7 @@ namespace JSApi {
         duk_push_c_function(ctx, js_memory_constructor, 0);
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_memory_stats, 0); duk_put_prop_string(ctx, -2, "stats");
+        duk_push_c_function(ctx, js_memory_destroy, 0); duk_put_prop_string(ctx, -2, "destroy");
         duk_put_prop_string(ctx, -2, "prototype");
         duk_push_c_function(ctx, js_memory_finalizer, 1);
         duk_set_finalizer(ctx, -2);
