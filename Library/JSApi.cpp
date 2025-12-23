@@ -442,6 +442,53 @@ namespace JSApi {
         return 1;
     }
 
+    duk_ret_t js_get_env(duk_context* ctx) {
+        if (!duk_is_string(ctx, 0)) {
+            return DUK_RET_TYPE_ERROR;
+        }
+        
+        std::wstring varName = Utils::ToWString(duk_get_string(ctx, 0));
+        wchar_t buffer[32767]; // Max environment variable size
+        
+        DWORD result = GetEnvironmentVariableW(varName.c_str(), buffer, 32767);
+        if (result == 0) {
+            duk_push_null(ctx);
+        } else {
+            duk_push_string(ctx, Utils::ToString(buffer).c_str());
+        }
+        return 1;
+    }
+
+    duk_ret_t js_get_all_env(duk_context* ctx) {
+        LPWCH envStrings = GetEnvironmentStringsW();
+        if (!envStrings) {
+            duk_push_object(ctx);
+            return 1;
+        }
+        
+        duk_push_object(ctx);
+        LPWCH current = envStrings;
+        
+        while (*current) {
+            std::wstring entry = current;
+            size_t pos = entry.find(L'=');
+            
+            // Skip entries that start with '=' (system variables)
+            if (pos != std::wstring::npos && pos > 0) {
+                std::wstring key = entry.substr(0, pos);
+                std::wstring value = entry.substr(pos + 1);
+                
+                duk_push_string(ctx, Utils::ToString(value).c_str());
+                duk_put_prop_string(ctx, -2, Utils::ToString(key).c_str());
+            }
+            
+            current += wcslen(current) + 1;
+        }
+        
+        FreeEnvironmentStringsW(envStrings);
+        return 1;
+    }
+
     duk_ret_t js_system_get_workspace_variables(duk_context* ctx) {
         const MultiMonitorInfo& info = System::GetMultiMonitorInfo();
         duk_push_object(ctx);
@@ -1161,6 +1208,10 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "onReady");
         duk_push_c_function(ctx, js_get_exe_path, 0);
         duk_put_prop_string(ctx, -2, "getExePath");
+        duk_push_c_function(ctx, js_get_env, 1);
+        duk_put_prop_string(ctx, -2, "getEnv");
+        duk_push_c_function(ctx, js_get_all_env, 0);
+        duk_put_prop_string(ctx, -2, "getAllEnv");
 
         // novadesk.system object with constructors
         duk_push_object(ctx);

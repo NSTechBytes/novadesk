@@ -88,6 +88,15 @@ novadesk.onReady(function () {
     novadesk.log("Directory: " + exePath.directory);
     novadesk.log("Filename: " + exePath.filename);
 
+    // Test environment variables
+    novadesk.log("Username: " + novadesk.getEnv("USERNAME"));
+    novadesk.log("Temp: " + novadesk.getEnv("TEMP"));
+    novadesk.log("User Profile: " + novadesk.getEnv("USERPROFILE"));
+
+    // Test getting all environment variables
+    var allEnv = novadesk.getAllEnv();
+    novadesk.log("Total environment variables: " + Object.keys(allEnv).length);
+
     createClockWidget();
 
     // Call every second - monitors stay alive and track changes
