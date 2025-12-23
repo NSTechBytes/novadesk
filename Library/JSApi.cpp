@@ -16,12 +16,12 @@
 #include "NetworkMonitor.h"
 #include "MouseMonitor.h"
 #include "DiskMonitor.h"
+#include "PathUtils.h"
 #include <map>
 #include <fstream>
 #include <sstream>
 #include <Windows.h>
-#include <shlwapi.h>
-#pragma comment(lib, "shlwapi.lib")
+#include <Windows.h>
 #include "Novadesk.h"
 #include <cwctype>
 #include <algorithm>
@@ -69,14 +69,6 @@ namespace JSApi {
         return buffer.str();
     }
 
-    // Helper to get Widgets directory
-    std::wstring GetWidgetsDir() {
-        wchar_t path[MAX_PATH];
-        GetModuleFileNameW(NULL, path, MAX_PATH);
-        std::wstring exePath = path;
-        size_t lastBackslash = exePath.find_last_of(L"\\");
-        return exePath.substr(0, lastBackslash + 1) + L"Widgets\\";
-    }
 
     // Helper to call a JS function by its index in the "pending handlers" object
     void CallStoredCallback(int id) {
@@ -448,13 +440,10 @@ namespace JSApi {
     }
 
     duk_ret_t js_get_exe_path(duk_context* ctx) {
-        wchar_t exePath[MAX_PATH];
-        GetModuleFileNameW(NULL, exePath, MAX_PATH);
-        
-        std::wstring fullPath = exePath;
+        std::wstring fullPath = PathUtils::GetExePath();
+        std::wstring directory = PathUtils::GetExeDir();
         size_t lastBackslash = fullPath.find_last_of(L"\\");
-        std::wstring directory = fullPath.substr(0, lastBackslash + 1);
-        std::wstring filename = fullPath.substr(lastBackslash + 1);
+        std::wstring filename = (lastBackslash != std::wstring::npos) ? fullPath.substr(lastBackslash + 1) : fullPath;
         
         duk_push_object(ctx);
         duk_push_string(ctx, Utils::ToString(fullPath).c_str());
@@ -637,7 +626,7 @@ namespace JSApi {
     // JS API: novadesk.include(filename)
     duk_ret_t js_include(duk_context* ctx) {
         std::wstring filename = Utils::ToWString(duk_require_string(ctx, 0));
-        std::wstring fullPath = GetWidgetsDir() + filename;
+        std::wstring fullPath = PathUtils::ResolvePath(filename, PathUtils::GetWidgetsDir());
 
         std::string content = ReadFileContent(fullPath);
         if (content.empty()) {
@@ -892,9 +881,7 @@ namespace JSApi {
         duk_pop(ctx);
         if (duk_get_prop_string(ctx, 0, "path")) {
             path = Utils::ToWString(duk_get_string(ctx, -1));
-            if (!path.empty() && PathIsRelativeW(path.c_str())) {
-                path = GetWidgetsDir() + path;
-            }
+            path = PathUtils::ResolvePath(path, PathUtils::GetWidgetsDir());
         }
         duk_pop(ctx);
         if (duk_get_prop_string(ctx, 0, "x")) x = duk_get_int(ctx, -1);
@@ -999,12 +986,8 @@ namespace JSApi {
         if (!widget) return DUK_RET_TYPE_ERROR;
 
         std::wstring id = Utils::ToWString(duk_get_string(ctx, 0));
-        std::wstring path = Utils::ToWString(duk_get_string(ctx, 1));
+        std::wstring path = PathUtils::ResolvePath(Utils::ToWString(duk_get_string(ctx, 1)), PathUtils::GetWidgetsDir());
         
-        if (!path.empty() && PathIsRelativeW(path.c_str())) {
-            path = GetWidgetsDir() + path;
-        }
-
         bool result = widget->UpdateImage(id, path);
         duk_push_boolean(ctx, result);
         return 1;
@@ -1247,14 +1230,7 @@ namespace JSApi {
                     Logging::Log(LogLevel::Info, L"Directive: All logging disabled");
                 }
                 else if (directive == "logToFile") {
-                    // Get exe directory (parent of Widgets)
-                    wchar_t exePath[MAX_PATH];
-                    GetModuleFileNameW(NULL, exePath, MAX_PATH);
-                    std::wstring exeDir = exePath;
-                    size_t lastBackslash = exeDir.find_last_of(L"\\");
-                    exeDir = exeDir.substr(0, lastBackslash + 1);
-                    
-                    std::wstring logPath = exeDir + L"novadesk.log";
+                    std::wstring logPath = PathUtils::GetExeDir() + L"novadesk.log";
                     Logging::SetFileLogging(logPath);
                     Logging::Log(LogLevel::Info, L"Directive: File logging enabled to %s", logPath.c_str());
                 }
@@ -1416,15 +1392,10 @@ namespace JSApi {
             // Custom path provided
             finalScriptPath = scriptPath;
             // Check if it's a relative path
-            if (PathIsRelativeW(finalScriptPath.c_str()))
+            if (PathUtils::IsPathRelative(finalScriptPath))
             {
                 // Make it relative to exe directory
-                wchar_t exePath[MAX_PATH];
-                GetModuleFileNameW(NULL, exePath, MAX_PATH);
-                std::wstring exeDir = exePath;
-                size_t lastBackslash = exeDir.find_last_of(L"\\");
-                exeDir = exeDir.substr(0, lastBackslash + 1);
-                finalScriptPath = exeDir + scriptPath;
+                finalScriptPath = PathUtils::ResolvePath(finalScriptPath);
             }
             s_CurrentScriptPath = finalScriptPath; // Remember for reloads
         }
@@ -1433,7 +1404,7 @@ namespace JSApi {
             // Use default or previously loaded path
             if (s_CurrentScriptPath.empty())
             {
-                finalScriptPath = GetWidgetsDir() + L"index.js";
+                finalScriptPath = PathUtils::ResolvePath(L"index.js", PathUtils::GetWidgetsDir());
                 s_CurrentScriptPath = finalScriptPath;
             }
             else

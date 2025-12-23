@@ -156,6 +156,7 @@
     <ClInclude Include="Library\Resource.h" />
     <ClInclude Include="Library\targetver.h" />
     <ClInclude Include="Library\Settings.h" />
+    <ClInclude Include="Library\PathUtils.h" />
     <ClInclude Include="Library\json\json.hpp" />
   </ItemGroup>
   <ItemGroup>
@@ -174,6 +175,7 @@
     <ClCompile Include="Library\MemoryMonitor.cpp" />
     <ClCompile Include="Library\duktape\duktape.c" />
     <ClCompile Include="Library\Novadesk.cpp" />
+    <ClCompile Include="Library\PathUtils.cpp" />
     <ClCompile Include="Library\Logging.cpp" />
   </ItemGroup>
   <ItemGroup>
