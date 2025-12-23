@@ -23,6 +23,9 @@ Text::Text(const std::wstring& id, int x, int y, int w, int h,
 
 void Text::Render(Graphics& graphics)
 {
+    // Draw background first
+    RenderBackground(graphics);
+
     // Create font
     INT fontStyle = FontStyleRegular;
     if (m_Bold) fontStyle |= FontStyleBold;

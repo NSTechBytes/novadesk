@@ -816,8 +816,16 @@ namespace JSApi {
         duk_pop(ctx);
         if (duk_get_prop_string(ctx, 0, "height")) h = duk_get_int(ctx, -1);
         duk_pop(ctx);
+        
+        std::wstring solidColor = L"";
+        if (duk_get_prop_string(ctx, 0, "solidcolor")) solidColor = Utils::ToWString(duk_get_string(ctx, -1));
+        duk_pop(ctx);
 
-        widget->AddImage(id, x, y, w, h, path);
+        int solidColorRadius = 0;
+        if (duk_get_prop_string(ctx, 0, "solidcolorradius")) solidColorRadius = duk_get_int(ctx, -1);
+        duk_pop(ctx);
+
+        widget->AddImage(id, x, y, w, h, path, solidColor, solidColorRadius);
         
         // Parse Mouse Actions
         Element* el = widget->FindElementById(id);
@@ -899,7 +907,15 @@ namespace JSApi {
         if (duk_get_prop_string(ctx, 0, "clipstringh")) clipH = duk_get_int(ctx, -1);
         duk_pop(ctx);
 
-        widget->AddText(id, x, y, w, h, text, fontFamily, fontSize, color, alpha, bold, italic, align, clip, clipW, clipH);
+        std::wstring solidColor = L"";
+        if (duk_get_prop_string(ctx, 0, "solidcolor")) solidColor = Utils::ToWString(duk_get_string(ctx, -1));
+        duk_pop(ctx);
+
+        int solidColorRadius = 0;
+        if (duk_get_prop_string(ctx, 0, "solidcolorradius")) solidColorRadius = duk_get_int(ctx, -1);
+        duk_pop(ctx);
+
+        widget->AddText(id, x, y, w, h, text, fontFamily, fontSize, color, alpha, bold, italic, align, clip, clipW, clipH, solidColor, solidColorRadius);
         
         // Parse Mouse Actions
         Element* el = widget->FindElementById(id);

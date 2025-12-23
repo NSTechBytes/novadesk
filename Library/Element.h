@@ -11,7 +11,21 @@
 #include <windows.h>
 #include <objidl.h>
 #include <gdiplus.h>
+#include <windows.h>
+#include <objidl.h>
+#include <gdiplus.h>
 #include <string>
+
+// Helper macros for color extraction from COLORREF (0x00BBGGRR)
+#ifndef GetRValue
+#define GetRValue(rgb)      (LOBYTE(rgb))
+#endif
+#ifndef GetGValue
+#define GetGValue(rgb)      (LOBYTE((WORD)(rgb) >> 8))
+#endif
+#ifndef GetBValue
+#define GetBValue(rgb)      (LOBYTE((rgb) >> 16))
+#endif
 
 /*
 ** Content type enumeration.
@@ -88,6 +102,16 @@ public:
         return (x >= m_X && x < m_X + w && y >= m_Y && y < m_Y + h);
     }
 
+    void SetSolidColor(COLORREF color, BYTE alpha) { 
+        m_SolidColor = color; 
+        m_SolidAlpha = alpha; 
+        m_HasSolidColor = true; 
+    }
+
+    void SetCornerRadius(int radius) { 
+        m_CornerRadius = radius; 
+    }
+
     /*
     ** Check if this element should be hit even if it's transparent.
     ** (e.g. for SolidColor in Rainmeter)
@@ -161,6 +185,43 @@ protected:
     int m_X, m_Y;
     int m_Width, m_Height;
     bool m_WDefined, m_HDefined;
+    
+    // Background properties
+    bool m_HasSolidColor = false;
+    COLORREF m_SolidColor = 0;
+    BYTE m_SolidAlpha = 0;
+    int m_CornerRadius = 0;
+
+    void RenderBackground(Gdiplus::Graphics& graphics) {
+        if (!m_HasSolidColor) return;
+
+        Gdiplus::Color backColor(m_SolidAlpha, GetRValue(m_SolidColor), GetGValue(m_SolidColor), GetBValue(m_SolidColor));
+        Gdiplus::SolidBrush backBrush(backColor);
+        
+        int w = GetWidth();
+        int h = GetHeight();
+        
+        if (m_CornerRadius > 0) {
+            // Draw rounded rectangle
+            Gdiplus::GraphicsPath path;
+            int d = m_CornerRadius * 2;
+            
+            // Should clamp radius to half width/height
+            if (d > w) d = w;
+            if (d > h) d = h;
+
+            Gdiplus::Rect r(m_X, m_Y, w, h);
+            path.AddArc(r.X, r.Y, d, d, 180, 90);
+            path.AddArc(r.X + r.Width - d, r.Y, d, d, 270, 90);
+            path.AddArc(r.X + r.Width - d, r.Y + r.Height - d, d, d, 0, 90);
+            path.AddArc(r.X, r.Y + r.Height - d, d, d, 90, 90);
+            path.CloseFigure();
+            
+            graphics.FillPath(&backBrush, &path);
+        } else {
+            graphics.FillRectangle(&backBrush, m_X, m_Y, w, h);
+        }
+    }
 };
 
 #endif

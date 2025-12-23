@@ -130,7 +130,8 @@ public:
     ** The image will be loaded and cached for rendering.
     */
     void AddImage(const std::wstring& id, int x, int y, int w, int h, 
-                  const std::wstring& path);
+                  const std::wstring& path, const std::wstring& solidColor = L"",
+                  int solidColorRadius = 0);
 
     /*
     ** Add a text content item to the widget.
@@ -140,7 +141,8 @@ public:
                  const std::wstring& text, const std::wstring& fontFamily,
                  int fontSize, COLORREF color, BYTE alpha, bool bold = false,
                  bool italic = false, Alignment align = ALIGN_LEFT_TOP,
-                 ClipString clip = CLIP_NONE, int clipW = -1, int clipH = -1);
+                 ClipString clip = CLIP_NONE, int clipW = -1, int clipH = -1,
+                 const std::wstring& solidColor = L"", int solidColorRadius = 0);
 
     /*
     ** Update an existing image content item with a new image path.

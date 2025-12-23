@@ -53,6 +53,9 @@ void ImageElement::UpdateImage(const std::wstring& path)
 
 void ImageElement::Render(Graphics& graphics)
 {
+    // Draw background first
+    RenderBackground(graphics);
+
     if (!m_Image) return;
     
     RectF destRect((REAL)m_X, (REAL)m_Y, (REAL)GetWidth(), (REAL)GetHeight());
@@ -76,6 +79,9 @@ bool ImageElement::HitTest(int x, int y)
     // Bounding box check first
     if (!Element::HitTest(x, y)) return false;
     
+    // If we have a solid background, the entire box is hit
+    if (m_HasSolidColor && m_SolidAlpha > 0) return true;
+
     if (!m_Image) return false;
 
     // Map widget coordinates to image coordinates

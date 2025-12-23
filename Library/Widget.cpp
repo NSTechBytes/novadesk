@@ -626,12 +626,29 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 // ============================================================================
 
 void Widget::AddImage(const std::wstring& id, int x, int y, int w, int h,
-                      const std::wstring& path)
+                      const std::wstring& path, const std::wstring& solidColor,
+                      int solidColorRadius)
 {
     // Remove existing if any
     RemoveContent(id);
 
     ImageElement* element = new ImageElement(id, x, y, w, h, path);
+    
+    if (!solidColor.empty())
+    {
+        COLORREF color = 0;
+        BYTE alpha = 0;
+        if (ColorUtil::ParseRGBA(solidColor, color, alpha))
+        {
+            element->SetSolidColor(color, alpha);
+        }
+    }
+    
+    if (solidColorRadius > 0)
+    {
+        element->SetCornerRadius(solidColorRadius);
+    }
+    
     m_Elements.push_back(element);
     
     Redraw();
@@ -641,13 +658,30 @@ void Widget::AddText(const std::wstring& id, int x, int y, int w, int h,
                      const std::wstring& text, const std::wstring& fontFamily,
                      int fontSize, COLORREF color, BYTE alpha, bool bold,
                      bool italic, Alignment align,
-                     ClipString clip, int clipW, int clipH)
+                     ClipString clip, int clipW, int clipH,
+                     const std::wstring& solidColor, int solidColorRadius)
 {
     // Remove existing if any
     RemoveContent(id);
 
     Text* element = new Text(id, x, y, w, h, text, fontFamily, fontSize, color, alpha,
                              bold, italic, align, clip, clipW, clipH);
+                             
+    if (!solidColor.empty())
+    {
+        COLORREF c = 0;
+        BYTE a = 0;
+        if (ColorUtil::ParseRGBA(solidColor, c, a))
+        {
+            element->SetSolidColor(c, a);
+        }
+    }
+    
+    if (solidColorRadius > 0)
+    {
+        element->SetCornerRadius(solidColorRadius);
+    }
+
     m_Elements.push_back(element);
     
     Redraw();
