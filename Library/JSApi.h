@@ -8,7 +8,7 @@
 #pragma once
 #include <string>
 #include "duktape/duktape.h"
-#include <Windows.h>
+#include "Hotkey.h"
 
 namespace JSApi {
     /*
@@ -84,5 +84,7 @@ namespace JSApi {
     void OnTimer(UINT_PTR id);
     void OnMessage(UINT message, WPARAM wParam, LPARAM lParam);
     void SetMessageWindow(HWND hWnd);
-    void TriggerFullRefresh();
+    void TriggerFullRefreshInternal();
+    duk_ret_t js_register_hotkey(duk_context* ctx);
+    duk_ret_t js_unregister_hotkey(duk_context* ctx);
 }

@@ -23,6 +23,8 @@
 #include <shlwapi.h>
 #pragma comment(lib, "shlwapi.lib")
 #include "Novadesk.h"
+#include <cwctype>
+#include <algorithm>
 
 extern std::vector<Widget*> widgets;
 
@@ -56,6 +58,7 @@ namespace JSApi {
     // Global context pointer for callbacks
     static duk_context* s_JsContext = nullptr;
     static std::wstring s_CurrentScriptPath = L""; // Remember script path for reloads
+    static int s_NextTempId = 1; 
 
     // Helper to read file content
     std::string ReadFileContent(const std::wstring& path) {
@@ -97,6 +100,27 @@ namespace JSApi {
         }
 
         duk_pop_2(s_JsContext); // Pop __timers and novadesk
+    }
+
+    // Helper to call any JS function by its index in novadesk.__hotkeys
+    void CallHotkeyCallback(int callbackIdx) {
+        if (!s_JsContext || callbackIdx < 0) return;
+
+        duk_get_global_string(s_JsContext, "novadesk");
+        if (duk_get_prop_string(s_JsContext, -1, "__hotkeys")) {
+            duk_push_int(s_JsContext, callbackIdx);
+            if (duk_get_prop(s_JsContext, -2)) {
+                if (duk_is_function(s_JsContext, -1)) {
+                    if (duk_pcall(s_JsContext, 0) != 0) {
+                        Logging::Log(LogLevel::Error, L"Hotkey callback error: %S", duk_safe_to_string(s_JsContext, -1));
+                    }
+                }
+                duk_pop(s_JsContext); // Pop result or error
+            } else {
+                duk_pop(s_JsContext); // Pop undefined
+            }
+        }
+        duk_pop_2(s_JsContext); // Pop __hotkeys and novadesk
     }
 
     // JS API: novadesk.setInterval(cb, ms)
@@ -487,6 +511,66 @@ namespace JSApi {
         
         FreeEnvironmentStringsW(envStrings);
         return 1;
+    }
+
+    duk_ret_t js_register_hotkey(duk_context* ctx) {
+        if (duk_get_top(ctx) < 2) return DUK_RET_TYPE_ERROR;
+
+        std::wstring hotkeyStr = Utils::ToWString(duk_get_string(ctx, 0));
+        int keyDownIdx = -1;
+        int keyUpIdx = -1;
+        
+        int idForCallback = s_NextTempId++; 
+
+        // Ensure JS-side storage exists
+        duk_get_global_string(ctx, "novadesk");
+        if (!duk_get_prop_string(ctx, -1, "__hotkeys")) {
+            duk_pop(ctx);
+            duk_push_object(ctx);
+            duk_put_prop_string(ctx, -2, "__hotkeys");
+            duk_get_prop_string(ctx, -1, "__hotkeys");
+        }
+
+        // Handle arguments: string/object
+        if (duk_is_function(ctx, 1)) {
+            keyDownIdx = idForCallback * 10;
+            duk_push_int(ctx, keyDownIdx);
+            duk_dup(ctx, 1);
+            duk_put_prop(ctx, -3);
+        } else if (duk_is_object(ctx, 1)) {
+            if (duk_get_prop_string(ctx, 1, "onKeyDown") && duk_is_function(ctx, -1)) {
+                keyDownIdx = idForCallback * 10;
+                duk_push_int(ctx, keyDownIdx);
+                duk_dup(ctx, -2);
+                duk_put_prop(ctx, -4);
+            }
+            duk_pop(ctx);
+            if (duk_get_prop_string(ctx, 1, "onKeyUp") && duk_is_function(ctx, -1)) {
+                keyUpIdx = idForCallback * 10 + 1;
+                duk_push_int(ctx, keyUpIdx);
+                duk_dup(ctx, -2);
+                duk_put_prop(ctx, -4);
+            }
+            duk_pop(ctx);
+        }
+        duk_pop_2(ctx); // Pop __hotkeys and novadesk
+
+        int resultId = HotkeyManager::Register(hotkeyStr, keyDownIdx, keyUpIdx);
+        if (resultId < 0) return DUK_RET_ERROR;
+
+        duk_push_int(ctx, resultId);
+        return 1;
+    }
+
+    duk_ret_t js_unregister_hotkey(duk_context* ctx) {
+        if (!duk_is_number(ctx, 0)) return DUK_RET_TYPE_ERROR;
+        int id = duk_get_int(ctx, 0);
+
+        if (HotkeyManager::Unregister(id)) {
+            // Success
+        }
+
+        return 0;
     }
 
     duk_ret_t js_system_get_workspace_variables(duk_context* ctx) {
@@ -1123,7 +1207,7 @@ namespace JSApi {
         duk_pop(s_JsContext); // pop result/error
     }
 
-    void TriggerFullRefresh() {
+    void TriggerFullRefreshInternal() {
         if (s_JsContext) {
             ReloadScripts(s_JsContext);
         }
@@ -1206,12 +1290,21 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "include");
         duk_push_c_function(ctx, js_on_ready, 1);
         duk_put_prop_string(ctx, -2, "onReady");
+
+        // Set Hotkey Manager callback
+        HotkeyManager::SetCallbackHandler([](int idx) {
+            CallHotkeyCallback(idx);
+        });
         duk_push_c_function(ctx, js_get_exe_path, 0);
         duk_put_prop_string(ctx, -2, "getExePath");
         duk_push_c_function(ctx, js_get_env, 1);
         duk_put_prop_string(ctx, -2, "getEnv");
         duk_push_c_function(ctx, js_get_all_env, 0);
         duk_put_prop_string(ctx, -2, "getAllEnv");
+        duk_push_c_function(ctx, js_register_hotkey, 2);
+        duk_put_prop_string(ctx, -2, "registerHotkey");
+        duk_push_c_function(ctx, js_unregister_hotkey, 1);
+        duk_put_prop_string(ctx, -2, "unregisterHotkey");
 
         // novadesk.system object with constructors
         duk_push_object(ctx);
@@ -1386,12 +1479,20 @@ namespace JSApi {
 
     void ReloadScripts(duk_context* ctx) {
         Logging::Log(LogLevel::Info, L"Reloading scripts...");
-
+        
+        // Unregister all hotkeys to prevent leaks and double hooks
+        HotkeyManager::UnregisterAll();
         // Destroy all existing widgets
         for (auto w : widgets) {
             delete w;
         }
         widgets.clear();
+
+        // Clear hotkey callbacks
+        duk_get_global_string(ctx, "novadesk");
+        duk_del_prop_string(ctx, -1, "__hotkeys");
+        duk_pop(ctx);
+        s_NextTempId = 1;
 
         // Reload and execute script
         LoadAndExecuteScript(ctx);

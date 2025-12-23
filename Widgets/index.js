@@ -47,60 +47,82 @@ function createClockWidget() {
 
 }
 
-// Create monitors once and keep them alive
-var cpu = new novadesk.system.CPU();
-var mem = new novadesk.system.Memory();
-var net = new novadesk.system.Network();
-var mouse = new novadesk.system.Mouse();
-var disk = new novadesk.system.Disk({ drive: "C:" });  // Single drive
-var allDisks = new novadesk.system.Disk();              // All drives
+// // Create monitors once and keep them alive
+// var cpu = new novadesk.system.CPU();
+// var mem = new novadesk.system.Memory();
+// var net = new novadesk.system.Network();
+// var mouse = new novadesk.system.Mouse();
+// var disk = new novadesk.system.Disk({ drive: "C:" });  // Single drive
+// var allDisks = new novadesk.system.Disk();              // All drives
 
-function testMonitors() {
-    // Use existing monitors (don't recreate each time)
-    var usage = cpu.usage();
-    novadesk.log("CPU Usage: " + usage + "%");
+// function testMonitors() {
+//     // Use existing monitors (don't recreate each time)
+//     var usage = cpu.usage();
+//     novadesk.log("CPU Usage: " + usage + "%");
 
-    var stats = mem.stats();
-    novadesk.log("Memory Used: " + stats.used + " / " + stats.total + " (" + stats.percent + "%)");
+//     var stats = mem.stats();
+//     novadesk.log("Memory Used: " + stats.used + " / " + stats.total + " (" + stats.percent + "%)");
 
-    var netStats = net.stats();
-    novadesk.log("Network In: " + (netStats.netIn / 1024).toFixed(2) + " KB/s, Out: " + (netStats.netOut / 1024).toFixed(2) + " KB/s");
+//     var netStats = net.stats();
+//     novadesk.log("Network In: " + (netStats.netIn / 1024).toFixed(2) + " KB/s, Out: " + (netStats.netOut / 1024).toFixed(2) + " KB/s");
 
-    var mousePos = mouse.position();
-    novadesk.log("Mouse Position: X=" + mousePos.x + ", Y=" + mousePos.y);
+//     var mousePos = mouse.position();
+//     novadesk.log("Mouse Position: X=" + mousePos.x + ", Y=" + mousePos.y);
 
-    // Single drive
-    var diskStats = disk.stats();
-    novadesk.log("Disk " + diskStats.drive + " " + (diskStats.used / (1024 * 1024 * 1024)).toFixed(2) + " GB / " + (diskStats.total / (1024 * 1024 * 1024)).toFixed(2) + " GB (" + diskStats.percent + "%)");
+//     // Single drive
+//     var diskStats = disk.stats();
+//     novadesk.log("Disk " + diskStats.drive + " " + (diskStats.used / (1024 * 1024 * 1024)).toFixed(2) + " GB / " + (diskStats.total / (1024 * 1024 * 1024)).toFixed(2) + " GB (" + diskStats.percent + "%)");
 
-    // All drives (returns array)
-    var allDiskStats = allDisks.stats();
-    for (var i = 0; i < allDiskStats.length; i++) {
-        var d = allDiskStats[i];
-        novadesk.log("Drive " + d.drive + " " + (d.used / (1024 * 1024 * 1024)).toFixed(2) + " GB / " + (d.total / (1024 * 1024 * 1024)).toFixed(2) + " GB (" + d.percent + "%)");
-    }
-}
+//     // All drives (returns array)
+//     var allDiskStats = allDisks.stats();
+//     for (var i = 0; i < allDiskStats.length; i++) {
+//         var d = allDiskStats[i];
+//         novadesk.log("Drive " + d.drive + " " + (d.used / (1024 * 1024 * 1024)).toFixed(2) + " GB / " + (d.total / (1024 * 1024 * 1024)).toFixed(2) + " GB (" + d.percent + "%)");
+//     }
+// }
 
 novadesk.onReady(function () {
     // Log executable path info
-    var exePath = novadesk.getExePath();
-    novadesk.log("Executable: " + exePath.fullPath);
-    novadesk.log("Directory: " + exePath.directory);
-    novadesk.log("Filename: " + exePath.filename);
+    // var exePath = novadesk.getExePath();
+    // novadesk.log("Executable: " + exePath.fullPath);
+    // novadesk.log("Directory: " + exePath.directory);
+    // novadesk.log("Filename: " + exePath.filename);
 
-    // Test environment variables
-    novadesk.log("Username: " + novadesk.getEnv("USERNAME"));
-    novadesk.log("Temp: " + novadesk.getEnv("TEMP"));
-    novadesk.log("User Profile: " + novadesk.getEnv("USERPROFILE"));
+    // // Test environment variables
+    // novadesk.log("Username: " + novadesk.getEnv("USERNAME"));
+    // novadesk.log("Temp: " + novadesk.getEnv("TEMP"));
+    // novadesk.log("User Profile: " + novadesk.getEnv("USERPROFILE"));
 
-    // Test getting all environment variables
-    var allEnv = novadesk.getAllEnv();
-    novadesk.log("Total environment variables: " + Object.keys(allEnv).length);
+    // // Test getting all environment variables
+    // var allEnv = novadesk.getAllEnv();
+    // novadesk.log("Total environment variables: " + Object.keys(allEnv).length);
+
+    // Test Hotkeys
+    // 1. Simple registration (triggers on KeyDown)
+    novadesk.registerHotkey("Ctrl+Alt+R", function () {
+        novadesk.log("Global Refresh Triggered!");
+        novadesk.refresh();
+    });
+
+    // 2. Advanced registration (KeyDown/KeyUp)
+    novadesk.registerHotkey("Space", {
+        onKeyDown: function () {
+            novadesk.log("SPACE DOWN (Global)");
+        },
+        onKeyUp: function () {
+            novadesk.log("SPACE UP (Global)");
+        }
+    });
+
+    // 3. Win key combination
+    novadesk.registerHotkey("Win+Z", function () {
+        novadesk.log("Win+Z pressed - toggling something...");
+    });
 
     createClockWidget();
 
-    // Call every second - monitors stay alive and track changes
-    setInterval(function () {
-        testMonitors();
-    }, 1000);
+    // // Call every second - monitors stay alive and track changes
+    // setInterval(function () {
+    //     testMonitors();
+    // }, 1000);
 });

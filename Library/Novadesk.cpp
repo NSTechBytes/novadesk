@@ -96,7 +96,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             }
             else if (wmId == ID_TRAY_REFRESH)
             {
-                JSApi::TriggerFullRefresh();
+                JSApi::TriggerFullRefreshInternal();
             }
         }
         break;

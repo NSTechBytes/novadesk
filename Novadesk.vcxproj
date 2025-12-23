@@ -135,6 +135,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Library\Hotkey.h" />
     <ClInclude Include="Library\DiskMonitor.h" />
     <ClInclude Include="Library\Element.h" />
     <ClInclude Include="Library\Image.h" />
@@ -158,6 +159,7 @@
     <ClInclude Include="Library\json\json.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Library\Hotkey.cpp" />
     <ClCompile Include="Library\DiskMonitor.cpp" />
     <ClCompile Include="Library\Image.cpp" />
     <ClCompile Include="Library\MouseMonitor.cpp" />
