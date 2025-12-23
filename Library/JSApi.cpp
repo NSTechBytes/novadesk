@@ -825,7 +825,15 @@ namespace JSApi {
         if (duk_get_prop_string(ctx, 0, "solidcolorradius")) solidColorRadius = duk_get_int(ctx, -1);
         duk_pop(ctx);
 
-        widget->AddImage(id, x, y, w, h, path, solidColor, solidColorRadius);
+        int preserveAspectRatio = 0;
+        if (duk_get_prop_string(ctx, 0, "preserveaspectratio")) preserveAspectRatio = duk_get_int(ctx, -1);
+        duk_pop(ctx);
+
+        std::wstring imageTint = L"";
+        if (duk_get_prop_string(ctx, 0, "imagetint")) imageTint = Utils::ToWString(duk_get_string(ctx, -1));
+        duk_pop(ctx);
+
+        widget->AddImage(id, x, y, w, h, path, solidColor, solidColorRadius, preserveAspectRatio, imageTint);
         
         // Parse Mouse Actions
         Element* el = widget->FindElementById(id);

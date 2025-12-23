@@ -58,8 +58,70 @@ void ImageElement::Render(Graphics& graphics)
 
     if (!m_Image) return;
     
-    RectF destRect((REAL)m_X, (REAL)m_Y, (REAL)GetWidth(), (REAL)GetHeight());
-    graphics.DrawImage(m_Image, destRect);
+    int w = GetWidth();
+    int h = GetHeight();
+    if (w <= 0 || h <= 0) return;
+    
+    REAL finalX = (REAL)m_X;
+    REAL finalY = (REAL)m_Y;
+    REAL finalW = (REAL)w;
+    REAL finalH = (REAL)h;
+    
+    if (m_PreserveAspectRatio == 1) // Preserve (Fit)
+    {
+        REAL imgW = (REAL)m_Image->GetWidth();
+        REAL imgH = (REAL)m_Image->GetHeight();
+        REAL scaleX = (REAL)w / imgW;
+        REAL scaleY = (REAL)h / imgH;
+        REAL scale = min(scaleX, scaleY); // Fit inside
+        
+        finalW = imgW * scale;
+        finalH = imgH * scale;
+        finalX = m_X + (w - finalW) / 2.0f;
+        finalY = m_Y + (h - finalH) / 2.0f;
+    }
+    else if (m_PreserveAspectRatio == 2) // Crop (Fill)
+    {
+        // For crop, we clip content outside the box
+        graphics.SetClip(RectF((REAL)m_X, (REAL)m_Y, (REAL)w, (REAL)h));
+        
+        REAL imgW = (REAL)m_Image->GetWidth();
+        REAL imgH = (REAL)m_Image->GetHeight();
+        REAL scaleX = (REAL)w / imgW;
+        REAL scaleY = (REAL)h / imgH;
+        REAL scale = max(scaleX, scaleY); // Fill the box
+        
+        finalW = imgW * scale;
+        finalH = imgH * scale;
+        finalX = m_X + (w - finalW) / 2.0f;
+        finalY = m_Y + (h - finalH) / 2.0f;
+    }
+    
+    ImageAttributes* attr = nullptr;
+    ImageAttributes imageAttr;
+    
+    if (m_HasImageTint)
+    {
+        ColorMatrix colorMatrix = {
+            (REAL)GetRValue(m_ImageTint)/255.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, (REAL)GetGValue(m_ImageTint)/255.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, (REAL)GetBValue(m_ImageTint)/255.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, (REAL)m_ImageTintAlpha/255.0f, 0.0f, 
+            0.0f, 0.0f, 0.0f, 0.0f, 1.0f
+        };
+        
+        imageAttr.SetColorMatrix(&colorMatrix, ColorMatrixFlagsDefault, ColorAdjustTypeBitmap);
+        attr = &imageAttr;
+    }
+    
+    graphics.DrawImage(m_Image, RectF(finalX, finalY, finalW, finalH), 
+                       0, 0, (REAL)m_Image->GetWidth(), (REAL)m_Image->GetHeight(), 
+                       UnitPixel, attr);
+
+    if (m_PreserveAspectRatio == 2)
+    {
+        graphics.ResetClip();
+    }
 }
 
 int ImageElement::GetAutoWidth()

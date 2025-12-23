@@ -627,12 +627,15 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
 void Widget::AddImage(const std::wstring& id, int x, int y, int w, int h,
                       const std::wstring& path, const std::wstring& solidColor,
-                      int solidColorRadius)
+                      int solidColorRadius,
+                      int preserveAspectRatio,
+                      const std::wstring& imageTint)
 {
     // Remove existing if any
     RemoveContent(id);
 
     ImageElement* element = new ImageElement(id, x, y, w, h, path);
+    element->SetPreserveAspectRatio(preserveAspectRatio);
     
     if (!solidColor.empty())
     {
@@ -647,6 +650,16 @@ void Widget::AddImage(const std::wstring& id, int x, int y, int w, int h,
     if (solidColorRadius > 0)
     {
         element->SetCornerRadius(solidColorRadius);
+    }
+    
+    if (!imageTint.empty())
+    {
+        COLORREF color = 0;
+        BYTE alpha = 0;
+        if (ColorUtil::ParseRGBA(imageTint, color, alpha))
+        {
+            element->SetImageTint(color, alpha);
+        }
     }
     
     m_Elements.push_back(element);

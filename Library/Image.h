@@ -30,10 +30,24 @@ public:
 
     virtual bool HitTest(int x, int y) override;
 
+    void SetPreserveAspectRatio(int mode) { m_PreserveAspectRatio = mode; }
+    void SetImageTint(COLORREF color, BYTE alpha) { 
+        m_ImageTint = color; 
+        m_ImageTintAlpha = alpha; 
+        m_HasImageTint = (alpha > 0); 
+    }
+
 private:
     std::wstring m_ImagePath;
     Gdiplus::Bitmap* m_Image;
     
+    // 0 = Stretch, 1 = Preserve, 2 = Crop
+    int m_PreserveAspectRatio = 0;
+    
+    bool m_HasImageTint = false;
+    COLORREF m_ImageTint = 0;
+    BYTE m_ImageTintAlpha = 255;
+
     void LoadImage();
 };
 

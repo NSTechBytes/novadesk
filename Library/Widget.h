@@ -131,7 +131,9 @@ public:
     */
     void AddImage(const std::wstring& id, int x, int y, int w, int h, 
                   const std::wstring& path, const std::wstring& solidColor = L"",
-                  int solidColorRadius = 0);
+                  int solidColorRadius = 0,
+                  int preserveAspectRatio = 0,
+                  const std::wstring& imageTint = L"");
 
     /*
     ** Add a text content item to the widget.
