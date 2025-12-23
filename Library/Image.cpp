@@ -100,16 +100,64 @@ void ImageElement::Render(Graphics& graphics)
     ImageAttributes* attr = nullptr;
     ImageAttributes imageAttr;
     
-    if (m_HasImageTint)
+    // Check if we need ColorMatrix
+    if (m_HasColorMatrix || m_Grayscale || m_HasImageTint || m_ImageAlpha < 255)
     {
-        ColorMatrix colorMatrix = {
-            (REAL)GetRValue(m_ImageTint)/255.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-            0.0f, (REAL)GetGValue(m_ImageTint)/255.0f, 0.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, (REAL)GetBValue(m_ImageTint)/255.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 0.0f, (REAL)m_ImageTintAlpha/255.0f, 0.0f, 
-            0.0f, 0.0f, 0.0f, 0.0f, 1.0f
-        };
+        ColorMatrix colorMatrix;
+        bool matrixSet = false;
+
+        if (m_HasColorMatrix)
+        {
+            // Use custom matrix
+            memcpy(&colorMatrix, m_ColorMatrix, sizeof(ColorMatrix));
+            matrixSet = true;
+        }
+        else if (m_Grayscale)
+        {
+            // Grayscale matrix
+            ColorMatrix grayMatrix = {
+                0.299f, 0.299f, 0.299f, 0.0f, 0.0f,
+                0.587f, 0.587f, 0.587f, 0.0f, 0.0f,
+                0.114f, 0.114f, 0.114f, 0.0f, 0.0f,
+                0.0f,   0.0f,   0.0f,   1.0f, 0.0f,
+                0.0f,   0.0f,   0.0f,   0.0f, 1.0f
+            };
+            colorMatrix = grayMatrix;
+            matrixSet = true;
+        }
+        else if (m_HasImageTint)
+        {
+            // Tint matrix
+            ColorMatrix tintMatrix = {
+                (REAL)GetRValue(m_ImageTint)/255.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, (REAL)GetGValue(m_ImageTint)/255.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, (REAL)GetBValue(m_ImageTint)/255.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f, (REAL)m_ImageTintAlpha/255.0f, 0.0f, 
+                0.0f, 0.0f, 0.0f, 0.0f, 1.0f
+            };
+            colorMatrix = tintMatrix;
+            matrixSet = true;
+        }
         
+        // If we haven't set a matrix but need alpha, start with identity
+        if (!matrixSet)
+        {
+             ColorMatrix identityMatrix = {
+                1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+                0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+                0.0f, 0.0f, 0.0f, 0.0f, 1.0f
+            };
+            colorMatrix = identityMatrix;
+        }
+
+        // Apply Image Alpha
+        if (m_ImageAlpha < 255)
+        {
+            colorMatrix.m[3][3] *= (m_ImageAlpha / 255.0f);
+        }
+
         imageAttr.SetColorMatrix(&colorMatrix, ColorMatrixFlagsDefault, ColorAdjustTypeBitmap);
         attr = &imageAttr;
     }

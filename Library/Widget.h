@@ -133,7 +133,10 @@ public:
                   const std::wstring& path, const std::wstring& solidColor = L"",
                   int solidColorRadius = 0,
                   int preserveAspectRatio = 0,
-                  const std::wstring& imageTint = L"");
+                  const std::wstring& imageTint = L"",
+                  int imageAlpha = 255,
+                  bool grayscale = false,
+                  const std::vector<float>& colorMatrix = {});
 
     /*
     ** Add a text content item to the widget.

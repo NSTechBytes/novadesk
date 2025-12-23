@@ -14,7 +14,7 @@ var w = new widgetWindow({
 // Assuming we have a test image. Using a placeholder path, user might need to adjust.
 // Or I can try to use a solid color standard image if I had one, but I don't.
 // I'll try to use a known file if possible, or just expect the user to have 'test.png'
-var imgPath = "assets/Background.png";
+var imgPath = "D:\\GITHUB\\Novadesk\\assets\\Novadesk.ico";
 
 w.addText({
     id: "t1",
@@ -77,6 +77,63 @@ w.addImage({
     width: 200, height: 100,
     preserveaspectratio: 1,
     imagetint: "rgb(0,0,255)"
+});
+
+
+// 6. Image Alpha
+w.addText({ id: "l6", text: "Image Alpha (50%)", x: 10, y: 400, color: "white" });
+w.addImage({
+    id: "img_alpha",
+    path: imgPath,
+    x: 10, y: 430,
+    width: 200, height: 100,
+    preserveaspectratio: 1,
+    imagealpha: 10
+});
+
+// 7. Grayscale
+w.addText({ id: "l7", text: "Grayscale", x: 250, y: 400, color: "white" });
+w.addImage({
+    id: "img_gray",
+    path: imgPath,
+    x: 250, y: 430,
+    width: 200, height: 100,
+    preserveaspectratio: 1,
+    grayscale: true
+});
+
+// 8. ColorMatrix (Sepia)
+w.addText({ id: "l8", text: "ColorMatrix (Sepia)", x: 500, y: 400, color: "white" });
+w.addImage({
+    id: "img_matrix",
+    path: imgPath,
+    x: 500, y: 430,
+    width: 200, height: 100,
+    preserveaspectratio: 1,
+    colormatrix: [
+        0.393, 0.349, 0.272, 0, 0,
+        0.769, 0.686, 0.534, 0, 0,
+        0.189, 0.168, 0.131, 0, 0,
+        0, 0, 0, 1, 0,
+        0, 0, 0, 0, 1
+    ]
+});
+
+// 9. ColorMatrix Array (Negative)
+w.addText({ id: "l9", text: "ColorMatrix Array (Negative)", x: 10, y: 550, color: "white" });
+w.addImage({
+    id: "img_matrix_array",
+    path: imgPath,
+    x: 10, y: 580,
+    width: 200, height: 100,
+    preserveaspectratio: 1,
+    colormatrix: [
+        -1, 0, 0, 0, 0,
+        0, -1, 0, 0, 0,
+        0, 0, -1, 0, 0,
+        0, 0, 0, 1, 0,
+        1, 1, 1, 0, 1
+    ]
 });
 
 novadesk.log("Image Test Loaded");

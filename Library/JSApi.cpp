@@ -832,8 +832,36 @@ namespace JSApi {
         std::wstring imageTint = L"";
         if (duk_get_prop_string(ctx, 0, "imagetint")) imageTint = Utils::ToWString(duk_get_string(ctx, -1));
         duk_pop(ctx);
+        
+        int imageAlpha = 255;
+        if (duk_get_prop_string(ctx, 0, "imagealpha")) imageAlpha = duk_get_int(ctx, -1);
+        duk_pop(ctx);
+        
+        bool grayscale = false;
+        if (duk_get_prop_string(ctx, 0, "grayscale")) grayscale = duk_get_boolean(ctx, -1);
+        duk_pop(ctx);
+        
+        std::vector<float> colorMatrix;
+        
+        // Support single 'colormatrix' array
+        if (duk_get_prop_string(ctx, 0, "colormatrix"))
+        {
+            if (duk_is_array(ctx, -1))
+            {
+                colorMatrix.resize(25, 0.0f);
+                
+                int len = (int)duk_get_length(ctx, -1);
+                for (int i = 0; i < len && i < 25; i++)
+                {
+                    duk_get_prop_index(ctx, -1, i);
+                    colorMatrix[i] = (float)duk_get_number(ctx, -1);
+                    duk_pop(ctx);
+                }
+            }
+            duk_pop(ctx);
+        }
 
-        widget->AddImage(id, x, y, w, h, path, solidColor, solidColorRadius, preserveAspectRatio, imageTint);
+        widget->AddImage(id, x, y, w, h, path, solidColor, solidColorRadius, preserveAspectRatio, imageTint, imageAlpha, grayscale, colorMatrix);
         
         // Parse Mouse Actions
         Element* el = widget->FindElementById(id);

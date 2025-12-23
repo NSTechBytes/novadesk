@@ -36,6 +36,17 @@ public:
         m_ImageTintAlpha = alpha; 
         m_HasImageTint = (alpha > 0); 
     }
+    
+    void SetImageAlpha(BYTE alpha) { m_ImageAlpha = alpha; }
+    void SetGrayscale(bool enable) { m_Grayscale = enable; }
+    void SetColorMatrix(const float* matrix) {
+        if (matrix) {
+            memcpy(m_ColorMatrix, matrix, sizeof(float) * 25);
+            m_HasColorMatrix = true;
+        } else {
+            m_HasColorMatrix = false;
+        }
+    }
 
 private:
     std::wstring m_ImagePath;
@@ -47,6 +58,12 @@ private:
     bool m_HasImageTint = false;
     COLORREF m_ImageTint = 0;
     BYTE m_ImageTintAlpha = 255;
+    
+    // New properties
+    BYTE m_ImageAlpha = 255;
+    bool m_Grayscale = false;
+    bool m_HasColorMatrix = false;
+    float m_ColorMatrix[5][5];
 
     void LoadImage();
 };

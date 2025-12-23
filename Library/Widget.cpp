@@ -629,14 +629,24 @@ void Widget::AddImage(const std::wstring& id, int x, int y, int w, int h,
                       const std::wstring& path, const std::wstring& solidColor,
                       int solidColorRadius,
                       int preserveAspectRatio,
-                      const std::wstring& imageTint)
+                      const std::wstring& imageTint,
+                      int imageAlpha,
+                      bool grayscale,
+                      const std::vector<float>& colorMatrix)
 {
     // Remove existing if any
     RemoveContent(id);
 
     ImageElement* element = new ImageElement(id, x, y, w, h, path);
     element->SetPreserveAspectRatio(preserveAspectRatio);
+    element->SetImageAlpha((BYTE)imageAlpha);
+    element->SetGrayscale(grayscale);
     
+    if (colorMatrix.size() == 25)
+    {
+        element->SetColorMatrix(colorMatrix.data());
+    }
+
     if (!solidColor.empty())
     {
         COLORREF color = 0;
