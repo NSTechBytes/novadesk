@@ -51,6 +51,31 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     HANDLE hMutex = CreateMutex(NULL, TRUE, L"Global\\NovadeskMutex");
     if (GetLastError() == ERROR_ALREADY_EXISTS)
     {
+        // Another instance is running, check arguments for commands
+        if (lpCmdLine && wcslen(lpCmdLine) > 0)
+        {
+            std::wstring cmd = lpCmdLine;
+            HWND hExisting = FindWindow(L"NovadeskTrayClass", NULL);
+
+            if (hExisting)
+            {
+                if (cmd.find(L"/refresh") != std::wstring::npos || 
+                    cmd.find(L"-refresh") != std::wstring::npos ||
+                    cmd.find(L"--refresh") != std::wstring::npos)
+                {
+                    SendMessage(hExisting, WM_COMMAND, ID_TRAY_REFRESH, 0);
+                    return 0;
+                }
+                else if (cmd.find(L"/exit") != std::wstring::npos || 
+                         cmd.find(L"-exit") != std::wstring::npos ||
+                         cmd.find(L"--exit") != std::wstring::npos)
+                {
+                    SendMessage(hExisting, WM_COMMAND, ID_TRAY_EXIT, 0);
+                    return 0;
+                }
+            }
+        }
+
         if (hMutex) CloseHandle(hMutex);
         return 0;
     }
