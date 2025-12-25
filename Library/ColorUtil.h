@@ -73,12 +73,13 @@ public:
         }
 
         // 2. Handle rgba(r, g, b, alpha) or rgb(r, g, b)
-        int r, g, b, a = 255;
-        if (swscanf_s(rgbaStr.c_str(), L"rgba ( %d , %d , %d , %d )", &r, &g, &b, &a) == 4 ||
-            swscanf_s(rgbaStr.c_str(), L"rgba(%d,%d,%d,%d)", &r, &g, &b, &a) == 4)
+        int r, g, b;
+        float af = 1.0f;
+        if (swscanf_s(rgbaStr.c_str(), L"rgba ( %d , %d , %d , %f )", &r, &g, &b, &af) == 4 ||
+            swscanf_s(rgbaStr.c_str(), L"rgba(%d,%d,%d,%f)", &r, &g, &b, &af) == 4)
         {
             color = RGB(r, g, b);
-            alpha = (BYTE)a;
+            alpha = (BYTE)(af * 255.0f);
             return true;
         }
         else if (swscanf_s(rgbaStr.c_str(), L"rgb ( %d , %d , %d )", &r, &g, &b) == 3 ||

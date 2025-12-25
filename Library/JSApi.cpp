@@ -51,7 +51,7 @@ namespace JSApi {
     duk_ret_t js_get_all_env(duk_context* ctx);
     duk_ret_t js_register_hotkey(duk_context* ctx);
     duk_ret_t js_unregister_hotkey(duk_context* ctx);
-    duk_ret_t js_system_get_workspace_variables(duk_context* ctx);
+    duk_ret_t js_system_get_display_metrics(duk_context* ctx);
     duk_ret_t js_set_timer(duk_context* ctx);
     duk_ret_t js_clear_timer(duk_context* ctx);
     duk_ret_t js_set_immediate(duk_context* ctx);
@@ -582,63 +582,49 @@ namespace JSApi {
         return 0;
     }
 
-    duk_ret_t js_system_get_workspace_variables(duk_context* ctx) {
+    duk_ret_t js_system_get_display_metrics(duk_context* ctx) {
         const MultiMonitorInfo& info = System::GetMultiMonitorInfo();
         duk_push_object(ctx);
 
-        // Current (Monitor 0 for now as default)
-        const MonitorInfo* current = info.monitors.empty() ? nullptr : &info.monitors[0];
-        const MonitorInfo* primary = info.monitors.empty() ? nullptr : &info.monitors[info.primaryIndex < info.monitors.size() ? info.primaryIndex : 0];
+        // Indices
+        const MonitorInfo* primary = (info.primaryIndex < info.monitors.size()) ? &info.monitors[info.primaryIndex] : (info.monitors.empty() ? nullptr : &info.monitors[0]);
 
-        auto pushVars = [&](const char* prefix, const MonitorInfo* m) {
-            std::string p = prefix ? prefix : "";
-            if (m) {
-                duk_push_int(ctx, m->work.left); duk_put_prop_string(ctx, -2, (p + "WORKAREAX").c_str());
-                duk_push_int(ctx, m->work.top); duk_put_prop_string(ctx, -2, (p + "WORKAREAY").c_str());
-                duk_push_int(ctx, m->work.right - m->work.left); duk_put_prop_string(ctx, -2, (p + "WORKAREAWIDTH").c_str());
-                duk_push_int(ctx, m->work.bottom - m->work.top); duk_put_prop_string(ctx, -2, (p + "WORKAREAHEIGHT").c_str());
-
-                duk_push_int(ctx, m->screen.left); duk_put_prop_string(ctx, -2, (p + "SCREENAREAX").c_str());
-                duk_push_int(ctx, m->screen.top); duk_put_prop_string(ctx, -2, (p + "SCREENAREAY").c_str());
-                duk_push_int(ctx, m->screen.right - m->screen.left); duk_put_prop_string(ctx, -2, (p + "SCREENAREAWIDTH").c_str());
-                duk_push_int(ctx, m->screen.bottom - m->screen.top); duk_put_prop_string(ctx, -2, (p + "SCREENAREAHEIGHT").c_str());
-            }
+        auto pushRect = [&](const RECT& r) {
+            duk_push_object(ctx);
+            duk_push_int(ctx, (int)r.left); duk_put_prop_string(ctx, -2, "x");
+            duk_push_int(ctx, (int)r.top); duk_put_prop_string(ctx, -2, "y");
+            duk_push_int(ctx, (int)(r.right - r.left)); duk_put_prop_string(ctx, -2, "width");
+            duk_push_int(ctx, (int)(r.bottom - r.top)); duk_put_prop_string(ctx, -2, "height");
         };
 
-        // Standard tags (Current)
-        pushVars(nullptr, current);
+        auto pushMonitorInfo = [&](const MonitorInfo& m) {
+            duk_push_object(ctx);
+            pushRect(m.work); duk_put_prop_string(ctx, -2, "workArea");
+            pushRect(m.screen); duk_put_prop_string(ctx, -2, "screenArea");
+        };
 
-        // Primary tags
-        pushVars("P", primary);
-
-        // Virtual Screen tags
-        duk_push_int(ctx, info.vsL); duk_put_prop_string(ctx, -2, "VSCREENAREAX");
-        duk_push_int(ctx, info.vsT); duk_put_prop_string(ctx, -2, "VSCREENAREAY");
-        duk_push_int(ctx, info.vsW); duk_put_prop_string(ctx, -2, "VSCREENAREAWIDTH");
-        duk_push_int(ctx, info.vsH); duk_put_prop_string(ctx, -2, "VSCREENAREAHEIGHT");
-
-        // Nth Monitor tags (@N) -> actually translated to _N for simplicity in JS property access
-        for (size_t i = 0; i < info.monitors.size(); ++i) {
-            char suffix[16];
-            sprintf_s(suffix, "@%zu", i + 1);
-            // We'll also provide underbar versions just in case JS hates @
-            
-            auto pushNth = [&](const char* base, int val) {
-                char key[64];
-                sprintf_s(key, "%s%s", base, suffix);
-                duk_push_int(ctx, val); duk_put_prop_string(ctx, -2, key);
-            };
-
-            const MonitorInfo& m = info.monitors[i];
-            pushNth("WORKAREAX", m.work.left);
-            pushNth("WORKAREAY", m.work.top);
-            pushNth("WORKAREAWIDTH", m.work.right - m.work.left);
-            pushNth("WORKAREAHEIGHT", m.work.bottom - m.work.top);
-            pushNth("SCREENAREAX", m.screen.left);
-            pushNth("SCREENAREAY", m.screen.top);
-            pushNth("SCREENAREAWIDTH", m.screen.right - m.screen.left);
-            pushNth("SCREENAREAHEIGHT", m.screen.bottom - m.screen.top);
+        // Primary monitor info
+        if (primary) {
+            pushMonitorInfo(*primary);
+            duk_put_prop_string(ctx, -2, "primary");
         }
+
+        // Virtual Screen info
+        duk_push_object(ctx);
+        duk_push_int(ctx, info.vsL); duk_put_prop_string(ctx, -2, "x");
+        duk_push_int(ctx, info.vsT); duk_put_prop_string(ctx, -2, "y");
+        duk_push_int(ctx, info.vsW); duk_put_prop_string(ctx, -2, "width");
+        duk_push_int(ctx, info.vsH); duk_put_prop_string(ctx, -2, "height");
+        duk_put_prop_string(ctx, -2, "virtualScreen");
+
+        // All monitors array
+        duk_push_array(ctx);
+        for (size_t i = 0; i < info.monitors.size(); ++i) {
+            pushMonitorInfo(info.monitors[i]);
+            duk_push_int(ctx, (int)i + 1); duk_put_prop_string(ctx, -2, "id");
+            duk_put_prop_index(ctx, -2, (duk_uarridx_t)i);
+        }
+        duk_put_prop_string(ctx, -2, "monitors");
 
         return 1;
     }
@@ -1102,8 +1088,8 @@ namespace JSApi {
         duk_set_finalizer(ctx, -2);
         duk_put_prop_string(ctx, -2, "Disk");
         
-        duk_push_c_function(ctx, js_system_get_workspace_variables, 0);
-        duk_put_prop_string(ctx, -2, "getWorkspaceVariables");
+        duk_push_c_function(ctx, js_system_get_display_metrics, 0);
+        duk_put_prop_string(ctx, -2, "getDisplayMetrics");
 
         duk_put_prop_string(ctx, -2, "system");
 
