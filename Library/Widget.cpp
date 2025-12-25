@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "Widget.h"
+#include "PropertyParser.h"
 #include "Logging.h"
 #include "Settings.h"
 #include "Resource.h"
@@ -625,95 +626,50 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 // Content Management Methods
 // ============================================================================
 
-void Widget::AddImage(const std::wstring& id, int x, int y, int w, int h,
-                      const std::wstring& path, const std::wstring& solidColor,
-                      int solidColorRadius,
-                      int preserveAspectRatio,
-                      const std::wstring& imageTint,
-                      int imageAlpha,
-                      bool grayscale,
-                      const std::vector<float>& colorMatrix,
-                      bool tile,
-                      float rotate,
-                      const std::vector<float>& transformMatrix)
+// Helper to apply common element options
+void Widget::AddImage(const PropertyParser::ImageOptions& options)
 {
     // Remove existing if any
-    RemoveContent(id);
+    RemoveContent(options.id);
 
-    ImageElement* element = new ImageElement(id, x, y, w, h, path);
-    element->SetPreserveAspectRatio(preserveAspectRatio);
-    element->SetImageAlpha((BYTE)imageAlpha);
-    element->SetGrayscale(grayscale);
-    element->SetTile(tile);
-    element->SetRotate(rotate);
+    ImageElement* element = new ImageElement(options.id, options.x, options.y, options.width, options.height, options.path);
+    element->SetPreserveAspectRatio(options.preserveAspectRatio);
+    element->SetImageAlpha(options.imageAlpha);
+    element->SetGrayscale(options.grayscale);
+    element->SetTile(options.tile);
         
-    if (transformMatrix.size() == 6)
+    if (options.hasTransformMatrix)
     {
-        element->SetTransformMatrix(transformMatrix.data());
+        element->SetTransformMatrix(options.transformMatrix.data());
     }
     
-    if (colorMatrix.size() == 25)
+    if (options.hasColorMatrix)
     {
-        element->SetColorMatrix(colorMatrix.data());
+        element->SetColorMatrix(options.colorMatrix.data());
     }
 
-    if (!solidColor.empty())
+    if (options.hasImageTint)
     {
-        COLORREF color = 0;
-        BYTE alpha = 0;
-        if (ColorUtil::ParseRGBA(solidColor, color, alpha))
-        {
-            element->SetSolidColor(color, alpha);
-        }
+        element->SetImageTint(options.imageTint, options.imageTintAlpha);
     }
     
-    if (solidColorRadius > 0)
-    {
-        element->SetCornerRadius(solidColorRadius);
-    }
-    
-    if (!imageTint.empty())
-    {
-        COLORREF color = 0;
-        BYTE alpha = 0;
-        if (ColorUtil::ParseRGBA(imageTint, color, alpha))
-        {
-            element->SetImageTint(color, alpha);
-        }
-    }
+    PropertyParser::ApplyElementOptions(element, options);
     
     m_Elements.push_back(element);
     
     Redraw();
 }
 
-void Widget::AddText(const std::wstring& id, int x, int y, int w, int h,
-                     const std::wstring& text, const std::wstring& fontFamily,
-                     int fontSize, COLORREF color, BYTE alpha, bool bold,
-                     bool italic, Alignment align,
-                     ClipString clip, int clipW, int clipH,
-                     const std::wstring& solidColor, int solidColorRadius)
+void Widget::AddText(const PropertyParser::TextOptions& options)
 {
     // Remove existing if any
-    RemoveContent(id);
+    RemoveContent(options.id);
 
-    Text* element = new Text(id, x, y, w, h, text, fontFamily, fontSize, color, alpha,
-                             bold, italic, align, clip, clipW, clipH);
+    Text* element = new Text(options.id, options.x, options.y, options.width, options.height, 
+                             options.text, options.fontFamily, options.fontSize, options.color, options.alpha,
+                             options.bold, options.italic, options.align, options.clip, options.clipW, options.clipH);
                              
-    if (!solidColor.empty())
-    {
-        COLORREF c = 0;
-        BYTE a = 0;
-        if (ColorUtil::ParseRGBA(solidColor, c, a))
-        {
-            element->SetSolidColor(c, a);
-        }
-    }
-    
-    if (solidColorRadius > 0)
-    {
-        element->SetCornerRadius(solidColorRadius);
-    }
+    PropertyParser::ApplyElementOptions(element, options);
 
     m_Elements.push_back(element);
     

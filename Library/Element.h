@@ -137,6 +137,9 @@ public:
         m_PaddingBottom = bottom;
     }
 
+    void SetRotate(float angle) { m_Rotate = angle; }
+    float GetRotate() const { return m_Rotate; }
+
     /*
     ** Check if this element should be hit even if it's transparent.
     ** (e.g. for SolidColor in Rainmeter)
@@ -239,6 +242,9 @@ protected:
     int m_PaddingTop = 0;
     int m_PaddingRight = 0;
     int m_PaddingBottom = 0;
+
+    // Transformation properties
+    float m_Rotate = 0.0f;
 
     void RenderBackground(Gdiplus::Graphics& graphics) {
         if (!m_HasSolidColor) return;

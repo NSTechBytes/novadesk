@@ -16,6 +16,11 @@
 #include "Text.h"
 #include "Image.h"
 
+namespace PropertyParser {
+    struct ImageOptions;
+    struct TextOptions;
+}
+
 struct WidgetOptions
 {
     std::wstring id;
@@ -129,28 +134,13 @@ public:
     ** Add an image content item to the widget.
     ** The image will be loaded and cached for rendering.
     */
-    void AddImage(const std::wstring& id, int x, int y, int w, int h, 
-                  const std::wstring& path, const std::wstring& solidColor = L"",
-                  int solidColorRadius = 0,
-                  int preserveAspectRatio = 0,
-                  const std::wstring& imageTint = L"",
-                  int imageAlpha = 255,
-                  bool grayscale = false,
-                  const std::vector<float>& colorMatrix = {},
-                  bool tile = false,
-                  float rotate = 0.0f,
-                  const std::vector<float>& transformMatrix = {});
+    void AddImage(const PropertyParser::ImageOptions& options);
 
     /*
     ** Add a text content item to the widget.
     ** Text will be rendered with the specified font and styling.
     */
-    void AddText(const std::wstring& id, int x, int y, int w, int h,
-                 const std::wstring& text, const std::wstring& fontFamily,
-                 int fontSize, COLORREF color, BYTE alpha, bool bold = false,
-                 bool italic = false, Alignment align = ALIGN_LEFT_TOP,
-                 ClipString clip = CLIP_NONE, int clipW = -1, int clipH = -1,
-                 const std::wstring& solidColor = L"", int solidColorRadius = 0);
+    void AddText(const PropertyParser::TextOptions& options);
 
     /*
     ** Update an existing image content item with a new image path.

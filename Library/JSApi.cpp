@@ -797,110 +797,12 @@ namespace JSApi {
 
         if (!widget || !duk_is_object(ctx, 0)) return DUK_RET_TYPE_ERROR;
 
-        // Defaults
-        std::wstring id = L"", path = L"";
-        int x = 0, y = 0, w = 0, h = 0; // Default to auto
+        duk_dup(ctx, 0); // Push options object to top
+        PropertyParser::ImageOptions options;
+        PropertyParser::ParseImageOptions(ctx, options);
+        duk_pop(ctx); // Pop options object
 
-        if (duk_get_prop_string(ctx, 0, "id")) id = Utils::ToWString(duk_get_string(ctx, -1));
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "path")) {
-            path = Utils::ToWString(duk_get_string(ctx, -1));
-            path = PathUtils::ResolvePath(path, PathUtils::GetWidgetsDir());
-        }
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "x")) x = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "y")) y = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "width")) w = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "height")) h = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-        
-        std::wstring solidColor = L"";
-        if (duk_get_prop_string(ctx, 0, "solidcolor")) solidColor = Utils::ToWString(duk_get_string(ctx, -1));
-        duk_pop(ctx);
-
-        int solidColorRadius = 0;
-        if (duk_get_prop_string(ctx, 0, "solidcolorradius")) solidColorRadius = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-
-        int preserveAspectRatio = 0;
-        if (duk_get_prop_string(ctx, 0, "preserveaspectratio")) preserveAspectRatio = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-
-        std::wstring imageTint = L"";
-        if (duk_get_prop_string(ctx, 0, "imagetint")) imageTint = Utils::ToWString(duk_get_string(ctx, -1));
-        duk_pop(ctx);
-        
-        int imageAlpha = 255;
-        if (duk_get_prop_string(ctx, 0, "imagealpha")) imageAlpha = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-        
-        bool grayscale = false;
-        if (duk_get_prop_string(ctx, 0, "grayscale")) grayscale = duk_get_boolean(ctx, -1);
-        duk_pop(ctx);
-        
-        bool tile = false;
-        if (duk_get_prop_string(ctx, 0, "tile")) tile = duk_get_boolean(ctx, -1);
-        duk_pop(ctx);
-        
-        float rotate = 0.0f;
-        if (duk_get_prop_string(ctx, 0, "rotate")) rotate = (float)duk_get_number(ctx, -1);
-        duk_pop(ctx);
-        
-        // Transformation matrix (6 elements)
-        std::vector<float> transformMatrix;
-        if (duk_get_prop_string(ctx, 0, "transformmatrix"))
-        {
-            if (duk_is_array(ctx, -1))
-            {
-                int len = (int)duk_get_length(ctx, -1);
-                if (len == 6) {
-                    transformMatrix.resize(6);
-                    for (int i = 0; i < 6; i++)
-                    {
-                        duk_get_prop_index(ctx, -1, i);
-                        transformMatrix[i] = (float)duk_get_number(ctx, -1);
-                        duk_pop(ctx);
-                    }
-                }
-            }
-            duk_pop(ctx);
-        }
-        
-        std::vector<float> colorMatrix;
-        
-        // Support single 'colormatrix' array
-        if (duk_get_prop_string(ctx, 0, "colormatrix"))
-        {
-            if (duk_is_array(ctx, -1))
-            {
-                colorMatrix.resize(25, 0.0f);
-                
-                int len = (int)duk_get_length(ctx, -1);
-                for (int i = 0; i < len && i < 25; i++)
-                {
-                    duk_get_prop_index(ctx, -1, i);
-                    colorMatrix[i] = (float)duk_get_number(ctx, -1);
-                    duk_pop(ctx);
-                }
-            }
-            duk_pop(ctx);
-        }
-
-        widget->AddImage(id, x, y, w, h, path, solidColor, solidColorRadius, preserveAspectRatio, imageTint, imageAlpha, grayscale, colorMatrix, tile, rotate, transformMatrix);
-        
-        // Parse Mouse Actions and other options (padding, etc.)
-        Element* el = widget->FindElementById(id);
-        
-        // ParseElementOptions expects the options object at the top of the stack
-        duk_dup(ctx, 0); // Copy options object from index 0 to top
-        ParseElementOptions(ctx, el);
-        duk_pop(ctx); // Pop the copy
-
-        // Force redraw to apply any layout changes (padding, etc.)
-        widget->Redraw();
+        widget->AddImage(options);
 
         // Return 'this' for chaining
         duk_push_this(ctx);
@@ -915,100 +817,12 @@ namespace JSApi {
 
         if (!widget || !duk_is_object(ctx, 0)) return DUK_RET_TYPE_ERROR;
 
-        // Defaults
-        std::wstring id = L"", text = L"", fontFamily = L"Arial";
-        int x = 0, y = 0, w = 0, h = 0; // Default to auto
-        int fontSize = 12;
-        COLORREF color = RGB(0, 0, 0);
-        BYTE alpha = 255;
-        bool bold = false, italic = false;
-        if (duk_get_prop_string(ctx, 0, "id")) id = Utils::ToWString(duk_get_string(ctx, -1));
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "text")) text = Utils::ToWString(duk_get_string(ctx, -1));
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "fontfamily")) fontFamily = Utils::ToWString(duk_get_string(ctx, -1));
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "x")) x = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "y")) y = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "width")) w = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "height")) h = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "fontsize")) fontSize = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "color")) {
-            std::wstring colorStr = Utils::ToWString(duk_get_string(ctx, -1));
-            ColorUtil::ParseRGBA(colorStr, color, alpha);
-        }
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "fontweight")) {
-            std::string s = duk_get_string(ctx, -1);
-            if (s == "bold") bold = true;
-        }
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "fontstyle")) {
-            std::string s = duk_get_string(ctx, -1);
-            if (s == "italic") italic = true;
-        }
-        duk_pop(ctx);
+        duk_dup(ctx, 0); // Push options object to top
+        PropertyParser::TextOptions options;
+        PropertyParser::ParseTextOptions(ctx, options);
+        duk_pop(ctx); // Pop options object
 
-        Alignment align = ALIGN_LEFT_TOP;
-        if (duk_get_prop_string(ctx, 0, "align")) {
-            std::string s = duk_get_string(ctx, -1);
-            if (s == "left" || s == "lefttop") align = ALIGN_LEFT_TOP;
-            else if (s == "center" || s == "centertop") align = ALIGN_CENTER_TOP;
-            else if (s == "right" || s == "righttop") align = ALIGN_RIGHT_TOP;
-            else if (s == "leftcenter") align = ALIGN_LEFT_CENTER;
-            else if (s == "centercenter") align = ALIGN_CENTER_CENTER;
-            else if (s == "rightcenter") align = ALIGN_RIGHT_CENTER;
-            else if (s == "leftbottom") align = ALIGN_LEFT_BOTTOM;
-            else if (s == "centerbottom") align = ALIGN_CENTER_BOTTOM;
-            else if (s == "rightbottom") align = ALIGN_RIGHT_BOTTOM;
-        }
-        duk_pop(ctx);
-
-        ClipString clip = CLIP_NONE;
-        int clipW = -1, clipH = -1;
-        if (duk_get_prop_string(ctx, 0, "clipstring")) clip = (ClipString)duk_get_int(ctx, -1);
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "clipstringw")) clipW = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-        if (duk_get_prop_string(ctx, 0, "clipstringh")) clipH = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-
-        std::wstring solidColor = L"";
-        if (duk_get_prop_string(ctx, 0, "solidcolor")) solidColor = Utils::ToWString(duk_get_string(ctx, -1));
-        duk_pop(ctx);
-
-        int solidColorRadius = 0;
-        if (duk_get_prop_string(ctx, 0, "solidcolorradius")) solidColorRadius = duk_get_int(ctx, -1);
-        duk_pop(ctx);
-
-        widget->AddText(id, x, y, w, h, text, fontFamily, fontSize, color, alpha, bold, italic, align, clip, clipW, clipH, solidColor, solidColorRadius);
-        
-        // Parse Mouse Actions and additional properties
-        Element* el = widget->FindElementById(id);
-        if (el && el->GetType() == ELEMENT_TEXT) {
-            Text* textEl = static_cast<Text*>(el);
-            
-            // Parse rotation
-            if (duk_get_prop_string(ctx, 0, "rotate")) {
-            float rotate = (float)duk_get_number(ctx, -1);
-            Text* textEl = dynamic_cast<Text*>(el);
-            if (textEl) textEl->SetRotate(rotate);
-        }
-        duk_pop(ctx);
-        }
-        
-        // ParseElementOptions expects the options object at the top of the stack
-        duk_dup(ctx, 0); // Copy options object from index 0 to top
-        ParseElementOptions(ctx, el);
-        duk_pop(ctx); // Pop the copy
-
-        // Force redraw to apply any layout changes
-        widget->Redraw();
+        widget->AddText(options);
 
         // Return 'this' for chaining
         duk_push_this(ctx);

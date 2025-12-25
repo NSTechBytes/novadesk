@@ -49,7 +49,6 @@ public:
     }
     
     void SetTile(bool tile) { m_Tile = tile; }
-    void SetRotate(float degrees) { m_Rotate = degrees; }
     void SetTransformMatrix(const float* matrix) {
         if (matrix) {
             memcpy(m_TransformMatrix, matrix, sizeof(float) * 6);
@@ -77,8 +76,8 @@ private:
     float m_ColorMatrix[5][5];
 
     // Newest properties
+    // Newest properties
     bool m_Tile = false;
-    float m_Rotate = 0.0f;
     
     // Transformation matrix (6 elements: m11, m12, m21, m22, dx, dy)
     bool m_HasTransformMatrix = false;

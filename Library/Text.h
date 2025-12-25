@@ -50,7 +50,6 @@ public:
     void SetFontFamily(const std::wstring& font) { m_FontFamily = font; }
     void SetFontSize(int size) { m_FontSize = size; }
     void SetColor(COLORREF color, BYTE alpha) { m_Color = color; m_Alpha = alpha; }
-    void SetRotate(float degrees) { m_Rotate = degrees; }
 
     virtual int GetAutoWidth() override;
     virtual int GetAutoHeight() override;
@@ -68,7 +67,6 @@ private:
     ClipString m_ClipString;
     int m_ClipStringW;
     int m_ClipStringH;
-    float m_Rotate = 0.0f;
 };
 
 #endif
