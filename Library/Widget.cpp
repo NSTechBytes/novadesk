@@ -92,6 +92,16 @@ bool Widget::Create()
 
     if (!m_hWnd) return false;
 
+    // Sync actual position if CW_USEDEFAULT was used or OS repositioned it
+    RECT rc;
+    if (GetWindowRect(m_hWnd, &rc))
+    {
+        m_Options.x = rc.left;
+        m_Options.y = rc.top;
+        if (!m_Options.m_WDefined) m_Options.width = rc.right - rc.left;
+        if (!m_Options.m_HDefined) m_Options.height = rc.bottom - rc.top;
+    }
+
     // Initial Z-position - use ChangeSingleZPos to bring new widgets to front
     ChangeSingleZPos(m_WindowZPosition);
 
@@ -592,6 +602,23 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         wp->y = (std::max)(wp->y, (int)targetMonitor->top);
                     }
                 }
+            }
+        }
+        return 0;
+
+    case WM_WINDOWPOSCHANGED:
+        if (widget)
+        {
+            LPWINDOWPOS wp = (LPWINDOWPOS)lParam;
+            if (!(wp->flags & SWP_NOMOVE))
+            {
+                widget->m_Options.x = wp->x;
+                widget->m_Options.y = wp->y;
+            }
+            if (!(wp->flags & SWP_NOSIZE))
+            {
+                widget->m_Options.width = wp->cx;
+                widget->m_Options.height = wp->cy;
             }
         }
         return 0;
