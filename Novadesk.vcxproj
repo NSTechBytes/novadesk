@@ -138,11 +138,11 @@
     <ClInclude Include="Library\Hotkey.h" />
     <ClInclude Include="Library\DiskMonitor.h" />
     <ClInclude Include="Library\Element.h" />
-    <ClInclude Include="Library\Image.h" />
+    <ClInclude Include="Library\ImageElement.h" />
     <ClInclude Include="Library\MouseMonitor.h" />
     <ClInclude Include="Library\NetworkMonitor.h" />
     <ClInclude Include="Library\System.h" />
-    <ClInclude Include="Library\Text.h" />
+    <ClInclude Include="Library\TextElement.h" />
     <ClInclude Include="Library\Widget.h" />
     <ClInclude Include="Library\ColorUtil.h" />
     <ClInclude Include="Library\Logging.h" />
@@ -163,13 +163,14 @@
     <ClInclude Include="Library\json\json.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Library\Element.cpp" />
     <ClCompile Include="Library\Hotkey.cpp" />
     <ClCompile Include="Library\DiskMonitor.cpp" />
-    <ClCompile Include="Library\Image.cpp" />
+    <ClCompile Include="Library\ImageElement.cpp" />
     <ClCompile Include="Library\MouseMonitor.cpp" />
     <ClCompile Include="Library\NetworkMonitor.cpp" />
     <ClCompile Include="Library\System.cpp" />
-    <ClCompile Include="Library\Text.cpp" />
+    <ClCompile Include="Library\TextElement.cpp" />
     <ClCompile Include="Library\Widget.cpp" />
     <ClCompile Include="Library\JSApi.cpp" />
     <ClCompile Include="Library\Settings.cpp" />

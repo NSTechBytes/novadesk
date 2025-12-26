@@ -657,7 +657,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 void Widget::AddImage(const PropertyParser::ImageOptions& options)
 {
     // Remove existing if any
-    RemoveContent(options.id);
+    RemoveElements(options.id);
 
     ImageElement* element = new ImageElement(options.id, options.x, options.y, options.width, options.height, options.path);
     element->SetPreserveAspectRatio(options.preserveAspectRatio);
@@ -690,9 +690,9 @@ void Widget::AddImage(const PropertyParser::ImageOptions& options)
 void Widget::AddText(const PropertyParser::TextOptions& options)
 {
     // Remove existing if any
-    RemoveContent(options.id);
+    RemoveElements(options.id);
 
-    Text* element = new Text(options.id, options.x, options.y, options.width, options.height, 
+    TextElement* element = new TextElement(options.id, options.x, options.y, options.width, options.height, 
                              options.text, options.fontFace, options.fontSize, options.fontColor, options.alpha,
                              options.bold, options.italic, options.textAlign, options.clip, options.clipW, options.clipH);
                              
@@ -703,36 +703,78 @@ void Widget::AddText(const PropertyParser::TextOptions& options)
     Redraw();
 }
 
-bool Widget::UpdateImage(const std::wstring& id, const std::wstring& newPath)
+void Widget::SetElementProperties(const std::wstring& id, duk_context* ctx)
 {
     Element* element = FindElementById(id);
-    if (!element || element->GetType() != ELEMENT_IMAGE) return false;
-    
-    // We know it's an ImageElement because of the type check
-    static_cast<ImageElement*>(element)->UpdateImage(newPath);
-    
+    if (!element) return;
+
+    if (element->GetType() == ELEMENT_TEXT) {
+        PropertyParser::TextOptions options;
+        
+        // Fill struct with current state before parsing for partial updates
+        options.id = element->GetId();
+        options.x = element->GetX();
+        options.y = element->GetY();
+        options.width = element->GetWidth();
+        options.height = element->GetHeight();
+        options.rotate = element->GetRotate();
+        options.antialias = element->GetAntiAlias();
+        
+        TextElement* t = static_cast<TextElement*>(element);
+        options.text = t->GetText();
+        options.fontFace = t->GetFontFace();
+        options.fontSize = t->GetFontSize();
+        options.fontColor = t->GetFontColor();
+        options.alpha = t->GetFontAlpha();
+        options.bold = t->IsBold();
+        options.italic = t->IsItalic();
+        options.textAlign = t->GetTextAlign();
+        options.clip = t->GetClipString();
+        options.clipW = t->GetClipW();
+        options.clipH = t->GetClipH();
+
+        PropertyParser::ParseTextOptions(ctx, options);
+        PropertyParser::ApplyTextOptions(t, options);
+    } else if (element->GetType() == ELEMENT_IMAGE) {
+        PropertyParser::ImageOptions options;
+        options.id = element->GetId();
+        options.x = element->GetX();
+        options.y = element->GetY();
+        options.width = element->GetWidth();
+        options.height = element->GetHeight();
+        options.rotate = element->GetRotate();
+        options.antialias = element->GetAntiAlias();
+
+        ImageElement* img = static_cast<ImageElement*>(element);
+        options.path = img->GetImagePath();
+        options.preserveAspectRatio = img->GetPreserveAspectRatio();
+        options.imageAlpha = img->GetImageAlpha();
+        options.grayscale = img->IsGrayscale();
+        options.tile = img->IsTile();
+
+        PropertyParser::ParseImageOptions(ctx, options);
+        PropertyParser::ApplyImageOptions(img, options);
+    }
+
     Redraw();
-    return true;
 }
 
-bool Widget::UpdateText(const std::wstring& id, const std::wstring& newText)
+bool Widget::RemoveElements(const std::wstring& id)
 {
-    Element* element = FindElementById(id);
-    if (!element || element->GetType() != ELEMENT_TEXT) return false;
-    
-    // We know it's a Text element
-    static_cast<Text*>(element)->SetText(newText);
-    
-    Redraw();
-    return true;
-}
+    if (id.empty())
+    {
+        for (auto* el : m_Elements) delete el;
+        m_Elements.clear();
+        m_MouseOverElement = nullptr;
+        Redraw();
+        return true;
+    }
 
-bool Widget::RemoveContent(const std::wstring& id)
-{
     for (auto it = m_Elements.begin(); it != m_Elements.end(); ++it)
     {
         if ((*it)->GetId() == id)
         {
+            if (*it == m_MouseOverElement) m_MouseOverElement = nullptr;
             delete *it;
             m_Elements.erase(it);
             Redraw();
@@ -742,15 +784,24 @@ bool Widget::RemoveContent(const std::wstring& id)
     return false;
 }
 
-void Widget::ClearContent()
+void Widget::RemoveElements(const std::vector<std::wstring>& ids)
 {
-    for (auto* element : m_Elements)
+    bool changed = false;
+    for (const auto& id : ids)
     {
-        delete element;
+        for (auto it = m_Elements.begin(); it != m_Elements.end(); ++it)
+        {
+            if ((*it)->GetId() == id)
+            {
+                if (*it == m_MouseOverElement) m_MouseOverElement = nullptr;
+                delete *it;
+                m_Elements.erase(it);
+                changed = true;
+                break;
+            }
+        }
     }
-    m_Elements.clear();
-    m_MouseOverElement = nullptr; // Fix dangling pointer
-    Redraw();
+    if (changed) Redraw();
 }
 
 void Widget::Redraw()

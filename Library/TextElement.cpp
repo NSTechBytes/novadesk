@@ -5,16 +5,16 @@
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
-#include "Text.h"
+#include "TextElement.h"
 #include "Logging.h"
 
 using namespace Gdiplus;
 
-Text::Text(const std::wstring& id, int x, int y, int w, int h,
+TextElement::TextElement(const std::wstring& id, int x, int y, int w, int h,
      const std::wstring& text, const std::wstring& fontFace,
      int fontSize, COLORREF fontColor, BYTE alpha,
-     bool bold, bool italic, Alignment textAlign,
-     ClipString clip, int clipW, int clipH)
+     bool bold, bool italic, TextAlignment textAlign,
+     TextClipString clip, int clipW, int clipH)
     : Element(ELEMENT_TEXT, id, x, y, w, h),
       m_Text(text), m_FontFace(fontFace), m_FontSize(fontSize),
       m_FontColor(fontColor), m_Alpha(alpha), m_Bold(bold), m_Italic(italic),
@@ -22,7 +22,7 @@ Text::Text(const std::wstring& id, int x, int y, int w, int h,
 {
 }
 
-void Text::Render(Graphics& graphics)
+void TextElement::Render(Graphics& graphics)
 {
     // Draw background first
     RenderBackground(graphics);
@@ -52,48 +52,48 @@ void Text::Render(Graphics& graphics)
     StringFormat format;
     switch (m_TextAlign)
     {
-    case ALIGN_LEFT_TOP:
-    case ALIGN_LEFT_CENTER:
-    case ALIGN_LEFT_BOTTOM:
+    case TEXT_ALIGN_LEFT_TOP:
+    case TEXT_ALIGN_LEFT_CENTER:
+    case TEXT_ALIGN_LEFT_BOTTOM:
         format.SetAlignment(StringAlignmentNear);
         break;
-    case ALIGN_CENTER_TOP:
-    case ALIGN_CENTER_CENTER:
-    case ALIGN_CENTER_BOTTOM:
+    case TEXT_ALIGN_CENTER_TOP:
+    case TEXT_ALIGN_CENTER_CENTER:
+    case TEXT_ALIGN_CENTER_BOTTOM:
         format.SetAlignment(StringAlignmentCenter);
         break;
-    case ALIGN_RIGHT_TOP:
-    case ALIGN_RIGHT_CENTER:
-    case ALIGN_RIGHT_BOTTOM:
+    case TEXT_ALIGN_RIGHT_TOP:
+    case TEXT_ALIGN_RIGHT_CENTER:
+    case TEXT_ALIGN_RIGHT_BOTTOM:
         format.SetAlignment(StringAlignmentFar);
         break;
     }
 
     switch (m_TextAlign)
     {
-    case ALIGN_LEFT_TOP:
-    case ALIGN_CENTER_TOP:
-    case ALIGN_RIGHT_TOP:
+    case TEXT_ALIGN_LEFT_TOP:
+    case TEXT_ALIGN_CENTER_TOP:
+    case TEXT_ALIGN_RIGHT_TOP:
         format.SetLineAlignment(StringAlignmentNear);
         break;
-    case ALIGN_LEFT_CENTER:
-    case ALIGN_CENTER_CENTER:
-    case ALIGN_RIGHT_CENTER:
+    case TEXT_ALIGN_LEFT_CENTER:
+    case TEXT_ALIGN_CENTER_CENTER:
+    case TEXT_ALIGN_RIGHT_CENTER:
         format.SetLineAlignment(StringAlignmentCenter);
         break;
-    case ALIGN_LEFT_BOTTOM:
-    case ALIGN_CENTER_BOTTOM:
-    case ALIGN_RIGHT_BOTTOM:
+    case TEXT_ALIGN_LEFT_BOTTOM:
+    case TEXT_ALIGN_CENTER_BOTTOM:
+    case TEXT_ALIGN_RIGHT_BOTTOM:
         format.SetLineAlignment(StringAlignmentFar);
         break;
     }
 
     // Set trimming/clipping
-    if (m_ClipString == CLIP_ELLIPSIS)
+    if (m_ClipString == TEXT_CLIP_ELLIPSIS)
     {
         format.SetTrimming(StringTrimmingEllipsisCharacter);
     }
-    else if (m_ClipString == CLIP_ON)
+    else if (m_ClipString == TEXT_CLIP_ON)
     {
         format.SetTrimming(StringTrimmingCharacter);
     }
@@ -114,10 +114,6 @@ void Text::Render(Graphics& graphics)
     int layoutW = GetWidth() - m_PaddingLeft - m_PaddingRight;
     int layoutH = GetHeight() - m_PaddingTop - m_PaddingBottom;
     
-    // Logging::Log(LogLevel::Debug, L"Text Render: W=%d H=%d Pad=[%d,%d,%d,%d] Layout=[%d,%d,%d,%d]", 
-    //     GetWidth(), GetHeight(), m_PaddingLeft, m_PaddingTop, m_PaddingRight, m_PaddingBottom,
-    //     layoutX, layoutY, layoutW, layoutH);
-
     // Ensure positive dimensions
     if (layoutW < 0) layoutW = 0;
     if (layoutH < 0) layoutH = 0;
@@ -133,7 +129,7 @@ void Text::Render(Graphics& graphics)
     }
 }
 
-int Text::GetAutoWidth()
+int TextElement::GetAutoWidth()
 {
     HDC hdc = GetDC(NULL);
     Graphics graphics(hdc);
@@ -149,16 +145,14 @@ int Text::GetAutoWidth()
     ReleaseDC(NULL, hdc);
     
     int width = (int)ceil(boundingBox.Width) + m_PaddingLeft + m_PaddingRight;
-    if (!m_WDefined && m_ClipString != CLIP_NONE && m_ClipStringW != -1)
+    if (!m_WDefined && m_ClipString != TEXT_CLIP_NONE && m_ClipStringW != -1)
     {
         if (width > m_ClipStringW) return m_ClipStringW;
     }
-   // Logging::Log(LogLevel::Debug, L"Text GetAutoWidth: TextW=%f PadL=%d PadR=%d Total=%d", 
-   //     boundingBox.Width, m_PaddingLeft, m_PaddingRight, width);
     return width;
 }
 
-int Text::GetAutoHeight()
+int TextElement::GetAutoHeight()
 {
     HDC hdc = GetDC(NULL);
     Graphics graphics(hdc);
@@ -174,22 +168,18 @@ int Text::GetAutoHeight()
     ReleaseDC(NULL, hdc);
     
     int height = (int)ceil(boundingBox.Height) + m_PaddingTop + m_PaddingBottom;
-    if (!m_HDefined && m_ClipString != CLIP_NONE && m_ClipStringH != -1)
+    if (!m_HDefined && m_ClipString != TEXT_CLIP_NONE && m_ClipStringH != -1)
     {
         if (height > m_ClipStringH) return m_ClipStringH;
     }
-   // Logging::Log(LogLevel::Debug, L"Text GetAutoHeight: TextH=%f PadT=%d PadB=%d Total=%d", 
-     //   boundingBox.Height, m_PaddingTop, m_PaddingBottom, height);
     return height;
 }
 
-bool Text::HitTest(int x, int y)
+bool TextElement::HitTest(int x, int y)
 {
     // Bounding box check first (Element's layout rect)
     if (!Element::HitTest(x, y)) return false;
 
-    // Redundant but keeping it for now if we want tighter bounds
-    // Better: use the bounding box from MeasureString
     HDC hdc = GetDC(NULL);
     Graphics graphics(hdc);
     
@@ -199,21 +189,20 @@ bool Text::HitTest(int x, int y)
     Font font(m_FontFace.c_str(), (REAL)m_FontSize, fontStyle, UnitPixel);
 
     StringFormat format;
-    // (Same alignment logic as in Render)
     switch (m_TextAlign) {
-    case ALIGN_LEFT_TOP: case ALIGN_LEFT_CENTER: case ALIGN_LEFT_BOTTOM:
+    case TEXT_ALIGN_LEFT_TOP: case TEXT_ALIGN_LEFT_CENTER: case TEXT_ALIGN_LEFT_BOTTOM:
         format.SetAlignment(StringAlignmentNear); break;
-    case ALIGN_CENTER_TOP: case ALIGN_CENTER_CENTER: case ALIGN_CENTER_BOTTOM:
+    case TEXT_ALIGN_CENTER_TOP: case TEXT_ALIGN_CENTER_CENTER: case TEXT_ALIGN_CENTER_BOTTOM:
         format.SetAlignment(StringAlignmentCenter); break;
-    case ALIGN_RIGHT_TOP: case ALIGN_RIGHT_CENTER: case ALIGN_RIGHT_BOTTOM:
+    case TEXT_ALIGN_RIGHT_TOP: case TEXT_ALIGN_RIGHT_CENTER: case TEXT_ALIGN_RIGHT_BOTTOM:
         format.SetAlignment(StringAlignmentFar); break;
     }
     switch (m_TextAlign) {
-    case ALIGN_LEFT_TOP: case ALIGN_CENTER_TOP: case ALIGN_RIGHT_TOP:
+    case TEXT_ALIGN_LEFT_TOP: case TEXT_ALIGN_CENTER_TOP: case TEXT_ALIGN_RIGHT_TOP:
         format.SetLineAlignment(StringAlignmentNear); break;
-    case ALIGN_LEFT_CENTER: case ALIGN_CENTER_CENTER: case ALIGN_RIGHT_CENTER:
+    case TEXT_ALIGN_LEFT_CENTER: case TEXT_ALIGN_CENTER_CENTER: case TEXT_ALIGN_RIGHT_CENTER:
         format.SetLineAlignment(StringAlignmentCenter); break;
-    case ALIGN_LEFT_BOTTOM: case ALIGN_CENTER_BOTTOM: case ALIGN_RIGHT_BOTTOM:
+    case TEXT_ALIGN_LEFT_BOTTOM: case TEXT_ALIGN_CENTER_BOTTOM: case TEXT_ALIGN_RIGHT_BOTTOM:
         format.SetLineAlignment(StringAlignmentFar); break;
     }
 

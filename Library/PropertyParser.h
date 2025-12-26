@@ -9,6 +9,8 @@
 #include "duktape/duktape.h"
 #include "Widget.h"
 #include "Element.h"
+#include "TextElement.h"
+#include "ImageElement.h"
 
 namespace PropertyParser
 {
@@ -111,8 +113,8 @@ namespace PropertyParser
         BYTE alpha = 255;
         bool bold = false;
         bool italic = false;
-        Alignment textAlign = ALIGN_LEFT_TOP;
-        ClipString clip = CLIP_NONE;
+        TextAlignment textAlign = TEXT_ALIGN_LEFT_TOP;
+        TextClipString clip = TEXT_CLIP_NONE;
         int clipW = -1;
         int clipH = -1;
     };
@@ -144,13 +146,27 @@ namespace PropertyParser
     void PushWidgetProperties(duk_context* ctx, Widget* widget);
 
     /*
-    ** Parse mouse/scroll event handlers and apply them to an Element.
-    ** This is the legacy version that parses and applies in one step.
+    ** Parse element options and apply them to an Element.
     */
     void ParseElementOptions(duk_context* ctx, Element* element);
 
     /*
+    ** Push an Element's current properties as a JavaScript object onto the stack.
+    */
+    void PushElementProperties(duk_context* ctx, Element* element);
+    
+    /*
     ** Apply properties from an ElementOptions struct to an Element instance.
     */
     void ApplyElementOptions(Element* element, const ElementOptions& options);
+
+    /*
+    ** Apply properties from an ImageOptions struct to an ImageElement instance.
+    */
+    void ApplyImageOptions(ImageElement* element, const ImageOptions& options);
+
+    /*
+    ** Apply properties from a TextOptions struct to a TextElement instance.
+    */
+    void ApplyTextOptions(TextElement* element, const TextOptions& options);
 }

@@ -299,22 +299,23 @@ namespace PropertyParser {
 
         std::wstring alignStr;
         if (reader.GetString("textalign", alignStr)) {
-            if (alignStr == L"left" || alignStr == L"lefttop") options.textAlign = ALIGN_LEFT_TOP;
-            else if (alignStr == L"center" || alignStr == L"centertop") options.textAlign = ALIGN_CENTER_TOP;
-            else if (alignStr == L"right" || alignStr == L"righttop") options.textAlign = ALIGN_RIGHT_TOP;
-            else if (alignStr == L"leftcenter") options.textAlign = ALIGN_LEFT_CENTER;
-            else if (alignStr == L"centercenter") options.textAlign = ALIGN_CENTER_CENTER;
-            else if (alignStr == L"rightcenter") options.textAlign = ALIGN_RIGHT_CENTER;
-            else if (alignStr == L"leftbottom") options.textAlign = ALIGN_LEFT_BOTTOM;
-            else if (alignStr == L"centerbottom") options.textAlign = ALIGN_CENTER_BOTTOM;
-            else if (alignStr == L"rightbottom") options.textAlign = ALIGN_RIGHT_BOTTOM;
+            if (alignStr == L"left" || alignStr == L"lefttop") options.textAlign = TEXT_ALIGN_LEFT_TOP;
+            else if (alignStr == L"centertop") options.textAlign = TEXT_ALIGN_CENTER_TOP;
+            else if (alignStr == L"righttop") options.textAlign = TEXT_ALIGN_RIGHT_TOP;
+            else if (alignStr == L"leftcenter") options.textAlign = TEXT_ALIGN_LEFT_CENTER;
+            else if (alignStr == L"centercenter") options.textAlign = TEXT_ALIGN_CENTER_CENTER;
+            else if (alignStr == L"rightcenter") options.textAlign = TEXT_ALIGN_RIGHT_CENTER;
+            else if (alignStr == L"leftbottom") options.textAlign = TEXT_ALIGN_LEFT_BOTTOM;
+            else if (alignStr == L"centerbottom") options.textAlign = TEXT_ALIGN_CENTER_BOTTOM;
+            else if (alignStr == L"rightbottom") options.textAlign = TEXT_ALIGN_RIGHT_BOTTOM;
         }
         
         int clipVal = 0;
-        if (reader.GetInt("clipstring", clipVal)) options.clip = (ClipString)clipVal;
+        if (reader.GetInt("clipstring", clipVal)) options.clip = (TextClipString)clipVal;
         reader.GetInt("clipstringw", options.clipW);
         reader.GetInt("clipstringh", options.clipH);
     }
+
 
     void ApplyWidgetProperties(duk_context* ctx, Widget* widget) {
         if (!widget || !duk_is_object(ctx, -1)) return;
@@ -412,15 +413,153 @@ namespace PropertyParser {
         duk_push_string(ctx, Utils::ToString(opt.backgroundColor).c_str()); duk_put_prop_string(ctx, -2, "backgroundcolor");
     }
 
+    void PushElementProperties(duk_context* ctx, Element* element) {
+        if (!element) return;
+        duk_push_object(ctx);
+        
+        duk_push_string(ctx, Utils::ToString(element->GetId()).c_str()); duk_put_prop_string(ctx, -2, "id");
+        duk_push_int(ctx, element->GetX()); duk_put_prop_string(ctx, -2, "x");
+        duk_push_int(ctx, element->GetY()); duk_put_prop_string(ctx, -2, "y");
+        duk_push_int(ctx, element->GetWidth()); duk_put_prop_string(ctx, -2, "width");
+        duk_push_int(ctx, element->GetHeight()); duk_put_prop_string(ctx, -2, "height");
+        duk_push_number(ctx, element->GetRotate()); duk_put_prop_string(ctx, -2, "rotate");
+        duk_push_boolean(ctx, element->GetAntiAlias()); duk_put_prop_string(ctx, -2, "antialias");
+
+        // Background
+        if (element->HasSolidColor()) {
+            COLORREF c = element->GetSolidColor();
+            BYTE a = element->GetSolidAlpha();
+            std::wstring colorStr = ColorUtil::ToRGBAString(c, a);
+            duk_push_string(ctx, Utils::ToString(colorStr).c_str()); duk_put_prop_string(ctx, -2, "solidcolor");
+        }
+        duk_push_int(ctx, element->GetCornerRadius()); duk_put_prop_string(ctx, -2, "solidcolorradius");
+
+        // Gradient
+        if (element->HasGradient()) {
+            COLORREF c2 = element->GetSolidColor2();
+            BYTE a2 = element->GetSolidAlpha2();
+            std::wstring color2Str = ColorUtil::ToRGBAString(c2, a2);
+            duk_push_string(ctx, Utils::ToString(color2Str).c_str()); duk_put_prop_string(ctx, -2, "solidcolor2");
+            duk_push_number(ctx, element->GetGradientAngle()); duk_put_prop_string(ctx, -2, "gradientangle");
+        }
+
+        // Bevel
+        int bt = element->GetBevelType();
+        duk_push_int(ctx, bt); duk_put_prop_string(ctx, -2, "beveltype");
+        if (bt > 0) {
+            duk_push_int(ctx, element->GetBevelWidth()); duk_put_prop_string(ctx, -2, "bevelwidth");
+            
+            std::wstring bc1 = ColorUtil::ToRGBAString(element->GetBevelColor1(), element->GetBevelAlpha1());
+            duk_push_string(ctx, Utils::ToString(bc1).c_str()); duk_put_prop_string(ctx, -2, "bevelcolor1");
+            
+            std::wstring bc2 = ColorUtil::ToRGBAString(element->GetBevelColor2(), element->GetBevelAlpha2());
+            duk_push_string(ctx, Utils::ToString(bc2).c_str()); duk_put_prop_string(ctx, -2, "bevelcolor2");
+        }
+
+        // Padding
+        duk_push_array(ctx);
+        duk_push_int(ctx, element->GetPaddingLeft()); duk_put_prop_index(ctx, -2, 0);
+        duk_push_int(ctx, element->GetPaddingTop()); duk_put_prop_index(ctx, -2, 1);
+        duk_push_int(ctx, element->GetPaddingRight()); duk_put_prop_index(ctx, -2, 2);
+        duk_push_int(ctx, element->GetPaddingBottom()); duk_put_prop_index(ctx, -2, 3);
+        duk_put_prop_string(ctx, -2, "padding");
+
+        // Mouse Actions
+        if (!element->m_OnLeftMouseUp.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnLeftMouseUp).c_str()); duk_put_prop_string(ctx, -2, "onleftmouseup"); }
+        if (!element->m_OnLeftMouseDown.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnLeftMouseDown).c_str()); duk_put_prop_string(ctx, -2, "onleftmousedown"); }
+        if (!element->m_OnLeftDoubleClick.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnLeftDoubleClick).c_str()); duk_put_prop_string(ctx, -2, "onleftdoubleclick"); }
+        if (!element->m_OnRightMouseUp.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnRightMouseUp).c_str()); duk_put_prop_string(ctx, -2, "onrightmouseup"); }
+        if (!element->m_OnRightMouseDown.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnRightMouseDown).c_str()); duk_put_prop_string(ctx, -2, "onrightmousedown"); }
+        if (!element->m_OnRightDoubleClick.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnRightDoubleClick).c_str()); duk_put_prop_string(ctx, -2, "onrightdoubleclick"); }
+        if (!element->m_OnMiddleMouseUp.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnMiddleMouseUp).c_str()); duk_put_prop_string(ctx, -2, "onmiddlemouseup"); }
+        if (!element->m_OnMiddleMouseDown.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnMiddleMouseDown).c_str()); duk_put_prop_string(ctx, -2, "onmiddlemousedown"); }
+        if (!element->m_OnMiddleDoubleClick.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnMiddleDoubleClick).c_str()); duk_put_prop_string(ctx, -2, "onmiddledoubleclick"); }
+        if (!element->m_OnX1MouseUp.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnX1MouseUp).c_str()); duk_put_prop_string(ctx, -2, "onx1mouseup"); }
+        if (!element->m_OnX1MouseDown.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnX1MouseDown).c_str()); duk_put_prop_string(ctx, -2, "onx1mousedown"); }
+        if (!element->m_OnX1DoubleClick.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnX1DoubleClick).c_str()); duk_put_prop_string(ctx, -2, "onx1doubleclick"); }
+        if (!element->m_OnX2MouseUp.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnX2MouseUp).c_str()); duk_put_prop_string(ctx, -2, "onx2mouseup"); }
+        if (!element->m_OnX2MouseDown.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnX2MouseDown).c_str()); duk_put_prop_string(ctx, -2, "onx2mousedown"); }
+        if (!element->m_OnX2DoubleClick.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnX2DoubleClick).c_str()); duk_put_prop_string(ctx, -2, "onx2doubleclick"); }
+        if (!element->m_OnScrollUp.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnScrollUp).c_str()); duk_put_prop_string(ctx, -2, "onscrollup"); }
+        if (!element->m_OnScrollDown.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnScrollDown).c_str()); duk_put_prop_string(ctx, -2, "onscrolldown"); }
+        if (!element->m_OnScrollLeft.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnScrollLeft).c_str()); duk_put_prop_string(ctx, -2, "onscrollleft"); }
+        if (!element->m_OnScrollRight.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnScrollRight).c_str()); duk_put_prop_string(ctx, -2, "onscrollright"); }
+        if (!element->m_OnMouseOver.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnMouseOver).c_str()); duk_put_prop_string(ctx, -2, "onmouseover"); }
+        if (!element->m_OnMouseLeave.empty()) { duk_push_string(ctx, Utils::ToString(element->m_OnMouseLeave).c_str()); duk_put_prop_string(ctx, -2, "onmouseleave"); }
+
+        // Type Specific
+        if (element->GetType() == ELEMENT_TEXT) {
+            TextElement* t = static_cast<TextElement*>(element);
+            duk_push_string(ctx, Utils::ToString(t->GetText()).c_str()); duk_put_prop_string(ctx, -2, "text");
+            duk_push_string(ctx, Utils::ToString(t->GetFontFace()).c_str()); duk_put_prop_string(ctx, -2, "fontface");
+            duk_push_int(ctx, t->GetFontSize()); duk_put_prop_string(ctx, -2, "fontsize");
+            
+            std::wstring fc = ColorUtil::ToRGBAString(t->GetFontColor(), t->GetFontAlpha());
+            duk_push_string(ctx, Utils::ToString(fc).c_str()); duk_put_prop_string(ctx, -2, "fontcolor");
+            
+            duk_push_boolean(ctx, t->IsBold()); duk_put_prop_string(ctx, -2, "bold");
+            duk_push_boolean(ctx, t->IsItalic()); duk_put_prop_string(ctx, -2, "italic");
+            
+            // Align string mapping (needs inverse)
+            const char* alStr = "lefttop";
+            switch(t->GetTextAlign()) {
+                case TEXT_ALIGN_LEFT_TOP: alStr = "lefttop"; break;
+                case TEXT_ALIGN_CENTER_TOP: alStr = "centertop"; break;
+                case TEXT_ALIGN_RIGHT_TOP: alStr = "righttop"; break;
+                case TEXT_ALIGN_LEFT_CENTER: alStr = "leftcenter"; break;
+                case TEXT_ALIGN_CENTER_CENTER: alStr = "centercenter"; break;
+                case TEXT_ALIGN_RIGHT_CENTER: alStr = "rightcenter"; break;
+                case TEXT_ALIGN_LEFT_BOTTOM: alStr = "leftbottom"; break;
+                case TEXT_ALIGN_CENTER_BOTTOM: alStr = "centerbottom"; break;
+                case TEXT_ALIGN_RIGHT_BOTTOM: alStr = "rightbottom"; break;
+            }
+            duk_push_string(ctx, alStr); duk_put_prop_string(ctx, -2, "textalign");
+            duk_push_int(ctx, (int)t->GetClipString()); duk_put_prop_string(ctx, -2, "clipstring");
+            duk_push_int(ctx, t->GetClipW()); duk_put_prop_string(ctx, -2, "clipstringw");
+            duk_push_int(ctx, t->GetClipH()); duk_put_prop_string(ctx, -2, "clipstringh");
+            
+        } else if (element->GetType() == ELEMENT_IMAGE) {
+            ImageElement* img = static_cast<ImageElement*>(element);
+            duk_push_string(ctx, Utils::ToString(img->GetImagePath()).c_str()); duk_put_prop_string(ctx, -2, "path");
+            duk_push_int(ctx, img->GetPreserveAspectRatio()); duk_put_prop_string(ctx, -2, "preserveaspectratio");
+            duk_push_boolean(ctx, img->IsGrayscale()); duk_put_prop_string(ctx, -2, "grayscale");
+            duk_push_boolean(ctx, img->IsTile()); duk_put_prop_string(ctx, -2, "tile");
+            duk_push_int(ctx, img->GetImageAlpha()); duk_put_prop_string(ctx, -2, "imagealpha");
+            
+            if (img->HasImageTint()) {
+                std::wstring itStr = ColorUtil::ToRGBAString(img->GetImageTint(), img->GetImageTintAlpha());
+                duk_push_string(ctx, Utils::ToString(itStr).c_str()); duk_put_prop_string(ctx, -2, "imagetint");
+            }
+        }
+    }
+
+
+    void ParseElementOptions(duk_context* ctx, Element* element) {
+        if (!element || !duk_is_object(ctx, -1)) return;
+        
+        ElementOptions options;
+        // Parse base options from top of stack
+        PropertyReader reader(ctx);
+        ParseElementOptionsInternal(ctx, options);
+        // Apply to element
+        ApplyElementOptions(element, options);
+    }
+
     void ApplyElementOptions(Element* element, const ElementOptions& options) {
         if (!element) return;
+
+        // Only apply if provided (assuming some sentinel values or separate flags for "defined")
+        // For simplicity, we apply everything. In setElementProperties, we'll only parse what's provided.
+        
+        element->SetPosition(options.x, options.y);
+        if (options.width > 0 || options.height > 0) {
+            element->SetSize(options.width, options.height);
+        }
 
         if (options.hasSolidColor) {
             element->SetSolidColor(options.solidColor, options.solidAlpha);
         }
-        if (options.solidColorRadius > 0) {
-            element->SetCornerRadius(options.solidColorRadius);
-        }
+        element->SetCornerRadius(options.solidColorRadius);
         
         if (options.hasGradient) {
             element->SetGradient(options.solidColor2, options.solidAlpha2, options.gradientAngle);
@@ -428,16 +567,14 @@ namespace PropertyParser {
 
         if (options.bevelType > 0) {
             element->SetBevel(options.bevelType, options.bevelWidth, options.bevelColor1, options.bevelAlpha1, options.bevelColor2, options.bevelAlpha2);
+        } else if (options.bevelType == 0) {
+            element->SetBevel(0, 0, 0, 0, 0, 0);
         }
         
         element->SetRotate(options.rotate);
+        element->SetPadding(options.paddingLeft, options.paddingTop, options.paddingRight, options.paddingBottom);
 
-        // Padding
-        if (options.paddingLeft || options.paddingTop || options.paddingRight || options.paddingBottom) {
-            element->SetPadding(options.paddingLeft, options.paddingTop, options.paddingRight, options.paddingBottom);
-        }
-
-        // Mouse Actions
+        // Mouse Actions (Directly overwrite if not empty in options)
         if (!options.onLeftMouseUp.empty()) element->m_OnLeftMouseUp = options.onLeftMouseUp;
         if (!options.onLeftMouseDown.empty()) element->m_OnLeftMouseDown = options.onLeftMouseDown;
         if (!options.onLeftDoubleClick.empty()) element->m_OnLeftDoubleClick = options.onLeftDoubleClick;
@@ -447,32 +584,52 @@ namespace PropertyParser {
         if (!options.onMiddleMouseUp.empty()) element->m_OnMiddleMouseUp = options.onMiddleMouseUp;
         if (!options.onMiddleMouseDown.empty()) element->m_OnMiddleMouseDown = options.onMiddleMouseDown;
         if (!options.onMiddleDoubleClick.empty()) element->m_OnMiddleDoubleClick = options.onMiddleDoubleClick;
-        
         if (!options.onX1MouseUp.empty()) element->m_OnX1MouseUp = options.onX1MouseUp;
         if (!options.onX1MouseDown.empty()) element->m_OnX1MouseDown = options.onX1MouseDown;
         if (!options.onX1DoubleClick.empty()) element->m_OnX1DoubleClick = options.onX1DoubleClick;
         if (!options.onX2MouseUp.empty()) element->m_OnX2MouseUp = options.onX2MouseUp;
         if (!options.onX2MouseDown.empty()) element->m_OnX2MouseDown = options.onX2MouseDown;
         if (!options.onX2DoubleClick.empty()) element->m_OnX2DoubleClick = options.onX2DoubleClick;
-        
         if (!options.onScrollUp.empty()) element->m_OnScrollUp = options.onScrollUp;
         if (!options.onScrollDown.empty()) element->m_OnScrollDown = options.onScrollDown;
         if (!options.onScrollLeft.empty()) element->m_OnScrollLeft = options.onScrollLeft;
         if (!options.onScrollRight.empty()) element->m_OnScrollRight = options.onScrollRight;
-        
         if (!options.onMouseOver.empty()) element->m_OnMouseOver = options.onMouseOver;
         if (!options.onMouseLeave.empty()) element->m_OnMouseLeave = options.onMouseLeave;
         
         element->SetAntiAlias(options.antialias);
     }
 
-    void ParseElementOptions(duk_context* ctx, Element* element) {
-        if (!element || !duk_is_object(ctx, -1)) return;
-        
-        ElementOptions options;
-        // Parse into our struct
-        ParseElementOptionsInternal(ctx, options);
-        // Apply to element
+    void ApplyImageOptions(ImageElement* element, const ImageOptions& options) {
+        if (!element) return;
         ApplyElementOptions(element, options);
+        
+        if (!options.path.empty()) element->UpdateImage(options.path);
+        element->SetPreserveAspectRatio(options.preserveAspectRatio);
+        element->SetGrayscale(options.grayscale);
+        element->SetTile(options.tile);
+        element->SetImageAlpha(options.imageAlpha);
+        
+        if (options.hasImageTint) {
+            element->SetImageTint(options.imageTint, options.imageTintAlpha);
+        }
+        
+        if (options.hasTransformMatrix) {
+            element->SetTransformMatrix(options.transformMatrix.data());
+        }
+    }
+
+    void ApplyTextOptions(TextElement* element, const TextOptions& options) {
+        if (!element) return;
+        ApplyElementOptions(element, options);
+        
+        element->SetText(options.text);
+        element->SetFontFace(options.fontFace);
+        element->SetFontSize(options.fontSize);
+        element->SetFontColor(options.fontColor, options.alpha);
+        element->SetBold(options.bold);
+        element->SetItalic(options.italic);
+        element->SetTextAlign(options.textAlign);
+        element->SetClip(options.clip, options.clipW, options.clipH);
     }
 }

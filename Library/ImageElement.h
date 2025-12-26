@@ -58,6 +58,19 @@ public:
         }
     }
 
+    const std::wstring& GetImagePath() const { return m_ImagePath; }
+    int GetPreserveAspectRatio() const { return m_PreserveAspectRatio; }
+    bool HasImageTint() const { return m_HasImageTint; }
+    COLORREF GetImageTint() const { return m_ImageTint; }
+    BYTE GetImageTintAlpha() const { return m_ImageTintAlpha; }
+    BYTE GetImageAlpha() const { return m_ImageAlpha; }
+    bool IsGrayscale() const { return m_Grayscale; }
+    bool IsTile() const { return m_Tile; }
+    bool HasTransformMatrix() const { return m_HasTransformMatrix; }
+    const float* GetTransformMatrix() const { return m_TransformMatrix; }
+    bool HasColorMatrix() const { return m_HasColorMatrix; }
+    const float* GetColorMatrix() const { return (const float*)m_ColorMatrix; }
+
 private:
     std::wstring m_ImagePath;
     Gdiplus::Bitmap* m_Image;

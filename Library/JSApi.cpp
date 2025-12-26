@@ -33,10 +33,9 @@ namespace JSApi {
     // Forward declarations
     duk_ret_t js_widget_add_image(duk_context* ctx);
     duk_ret_t js_widget_add_text(duk_context* ctx);
-    duk_ret_t js_widget_update_image(duk_context* ctx);
-    duk_ret_t js_widget_update_text(duk_context* ctx);
-    duk_ret_t js_widget_remove_content(duk_context* ctx);
-    duk_ret_t js_widget_clear_content(duk_context* ctx);
+    duk_ret_t js_widget_set_element_properties(duk_context* ctx);
+    duk_ret_t js_widget_remove_elements(duk_context* ctx);
+    duk_ret_t js_widget_get_element_properties(duk_context* ctx);
     duk_ret_t js_widget_set_properties(duk_context* ctx);
     duk_ret_t js_widget_get_properties(duk_context* ctx);
     duk_ret_t js_widget_close(duk_context* ctx);
@@ -737,17 +736,14 @@ namespace JSApi {
             duk_push_c_function(ctx, js_widget_add_text, 1);
             duk_put_prop_string(ctx, -2, "addText");
             
-            duk_push_c_function(ctx, js_widget_update_image, 2);
-            duk_put_prop_string(ctx, -2, "updateImage");
+            duk_push_c_function(ctx, js_widget_set_element_properties, 2);
+            duk_put_prop_string(ctx, -2, "setElementProperties");
             
-            duk_push_c_function(ctx, js_widget_update_text, 2);
-            duk_put_prop_string(ctx, -2, "updateText");
+            duk_push_c_function(ctx, js_widget_remove_elements, 1);
+            duk_put_prop_string(ctx, -2, "removeElements");
             
-            duk_push_c_function(ctx, js_widget_remove_content, 1);
-            duk_put_prop_string(ctx, -2, "removeContent");
-            
-            duk_push_c_function(ctx, js_widget_clear_content, 0);
-            duk_put_prop_string(ctx, -2, "clearContent");
+            duk_push_c_function(ctx, js_widget_get_element_properties, 1);
+            duk_put_prop_string(ctx, -2, "getElementProperties");
 
             duk_push_c_function(ctx, js_widget_set_properties, 1);
             duk_put_prop_string(ctx, -2, "setProperties");
@@ -815,7 +811,7 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_widget_update_image(duk_context* ctx) {
+    duk_ret_t js_widget_set_element_properties(duk_context* ctx) {
         duk_push_this(ctx);
         duk_get_prop_string(ctx, -1, "\xFF" "widgetPtr");
         Widget* widget = (Widget*)duk_get_pointer(ctx, -1);
@@ -824,14 +820,45 @@ namespace JSApi {
         if (!widget) return DUK_RET_TYPE_ERROR;
 
         std::wstring id = Utils::ToWString(duk_get_string(ctx, 0));
-        std::wstring path = PathUtils::ResolvePath(Utils::ToWString(duk_get_string(ctx, 1)), PathUtils::GetWidgetsDir());
-        
-        bool result = widget->UpdateImage(id, path);
-        duk_push_boolean(ctx, result);
+        if (!duk_is_object(ctx, 1)) return DUK_RET_TYPE_ERROR;
+
+        duk_dup(ctx, 1); // Push properties object to top
+        widget->SetElementProperties(id, ctx);
+        duk_pop(ctx);
+
+        duk_push_this(ctx);
         return 1;
     }
 
-    duk_ret_t js_widget_update_text(duk_context* ctx) {
+    duk_ret_t js_widget_remove_elements(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "widgetPtr");
+        Widget* widget = (Widget*)duk_get_pointer(ctx, -1);
+        duk_pop_2(ctx);
+
+        if (!widget) return DUK_RET_TYPE_ERROR;
+
+        if (duk_is_null_or_undefined(ctx, 0)) {
+            widget->RemoveElements(); // Clear all
+        } else if (duk_is_array(ctx, 0)) {
+            std::vector<std::wstring> ids;
+            int len = (int)duk_get_length(ctx, 0);
+            for (int i = 0; i < len; i++) {
+                duk_get_prop_index(ctx, 0, i);
+                ids.push_back(Utils::ToWString(duk_get_string(ctx, -1)));
+                duk_pop(ctx);
+            }
+            widget->RemoveElements(ids);
+        } else {
+            std::wstring id = Utils::ToWString(duk_get_string(ctx, 0));
+            widget->RemoveElements(id);
+        }
+
+        duk_push_this(ctx);
+        return 1;
+    }
+
+    duk_ret_t js_widget_get_element_properties(duk_context* ctx) {
         duk_push_this(ctx);
         duk_get_prop_string(ctx, -1, "\xFF" "widgetPtr");
         Widget* widget = (Widget*)duk_get_pointer(ctx, -1);
@@ -840,40 +867,13 @@ namespace JSApi {
         if (!widget) return DUK_RET_TYPE_ERROR;
 
         std::wstring id = Utils::ToWString(duk_get_string(ctx, 0));
-        std::wstring text = Utils::ToWString(duk_get_string(ctx, 1));
+        Element* element = widget->FindElementById(id);
+        if (!element) {
+            duk_push_null(ctx);
+            return 1;
+        }
 
-        bool result = widget->UpdateText(id, text);
-        duk_push_boolean(ctx, result);
-        return 1;
-    }
-
-    duk_ret_t js_widget_remove_content(duk_context* ctx) {
-        duk_push_this(ctx);
-        duk_get_prop_string(ctx, -1, "\xFF" "widgetPtr");
-        Widget* widget = (Widget*)duk_get_pointer(ctx, -1);
-        duk_pop_2(ctx);
-
-        if (!widget) return DUK_RET_TYPE_ERROR;
-
-        std::wstring id = Utils::ToWString(duk_get_string(ctx, 0));
-        bool result = widget->RemoveContent(id);
-        duk_push_boolean(ctx, result);
-        return 1;
-    }
-
-
-    duk_ret_t js_widget_clear_content(duk_context* ctx) {
-        duk_push_this(ctx);
-        duk_get_prop_string(ctx, -1, "\xFF" "widgetPtr");
-        Widget* widget = (Widget*)duk_get_pointer(ctx, -1);
-        duk_pop_2(ctx);
-
-        if (!widget) return DUK_RET_TYPE_ERROR;
-
-        widget->ClearContent();
-        
-        // Return 'this' for chaining
-        duk_push_this(ctx);
+        PropertyParser::PushElementProperties(ctx, element);
         return 1;
     }
 

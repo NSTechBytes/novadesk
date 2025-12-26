@@ -13,8 +13,11 @@
 #include <vector>
 #include "System.h"
 #include "Element.h"
-#include "Text.h"
-#include "Image.h"
+#include "TextElement.h"
+#include "ImageElement.h"
+
+struct duk_hthread;
+typedef struct duk_hthread duk_context;
 
 namespace PropertyParser {
     struct ImageOptions;
@@ -143,27 +146,20 @@ public:
     void AddText(const PropertyParser::TextOptions& options);
 
     /*
-    ** Update an existing image content item with a new image path.
-    ** Returns true if the item was found and updated.
+    ** Update properties of an existing element.
     */
-    bool UpdateImage(const std::wstring& id, const std::wstring& newPath);
+    void SetElementProperties(const std::wstring& id, duk_context* ctx);
 
     /*
-    ** Update an existing text content item with new text.
-    ** Returns true if the item was found and updated.
+    ** Remove one or more content items by ID.
+    ** If id is empty, clears all content.
     */
-    bool UpdateText(const std::wstring& id, const std::wstring& newText);
+    bool RemoveElements(const std::wstring& id = L"");
 
     /*
-    ** Remove a content item by its ID.
-    ** Returns true if the item was found and removed.
+    ** Remove multiple elements by their IDs.
     */
-    bool RemoveContent(const std::wstring& id);
-
-    /*
-    ** Clear all content items from the widget.
-    */
-    void ClearContent();
+    void RemoveElements(const std::vector<std::wstring>& ids);
 
     /*
     ** Redraw the widget window to reflect content changes.

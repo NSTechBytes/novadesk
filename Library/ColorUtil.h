@@ -12,6 +12,17 @@
 #include <string>
 #include <cstdio>
 
+// Helper macros for color extraction from COLORREF (0x00BBGGRR)
+#ifndef GetRValue
+#define GetRValue(rgb)      (LOBYTE(rgb))
+#endif
+#ifndef GetGValue
+#define GetGValue(rgb)      (LOBYTE((WORD)(rgb) >> 8))
+#endif
+#ifndef GetBValue
+#define GetBValue(rgb)      (LOBYTE((rgb) >> 16))
+#endif
+
 class ColorUtil
 {
 public:
@@ -90,6 +101,16 @@ public:
             return true;
         }
         return false;
+    }
+
+    /*
+    ** Convert a COLORREF and alpha value to an "rgba(r,g,b,a)" string.
+    */
+    static std::wstring ToRGBAString(COLORREF color, BYTE alpha)
+    {
+        wchar_t buf[64];
+        swprintf_s(buf, L"rgba(%d,%d,%d,%.2f)", GetRValue(color), GetGValue(color), GetBValue(color), alpha / 255.0f);
+        return std::wstring(buf);
     }
 };
 
