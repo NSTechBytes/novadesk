@@ -38,7 +38,7 @@ function createClockWidget() {
     }
 
     // Update every second
-    clockInterval = novadesk.setInterval(function () {
+    clockInterval = setInterval(function () {
         var now = new Date();
         var timeStr = pad(now.getHours()) + ":" +
             pad(now.getMinutes()) + ":" +
@@ -49,12 +49,12 @@ function createClockWidget() {
     }, 1000);
 
     // Test setTimeout
-    novadesk.setTimeout(function () {
+    setTimeout(function () {
         novadesk.log("One-shot timeout fired from clock widget!");
     }, 5000);
 
     // Test setImmediate
-    novadesk.setImmediate(function () {
+    setImmediate(function () {
         novadesk.log("Clock widget initialized via setImmediate");
     });
 }

@@ -7,7 +7,7 @@
 
 !logToFile;
 // !enableDebugging;
-var metrics = novadesk.system.getDisplayMetrics();
+var metrics = system.getDisplayMetrics();
 
 var sysWidget = new widgetWindow({
     id: "sysWidget",

@@ -475,6 +475,37 @@ namespace JSApi {
     }
 
     duk_ret_t js_get_env(duk_context* ctx) {
+        if (duk_get_top(ctx) == 0) {
+            // No arguments - return all environment variables
+            LPWCH envStrings = GetEnvironmentStringsW();
+            if (!envStrings) {
+                duk_push_object(ctx);
+                return 1;
+            }
+            
+            duk_push_object(ctx);
+            LPWCH current = envStrings;
+            
+            while (*current) {
+                std::wstring entry = current;
+                size_t pos = entry.find(L'=');
+                
+                // Skip entries that start with '=' (system variables)
+                if (pos != std::wstring::npos && pos > 0) {
+                    std::wstring key = entry.substr(0, pos);
+                    std::wstring value = entry.substr(pos + 1);
+                    
+                    duk_push_string(ctx, Utils::ToString(value).c_str());
+                    duk_put_prop_string(ctx, -2, Utils::ToString(key).c_str());
+                }
+                
+                current += wcslen(current) + 1;
+            }
+            
+            FreeEnvironmentStringsW(envStrings);
+            return 1;
+        }
+
         if (!duk_is_string(ctx, 0)) {
             return DUK_RET_TYPE_ERROR;
         }
@@ -491,35 +522,6 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_get_all_env(duk_context* ctx) {
-        LPWCH envStrings = GetEnvironmentStringsW();
-        if (!envStrings) {
-            duk_push_object(ctx);
-            return 1;
-        }
-        
-        duk_push_object(ctx);
-        LPWCH current = envStrings;
-        
-        while (*current) {
-            std::wstring entry = current;
-            size_t pos = entry.find(L'=');
-            
-            // Skip entries that start with '=' (system variables)
-            if (pos != std::wstring::npos && pos > 0) {
-                std::wstring key = entry.substr(0, pos);
-                std::wstring value = entry.substr(pos + 1);
-                
-                duk_push_string(ctx, Utils::ToString(value).c_str());
-                duk_put_prop_string(ctx, -2, Utils::ToString(key).c_str());
-            }
-            
-            current += wcslen(current) + 1;
-        }
-        
-        FreeEnvironmentStringsW(envStrings);
-        return 1;
-    }
 
     duk_ret_t js_register_hotkey(duk_context* ctx) {
         if (duk_get_top(ctx) < 2) return DUK_RET_TYPE_ERROR;
@@ -1015,7 +1017,10 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "include");
         duk_push_c_function(ctx, js_on_ready, 1);
         duk_put_prop_string(ctx, -2, "onReady");
- 
+
+        // Keep a reference to the novadesk object
+        duk_put_global_string(ctx, "novadesk");
+
         // Register Managers
         HotkeyManager::SetCallbackHandler([](int idx) {
             CallHotkeyCallback(idx);
@@ -1023,20 +1028,20 @@ namespace JSApi {
         TimerManager::SetCallbackHandler([](int idx) {
             CallStoredCallback(idx);
         });
- 
-        duk_push_c_function(ctx, js_get_exe_path, 0);
-        duk_put_prop_string(ctx, -2, "getExePath");
+
+        // Register system object
+        duk_push_object(ctx);
+
         duk_push_c_function(ctx, js_get_env, 1);
         duk_put_prop_string(ctx, -2, "getEnv");
-        duk_push_c_function(ctx, js_get_all_env, 0);
-        duk_put_prop_string(ctx, -2, "getAllEnv");
         duk_push_c_function(ctx, js_register_hotkey, 2);
         duk_put_prop_string(ctx, -2, "registerHotkey");
         duk_push_c_function(ctx, js_unregister_hotkey, 1);
         duk_put_prop_string(ctx, -2, "unregisterHotkey");
-
-        // novadesk.system object with constructors
-        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_get_exe_path, 0);
+        duk_put_prop_string(ctx, -2, "getExePath");
+        duk_push_c_function(ctx, js_system_get_display_metrics, 0);
+        duk_put_prop_string(ctx, -2, "getDisplayMetrics");
 
         // CPU Class
         duk_push_c_function(ctx, js_cpu_constructor, 1);
@@ -1046,7 +1051,7 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "prototype");
         duk_push_c_function(ctx, js_cpu_finalizer, 1);
         duk_set_finalizer(ctx, -2);
-        duk_put_prop_string(ctx, -2, "CPU");
+        duk_put_prop_string(ctx, -2, "cpu");
 
         // Memory Class
         duk_push_c_function(ctx, js_memory_constructor, 0);
@@ -1056,7 +1061,7 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "prototype");
         duk_push_c_function(ctx, js_memory_finalizer, 1);
         duk_set_finalizer(ctx, -2);
-        duk_put_prop_string(ctx, -2, "Memory");
+        duk_put_prop_string(ctx, -2, "memory");
 
         // Network Class
         duk_push_c_function(ctx, js_network_constructor, 0);
@@ -1066,7 +1071,7 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "prototype");
         duk_push_c_function(ctx, js_network_finalizer, 1);
         duk_set_finalizer(ctx, -2);
-        duk_put_prop_string(ctx, -2, "Network");
+        duk_put_prop_string(ctx, -2, "network");
 
         // Mouse Class
         duk_push_c_function(ctx, js_mouse_constructor, 0);
@@ -1076,7 +1081,7 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "prototype");
         duk_push_c_function(ctx, js_mouse_finalizer, 1);
         duk_set_finalizer(ctx, -2);
-        duk_put_prop_string(ctx, -2, "Mouse");
+        duk_put_prop_string(ctx, -2, "mouse");
 
         // Disk Class
         duk_push_c_function(ctx, js_disk_constructor, 1);
@@ -1086,14 +1091,9 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "prototype");
         duk_push_c_function(ctx, js_disk_finalizer, 1);
         duk_set_finalizer(ctx, -2);
-        duk_put_prop_string(ctx, -2, "Disk");
-        
-        duk_push_c_function(ctx, js_system_get_display_metrics, 0);
-        duk_put_prop_string(ctx, -2, "getDisplayMetrics");
+        duk_put_prop_string(ctx, -2, "disk");
 
-        duk_put_prop_string(ctx, -2, "system");
-
-        duk_put_global_string(ctx, "novadesk");
+        duk_put_global_string(ctx, "system");
 
         // Register timer functions globally (not on novadesk)
         duk_push_c_function(ctx, js_set_timer, 2);
@@ -1113,11 +1113,6 @@ namespace JSApi {
         duk_push_c_function(ctx, js_set_immediate, 1);
         duk_put_global_string(ctx, "setImmediate");
 
-        // process.nextTick
-        duk_push_object(ctx);
-        duk_push_c_function(ctx, js_set_immediate, 1);
-        duk_put_prop_string(ctx, -2, "nextTick");
-        duk_put_global_string(ctx, "process");
 
         // Add refresh method to novadesk
         duk_get_global_string(ctx, "novadesk");
