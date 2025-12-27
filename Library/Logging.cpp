@@ -11,6 +11,7 @@
 #include <fstream>
 #include <ctime>
 #include <chrono>
+#include <vector>
 
 // Static member initialization
 bool Logging::s_ConsoleEnabled = true;
@@ -26,8 +27,16 @@ void Logging::Log(LogLevel level, const wchar_t* format, ...)
 
     va_list args;
     va_start(args, format);
-    wchar_t buffer[1024];
-    vswprintf_s(buffer, format, args);
+    
+    // Determine required size
+    int len = _vscwprintf(format, args);
+    if (len < 0) {
+        va_end(args);
+        return;
+    }
+
+    std::vector<wchar_t> buffer(len + 1);
+    vswprintf_s(buffer.data(), buffer.size(), format, args);
     va_end(args);
 
     const wchar_t* levelStr = L"";
@@ -46,18 +55,21 @@ void Logging::Log(LogLevel level, const wchar_t* format, ...)
     tm timeInfo;
     localtime_s(&timeInfo, &now_c);
     
-    wchar_t timestamp[32];
+    wchar_t timestamp[64];
     swprintf_s(timestamp, L"[%04d-%02d-%02d %02d:%02d:%02d.%03lld]",
         timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday,
         timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec, ms.count());
 
-    wchar_t output[1200];
-    swprintf_s(output, L"%s [Novadesk] %s %s\n", timestamp, levelStr, buffer);
+    // Prepare final output string dynamically
+    // format: timestamp + " [Novadesk] " + levelStr + " " + buffer + "\n"
+    size_t outputSize = wcslen(timestamp) + 12 + wcslen(levelStr) + 1 + len + 2;
+    std::vector<wchar_t> output(outputSize);
+    swprintf_s(output.data(), output.size(), L"%s [Novadesk] %s %s\n", timestamp, levelStr, buffer.data());
 
     // Output to console (debug output)
     if (s_ConsoleEnabled)
     {
-        OutputDebugStringW(output);
+        OutputDebugStringW(output.data());
     }
 
     // Output to file
@@ -66,7 +78,7 @@ void Logging::Log(LogLevel level, const wchar_t* format, ...)
         std::wofstream logFile(s_LogFilePath, std::ios::app);
         if (logFile.is_open())
         {
-            logFile << output;
+            logFile << output.data();
             logFile.close();
         }
     }
@@ -77,10 +89,20 @@ void Logging::SetConsoleLogging(bool enable)
     s_ConsoleEnabled = enable;
 }
 
-void Logging::SetFileLogging(const std::wstring& filePath)
+void Logging::SetFileLogging(const std::wstring& filePath, bool clearFile)
 {
     s_LogFilePath = filePath;
     s_FileEnabled = !filePath.empty();
+
+    if (s_FileEnabled && clearFile)
+    {
+        // Truncate the file
+        std::wofstream logFile(s_LogFilePath, std::ios::trunc);
+        if (logFile.is_open())
+        {
+            logFile.close();
+        }
+    }
 }
 
 void Logging::SetLogLevel(LogLevel minLevel)

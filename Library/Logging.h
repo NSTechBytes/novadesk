@@ -37,7 +37,7 @@ public:
     ** Enable file logging. Logs will be written to the specified file.
     ** Pass empty string to disable file logging.
     */
-    static void SetFileLogging(const std::wstring& filePath);
+    static void SetFileLogging(const std::wstring& filePath, bool clearFile = false);
 
     /*
     ** Set the minimum log level. Messages below this level are ignored.

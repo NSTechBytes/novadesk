@@ -982,7 +982,7 @@ namespace JSApi {
                 }
                 else if (directive == "logToFile") {
                     std::wstring logPath = PathUtils::GetExeDir() + L"novadesk.log";
-                    Logging::SetFileLogging(logPath);
+                    Logging::SetFileLogging(logPath, true);
                     Logging::Log(LogLevel::Info, L"Directive: File logging enabled to %s", logPath.c_str());
                 }
                 else if (directive == "hideTrayIcon") {
