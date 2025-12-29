@@ -27,11 +27,18 @@ using namespace Gdiplus;
 
 extern std::vector<Widget*> widgets; // Defined in Novadesk.cpp
 
+/*
+** Construct a new Widget with the specified options.
+** Options include size, position, colors, z-order, and behavior flags.
+*/
 Widget::Widget(const WidgetOptions& options) 
     : m_hWnd(nullptr), m_Options(options), m_WindowZPosition(options.zPos)
 {
 }
 
+/*
+** Destructor. Cleans up window resources and removes from system tracking.
+*/
 Widget::~Widget()
 {
     if (m_hWnd)
@@ -47,6 +54,10 @@ Widget::~Widget()
     m_Elements.clear();
 }
 
+/*
+** Register the widget window class.
+** Only needs to be called once per application instance.
+*/
 bool Widget::Register()
 {
     static bool registered = false;
@@ -70,6 +81,11 @@ bool Widget::Register()
     return false;
 }
 
+/*
+** Create the widget window.
+** Registers the window class if needed and creates the actual window.
+** Returns true on success, false on failure.
+*/
 bool Widget::Create()
 {
     if (!Register()) return false;
@@ -116,6 +132,10 @@ bool Widget::Create()
     return true;
 }
 
+/*
+** Show the widget window.
+** Makes the window visible and applies the configured z-order position.
+*/
 void Widget::Show()
 {
     if (m_hWnd)
@@ -125,6 +145,10 @@ void Widget::Show()
     }
 }
 
+/*
+** Change the z-order position of this widget.
+** If all is true, affects all widgets in the same z-order group.
+*/
 void Widget::ChangeZPos(ZPOSITION zPos, bool all)
 {
     ZPOSITION oldZPos = m_WindowZPosition;
@@ -215,6 +239,10 @@ timer_check:
     }
 }
 
+/*
+** Change the z-order position of a single widget.
+** Similar to ChangeZPos but only affects this specific widget.
+*/
 void Widget::ChangeSingleZPos(ZPOSITION zPos, bool all)
 {
     if (zPos == ZPOSITION_NORMAL && System::GetShowDesktop())
@@ -237,6 +265,9 @@ void Widget::ChangeSingleZPos(ZPOSITION zPos, bool all)
     }
 }
 
+/*
+** Set window position and size.
+*/
 void Widget::SetWindowPosition(int x, int y, int w, int h)
 {
     if (x == CW_USEDEFAULT) x = m_Options.x;
@@ -276,6 +307,9 @@ void Widget::SetWindowPosition(int x, int y, int w, int h)
     }
 }
 
+/*
+** Set overall window opacity (0-255).
+*/
 void Widget::SetWindowOpacity(BYTE opacity)
 {
     if (m_Options.windowOpacity != opacity)
@@ -286,6 +320,9 @@ void Widget::SetWindowOpacity(BYTE opacity)
     }
 }
 
+/*
+** Set background color and alpha.
+*/
 void Widget::SetBackgroundColor(const std::wstring& colorStr)
 {
     COLORREF color = m_Options.color;
@@ -304,6 +341,9 @@ void Widget::SetBackgroundColor(const std::wstring& colorStr)
     }
 }
 
+/*
+** Enable/disable click-through.
+*/
 void Widget::SetClickThrough(bool enable)
 {
     if (m_Options.clickThrough != enable)
@@ -321,6 +361,9 @@ void Widget::SetClickThrough(bool enable)
     }
 }
 
+/*
+** Retrieve the Widget instance associated with a window handle.
+*/
 Widget* Widget::GetWidgetFromHWND(HWND hWnd)
 {
     for (auto w : widgets)
@@ -330,6 +373,10 @@ Widget* Widget::GetWidgetFromHWND(HWND hWnd)
     return nullptr;
 }
 
+/*
+** Window procedure for handling widget window messages.
+** Handles painting, mouse input, dragging, and z-order management.
+*/
 LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     if (message == WM_CREATE)
@@ -672,6 +719,10 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 // ============================================================================
 
 // Helper to apply common element options
+/*
+** Add an image content item to the widget.
+** The image will be loaded and cached for rendering.
+*/
 void Widget::AddImage(const PropertyParser::ImageOptions& options)
 {
     // Remove existing if any
@@ -705,6 +756,10 @@ void Widget::AddImage(const PropertyParser::ImageOptions& options)
     Redraw();
 }
 
+/*
+** Add a text content item to the widget.
+** Text will be rendered with the specified font and styling.
+*/
 void Widget::AddText(const PropertyParser::TextOptions& options)
 {
     // Remove existing if any
@@ -721,6 +776,9 @@ void Widget::AddText(const PropertyParser::TextOptions& options)
     Redraw();
 }
 
+/*
+** Update properties of an existing element.
+*/
 void Widget::SetElementProperties(const std::wstring& id, duk_context* ctx)
 {
     Element* element = FindElementById(id);
@@ -777,6 +835,10 @@ void Widget::SetElementProperties(const std::wstring& id, duk_context* ctx)
     Redraw();
 }
 
+/*
+** Remove one or more content items by ID.
+** If id is empty, clears all content.
+*/
 bool Widget::RemoveElements(const std::wstring& id)
 {
     if (id.empty())
@@ -802,6 +864,9 @@ bool Widget::RemoveElements(const std::wstring& id)
     return false;
 }
 
+/*
+** Remove multiple elements by their IDs.
+*/
 void Widget::RemoveElements(const std::vector<std::wstring>& ids)
 {
     bool changed = false;
@@ -822,16 +887,39 @@ void Widget::RemoveElements(const std::vector<std::wstring>& ids)
     if (changed) Redraw();
 }
 
+/*
+** Add a custom item to the context menu.
+*/
 void Widget::AddContextMenuItem(const std::wstring& label, const std::wstring& action)
 {
     m_ContextMenuItems.push_back({ label, action });
 }
 
+/*
+** Clear all custom context menu items.
+*/
 void Widget::ClearContextMenuItems()
 {
     m_ContextMenuItems.clear();
 }
 
+/*
+** Remove a specific context menu item by label.
+*/
+void Widget::RemoveContextMenuItem(const std::wstring& label)
+{
+    auto it = std::remove_if(m_ContextMenuItems.begin(), m_ContextMenuItems.end(),
+        [&](const ContextMenuItem& item) { return item.label == label; });
+
+    if (it != m_ContextMenuItems.end())
+    {
+        m_ContextMenuItems.erase(it, m_ContextMenuItems.end());
+    }
+}
+
+/*
+** Redraw the widget window to reflect content changes.
+*/
 void Widget::Redraw()
 {
     UpdateLayeredWindowContent();
@@ -839,6 +927,10 @@ void Widget::Redraw()
 
 
 
+/*
+** Update the layered window content using UpdateLayeredWindow.
+** Draws all content to a memory DC and updates the window.
+*/
 void Widget::UpdateLayeredWindowContent()
 {
     if (!m_hWnd) return;
@@ -947,6 +1039,10 @@ void Widget::UpdateLayeredWindowContent()
     ReleaseDC(NULL, hdcScreen);
 }
 
+/*
+** Find a content element by its ID.
+** Returns pointer to the element or nullptr if not found.
+*/
 Element* Widget::FindElementById(const std::wstring& id)
 {
     for (auto* element : m_Elements)
@@ -956,6 +1052,10 @@ Element* Widget::FindElementById(const std::wstring& id)
     return nullptr;
 }
 
+/*
+** Handle mouse messages and dispatch to elements.
+** Returns true if the message was handled by an element, false otherwise.
+*/
 bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
 {
     bool handled = false;
@@ -1101,6 +1201,9 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     return handled;
 }
 
+/*
+** Show the context menu for the widget.
+*/
 void Widget::OnContextMenu()
 {
     POINT pt;

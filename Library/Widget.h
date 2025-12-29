@@ -52,179 +52,71 @@ struct WidgetOptions
 class Widget
 {
 public:
-    /*
-    ** Construct a new Widget with the specified options.
-    ** Options include size, position, colors, z-order, and behavior flags.
-    */
     Widget(const WidgetOptions& options);
 
-    /*
-    ** Destructor. Cleans up window resources and removes from system tracking.
-    */
     ~Widget();
 
-    /*
-    ** Create the widget window.
-    ** Registers the window class if needed and creates the actual window.
-    ** Returns true on success, false on failure.
-    */
     bool Create();
 
-    /*
-    ** Show the widget window.
-    ** Makes the window visible and applies the configured z-order position.
-    */
     void Show();
 
-    /*
-    ** Change the z-order position of this widget.
-    ** If all is true, affects all widgets in the same z-order group.
-    */
     void ChangeZPos(ZPOSITION zPos, bool all = false);
 
-    /*
-    ** Change the z-order position of a single widget.
-    ** Similar to ChangeZPos but only affects this specific widget.
-    */
     void ChangeSingleZPos(ZPOSITION zPos, bool all = false);
 
-    /*
-    ** Set window position and size.
-    */
     void SetWindowPosition(int x, int y, int w, int h);
 
-    /*
-    ** Set overall window opacity (0-255).
-    */
     void SetWindowOpacity(BYTE opacity);
 
-    /*
-    ** Set background color and alpha.
-    */
     void SetBackgroundColor(const std::wstring& colorStr);
 
-    /*
-    ** Enable/disable window dragging.
-    */
     void SetDraggable(bool enable) { m_Options.draggable = enable; }
 
-    /*
-    ** Enable/disable click-through.
-    */
     void SetClickThrough(bool enable);
 
-    /*
-    ** Enable/disable keep on screen.
-    */
     void SetKeepOnScreen(bool enable) { m_Options.keepOnScreen = enable; }
 
-    /*
-    ** Enable/disable snap edges.
-    */
     void SetSnapEdges(bool enable) { m_Options.snapEdges = enable; }
 
-    /*
-    ** Get current widget options.
-    */
     const WidgetOptions& GetOptions() const { return m_Options; }
     
-    /*
-    ** Get the window handle for this widget.
-    */
     HWND GetWindow() const { return m_hWnd; }
 
-    /*
-    ** Get the current z-order position of this widget.
-    */
     ZPOSITION GetWindowZPosition() const { return m_WindowZPosition; }
 
-    /*
-    ** Add an image content item to the widget.
-    ** The image will be loaded and cached for rendering.
-    */
     void AddImage(const PropertyParser::ImageOptions& options);
 
-    /*
-    ** Add a text content item to the widget.
-    ** Text will be rendered with the specified font and styling.
-    */
     void AddText(const PropertyParser::TextOptions& options);
 
-    /*
-    ** Update properties of an existing element.
-    */
     void SetElementProperties(const std::wstring& id, duk_context* ctx);
 
-    /*
-    ** Remove one or more content items by ID.
-    ** If id is empty, clears all content.
-    */
     bool RemoveElements(const std::wstring& id = L"");
 
-    /*
-    ** Remove multiple elements by their IDs.
-    */
     void RemoveElements(const std::vector<std::wstring>& ids);
 
-    /*
-    ** Add a custom item to the context menu.
-    */
     void AddContextMenuItem(const std::wstring& label, const std::wstring& action);
 
-    /*
-    ** Clear all custom context menu items.
-    */
     void ClearContextMenuItems();
 
-    /*
-    ** Set whether to show default context menu items (Refresh, Exit, etc).
-    */
+    void RemoveContextMenuItem(const std::wstring& label);
+
     void SetShowDefaultContextMenuItems(bool show) { m_ShowDefaultContextMenuItems = show; }
 
-    /*
-    ** Redraw the widget window to reflect content changes.
-    */
     void Redraw();
 
-    /*
-    ** Find a content element by its ID.
-    ** Returns pointer to the element or nullptr if not found.
-    */
     Element* FindElementById(const std::wstring& id);
 
 private:
-    /*
-    ** Window procedure for handling widget window messages.
-    ** Handles painting, mouse input, dragging, and z-order management.
-    */
     static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
-    /*
-    ** Register the widget window class.
-    ** Only needs to be called once per application instance.
-    */
     static bool Register();
 
-    /*
-    ** Retrieve the Widget instance associated with a window handle.
-    */
     static Widget* GetWidgetFromHWND(HWND hWnd);
 
-    /*
-    ** Update the layered window content using UpdateLayeredWindow.
-    ** Draws all content to a memory DC and updates the window.
-    */
     void UpdateLayeredWindowContent();
 
-    /*
-    ** Handle mouse messages and dispatch to elements.
-    ** Returns true if the message was handled by an element, false otherwise.
-    */
     bool HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam);
 
-    /*
-    ** Show the context menu for the widget.
-    */
     void OnContextMenu();
 
     HWND m_hWnd;

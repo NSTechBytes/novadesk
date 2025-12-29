@@ -17,14 +17,25 @@ namespace TimerManager {
 
     static const UINT WM_TIMER_ACTION = WM_USER + 100;
 
+    /*
+    ** Initialize the timer manager with the message window.
+    */
     void Initialize(HWND hWnd) {
         s_Window = hWnd;
     }
 
+    /*
+    ** Set the handler function to call when a timer triggers.
+    ** This bridges to the JS API layer.
+    */
     void SetCallbackHandler(std::function<void(int)> handler) {
         s_JSHandler = handler;
     }
 
+    /*
+    ** Register a new timer (timeout or interval).
+    ** Returns a unique ID for the timer.
+    */
     int Register(int ms, int callbackIdx, bool repeating) {
         if (!s_Window) return -1;
 
@@ -35,6 +46,9 @@ namespace TimerManager {
         return (int)id;
     }
 
+    /*
+    ** Clear a specific timer by its ID.
+    */
     void Clear(int id) {
         if (!s_Window) return;
 
@@ -45,6 +59,9 @@ namespace TimerManager {
         }
     }
 
+    /*
+    ** Clear all active timers.
+    */
     void ClearAll() {
         if (!s_Window) return;
 
@@ -54,6 +71,9 @@ namespace TimerManager {
         s_Timers.clear();
     }
 
+    /*
+    ** Queue a high-priority immediate callback (setImmediate).
+    */
     int PushImmediate(int callbackIdx) {
         if (!s_Window) return -1;
 
@@ -64,6 +84,9 @@ namespace TimerManager {
         return (int)id;
     }
 
+    /*
+    ** Handle WM_TIMER messages.
+    */
     void HandleTimer(UINT_PTR id) {
         auto it = s_Timers.find(id);
         if (it != s_Timers.end()) {
@@ -80,6 +103,9 @@ namespace TimerManager {
         }
     }
 
+    /*
+    ** Handle custom window messages (for setImmediate).
+    */
     void HandleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         if (message == WM_TIMER_ACTION) {
             UINT_PTR id = (UINT_PTR)wParam;

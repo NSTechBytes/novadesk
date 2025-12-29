@@ -34,6 +34,7 @@ namespace JSApi {
     duk_ret_t js_widget_add_image(duk_context* ctx);
     duk_ret_t js_widget_add_text(duk_context* ctx);
     duk_ret_t js_widget_add_context_menu_item(duk_context* ctx);
+    duk_ret_t js_widget_remove_context_menu_item(duk_context* ctx);
     duk_ret_t js_widget_clear_context_menu(duk_context* ctx);
     duk_ret_t js_widget_show_default_context_menu_items(duk_context* ctx);
     duk_ret_t js_widget_set_element_properties(duk_context* ctx);
@@ -864,6 +865,23 @@ namespace JSApi {
         std::wstring action = Utils::ToWString(duk_safe_to_string(ctx, 1));
 
         widget->AddContextMenuItem(label, action);
+
+        duk_push_this(ctx);
+        return 1;
+    }
+
+    duk_ret_t js_widget_remove_context_menu_item(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "widgetPtr");
+        Widget* widget = (Widget*)duk_get_pointer(ctx, -1);
+        duk_pop_2(ctx);
+
+        if (!widget) return DUK_RET_ERROR;
+
+        if (duk_get_top(ctx) < 1) return DUK_RET_TYPE_ERROR;
+        
+        std::wstring label = Utils::ToWString(duk_safe_to_string(ctx, 0));
+        widget->RemoveContextMenuItem(label);
 
         duk_push_this(ctx);
         return 1;
