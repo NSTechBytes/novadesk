@@ -47,6 +47,7 @@ struct WidgetOptions
     bool snapEdges = true;
     bool m_WDefined = false;
     bool m_HDefined = false;
+    std::wstring scriptPath;
 };
 
 class Widget
@@ -59,6 +60,7 @@ public:
     bool Create();
 
     void Show();
+    void Refresh();
 
     void ChangeZPos(ZPOSITION zPos, bool all = false);
 
@@ -140,4 +142,3 @@ private:
 };
 
 #endif
-

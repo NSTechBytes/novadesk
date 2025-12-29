@@ -145,6 +145,15 @@ void Widget::Show()
     }
 }
 
+void Widget::Refresh()
+{
+    RemoveElements(L""); // Clear all elements
+    if (!m_Options.scriptPath.empty())
+    {
+        JSApi::ExecuteWidgetScript(this);
+    }
+}
+
 /*
 ** Change the z-order position of this widget.
 ** If all is true, affects all widgets in the same z-order group.
@@ -783,6 +792,8 @@ void Widget::AddText(const PropertyParser::TextOptions& options)
                              options.text, options.fontFace, options.fontSize, options.fontColor, options.alpha,
                              options.bold, options.italic, options.textAlign, options.clip, options.clipW, options.clipH);
                              
+    Logging::Log(LogLevel::Debug, L"Widget::AddText: Created TextElement id='%s', text='%s', x=%d, y=%d", element->GetId().c_str(), element->GetText().c_str(), element->GetX(), element->GetY());
+
     PropertyParser::ApplyElementOptions(element, options);
 
     m_Elements.push_back(element);
@@ -1259,7 +1270,7 @@ void Widget::OnContextMenu()
     }
     else if (cmd == 1001)
     {
-        JSApi::Reload();
+        Refresh();
     }
     else if (cmd == 1002)
     {
@@ -1276,4 +1287,5 @@ void Widget::OnContextMenu()
         PostQuitMessage(0);
     }
 }
+
 

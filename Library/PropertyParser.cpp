@@ -28,26 +28,49 @@ namespace PropertyParser {
                 }
             }
             duk_pop(m_Ctx);
+
+            // Try lowercase fallback if original was not lowercase
+            std::string lowerKey = key;
+            std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
+            if (lowerKey != key) {
+                return GetString(lowerKey.c_str(), outStr);
+            }
             return false;
         }
 
         bool GetInt(const char* key, int& outInt) {
             if (duk_get_prop_string(m_Ctx, -1, key)) {
-                outInt = duk_get_int(m_Ctx, -1);
-                duk_pop(m_Ctx);
-                return true;
+                if (duk_is_number(m_Ctx, -1)) {
+                    outInt = duk_get_int(m_Ctx, -1);
+                    duk_pop(m_Ctx);
+                    return true;
+                }
             }
             duk_pop(m_Ctx);
+
+            std::string lowerKey = key;
+            std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
+            if (lowerKey != key) {
+                return GetInt(lowerKey.c_str(), outInt);
+            }
             return false;
         }
 
         bool GetFloat(const char* key, float& outFloat) {
             if (duk_get_prop_string(m_Ctx, -1, key)) {
-                outFloat = (float)duk_get_number(m_Ctx, -1);
-                duk_pop(m_Ctx);
-                return true;
+                if (duk_is_number(m_Ctx, -1)) {
+                    outFloat = (float)duk_get_number(m_Ctx, -1);
+                    duk_pop(m_Ctx);
+                    return true;
+                }
             }
             duk_pop(m_Ctx);
+
+            std::string lowerKey = key;
+            std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
+            if (lowerKey != key) {
+                return GetFloat(lowerKey.c_str(), outFloat);
+            }
             return false;
         }
 
@@ -58,6 +81,12 @@ namespace PropertyParser {
                 return true;
             }
             duk_pop(m_Ctx);
+
+            std::string lowerKey = key;
+            std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
+            if (lowerKey != key) {
+                return GetBool(lowerKey.c_str(), outBool);
+            }
             return false;
         }
 
@@ -70,6 +99,12 @@ namespace PropertyParser {
                 }
             }
             duk_pop(m_Ctx);
+
+            std::string lowerKey = key;
+            std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
+            if (lowerKey != key) {
+                return GetColor(lowerKey.c_str(), outColor, outAlpha);
+            }
             return false;
         }
         
@@ -158,6 +193,10 @@ namespace PropertyParser {
         reader.GetBool("snapedges", options.snapEdges);
         reader.GetInt("x", options.x);
         reader.GetInt("y", options.y);
+
+        if (reader.GetString("script", options.scriptPath)) {
+            options.scriptPath = PathUtils::ResolvePath(options.scriptPath, PathUtils::GetWidgetsDir());
+        }
     }
 
     void ParseElementOptionsInternal(duk_context* ctx, ElementOptions& options) {

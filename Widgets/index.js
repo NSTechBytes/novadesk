@@ -1,29 +1,29 @@
-/* Copyright (C) 2026 Novadesk Project
- *
- * This Source Code Form is subject to the terms of the GNU General Public
- * License; either version 2 of the License, or (at your option) any later
- * version. If a copy of the GPL was not distributed with this file, You can
- * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
+// Main controller script
+novadesk.log("Starting Independent Refresh Test...");
 
-!logToFile;
-// !enableDebugging;
-var metrics = system.getDisplayMetrics();
+// // Create Widget A (Static)
+// widgetA = new widgetWindow({
+//     id: "WidgetA",
+//     x: 100, y: 100,
+//     width: 200, height: 100,
+//     backgroundcolor: "rgba(255, 0, 0, 100)" // Red
+// });
 
-var sysWidget = new widgetWindow({
-    id: "sysWidget",
-    width: 450,
-    height: 600,
-    backgroundcolor: "rgba(30, 30, 40, 0.9)",
-    zpos: "ondesktop",
-    draggable: true,
+// widgetA.addText({
+//     id: "labelA",
+//     text: "I am Widget A (Static)",
+//     x: 10, y: 10,
+//     fontSize: 12,
+//     fontcolor: "rgba(255, 255, 255, 255)"
+// });
+
+// Create Widget B (Dynamic/Refreshable)
+widgetB = new widgetWindow({
+    id: "WidgetB",
+    x: 400, y: 100,
+    width: 300, height: 150,
+    backgroundcolor: "rgba(0, 0, 255, 100)", // Blue
+    script: "widgetB_ui.js"
 });
 
-sysWidget.addText({
-    id: "title",
-    text: "Display Metrics",
-    x: 20, y: 20,
-    fontsize: 20,
-    color: "rgb(255, 255, 255)",
-    fontweight: "bold",
-    onleftmouseup: "sysWidget.refresh();"
-});
+novadesk.log("Test widgets created. Right-click Widget B to refresh it.");

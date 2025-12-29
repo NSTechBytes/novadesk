@@ -10,6 +10,8 @@
 #include "duktape/duktape.h"
 #include "Hotkey.h"
 
+class Widget;
+
 namespace JSApi {
 
     void InitializeJavaScriptAPI(duk_context* ctx);
@@ -28,14 +30,16 @@ namespace JSApi {
     duk_ret_t js_widget_remove_context_menu_item(duk_context* ctx);
     duk_ret_t js_widget_clear_context_menu(duk_context* ctx);
     duk_ret_t js_widget_show_default_context_menu_items(duk_context* ctx);
-    duk_ret_t js_widget_update_image(duk_context* ctx);
-    duk_ret_t js_widget_update_text(duk_context* ctx);
-    duk_ret_t js_widget_remove_content(duk_context* ctx);
-    duk_ret_t js_widget_clear_content(duk_context* ctx);
+    duk_ret_t js_widget_set_element_properties(duk_context* ctx);
+    duk_ret_t js_widget_remove_elements(duk_context* ctx);
+    duk_ret_t js_widget_get_element_properties(duk_context* ctx);
     duk_ret_t js_widget_set_properties(duk_context* ctx);
     duk_ret_t js_widget_get_properties(duk_context* ctx);
 
     void ExecuteScript(const std::wstring& script);
+    void ExecuteWidgetScript(Widget* widget);
+
+    duk_ret_t js_widget_refresh(duk_context* ctx);
 
     // Event handlers for the main message loop
     void OnTimer(UINT_PTR id);

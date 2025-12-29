@@ -85,7 +85,7 @@ namespace JSApi {
     void CallHotkeyCallback(int callbackIdx);
     void CallStoredCallback(int id);
     bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath);
-    std::string ParseConfigDirectives(const std::string& script);
+
 
     // Ready callback storage
     static int s_ReadyCallbackIndex = -1;
@@ -715,6 +715,59 @@ namespace JSApi {
         return 0;
     }
 
+    void BindWidgetControlMethods(duk_context* ctx) {
+        duk_push_c_function(ctx, js_widget_add_context_menu_item, 2);
+        duk_put_prop_string(ctx, -2, "addContextMenuItem");
+        
+        duk_push_c_function(ctx, js_widget_remove_context_menu_item, 1);
+        duk_put_prop_string(ctx, -2, "removeContextMenuItem");
+        
+        duk_push_c_function(ctx, js_widget_clear_context_menu, 0);
+        duk_put_prop_string(ctx, -2, "clearContextMenu");
+        
+        duk_push_c_function(ctx, js_widget_show_default_context_menu_items, 1);
+        duk_put_prop_string(ctx, -2, "showDefaultContextMenuItems");
+        
+        duk_push_c_function(ctx, js_widget_set_properties, 1);
+        duk_put_prop_string(ctx, -2, "setProperties");
+        
+        duk_push_c_function(ctx, js_widget_get_properties, 0);
+        duk_put_prop_string(ctx, -2, "getProperties");
+        
+        duk_push_c_function(ctx, js_widget_close, 0);
+        duk_put_prop_string(ctx, -2, "close");
+        
+        duk_push_c_function(ctx, js_widget_refresh, 0); 
+        duk_put_prop_string(ctx, -2, "refresh");
+    }
+
+    void BindWidgetUIMethods(duk_context* ctx) {
+        duk_push_c_function(ctx, js_widget_add_image, 1);
+        duk_put_prop_string(ctx, -2, "addImage");
+        
+        duk_push_c_function(ctx, js_widget_add_text, 1);
+        duk_put_prop_string(ctx, -2, "addText");
+
+        // These aliased to setElementProperties for backward compatibility or future specialized implementation
+        duk_push_c_function(ctx, js_widget_set_element_properties, 2);
+        duk_put_prop_string(ctx, -2, "updateImage");
+
+        duk_push_c_function(ctx, js_widget_set_element_properties, 2);
+        duk_put_prop_string(ctx, -2, "updateText");
+
+        duk_push_c_function(ctx, js_widget_remove_elements, 1);
+        duk_put_prop_string(ctx, -2, "removeElements");
+
+        duk_push_c_function(ctx, js_widget_set_element_properties, 2);
+        duk_put_prop_string(ctx, -2, "setElementProperties");
+        
+        duk_push_c_function(ctx, js_widget_get_element_properties, 1);
+        duk_put_prop_string(ctx, -2, "getElementProperties");
+
+        duk_push_c_function(ctx, js_widget_remove_elements, 1);
+        duk_put_prop_string(ctx, -2, "clearContent");
+    }
+
     /*
     ** JavaScript API: new widgetWindow(options)
     ** Creates a new widget window with the specified options.
@@ -778,42 +831,14 @@ namespace JSApi {
         duk_push_pointer(ctx, widget);
         duk_put_prop_string(ctx, -2, "\xFF" "widgetPtr");
         
-        // Add methods to the widget object
-        duk_push_c_function(ctx, js_widget_add_image, 1);
-        duk_put_prop_string(ctx, -2, "addImage");
-        
-        duk_push_c_function(ctx, js_widget_add_text, 1);
-        duk_put_prop_string(ctx, -2, "addText");
+        // Bind ONLY control methods to the returned instance
+        // Elements can only be added within the widget's own script
+        BindWidgetControlMethods(ctx);
 
-        duk_push_c_function(ctx, js_widget_add_context_menu_item, 2);
-        duk_put_prop_string(ctx, -2, "addContextMenuItem");
-
-        duk_push_c_function(ctx, js_widget_clear_context_menu, 0);
-        duk_put_prop_string(ctx, -2, "clearContextMenu");
-        
-        duk_push_c_function(ctx, js_widget_show_default_context_menu_items, 1);
-        duk_put_prop_string(ctx, -2, "showDefaultContextMenuItems");
-        
-        duk_push_c_function(ctx, js_widget_set_element_properties, 2);
-        duk_put_prop_string(ctx, -2, "setElementProperties");
-        
-        duk_push_c_function(ctx, js_widget_remove_elements, 1);
-        duk_put_prop_string(ctx, -2, "removeElements");
-        
-        duk_push_c_function(ctx, js_widget_get_element_properties, 1);
-        duk_put_prop_string(ctx, -2, "getElementProperties");
-
-        duk_push_c_function(ctx, js_widget_set_properties, 1);
-        duk_put_prop_string(ctx, -2, "setProperties");
-
-        duk_push_c_function(ctx, js_widget_get_properties, 0);
-        duk_put_prop_string(ctx, -2, "getProperties");
-
-        duk_push_c_function(ctx, js_widget_close, 0);
-        duk_put_prop_string(ctx, -2, "close");
-
-        duk_push_c_function(ctx, js_novadesk_refresh, 0); // Full reload like Rainmeter
-        duk_put_prop_string(ctx, -2, "refresh");
+        // Immediately execute its assigned script if it exists
+        if (!widget->GetOptions().scriptPath.empty()) {
+            ExecuteWidgetScript(widget);
+        }
         
         return 1; // Return the object
     }
@@ -855,6 +880,7 @@ namespace JSApi {
         PropertyParser::ParseTextOptions(ctx, options);
         duk_pop(ctx); // Pop options object
 
+        Logging::Log(LogLevel::Debug, L"js_widget_add_text: Calling widget->AddText for id='%s', text='%s'", options.id.c_str(), options.text.c_str());
         widget->AddText(options);
 
         // Return 'this' for chaining
@@ -1105,6 +1131,60 @@ namespace JSApi {
         } else {
             ::ShowTrayIconDynamic();
         }
+    }
+
+    void ExecuteWidgetScript(Widget* widget) {
+        if (!s_JsContext || !widget) return;
+        const std::wstring& scriptPath = widget->GetOptions().scriptPath;
+        if (scriptPath.empty()) return;
+
+        std::string content = FileUtils::ReadFileContent(scriptPath);
+        if (content.empty()) {
+            Logging::Log(LogLevel::Error, L"ExecuteWidgetScript: Failed to read %s", scriptPath.c_str());
+            return;
+        }
+
+        // Save original widgetWindow constructor to global stash
+        duk_push_global_stash(s_JsContext);
+        duk_get_global_string(s_JsContext, "widgetWindow");
+        duk_put_prop_string(s_JsContext, -2, "original_widgetWindow");
+        duk_pop(s_JsContext);
+
+        // Push the widget instance as a global 'widgetWindow' for this script scope
+        PropertyParser::PushWidgetProperties(s_JsContext, widget);
+        
+        // Add pointer for internal API usage
+        duk_push_pointer(s_JsContext, widget);
+        duk_put_prop_string(s_JsContext, -2, "\xFF" "widgetPtr");
+
+        // Bind Control AND UI methods to the global widgetWindow
+        BindWidgetControlMethods(s_JsContext);
+        BindWidgetUIMethods(s_JsContext);
+        
+        duk_put_global_string(s_JsContext, "widgetWindow");
+
+        if (duk_peval_string(s_JsContext, content.c_str()) != 0) {
+            Logging::Log(LogLevel::Error, L"Widget Script Error (%s): %S", widget->GetOptions().id.c_str(), duk_safe_to_string(s_JsContext, -1));
+        }
+        duk_pop(s_JsContext);
+
+        // Restore global widgetWindow to original constructor from stash
+        duk_push_global_stash(s_JsContext);
+        duk_get_prop_string(s_JsContext, -1, "original_widgetWindow");
+        duk_put_global_string(s_JsContext, "widgetWindow");
+        duk_pop(s_JsContext);
+    }
+
+    duk_ret_t js_widget_refresh(duk_context* ctx) {
+        duk_push_this(ctx);
+        duk_get_prop_string(ctx, -1, "\xFF" "widgetPtr");
+        Widget* widget = (Widget*)duk_get_pointer(ctx, -1);
+        duk_pop_2(ctx);
+
+        if (widget) {
+            widget->Refresh();
+        }
+        return 0;
     }
 
 
