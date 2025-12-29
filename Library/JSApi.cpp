@@ -716,18 +716,6 @@ namespace JSApi {
     }
 
     void BindWidgetControlMethods(duk_context* ctx) {
-        duk_push_c_function(ctx, js_widget_add_context_menu_item, 2);
-        duk_put_prop_string(ctx, -2, "addContextMenuItem");
-        
-        duk_push_c_function(ctx, js_widget_remove_context_menu_item, 1);
-        duk_put_prop_string(ctx, -2, "removeContextMenuItem");
-        
-        duk_push_c_function(ctx, js_widget_clear_context_menu, 0);
-        duk_put_prop_string(ctx, -2, "clearContextMenu");
-        
-        duk_push_c_function(ctx, js_widget_show_default_context_menu_items, 1);
-        duk_put_prop_string(ctx, -2, "showDefaultContextMenuItems");
-        
         duk_push_c_function(ctx, js_widget_set_properties, 1);
         duk_put_prop_string(ctx, -2, "setProperties");
         
@@ -748,12 +736,18 @@ namespace JSApi {
         duk_push_c_function(ctx, js_widget_add_text, 1);
         duk_put_prop_string(ctx, -2, "addText");
 
-        // These aliased to setElementProperties for backward compatibility or future specialized implementation
-        duk_push_c_function(ctx, js_widget_set_element_properties, 2);
-        duk_put_prop_string(ctx, -2, "updateImage");
-
-        duk_push_c_function(ctx, js_widget_set_element_properties, 2);
-        duk_put_prop_string(ctx, -2, "updateText");
+        // Context Menu Methods (Now UI Script only)
+        duk_push_c_function(ctx, js_widget_add_context_menu_item, 2);
+        duk_put_prop_string(ctx, -2, "addContextMenuItem");
+        
+        duk_push_c_function(ctx, js_widget_remove_context_menu_item, 1);
+        duk_put_prop_string(ctx, -2, "removeContextMenuItem");
+        
+        duk_push_c_function(ctx, js_widget_clear_context_menu, 0);
+        duk_put_prop_string(ctx, -2, "clearContextMenu");
+        
+        duk_push_c_function(ctx, js_widget_show_default_context_menu_items, 1);
+        duk_put_prop_string(ctx, -2, "showDefaultContextMenuItems");
 
         duk_push_c_function(ctx, js_widget_remove_elements, 1);
         duk_put_prop_string(ctx, -2, "removeElements");
@@ -763,9 +757,6 @@ namespace JSApi {
         
         duk_push_c_function(ctx, js_widget_get_element_properties, 1);
         duk_put_prop_string(ctx, -2, "getElementProperties");
-
-        duk_push_c_function(ctx, js_widget_remove_elements, 1);
-        duk_put_prop_string(ctx, -2, "clearContent");
     }
 
     /*
