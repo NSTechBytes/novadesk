@@ -204,6 +204,11 @@ void InitTrayIcon(HWND hWnd)
     nid.hIcon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_NOVADESK));
     wcscpy_s(nid.szTip, szTitle);
 
+    if (Settings::GetGlobalBool("hideTrayIcon", false)) {
+        Logging::Log(LogLevel::Info, L"Tray icon hidden by settings");
+        return;
+    }
+
     Shell_NotifyIcon(NIM_ADD, &nid);
     Logging::Log(LogLevel::Info, L"Tray icon initialized");
 }

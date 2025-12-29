@@ -51,7 +51,6 @@ namespace JSApi {
     duk_ret_t js_on_ready(duk_context* ctx);
     duk_ret_t js_get_exe_path(duk_context* ctx);
     duk_ret_t js_get_env(duk_context* ctx);
-    duk_ret_t js_get_all_env(duk_context* ctx);
     duk_ret_t js_register_hotkey(duk_context* ctx);
     duk_ret_t js_unregister_hotkey(duk_context* ctx);
     duk_ret_t js_system_get_display_metrics(duk_context* ctx);
@@ -515,13 +514,13 @@ namespace JSApi {
         }
         
         std::wstring varName = Utils::ToWString(duk_get_string(ctx, 0));
-        wchar_t buffer[32767]; // Max environment variable size
+        std::vector<wchar_t> buffer(32767); // Max environment variable size
         
-        DWORD result = GetEnvironmentVariableW(varName.c_str(), buffer, 32767);
+        DWORD result = GetEnvironmentVariableW(varName.c_str(), buffer.data(), 32767);
         if (result == 0) {
             duk_push_null(ctx);
         } else {
-            duk_push_string(ctx, Utils::ToString(buffer).c_str());
+            duk_push_string(ctx, Utils::ToString(buffer.data()).c_str());
         }
         return 1;
     }
@@ -1068,6 +1067,46 @@ namespace JSApi {
 
 
 
+    void js_novadesk_saveLogToFile_internal(bool enable) {
+        Settings::SetGlobalBool("saveLogToFile", enable);
+        if (enable) {
+            std::wstring logPath = PathUtils::GetExeDir() + L"novadesk.log";
+            Logging::SetFileLogging(logPath, true);
+            Logging::Log(LogLevel::Info, L"File logging enabled to %s", logPath.c_str());
+        } else {
+            Logging::SetFileLogging(L"");
+        }
+    }
+
+    void js_novadesk_enableDebugging_internal(bool enable) {
+        Settings::SetGlobalBool("enableDebugging", enable);
+        Logging::SetLogLevel(enable ? LogLevel::Debug : LogLevel::Info);
+        if (enable) Logging::Log(LogLevel::Info, L"Debug logging enabled");
+    }
+
+    void js_novadesk_disableLogging_internal(bool disable) {
+        Settings::SetGlobalBool("disableLogging", disable);
+        Logging::SetConsoleLogging(!disable);
+        if (disable) {
+             Logging::SetFileLogging(L"");
+             Logging::Log(LogLevel::Info, L"All logging disabled");
+        } else {
+             if (Settings::GetGlobalBool("saveLogToFile", false)) {
+                 std::wstring logPath = PathUtils::GetExeDir() + L"novadesk.log";
+                 Logging::SetFileLogging(logPath, true);
+             }
+        }
+    }
+
+    void js_novadesk_hideTrayIcon_internal(bool hide) {
+        Settings::SetGlobalBool("hideTrayIcon", hide);
+        if (hide) {
+            ::HideTrayIconDynamic();
+        } else {
+            ::ShowTrayIconDynamic();
+        }
+    }
+
     std::string ParseConfigDirectives(const std::string& script) {
         std::string result;
         std::istringstream stream(script);
@@ -1093,21 +1132,16 @@ namespace JSApi {
 
                 // Process directives
                 if (directive == "enableDebugging") {
-                    Logging::SetLogLevel(LogLevel::Debug);
-                    Logging::Log(LogLevel::Info, L"Directive: Debug logging enabled");
+                    js_novadesk_enableDebugging_internal(true);
                 }
                 else if (directive == "disableLogging") {
-                    Logging::SetConsoleLogging(false);
-                    Logging::SetFileLogging(L""); // Also disable file logging
-                    Logging::Log(LogLevel::Info, L"Directive: All logging disabled");
+                    js_novadesk_disableLogging_internal(true);
                 }
-                else if (directive == "logToFile") {
-                    std::wstring logPath = PathUtils::GetExeDir() + L"novadesk.log";
-                    Logging::SetFileLogging(logPath, true);
-                    Logging::Log(LogLevel::Info, L"Directive: File logging enabled to %s", logPath.c_str());
+                else if (directive == "saveLogToFile") {
+                    js_novadesk_saveLogToFile_internal(true);
                 }
                 else if (directive == "hideTrayIcon") {
-                    ::HideTrayIconDynamic();
+                    js_novadesk_hideTrayIcon_internal(true);
                 }
                 else {
                     Logging::Log(LogLevel::Error, L"Unknown directive: !%S", directive.c_str());
@@ -1121,6 +1155,30 @@ namespace JSApi {
         }
 
         return result;
+    }
+
+    duk_ret_t js_novadesk_saveLogToFile(duk_context* ctx) {
+        if (duk_get_top(ctx) == 0) return DUK_RET_TYPE_ERROR;
+        js_novadesk_saveLogToFile_internal(duk_get_boolean(ctx, 0));
+        return 0;
+    }
+
+    duk_ret_t js_novadesk_enableDebugging(duk_context* ctx) {
+        if (duk_get_top(ctx) == 0) return DUK_RET_TYPE_ERROR;
+        js_novadesk_enableDebugging_internal(duk_get_boolean(ctx, 0));
+        return 0;
+    }
+
+    duk_ret_t js_novadesk_disableLogging(duk_context* ctx) {
+        if (duk_get_top(ctx) == 0) return DUK_RET_TYPE_ERROR;
+        js_novadesk_disableLogging_internal(duk_get_boolean(ctx, 0));
+        return 0;
+    }
+
+    duk_ret_t js_novadesk_hideTrayIcon(duk_context* ctx) {
+        if (duk_get_top(ctx) == 0) return DUK_RET_TYPE_ERROR;
+        js_novadesk_hideTrayIcon_internal(duk_get_boolean(ctx, 0));
+        return 0;
     }
 
     /*
@@ -1143,6 +1201,17 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "include");
         duk_push_c_function(ctx, js_on_ready, 1);
         duk_put_prop_string(ctx, -2, "onReady");
+
+        duk_push_c_function(ctx, js_novadesk_saveLogToFile, 1);
+        duk_put_prop_string(ctx, -2, "saveLogToFile");
+        duk_push_c_function(ctx, js_novadesk_enableDebugging, 1);
+        duk_put_prop_string(ctx, -2, "enableDebugging");
+        duk_push_c_function(ctx, js_novadesk_disableLogging, 1);
+        duk_put_prop_string(ctx, -2, "disableLogging");
+        duk_push_c_function(ctx, js_novadesk_hideTrayIcon, 1);
+        duk_put_prop_string(ctx, -2, "hideTrayIcon");
+        duk_push_c_function(ctx, js_novadesk_refresh, 0);
+        duk_put_prop_string(ctx, -2, "refresh");
 
         // Keep a reference to the novadesk object
         duk_put_global_string(ctx, "novadesk");
@@ -1258,10 +1327,8 @@ namespace JSApi {
     */
 
     bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath) {
-        // Reset logging state to defaults before each load
-        Logging::SetConsoleLogging(true);
-        Logging::SetFileLogging(L"");
-        Logging::SetLogLevel(LogLevel::Info);
+        // Apply global settings (logging, tray icon, etc) from settings.json
+        Settings::ApplyGlobalSettings();
 
         // Determine which script to load
         std::wstring finalScriptPath;

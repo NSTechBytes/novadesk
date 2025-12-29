@@ -21,7 +21,11 @@ public:
     static void Initialize();
     static void SaveWidget(const std::wstring& id, const WidgetOptions& options);
     static bool LoadWidget(const std::wstring& id, WidgetOptions& outOptions);
+    static void ApplyGlobalSettings();
     static void Save();
+
+    static void SetGlobalBool(const std::string& key, bool value);
+    static bool GetGlobalBool(const std::string& key, bool defaultValue);
 
 private:
     static void Load();

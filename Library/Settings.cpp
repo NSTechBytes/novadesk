@@ -9,6 +9,8 @@
 #include "Utils.h"
 #include "Logging.h"
 #include "ColorUtil.h"
+#include "PathUtils.h"
+#include "Novadesk.h"
 #include <fstream>
 #include <iomanip>
 
@@ -51,11 +53,40 @@ void Settings::Load()
             s_Data = json::object();
             s_Data["widgets"] = json::object();
         }
+ 
+        ApplyGlobalSettings();
     }
     else
     {
         s_Data = json::object();
         s_Data["widgets"] = json::object();
+        ApplyGlobalSettings(); // Apply defaults
+    }
+}
+
+void Settings::ApplyGlobalSettings()
+{
+    // Default values if keys don't exist
+    Logging::SetLogLevel(Settings::GetGlobalBool("enableDebugging", false) ? LogLevel::Debug : LogLevel::Info);
+    
+    bool disableLogging = Settings::GetGlobalBool("disableLogging", false);
+    Logging::SetConsoleLogging(!disableLogging);
+    
+    if (disableLogging) {
+        Logging::SetFileLogging(L"");
+    } else {
+        if (Settings::GetGlobalBool("saveLogToFile", false)) {
+            std::wstring logPath = PathUtils::GetExeDir() + L"novadesk.log";
+            Logging::SetFileLogging(logPath, true);
+        } else {
+            Logging::SetFileLogging(L"");
+        }
+    }
+
+    if (Settings::GetGlobalBool("hideTrayIcon", false)) {
+        ::HideTrayIconDynamic();
+    } else {
+        ::ShowTrayIconDynamic();
     }
 }
 
@@ -149,4 +180,21 @@ bool Settings::LoadWidget(const std::wstring& id, WidgetOptions& outOptions)
         Logging::Log(LogLevel::Error, L"Error loading widget %s: %S", id.c_str(), e.what());
         return false;
     }
+}
+
+void Settings::SetGlobalBool(const std::string& key, bool value)
+{
+    if (s_Data[key] != value) {
+        s_Data[key] = value;
+        s_Dirty = true;
+        Save();
+    }
+}
+
+bool Settings::GetGlobalBool(const std::string& key, bool defaultValue)
+{
+    if (s_Data.contains(key)) {
+        return s_Data[key].get<bool>();
+    }
+    return defaultValue;
 }
