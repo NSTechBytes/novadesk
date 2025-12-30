@@ -184,8 +184,6 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "debug");
         duk_push_c_function(ctx, js_include, 1);
         duk_put_prop_string(ctx, -2, "include");
-        duk_push_c_function(ctx, js_on_ready, 1);
-        duk_put_prop_string(ctx, -2, "onReady");
     }
 
     void BindNovadeskAppMethods(duk_context* ctx) {

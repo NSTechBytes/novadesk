@@ -34,14 +34,6 @@ namespace JSApi {
         duk_pop(s_JsContext);
     }
 
-    duk_ret_t js_on_ready(duk_context* ctx) {
-        if (!duk_is_function(ctx, 0)) return DUK_RET_TYPE_ERROR;
-        duk_push_global_stash(ctx);
-        duk_dup(ctx, 0);
-        duk_put_prop_string(ctx, -2, "readyCallback");
-        duk_pop(ctx);
-        return 0;
-    }
 
     void ExecuteWidgetScript(Widget* widget) {
         if (!s_JsContext || !widget) return;

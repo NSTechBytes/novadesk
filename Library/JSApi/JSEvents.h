@@ -9,6 +9,5 @@
 #include "JSCommon.h"
 
 namespace JSApi {
-    duk_ret_t js_on_ready(duk_context* ctx);
     void ExecuteScript(const std::wstring& script);
 }
