@@ -76,7 +76,6 @@ namespace JSApi {
         // Register global modules
         BindPathMethods(ctx);
         BindAppMethods(ctx);
-        BindProcessMethods(ctx);
         BindIPCMethods(ctx);
 
         Logging::Log(LogLevel::Info, L"JavaScript API initialized");

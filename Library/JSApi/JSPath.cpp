@@ -235,9 +235,6 @@ namespace JSApi {
         duk_push_c_function(ctx, js_path_relative, 2);
         duk_put_prop_string(ctx, -2, "relative");
 
-        duk_push_string(ctx, "\\");
-        duk_put_prop_string(ctx, -2, "sep");
-
         duk_put_global_string(ctx, "path");
     }
 }

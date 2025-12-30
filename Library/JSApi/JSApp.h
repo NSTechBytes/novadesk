@@ -13,8 +13,6 @@ namespace JSApi {
     duk_ret_t js_app_get_path(duk_context* ctx);
     duk_ret_t js_app_get_version(duk_context* ctx);
     duk_ret_t js_app_get_name(duk_context* ctx);
-    duk_ret_t js_process_cwd(duk_context* ctx);
-
+    
     void BindAppMethods(duk_context* ctx);
-    void BindProcessMethods(duk_context* ctx);
 }

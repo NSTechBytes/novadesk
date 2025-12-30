@@ -63,8 +63,6 @@ namespace JSApi {
         duk_put_prop_string(s_JsContext, -2, "original_novadesk");
         duk_get_global_string(s_JsContext, "path");
         duk_put_prop_string(s_JsContext, -2, "original_path");
-        duk_get_global_string(s_JsContext, "process");
-        duk_put_prop_string(s_JsContext, -2, "original_process");
         duk_get_global_string(s_JsContext, "app");
         duk_put_prop_string(s_JsContext, -2, "original_app");
         duk_get_global_string(s_JsContext, "__dirname");
@@ -104,7 +102,6 @@ namespace JSApi {
         duk_put_global_string(s_JsContext, "novadesk");
 
         BindPathMethods(s_JsContext);
-        BindProcessMethods(s_JsContext);
         BindIPCMethods(s_JsContext);
 
         // Provide __dirname and __filename
@@ -130,8 +127,6 @@ namespace JSApi {
         duk_put_global_string(s_JsContext, "novadesk");
         duk_get_prop_string(s_JsContext, -1, "original_path");
         duk_put_global_string(s_JsContext, "path");
-        duk_get_prop_string(s_JsContext, -1, "original_process");
-        duk_put_global_string(s_JsContext, "process");
         duk_get_prop_string(s_JsContext, -1, "original_app");
         duk_put_global_string(s_JsContext, "app");
         duk_get_prop_string(s_JsContext, -1, "original_dirname");

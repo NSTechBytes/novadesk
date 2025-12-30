@@ -64,13 +64,6 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_process_cwd(duk_context* ctx) {
-        wchar_t cwd[MAX_PATH];
-        GetCurrentDirectoryW(MAX_PATH, cwd);
-        duk_push_string(ctx, Utils::ToString(cwd).c_str());
-        return 1;
-    }
-
     void BindAppMethods(duk_context* ctx) {
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_app_get_path, 1);
@@ -80,14 +73,5 @@ namespace JSApi {
         duk_push_c_function(ctx, js_app_get_name, 0);
         duk_put_prop_string(ctx, -2, "getName");
         duk_put_global_string(ctx, "app");
-    }
-
-    void BindProcessMethods(duk_context* ctx) {
-        duk_push_object(ctx);
-        duk_push_c_function(ctx, js_process_cwd, 0);
-        duk_put_prop_string(ctx, -2, "cwd");
-        duk_push_string(ctx, "win32");
-        duk_put_prop_string(ctx, -2, "platform");
-        duk_put_global_string(ctx, "process");
     }
 }
