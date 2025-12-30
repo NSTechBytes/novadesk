@@ -119,10 +119,10 @@ namespace PropertyParser
         int clipH = -1;
     };
 
-    void ParseWidgetOptions(duk_context* ctx, WidgetOptions& options);
-    void ParseImageOptions(duk_context* ctx, ImageOptions& options);
-    void ParseTextOptions(duk_context* ctx, TextOptions& options);
-    void ApplyWidgetProperties(duk_context* ctx, Widget* widget);
+    void ParseWidgetOptions(duk_context* ctx, WidgetOptions& options, const std::wstring& baseDir = L"");
+    void ParseImageOptions(duk_context* ctx, ImageOptions& options, const std::wstring& baseDir = L"");
+    void ParseTextOptions(duk_context* ctx, TextOptions& options, const std::wstring& baseDir = L"");
+    void ApplyWidgetProperties(duk_context* ctx, Widget* widget, const std::wstring& baseDir = L"");
 
     void PushWidgetProperties(duk_context* ctx, Widget* widget);
     void ParseElementOptions(duk_context* ctx, Element* element);

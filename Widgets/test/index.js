@@ -9,4 +9,12 @@ testWidget = new widgetWindow({
     script: "test_ui.js"
 });
 
-novadesk.log("Test widget created. Hover over elements to test cursor changes.");
+pathTestWidget = new widgetWindow({
+    id: "PathTest",
+    x: 550, y: 100,
+    width: 300, height: 300,
+    backgroundcolor: "rgba(50, 0, 50, 200)",
+    script: "test/../assets/test_path.js" // Test canonicalization
+});
+
+novadesk.log("Test widgets created. Hover over elements and check path resolution.");

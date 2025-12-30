@@ -137,9 +137,11 @@ namespace PropertyParser {
     ** Optionally loads settings if an 'id' is present.
     */
 
-    void ParseWidgetOptions(duk_context* ctx, WidgetOptions& options) {
+    void ParseWidgetOptions(duk_context* ctx, WidgetOptions& options, const std::wstring& baseDir) {
         if (!duk_is_object(ctx, -1)) return;
         PropertyReader reader(ctx);
+
+        std::wstring finalBaseDir = baseDir.empty() ? PathUtils::GetWidgetsDir() : baseDir;
 
         reader.GetString("id", options.id);
 
@@ -195,7 +197,7 @@ namespace PropertyParser {
         reader.GetInt("y", options.y);
 
         if (reader.GetString("script", options.scriptPath)) {
-            options.scriptPath = PathUtils::ResolvePath(options.scriptPath, PathUtils::GetWidgetsDir());
+            options.scriptPath = PathUtils::ResolvePath(options.scriptPath, finalBaseDir);
         }
     }
 
@@ -291,16 +293,18 @@ namespace PropertyParser {
     ** Parse ElementOptions from a Duktape object at the top of the stack.
     */
 
-    void ParseImageOptions(duk_context* ctx, ImageOptions& options) {
+    void ParseImageOptions(duk_context* ctx, ImageOptions& options, const std::wstring& baseDir) {
         if (!duk_is_object(ctx, -1)) return;
         
+        std::wstring finalBaseDir = baseDir.empty() ? PathUtils::GetWidgetsDir() : baseDir;
+
         // Parse base options first
         ParseElementOptionsInternal(ctx, options);
         PropertyReader reader(ctx);
 
         // Path
         if (reader.GetString("path", options.path)) {
-            options.path = PathUtils::ResolvePath(options.path, PathUtils::GetWidgetsDir());
+            options.path = PathUtils::ResolvePath(options.path, finalBaseDir);
         }
 
         // Image specific
@@ -329,8 +333,10 @@ namespace PropertyParser {
     /*
     ** Parse TextOptions from a Duktape object at the top of the stack.
     */
-    void ParseTextOptions(duk_context* ctx, TextOptions& options) {
+    void ParseTextOptions(duk_context* ctx, TextOptions& options, const std::wstring& baseDir) {
         if (!duk_is_object(ctx, -1)) return;
+        
+        std::wstring finalBaseDir = baseDir.empty() ? PathUtils::GetWidgetsDir() : baseDir;
 
         // Parse base options first
         ParseElementOptionsInternal(ctx, options);
@@ -373,7 +379,7 @@ namespace PropertyParser {
     /*
     ** Apply properties from a Duktape object to a Widget.
     */
-    void ApplyWidgetProperties(duk_context* ctx, Widget* widget) {
+    void ApplyWidgetProperties(duk_context* ctx, Widget* widget, const std::wstring& baseDir) {
         if (!widget || !duk_is_object(ctx, -1)) return;
         PropertyReader reader(ctx);
 

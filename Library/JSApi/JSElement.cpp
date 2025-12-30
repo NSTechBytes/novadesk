@@ -10,6 +10,7 @@
 #include "../PropertyParser.h"
 #include "../Utils.h"
 #include "../Logging.h"
+#include "../PathUtils.h"
 #include "JSContextMenu.h"
 
 namespace JSApi {
@@ -23,7 +24,8 @@ namespace JSApi {
         if (!widget || !duk_is_object(ctx, 0)) return DUK_RET_TYPE_ERROR;
         duk_dup(ctx, 0);
         PropertyParser::ImageOptions options;
-        PropertyParser::ParseImageOptions(ctx, options);
+        std::wstring baseDir = PathUtils::GetParentDir(widget->GetOptions().scriptPath);
+        PropertyParser::ParseImageOptions(ctx, options, baseDir);
         duk_pop(ctx);
 
         widget->AddImage(options);
@@ -40,7 +42,8 @@ namespace JSApi {
         if (!widget || !duk_is_object(ctx, 0)) return DUK_RET_TYPE_ERROR;
         duk_dup(ctx, 0);
         PropertyParser::TextOptions options;
-        PropertyParser::ParseTextOptions(ctx, options);
+        std::wstring baseDir = PathUtils::GetParentDir(widget->GetOptions().scriptPath);
+        PropertyParser::ParseTextOptions(ctx, options, baseDir);
         duk_pop(ctx);
 
         widget->AddText(options);

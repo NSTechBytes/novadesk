@@ -18,3 +18,11 @@ widgetWindow.addText({
     fontSize: 10,
     fontcolor: "rgba(200, 200, 200, 255)"
 });
+
+
+widgetWindow.addImage({
+    id: "clockImage",
+    x: 10, y: 60,
+    width: 200, height: 200,
+    path: "../assets/background.png"
+});
