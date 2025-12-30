@@ -7,7 +7,8 @@ widgetWindow.addText({
     text: "Current Time: " + new Date().toLocaleTimeString(),
     x: 10, y: 10,
     fontSize: 14,
-    fontcolor: "rgba(0, 0, 0, 0.5)"
+    fontcolor: "rgba(0, 0, 0, 0.5)",
+    onleftmousedown: 'novadesk.log("Clock clicked!");'
 });
 
 widgetWindow.addText({

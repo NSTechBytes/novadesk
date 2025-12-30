@@ -80,6 +80,19 @@ bool Element::HasAction(UINT message, WPARAM wParam) const {
 }
 
 /*
+** Check if the element has any interactive mouse action.
+*/
+bool Element::HasMouseAction() const {
+    return !m_OnLeftMouseUp.empty() || !m_OnLeftMouseDown.empty() || !m_OnLeftDoubleClick.empty() ||
+           !m_OnRightMouseUp.empty() || !m_OnRightMouseDown.empty() || !m_OnRightDoubleClick.empty() ||
+           !m_OnMiddleMouseUp.empty() || !m_OnMiddleMouseDown.empty() || !m_OnMiddleDoubleClick.empty() ||
+           !m_OnX1MouseUp.empty() || !m_OnX1MouseDown.empty() || !m_OnX1DoubleClick.empty() ||
+           !m_OnX2MouseUp.empty() || !m_OnX2MouseDown.empty() || !m_OnX2DoubleClick.empty() ||
+           !m_OnScrollUp.empty() || !m_OnScrollDown.empty() || !m_OnScrollLeft.empty() || !m_OnScrollRight.empty() ||
+           !m_OnMouseOver.empty() || !m_OnMouseLeave.empty();
+}
+
+/*
 ** Set the padding for the element.
 */
 void Element::SetPadding(int left, int top, int right, int bottom) {

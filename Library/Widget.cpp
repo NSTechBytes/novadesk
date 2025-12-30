@@ -495,6 +495,30 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             widget->HandleMouseMessage(message, wParam, lParam);
         }
         return 0;
+    case WM_SETCURSOR:
+        if (LOWORD(lParam) == HTCLIENT && widget)
+        {
+            POINT pt;
+            GetCursorPos(&pt);
+            ScreenToClient(hWnd, &pt);
+
+            Element* hitElement = nullptr;
+            for (auto it = widget->m_Elements.rbegin(); it != widget->m_Elements.rend(); ++it)
+            {
+                if ((*it)->HitTest(pt.x, pt.y))
+                {
+                    hitElement = *it;
+                    break;
+                }
+            }
+
+            if (hitElement && hitElement->HasMouseAction())
+            {
+                SetCursor(LoadCursor(NULL, IDC_HAND));
+                return TRUE;
+            }
+        }
+        return DefWindowProc(hWnd, message, wParam, lParam);
 
     case WM_MOUSEMOVE:
         if (widget) 
@@ -1152,6 +1176,9 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 }
             }
             m_MouseOverElement = hitElement;
+            
+            // Refresh cursor when element under mouse changes as it might have different action state
+            PostMessage(m_hWnd, WM_SETCURSOR, (WPARAM)m_hWnd, MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));
         }
         
         // Ensure we track mouse leave window events

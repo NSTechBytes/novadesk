@@ -120,6 +120,7 @@ public:
     virtual bool IsTransparentHit() const { return false; }
 
     bool HasAction(UINT message, WPARAM wParam) const;
+    bool HasMouseAction() const;
 
     // Mouse Actions
     std::wstring m_OnLeftMouseUp;
