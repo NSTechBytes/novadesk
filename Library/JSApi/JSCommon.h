@@ -25,6 +25,7 @@ namespace JSApi {
     // Helper functions
     void ExecuteScript(const std::wstring& script);
     void ExecuteWidgetScript(Widget* widget);
+    void TriggerWidgetEvent(Widget* widget, const std::string& eventName);
     void CallStoredCallback(int id);
     void CallHotkeyCallback(int callbackIdx);
     void BindWidgetControlMethods(duk_context* ctx);

@@ -170,7 +170,9 @@ namespace JSApi {
         duk_get_prop_string(ctx, -1, "\xFF" "monitorPtr");
         CPUMonitor* monitor = (CPUMonitor*)duk_get_pointer(ctx, -1);
         if (!monitor) return DUK_RET_ERROR;
-        duk_push_number(ctx, monitor->GetUsage());
+        double usage = monitor->GetUsage();
+        usage = floor(usage + 0.5);
+        duk_push_number(ctx, usage);
         return 1;
     }
     duk_ret_t js_cpu_destroy(duk_context* ctx) {

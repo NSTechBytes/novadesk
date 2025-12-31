@@ -159,6 +159,37 @@ namespace JSApi {
         duk_pop(s_JsContext);
     }
 
+    void TriggerWidgetEvent(Widget* widget, const std::string& eventName) {
+        if (!s_JsContext || !widget) return;
+        duk_push_global_stash(s_JsContext);
+        if (duk_get_prop_string(s_JsContext, -1, "widget_objects")) {
+            std::string id = Utils::ToString(widget->GetOptions().id);
+            if (duk_get_prop_string(s_JsContext, -1, id.c_str())) {
+                if (duk_get_prop_string(s_JsContext, -1, "\xFF" "events")) {
+                    if (duk_get_prop_string(s_JsContext, -1, eventName.c_str())) {
+                        if (duk_is_array(s_JsContext, -1)) {
+                            duk_size_t len = duk_get_length(s_JsContext, -1);
+                            for (duk_size_t i = 0; i < len; i++) {
+                                duk_get_prop_index(s_JsContext, -1, (duk_uarridx_t)i);
+                                if (duk_is_function(s_JsContext, -1)) {
+                                    if (duk_pcall(s_JsContext, 0) != 0) {
+                                        Logging::Log(LogLevel::Error, L"Widget Event Error (%s: %S): %S", 
+                                            widget->GetOptions().id.c_str(), eventName.c_str(), duk_safe_to_string(s_JsContext, -1));
+                                    }
+                                }
+                                duk_pop(s_JsContext);
+                            }
+                        }
+                    }
+                    duk_pop(s_JsContext); // event name prop
+                }
+                duk_pop(s_JsContext); // events object
+            }
+            duk_pop(s_JsContext); // widget object
+        }
+        duk_pop_2(s_JsContext); // widget_objects, stash
+    }
+
     void CallStoredCallback(int id) {
         if (!s_JsContext) return;
         duk_get_global_string(s_JsContext, "novadesk");

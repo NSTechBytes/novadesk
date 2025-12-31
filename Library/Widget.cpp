@@ -16,6 +16,7 @@
 #include <gdiplus.h>
 
 #include "JSApi/JSApi.h"
+#include "JSApi/JSCommon.h"
 #include "ColorUtil.h"
 #pragma comment(lib, "gdiplus.lib")
 
@@ -41,10 +42,13 @@ Widget::Widget(const WidgetOptions& options)
 */
 Widget::~Widget()
 {
+    JSApi::TriggerWidgetEvent(this, "close");
+
     if (m_hWnd)
     {
         DestroyWindow(m_hWnd);
     }
+    JSApi::TriggerWidgetEvent(this, "closed");
     
     // Clean up elements
     for (auto* element : m_Elements)
@@ -147,6 +151,8 @@ void Widget::Show()
 
 void Widget::Refresh()
 {
+    JSApi::TriggerWidgetEvent(this, "refresh");
+
     RemoveElements(L""); // Clear all elements
     if (!m_Options.scriptPath.empty())
     {
@@ -859,67 +865,19 @@ void Widget::SetElementProperties(const std::wstring& id, duk_context* ctx)
 
     if (element->GetType() == ELEMENT_TEXT) {
         PropertyParser::TextOptions options;
-        
-        // Fill struct with current state before parsing for partial updates
-        options.id = element->GetId();
-        options.x = element->GetX();
-        options.y = element->GetY();
-        options.width = element->IsWDefined() ? element->GetWidth() : 0;
-        options.height = element->IsHDefined() ? element->GetHeight() : 0;
-        options.rotate = element->GetRotate();
-        options.antialias = element->GetAntiAlias();
-        
-        TextElement* t = static_cast<TextElement*>(element);
-        options.text = t->GetText();
-        options.fontFace = t->GetFontFace();
-        options.fontSize = t->GetFontSize();
-        options.fontColor = t->GetFontColor();
-        options.alpha = t->GetFontAlpha();
-        options.bold = t->IsBold();
-        options.italic = t->IsItalic();
-        options.textAlign = t->GetTextAlign();
-        options.clip = t->GetClipString();
-        options.clipW = t->GetClipW();
-        options.clipH = t->GetClipH();
-
+        PropertyParser::PreFillTextOptions(options, static_cast<TextElement*>(element));
         PropertyParser::ParseTextOptions(ctx, options);
-        PropertyParser::ApplyTextOptions(t, options);
+        PropertyParser::ApplyTextOptions(static_cast<TextElement*>(element), options);
     } else if (element->GetType() == ELEMENT_IMAGE) {
         PropertyParser::ImageOptions options;
-        options.id = element->GetId();
-        options.x = element->GetX();
-        options.y = element->GetY();
-        options.width = element->IsWDefined() ? element->GetWidth() : 0;
-        options.height = element->IsHDefined() ? element->GetHeight() : 0;
-        options.rotate = element->GetRotate();
-        options.antialias = element->GetAntiAlias();
-
-        ImageElement* img = static_cast<ImageElement*>(element);
-        options.path = img->GetImagePath();
-        options.preserveAspectRatio = img->GetPreserveAspectRatio();
-        options.imageAlpha = img->GetImageAlpha();
-        options.grayscale = img->IsGrayscale();
-        options.tile = img->IsTile();
-
+        PropertyParser::PreFillImageOptions(options, static_cast<ImageElement*>(element));
         PropertyParser::ParseImageOptions(ctx, options);
-        PropertyParser::ApplyImageOptions(img, options);
-    }
- else if (element->GetType() == ELEMENT_BAR) {
+        PropertyParser::ApplyImageOptions(static_cast<ImageElement*>(element), options);
+    } else if (element->GetType() == ELEMENT_BAR) {
         PropertyParser::BarOptions options;
-        options.id = element->GetId();
-        options.x = element->GetX();
-        options.y = element->GetY();
-        options.width = element->IsWDefined() ? element->GetWidth() : 0;
-        options.height = element->IsHDefined() ? element->GetHeight() : 0;
-        options.rotate = element->GetRotate();
-        options.antialias = element->GetAntiAlias();
-
-        BarElement* bar = static_cast<BarElement*>(element);
-        options.value = bar->GetValue();
-        options.orientation = bar->GetOrientation();
-
+        PropertyParser::PreFillBarOptions(options, static_cast<BarElement*>(element));
         PropertyParser::ParseBarOptions(ctx, options);
-        PropertyParser::ApplyBarOptions(bar, options);
+        PropertyParser::ApplyBarOptions(static_cast<BarElement*>(element), options);
     }
 
     Redraw();

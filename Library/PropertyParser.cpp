@@ -92,10 +92,12 @@ namespace PropertyParser {
 
         bool GetColor(const char* key, COLORREF& outColor, BYTE& outAlpha) {
             if (duk_get_prop_string(m_Ctx, -1, key)) {
-                std::wstring colorStr = Utils::ToWString(duk_get_string(m_Ctx, -1));
-                if (ColorUtil::ParseRGBA(colorStr, outColor, outAlpha)) {
-                    duk_pop(m_Ctx);
-                    return true;
+                if (duk_is_string(m_Ctx, -1)) {
+                    std::wstring colorStr = Utils::ToWString(duk_get_string(m_Ctx, -1));
+                    if (ColorUtil::ParseRGBA(colorStr, outColor, outAlpha)) {
+                        duk_pop(m_Ctx);
+                        return true;
+                    }
                 }
             }
             duk_pop(m_Ctx);
@@ -782,5 +784,111 @@ namespace PropertyParser {
         if (options.hasBarGradient) {
             element->SetBarColor2(options.barColor2, options.barAlpha2, options.barGradientAngle);
         }
+    }
+
+    void PreFillElementOptions(ElementOptions& options, Element* element) {
+        if (!element) return;
+        options.id = element->GetId();
+        options.x = element->GetX();
+        options.y = element->GetY();
+        options.width = element->IsWDefined() ? element->GetWidth() : 0;
+        options.height = element->IsHDefined() ? element->GetHeight() : 0;
+        options.rotate = element->GetRotate();
+        options.antialias = element->GetAntiAlias();
+
+        options.hasSolidColor = element->HasSolidColor();
+        options.solidColor = element->GetSolidColor();
+        options.solidAlpha = element->GetSolidAlpha();
+        options.solidColorRadius = element->GetCornerRadius();
+
+        options.hasGradient = element->HasGradient();
+        options.solidColor2 = element->GetSolidColor2();
+        options.solidAlpha2 = element->GetSolidAlpha2();
+        options.gradientAngle = element->GetGradientAngle();
+
+        options.bevelType = element->GetBevelType();
+        options.bevelWidth = element->GetBevelWidth();
+        options.bevelColor1 = element->GetBevelColor1();
+        options.bevelAlpha1 = element->GetBevelAlpha1();
+        options.bevelColor2 = element->GetBevelColor2();
+        options.bevelAlpha2 = element->GetBevelAlpha2();
+
+        options.paddingLeft = element->GetPaddingLeft();
+        options.paddingTop = element->GetPaddingTop();
+        options.paddingRight = element->GetPaddingRight();
+        options.paddingBottom = element->GetPaddingBottom();
+
+        options.onLeftMouseUp = element->m_OnLeftMouseUp;
+        options.onLeftMouseDown = element->m_OnLeftMouseDown;
+        options.onLeftDoubleClick = element->m_OnLeftDoubleClick;
+        options.onRightMouseUp = element->m_OnRightMouseUp;
+        options.onRightMouseDown = element->m_OnRightMouseDown;
+        options.onRightDoubleClick = element->m_OnRightDoubleClick;
+        options.onMiddleMouseUp = element->m_OnMiddleMouseUp;
+        options.onMiddleMouseDown = element->m_OnMiddleMouseDown;
+        options.onMiddleDoubleClick = element->m_OnMiddleDoubleClick;
+        options.onX1MouseUp = element->m_OnX1MouseUp;
+        options.onX1MouseDown = element->m_OnX1MouseDown;
+        options.onX1DoubleClick = element->m_OnX1DoubleClick;
+        options.onX2MouseUp = element->m_OnX2MouseUp;
+        options.onX2MouseDown = element->m_OnX2MouseDown;
+        options.onX2DoubleClick = element->m_OnX2DoubleClick;
+        options.onScrollUp = element->m_OnScrollUp;
+        options.onScrollDown = element->m_OnScrollDown;
+        options.onScrollLeft = element->m_OnScrollLeft;
+        options.onScrollRight = element->m_OnScrollRight;
+        options.onMouseOver = element->m_OnMouseOver;
+        options.onMouseLeave = element->m_OnMouseLeave;
+    }
+
+    void PreFillTextOptions(TextOptions& options, TextElement* element) {
+        if (!element) return;
+        PreFillElementOptions(options, element);
+        options.text = element->GetText();
+        options.fontFace = element->GetFontFace();
+        options.fontSize = element->GetFontSize();
+        options.fontColor = element->GetFontColor();
+        options.alpha = element->GetFontAlpha();
+        options.bold = element->IsBold();
+        options.italic = element->IsItalic();
+        options.textAlign = element->GetTextAlign();
+        options.clip = element->GetClipString();
+        options.clipW = element->GetClipW();
+        options.clipH = element->GetClipH();
+    }
+
+    void PreFillImageOptions(ImageOptions& options, ImageElement* element) {
+        if (!element) return;
+        PreFillElementOptions(options, element);
+        options.path = element->GetImagePath();
+        options.preserveAspectRatio = element->GetPreserveAspectRatio();
+        options.imageAlpha = element->GetImageAlpha();
+        options.grayscale = element->IsGrayscale();
+        options.tile = element->IsTile();
+        if (element->HasImageTint()) {
+            options.hasImageTint = true;
+            options.imageTint = element->GetImageTint();
+            options.imageTintAlpha = element->GetImageTintAlpha();
+        }
+        if (element->HasTransformMatrix()) {
+            options.hasTransformMatrix = true;
+            const float* matrix = element->GetTransformMatrix();
+            options.transformMatrix.assign(matrix, matrix + 6);
+        }
+    }
+
+    void PreFillBarOptions(BarOptions& options, BarElement* element) {
+        if (!element) return;
+        PreFillElementOptions(options, element);
+        options.value = element->GetValue();
+        options.orientation = element->GetOrientation();
+        options.barCornerRadius = element->GetBarCornerRadius();
+        options.hasBarColor = element->HasBarColor();
+        options.barColor = element->GetBarColor();
+        options.barAlpha = element->GetBarAlpha();
+        options.hasBarGradient = element->HasBarGradient();
+        options.barColor2 = element->GetBarColor2();
+        options.barAlpha2 = element->GetBarAlpha2();
+        options.barGradientAngle = element->GetBarGradientAngle();
     }
 }

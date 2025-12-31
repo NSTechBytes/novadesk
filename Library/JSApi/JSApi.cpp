@@ -42,6 +42,12 @@ namespace JSApi {
         BindNovadeskAppMethods(ctx);
         duk_put_global_string(ctx, "novadesk");
 
+        // Initialize Global Stash for Object Tracking
+        duk_push_global_stash(ctx);
+        duk_push_object(ctx);
+        duk_put_prop_string(ctx, -2, "widget_objects");
+        duk_pop(ctx);
+
         // Register Managers
         HotkeyManager::SetCallbackHandler([](int idx) {
             CallHotkeyCallback(idx);

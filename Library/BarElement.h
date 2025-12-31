@@ -46,6 +46,14 @@ public:
         m_HasBarGradient = true;
     }
 
+    bool HasBarColor() const { return m_HasBarColor; }
+    COLORREF GetBarColor() const { return m_BarColor; }
+    BYTE GetBarAlpha() const { return m_BarAlpha; }
+
+    bool HasBarGradient() const { return m_HasBarGradient; }
+    COLORREF GetBarColor2() const { return m_BarColor2; }
+    BYTE GetBarAlpha2() const { return m_BarAlpha2; }
+
 private:
     float m_Value; // 0.0 to 1.0
     BarOrientation m_Orientation;

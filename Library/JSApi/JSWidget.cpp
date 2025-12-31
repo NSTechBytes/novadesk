@@ -100,8 +100,44 @@ namespace JSApi {
         if (!widget->GetOptions().scriptPath.empty()) {
             ExecuteWidgetScript(widget);
         }
+
+        // Register in Global Stash for Event Dispatching
+        duk_push_global_stash(ctx);
+        duk_get_prop_string(ctx, -1, "widget_objects");
+        duk_dup(ctx, -3); // The widget object
+        duk_put_prop_string(ctx, -2, idStr.c_str());
+        duk_pop_2(ctx); // stash, widget_objects
         
         return 1;
+    }
+
+    duk_ret_t js_widget_on(duk_context* ctx) {
+        if (!duk_is_string(ctx, 0) || !duk_is_function(ctx, 1)) return DUK_RET_TYPE_ERROR;
+        const char* eventName = duk_get_string(ctx, 0);
+
+        duk_push_this(ctx);
+        // Get or create the hidden events object
+        if (!duk_get_prop_string(ctx, -1, "\xFF" "events")) {
+            duk_pop(ctx);
+            duk_push_object(ctx);
+            duk_dup(ctx, -1);
+            duk_put_prop_string(ctx, -3, "\xFF" "events");
+        }
+
+        // Get or create the array for this event
+        if (!duk_get_prop_string(ctx, -1, eventName)) {
+            duk_pop(ctx);
+            duk_push_array(ctx);
+            duk_dup(ctx, -1);
+            duk_put_prop_string(ctx, -3, eventName);
+        }
+
+        // Add the callback
+        duk_dup(ctx, 1);
+        duk_put_prop_index(ctx, -2, (duk_uarridx_t)duk_get_length(ctx, -2));
+
+        duk_pop_3(ctx); // array, events object, this
+        return 0;
     }
 
     duk_ret_t js_widget_set_properties(duk_context* ctx) {
@@ -122,10 +158,28 @@ namespace JSApi {
     duk_ret_t js_widget_close(duk_context* ctx) {
         Widget* widget = GetWidgetFromContext(ctx);
         if (!widget) return DUK_RET_TYPE_ERROR;
+        duk_push_this(ctx);
+        std::string idStr = "";
+        if (duk_get_prop_string(ctx, -1, "\xFF" "id")) {
+             idStr = duk_get_string(ctx, -1);
+        }
+        duk_pop(ctx);
+
         delete widget;
+
         duk_push_this(ctx);
         duk_del_prop_string(ctx, -1, "\xFF" "widgetPtr");
         duk_del_prop_string(ctx, -1, "\xFF" "id");
+
+        // Unregister from Global Stash
+        if (!idStr.empty()) {
+            duk_push_global_stash(ctx);
+            if (duk_get_prop_string(ctx, -1, "widget_objects")) {
+                duk_del_prop_string(ctx, -1, idStr.c_str());
+            }
+            duk_pop_2(ctx);
+        }
+
         duk_pop(ctx);
         return 0;
     }
@@ -145,5 +199,7 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "close");
         duk_push_c_function(ctx, js_widget_refresh, 0); 
         duk_put_prop_string(ctx, -2, "refresh");
+        duk_push_c_function(ctx, js_widget_on, 2);
+        duk_put_prop_string(ctx, -2, "on");
     }
 }

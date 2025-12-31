@@ -148,6 +148,10 @@ namespace PropertyParser
     void PushWidgetProperties(duk_context* ctx, Widget* widget);
     void ParseElementOptions(duk_context* ctx, Element* element);
     void PushElementProperties(duk_context* ctx, Element* element);
+    void PreFillElementOptions(ElementOptions& options, Element* element);
+    void PreFillTextOptions(TextOptions& options, TextElement* element);
+    void PreFillImageOptions(ImageOptions& options, ImageElement* element);
+    void PreFillBarOptions(BarOptions& options, BarElement* element);
     void ApplyElementOptions(Element* element, const ElementOptions& options);
 
     void ApplyImageOptions(ImageElement* element, const ImageOptions& options);
