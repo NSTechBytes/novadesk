@@ -59,6 +59,8 @@ public:
     virtual int GetAutoWidth() { return 0; }
     virtual int GetAutoHeight() { return 0; }
 
+    virtual Gdiplus::Rect GetBounds();
+
     virtual bool HitTest(int x, int y);
 
     void SetSolidColor(COLORREF color, BYTE alpha) { 

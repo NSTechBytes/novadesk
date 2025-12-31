@@ -1,28 +1,52 @@
-// The global 'widgetWindow' object automatically points to the 
-// specific widget instance that is being loaded or refreshed.
-novadesk.log("UI Script for Widget B is running...");
+var background_Width = 210;
+var background_Height = 70;
+var font_Color = "rgb(255,255,255)";
 
-widgetWindow.addText({
-    id: "timeLabel",
-    text: "Current Time: " + new Date().toLocaleTimeString(),
-    x: 10, y: 10,
-    fontSize: 14,
-    fontcolor: "rgba(0, 0, 0, 0.5)",
-    onleftmousedown: 'novadesk.log("Clock clicked!");'
-});
-
-widgetWindow.addText({
-    id: "hint",
-    text: "Right-click me to refresh ONLY this widget!",
-    x: 10, y: 40,
-    fontSize: 10,
-    fontcolor: "rgba(200, 200, 200, 255)"
-});
-
-
-widgetWindow.addImage({
-    id: "clockImage",
-    x: 10, y: 60,
-    width: 200, height: 200,
+win.addImage({
+    id: "background_Image",
+    width: background_Width,
+    height: background_Height,
     path: "../assets/background.png"
 });
+
+
+win.addText({
+    id: "time_Title",
+    text: "Time",
+    x: (background_Width / 2),
+    y: 10,
+    fontsize: 20,
+    textalign: "center",
+    fontcolor: font_Color
+});
+
+win.addText({
+    id: "time",
+    text: "00:00:00",
+    x: (background_Width / 2),
+    y: 40,
+    fontsize: 25,
+    textalign: "center",
+    fontcolor: font_Color
+});
+
+function pad(n) {
+    return n < 10 ? '0' + n : n.toString();
+}
+
+function updateTime() {
+    var now = new Date();
+    var timeStr = pad(now.getHours()) + ":" +
+        pad(now.getMinutes()) + ":" +
+        pad(now.getSeconds());
+
+    win.setElementProperties("time", {
+        text: timeStr
+    });
+}
+
+// Update every second
+setInterval(updateTime, 1000);
+updateTime(); // Initial update
+
+novadesk.log("Clock widget initialized");

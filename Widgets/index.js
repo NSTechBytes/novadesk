@@ -1,7 +1,7 @@
 var widget = new widgetWindow({
-  id: "myWidget",
-  width: 300,
-  height: 150,
+  id: "clock_Widget",
+  // width: 300,
+  // height: 150,
   backgroundcolor: "rgba(30, 30, 40, 0.9)",
-  script:"test.js"
+  script: "clock/clock.js"
 });

@@ -1035,8 +1035,9 @@ void Widget::UpdateLayeredWindowContent()
         int maxY = 0;
         for (Element* element : m_Elements)
         {
-            maxX = (std::max)(maxX, element->GetX() + element->GetWidth());
-            maxY = (std::max)(maxY, element->GetY() + element->GetHeight());
+            Gdiplus::Rect bounds = element->GetBounds();
+            maxX = (std::max)(maxX, bounds.X + bounds.Width);
+            maxY = (std::max)(maxY, bounds.Y + bounds.Height);
         }
         
         if (!m_Options.m_WDefined) calcW = maxX;

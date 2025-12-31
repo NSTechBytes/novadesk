@@ -355,7 +355,7 @@ namespace PropertyParser {
         if (reader.GetString("fontstyle", style) && style == L"italic") options.italic = true;
 
         std::wstring alignStr;
-        if (reader.GetString("textalign", alignStr)) {
+        if (reader.GetString("textalign", alignStr) || reader.GetString("align", alignStr)) {
             // Convert to lowercase for comparison
             std::transform(alignStr.begin(), alignStr.end(), alignStr.begin(), ::towlower);
 

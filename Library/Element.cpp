@@ -35,12 +35,19 @@ int Element::GetHeight() {
 }
 
 /*
+** Get the bounding box of the element.
+*/
+Gdiplus::Rect Element::GetBounds() {
+    return Gdiplus::Rect(m_X, m_Y, GetWidth(), GetHeight());
+}
+
+/*
 ** Check if a point is within the element's bounds.
 */
 bool Element::HitTest(int x, int y) {
-    int w = GetWidth();
-    int h = GetHeight();
-    return (x >= m_X && x < m_X + w && y >= m_Y && y < m_Y + h);
+    Gdiplus::Rect bounds = GetBounds();
+    return (x >= bounds.X && x < bounds.X + bounds.Width &&
+            y >= bounds.Y && y < bounds.Y + bounds.Height);
 }
 
 /*

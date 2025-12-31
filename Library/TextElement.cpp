@@ -109,10 +109,11 @@ void TextElement::Render(Graphics& graphics)
     }
     
     // Apply padding to layout rectangle
-    int layoutX = m_X + m_PaddingLeft;
-    int layoutY = m_Y + m_PaddingTop;
-    int layoutW = GetWidth() - m_PaddingLeft - m_PaddingRight;
-    int layoutH = GetHeight() - m_PaddingTop - m_PaddingBottom;
+    Gdiplus::Rect bounds = GetBounds();
+    int layoutX = bounds.X + m_PaddingLeft;
+    int layoutY = bounds.Y + m_PaddingTop;
+    int layoutW = bounds.Width - m_PaddingLeft - m_PaddingRight;
+    int layoutH = bounds.Height - m_PaddingTop - m_PaddingBottom;
     
     // Ensure positive dimensions
     if (layoutW < 0) layoutW = 0;
@@ -175,9 +176,34 @@ int TextElement::GetAutoHeight()
     return height;
 }
 
+Gdiplus::Rect TextElement::GetBounds() {
+    int w = GetWidth();
+    int h = GetHeight();
+    int x = m_X;
+    int y = m_Y;
+
+    // Horizontal Alignment Offset
+    if (m_TextAlign == TEXT_ALIGN_CENTER_TOP || m_TextAlign == TEXT_ALIGN_CENTER_CENTER || m_TextAlign == TEXT_ALIGN_CENTER_BOTTOM) {
+        x -= w / 2;
+    }
+    else if (m_TextAlign == TEXT_ALIGN_RIGHT_TOP || m_TextAlign == TEXT_ALIGN_RIGHT_CENTER || m_TextAlign == TEXT_ALIGN_RIGHT_BOTTOM) {
+        x -= w;
+    }
+
+    // Vertical Alignment Offset
+    if (m_TextAlign == TEXT_ALIGN_LEFT_CENTER || m_TextAlign == TEXT_ALIGN_CENTER_CENTER || m_TextAlign == TEXT_ALIGN_RIGHT_CENTER) {
+        y -= h / 2;
+    }
+    else if (m_TextAlign == TEXT_ALIGN_LEFT_BOTTOM || m_TextAlign == TEXT_ALIGN_CENTER_BOTTOM || m_TextAlign == TEXT_ALIGN_RIGHT_BOTTOM) {
+        y -= h;
+    }
+
+    return Gdiplus::Rect(x, y, w, h);
+}
+
 bool TextElement::HitTest(int x, int y)
 {
-    // Bounding box check first (Element's layout rect)
+    // Bounding box check first (Element's bounds)
     if (!Element::HitTest(x, y)) return false;
 
     HDC hdc = GetDC(NULL);
@@ -206,8 +232,9 @@ bool TextElement::HitTest(int x, int y)
         format.SetLineAlignment(StringAlignmentFar); break;
     }
 
-    int pW = GetWidth() - m_PaddingLeft - m_PaddingRight;
-    int pH = GetHeight() - m_PaddingTop - m_PaddingBottom;
+    Gdiplus::Rect bounds = GetBounds();
+    int pW = bounds.Width - m_PaddingLeft - m_PaddingRight;
+    int pH = bounds.Height - m_PaddingTop - m_PaddingBottom;
     if (pW < 0) pW = 0;
     if (pH < 0) pH = 0;
 
@@ -217,8 +244,8 @@ bool TextElement::HitTest(int x, int y)
     
     ReleaseDC(NULL, hdc);
 
-    boundingBox.X += m_X;
-    boundingBox.Y += m_Y;
+    boundingBox.X += bounds.X;
+    boundingBox.Y += bounds.Y;
 
     return (x >= boundingBox.X && x < boundingBox.X + boundingBox.Width &&
             y >= boundingBox.Y && y < boundingBox.Y + boundingBox.Height);

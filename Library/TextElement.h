@@ -69,6 +69,7 @@ public:
 
     virtual int GetAutoWidth() override;
     virtual int GetAutoHeight() override;
+    virtual Gdiplus::Rect GetBounds() override;
     virtual bool HitTest(int x, int y) override;
 
 private:
