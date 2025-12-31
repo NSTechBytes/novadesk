@@ -17,6 +17,8 @@
 #include <vector>
 #include <shellapi.h>
 #include <gdiplus.h>
+#include <fcntl.h>
+#include <io.h>
 
 #pragma comment(lib, "gdiplus.lib")
 
@@ -44,6 +46,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_ LPWSTR    lpCmdLine,
                      _In_ int       nCmdShow)
 {
+    // Attach to parent console for logging if present
+    if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+        FILE* fDummy;
+        freopen_s(&fDummy, "CONOUT$", "w", stdout);
+        freopen_s(&fDummy, "CONOUT$", "w", stderr);
+        // Also enable wide output for stdout
+        _setmode(_fileno(stdout), _O_U16TEXT);
+    }
+
     // Enable DPI Awareness
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
@@ -159,13 +170,31 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     std::wstring scriptPath;
     if (lpCmdLine && wcslen(lpCmdLine) > 0)
     {
-        // Remove quotes if present
         scriptPath = lpCmdLine;
+        
+        // Trim leading and trailing whitespace
+        size_t first = scriptPath.find_first_not_of(L" \t\r\n");
+        if (std::wstring::npos != first) {
+            size_t last = scriptPath.find_last_not_of(L" \t\r\n");
+            scriptPath = scriptPath.substr(first, (last - first + 1));
+        }
+
+        // Remove quotes if present
         if (!scriptPath.empty() && scriptPath.front() == L'"' && scriptPath.back() == L'"')
         {
             scriptPath = scriptPath.substr(1, scriptPath.length() - 2);
         }
-        Logging::Log(LogLevel::Info, L"Using custom script: %s", scriptPath.c_str());
+        
+        // Trim again after quote removal in case there were spaces inside quotes (unlikely but safe)
+        first = scriptPath.find_first_not_of(L" \t\r\n");
+        if (std::wstring::npos != first) {
+            size_t last = scriptPath.find_last_not_of(L" \t\r\n");
+            scriptPath = scriptPath.substr(first, (last - first + 1));
+        }
+
+        if (!scriptPath.empty()) {
+            Logging::Log(LogLevel::Info, L"Using custom script: %s", scriptPath.c_str());
+        }
     }
 
     // Load and execute script (with optional custom path)

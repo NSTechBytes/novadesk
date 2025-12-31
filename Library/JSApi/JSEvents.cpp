@@ -110,7 +110,16 @@ namespace JSApi {
         duk_push_string(s_JsContext, filename.c_str());
         duk_put_global_string(s_JsContext, "__filename");
 
-        if (duk_peval_string(s_JsContext, content.c_str()) != 0) {
+        // Wrap the script in an IIFE (Immediately Invoked Function Expression) to provide 
+        // variable isolation. This prevents top-level 'var' and 'function' declarations 
+        // from colliding between different widgets that share the same Duktape heap.
+        // The parameters (win, system, etc.) ensure these widget-specific objects 
+        // are trapped in the closure.
+        std::string wrappedContent = "(function(win, system, novadesk, ipc, path, __dirname, __filename) {\n";
+        wrappedContent += content;
+        wrappedContent += "\n})(win, system, novadesk, ipc, path, __dirname, __filename);";
+
+        if (duk_peval_string(s_JsContext, wrappedContent.c_str()) != 0) {
             Logging::Log(LogLevel::Error, L"Widget Script Error (%s): %S", widget->GetOptions().id.c_str(), duk_safe_to_string(s_JsContext, -1));
         }
         duk_pop(s_JsContext);

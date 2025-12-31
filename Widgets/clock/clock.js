@@ -111,4 +111,7 @@ function updateTime() {
 // =====================
 ipc.on("update_Elements", function () {
     updateTime();
+    novadesk.log("UI:update_Elements");
 });
+
+novadesk.log("UI:update_Elements");
