@@ -138,6 +138,15 @@ namespace JSApi {
             duk_del_prop_string(s_JsContext, -1, f); // Clean up stash
         }
 
+        // Clean up context tracking properties
+        const char* context_props[] = { 
+            "original_win", "original_system", "original_novadesk", 
+            "original_path", "original_app", "original_dirname", "original_filename" 
+        };
+        for (const char* p : context_props) {
+            duk_del_prop_string(s_JsContext, -1, p);
+        }
+
         duk_pop(s_JsContext);
     }
 

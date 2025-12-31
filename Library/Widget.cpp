@@ -864,8 +864,8 @@ void Widget::SetElementProperties(const std::wstring& id, duk_context* ctx)
         options.id = element->GetId();
         options.x = element->GetX();
         options.y = element->GetY();
-        options.width = element->GetWidth();
-        options.height = element->GetHeight();
+        options.width = element->IsWDefined() ? element->GetWidth() : 0;
+        options.height = element->IsHDefined() ? element->GetHeight() : 0;
         options.rotate = element->GetRotate();
         options.antialias = element->GetAntiAlias();
         
@@ -889,8 +889,8 @@ void Widget::SetElementProperties(const std::wstring& id, duk_context* ctx)
         options.id = element->GetId();
         options.x = element->GetX();
         options.y = element->GetY();
-        options.width = element->GetWidth();
-        options.height = element->GetHeight();
+        options.width = element->IsWDefined() ? element->GetWidth() : 0;
+        options.height = element->IsHDefined() ? element->GetHeight() : 0;
         options.rotate = element->GetRotate();
         options.antialias = element->GetAntiAlias();
 
@@ -909,8 +909,8 @@ void Widget::SetElementProperties(const std::wstring& id, duk_context* ctx)
         options.id = element->GetId();
         options.x = element->GetX();
         options.y = element->GetY();
-        options.width = element->GetWidth();
-        options.height = element->GetHeight();
+        options.width = element->IsWDefined() ? element->GetWidth() : 0;
+        options.height = element->IsHDefined() ? element->GetHeight() : 0;
         options.rotate = element->GetRotate();
         options.antialias = element->GetAntiAlias();
 
@@ -1014,7 +1014,6 @@ void Widget::Redraw()
 {
     UpdateLayeredWindowContent();
 }
-
 
 
 /*

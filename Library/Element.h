@@ -48,6 +48,9 @@ public:
     int GetWidth();
     int GetHeight();
 
+    bool IsWDefined() const { return m_WDefined; }
+    bool IsHDefined() const { return m_HDefined; }
+
     void SetPosition(int x, int y) { m_X = x; m_Y = y; }
     void SetSize(int w, int h) { 
         m_Width = w; 
