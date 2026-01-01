@@ -17,6 +17,7 @@
 #include "JSSystem.h"
 #include "JSUtils.h"
 #include "JSIPC.h"
+#include "JSJson.h"
 #include "JSPath.h"
 #include "JSApp.h"
 
@@ -92,6 +93,7 @@ namespace JSApi {
 
         duk_push_object(s_JsContext);
         BindSystemBaseMethods(s_JsContext);
+        BindJsonMethods(s_JsContext);
         duk_put_global_string(s_JsContext, "system");
 
         duk_push_object(s_JsContext);

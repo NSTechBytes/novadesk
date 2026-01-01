@@ -14,6 +14,7 @@
 #include "JSContextMenu.h"
 #include "JSEvents.h"
 #include "JSIPC.h"
+#include "JSJson.h"
 #include "JSPath.h"
 #include "JSApp.h"
 
@@ -58,6 +59,7 @@ namespace JSApi {
         // Register system object
         duk_push_object(ctx);
         BindSystemBaseMethods(ctx);
+        BindJsonMethods(ctx);
         BindSystemMonitors(ctx);
         duk_put_global_string(ctx, "system");
 

@@ -141,6 +141,7 @@
     <ClInclude Include="Library\ImageElement.h" />
     <ClInclude Include="Library\BarElement.h" />
     <ClInclude Include="Library\JSApi\JSIPC.h" />
+    <ClInclude Include="Library\JSApi\JSJson.h" />
     <ClInclude Include="Library\JSApi\JSPath.h" />
     <ClInclude Include="Library\JSApi\JSApp.h" />
     <ClInclude Include="Library\MouseMonitor.h" />
@@ -180,6 +181,7 @@
     <ClCompile Include="Library\ImageElement.cpp" />
     <ClCompile Include="Library\BarElement.cpp" />
     <ClCompile Include="Library\JSApi\JSIPC.cpp" />
+    <ClCompile Include="Library\JSApi\JSJson.cpp" />
     <ClCompile Include="Library\JSApi\JSPath.cpp" />
     <ClCompile Include="Library\JSApi\JSApp.cpp" />
     <ClCompile Include="Library\MouseMonitor.cpp" />

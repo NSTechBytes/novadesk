@@ -120,6 +120,9 @@
     <ClInclude Include="Library\JSApi\JSIPC.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Library\JSApi\JSJson.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Library\JSApi\JSPath.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -216,6 +219,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Library\JSApi\JSIPC.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Library\JSApi\JSJson.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Library\JSApi\JSPath.cpp">
