@@ -12,3 +12,18 @@
 // Tray icon control functions
 void ShowTrayIconDynamic();
 void HideTrayIconDynamic();
+
+#include <vector>
+#include <string>
+
+struct TrayMenuItem {
+    std::wstring text;
+    int id;
+    bool isSeparator;
+    bool checked;
+    std::vector<TrayMenuItem> children;
+};
+
+void SetTrayMenu(const std::vector<TrayMenuItem>& menu);
+void ClearTrayMenu();
+void SetShowDefaultTrayItems(bool show);

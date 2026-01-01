@@ -129,6 +129,9 @@
     <ClInclude Include="Library\JSApi\JSApp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Library\JSApi\JSNovadeskTray.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Library\Novadesk.cpp">
@@ -228,6 +231,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Library\JSApi\JSApp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Library\JSApi\JSNovadeskTray.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

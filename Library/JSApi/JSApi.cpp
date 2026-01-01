@@ -16,6 +16,7 @@
 #include "JSIPC.h"
 #include "JSJson.h"
 #include "JSPath.h"
+#include "JSNovadeskTray.h"
 #include "JSApp.h"
 
 #include "../Widget.h"
@@ -40,6 +41,7 @@ namespace JSApi {
         duk_push_object(ctx);
         BindNovadeskBaseMethods(ctx);
         BindNovadeskAppMethods(ctx);
+        BindNovadeskTrayMethods(ctx);
         duk_put_global_string(ctx, "novadesk");
 
         // Initialize Global Stash for Object Tracking

@@ -12,6 +12,7 @@
 #include "System.h"
 #include "Logging.h"
 #include "JSApi/JSApi.h"
+#include "JSApi/JSNovadeskTray.h"
 #include "Settings.h"
 #include "Resource.h"
 #include <vector>
@@ -125,6 +126,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             if (wmId == ID_TRAY_EXIT)
             {
                 DestroyWindow(hWnd);
+            }
+            else if (wmId >= 2000)
+            {
+                JSApi::OnTrayCommand(wmId);
             }
 
         }
@@ -248,6 +253,36 @@ void RemoveTrayIcon()
     Logging::Log(LogLevel::Info, L"Tray icon removed");
 }
 
+std::vector<TrayMenuItem> g_TrayMenu;
+bool g_ShowDefaultTrayItems = true;
+
+void BuildMenu(HMENU hMenu, const std::vector<TrayMenuItem>& items)
+{
+    for (const auto& item : items)
+    {
+        if (item.isSeparator)
+        {
+            AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        }
+        else if (!item.children.empty())
+        {
+            HMENU hSubMenu = CreatePopupMenu();
+            BuildMenu(hSubMenu, item.children);
+
+            UINT flags = MF_POPUP | MF_STRING;
+            if (item.checked) flags |= MF_CHECKED;
+
+            AppendMenu(hMenu, flags, (UINT_PTR)hSubMenu, item.text.c_str());
+        }
+        else
+        {
+            UINT flags = MF_STRING;
+            if (item.checked) flags |= MF_CHECKED;
+            AppendMenu(hMenu, flags, item.id, item.text.c_str());
+        }
+    }
+}
+
 void ShowTrayMenu(HWND hWnd)
 {
     POINT pt;
@@ -255,7 +290,16 @@ void ShowTrayMenu(HWND hWnd)
 
     HMENU hMenu = CreatePopupMenu();
 
-    AppendMenu(hMenu, MF_STRING, ID_TRAY_EXIT, L"Exit");
+    BuildMenu(hMenu, g_TrayMenu);
+
+    if (g_ShowDefaultTrayItems)
+    {
+        if (!g_TrayMenu.empty())
+        {
+            AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        }
+        AppendMenu(hMenu, MF_STRING, ID_TRAY_EXIT, L"Exit");
+    }
 
     SetForegroundWindow(hWnd);
     TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hWnd, NULL);
@@ -281,3 +325,17 @@ void HideTrayIconDynamic()
 }
 
 
+void SetTrayMenu(const std::vector<TrayMenuItem>& menu)
+{
+    g_TrayMenu = menu;
+}
+
+void ClearTrayMenu()
+{
+    g_TrayMenu.clear();
+}
+
+void SetShowDefaultTrayItems(bool show)
+{
+    g_ShowDefaultTrayItems = show;
+}
