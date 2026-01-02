@@ -80,9 +80,9 @@ void ImageElement::Render(Graphics& graphics)
     int contentW = w - m_PaddingLeft - m_PaddingRight;
     int contentH = h - m_PaddingTop - m_PaddingBottom;
     
-    Logging::Log(LogLevel::Debug, L"Image Render: W=%d H=%d Pad=[%d,%d,%d,%d] Content=[%d,%d,%d,%d] Preserve=%d", 
-        w, h, m_PaddingLeft, m_PaddingTop, m_PaddingRight, m_PaddingBottom,
-        contentX, contentY, contentW, contentH, m_PreserveAspectRatio);
+    // Logging::Log(LogLevel::Debug, L"Image Render: W=%d H=%d Pad=[%d,%d,%d,%d] Content=[%d,%d,%d,%d] Preserve=%d", 
+    //     w, h, m_PaddingLeft, m_PaddingTop, m_PaddingRight, m_PaddingBottom,
+    //     contentX, contentY, contentW, contentH, m_PreserveAspectRatio);
     
     // Ensure positive dimensions
     if (contentW <= 0 || contentH <= 0) {

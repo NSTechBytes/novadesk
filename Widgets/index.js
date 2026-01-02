@@ -100,3 +100,6 @@ var hotkeyId = system.registerHotkey("CTRL+S", function () {
   novadesk.log("CTRL+S pressed");
   novadesk.refresh();
 });
+
+novadesk.enableDebugging(true);
+

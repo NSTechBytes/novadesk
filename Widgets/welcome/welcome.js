@@ -82,7 +82,7 @@ win.addText({
     height: 25,
     solidcolor: CONFIG.colors.accent,
     solidcolorradius: 5,
-    textalign: "centercenter",
+    textalign: "centercenter"
 });
 
 win.addText({
@@ -98,4 +98,22 @@ win.addText({
     solidcolor: CONFIG.colors.accent,
     solidcolorradius: 5,
     textalign: "centercenter",
+    onleftmouseup: function () {
+        // novadesk.log("Wrapper called!");
+        // var crash = null; crash.bang();
+        mousetest();
+    }
 });
+
+
+function mousetest() {
+    novadesk.log("Mouse test");
+    system.execute('https://novadesk-demo.vercel.app');
+    var appver = app.getVersion();
+    novadesk.log(appver);
+}
+
+
+
+var props = ui.getElementProperties("website-button");
+novadesk.log(JSON.stringify(props));

@@ -22,6 +22,8 @@
 #include "JSApp.h"
 
 namespace JSApi {
+    static int s_NextEventCallbackId = 1;
+
     void ExecuteScript(const std::wstring& script) {
         if (!s_JsContext) {
             Logging::Log(LogLevel::Error, L"ExecuteScript: Context not set");
@@ -229,6 +231,56 @@ namespace JSApi {
                 }
                 duk_pop(s_JsContext);
             } else {
+                duk_pop(s_JsContext);
+            }
+        }
+        duk_pop_2(s_JsContext);
+    }
+
+    int RegisterEventCallback(duk_context* ctx, duk_idx_t idx) {
+        idx = duk_normalize_index(ctx, idx); // Normalize relative index before stack changes
+        if (!duk_is_function(ctx, idx)) return -1;
+        
+        int id = s_NextEventCallbackId++;
+
+        // Store in global stash hidden object
+        duk_push_global_stash(ctx);
+        if (!duk_get_prop_string(ctx, -1, "__events")) {
+            duk_pop(ctx);
+            duk_push_object(ctx);
+            duk_put_prop_string(ctx, -2, "__events");
+            duk_get_prop_string(ctx, -1, "__events");
+        }
+        
+        duk_push_int(ctx, id);
+        duk_dup(ctx, idx);
+        duk_put_prop(ctx, -3);
+        
+        duk_pop_2(ctx); // pop __events, stash
+
+        Logging::Log(LogLevel::Debug, L"Event callback registered: %d", id);
+        return id;
+    }
+
+    void CallEventCallback(int id) {
+        if (!s_JsContext || id < 0) return;
+        
+        Logging::Log(LogLevel::Debug, L"Calling event callback: %d", id);
+
+        duk_push_global_stash(s_JsContext);
+        if (duk_get_prop_string(s_JsContext, -1, "__events")) {
+            duk_push_int(s_JsContext, id);
+            if (duk_get_prop(s_JsContext, -2)) {
+                if (duk_is_function(s_JsContext, -1)) {
+                    if (duk_pcall(s_JsContext, 0) != 0) {
+                        Logging::Log(LogLevel::Error, L"Event callback error: %S", duk_safe_to_string(s_JsContext, -1));
+                    }
+                } else {
+                    Logging::Log(LogLevel::Error, L"Event callback %d is not a function", id);
+                }
+                duk_pop(s_JsContext);
+            } else {
+                Logging::Log(LogLevel::Error, L"Event callback %d not found", id);
                 duk_pop(s_JsContext);
             }
         }

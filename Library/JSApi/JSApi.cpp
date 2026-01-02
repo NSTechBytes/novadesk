@@ -125,7 +125,12 @@ namespace JSApi {
         duk_push_string(ctx, filename.c_str());
         duk_put_global_string(ctx, "__filename");
 
-        if (duk_peval_string(ctx, content.c_str()) != 0) {
+        // Wrap the script in an IIFE to prevent global scope pollution
+        std::string wrappedContent = "(function() {\n";
+        wrappedContent += content;
+        wrappedContent += "\n})();";
+
+        if (duk_peval_string(ctx, wrappedContent.c_str()) != 0) {
             Logging::Log(LogLevel::Error, L"Script execution failed: %S", duk_safe_to_string(ctx, -1));
             duk_pop(ctx);
             return false;
