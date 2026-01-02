@@ -147,8 +147,9 @@ namespace JSApi {
         Logging::Log(LogLevel::Info, L"Reloading scripts...");
         HotkeyManager::UnregisterAll();
         TimerManager::ClearAll();
-        for (auto w : widgets) delete w;
+        std::vector<Widget*> widgetsCopy = widgets;
         widgets.clear();
+        for (auto w : widgetsCopy) delete w;
 
         duk_get_global_string(ctx, "novadesk");
         duk_del_prop_string(ctx, -1, "__hotkeys");

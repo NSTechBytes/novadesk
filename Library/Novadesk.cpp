@@ -220,7 +220,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
     // Cleanup
-    for (auto w : widgets) delete w;
+    std::vector<Widget*> widgetsCopy = widgets;
+    widgets.clear();
+    for (auto w : widgetsCopy) delete w;
+    
     duk_destroy_heap(ctx);
     System::Finalize();
     
