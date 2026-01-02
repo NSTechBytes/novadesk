@@ -17,7 +17,7 @@
 #include "JSJson.h"
 #include "JSPath.h"
 #include "JSNovadeskTray.h"
-#include "JSApp.h"
+
 
 #include "../Widget.h"
 #include "../Settings.h"
@@ -85,7 +85,7 @@ namespace JSApi {
 
         // Register global modules
         BindPathMethods(ctx);
-        BindAppMethods(ctx);
+
         BindIPCMethods(ctx);
 
         Logging::Log(LogLevel::Info, L"JavaScript API initialized");

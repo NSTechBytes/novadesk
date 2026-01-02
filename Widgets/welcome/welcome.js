@@ -108,9 +108,6 @@ win.addText({
 
 function mousetest() {
     novadesk.log("Mouse test");
-    system.execute('https://novadesk-demo.vercel.app');
-    var appver = app.getVersion();
-    novadesk.log(appver);
 }
 
 

@@ -19,7 +19,7 @@
 #include "JSIPC.h"
 #include "JSJson.h"
 #include "JSPath.h"
-#include "JSApp.h"
+
 
 namespace JSApi {
     static int s_NextEventCallbackId = 1;
@@ -58,8 +58,7 @@ namespace JSApi {
         duk_put_prop_string(s_JsContext, -2, "original_novadesk");
         duk_get_global_string(s_JsContext, "path");
         duk_put_prop_string(s_JsContext, -2, "original_path");
-        duk_get_global_string(s_JsContext, "app");
-        duk_put_prop_string(s_JsContext, -2, "original_app");
+
         duk_get_global_string(s_JsContext, "__dirname");
         duk_put_prop_string(s_JsContext, -2, "original_dirname");
         duk_get_global_string(s_JsContext, "__filename");
@@ -68,7 +67,7 @@ namespace JSApi {
         // Save and remove timers and constructors
         const char* forbidden[] = { 
             "setInterval", "setTimeout", "clearInterval", "clearTimeout", "setImmediate",
-            "widgetWindow", "app"
+            "widgetWindow"
         };
         for (const char* f : forbidden) {
             duk_get_global_string(s_JsContext, f);
@@ -143,8 +142,7 @@ namespace JSApi {
         duk_put_global_string(s_JsContext, "novadesk");
         duk_get_prop_string(s_JsContext, -1, "original_path");
         duk_put_global_string(s_JsContext, "path");
-        duk_get_prop_string(s_JsContext, -1, "original_app");
-        duk_put_global_string(s_JsContext, "app");
+
         duk_get_prop_string(s_JsContext, -1, "original_dirname");
         duk_put_global_string(s_JsContext, "__dirname");
         duk_get_prop_string(s_JsContext, -1, "original_filename");
@@ -160,7 +158,7 @@ namespace JSApi {
         // Clean up context tracking properties
         const char* context_props[] = { 
             "original_win", "original_system", "original_novadesk", 
-            "original_path", "original_app", "original_dirname", "original_filename" 
+            "original_path", "original_dirname", "original_filename" 
         };
         for (const char* p : context_props) {
             duk_del_prop_string(s_JsContext, -1, p);
