@@ -235,10 +235,24 @@ namespace PropertyParser {
         reader.GetFloat("gradientangle", options.gradientAngle);
 
         // Bevel
-        reader.GetInt("beveltype", options.bevelType);
+        std::wstring bevelStr;
+        if (reader.GetString("beveltype", bevelStr)) {
+            if (bevelStr == L"none") options.bevelType = 0;
+            else if (bevelStr == L"raised") options.bevelType = 1;
+            else if (bevelStr == L"sunken") options.bevelType = 2;
+            else if (bevelStr == L"emboss") options.bevelType = 3;
+            else if (bevelStr == L"pillow") options.bevelType = 4;
+            else options.bevelType = 0; // Default to none if unknown string
+        } else {
+            options.bevelType = 0; // Default to none if missing
+        }
+
         if (options.bevelType > 0) {
+            options.bevelWidth = 1; // Default to 1
             reader.GetInt("bevelwidth", options.bevelWidth);
-            reader.GetColor("bevelcolor1", options.bevelColor1, options.bevelAlpha1);
+            
+            // bevelcolor is the property for the primary bevel color
+            reader.GetColor("bevelcolor", options.bevelColor, options.bevelAlpha);
             reader.GetColor("bevelcolor2", options.bevelColor2, options.bevelAlpha2);
         }
 
@@ -557,12 +571,20 @@ namespace PropertyParser {
 
         // Bevel
         int bt = element->GetBevelType();
-        duk_push_int(ctx, bt); duk_put_prop_string(ctx, -2, "beveltype");
+        const char* bevStr = "none";
+        switch (bt) {
+            case 1: bevStr = "raised"; break;
+            case 2: bevStr = "sunken"; break;
+            case 3: bevStr = "emboss"; break;
+            case 4: bevStr = "pillow"; break;
+        }
+        duk_push_string(ctx, bevStr); duk_put_prop_string(ctx, -2, "beveltype");
+
         if (bt > 0) {
             duk_push_int(ctx, element->GetBevelWidth()); duk_put_prop_string(ctx, -2, "bevelwidth");
             
-            std::wstring bc1 = ColorUtil::ToRGBAString(element->GetBevelColor1(), element->GetBevelAlpha1());
-            duk_push_string(ctx, Utils::ToString(bc1).c_str()); duk_put_prop_string(ctx, -2, "bevelcolor1");
+            std::wstring bc1 = ColorUtil::ToRGBAString(element->GetBevelColor(), element->GetBevelAlpha());
+            duk_push_string(ctx, Utils::ToString(bc1).c_str()); duk_put_prop_string(ctx, -2, "bevelcolor");
             
             std::wstring bc2 = ColorUtil::ToRGBAString(element->GetBevelColor2(), element->GetBevelAlpha2());
             duk_push_string(ctx, Utils::ToString(bc2).c_str()); duk_put_prop_string(ctx, -2, "bevelcolor2");
@@ -626,7 +648,6 @@ namespace PropertyParser {
                 case TEXT_ALIGN_RIGHT_BOTTOM: alStr = "rightbottom"; break;
             }
             duk_push_string(ctx, alStr); duk_put_prop_string(ctx, -2, "textalign");
-            duk_push_string(ctx, alStr); duk_put_prop_string(ctx, -2, "align");
             duk_push_int(ctx, (int)t->GetClipString()); duk_put_prop_string(ctx, -2, "clipstring");
             duk_push_int(ctx, t->GetClipW()); duk_put_prop_string(ctx, -2, "clipstringw");
             duk_push_int(ctx, t->GetClipH()); duk_put_prop_string(ctx, -2, "clipstringh");
@@ -692,7 +713,7 @@ namespace PropertyParser {
         }
 
         if (options.bevelType > 0) {
-            element->SetBevel(options.bevelType, options.bevelWidth, options.bevelColor1, options.bevelAlpha1, options.bevelColor2, options.bevelAlpha2);
+            element->SetBevel(options.bevelType, options.bevelWidth, options.bevelColor, options.bevelAlpha, options.bevelColor2, options.bevelAlpha2);
         } else if (options.bevelType == 0) {
             element->SetBevel(0, 0, 0, 0, 0, 0);
         }
@@ -808,8 +829,8 @@ namespace PropertyParser {
 
         options.bevelType = element->GetBevelType();
         options.bevelWidth = element->GetBevelWidth();
-        options.bevelColor1 = element->GetBevelColor1();
-        options.bevelAlpha1 = element->GetBevelAlpha1();
+        options.bevelColor = element->GetBevelColor();
+        options.bevelAlpha = element->GetBevelAlpha();
         options.bevelColor2 = element->GetBevelColor2();
         options.bevelAlpha2 = element->GetBevelAlpha2();
 

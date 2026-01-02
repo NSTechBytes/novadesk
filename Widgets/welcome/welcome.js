@@ -44,7 +44,6 @@ win.addImage({
     y: 10,
     width: 180,
     height: 180,
-    onleftmousedown: "system.execute('https://novadesk-demo.vercel.app');"
 });
 
 win.addText({
@@ -84,7 +83,6 @@ win.addText({
     solidcolor: CONFIG.colors.accent,
     solidcolorradius: 5,
     textalign: "centercenter",
-    onleftmousedown: "system.execute('https://novadesk-demo.vercel.app');",
 });
 
 win.addText({
@@ -100,5 +98,4 @@ win.addText({
     solidcolor: CONFIG.colors.accent,
     solidcolorradius: 5,
     textalign: "centercenter",
-    onleftmousedown: "system.execute('https://novadesk-demo.vercel.app');"
 });

@@ -145,7 +145,7 @@ int TextElement::GetAutoWidth()
     
     ReleaseDC(NULL, hdc);
     
-    int width = (int)ceil(boundingBox.Width) + m_PaddingLeft + m_PaddingRight;
+    int width = (int)ceil(boundingBox.Width);
     if (!m_WDefined && m_ClipString != TEXT_CLIP_NONE && m_ClipStringW != -1)
     {
         if (width > m_ClipStringW) return m_ClipStringW;
@@ -195,7 +195,7 @@ int TextElement::GetAutoHeight()
     
     ReleaseDC(NULL, hdc);
     
-    int height = (int)ceil(boundingBox.Height) + m_PaddingTop + m_PaddingBottom;
+    int height = (int)ceil(boundingBox.Height);
     if (!m_HDefined && m_ClipString != TEXT_CLIP_NONE && m_ClipStringH != -1)
     {
         if (height > m_ClipStringH) return m_ClipStringH;

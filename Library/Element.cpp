@@ -22,16 +22,16 @@ Element::Element(ElementType type, const std::wstring& id, int x, int y, int wid
 ** Get the width of the element.
 */
 int Element::GetWidth() { 
-    if (m_WDefined) return m_Width;
-    return GetAutoWidth();
+    int w = m_WDefined ? m_Width : GetAutoWidth();
+    return w + m_PaddingLeft + m_PaddingRight;
 }
 
 /*
 ** Get the height of the element.
 */
 int Element::GetHeight() { 
-    if (m_HDefined) return m_Height;
-    return GetAutoHeight();
+    int h = m_HDefined ? m_Height : GetAutoHeight();
+    return h + m_PaddingTop + m_PaddingBottom;
 }
 
 /*
@@ -201,7 +201,7 @@ void Element::RenderBevel(Gdiplus::Graphics& graphics) {
     int w = bounds.Width;
     int h = bounds.Height;
     
-    Gdiplus::Color highlight(m_BevelAlpha1, GetRValue(m_BevelColor1), GetGValue(m_BevelColor1), GetBValue(m_BevelColor1));
+    Gdiplus::Color highlight(m_BevelAlpha, GetRValue(m_BevelColor), GetGValue(m_BevelColor), GetBValue(m_BevelColor));
     Gdiplus::Color shadow(m_BevelAlpha2, GetRValue(m_BevelColor2), GetGValue(m_BevelColor2), GetBValue(m_BevelColor2));
     
     Gdiplus::Pen highlightPen(highlight, (Gdiplus::REAL)m_BevelWidth);
@@ -226,7 +226,7 @@ void Element::RenderBevel(Gdiplus::Graphics& graphics) {
         
     case 3: // Emboss
         {
-            Gdiplus::Color midHighlight(m_BevelAlpha1 / 2, GetRValue(m_BevelColor1), GetGValue(m_BevelColor1), GetBValue(m_BevelColor1));
+            Gdiplus::Color midHighlight(m_BevelAlpha / 2, GetRValue(m_BevelColor), GetGValue(m_BevelColor), GetBValue(m_BevelColor));
             Gdiplus::Pen midPen(midHighlight, (Gdiplus::REAL)m_BevelWidth);
             graphics.DrawLine(&highlightPen, bounds.X + offset, bounds.Y + offset, bounds.X + w - offset, bounds.Y + offset);
             graphics.DrawLine(&midPen, bounds.X + offset, bounds.Y + offset, bounds.X + offset, bounds.Y + h - offset);
@@ -235,8 +235,8 @@ void Element::RenderBevel(Gdiplus::Graphics& graphics) {
         
     case 4: // Pillow
         for (int i = 0; i < m_BevelWidth; i++) {
-            int alpha = (int)(m_BevelAlpha1 * (1.0f - (float)i / m_BevelWidth));
-            Gdiplus::Color fadeColor(alpha, GetRValue(m_BevelColor1), GetGValue(m_BevelColor1), GetBValue(m_BevelColor1));
+            int alpha = (int)(m_BevelAlpha * (1.0f - (float)i / m_BevelWidth));
+            Gdiplus::Color fadeColor(alpha, GetRValue(m_BevelColor), GetGValue(m_BevelColor), GetBValue(m_BevelColor));
             Gdiplus::Pen fadePen(fadeColor, 1.0f);
             graphics.DrawRectangle(&fadePen, bounds.X + i, bounds.Y + i, w - i * 2, h - i * 2);
         }

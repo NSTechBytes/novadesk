@@ -83,11 +83,11 @@ public:
         m_CornerRadius = radius; 
     }
 
-    void SetBevel(int type, int width, COLORREF color1, BYTE alpha1, COLORREF color2, BYTE alpha2) {
+    void SetBevel(int type, int width, COLORREF color, BYTE alpha, COLORREF color2, BYTE alpha2) {
         m_BevelType = type;
         m_BevelWidth = width;
-        m_BevelColor1 = color1;
-        m_BevelAlpha1 = alpha1;
+        m_BevelColor = color;
+        m_BevelAlpha = alpha;
         m_BevelColor2 = color2;
         m_BevelAlpha2 = alpha2;
     }
@@ -111,8 +111,8 @@ public:
 
     int GetBevelType() const { return m_BevelType; }
     int GetBevelWidth() const { return m_BevelWidth; }
-    COLORREF GetBevelColor1() const { return m_BevelColor1; }
-    BYTE GetBevelAlpha1() const { return m_BevelAlpha1; }
+    COLORREF GetBevelColor() const { return m_BevelColor; }
+    BYTE GetBevelAlpha() const { return m_BevelAlpha; }
     COLORREF GetBevelColor2() const { return m_BevelColor2; }
     BYTE GetBevelAlpha2() const { return m_BevelAlpha2; }
 
@@ -175,8 +175,8 @@ protected:
     // Bevel properties
     int m_BevelType = 0;
     int m_BevelWidth = 0;
-    COLORREF m_BevelColor1 = RGB(255, 255, 255);
-    BYTE m_BevelAlpha1 = 200;
+    COLORREF m_BevelColor = RGB(255, 255, 255);
+    BYTE m_BevelAlpha = 200;
     COLORREF m_BevelColor2 = RGB(0, 0, 0);
     BYTE m_BevelAlpha2 = 150;
 

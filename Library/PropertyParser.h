@@ -39,8 +39,8 @@ namespace PropertyParser
         // Bevel
         int bevelType = 0;
         int bevelWidth = 0;
-        COLORREF bevelColor1 = RGB(255, 255, 255);
-        BYTE bevelAlpha1 = 200;
+        COLORREF bevelColor = RGB(255, 255, 255);
+        BYTE bevelAlpha = 200;
         COLORREF bevelColor2 = RGB(0, 0, 0);
         BYTE bevelAlpha2 = 150;
 
