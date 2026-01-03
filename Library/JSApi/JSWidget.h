@@ -17,5 +17,4 @@ namespace JSApi {
 
     void BindWidgetControlMethods(duk_context* ctx);
  
-     void HandleWidgetScriptRun(class Widget* widget);
  }

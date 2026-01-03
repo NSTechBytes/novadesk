@@ -101,5 +101,10 @@ var hotkeyId = system.registerHotkey("CTRL+S", function () {
   novadesk.refresh();
 });
 
-novadesk.enableDebugging(true);
+novadesk.enableDebugging(false);
 
+
+ipc.on("get-message-from-widget", function() {
+  novadesk.log("Call received from widget");
+  ipc.send("send-message-to-widget", "Hello from main script");
+});

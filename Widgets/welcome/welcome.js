@@ -98,19 +98,15 @@ win.addText({
     solidcolor: CONFIG.colors.accent,
     solidcolorradius: 5,
     textalign: "centercenter",
-    onleftmouseup: function () {
-        // novadesk.log("Wrapper called!");
-        // var crash = null; crash.bang();
-        mousetest();
-    }
+    onleftmouseup: mouseup
 });
 
-
-function mousetest() {
+function mouseup() {
     novadesk.log("Mouse test");
 }
 
+ipc.send("get-message-from-widget");
 
-
-var props = ui.getElementProperties("website-button");
-novadesk.log(JSON.stringify(props));
+ipc.on("send-message-to-widget", function (data) {
+novadesk.log("Main Message: " + data);
+});
