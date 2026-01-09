@@ -90,7 +90,7 @@ namespace PropertyParser
     */
     struct ImageOptions : public ElementOptions {
         std::wstring path;
-        int preserveAspectRatio = 0;
+        ImageAspectRatio preserveAspectRatio = IMAGE_ASPECT_STRETCH;
         
         bool hasImageTint = false;
         COLORREF imageTint = 0;

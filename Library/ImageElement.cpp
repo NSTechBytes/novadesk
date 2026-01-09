@@ -95,7 +95,7 @@ void ImageElement::Render(Graphics& graphics)
     REAL finalW = (REAL)contentW;
     REAL finalH = (REAL)contentH;
     
-    if (m_PreserveAspectRatio == 1) // Preserve (Fit)
+    if (m_PreserveAspectRatio == IMAGE_ASPECT_PRESERVE) // Preserve (Fit)
     {
         REAL imgW = (REAL)m_Image->GetWidth();
         REAL imgH = (REAL)m_Image->GetHeight();
@@ -108,7 +108,7 @@ void ImageElement::Render(Graphics& graphics)
         finalX = contentX + (contentW - finalW) / 2.0f;
         finalY = contentY + (contentH - finalH) / 2.0f;
     }
-    else if (m_PreserveAspectRatio == 2) // Crop (Fill)
+    else if (m_PreserveAspectRatio == IMAGE_ASPECT_CROP) // Crop (Fill)
     {
         // For crop, we clip content outside the box
         graphics.SetClip(RectF((REAL)contentX, (REAL)contentY, (REAL)contentW, (REAL)contentH));
@@ -237,7 +237,7 @@ void ImageElement::Render(Graphics& graphics)
     }
     
     // Restore clip if it was set for Crop mode
-    if (m_PreserveAspectRatio == 2)
+    if (m_PreserveAspectRatio == IMAGE_ASPECT_CROP)
     {
         graphics.ResetClip();
     }

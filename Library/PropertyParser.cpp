@@ -338,7 +338,12 @@ namespace PropertyParser {
         }
 
         // Image specific
-        reader.GetInt("preserveaspectratio", options.preserveAspectRatio);
+        std::wstring aspectStr;
+        if (reader.GetString("preserveaspectratio", aspectStr)) {
+            if (aspectStr == L"preserve") options.preserveAspectRatio = IMAGE_ASPECT_PRESERVE;
+            else if (aspectStr == L"crop") options.preserveAspectRatio = IMAGE_ASPECT_CROP;
+            else if (aspectStr == L"stretch") options.preserveAspectRatio = IMAGE_ASPECT_STRETCH;
+        }
         reader.GetBool("grayscale", options.grayscale);
         reader.GetBool("tile", options.tile);
         int alpha = 255;
@@ -400,8 +405,12 @@ namespace PropertyParser {
             else if (alignStr == L"rightbottom") options.textAlign = TEXT_ALIGN_RIGHT_BOTTOM;
         }
         
-        int clipVal = 0;
-        if (reader.GetInt("clipstring", clipVal)) options.clip = (TextClipString)clipVal;
+        std::wstring clipStr;
+        if (reader.GetString("clipstring", clipStr)) {
+            if (clipStr == L"none") options.clip = TEXT_CLIP_NONE;
+            else if (clipStr == L"on" || clipStr == L"clip") options.clip = TEXT_CLIP_ON;
+            else if (clipStr == L"ellipsis") options.clip = TEXT_CLIP_ELLIPSIS;
+        }
         reader.GetInt("clipstringw", options.clipW);
         reader.GetInt("clipstringh", options.clipH);
     }
@@ -648,14 +657,25 @@ namespace PropertyParser {
                 case TEXT_ALIGN_RIGHT_BOTTOM: alStr = "rightbottom"; break;
             }
             duk_push_string(ctx, alStr); duk_put_prop_string(ctx, -2, "textalign");
-            duk_push_int(ctx, (int)t->GetClipString()); duk_put_prop_string(ctx, -2, "clipstring");
+            const char* clipStr = "none";
+            switch (t->GetClipString()) {
+                case TEXT_CLIP_ON: clipStr = "clip"; break;
+                case TEXT_CLIP_ELLIPSIS: clipStr = "ellipsis"; break;
+            }
+            duk_push_string(ctx, clipStr); duk_put_prop_string(ctx, -2, "clipstring");
             duk_push_int(ctx, t->GetClipW()); duk_put_prop_string(ctx, -2, "clipstringw");
             duk_push_int(ctx, t->GetClipH()); duk_put_prop_string(ctx, -2, "clipstringh");
             
         } else if (element->GetType() == ELEMENT_IMAGE) {
             ImageElement* img = static_cast<ImageElement*>(element);
             duk_push_string(ctx, Utils::ToString(img->GetImagePath()).c_str()); duk_put_prop_string(ctx, -2, "path");
-            duk_push_int(ctx, img->GetPreserveAspectRatio()); duk_put_prop_string(ctx, -2, "preserveaspectratio");
+            
+            const char* aspectStr = "stretch";
+            switch (img->GetPreserveAspectRatio()) {
+                case IMAGE_ASPECT_PRESERVE: aspectStr = "preserve"; break;
+                case IMAGE_ASPECT_CROP:     aspectStr = "crop";     break;
+            }
+            duk_push_string(ctx, aspectStr); duk_put_prop_string(ctx, -2, "preserveaspectratio");
             duk_push_boolean(ctx, img->IsGrayscale()); duk_put_prop_string(ctx, -2, "grayscale");
             duk_push_boolean(ctx, img->IsTile()); duk_put_prop_string(ctx, -2, "tile");
             duk_push_int(ctx, img->GetImageAlpha()); duk_put_prop_string(ctx, -2, "imagealpha");
