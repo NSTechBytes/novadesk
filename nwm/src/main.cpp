@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <windows.h>
+#include "rescle.h"
 
 namespace fs = std::filesystem;
 
@@ -39,6 +40,37 @@ void PrintUsage() {
     std::cout << "  nwm init <widget-name>    - Create a new widget in current directory" << std::endl;
     std::cout << "  nwm run                   - Run widget in current directory" << std::endl;
     std::cout << "  nwm build                 - Build widget in current directory" << std::endl;
+}
+
+// Helper for string conversion
+std::wstring ToWString(const std::string& str) {
+    if (str.empty()) return L"";
+    int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+    std::wstring wstrTo(size_needed, 0);
+    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
+    return wstrTo;
+}
+
+// Helper to parse version string "1.0.0.0" into 4 shorts
+bool ParseVersion(const std::string& version, unsigned short& v1, unsigned short& v2, unsigned short& v3, unsigned short& v4) {
+    v1 = v2 = v3 = v4 = 0;
+    std::vector<int> parts;
+    std::string current;
+    for (char c : version) {
+        if (c == '.') {
+            if (!current.empty()) parts.push_back(std::stoi(current));
+            current.clear();
+        } else if (isdigit(c)) {
+            current += c;
+        }
+    }
+    if (!current.empty()) parts.push_back(std::stoi(current));
+    
+    if (parts.size() >= 1) v1 = parts[0];
+    if (parts.size() >= 2) v2 = parts[1];
+    if (parts.size() >= 3) v3 = parts[2];
+    if (parts.size() >= 4) v4 = parts[3];
+    return parts.size() > 0;
 }
 
 bool InitWidget(const std::string& name) {
@@ -209,27 +241,35 @@ bool BuildWidget() {
             }
         }
 
-        fs::path rceditPath = exeDir / "rcedit-x86.exe";
-        if (fs::exists(rceditPath)) {
-            std::string rceditCmd = "\"" + rceditPath.string() + "\" \"" + destExe.string() + "\"";
-            rceditCmd += " --set-file-version " + version + " --set-product-version " + version;
-            rceditCmd += " --set-version-string \"CompanyName\" \"" + author + "\"";
-            rceditCmd += " --set-version-string \"FileDescription\" \"" + description + "\"";
-            rceditCmd += " --set-version-string \"ProductName\" \"" + widgetRealName + "\"";
+        std::cout << "Applying metadata via internal rescle..." << std::endl;
+        rescle::ResourceUpdater updater;
+        if (updater.Load(destExe.c_str())) {
+            updater.SetVersionString(RU_VS_PRODUCT_NAME, ToWString(widgetRealName).c_str());
+            updater.SetVersionString(RU_VS_COMPANY_NAME, ToWString(author).c_str());
+            updater.SetVersionString(RU_VS_FILE_DESCRIPTION, ToWString(description).c_str());
+            updater.SetVersionString(RU_VS_FILE_VERSION, ToWString(version).c_str());
+            updater.SetVersionString(RU_VS_PRODUCT_VERSION, ToWString(version).c_str());
+
+            unsigned short v1, v2, v3, v4;
+            if (ParseVersion(version, v1, v2, v3, v4)) {
+                updater.SetFileVersion(v1, v2, v3, v4);
+                updater.SetProductVersion(v1, v2, v3, v4);
+            }
 
             if (!icon.empty()) {
                 fs::path iconPath = widgetPath / icon;
                 if (fs::exists(iconPath)) {
-                    rceditCmd += " --set-icon \"" + iconPath.string() + "\"";
+                    updater.SetIcon(iconPath.c_str());
                 }
             }
-            
-            std::cout << "Applying metadata via rcedit..." << std::endl;
-            if (!ExecuteCommand(rceditCmd)) {
-                std::cerr << "Warning: rcedit failed with some errors." << std::endl;
+
+            if (!updater.Commit()) {
+                std::cerr << "Error: Failed to commit metadata updates via rescle." << std::endl;
+                return false;
             }
         } else {
-            std::cout << "Warning: rcedit-x86.exe not found. Skipping metadata." << std::endl;
+            std::cerr << "Error: Failed to load executable for metadata update." << std::endl;
+            return false;
         }
 
         std::cout << "Successfully built widget in " << distDir << std::endl;
