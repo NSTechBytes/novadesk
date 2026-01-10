@@ -97,16 +97,5 @@ win.addText({
     height: 25,
     solidcolor: CONFIG.colors.accent,
     solidcolorradius: 5,
-    textalign: "centercenter",
-    onleftmouseup: mouseup
-});
-
-function mouseup() {
-    novadesk.log("Mouse test");
-}
-
-ipc.send("get-message-from-widget");
-
-ipc.on("send-message-to-widget", function (data) {
-novadesk.log("Main Message: " + data);
+    textalign: "centercenter"
 });

@@ -52,8 +52,6 @@ namespace JSApi {
         duk_push_global_stash(s_JsContext);
         duk_get_global_string(s_JsContext, "win");
         duk_put_prop_string(s_JsContext, -2, "original_win");
-        duk_get_global_string(s_JsContext, "novadesk");
-        duk_put_prop_string(s_JsContext, -2, "original_novadesk");
         duk_get_global_string(s_JsContext, "path");
         duk_put_prop_string(s_JsContext, -2, "original_path");
 
@@ -90,10 +88,6 @@ namespace JSApi {
         BindWidgetUIMethods(s_JsContext);
         duk_put_global_string(s_JsContext, "win");
 
-        duk_push_object(s_JsContext);
-        BindNovadeskBaseMethods(s_JsContext);
-        duk_put_global_string(s_JsContext, "novadesk");
-
         BindPathMethods(s_JsContext);
         
         // Clear old IPC listeners for this specific widget before binding new ones
@@ -118,9 +112,9 @@ namespace JSApi {
         // The parameters (win, novadesk, etc.) ensure these widget-specific objects 
         // are trapped in the closure. By adding restricted globals like 'system' 
         // to the parameters but NOT the arguments, we shadow them with 'undefined'.
-        std::string wrappedContent = "(function(win, novadesk, ipc, path, __dirname, __filename, system, setInterval, setTimeout, clearInterval, clearTimeout, setImmediate, widgetWindow) {\n";
+        std::string wrappedContent = "(function(win, ipc, path, __dirname, __filename, system, setInterval, setTimeout, clearInterval, clearTimeout, setImmediate, widgetWindow) {\n";
         wrappedContent += content;
-        wrappedContent += "\n})(win, novadesk, ipc, path, __dirname, __filename);";
+        wrappedContent += "\n})(win, ipc, path, __dirname, __filename);";
 
         if (duk_peval_string(s_JsContext, wrappedContent.c_str()) != 0) {
             Logging::Log(LogLevel::Error, L"Widget Script Error (%s): %S", widget->GetOptions().id.c_str(), duk_safe_to_string(s_JsContext, -1));
@@ -130,8 +124,6 @@ namespace JSApi {
         duk_push_global_stash(s_JsContext);
         duk_get_prop_string(s_JsContext, -1, "original_win");
         duk_put_global_string(s_JsContext, "win");
-        duk_get_prop_string(s_JsContext, -1, "original_novadesk");
-        duk_put_global_string(s_JsContext, "novadesk");
         duk_get_prop_string(s_JsContext, -1, "original_path");
         duk_put_global_string(s_JsContext, "path");
 
@@ -149,7 +141,7 @@ namespace JSApi {
 
         // Clean up context tracking properties
         const char* context_props[] = { 
-            "original_win", "original_novadesk", 
+            "original_win", 
             "original_path", "original_dirname", "original_filename" 
         };
         for (const char* p : context_props) {
@@ -212,25 +204,26 @@ namespace JSApi {
 
     void CallStoredCallback(int id) {
         if (!s_JsContext) return;
-        duk_get_global_string(s_JsContext, "novadesk");
-        duk_get_prop_string(s_JsContext, -1, "__timers");
-        duk_push_int(s_JsContext, id);
-        if (duk_get_prop(s_JsContext, -2)) {
-            if (duk_is_function(s_JsContext, -1)) {
-                if (duk_pcall(s_JsContext, 0) != 0) {
-                    Logging::Log(LogLevel::Error, L"Timer callback error: %S", duk_safe_to_string(s_JsContext, -1));
+        duk_push_global_stash(s_JsContext);
+        if (duk_get_prop_string(s_JsContext, -1, "__timers")) {
+            duk_push_int(s_JsContext, id);
+            if (duk_get_prop(s_JsContext, -2)) {
+                if (duk_is_function(s_JsContext, -1)) {
+                    if (duk_pcall(s_JsContext, 0) != 0) {
+                        Logging::Log(LogLevel::Error, L"Timer callback error: %S", duk_safe_to_string(s_JsContext, -1));
+                    }
                 }
+                duk_pop(s_JsContext);
+            } else {
+                duk_pop(s_JsContext);
             }
-            duk_pop(s_JsContext);
-        } else {
-            duk_pop(s_JsContext);
         }
         duk_pop_2(s_JsContext);
     }
 
     void CallHotkeyCallback(int callbackIdx) {
         if (!s_JsContext || callbackIdx < 0) return;
-        duk_get_global_string(s_JsContext, "novadesk");
+        duk_push_global_stash(s_JsContext);
         if (duk_get_prop_string(s_JsContext, -1, "__hotkeys")) {
             duk_push_int(s_JsContext, callbackIdx);
             if (duk_get_prop(s_JsContext, -2)) {

@@ -37,12 +37,16 @@ namespace JSApi {
     void InitializeJavaScriptAPI(duk_context* ctx) {
         s_JsContext = ctx;
 
-        // Register novadesk object and methods
+        // Register console object
         duk_push_object(ctx);
-        BindNovadeskBaseMethods(ctx);
+        BindConsoleMethods(ctx);
+        duk_put_global_string(ctx, "console");
+
+        // Register app object
+        duk_push_object(ctx);
         BindNovadeskAppMethods(ctx);
         BindNovadeskTrayMethods(ctx);
-        duk_put_global_string(ctx, "novadesk");
+        duk_put_global_string(ctx, "app");
 
         // Initialize Global Stash for Object Tracking
         duk_push_global_stash(ctx);
@@ -156,9 +160,10 @@ namespace JSApi {
         widgets.clear();
         for (auto w : widgetsCopy) delete w;
 
-        duk_get_global_string(ctx, "novadesk");
+        duk_push_global_stash(ctx);
         duk_del_prop_string(ctx, -1, "__hotkeys");
         duk_del_prop_string(ctx, -1, "__timers");
+        duk_del_prop_string(ctx, -1, "__trayCallbacks");
         duk_pop(ctx);
  
         s_NextTempId = 1;
