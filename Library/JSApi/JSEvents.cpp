@@ -153,56 +153,71 @@ namespace JSApi {
 
     void TriggerWidgetEvent(Widget* widget, const std::string& eventName) {
         if (!s_JsContext || !widget) return;
+        
         duk_push_global_stash(s_JsContext);
-        if (duk_get_prop_string(s_JsContext, -1, "widget_objects")) {
-            std::string id = Utils::ToString(widget->GetOptions().id);
-            if (duk_get_prop_string(s_JsContext, -1, id.c_str())) {
-                // Save original globals to restore later
-                duk_get_global_string(s_JsContext, "win");
-                duk_get_global_string(s_JsContext, "system");
-                duk_get_global_string(s_JsContext, "widgetWindow");
-                duk_get_global_string(s_JsContext, "app");
+        if (!duk_get_prop_string(s_JsContext, -1, "widget_objects")) {
+            duk_pop_2(s_JsContext); // undefined, stash
+            return;
+        }
+        
+        std::string id = Utils::ToString(widget->GetOptions().id);
+        if (!duk_get_prop_string(s_JsContext, -1, id.c_str())) {
+            duk_pop_3(s_JsContext); // undefined, widget_objects, stash
+            return;
+        }
+        
+        // Check if the widget object is valid (not undefined/null)
+        if (!duk_is_object(s_JsContext, -1)) {
+            duk_pop_3(s_JsContext); // widget object, widget_objects, stash
+            return;
+        }
+        
+        // Save original globals to restore later
+        duk_get_global_string(s_JsContext, "win");
+        duk_get_global_string(s_JsContext, "system");
+        duk_get_global_string(s_JsContext, "widgetWindow");
+        duk_get_global_string(s_JsContext, "app");
 
-                // Set widget-specific context for the duration of the event
-                duk_dup(s_JsContext, -4); // The widget object
-                duk_put_global_string(s_JsContext, "win");
-                
-                // Mask restricted globals
-                duk_push_undefined(s_JsContext);
-                duk_put_global_string(s_JsContext, "system");
-                duk_push_undefined(s_JsContext);
-                duk_put_global_string(s_JsContext, "widgetWindow");
-                duk_push_undefined(s_JsContext);
-                duk_put_global_string(s_JsContext, "app");
+        // Set widget-specific context for the duration of the event
+        duk_dup(s_JsContext, -5); // The widget object
+        duk_put_global_string(s_JsContext, "win");
+        
+        // Mask restricted globals
+        duk_push_undefined(s_JsContext);
+        duk_put_global_string(s_JsContext, "system");
+        duk_push_undefined(s_JsContext);
+        duk_put_global_string(s_JsContext, "widgetWindow");
+        duk_push_undefined(s_JsContext);
+        duk_put_global_string(s_JsContext, "app");
 
-                if (duk_get_prop_string(s_JsContext, -4, "\xFF" "events")) {
-                    if (duk_get_prop_string(s_JsContext, -1, eventName.c_str())) {
-                        if (duk_is_array(s_JsContext, -1)) {
-                            duk_size_t len = duk_get_length(s_JsContext, -1);
-                            for (duk_size_t i = 0; i < len; i++) {
-                                duk_get_prop_index(s_JsContext, -1, (duk_uarridx_t)i);
-                                if (duk_is_function(s_JsContext, -1)) {
-                                    if (duk_pcall(s_JsContext, 0) != 0) {
-                                        Logging::Log(LogLevel::Error, L"Widget Event Error (%s: %S): %S", 
-                                            widget->GetOptions().id.c_str(), eventName.c_str(), duk_safe_to_string(s_JsContext, -1));
-                                    }
-                                }
-                                duk_pop(s_JsContext);
+        // Try to get the events object - use protected call to avoid crashes
+        if (duk_get_prop_string(s_JsContext, -5, "\xFF" "events")) {
+            if (duk_get_prop_string(s_JsContext, -1, eventName.c_str())) {
+                if (duk_is_array(s_JsContext, -1)) {
+                    duk_size_t len = duk_get_length(s_JsContext, -1);
+                    for (duk_size_t i = 0; i < len; i++) {
+                        duk_get_prop_index(s_JsContext, -1, (duk_uarridx_t)i);
+                        if (duk_is_function(s_JsContext, -1)) {
+                            if (duk_pcall(s_JsContext, 0) != 0) {
+                                Logging::Log(LogLevel::Error, L"Widget Event Error (%s: %S): %S", 
+                                    widget->GetOptions().id.c_str(), eventName.c_str(), duk_safe_to_string(s_JsContext, -1));
                             }
                         }
+                        duk_pop(s_JsContext);
                     }
-                    duk_pop(s_JsContext); // event name prop
                 }
-                duk_pop(s_JsContext); // events object
-
-                // Restore original globals
-                duk_put_global_string(s_JsContext, "app");
-                duk_put_global_string(s_JsContext, "widgetWindow");
-                duk_put_global_string(s_JsContext, "system");
-                duk_put_global_string(s_JsContext, "win");
             }
-            duk_pop(s_JsContext); // widget object
+            duk_pop(s_JsContext); // event name prop
         }
+        duk_pop(s_JsContext); // events object or undefined
+
+        // Restore original globals
+        duk_put_global_string(s_JsContext, "app");
+        duk_put_global_string(s_JsContext, "widgetWindow");
+        duk_put_global_string(s_JsContext, "system");
+        duk_put_global_string(s_JsContext, "win");
+        
+        duk_pop(s_JsContext); // widget object
         duk_pop_2(s_JsContext); // widget_objects, stash
     }
 
