@@ -54,6 +54,8 @@ namespace JSApi {
         duk_put_prop_string(s_JsContext, -2, "original_win");
         duk_get_global_string(s_JsContext, "path");
         duk_put_prop_string(s_JsContext, -2, "original_path");
+        duk_get_global_string(s_JsContext, "app");
+        duk_put_prop_string(s_JsContext, -2, "original_app");
 
         duk_get_global_string(s_JsContext, "__dirname");
         duk_put_prop_string(s_JsContext, -2, "original_dirname");
@@ -90,6 +92,10 @@ namespace JSApi {
 
         BindPathMethods(s_JsContext);
         
+        duk_push_object(s_JsContext);
+        BindRestrictedAppMethods(s_JsContext);
+        duk_put_global_string(s_JsContext, "app");
+        
         // Clear old IPC listeners for this specific widget before binding new ones
         // This prevents old handlers from persisting after widget refresh
         std::string widgetId = Utils::ToString(widget->GetOptions().id);
@@ -112,9 +118,9 @@ namespace JSApi {
         // The parameters (win, novadesk, etc.) ensure these widget-specific objects 
         // are trapped in the closure. By adding restricted globals like 'system' 
         // to the parameters but NOT the arguments, we shadow them with 'undefined'.
-        std::string wrappedContent = "(function(win, ipc, path, __dirname, __filename, system, setInterval, setTimeout, clearInterval, clearTimeout, setImmediate, widgetWindow) {\n";
+        std::string wrappedContent = "(function(win, ipc, path, __dirname, __filename, app, system, setInterval, setTimeout, clearInterval, clearTimeout, setImmediate, widgetWindow) {\n";
         wrappedContent += content;
-        wrappedContent += "\n})(win, ipc, path, __dirname, __filename);";
+        wrappedContent += "\n})(win, ipc, path, __dirname, __filename, app);";
 
         if (duk_peval_string(s_JsContext, wrappedContent.c_str()) != 0) {
             Logging::Log(LogLevel::Error, L"Widget Script Error (%s): %S", widget->GetOptions().id.c_str(), duk_safe_to_string(s_JsContext, -1));
@@ -126,6 +132,8 @@ namespace JSApi {
         duk_put_global_string(s_JsContext, "win");
         duk_get_prop_string(s_JsContext, -1, "original_path");
         duk_put_global_string(s_JsContext, "path");
+        duk_get_prop_string(s_JsContext, -1, "original_app");
+        duk_put_global_string(s_JsContext, "app");
 
         duk_get_prop_string(s_JsContext, -1, "original_dirname");
         duk_put_global_string(s_JsContext, "__dirname");
@@ -142,7 +150,7 @@ namespace JSApi {
         // Clean up context tracking properties
         const char* context_props[] = { 
             "original_win", 
-            "original_path", "original_dirname", "original_filename" 
+            "original_path", "original_app", "original_dirname", "original_filename" 
         };
         for (const char* p : context_props) {
             duk_del_prop_string(s_JsContext, -1, p);
@@ -161,6 +169,7 @@ namespace JSApi {
                 duk_get_global_string(s_JsContext, "win");
                 duk_get_global_string(s_JsContext, "system");
                 duk_get_global_string(s_JsContext, "widgetWindow");
+                duk_get_global_string(s_JsContext, "app");
 
                 // Set widget-specific context for the duration of the event
                 duk_dup(s_JsContext, -4); // The widget object
@@ -171,6 +180,10 @@ namespace JSApi {
                 duk_put_global_string(s_JsContext, "system");
                 duk_push_undefined(s_JsContext);
                 duk_put_global_string(s_JsContext, "widgetWindow");
+                
+                duk_push_object(s_JsContext);
+                BindRestrictedAppMethods(s_JsContext);
+                duk_put_global_string(s_JsContext, "app");
 
                 if (duk_get_prop_string(s_JsContext, -4, "\xFF" "events")) {
                     if (duk_get_prop_string(s_JsContext, -1, eventName.c_str())) {
@@ -193,6 +206,7 @@ namespace JSApi {
                 duk_pop(s_JsContext); // events object
 
                 // Restore original globals
+                duk_put_global_string(s_JsContext, "app");
                 duk_put_global_string(s_JsContext, "widgetWindow");
                 duk_put_global_string(s_JsContext, "system");
                 duk_put_global_string(s_JsContext, "win");

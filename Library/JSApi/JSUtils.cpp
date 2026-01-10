@@ -207,4 +207,9 @@ namespace JSApi {
         duk_push_c_function(ctx, js_novadesk_exit, 0);
         duk_put_prop_string(ctx, -2, "exit");
     }
+
+    void BindRestrictedAppMethods(duk_context* ctx) {
+        duk_push_c_function(ctx, js_include, 1);
+        duk_put_prop_string(ctx, -2, "include");
+    }
 }
