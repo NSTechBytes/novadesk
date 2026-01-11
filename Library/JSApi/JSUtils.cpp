@@ -148,8 +148,8 @@ namespace JSApi {
         bool enable = duk_get_boolean(ctx, 0);
         Settings::SetGlobalBool("saveLogToFile", enable);
         if (enable) {
-            std::wstring logPath = PathUtils::GetExeDir() + L"novadesk.log";
-            Logging::SetFileLogging(logPath, true);
+            std::wstring logPath = PathUtils::GetExeDir() + L"logs.log";
+            Logging::SetFileLogging(logPath, false);
         } else {
             Logging::SetFileLogging(L"");
         }
@@ -172,8 +172,8 @@ namespace JSApi {
         if (disable) {
              Logging::SetFileLogging(L"");
         } else if (Settings::GetGlobalBool("saveLogToFile", false)) {
-             std::wstring logPath = PathUtils::GetExeDir() + L"novadesk.log";
-             Logging::SetFileLogging(logPath, true);
+             std::wstring logPath = PathUtils::GetExeDir() + L"logs.log";
+             Logging::SetFileLogging(logPath, false);
         }
         return 0;
     }

@@ -22,6 +22,7 @@
 #include <io.h>
 #include "MenuUtils.h"
 #include "Utils.h"
+#include "PathUtils.h"
 
 #pragma comment(lib, "gdiplus.lib")
 
@@ -57,6 +58,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         // Also enable wide output for stdout
         _setmode(_fileno(stdout), _O_U16TEXT);
     }
+
+    // Clear log file on startup
+    // This ensures a fresh log for the new session, while subsequent refreshes 
+    // (handled in Settings.cpp/JSUtils.cpp) will append to preserve history.
+    std::wstring logPath = PathUtils::GetExeDir() + L"logs.log";
+    DeleteFileW(logPath.c_str());
 
     // Enable DPI Awareness
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);

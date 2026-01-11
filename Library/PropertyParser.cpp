@@ -411,8 +411,7 @@ namespace PropertyParser {
             else if (clipStr == L"on" || clipStr == L"clip") options.clip = TEXT_CLIP_ON;
             else if (clipStr == L"ellipsis") options.clip = TEXT_CLIP_ELLIPSIS;
         }
-        reader.GetInt("clipstringw", options.clipW);
-        reader.GetInt("clipstringh", options.clipH);
+
     }
 
     /*
@@ -663,8 +662,7 @@ namespace PropertyParser {
                 case TEXT_CLIP_ELLIPSIS: clipStr = "ellipsis"; break;
             }
             duk_push_string(ctx, clipStr); duk_put_prop_string(ctx, -2, "clipstring");
-            duk_push_int(ctx, t->GetClipW()); duk_put_prop_string(ctx, -2, "clipstringw");
-            duk_push_int(ctx, t->GetClipH()); duk_put_prop_string(ctx, -2, "clipstringh");
+
             
         } else if (element->GetType() == ELEMENT_IMAGE) {
             ImageElement* img = static_cast<ImageElement*>(element);
@@ -805,7 +803,7 @@ namespace PropertyParser {
         element->SetBold(options.bold);
         element->SetItalic(options.italic);
         element->SetTextAlign(options.textAlign);
-        element->SetClip(options.clip, options.clipW, options.clipH);
+        element->SetClip(options.clip);
     }
 
     /*
@@ -894,8 +892,6 @@ namespace PropertyParser {
         options.italic = element->IsItalic();
         options.textAlign = element->GetTextAlign();
         options.clip = element->GetClipString();
-        options.clipW = element->GetClipW();
-        options.clipH = element->GetClipH();
     }
 
     void PreFillImageOptions(ImageOptions& options, ImageElement* element) {
