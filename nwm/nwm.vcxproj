@@ -168,6 +168,9 @@
 	<ItemGroup>
 		<ClInclude Include="src\rescle.h" />
 	</ItemGroup>
+	<ItemGroup>
+		<ResourceCompile Include="nwm.rc" />
+	</ItemGroup>
 	<Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 	<ImportGroup Label="ExtensionTargets"></ImportGroup>
 </Project>
