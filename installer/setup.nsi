@@ -165,6 +165,8 @@ Section "Uninstall"
 
   ; Remove files
   Delete "$INSTDIR\Novadesk.exe"
+  Delete "$INSTDIR\settings.json"
+  Delete "$INSTDIR\logs.log"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir /r "$INSTDIR\Widgets"
   
