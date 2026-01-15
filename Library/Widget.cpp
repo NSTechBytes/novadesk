@@ -664,7 +664,6 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                 }
 
-                // Keep on screen (using Rainmeter's robust multi-point algorithm)
                 if (widget->m_Options.keepOnScreen)
                 {
                     const auto& monitors = System::GetMultiMonitorInfo().monitors;
@@ -1134,8 +1133,6 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 actionElement = el;
                 break;
             }
-            
-            // If it hits but has no action, it FALLS THROUGH to elements below (Rainmeter behavior)
         }
     }
 
