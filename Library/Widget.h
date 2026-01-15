@@ -46,6 +46,8 @@ struct WidgetOptions
     bool snapEdges = true;
     bool m_WDefined = false;
     bool m_HDefined = false;
+    bool show = true;
+    bool dynamicWindowSize = false;
     std::wstring scriptPath;
 };
 
@@ -59,6 +61,7 @@ public:
     bool Create();
 
     void Show();
+    void Hide();
     void Refresh();
 
     void ChangeZPos(ZPOSITION zPos, bool all = false);
@@ -68,6 +71,7 @@ public:
     void SetBackgroundColor(const std::wstring& colorStr);
     void SetDraggable(bool enable) { m_Options.draggable = enable; }
     void SetClickThrough(bool enable);
+    void SetDynamicWindowSize(bool dynamicWindowSize);
     void SetKeepOnScreen(bool enable) { m_Options.keepOnScreen = enable; }
     void SetSnapEdges(bool enable) { m_Options.snapEdges = enable; }
 

@@ -150,6 +150,16 @@ void Widget::Show()
     {
         ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
         UpdateWindow(m_hWnd);
+        JSApi::TriggerWidgetEvent(this, "show");
+    }
+}
+
+void Widget::Hide()
+{
+    if (m_hWnd)
+    {
+        ShowWindow(m_hWnd, SW_HIDE);
+        JSApi::TriggerWidgetEvent(this, "hide");
     }
 }
 
@@ -967,11 +977,13 @@ void Widget::UpdateLayeredWindowContent()
 {
     if (!m_hWnd) return;
 
-    // 1. Calculate bounding box of all elements if widget size is not defined
     int calcW = m_Options.width;
     int calcH = m_Options.height;
 
-    if (!m_Options.m_WDefined || !m_Options.m_HDefined)
+    bool shouldCalcW = m_Options.dynamicWindowSize || (!m_Options.m_WDefined && m_Options.width <= 1);
+    bool shouldCalcH = m_Options.dynamicWindowSize || (!m_Options.m_HDefined && m_Options.height <= 1);
+
+    if (shouldCalcW || shouldCalcH)
     {
         int maxX = 0;
         int maxY = 0;
@@ -982,8 +994,8 @@ void Widget::UpdateLayeredWindowContent()
             maxY = (std::max)(maxY, bounds.Y + bounds.Height);
         }
         
-        if (!m_Options.m_WDefined) calcW = maxX;
-        if (!m_Options.m_HDefined) calcH = maxY;
+        if (shouldCalcW) calcW = maxX;
+        if (shouldCalcH) calcH = maxY;
         
         // Ensure at least 1x1
         if (calcW <= 0) calcW = 1;
@@ -1284,6 +1296,18 @@ void Widget::OnContextMenu()
     else if (cmd == 1003)
     {
         PostQuitMessage(0);
+    }
+}
+
+void Widget::SetDynamicWindowSize(bool dynamicWindowSize)
+{
+    if (m_Options.dynamicWindowSize != dynamicWindowSize)
+    {
+        m_Options.dynamicWindowSize = dynamicWindowSize;
+        if (m_hWnd)
+        {
+            Redraw();
+        }
     }
 }
 
