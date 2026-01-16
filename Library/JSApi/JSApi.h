@@ -26,4 +26,7 @@ namespace JSApi {
     void OnTimer(UINT_PTR id);
     void OnMessage(UINT message, WPARAM wParam, LPARAM lParam);
     void SetMessageWindow(HWND hWnd);
+    HWND GetMessageWindow();
+
+    static const UINT WM_NOVADESK_DISPATCH = WM_USER + 101;
 }

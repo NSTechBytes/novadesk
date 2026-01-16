@@ -11,6 +11,7 @@
 #include "../Utils.h"
 #include "../Hotkey.h"
 #include "novadesk_addon.h"
+#include "JSApi.h"
 #include "../System.h"
 #include "../CPUMonitor.h"
 #include "../MemoryMonitor.h"
@@ -230,7 +231,7 @@ namespace JSApi {
 
         // Call initialization. The addon may push a return value.
         int topBefore = duk_get_top(ctx);
-        initFn(ctx);
+        initFn(ctx, JSApi::GetMessageWindow());
         int topAfter = duk_get_top(ctx);
 
         if (topAfter > topBefore) {
@@ -239,6 +240,32 @@ namespace JSApi {
         }
 
         return 0;
+    }
+
+    duk_ret_t js_system_unload_addon(duk_context* ctx) {
+        if (duk_get_top(ctx) < 1) return DUK_RET_TYPE_ERROR;
+        std::wstring addonPath = Utils::ToWString(duk_get_string(ctx, 0));
+
+        if (PathUtils::IsPathRelative(addonPath)) {
+            addonPath = PathUtils::ResolvePath(addonPath, PathUtils::GetParentDir(s_CurrentScriptPath));
+        }
+
+        auto it = s_LoadedAddons.find(addonPath);
+        if (it != s_LoadedAddons.end()) {
+            if (it->second.unloadFn) {
+                try {
+                    it->second.unloadFn();
+                } catch (...) {
+                    Logging::Log(LogLevel::Error, L"Crash in NovadeskAddonUnload for %s", addonPath.c_str());
+                }
+            }
+            FreeLibrary(it->second.handle);
+            s_LoadedAddons.erase(it);
+            duk_push_boolean(ctx, true);
+        } else {
+            duk_push_boolean(ctx, false);
+        }
+        return 1;
     }
 
     void CleanupAddons() {
@@ -488,6 +515,8 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "getDisplayMetrics");
         duk_push_c_function(ctx, js_system_load_addon, 1);
         duk_put_prop_string(ctx, -2, "loadAddon");
+        duk_push_c_function(ctx, js_system_unload_addon, 1);
+        duk_put_prop_string(ctx, -2, "unloadAddon");
     }
 
     void BindSystemMonitors(duk_context* ctx) {

@@ -36,6 +36,8 @@ extern std::vector<Widget*> widgets;
 
 namespace JSApi {
 
+    static HWND s_MessageWindow = nullptr;
+
     void InitializeJavaScriptAPI(duk_context* ctx) {
         s_JsContext = ctx;
 
@@ -193,6 +195,13 @@ namespace JSApi {
     void OnMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         static const UINT WM_DISPATCH_IPC = WM_USER + 102;
 
+        if (message == WM_NOVADESK_DISPATCH) {
+            typedef void (*DispatchFn)(void*);
+            DispatchFn fn = (DispatchFn)wParam;
+            if (fn) fn((void*)lParam);
+            return;
+        }
+
         if (message == WM_DISPATCH_IPC) {
             DispatchPendingIPC(s_JsContext);
             return;
@@ -202,6 +211,11 @@ namespace JSApi {
     }
  
     void SetMessageWindow(HWND hWnd) {
+        s_MessageWindow = hWnd;
         TimerManager::Initialize(hWnd);
+    }
+
+    HWND GetMessageWindow() {
+        return s_MessageWindow;
     }
 }

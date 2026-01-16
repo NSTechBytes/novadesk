@@ -7,16 +7,17 @@
 
 #pragma once
 
+#include <Windows.h>
+#include "duktape/duktape.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include "duktape/duktape.h"
-
 // Define the initialization function signature
 // This function is required in every Novadesk addon DLL.
 // It is called when the addon is loaded via system.loadAddon().
-typedef void (*NovadeskAddonInitFn)(duk_context* ctx);
+typedef void (*NovadeskAddonInitFn)(duk_context* ctx, HWND hMsgWnd);
 
 // Define the cleanup function signature (optional)
 // If exported, it is called when the script is reloaded or Novadesk exits.
