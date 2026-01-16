@@ -17,6 +17,7 @@
 #include "JSJson.h"
 #include "JSPath.h"
 #include "JSNovadeskTray.h"
+#include "JSWebFetch.h"
 
 
 #include "../Widget.h"
@@ -67,6 +68,7 @@ namespace JSApi {
         BindSystemBaseMethods(ctx);
         BindJsonMethods(ctx);
         BindSystemMonitors(ctx);
+        BindWebFetch(ctx);
         duk_put_global_string(ctx, "system");
 
         // Register timers
@@ -192,6 +194,7 @@ namespace JSApi {
             return;
         }
         TimerManager::HandleMessage(message, wParam, lParam);
+        HandleWebFetchMessage(message, wParam, lParam);
     }
  
     void SetMessageWindow(HWND hWnd) {
