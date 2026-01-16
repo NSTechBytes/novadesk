@@ -18,6 +18,7 @@
 #include "JSPath.h"
 #include "JSNovadeskTray.h"
 #include "JSWebFetch.h"
+#include "JSAudio.h"
 
 
 #include "../Widget.h"
@@ -69,6 +70,7 @@ namespace JSApi {
         BindJsonMethods(ctx);
         BindSystemMonitors(ctx);
         BindWebFetch(ctx);
+        BindAudioMethods(ctx);
         duk_put_global_string(ctx, "system");
 
         // Register timers

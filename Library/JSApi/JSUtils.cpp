@@ -117,21 +117,7 @@ namespace JSApi {
     duk_ret_t js_include(duk_context* ctx) {
         std::wstring filename = Utils::ToWString(duk_require_string(ctx, 0));
         
-        // Determine the base directory for path resolution
-        std::wstring baseDir = PathUtils::GetWidgetsDir();
-        
-        // Check if __dirname is available in the global scope
-        duk_get_global_string(ctx, "__dirname");
-        if (duk_is_string(ctx, -1)) {
-            std::wstring dirname = Utils::ToWString(duk_get_string(ctx, -1));
-            if (!dirname.empty()) {
-                baseDir = dirname;
-                if (baseDir.back() != L'\\') baseDir += L'\\';
-            }
-        }
-        duk_pop(ctx);
-        
-        std::wstring fullPath = PathUtils::ResolvePath(filename, baseDir);
+        std::wstring fullPath = ResolveScriptPath(ctx, filename);
 
         std::string content = FileUtils::ReadFileContent(fullPath);
         if (content.empty()) {
@@ -278,5 +264,24 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "getFileVersion");
         duk_push_c_function(ctx, js_novadesk_getNovadeskVersion, 0);
         duk_put_prop_string(ctx, -2, "getNovadeskVersion");
+    }
+
+    std::wstring ResolveScriptPath(duk_context* ctx, const std::wstring& path) {
+        if (path.empty()) return L"";
+        if (!PathUtils::IsPathRelative(path)) return PathUtils::NormalizePath(path);
+
+        std::wstring baseDir = PathUtils::GetWidgetsDir();
+        
+        duk_get_global_string(ctx, "__dirname");
+        if (duk_is_string(ctx, -1)) {
+            std::wstring dirname = Utils::ToWString(duk_get_string(ctx, -1));
+            if (!dirname.empty()) {
+                baseDir = dirname;
+                if (baseDir.back() != L'\\') baseDir += L'\\';
+            }
+        }
+        duk_pop(ctx);
+
+        return PathUtils::ResolvePath(path, baseDir);
     }
 }

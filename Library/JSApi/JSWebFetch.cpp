@@ -11,6 +11,8 @@
 #include "../Logging.h"
 #include "../FileUtils.h"
 #include "../TimerManager.h"
+#include "../PathUtils.h"
+#include "JSUtils.h"
 #include <windows.h>
 #include <wininet.h>
 #include <thread>
@@ -86,6 +88,11 @@ namespace JSApi {
 
         std::wstring url = Utils::ToWString(duk_get_string(ctx, 0));
         if (!duk_is_function(ctx, 1)) return DUK_RET_TYPE_ERROR;
+
+        // Resolve local paths relative to the script directory if it's not a URL
+        if (url.find(L"http://") != 0 && url.find(L"https://") != 0 && url.find(L"file://") != 0 && PathUtils::IsPathRelative(url)) {
+            url = ResolveScriptPath(ctx, url);
+        }
 
         int callbackId = RegisterEventCallback(ctx, 1);
         HWND hNotifyWnd = TimerManager::GetWindow();

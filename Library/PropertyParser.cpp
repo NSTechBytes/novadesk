@@ -12,6 +12,7 @@
 #include "PathUtils.h"
 #include <string>
 #include "JSApi/JSEvents.h"
+#include "JSApi/JSUtils.h"
 
 namespace PropertyParser {
 
@@ -174,7 +175,7 @@ namespace PropertyParser {
         reader.GetBool("dynamicWindowSize", options.dynamicWindowSize);
 
         if (reader.GetString("script", options.scriptPath)) {
-            options.scriptPath = PathUtils::ResolvePath(options.scriptPath, finalBaseDir);
+            options.scriptPath = JSApi::ResolveScriptPath(ctx, options.scriptPath);
         }
     }
 
@@ -303,7 +304,7 @@ namespace PropertyParser {
 
         // Path
         if (reader.GetString("path", options.path)) {
-            options.path = PathUtils::ResolvePath(options.path, finalBaseDir);
+            options.path = JSApi::ResolveScriptPath(ctx, options.path);
         }
 
         // Image specific

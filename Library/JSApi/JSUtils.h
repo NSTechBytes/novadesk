@@ -34,4 +34,7 @@ namespace JSApi {
     // Binding functions
     void BindConsoleMethods(duk_context* ctx);
     void BindNovadeskAppMethods(duk_context* ctx);
+
+    // Helpers
+    std::wstring ResolveScriptPath(duk_context* ctx, const std::wstring& path);
 }
