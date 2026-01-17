@@ -218,4 +218,119 @@ namespace JSApi {
     HWND GetMessageWindow() {
         return s_MessageWindow;
     }
+
+    // ==============================================
+    // Host API Implementation
+    // ==============================================
+    
+    // Helper to wrap addon functions
+    static duk_ret_t addon_function_wrapper(duk_context* ctx) {
+        duk_push_current_function(ctx);
+        duk_get_prop_string(ctx, -1, "\xff" "fn");
+        typedef int (*AddonFn)(void*);
+        AddonFn fn = (AddonFn)duk_get_pointer(ctx, -1);
+        duk_pop_2(ctx);
+
+        if (fn) {
+            return (duk_ret_t)fn(ctx);
+        }
+        return 0;
+    }
+
+    static void host_RegisterString(void* ctx, const char* name, const char* value) {
+        if (value) duk_push_string((duk_context*)ctx, value);
+        else duk_push_null((duk_context*)ctx);
+        duk_put_prop_string((duk_context*)ctx, -2, name);
+    }
+
+    static void host_RegisterNumber(void* ctx, const char* name, double value) {
+        duk_push_number((duk_context*)ctx, value);
+        duk_put_prop_string((duk_context*)ctx, -2, name);
+    }
+
+    static void host_RegisterBool(void* ctx, const char* name, int value) {
+        duk_push_boolean((duk_context*)ctx, value != 0);
+        duk_put_prop_string((duk_context*)ctx, -2, name);
+    }
+
+    static void host_RegisterObjectStart(void* ctx, const char* name) {
+        duk_push_object((duk_context*)ctx);
+    }
+
+    static void host_RegisterObjectEnd(void* ctx, const char* name) {
+        duk_put_prop_string((duk_context*)ctx, -2, name);
+    }
+
+    static void host_RegisterArrayString(void* ctx, const char* name, const char** values, size_t count) {
+        duk_idx_t arr_idx = duk_push_array((duk_context*)ctx);
+        for (size_t i = 0; i < count; ++i) {
+            duk_push_string((duk_context*)ctx, values[i]);
+            duk_put_prop_index((duk_context*)ctx, arr_idx, (duk_uarridx_t)i);
+        }
+        duk_put_prop_string((duk_context*)ctx, -2, name);
+    }
+
+    static void host_RegisterArrayNumber(void* ctx, const char* name, const double* values, size_t count) {
+        duk_idx_t arr_idx = duk_push_array((duk_context*)ctx);
+        for (size_t i = 0; i < count; ++i) {
+            duk_push_number((duk_context*)ctx, values[i]);
+            duk_put_prop_index((duk_context*)ctx, arr_idx, (duk_uarridx_t)i);
+        }
+        duk_put_prop_string((duk_context*)ctx, -2, name);
+    }
+
+    static void host_RegisterFunction(void* ctx, const char* name, int (*func)(void*), int nargs) {
+        duk_push_c_function((duk_context*)ctx, addon_function_wrapper, (duk_idx_t)nargs);
+        duk_push_pointer((duk_context*)ctx, (void*)func);
+        duk_put_prop_string((duk_context*)ctx, -2, "\xff" "fn");
+        duk_put_prop_string((duk_context*)ctx, -2, name);
+    }
+
+    static void host_PushString(void* ctx, const char* value) { duk_push_string((duk_context*)ctx, value); }
+    static void host_PushNumber(void* ctx, double value) { duk_push_number((duk_context*)ctx, value); }
+    static void host_PushBool(void* ctx, int value) { duk_push_boolean((duk_context*)ctx, value != 0); }
+    static void host_PushNull(void* ctx) { duk_push_null((duk_context*)ctx); }
+    static void host_PushObject(void* ctx) { duk_push_object((duk_context*)ctx); }
+
+    static void* host_JsGetFunctionPtr(void* ctx, int index) {
+        if (duk_is_function((duk_context*)ctx, (duk_idx_t)index)) {
+            return duk_get_heapptr((duk_context*)ctx, (duk_idx_t)index);
+        }
+        return nullptr;
+    }
+
+    static void host_JsCallFunction(void* ctx, void* funcPtr, int nargs) {
+        duk_push_heapptr((duk_context*)ctx, funcPtr);
+        // Move arguments above the function
+        if (nargs > 0) {
+            duk_insert((duk_context*)ctx, -(nargs + 1));
+        }
+        if (duk_pcall((duk_context*)ctx, (duk_idx_t)nargs) != 0) {
+            duk_pop((duk_context*)ctx); // error
+        } else {
+            duk_pop((duk_context*)ctx); // result
+        }
+    }
+
+    static const NovadeskHostAPI s_HostAPI = {
+        host_RegisterString,
+        host_RegisterNumber,
+        host_RegisterBool,
+        host_RegisterObjectStart,
+        host_RegisterObjectEnd,
+        host_RegisterArrayString,
+        host_RegisterArrayNumber,
+        host_RegisterFunction,
+        host_PushString,
+        host_PushNumber,
+        host_PushBool,
+        host_PushNull,
+        host_PushObject,
+        host_JsGetFunctionPtr,
+        host_JsCallFunction
+    };
+
+    const NovadeskHostAPI* GetHostAPI() {
+        return &s_HostAPI;
+    }
 }

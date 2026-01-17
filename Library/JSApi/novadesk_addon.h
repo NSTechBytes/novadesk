@@ -8,19 +8,33 @@
 #pragma once
 
 #include <Windows.h>
-#include "duktape/duktape.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// Define the initialization function signature
-// This function is required in every Novadesk addon DLL.
-// It is called when the addon is loaded via system.loadAddon().
-typedef void (*NovadeskAddonInitFn)(duk_context* ctx, HWND hMsgWnd);
+typedef void* novadesk_context;
 
-// Define the cleanup function signature (optional)
-// If exported, it is called when the script is reloaded or Novadesk exits.
+struct NovadeskHostAPI {
+    void (*RegisterString)(novadesk_context ctx, const char* name, const char* value);
+    void (*RegisterNumber)(novadesk_context ctx, const char* name, double value);
+    void (*RegisterBool)(novadesk_context ctx, const char* name, int value);
+    void (*RegisterObjectStart)(novadesk_context ctx, const char* name);
+    void (*RegisterObjectEnd)(novadesk_context ctx, const char* name);
+    void (*RegisterArrayString)(novadesk_context ctx, const char* name, const char** values, size_t count);
+    void (*RegisterArrayNumber)(novadesk_context ctx, const char* name, const double* values, size_t count);
+    void (*RegisterFunction)(novadesk_context ctx, const char* name, int (*func)(novadesk_context ctx), int nargs);
+    void (*PushString)(novadesk_context ctx, const char* value);
+    void (*PushNumber)(novadesk_context ctx, double value);
+    void (*PushBool)(novadesk_context ctx, int value);
+    void (*PushNull)(novadesk_context ctx);
+    void (*PushObject)(novadesk_context ctx);
+    void* (*JsGetFunctionPtr)(novadesk_context ctx, int index);
+    void (*JsCallFunction)(novadesk_context ctx, void* funcPtr, int nargs);
+};
+
+typedef void (*NovadeskAddonInitFn)(novadesk_context ctx, HWND hMsgWnd, const NovadeskHostAPI* host);
+
 typedef void (*NovadeskAddonUnloadFn)();
 
 #ifdef __cplusplus

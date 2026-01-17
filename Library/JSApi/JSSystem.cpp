@@ -231,7 +231,7 @@ namespace JSApi {
 
         // Call initialization. The addon may push a return value.
         int topBefore = duk_get_top(ctx);
-        initFn(ctx, JSApi::GetMessageWindow());
+        initFn(ctx, JSApi::GetMessageWindow(), JSApi::GetHostAPI());
         int topAfter = duk_get_top(ctx);
 
         if (topAfter > topBefore) {
