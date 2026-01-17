@@ -19,6 +19,8 @@
 #include "JSNovadeskTray.h"
 #include "JSWebFetch.h"
 #include "JSAudio.h"
+#include "JSRegistry.h"
+#include "JSClipboard.h"
 
 
 #include "../Widget.h"
@@ -73,6 +75,8 @@ namespace JSApi {
         BindSystemMonitors(ctx);
         BindWebFetch(ctx);
         BindAudioMethods(ctx);
+        BindRegistryMethods(ctx);
+        BindClipboardMethods(ctx);
         duk_put_global_string(ctx, "system");
 
         // Register timers
