@@ -21,6 +21,7 @@
 #include "JSAudio.h"
 #include "JSRegistry.h"
 #include "JSClipboard.h"
+#include "JSPower.h"
 
 
 #include "../Widget.h"
@@ -77,6 +78,7 @@ namespace JSApi {
         BindAudioMethods(ctx);
         BindRegistryMethods(ctx);
         BindClipboardMethods(ctx);
+        BindPowerMethods(ctx);
         duk_put_global_string(ctx, "system");
 
         // Register timers
