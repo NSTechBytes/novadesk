@@ -292,6 +292,25 @@ namespace JSApi {
     static void host_PushNull(void* ctx) { duk_push_null((duk_context*)ctx); }
     static void host_PushObject(void* ctx) { duk_push_object((duk_context*)ctx); }
 
+    static double host_GetNumber(void* ctx, int index) { return duk_get_number((duk_context*)ctx, (duk_idx_t)index); }
+    static const char* host_GetString(void* ctx, int index) { return duk_get_string((duk_context*)ctx, (duk_idx_t)index); }
+    static int host_GetBool(void* ctx, int index) { return duk_get_boolean((duk_context*)ctx, (duk_idx_t)index); }
+
+    static int host_IsNumber(void* ctx, int index) { return duk_is_number((duk_context*)ctx, (duk_idx_t)index); }
+    static int host_IsString(void* ctx, int index) { return duk_is_string((duk_context*)ctx, (duk_idx_t)index); }
+    static int host_IsBool(void* ctx, int index) { return duk_is_boolean((duk_context*)ctx, (duk_idx_t)index); }
+    static int host_IsObject(void* ctx, int index) { return duk_is_object((duk_context*)ctx, (duk_idx_t)index); }
+    static int host_IsFunction(void* ctx, int index) { return duk_is_function((duk_context*)ctx, (duk_idx_t)index); }
+    static int host_IsNull(void* ctx, int index) { return duk_is_null((duk_context*)ctx, (duk_idx_t)index); }
+
+    static int host_GetTop(void* ctx) { return (int)duk_get_top((duk_context*)ctx); }
+    static void host_Pop(void* ctx) { duk_pop((duk_context*)ctx); }
+    static void host_PopN(void* ctx, int n) { duk_pop_n((duk_context*)ctx, (duk_idx_t)n); }
+
+    static void host_ThrowError(void* ctx, const char* message) {
+        duk_error((duk_context*)ctx, DUK_ERR_ERROR, "%s", message);
+    }
+
     static void* host_JsGetFunctionPtr(void* ctx, int index) {
         if (duk_is_function((duk_context*)ctx, (duk_idx_t)index)) {
             return duk_get_heapptr((duk_context*)ctx, (duk_idx_t)index);
@@ -326,6 +345,19 @@ namespace JSApi {
         host_PushBool,
         host_PushNull,
         host_PushObject,
+        host_GetNumber,
+        host_GetString,
+        host_GetBool,
+        host_IsNumber,
+        host_IsString,
+        host_IsBool,
+        host_IsObject,
+        host_IsFunction,
+        host_IsNull,
+        host_GetTop,
+        host_Pop,
+        host_PopN,
+        host_ThrowError,
         host_JsGetFunctionPtr,
         host_JsCallFunction
     };
