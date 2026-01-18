@@ -132,10 +132,6 @@ function createClockWidget() {
 
   if (config.is_first_launch) {
       clockWindow.setProperties({ x: defaultX, y: defaultY });
-  } else if (config.clock_widget_position) {
-      clockWindow.setProperties(config.clock_widget_position);
-  } else {
-      clockWindow.setProperties({ x: defaultX, y: defaultY });
   }
 
   clockWindow.setContextMenu([
@@ -186,10 +182,6 @@ function createSystemWidget() {
 
   if (config.is_first_launch) {
       systemWindow.setProperties({ x: defaultX, y: defaultY });
-  } else if (config.system_widget_position) {
-      systemWindow.setProperties(config.system_widget_position);
-  } else {
-      systemWindow.setProperties({ x: defaultX, y: defaultY });
   }
 
   systemWindow.setContextMenu([
@@ -235,27 +227,13 @@ function createNetworkWidget() {
 
   // Position Logic
   var defaultX = metrics.primary.screenArea.width - 210 - 20;
-  // Calculate Y based on system if present, else check clock, else default
-  var prevProps = systemWindow ? systemWindow.getProperties() : (clockWindow ? clockWindow.getProperties() : null);
-  // Note: If falling back to clock, we should add clock's height. If purely default (no prev widgets), just 20.
-  // Actually, strictly following previous logic: it was based on systemWindow.
-  // If systemWindow is missing, it should probably go under clock, or top if neither.
-  // Let's try to be smart but simple consistently.
-  
   var defaultY = 20;
   if (systemWindow) {
       var p = systemWindow.getProperties();
       defaultY = p.y + p.height + 20;
-  } else if (clockWindow) {
-      var p = clockWindow.getProperties();
-      defaultY = p.y + p.height + 20; // Fallback to under clock if system is missing
   }
 
   if (config.is_first_launch) {
-      networkWindow.setProperties({ x: defaultX, y: defaultY });
-  } else if (config.network_widget_position) {
-      networkWindow.setProperties(config.network_widget_position);
-  } else {
       networkWindow.setProperties({ x: defaultX, y: defaultY });
   }
 
@@ -297,23 +275,12 @@ function createWelcomeWidget() {
     show: false
   });
 
-  // Position Logic
-  // We can't get properties before setting properties if we want to center it accurately using defaults
-  // But wait, we can get default size from the window creation if we didn't specify it?
-  // The original code did: welcomeWindow = new...; props = getProperties(); setProperties(...);
-  
-  // We need to temporarily force a property update to get dimensions if we want to center based on content.
-  // But `getProperties` should work immediately after creation.
   var tempProps = welcomeWindow.getProperties();
   
   var defaultX = (metrics.primary.screenArea.width - tempProps.width) / 2;
   var defaultY = (metrics.primary.screenArea.height - tempProps.height) / 2;
 
   if (config.is_first_launch) {
-      welcomeWindow.setProperties({ x: defaultX, y: defaultY });
-  } else if (config.welcome_widget_position) {
-      welcomeWindow.setProperties(config.welcome_widget_position);
-  } else {
       welcomeWindow.setProperties({ x: defaultX, y: defaultY });
   }
 
