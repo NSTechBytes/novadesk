@@ -602,15 +602,6 @@ namespace PropertyParser {
         duk_push_int(ctx, element->GetPaddingBottom()); duk_put_prop_index(ctx, -2, 3);
         duk_put_prop_string(ctx, -2, "padding");
 
-        // Mouse Actions
-        // We only support function callbacks now, so string push is removed or could push "[Function]"
-        // But for properties panel we might want to know if it has one?
-        // For now, let's omit pushing them back as string, or push empty/placeholder
-        /*
-        if (element->m_OnLeftMouseUpCallbackId != -1) { duk_push_string(ctx, "[Function]"); duk_put_prop_string(ctx, -2, "onleftmouseup"); }
-        // ... etc (omitted since we can't easily stringify the function back from just ID in this context easily without re-getting from stash)
-        */
-
         // Type Specific
         if (element->GetType() == ELEMENT_TEXT) {
             TextElement* t = static_cast<TextElement*>(element);
@@ -681,10 +672,8 @@ namespace PropertyParser {
         if (!element || !duk_is_object(ctx, -1)) return;
         
         ElementOptions options;
-        // Parse base options from top of stack
         PropertyReader reader(ctx);
         ParseElementOptionsInternal(ctx, options);
-        // Apply to element
         ApplyElementOptions(element, options);
     }
 
@@ -694,9 +683,6 @@ namespace PropertyParser {
 
     void ApplyElementOptions(Element* element, const ElementOptions& options) {
         if (!element) return;
-
-        // Only apply if provided (assuming some sentinel values or separate flags for "defined")
-        // For simplicity, we apply everything. In setElementProperties, we'll only parse what's provided.
         
         element->SetPosition(options.x, options.y);
         if (options.width > 0 || options.height > 0) {

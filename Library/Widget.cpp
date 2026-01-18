@@ -432,8 +432,11 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         {
             widget->HandleMouseMessage(message, wParam, lParam);
             
-            // Bring widget to front when clicked (for ondesktop/normal)
-            widget->ChangeSingleZPos(widget->m_WindowZPosition);
+            // Bring widget to front when clicked (for normal)
+            if (widget->m_WindowZPosition != ZPOSITION_ONDESKTOP && widget->m_WindowZPosition != ZPOSITION_ONBOTTOM)
+            {
+                widget->ChangeSingleZPos(widget->m_WindowZPosition);
+            }
             
             if (widget->m_Options.draggable)
             {
@@ -513,9 +516,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             widget->HandleMouseMessage(message, wParam, lParam);
         }
         return 0;
-        
 
-        
     case WM_SETCURSOR:
         if (LOWORD(lParam) == HTCLIENT && widget)
         {
@@ -578,6 +579,16 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
         return 0;
 
+    case WM_MOUSEACTIVATE:
+        if (widget)
+        {
+            if (widget->m_WindowZPosition == ZPOSITION_ONDESKTOP || widget->m_WindowZPosition == ZPOSITION_ONBOTTOM)
+            {
+                return MA_NOACTIVATE;
+            }
+        }
+        return MA_ACTIVATE;
+
     case WM_NCHITTEST:
         return HTCLIENT; // We handle everything in client area to get mouse messages
         
@@ -606,8 +617,6 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                         widget->m_MouseOverElement->m_IsMouseOver = false;
                         
-                        // Optional: Trigger leave event? 
-                        // Rainmeter seems to trigger leave when covered. Let's do it.
                         int leaveId = widget->m_MouseOverElement->m_OnMouseLeaveCallbackId;
                         if (leaveId != -1)
                              JSApi::CallEventCallback(leaveId);
@@ -631,7 +640,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     wp->hwndInsertAfter = System::GetBackmostTopWindow();
                 }
             }
-            else if (widget->m_WindowZPosition == ZPOSITION_ONBOTTOM)
+            else if (widget->m_WindowZPosition == ZPOSITION_ONBOTTOM || widget->m_WindowZPosition == ZPOSITION_ONDESKTOP)
             {
                 wp->flags |= SWP_NOZORDER;
             }
@@ -799,7 +808,6 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 // Content Management Methods
 // ============================================================================
 
-// Helper to apply common element options
 /*
 ** Add an image content item to the widget.
 ** The image will be loaded and cached for rendering.

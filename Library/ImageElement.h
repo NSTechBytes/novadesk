@@ -81,25 +81,15 @@ public:
 private:
     std::wstring m_ImagePath;
     Gdiplus::Bitmap* m_Image;
-    
-    // 0 = Stretch, 1 = Preserve, 2 = Crop
     ImageAspectRatio m_PreserveAspectRatio = IMAGE_ASPECT_STRETCH;
-    
     bool m_HasImageTint = false;
     COLORREF m_ImageTint = 0;
     BYTE m_ImageTintAlpha = 255;
-    
-    // New properties
     BYTE m_ImageAlpha = 255;
     bool m_Grayscale = false;
     bool m_HasColorMatrix = false;
     float m_ColorMatrix[5][5];
-
-    // Newest properties
-    // Newest properties
     bool m_Tile = false;
-    
-    // Transformation matrix (6 elements: m11, m12, m21, m22, dx, dy)
     bool m_HasTransformMatrix = false;
     float m_TransformMatrix[6];
 

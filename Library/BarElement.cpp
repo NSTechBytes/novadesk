@@ -17,10 +17,8 @@ void BarElement::Render(Gdiplus::Graphics& graphics) {
     int h = GetHeight();
     if (w <= 0 || h <= 0) return;
 
-    // 1. Render Background (Base Element)
     RenderBackground(graphics);
 
-    // 2. Calculate Bar Area
     if (m_HasBarColor || m_HasBarGradient) {
         float val = (m_Value < 0.0f) ? 0.0f : (m_Value > 1.0f) ? 1.0f : m_Value;
         
@@ -69,7 +67,5 @@ void BarElement::Render(Gdiplus::Graphics& graphics) {
             delete barBrush;
         }
     }
-
-    // 3. Render Bevel (Base Element)
     RenderBevel(graphics);
 }

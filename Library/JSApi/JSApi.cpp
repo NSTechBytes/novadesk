@@ -22,8 +22,6 @@
 #include "JSRegistry.h"
 #include "JSClipboard.h"
 #include "JSPower.h"
-
-
 #include "../Widget.h"
 #include "../Settings.h"
 #include "../Logging.h"

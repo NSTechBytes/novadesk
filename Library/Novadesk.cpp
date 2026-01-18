@@ -58,13 +58,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         FILE* fDummy;
         freopen_s(&fDummy, "CONOUT$", "w", stdout);
         freopen_s(&fDummy, "CONOUT$", "w", stderr);
-        // Also enable wide output for stdout
         _setmode(_fileno(stdout), _O_U16TEXT);
     }
 
     // Clear log file on startup
-    // This ensures a fresh log for the new session, while subsequent refreshes 
-    // (handled in Settings.cpp/JSUtils.cpp) will append to preserve history.
     std::wstring logPath = PathUtils::GetExeDir() + L"logs.log";
     DeleteFileW(logPath.c_str());
 
