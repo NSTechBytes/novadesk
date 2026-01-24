@@ -23,13 +23,28 @@ TextElement::TextElement(const std::wstring& id, int x, int y, int w, int h,
 
 void TextElement::Render(ID2D1DeviceContext* context)
 {
-    // Draw background first
-    RenderBackground(context);
+    D2D1_MATRIX_3X2_F originalTransform;
+    context->GetTransform(&originalTransform);
 
-    // Draw bevel second
+    // Apply rotation around the center of the element's total bounds
+    GfxRect bounds = GetBounds();
+    float centerX = bounds.X + bounds.Width / 2.0f;
+    float centerY = bounds.Y + bounds.Height / 2.0f;
+
+    if (m_Rotate != 0.0f)
+    {
+        context->SetTransform(D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY)) * originalTransform);
+    }
+
+    // Draw background and bevel inside the transform
+    RenderBackground(context);
     RenderBevel(context);
 
-    if (m_Text.empty()) return;
+    if (m_Text.empty())
+    {
+        context->SetTransform(originalTransform);
+        return;
+    }
 
     // Create text format
     std::wstring fontFace = m_FontFace.empty() ? L"Arial" : m_FontFace;
@@ -46,13 +61,12 @@ void TextElement::Render(ID2D1DeviceContext* context)
         pTextFormat.GetAddressOf()
     );
 
-    if (FAILED(hr)) {
+    if (FAILED(hr))
+    {
         Logging::Log(LogLevel::Error, L"TextElement: Failed to create text format for font '%s'", fontFace.c_str());
+        context->SetTransform(originalTransform);
         return;
     }
-
-    Logging::Log(LogLevel::Debug, L"TextElement: Loaded font '%s' (size: %d, bold: %s, italic: %s)", 
-        fontFace.c_str(), m_FontSize, m_Bold ? L"YES" : L"NO", m_Italic ? L"YES" : L"NO");
 
     // Set alignment
     switch (m_TextAlign)
@@ -93,10 +107,6 @@ void TextElement::Render(ID2D1DeviceContext* context)
         break;
     }
 
-    // Set trimming/clipping and wrapping behavior berdasarkan standar:
-    // "none" / "wrap": Enable wrapping if width provided
-    // "clip" / "ellipsis": Single line only
-    
     bool allowWrap = (m_ClipString == TEXT_CLIP_NONE || m_ClipString == TEXT_CLIP_WRAP);
     
     if (allowWrap)
@@ -120,19 +130,7 @@ void TextElement::Render(ID2D1DeviceContext* context)
             pTextFormat->SetTrimming(&trimming, nullptr);
         }
     }
-    
-    // Apply rotation if specified
-    D2D1_MATRIX_3X2_F originalTransform;
-    context->GetTransform(&originalTransform);
-    if (m_Rotate != 0.0f)
-    {
-        GfxRect bounds = GetBounds();
-        D2D1_POINT_2F center = D2D1::Point2F(bounds.X + bounds.Width / 2.0f, bounds.Y + bounds.Height / 2.0f);
-        context->SetTransform(D2D1::Matrix3x2F::Rotation(m_Rotate, center) * originalTransform);
-    }
-    
-    // Apply padding to layout rectangle
-    GfxRect bounds = GetBounds();
+
     float layoutX = (float)bounds.X + m_PaddingLeft;
     float layoutY = (float)bounds.Y + m_PaddingTop;
     float layoutW = (float)bounds.Width - m_PaddingLeft - m_PaddingRight;
@@ -153,7 +151,7 @@ void TextElement::Render(ID2D1DeviceContext* context)
         context->DrawText(m_Text.c_str(), (UINT32)m_Text.length(), pTextFormat.Get(), layoutRect, pBrush.Get());
     }
     
-    // Reset transform
+    // Restore transform
     context->SetTransform(originalTransform);
 }
 
@@ -188,8 +186,8 @@ int TextElement::GetAutoWidth()
 
     int contentW = (int)ceil(metrics.widthIncludingTrailingWhitespace);
     
-    Logging::Log(LogLevel::Debug, L"TextElement(%s): GetAutoWidth = %d (Font: %s, Size: %d, Text: '%s')", 
-        m_Id.c_str(), contentW, fontFace.c_str(), m_FontSize, m_Text.substr(0, 20).c_str());
+    // Logging::Log(LogLevel::Debug, L"TextElement(%s): GetAutoWidth = %d (Font: %s, Size: %d, Text: '%s')", 
+    //     m_Id.c_str(), contentW, fontFace.c_str(), m_FontSize, m_Text.substr(0, 20).c_str());
 
     if (!m_WDefined && (m_ClipString == TEXT_CLIP_ON || m_ClipString == TEXT_CLIP_ELLIPSIS) && m_Width > 0)
     {
@@ -249,8 +247,8 @@ int TextElement::GetAutoHeight()
 
     int contentH = (int)ceil(metrics.height);
     
-    Logging::Log(LogLevel::Debug, L"TextElement(%s): GetAutoHeight = %d (Font: %s, Size: %d, Wrap: %s, MaxWidth: %.0f)", 
-        m_Id.c_str(), contentH, fontFace.c_str(), m_FontSize, wrap ? L"YES" : L"NO", maxWidth);
+    // Logging::Log(LogLevel::Debug, L"TextElement(%s): GetAutoHeight = %d (Font: %s, Size: %d, Wrap: %s, MaxWidth: %.0f)", 
+    //     m_Id.c_str(), contentH, fontFace.c_str(), m_FontSize, wrap ? L"YES" : L"NO", maxWidth);
 
     if (!m_HDefined && (m_ClipString == TEXT_CLIP_ON || m_ClipString == TEXT_CLIP_ELLIPSIS) && m_Height > 0)
     {

@@ -44,27 +44,55 @@ void ImageElement::UpdateImage(const std::wstring& path)
 
 void ImageElement::Render(ID2D1DeviceContext* context)
 {
-    // Draw background first
-    RenderBackground(context);
-
-    // Draw bevel second
-    RenderBevel(context);
-
-    EnsureBitmap(context);
-    if (!m_D2DBitmap) return;
-    
-    D2D1_SIZE_F imgSize = m_D2DBitmap->GetSize();
-    
     int w = GetWidth();
     int h = GetHeight();
     if (w <= 0 || h <= 0) return;
+
+    D2D1_MATRIX_3X2_F originalTransform;
+    context->GetTransform(&originalTransform);
+
+    // Apply rotation around the center of the element's total bounds
+    GfxRect bounds = GetBounds();
+    float centerX = bounds.X + bounds.Width / 2.0f;
+    float centerY = bounds.Y + bounds.Height / 2.0f;
+
+    if (m_HasTransformMatrix)
+    {
+        D2D1::Matrix3x2F matrix = D2D1::Matrix3x2F(
+            m_TransformMatrix[0], m_TransformMatrix[1],
+            m_TransformMatrix[2], m_TransformMatrix[3],
+            m_TransformMatrix[4], m_TransformMatrix[5]
+        );
+        context->SetTransform(matrix * D2D1::Matrix3x2F::Translation(centerX, centerY) * originalTransform);
+    }
+    else if (m_Rotate != 0.0f)
+    {
+        context->SetTransform(D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY)) * originalTransform);
+    }
+
+    // Draw background and bevel inside the transform
+    RenderBackground(context);
+    RenderBevel(context);
+
+    EnsureBitmap(context);
+    if (!m_D2DBitmap)
+    {
+        context->SetTransform(originalTransform);
+        return;
+    }
+    
+    D2D1_SIZE_F imgSize = m_D2DBitmap->GetSize();
     
     int contentX = m_X + m_PaddingLeft;
     int contentY = m_Y + m_PaddingTop;
     int contentW = w - m_PaddingLeft - m_PaddingRight;
     int contentH = h - m_PaddingTop - m_PaddingBottom;
     
-    if (contentW <= 0 || contentH <= 0) return;
+    if (contentW <= 0 || contentH <= 0)
+    {
+        context->SetTransform(originalTransform);
+        return;
+    }
     
     D2D1_RECT_F finalRect = D2D1::RectF((float)contentX, (float)contentY, (float)(contentX + contentW), (float)(contentY + contentH));
     D2D1_RECT_F srcRect = D2D1::RectF(0, 0, imgSize.width, imgSize.height);
@@ -99,28 +127,7 @@ void ImageElement::Render(ID2D1DeviceContext* context)
         srcRect.bottom = srcRect.top + srcH;
     }
     
-    D2D1_MATRIX_3X2_F originalTransform;
-    context->GetTransform(&originalTransform);
-    
-    if (m_HasTransformMatrix)
-    {
-        D2D1::Matrix3x2F matrix = D2D1::Matrix3x2F(
-            m_TransformMatrix[0], m_TransformMatrix[1],
-            m_TransformMatrix[2], m_TransformMatrix[3],
-            m_TransformMatrix[4], m_TransformMatrix[5]
-        );
-        
-        float centerX = finalRect.left + (finalRect.right - finalRect.left) / 2.0f;
-        float centerY = finalRect.top + (finalRect.bottom - finalRect.top) / 2.0f;
-        context->SetTransform(matrix * D2D1::Matrix3x2F::Translation(centerX, centerY) * originalTransform);
-        // Note: Translation needs care here compared to GDI+ TranslateTransform order
-    }
-    else if (m_Rotate != 0.0f)
-    {
-        float centerX = finalRect.left + (finalRect.right - finalRect.left) / 2.0f;
-        float centerY = finalRect.top + (finalRect.bottom - finalRect.top) / 2.0f;
-        context->SetTransform(D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY)) * originalTransform);
-    }
+    // Rotation already applied above
 
     float opacity = m_ImageAlpha / 255.0f;
     D2D1_BITMAP_INTERPOLATION_MODE interp = m_AntiAlias ? D2D1_BITMAP_INTERPOLATION_MODE_LINEAR : D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR;
@@ -258,11 +265,30 @@ int ImageElement::GetAutoHeight()
 
 bool ImageElement::HitTest(int x, int y)
 {
+    // Element::HitTest already handles the rotation transform logic 
+    // to check if (x,y) is within the rotated bounding box.
     if (!Element::HitTest(x, y)) return false;
+    
+    // For pixel-level precision, we need the transformed coordinates again
+    float targetX = (float)x;
+    float targetY = (float)y;
+
+    if (m_Rotate != 0.0f) {
+        GfxRect bounds = GetBounds();
+        float centerX = bounds.X + bounds.Width / 2.0f;
+        float centerY = bounds.Y + bounds.Height / 2.0f;
+        D2D1::Matrix3x2F rotation = D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY));
+        if (rotation.Invert()) {
+            D2D1_POINT_2F transformed = rotation.TransformPoint(D2D1::Point2F((float)x, (float)y));
+            targetX = transformed.x;
+            targetY = transformed.y;
+        }
+    }
+
     if (m_HasSolidColor && m_SolidAlpha > 0) return true;
     if (!m_pWICBitmap) return false;
 
-    // Map (x, y) to image pixel coordinates
+    // Map the transformed (local-space) coordinates to image pixels
     int contentX = m_X + m_PaddingLeft;
     int contentY = m_Y + m_PaddingTop;
     int contentW = GetWidth() - m_PaddingLeft - m_PaddingRight;
@@ -270,8 +296,8 @@ bool ImageElement::HitTest(int x, int y)
 
     if (contentW <= 0 || contentH <= 0) return false;
 
-    float relX = (float)(x - contentX);
-    float relY = (float)(y - contentY);
+    float relX = targetX - contentX;
+    float relY = targetY - contentY;
 
     UINT imgW, imgH;
     m_pWICBitmap->GetSize(&imgW, &imgH);

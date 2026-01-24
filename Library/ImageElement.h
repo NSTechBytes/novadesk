@@ -39,8 +39,6 @@ public:
 
     virtual bool HitTest(int x, int y) override;
 
-    void SetRotate(float angle) { m_Rotate = angle; }
-    void SetAntiAlias(bool enable) { m_AntiAlias = enable; }
     void SetPreserveAspectRatio(ImageAspectRatio mode) { m_PreserveAspectRatio = mode; }
     void SetImageTint(COLORREF color, BYTE alpha) { 
         m_ImageTint = color; 
@@ -87,8 +85,6 @@ private:
     Microsoft::WRL::ComPtr<ID2D1Bitmap> m_D2DBitmap;
     Microsoft::WRL::ComPtr<IWICBitmap> m_pWICBitmap;
     ImageAspectRatio m_PreserveAspectRatio = IMAGE_ASPECT_STRETCH;
-    float m_Rotate = 0.0f;
-    bool m_AntiAlias = true;
     bool m_HasImageTint = false;
     COLORREF m_ImageTint = 0;
     BYTE m_ImageTintAlpha = 255;

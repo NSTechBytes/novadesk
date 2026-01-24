@@ -15,10 +15,23 @@ BarElement::BarElement(const std::wstring& id, int x, int y, int w, int h, float
 
 void BarElement::Render(ID2D1DeviceContext* context) {
     context->SetAntialiasMode(m_AntiAlias ? D2D1_ANTIALIAS_MODE_PER_PRIMITIVE : D2D1_ANTIALIAS_MODE_ALIASED);
+    
     int w = GetWidth();
     int h = GetHeight();
     if (w <= 0 || h <= 0) return;
 
+    D2D1_MATRIX_3X2_F originalTransform;
+    context->GetTransform(&originalTransform);
+
+    // Apply rotation around center
+    if (m_Rotate != 0.0f) {
+        GfxRect bounds = GetBounds();
+        float centerX = bounds.X + bounds.Width / 2.0f;
+        float centerY = bounds.Y + bounds.Height / 2.0f;
+        context->SetTransform(D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY)) * originalTransform);
+    }
+
+    // Draw background first
     RenderBackground(context);
 
     if (m_HasBarColor || m_HasBarGradient) {
@@ -58,5 +71,10 @@ void BarElement::Render(ID2D1DeviceContext* context) {
             }
         }
     }
+
+    // Draw bevel last
     RenderBevel(context);
+
+    // Restore transform
+    context->SetTransform(originalTransform);
 }

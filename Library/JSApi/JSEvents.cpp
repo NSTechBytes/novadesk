@@ -280,7 +280,7 @@ namespace JSApi {
         
         duk_pop_2(ctx); // pop __events, stash
 
-        Logging::Log(LogLevel::Debug, L"Event callback registered: %d", id);
+        // Logging::Log(LogLevel::Debug, L"Event callback registered: %d", id);
         return id;
     }
 

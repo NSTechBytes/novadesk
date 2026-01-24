@@ -871,7 +871,7 @@ void Widget::AddText(const PropertyParser::TextOptions& options)
                              options.text, options.fontFace, options.fontSize, options.fontColor, options.alpha,
                              options.bold, options.italic, options.textAlign, options.clip);
                              
-    Logging::Log(LogLevel::Debug, L"Widget::AddText: Created TextElement id='%s', text='%s', x=%d, y=%d", element->GetId().c_str(), element->GetText().c_str(), element->GetX(), element->GetY());
+    // Logging::Log(LogLevel::Debug, L"Widget::AddText: Created TextElement id='%s', text='%s', x=%d, y=%d", element->GetId().c_str(), element->GetText().c_str(), element->GetX(), element->GetY());
 
     PropertyParser::ApplyElementOptions(element, options);
 
@@ -1033,8 +1033,8 @@ void Widget::UpdateLayeredWindowContent()
             maxX = (std::max)(maxX, bounds.X + bounds.Width);
             maxY = (std::max)(maxY, bounds.Y + bounds.Height);
             
-            Logging::Log(LogLevel::Debug, L"Widget::UpdateSize: Element '%s' contributing to bounds: [X:%d, Y:%d, W:%d, H:%d] -> TargetMax: [%d, %d]", 
-                element->GetId().c_str(), bounds.X, bounds.Y, bounds.Width, bounds.Height, maxX, maxY);
+        //     Logging::Log(LogLevel::Debug, L"Widget::UpdateSize: Element '%s' contributing to bounds: [X:%d, Y:%d, W:%d, H:%d] -> TargetMax: [%d, %d]", 
+        //         element->GetId().c_str(), bounds.X, bounds.Y, bounds.Width, bounds.Height, maxX, maxY);
         }
         
         if (shouldCalcW) calcW = maxX;
@@ -1047,8 +1047,8 @@ void Widget::UpdateLayeredWindowContent()
         // If size changed, update window and options
         if (calcW != m_Options.width || calcH != m_Options.height)
         {
-            Logging::Log(LogLevel::Info, L"Widget::UpdateSize: Resizing window '%s' from %dx%d to %dx%d", 
-                m_Options.id.c_str(), m_Options.width, m_Options.height, calcW, calcH);
+            // Logging::Log(LogLevel::Info, L"Widget::UpdateSize: Resizing window '%s' from %dx%d to %dx%d", 
+            //     m_Options.id.c_str(), m_Options.width, m_Options.height, calcW, calcH);
             m_Options.width = calcW;
             m_Options.height = calcH;
             SetWindowPos(m_hWnd, NULL, 0, 0, calcW, calcH, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
@@ -1089,7 +1089,7 @@ void Widget::UpdateLayeredWindowContent()
             bool useHW = Settings::GetGlobalBool("useHardwareAcceleration", false);
             D2D1_RENDER_TARGET_TYPE rtType = useHW ? D2D1_RENDER_TARGET_TYPE_DEFAULT : D2D1_RENDER_TARGET_TYPE_SOFTWARE;
             
-            Logging::Log(LogLevel::Info, L"Creating Direct2D Context: Hardware Acceleration = %s", useHW ? L"ON" : L"OFF");
+            // Logging::Log(LogLevel::Info, L"Creating Direct2D Context: Hardware Acceleration = %s", useHW ? L"ON" : L"OFF");
 
             D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
                 rtType,
