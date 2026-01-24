@@ -7,6 +7,7 @@
 
 #include "TextElement.h"
 #include "Logging.h"
+#include "Direct2DHelper.h"
 
 using namespace Gdiplus;
 
@@ -22,50 +23,48 @@ TextElement::TextElement(const std::wstring& id, int x, int y, int w, int h,
 {
 }
 
-void TextElement::Render(Graphics& graphics)
+void TextElement::Render(ID2D1DeviceContext* context)
 {
     // Draw background first
-    RenderBackground(graphics);
+    RenderBackground(context);
 
     // Draw bevel second
-    RenderBevel(graphics);
+    RenderBevel(context);
 
-    // Set antialiasing mode
-    if (m_AntiAlias) {
-        graphics.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAlias);
-    } else {
-        graphics.SetTextRenderingHint(Gdiplus::TextRenderingHintSingleBitPerPixel);
-    }
+    if (m_Text.empty()) return;
 
-    // Create font
-    INT fontStyle = FontStyleRegular;
-    if (m_Bold) fontStyle |= FontStyleBold;
-    if (m_Italic) fontStyle |= FontStyleItalic;
-    
-    Font font(m_FontFace.c_str(), (REAL)m_FontSize, fontStyle, UnitPixel);
-    
-    // Create brush with color and alpha
-    Color textColor(m_Alpha, GetRValue(m_FontColor), GetGValue(m_FontColor), GetBValue(m_FontColor));
-    SolidBrush brush(textColor);
-    
-    // Set up string format for alignment
-    StringFormat format;
+    // Create text format
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
+    HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
+        m_FontFace.c_str(),
+        nullptr,
+        m_Bold ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_REGULAR,
+        m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL,
+        (float)m_FontSize,
+        L"", // locale
+        pTextFormat.GetAddressOf()
+    );
+
+    if (FAILED(hr)) return;
+
+    // Set alignment
     switch (m_TextAlign)
     {
     case TEXT_ALIGN_LEFT_TOP:
     case TEXT_ALIGN_LEFT_CENTER:
     case TEXT_ALIGN_LEFT_BOTTOM:
-        format.SetAlignment(StringAlignmentNear);
+        pTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         break;
     case TEXT_ALIGN_CENTER_TOP:
     case TEXT_ALIGN_CENTER_CENTER:
     case TEXT_ALIGN_CENTER_BOTTOM:
-        format.SetAlignment(StringAlignmentCenter);
+        pTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
         break;
     case TEXT_ALIGN_RIGHT_TOP:
     case TEXT_ALIGN_RIGHT_CENTER:
     case TEXT_ALIGN_RIGHT_BOTTOM:
-        format.SetAlignment(StringAlignmentFar);
+        pTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
         break;
     }
 
@@ -74,80 +73,117 @@ void TextElement::Render(Graphics& graphics)
     case TEXT_ALIGN_LEFT_TOP:
     case TEXT_ALIGN_CENTER_TOP:
     case TEXT_ALIGN_RIGHT_TOP:
-        format.SetLineAlignment(StringAlignmentNear);
+        pTextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
         break;
     case TEXT_ALIGN_LEFT_CENTER:
     case TEXT_ALIGN_CENTER_CENTER:
     case TEXT_ALIGN_RIGHT_CENTER:
-        format.SetLineAlignment(StringAlignmentCenter);
+        pTextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
         break;
     case TEXT_ALIGN_LEFT_BOTTOM:
     case TEXT_ALIGN_CENTER_BOTTOM:
     case TEXT_ALIGN_RIGHT_BOTTOM:
-        format.SetLineAlignment(StringAlignmentFar);
+        pTextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_FAR);
         break;
     }
 
-    // Set trimming/clipping
-    if (m_ClipString == TEXT_CLIP_ELLIPSIS)
+    // Set trimming/clipping and wrapping behavior berdasarkan standar:
+    // "none" / "wrap": Enable wrapping if width provided
+    // "clip" / "ellipsis": Single line only
+    
+    bool allowWrap = (m_ClipString == TEXT_CLIP_NONE || m_ClipString == TEXT_CLIP_WRAP);
+    
+    if (allowWrap)
     {
-        format.SetTrimming(StringTrimmingEllipsisCharacter);
+        pTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
     }
-    else if (m_ClipString == TEXT_CLIP_ON)
+    else
     {
-        format.SetTrimming(StringTrimmingCharacter);
+        pTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        
+        DWRITE_TRIMMING trimming = { DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0 };
+        Microsoft::WRL::ComPtr<IDWriteInlineObject> pEllipsis;
+        
+        if (m_ClipString == TEXT_CLIP_ELLIPSIS)
+        {
+            Direct2D::GetWriteFactory()->CreateEllipsisTrimmingSign(pTextFormat.Get(), pEllipsis.GetAddressOf());
+            pTextFormat->SetTrimming(&trimming, pEllipsis.Get());
+        }
+        else if (m_ClipString == TEXT_CLIP_ON)
+        {
+            pTextFormat->SetTrimming(&trimming, nullptr);
+        }
     }
     
     // Apply rotation if specified
+    D2D1_MATRIX_3X2_F originalTransform;
+    context->GetTransform(&originalTransform);
     if (m_Rotate != 0.0f)
     {
-        REAL centerX = m_X + GetWidth() / 2.0f;
-        REAL centerY = m_Y + GetHeight() / 2.0f;
-        graphics.TranslateTransform(centerX, centerY);
-        graphics.RotateTransform(m_Rotate);
-        graphics.TranslateTransform(-centerX, -centerY);
+        Gdiplus::Rect bounds = GetBounds();
+        D2D1_POINT_2F center = D2D1::Point2F(bounds.X + bounds.Width / 2.0f, bounds.Y + bounds.Height / 2.0f);
+        context->SetTransform(D2D1::Matrix3x2F::Rotation(m_Rotate, center) * originalTransform);
     }
     
     // Apply padding to layout rectangle
     Gdiplus::Rect bounds = GetBounds();
-    int layoutX = bounds.X + m_PaddingLeft;
-    int layoutY = bounds.Y + m_PaddingTop;
-    int layoutW = bounds.Width - m_PaddingLeft - m_PaddingRight;
-    int layoutH = bounds.Height - m_PaddingTop - m_PaddingBottom;
+    float layoutX = (float)bounds.X + m_PaddingLeft;
+    float layoutY = (float)bounds.Y + m_PaddingTop;
+    float layoutW = (float)bounds.Width - m_PaddingLeft - m_PaddingRight;
+    float layoutH = (float)bounds.Height - m_PaddingTop - m_PaddingBottom;
     
-    // Ensure positive dimensions
     if (layoutW < 0) layoutW = 0;
     if (layoutH < 0) layoutH = 0;
     
-    // Draw text
-    RectF layoutRect((REAL)layoutX, (REAL)layoutY, (REAL)layoutW, (REAL)layoutH);
-    graphics.DrawString(m_Text.c_str(), -1, &font, layoutRect, &format, &brush);
-    
-    // Reset transform if rotated
-    if (m_Rotate != 0.0f)
+    D2D1_RECT_F layoutRect = D2D1::RectF(layoutX, layoutY, layoutX + layoutW, layoutY + layoutH);
+
+    // Create brush
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pBrush;
+    Direct2D::CreateSolidBrush(context, m_FontColor, m_Alpha / 255.0f, pBrush.GetAddressOf());
+
+    if (pBrush)
     {
-        graphics.ResetTransform();
+        context->SetTextAntialiasMode(m_AntiAlias ? D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE : D2D1_TEXT_ANTIALIAS_MODE_ALIASED);
+        context->DrawText(m_Text.c_str(), (UINT32)m_Text.length(), pTextFormat.Get(), layoutRect, pBrush.Get());
     }
+    
+    // Reset transform
+    context->SetTransform(originalTransform);
 }
 
 int TextElement::GetAutoWidth()
 {
-    HDC hdc = GetDC(NULL);
-    Graphics graphics(hdc);
-    
-    INT fontStyle = FontStyleRegular;
-    if (m_Bold) fontStyle |= FontStyleBold;
-    if (m_Italic) fontStyle |= FontStyleItalic;
-    Font font(m_FontFace.c_str(), (REAL)m_FontSize, fontStyle, UnitPixel);
+    if (m_Text.empty()) return 0;
 
-    RectF boundingBox;
-    graphics.MeasureString(m_Text.c_str(), -1, &font, PointF(0, 0), &boundingBox);
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
+    HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
+        m_FontFace.c_str(), nullptr,
+        m_Bold ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_REGULAR,
+        m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL, (float)m_FontSize, L"",
+        pTextFormat.GetAddressOf()
+    );
+    if (FAILED(hr)) return 0;
+
+    // For AutoWidth, we never wrap
+    pTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
+    hr = Direct2D::GetWriteFactory()->CreateTextLayout(
+        m_Text.c_str(), (UINT32)m_Text.length(), pTextFormat.Get(),
+        10000.0f, 10000.0f, pLayout.GetAddressOf()
+    );
+    if (FAILED(hr)) return 0;
+
+    DWRITE_TEXT_METRICS metrics;
+    pLayout->GetMetrics(&metrics);
+
+    int width = (int)ceil(metrics.widthIncludingTrailingWhitespace);
     
-    ReleaseDC(NULL, hdc);
-    
-    int width = (int)ceil(boundingBox.Width);
-    // Clipping is now based on element width if defined
-    if (!m_WDefined && m_ClipString != TEXT_CLIP_NONE && m_Width > 0)
+    // Add element padding
+    width += m_PaddingLeft + m_PaddingRight;
+
+    if (!m_WDefined && (m_ClipString == TEXT_CLIP_ON || m_ClipString == TEXT_CLIP_ELLIPSIS) && m_Width > 0)
     {
         if (width > m_Width) return m_Width;
     }
@@ -156,49 +192,56 @@ int TextElement::GetAutoWidth()
 
 int TextElement::GetAutoHeight()
 {
-    HDC hdc = GetDC(NULL);
-    Graphics graphics(hdc);
-    
-    INT fontStyle = FontStyleRegular;
-    if (m_Bold) fontStyle |= FontStyleBold;
-    if (m_Italic) fontStyle |= FontStyleItalic;
-    Font font(m_FontFace.c_str(), (REAL)m_FontSize, fontStyle, UnitPixel);
+    if (m_Text.empty()) return 0;
 
-    RectF boundingBox;
-    
-    if (m_ClipString != TEXT_CLIP_NONE)
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
+    HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
+        m_FontFace.c_str(), nullptr,
+        m_Bold ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_REGULAR,
+        m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL, (float)m_FontSize, L"",
+        pTextFormat.GetAddressOf()
+    );
+    if (FAILED(hr)) return 0;
+
+    float maxWidth = 10000.0f;
+    bool wrap = (m_ClipString == TEXT_CLIP_NONE || m_ClipString == TEXT_CLIP_WRAP);
+
+    if (wrap)
     {
-        int targetW = GetWidth(); 
-        if (targetW > 0)
+        int elementW = GetWidth();
+        if (elementW > 0)
         {
-            // Measure with a fixed width to get wrapped height
-            // We subtract padding because the layout rect should be the content area
-            int contentW = targetW - m_PaddingLeft - m_PaddingRight;
-            if (contentW < 0) contentW = 0;
-
-            RectF layoutRect(0, 0, (REAL)contentW, 50000.0f); // Large height constraint
-            
-            // We need a format to enable wrapping
-            StringFormat format;
-            if (m_ClipString == TEXT_CLIP_ELLIPSIS) format.SetTrimming(StringTrimmingEllipsisCharacter);
-            
-            graphics.MeasureString(m_Text.c_str(), -1, &font, layoutRect, &format, &boundingBox);
+            int contentW = elementW - m_PaddingLeft - m_PaddingRight;
+            maxWidth = (float)(contentW > 0 ? contentW : 1);
+            pTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
         }
         else
         {
-            graphics.MeasureString(m_Text.c_str(), -1, &font, PointF(0, 0), &boundingBox);
+            pTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
         }
     }
     else
     {
-        graphics.MeasureString(m_Text.c_str(), -1, &font, PointF(0, 0), &boundingBox);
+        pTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
     }
+
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
+    hr = Direct2D::GetWriteFactory()->CreateTextLayout(
+        m_Text.c_str(), (UINT32)m_Text.length(), pTextFormat.Get(),
+        maxWidth, 10000.0f, pLayout.GetAddressOf()
+    );
+    if (FAILED(hr)) return 0;
+
+    DWRITE_TEXT_METRICS metrics;
+    pLayout->GetMetrics(&metrics);
+
+    int height = (int)ceil(metrics.height);
     
-    ReleaseDC(NULL, hdc);
-    
-    int height = (int)ceil(boundingBox.Height);
-    // Clipping is now based on element height if defined
-    if (!m_HDefined && m_ClipString != TEXT_CLIP_NONE && m_Height > 0)
+    // Add element padding
+    height += m_PaddingTop + m_PaddingBottom;
+
+    if (!m_HDefined && (m_ClipString == TEXT_CLIP_ON || m_ClipString == TEXT_CLIP_ELLIPSIS) && m_Height > 0)
     {
         if (height > m_Height) return m_Height;
     }
@@ -238,52 +281,41 @@ bool TextElement::HitTest(int x, int y)
     // If we have a background or gradient, the entire element is clickable
     if ((m_HasSolidColor && m_SolidAlpha > 0) || (m_HasGradient)) return true;
 
-    HDC hdc = GetDC(NULL);
-    Graphics graphics(hdc);
-    
-    INT fontStyle = FontStyleRegular;
-    if (m_Bold) fontStyle |= FontStyleBold;
-    if (m_Italic) fontStyle |= FontStyleItalic;
-    Font font(m_FontFace.c_str(), (REAL)m_FontSize, fontStyle, UnitPixel);
-
-    StringFormat format;
-    switch (m_TextAlign) {
-    case TEXT_ALIGN_LEFT_TOP: case TEXT_ALIGN_LEFT_CENTER: case TEXT_ALIGN_LEFT_BOTTOM:
-        format.SetAlignment(StringAlignmentNear); break;
-    case TEXT_ALIGN_CENTER_TOP: case TEXT_ALIGN_CENTER_CENTER: case TEXT_ALIGN_CENTER_BOTTOM:
-        format.SetAlignment(StringAlignmentCenter); break;
-    case TEXT_ALIGN_RIGHT_TOP: case TEXT_ALIGN_RIGHT_CENTER: case TEXT_ALIGN_RIGHT_BOTTOM:
-        format.SetAlignment(StringAlignmentFar); break;
-    }
-    switch (m_TextAlign) {
-    case TEXT_ALIGN_LEFT_TOP: case TEXT_ALIGN_CENTER_TOP: case TEXT_ALIGN_RIGHT_TOP:
-        format.SetLineAlignment(StringAlignmentNear); break;
-    case TEXT_ALIGN_LEFT_CENTER: case TEXT_ALIGN_CENTER_CENTER: case TEXT_ALIGN_RIGHT_CENTER:
-        format.SetLineAlignment(StringAlignmentCenter); break;
-    case TEXT_ALIGN_LEFT_BOTTOM: case TEXT_ALIGN_CENTER_BOTTOM: case TEXT_ALIGN_RIGHT_BOTTOM:
-        format.SetLineAlignment(StringAlignmentFar); break;
-    }
-
-    // Set wrapping logic mirroring Render/GetAutoHeight
-    if (m_ClipString != TEXT_CLIP_NONE) {
-        format.SetTrimming(m_ClipString == TEXT_CLIP_ELLIPSIS ? StringTrimmingEllipsisCharacter : StringTrimmingCharacter);
-    }
+    // Use DirectWrite for precise hit testing
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
+    HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
+        m_FontFace.c_str(), nullptr,
+        m_Bold ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_REGULAR,
+        m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL, (float)m_FontSize, L"",
+        pTextFormat.GetAddressOf()
+    );
+    if (FAILED(hr)) return false;
 
     Gdiplus::Rect bounds = GetBounds();
-    int pW = bounds.Width - m_PaddingLeft - m_PaddingRight;
-    int pH = bounds.Height - m_PaddingTop - m_PaddingBottom;
-    if (pW < 0) pW = 0;
-    if (pH < 0) pH = 0;
+    float layoutW = (float)bounds.Width - m_PaddingLeft - m_PaddingRight;
+    float layoutH = (float)bounds.Height - m_PaddingTop - m_PaddingBottom;
+    if (layoutW < 0) layoutW = 1;
+    if (layoutH < 0) layoutH = 1;
 
-    RectF layoutRect((REAL)m_PaddingLeft, (REAL)m_PaddingTop, (REAL)pW, (REAL)pH);
-    RectF boundingBox;
-    graphics.MeasureString(m_Text.c_str(), -1, &font, layoutRect, &format, &boundingBox);
-    
-    ReleaseDC(NULL, hdc);
+    bool allowWrap = (m_ClipString == TEXT_CLIP_NONE || m_ClipString == TEXT_CLIP_WRAP);
+    pTextFormat->SetWordWrapping(allowWrap ? DWRITE_WORD_WRAPPING_WRAP : DWRITE_WORD_WRAPPING_NO_WRAP);
 
-    boundingBox.X += bounds.X;
-    boundingBox.Y += bounds.Y;
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
+    hr = Direct2D::GetWriteFactory()->CreateTextLayout(
+        m_Text.c_str(), (UINT32)m_Text.length(), pTextFormat.Get(),
+        layoutW, layoutH, pLayout.GetAddressOf()
+    );
+    if (FAILED(hr)) return false;
 
-    return (x >= boundingBox.X && x < boundingBox.X + boundingBox.Width &&
-            y >= boundingBox.Y && y < boundingBox.Y + boundingBox.Height);
+    // Get point relative to layout area
+    float relX = (float)x - (bounds.X + m_PaddingLeft);
+    float relY = (float)y - (bounds.Y + m_PaddingTop);
+
+    BOOL isTrailingHit;
+    BOOL isInside;
+    DWRITE_HIT_TEST_METRICS hitMetrics;
+    pLayout->HitTestPoint(relX, relY, &isTrailingHit, &isInside, &hitMetrics);
+
+    return isInside;
 }

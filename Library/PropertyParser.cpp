@@ -330,8 +330,21 @@ namespace PropertyParser {
             options.hasTransformMatrix = true;
         }
 
-        if (reader.GetFloatArray("colorMatrix", options.colorMatrix, 20)) { 
-             options.hasColorMatrix = true;
+        std::vector<float> matrixRaw;
+        if (reader.GetFloatArray("colorMatrix", matrixRaw, 20)) {
+            if (matrixRaw.size() >= 25) {
+                // Convert 5x5 (25 numbers) to 5x4 (20 floats) by skipping the 5th column of each row
+                options.colorMatrix.clear();
+                for (int row = 0; row < 5; ++row) {
+                    for (int col = 0; col < 4; ++col) {
+                        options.colorMatrix.push_back(matrixRaw[row * 5 + col]);
+                    }
+                }
+                options.hasColorMatrix = true;
+            } else if (matrixRaw.size() >= 20) {
+                options.colorMatrix = matrixRaw;
+                options.hasColorMatrix = true;
+            }
         }
     }
 
@@ -379,6 +392,7 @@ namespace PropertyParser {
         if (reader.GetString("clipString", clipStr)) {
             if (clipStr == L"none") options.clip = TEXT_CLIP_NONE;
             else if (clipStr == L"on" || clipStr == L"clip") options.clip = TEXT_CLIP_ON;
+            else if (clipStr == L"wrap") options.clip = TEXT_CLIP_WRAP;
             else if (clipStr == L"ellipsis") options.clip = TEXT_CLIP_ELLIPSIS;
         }
 

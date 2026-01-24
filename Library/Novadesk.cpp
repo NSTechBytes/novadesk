@@ -24,6 +24,7 @@
 #include "Utils.h"
 #include "PathUtils.h"
 #include <commctrl.h>
+#include "Direct2DHelper.h"
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -114,6 +115,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // Initialize GDI+
     GdiplusStartupInput gdiplusStartupInput;
     GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+
+    // Initialize Direct2D
+    Direct2D::Initialize();
 
     // Initialize Settings
     Settings::Initialize();
@@ -247,6 +251,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     System::Finalize();
     
     // Convert GDI+ shutdown
+    Direct2D::Cleanup();
     GdiplusShutdown(gdiplusToken);
 
     // Close mutex

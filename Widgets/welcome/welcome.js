@@ -63,7 +63,7 @@ win.addText({
     x: 160,
     y: 70,
     fontSize: CONFIG.font.text,
-    clipString: "clip",
+    clipString: "wrap",
     width: 220,
     fontWeight: "bold",
     fontColor: CONFIG.colors.font,

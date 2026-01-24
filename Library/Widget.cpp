@@ -16,8 +16,10 @@
 #include <vector>
 #include <windowsx.h>
 #include <algorithm>
-#include <gdiplus.h>
-
+#include "Direct2DHelper.h"
+#include "ImageElement.h"
+#include "TextElement.h"
+#include "BarElement.h"
 #include "JSApi/JSApi.h"
 #include "JSApi/JSCommon.h"
 #include "JSApi/JSEvents.h"
@@ -1064,7 +1066,7 @@ void Widget::UpdateLayeredWindowContent()
     ZeroMemory(&bmi, sizeof(BITMAPINFO));
     bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     bmi.bmiHeader.biWidth = w;
-    bmi.bmiHeader.biHeight = h;
+    bmi.bmiHeader.biHeight = -h; // Top-down DIB
     bmi.bmiHeader.biPlanes = 1;
     bmi.bmiHeader.biBitCount = 32;
     bmi.bmiHeader.biCompression = BI_RGB;
@@ -1078,26 +1080,71 @@ void Widget::UpdateLayeredWindowContent()
     }
     HBITMAP hOldBitmap = (HBITMAP)SelectObject(hdcMem, hBitmap);
 
-    // Draw GDI+
+    // Draw Direct2D
     {
-        Graphics graphics(hdcMem);
-        graphics.SetSmoothingMode(SmoothingModeAntiAlias);
-        graphics.SetPixelOffsetMode(PixelOffsetModeHalf);
-        graphics.SetTextRenderingHint(TextRenderingHintAntiAlias);
-        graphics.SetCompositingMode(CompositingModeSourceOver);
-
-        // Clear with 0 alpha (fully transparent)
-        graphics.Clear(Color(0, 0, 0, 0));
-
-        // Draw Background
-        Color backColor(m_Options.bgAlpha, GetRValue(m_Options.color), GetGValue(m_Options.color), GetBValue(m_Options.color));
-        SolidBrush backBrush(backColor);
-        graphics.FillRectangle(&backBrush, 0, 0, w, h);
-
-        // Draw Elements
-        for (Element* element : m_Elements)
+        if (!m_pContext)
         {
-            element->Render(graphics);
+            bool useHW = Settings::GetGlobalBool("useHardwareAcceleration", false);
+            D2D1_RENDER_TARGET_TYPE rtType = useHW ? D2D1_RENDER_TARGET_TYPE_DEFAULT : D2D1_RENDER_TARGET_TYPE_SOFTWARE;
+            
+            Logging::Log(LogLevel::Info, L"Creating Direct2D Context: Hardware Acceleration = %s", useHW ? L"ON" : L"OFF");
+
+            D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+                rtType,
+                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+                0, 0,
+                D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE
+            );
+
+            Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pDCRT;
+            HRESULT hr = Direct2D::GetFactory()->CreateDCRenderTarget(&props, pDCRT.GetAddressOf());
+            if (SUCCEEDED(hr)) {
+                hr = pDCRT.As<ID2D1DeviceContext>(&m_pContext);
+            }
+            
+            if (FAILED(hr)) {
+                Logging::Log(LogLevel::Error, L"Failed to create D2D Context (0x%08X)", hr);
+            }
+        }
+
+        if (m_pContext)
+        {
+            Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pDCRT;
+            if (SUCCEEDED(m_pContext.As(&pDCRT)))
+            {
+                RECT renderRect = { 0, 0, w, h };
+                HRESULT hr = pDCRT->BindDC(hdcMem, &renderRect);
+                if (FAILED(hr)) {
+                    Logging::Log(LogLevel::Error, L"BindDC failed (0x%08X)", hr);
+                }
+            }
+
+            m_pContext->BeginDraw();
+            m_pContext->Clear(D2D1::ColorF(0, 0, 0, 0));
+
+            // Draw Background
+            D2D1_RECT_F backRect = D2D1::RectF(0, 0, (float)w, (float)h);
+            Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pBackBrush;
+            Direct2D::CreateSolidBrush(m_pContext.Get(), m_Options.color, m_Options.bgAlpha / 255.0f, pBackBrush.GetAddressOf());
+            if (pBackBrush)
+            {
+                m_pContext->FillRectangle(backRect, pBackBrush.Get());
+            }
+
+            // Draw Elements
+            for (Element* element : m_Elements)
+            {
+                element->Render(m_pContext.Get());
+            }
+
+            HRESULT hr = m_pContext->EndDraw();
+            if (hr == D2DERR_RECREATE_TARGET) {
+                m_pContext.Reset();
+                Logging::Log(LogLevel::Error, L"D2D Device lost, resetting RenderContext");
+            }
+            else if (FAILED(hr)) {
+                Logging::Log(LogLevel::Error, L"D2D EndDraw failed (0x%08X)", hr);
+            }
         }
     }
 
@@ -1117,7 +1164,12 @@ void Widget::UpdateLayeredWindowContent()
     bf.SourceConstantAlpha = m_Options.windowOpacity; // Master opacity
     bf.AlphaFormat = AC_SRC_ALPHA; // Pre-multiplied alpha
 
-    UpdateLayeredWindow(m_hWnd, hdcScreen, &pptDst, &size, hdcMem, &pptSrc, 0, &bf, ULW_ALPHA);
+    BOOL success = UpdateLayeredWindow(m_hWnd, hdcScreen, &pptDst, &size, hdcMem, &pptSrc, 0, &bf, ULW_ALPHA);
+    if (!success) {
+        DWORD err = GetLastError();
+        Logging::Log(LogLevel::Error, L"UpdateLayeredWindow failed for widget %s (Error: %d). Size: %dx%d, Pos: %d,%d", 
+                      m_Options.id.c_str(), err, w, h, pptDst.x, pptDst.y);
+    }
 
     SelectObject(hdcMem, hOldBitmap);
     DeleteObject(hBitmap);

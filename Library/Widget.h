@@ -12,6 +12,8 @@
 #include <commctrl.h>
 #include <string>
 #include <vector>
+#include <d2d1_1.h>
+#include <wrl/client.h>
 #include "System.h"
 #include "Element.h"
 #include "TextElement.h"
@@ -131,6 +133,9 @@ private:
     bool m_DragThresholdMet = false;
     POINT m_DragStartCursor = { 0, 0 };
     POINT m_DragStartWindow = { 0, 0 };
+    
+    // Rendering
+    Microsoft::WRL::ComPtr<ID2D1DeviceContext> m_pContext;
 
     static const UINT_PTR TIMER_TOPMOST = 2;
     static const UINT_PTR TIMER_TOOLTIP = 3;

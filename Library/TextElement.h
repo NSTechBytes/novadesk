@@ -30,7 +30,8 @@ enum TextClipString
 {
     TEXT_CLIP_NONE = 0,
     TEXT_CLIP_ON = 1,
-    TEXT_CLIP_ELLIPSIS = 2
+    TEXT_CLIP_ELLIPSIS = 2,
+    TEXT_CLIP_WRAP = 3
 };
 
 class TextElement : public Element
@@ -44,7 +45,7 @@ public:
 
     virtual ~TextElement() {}
 
-    virtual void Render(Gdiplus::Graphics& graphics) override;
+    virtual void Render(ID2D1DeviceContext* context) override;
 
     void SetText(const std::wstring& text) { m_Text = text; }
     void SetFontFace(const std::wstring& font) { m_FontFace = font; }
@@ -67,7 +68,7 @@ public:
 
     virtual int GetAutoWidth() override;
     virtual int GetAutoHeight() override;
-    virtual Gdiplus::Rect GetBounds() override;
+    virtual Gdiplus::Rect GetBounds() override; // Keeping ROI as Gdiplus::Rect for now as it's used for layout, but internally use D2D
     virtual bool HitTest(int x, int y) override;
 
 private:
