@@ -172,7 +172,6 @@ namespace PropertyParser {
         reader.GetInt("x", options.x);
         reader.GetInt("y", options.y);
         reader.GetBool("show", options.show);
-        reader.GetBool("dynamicWindowSize", options.dynamicWindowSize);
 
         if (reader.GetString("script", options.scriptPath)) {
             options.scriptPath = JSApi::ResolveScriptPath(ctx, options.scriptPath);
@@ -361,7 +360,7 @@ namespace PropertyParser {
         PropertyReader reader(ctx);
 
         reader.GetString("text", options.text);
-        reader.GetString("fontFace", options.fontFace);
+        if (!reader.GetString("fontFace", options.fontFace)) options.fontFace = L"Arial";
         reader.GetInt("fontSize", options.fontSize);
         
         reader.GetColor("fontColor", options.fontColor, options.alpha);
@@ -504,9 +503,6 @@ namespace PropertyParser {
         }
 
         // Boolean toggles
-        bool dynamicWindowSize;
-        if (reader.GetBool("dynamicWindowSize", dynamicWindowSize)) widget->SetDynamicWindowSize(dynamicWindowSize);
-        
         bool draggable;
         if (reader.GetBool("draggable", draggable)) widget->SetDraggable(draggable);
         
@@ -550,7 +546,6 @@ namespace PropertyParser {
         duk_push_boolean(ctx, opt.snapEdges); duk_put_prop_string(ctx, -2, "snapEdges");
         duk_push_string(ctx, Utils::ToString(opt.backgroundColor).c_str()); duk_put_prop_string(ctx, -2, "backgroundColor");
         duk_push_boolean(ctx, opt.show); duk_put_prop_string(ctx, -2, "show");
-        duk_push_boolean(ctx, opt.dynamicWindowSize); duk_put_prop_string(ctx, -2, "dynamicWindowSize");
     }
 
     /*
@@ -817,8 +812,11 @@ namespace PropertyParser {
         options.id = element->GetId();
         options.x = element->GetX();
         options.y = element->GetY();
-        options.width = element->IsWDefined() ? element->GetWidth() : 0;
-        options.height = element->IsHDefined() ? element->GetHeight() : 0;
+        
+        // Subtract padding to get internal dimensions
+        options.width = element->IsWDefined() ? (element->GetWidth() - element->GetPaddingLeft() - element->GetPaddingRight()) : 0;
+        options.height = element->IsHDefined() ? (element->GetHeight() - element->GetPaddingTop() - element->GetPaddingBottom()) : 0;
+        
         options.rotate = element->GetRotate();
         options.antialias = element->GetAntiAlias();
 

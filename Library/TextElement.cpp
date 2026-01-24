@@ -32,9 +32,11 @@ void TextElement::Render(ID2D1DeviceContext* context)
     if (m_Text.empty()) return;
 
     // Create text format
+    std::wstring fontFace = m_FontFace.empty() ? L"Arial" : m_FontFace;
+    
     Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
     HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
-        m_FontFace.c_str(),
+        fontFace.c_str(),
         nullptr,
         m_Bold ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_REGULAR,
         m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
@@ -44,7 +46,13 @@ void TextElement::Render(ID2D1DeviceContext* context)
         pTextFormat.GetAddressOf()
     );
 
-    if (FAILED(hr)) return;
+    if (FAILED(hr)) {
+        Logging::Log(LogLevel::Error, L"TextElement: Failed to create text format for font '%s'", fontFace.c_str());
+        return;
+    }
+
+    Logging::Log(LogLevel::Debug, L"TextElement: Loaded font '%s' (size: %d, bold: %s, italic: %s)", 
+        fontFace.c_str(), m_FontSize, m_Bold ? L"YES" : L"NO", m_Italic ? L"YES" : L"NO");
 
     // Set alignment
     switch (m_TextAlign)
@@ -153,9 +161,11 @@ int TextElement::GetAutoWidth()
 {
     if (m_Text.empty()) return 0;
 
+    std::wstring fontFace = m_FontFace.empty() ? L"Arial" : m_FontFace;
+
     Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
     HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
-        m_FontFace.c_str(), nullptr,
+        fontFace.c_str(), nullptr,
         m_Bold ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_REGULAR,
         m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL, (float)m_FontSize, L"",
@@ -176,25 +186,27 @@ int TextElement::GetAutoWidth()
     DWRITE_TEXT_METRICS metrics;
     pLayout->GetMetrics(&metrics);
 
-    int width = (int)ceil(metrics.widthIncludingTrailingWhitespace);
+    int contentW = (int)ceil(metrics.widthIncludingTrailingWhitespace);
     
-    // Add element padding
-    width += m_PaddingLeft + m_PaddingRight;
+    Logging::Log(LogLevel::Debug, L"TextElement(%s): GetAutoWidth = %d (Font: %s, Size: %d, Text: '%s')", 
+        m_Id.c_str(), contentW, fontFace.c_str(), m_FontSize, m_Text.substr(0, 20).c_str());
 
     if (!m_WDefined && (m_ClipString == TEXT_CLIP_ON || m_ClipString == TEXT_CLIP_ELLIPSIS) && m_Width > 0)
     {
-        if (width > m_Width) return m_Width;
+        if (contentW > m_Width) return m_Width;
     }
-    return width;
+    return contentW;
 }
 
 int TextElement::GetAutoHeight()
 {
     if (m_Text.empty()) return 0;
 
+    std::wstring fontFace = m_FontFace.empty() ? L"Arial" : m_FontFace;
+
     Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
     HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
-        m_FontFace.c_str(), nullptr,
+        fontFace.c_str(), nullptr,
         m_Bold ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_REGULAR,
         m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL, (float)m_FontSize, L"",
@@ -210,6 +222,7 @@ int TextElement::GetAutoHeight()
         int elementW = GetWidth();
         if (elementW > 0)
         {
+            // GetWidth() already includes padding, but DirectWrite layout range needs content width
             int contentW = elementW - m_PaddingLeft - m_PaddingRight;
             maxWidth = (float)(contentW > 0 ? contentW : 1);
             pTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
@@ -234,16 +247,16 @@ int TextElement::GetAutoHeight()
     DWRITE_TEXT_METRICS metrics;
     pLayout->GetMetrics(&metrics);
 
-    int height = (int)ceil(metrics.height);
+    int contentH = (int)ceil(metrics.height);
     
-    // Add element padding
-    height += m_PaddingTop + m_PaddingBottom;
+    Logging::Log(LogLevel::Debug, L"TextElement(%s): GetAutoHeight = %d (Font: %s, Size: %d, Wrap: %s, MaxWidth: %.0f)", 
+        m_Id.c_str(), contentH, fontFace.c_str(), m_FontSize, wrap ? L"YES" : L"NO", maxWidth);
 
     if (!m_HDefined && (m_ClipString == TEXT_CLIP_ON || m_ClipString == TEXT_CLIP_ELLIPSIS) && m_Height > 0)
     {
-        if (height > m_Height) return m_Height;
+        if (contentH > m_Height) return m_Height;
     }
-    return height;
+    return contentH;
 }
 
 GfxRect TextElement::GetBounds() {

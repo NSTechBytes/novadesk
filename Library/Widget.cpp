@@ -1020,8 +1020,8 @@ void Widget::UpdateLayeredWindowContent()
     int calcW = m_Options.width;
     int calcH = m_Options.height;
 
-    bool shouldCalcW = m_Options.dynamicWindowSize || (!m_Options.m_WDefined && m_Options.width <= 1);
-    bool shouldCalcH = m_Options.dynamicWindowSize || (!m_Options.m_HDefined && m_Options.height <= 1);
+    bool shouldCalcW = !m_Options.m_WDefined;
+    bool shouldCalcH = !m_Options.m_HDefined;
 
     if (shouldCalcW || shouldCalcH)
     {
@@ -1032,6 +1032,9 @@ void Widget::UpdateLayeredWindowContent()
             GfxRect bounds = element->GetBounds();
             maxX = (std::max)(maxX, bounds.X + bounds.Width);
             maxY = (std::max)(maxY, bounds.Y + bounds.Height);
+            
+            Logging::Log(LogLevel::Debug, L"Widget::UpdateSize: Element '%s' contributing to bounds: [X:%d, Y:%d, W:%d, H:%d] -> TargetMax: [%d, %d]", 
+                element->GetId().c_str(), bounds.X, bounds.Y, bounds.Width, bounds.Height, maxX, maxY);
         }
         
         if (shouldCalcW) calcW = maxX;
@@ -1044,6 +1047,8 @@ void Widget::UpdateLayeredWindowContent()
         // If size changed, update window and options
         if (calcW != m_Options.width || calcH != m_Options.height)
         {
+            Logging::Log(LogLevel::Info, L"Widget::UpdateSize: Resizing window '%s' from %dx%d to %dx%d", 
+                m_Options.id.c_str(), m_Options.width, m_Options.height, calcW, calcH);
             m_Options.width = calcW;
             m_Options.height = calcH;
             SetWindowPos(m_hWnd, NULL, 0, 0, calcW, calcH, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
@@ -1406,18 +1411,6 @@ void Widget::OnContextMenu()
     else if (cmd == 1003)
     {
         PostQuitMessage(0);
-    }
-}
-
-void Widget::SetDynamicWindowSize(bool dynamicWindowSize)
-{
-    if (m_Options.dynamicWindowSize != dynamicWindowSize)
-    {
-        m_Options.dynamicWindowSize = dynamicWindowSize;
-        if (m_hWnd)
-        {
-            Redraw();
-        }
     }
 }
 
