@@ -28,7 +28,8 @@
          if (duk_get_prop_string(ctx, -1, "\xFF" "widgetPtr")) {
              Widget* widget = (Widget*)duk_get_pointer(ctx, -1);
              duk_pop_2(ctx);
-             return widget;
+             if (Widget::IsValid(widget)) return widget;
+             return nullptr;
          }
          duk_pop(ctx);
  

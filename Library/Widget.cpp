@@ -32,6 +32,20 @@
 extern std::vector<Widget*> widgets; // Defined in Novadesk.cpp
 
 /*
+** Check if a widget pointer is valid (exists in the global widgets list).
+*/
+bool Widget::IsValid(Widget* pWidget)
+{
+    if (!pWidget) return false;
+    for (auto* w : widgets)
+    {
+        if (w == pWidget) return true;
+    }
+    return false;
+}
+
+
+/*
 ** Construct a new Widget with the specified options.
 ** Options include size, position, colors, z-order, and behavior flags.
 */
@@ -46,6 +60,7 @@ Widget::Widget(const WidgetOptions& options)
 Widget::~Widget()
 {
     JSApi::TriggerWidgetEvent(this, "close");
+    JSApi::CleanupWidget(m_Options.id);
 
     if (m_hWnd)
     {
