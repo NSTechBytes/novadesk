@@ -217,7 +217,7 @@ win.addText({
 // Test 12: Tiling - repeat image
 win.addImage({
     id: "tile",
-    path: "../assets/pic.png",
+    path: "../assets/pic2.png",
     x: 280,
     y: 380,
     width: 150,
@@ -348,7 +348,7 @@ win.addText({
 // Test 18: Tile + grayscale
 win.addImage({
     id: "combined-4",
-    path: "../assets/pic.png",
+    path: "../assets/pic2.png",
     x: 510,
     y: 560,
     width: 150,
