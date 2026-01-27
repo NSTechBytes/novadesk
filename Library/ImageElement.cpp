@@ -8,6 +8,7 @@
 #include "ImageElement.h"
 #include "Direct2DHelper.h"
 #include <d2d1effects.h>
+#include "Logging.h"
 
 ImageElement::ImageElement(const std::wstring& id, int x, int y, int w, int h,
              const std::wstring& path)
@@ -63,7 +64,9 @@ void ImageElement::Render(ID2D1DeviceContext* context)
             m_TransformMatrix[2], m_TransformMatrix[3],
             m_TransformMatrix[4], m_TransformMatrix[5]
         );
-        context->SetTransform(matrix * D2D1::Matrix3x2F::Translation(centerX, centerY) * originalTransform);
+        Logging::Log(LogLevel::Debug, L"ImageElement(%s) Applying Transform: [%.2f, %.2f, %.2f, %.2f, %.2f, %.2f]", 
+            m_Id.c_str(), m_TransformMatrix[0], m_TransformMatrix[1], m_TransformMatrix[2], m_TransformMatrix[3], m_TransformMatrix[4], m_TransformMatrix[5]);
+        context->SetTransform(matrix * originalTransform);
     }
     else if (m_Rotate != 0.0f)
     {
@@ -265,21 +268,31 @@ int ImageElement::GetAutoHeight()
 
 bool ImageElement::HitTest(int x, int y)
 {
-    // Element::HitTest already handles the rotation transform logic 
-    // to check if (x,y) is within the rotated bounding box.
+    // Bounding box and transform check
     if (!Element::HitTest(x, y)) return false;
     
-    // For pixel-level precision, we need the transformed coordinates again
+    // Map the point to image local space
     float targetX = (float)x;
     float targetY = (float)y;
 
-    if (m_Rotate != 0.0f) {
+    if (m_HasTransformMatrix || m_Rotate != 0.0f) {
         GfxRect bounds = GetBounds();
         float centerX = bounds.X + bounds.Width / 2.0f;
         float centerY = bounds.Y + bounds.Height / 2.0f;
-        D2D1::Matrix3x2F rotation = D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY));
-        if (rotation.Invert()) {
-            D2D1_POINT_2F transformed = rotation.TransformPoint(D2D1::Point2F((float)x, (float)y));
+        
+        D2D1::Matrix3x2F matrix;
+        if (m_HasTransformMatrix) {
+            matrix = D2D1::Matrix3x2F(
+                m_TransformMatrix[0], m_TransformMatrix[1],
+                m_TransformMatrix[2], m_TransformMatrix[3],
+                m_TransformMatrix[4], m_TransformMatrix[5]
+            );
+        } else {
+            matrix = D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY));
+        }
+
+        if (matrix.Invert()) {
+            D2D1_POINT_2F transformed = matrix.TransformPoint(D2D1::Point2F((float)x, (float)y));
             targetX = transformed.x;
             targetY = transformed.y;
         }

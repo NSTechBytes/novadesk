@@ -91,6 +91,8 @@ namespace PropertyParser
         bool antialias = true;
         
         float rotate = 0.0f;
+        bool hasTransformMatrix = false;
+        std::vector<float> transformMatrix;
     };
 
     /*
@@ -107,9 +109,6 @@ namespace PropertyParser
         BYTE imageAlpha = 255;
         bool grayscale = false;
         bool tile = false;
-        
-        bool hasTransformMatrix = false;
-        std::vector<float> transformMatrix;
         
         bool hasColorMatrix = false;
         std::vector<float> colorMatrix;

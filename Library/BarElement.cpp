@@ -7,6 +7,7 @@
 
 #include "BarElement.h"
 #include "Direct2DHelper.h"
+#include "Logging.h"
 
 BarElement::BarElement(const std::wstring& id, int x, int y, int w, int h, float value, BarOrientation orientation)
     : Element(ELEMENT_BAR, id, x, y, w, h), m_Value(value), m_Orientation(orientation)
@@ -24,7 +25,17 @@ void BarElement::Render(ID2D1DeviceContext* context) {
     context->GetTransform(&originalTransform);
 
     // Apply rotation around center
-    if (m_Rotate != 0.0f) {
+    if (m_HasTransformMatrix) {
+        D2D1::Matrix3x2F matrix = D2D1::Matrix3x2F(
+            m_TransformMatrix[0], m_TransformMatrix[1],
+            m_TransformMatrix[2], m_TransformMatrix[3],
+            m_TransformMatrix[4], m_TransformMatrix[5]
+        );
+        Logging::Log(LogLevel::Debug, L"BarElement(%s) Applying Transform: [%.2f, %.2f, %.2f, %.2f, %.2f, %.2f]", 
+            m_Id.c_str(), m_TransformMatrix[0], m_TransformMatrix[1], m_TransformMatrix[2], m_TransformMatrix[3], m_TransformMatrix[4], m_TransformMatrix[5]);
+        context->SetTransform(matrix * originalTransform);
+    }
+    else if (m_Rotate != 0.0f) {
         GfxRect bounds = GetBounds();
         float centerX = bounds.X + bounds.Width / 2.0f;
         float centerY = bounds.Y + bounds.Height / 2.0f;
