@@ -64,8 +64,8 @@ void ImageElement::Render(ID2D1DeviceContext* context)
             m_TransformMatrix[2], m_TransformMatrix[3],
             m_TransformMatrix[4], m_TransformMatrix[5]
         );
-        Logging::Log(LogLevel::Debug, L"ImageElement(%s) Applying Transform: [%.2f, %.2f, %.2f, %.2f, %.2f, %.2f]", 
-            m_Id.c_str(), m_TransformMatrix[0], m_TransformMatrix[1], m_TransformMatrix[2], m_TransformMatrix[3], m_TransformMatrix[4], m_TransformMatrix[5]);
+        // Logging::Log(LogLevel::Debug, L"ImageElement(%s) Applying Transform: [%.2f, %.2f, %.2f, %.2f, %.2f, %.2f]", 
+        //     m_Id.c_str(), m_TransformMatrix[0], m_TransformMatrix[1], m_TransformMatrix[2], m_TransformMatrix[3], m_TransformMatrix[4], m_TransformMatrix[5]);
         context->SetTransform(matrix * originalTransform);
     }
     else if (m_Rotate != 0.0f)
