@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 Novadesk Project 
+/* Copyright (C) 2026 OfficialNovadesk 
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -58,14 +58,6 @@ public:
     }
     
     void SetTile(bool tile) { m_Tile = tile; }
-    void SetTransformMatrix(const float* matrix) {
-        if (matrix) {
-            memcpy(m_TransformMatrix, matrix, sizeof(float) * 6);
-            m_HasTransformMatrix = true;
-        } else {
-            m_HasTransformMatrix = false;
-        }
-    }
 
     const std::wstring& GetImagePath() const { return m_ImagePath; }
     ImageAspectRatio GetPreserveAspectRatio() const { return m_PreserveAspectRatio; }
@@ -75,8 +67,6 @@ public:
     BYTE GetImageAlpha() const { return m_ImageAlpha; }
     bool IsGrayscale() const { return m_Grayscale; }
     bool IsTile() const { return m_Tile; }
-    bool HasTransformMatrix() const { return m_HasTransformMatrix; }
-    const float* GetTransformMatrix() const { return m_TransformMatrix; }
     bool HasColorMatrix() const { return m_HasColorMatrix; }
     const float* GetColorMatrix() const { return (const float*)m_ColorMatrix; }
 
@@ -93,8 +83,6 @@ private:
     bool m_HasColorMatrix = false;
     float m_ColorMatrix[20]; // D2D ColorMatrix effect uses 5x4
     bool m_Tile = false;
-    bool m_HasTransformMatrix = false;
-    float m_TransformMatrix[6];
     
     // Cache management
     ID2D1RenderTarget* m_pLastTarget = nullptr;

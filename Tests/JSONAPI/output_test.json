@@ -1,0 +1,9 @@
+{
+    "enabled": 1,
+    "name": "Test Config",
+    "settings": {
+        "debug": 0,
+        "timeout": 5000.0
+    },
+    "version": 1.0
+}

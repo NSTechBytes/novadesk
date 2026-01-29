@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 Novadesk Project 
+/* Copyright (C) 2026 OfficialNovadesk 
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -286,6 +286,10 @@ namespace PropertyParser {
         reader.GetBool("tooltipBalloon", options.tooltipBalloon);
 
         reader.GetBool("antiAlias", options.antialias);
+
+        if (reader.GetFloatArray("transformMatrix", options.transformMatrix, 6)) {
+            options.hasTransformMatrix = true;
+        }
     }
 
     /*
@@ -325,10 +329,6 @@ namespace PropertyParser {
              }
         }
         
-        if (reader.GetFloatArray("transformMatrix", options.transformMatrix, 6)) {
-            options.hasTransformMatrix = true;
-        }
-
         std::vector<float> matrixRaw;
         if (reader.GetFloatArray("colorMatrix", matrixRaw, 20)) {
             if (matrixRaw.size() >= 25) {
@@ -573,6 +573,17 @@ namespace PropertyParser {
         }
         duk_push_int(ctx, element->GetCornerRadius()); duk_put_prop_string(ctx, -2, "solidColorRadius");
 
+        // Transform Matrix
+        if (element->HasTransformMatrix()) {
+            const float* matrix = element->GetTransformMatrix();
+            duk_push_array(ctx);
+            for (int i = 0; i < 6; i++) {
+                duk_push_number(ctx, matrix[i]);
+                duk_put_prop_index(ctx, -2, i);
+            }
+            duk_put_prop_string(ctx, -2, "transformMatrix");
+        }
+
         // Gradient
         if (element->HasGradient()) {
             COLORREF c2 = element->GetSolidColor2();
@@ -744,6 +755,10 @@ namespace PropertyParser {
             element->SetToolTip(options.tooltipText, options.tooltipTitle, options.tooltipIcon, options.tooltipMaxWidth, options.tooltipMaxHeight, options.tooltipBalloon);
         }
 
+        if (options.hasTransformMatrix) {
+            element->SetTransformMatrix(options.transformMatrix.data());
+        }
+
         element->SetAntiAlias(options.antialias);
     }
 
@@ -763,10 +778,6 @@ namespace PropertyParser {
         
         if (options.hasImageTint) {
             element->SetImageTint(options.imageTint, options.imageTintAlpha);
-        }
-        
-        if (options.hasTransformMatrix) {
-            element->SetTransformMatrix(options.transformMatrix.data());
         }
     }
 

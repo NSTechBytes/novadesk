@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 Novadesk Project 
+/* Copyright (C) 2026 OfficialNovadesk 
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -46,32 +46,36 @@ GfxRect Element::GetBounds() {
 ** Check if a point is within the element's bounds.
 */
 bool Element::HitTest(int x, int y) {
-    if (m_Rotate == 0.0f) {
+    if (!m_HasTransformMatrix && m_Rotate == 0.0f) {
         GfxRect bounds = GetBounds();
         return (x >= bounds.X && x < bounds.X + bounds.Width &&
                 y >= bounds.Y && y < bounds.Y + bounds.Height);
     }
 
-    // Transform point (x, y) by the inverse of the rotation transform
     GfxRect bounds = GetBounds();
     float centerX = bounds.X + bounds.Width / 2.0f;
     float centerY = bounds.Y + bounds.Height / 2.0f;
 
-    D2D1::Matrix3x2F rotation = D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY));
-    D2D1::Matrix3x2F inverse;
+    D2D1::Matrix3x2F matrix;
+
+    if (m_HasTransformMatrix) {
+        matrix = D2D1::Matrix3x2F(
+            m_TransformMatrix[0], m_TransformMatrix[1],
+            m_TransformMatrix[2], m_TransformMatrix[3],
+            m_TransformMatrix[4], m_TransformMatrix[5]
+        );
+    } else {
+        matrix = D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY));
+    }
     
     // If inversion fails (degenerate matrix), fallback to standard bounds
-    if (!rotation.Invert()) {
+    if (!matrix.Invert()) {
         return (x >= bounds.X && x < bounds.X + bounds.Width &&
                 y >= bounds.Y && y < bounds.Y + bounds.Height);
     }
 
     D2D1_POINT_2F p = D2D1::Point2F((float)x, (float)y);
-    D2D1_POINT_2F transformed = rotation.TransformPoint(p); // Actually transforms by the matrix itself
-
-    // Wait, D2D1::Matrix3x2F::TransformPoint applies the matrix. 
-    // rotation.Invert() MODIFIES the matrix to be the inverse.
-    // So 'rotation' IS now the inverse matrix.
+    D2D1_POINT_2F transformed = matrix.TransformPoint(p); 
     
     return (transformed.x >= bounds.X && transformed.x < bounds.X + bounds.Width &&
             transformed.y >= bounds.Y && transformed.y < bounds.Y + bounds.Height);

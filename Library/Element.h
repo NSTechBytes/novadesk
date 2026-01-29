@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 Novadesk Project 
+/* Copyright (C) 2026 OfficialNovadesk 
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -104,6 +104,17 @@ public:
 
     void SetRotate(float angle) { m_Rotate = angle; }
     float GetRotate() const { return m_Rotate; }
+
+    void SetTransformMatrix(const float* matrix) {
+        if (matrix) {
+            memcpy(m_TransformMatrix, matrix, sizeof(float) * 6);
+            m_HasTransformMatrix = true;
+        } else {
+            m_HasTransformMatrix = false;
+        }
+    }
+    bool HasTransformMatrix() const { return m_HasTransformMatrix; }
+    const float* GetTransformMatrix() const { return m_TransformMatrix; }
 
     bool HasSolidColor() const { return m_HasSolidColor; }
     COLORREF GetSolidColor() const { return m_SolidColor; }
@@ -218,6 +229,8 @@ protected:
 
     // Transformation properties
     float m_Rotate = 0.0f;
+    bool m_HasTransformMatrix = false;
+    float m_TransformMatrix[6];
 
     // Tooltip properties
     std::wstring m_ToolTipText;

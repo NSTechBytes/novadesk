@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 Novadesk Project 
+/* Copyright (C) 2026 OfficialNovadesk 
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -8,6 +8,7 @@
 #include "TextElement.h"
 #include "Logging.h"
 #include "Direct2DHelper.h"
+#include "Logging.h"
 
 TextElement::TextElement(const std::wstring& id, int x, int y, int w, int h,
      const std::wstring& text, const std::wstring& fontFace,
@@ -31,7 +32,18 @@ void TextElement::Render(ID2D1DeviceContext* context)
     float centerX = bounds.X + bounds.Width / 2.0f;
     float centerY = bounds.Y + bounds.Height / 2.0f;
 
-    if (m_Rotate != 0.0f)
+    if (m_HasTransformMatrix)
+    {
+        D2D1::Matrix3x2F matrix = D2D1::Matrix3x2F(
+            m_TransformMatrix[0], m_TransformMatrix[1],
+            m_TransformMatrix[2], m_TransformMatrix[3],
+            m_TransformMatrix[4], m_TransformMatrix[5]
+        );
+        Logging::Log(LogLevel::Debug, L"TextElement(%s) Applying Transform: [%.2f, %.2f, %.2f, %.2f, %.2f, %.2f]", 
+            m_Id.c_str(), m_TransformMatrix[0], m_TransformMatrix[1], m_TransformMatrix[2], m_TransformMatrix[3], m_TransformMatrix[4], m_TransformMatrix[5]);
+        context->SetTransform(matrix * originalTransform);
+    }
+    else if (m_Rotate != 0.0f)
     {
         context->SetTransform(D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY)) * originalTransform);
     }

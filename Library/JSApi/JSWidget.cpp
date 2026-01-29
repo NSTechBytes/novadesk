@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 Novadesk Project 
+/* Copyright (C) 2026 OfficialNovadesk 
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -72,6 +72,11 @@
   
          if (options.id.empty()) {
              Logging::Log(LogLevel::Error, L"Widget creation failed: ID must be provided.");
+             return 0;
+         }
+ 
+         if (options.scriptPath.empty()) {
+             Logging::Log(LogLevel::Error, L"Widget creation failed: 'script' path must be provided.");
              return 0;
          }
 

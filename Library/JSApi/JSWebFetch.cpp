@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 Novadesk Project 
+/* Copyright (C) 2026 OfficialNovadesk 
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -100,7 +100,8 @@ namespace JSApi {
         std::thread fetchThread(FetchThreadProc, url, callbackId, hNotifyWnd);
         fetchThread.detach();
 
-        return 0;
+        duk_push_boolean(ctx, true);
+        return 1;
     }
 
     void HandleWebFetchMessage(UINT message, WPARAM wParam, LPARAM lParam) {

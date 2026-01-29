@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 Novadesk Project 
+/* Copyright (C) 2026 OfficialNovadesk 
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -122,9 +122,12 @@ namespace JSApi {
         wrappedContent += content;
         wrappedContent += "\n})(win, ipc, path, __dirname, __filename);";
 
+        widget->BeginUpdate();
         if (duk_peval_string(s_JsContext, wrappedContent.c_str()) != 0) {
             Logging::Log(LogLevel::Error, L"Widget Script Error (%s): %S", widget->GetOptions().id.c_str(), duk_safe_to_string(s_JsContext, -1));
         }
+        widget->EndUpdate();
+        
         duk_pop(s_JsContext);
 
         duk_push_global_stash(s_JsContext);
