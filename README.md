@@ -7,14 +7,14 @@
   <a href="https://novadesk-docs.pages.dev">
     <img src="https://img.shields.io/badge/Documentation-Read-f59e0b?style=for-the-badge&logo=gitbook&logoColor=white" alt="Documentation"/>
   </a>
-  <a href="https://github.com/Official-Novadesk/Novadesk/releases/latest">
+  <a href="https://github.com/Official-Novadesk/novadesk/releases/latest">
     <img src="https://img.shields.io/badge/Download-Latest-10b981?style=for-the-badge&logo=github&logoColor=white" alt="Download"/>
   </a>
   <br>
-  <img src="https://img.shields.io/github/license/Official-Novadesk/Novadesk?style=for-the-badge" alt="License"/>
-  <img src="https://img.shields.io/github/v/release/Official-Novadesk/Novadesk?style=for-the-badge" alt="Release"/>
-  <img src="https://img.shields.io/github/stars/Official-Novadesk/Novadesk?style=for-the-badge" alt="Stars"/>
-  <img src="https://img.shields.io/github/issues/Official-Novadesk/Novadesk?style=for-the-badge" alt="Issues"/>
+  <img src="https://img.shields.io/github/license/Official-Novadesk/novadesk?style=for-the-badge" alt="License"/>
+  <img src="https://img.shields.io/github/v/release/Official-Novadesk/novadesk?style=for-the-badge" alt="Release"/>
+  <img src="https://img.shields.io/github/stars/Official-Novadesk/novadesk?style=for-the-badge" alt="Stars"/>
+  <img src="https://img.shields.io/github/issues/Official-Novadesk/novadesk?style=for-the-badge" alt="Issues"/>
 </p>
 
 Novadesk is a open source powerful desktop widget platform built with C++ and powered by the Duktape JavaScript engine. It allows users to create system monitors, custom interfaces, and desktop enhancements using familiar JavaScript syntax.
