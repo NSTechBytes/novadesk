@@ -67,4 +67,13 @@ win.addText({
     clipString: "wrap"
 });
 
+win.addText({
+    id: "icon-test",
+    x: 20, y: startY + spacing * 9,
+    // \uE700 is the 'Settings' gear icon in Segoe MDL2 Assets
+    text: "<font=Segoe MDL2 Assets>\uE700</font> Settings",
+    fontSize: 24,
+    fontColor: "#FFFFFF"
+});
+
 console.log("Inline styling test widget script loaded.");
