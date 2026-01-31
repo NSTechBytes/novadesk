@@ -16,6 +16,94 @@
 #include "Logging.h"
 
 namespace PropertyParser {
+    
+    static std::vector<std::wstring> SplitByComma(const std::wstring& s) {
+        std::vector<std::wstring> parts;
+        int depth = 0;
+        size_t last = 0;
+        for (size_t i = 0; i < s.length(); i++) {
+            if (s[i] == L'(') depth++;
+            else if (s[i] == L')') depth--;
+            else if (s[i] == L',' && depth == 0) {
+                parts.push_back(s.substr(last, i - last));
+                last = i + 1;
+            }
+        }
+        parts.push_back(s.substr(last));
+        for (auto& p : parts) {
+            p.erase(0, p.find_first_not_of(L' '));
+            p.erase(p.find_last_not_of(L' ') + 1);
+        }
+        return parts;
+    }
+
+    static bool ParseGradientString(const std::wstring& str, GradientInfo& out) {
+        if (str.empty()) return false;
+        std::wstring s = str;
+        // Trim only at ends, not middle because color names like "rgba(0, 0, 0, 1)" have spaces
+        s.erase(0, s.find_first_not_of(L' '));
+        s.erase(s.find_last_not_of(L' ') + 1);
+        
+        std::wstring lowerS = s;
+        std::transform(lowerS.begin(), lowerS.end(), lowerS.begin(), ::towlower);
+
+        if (lowerS.find(L"lineargradient(") == 0) out.type = GRADIENT_LINEAR;
+        else if (lowerS.find(L"radialgradient(") == 0) out.type = GRADIENT_RADIAL;
+        else return false;
+
+        size_t start = lowerS.find(L'(') + 1;
+        size_t end = lowerS.find_last_of(L')');
+        if (end == std::wstring::npos || end <= start) return false;
+
+        std::wstring content = s.substr(start, end - start);
+        std::vector<std::wstring> parts = SplitByComma(content);
+        if (parts.empty()) return false;
+
+        int colorStartIndex = 0;
+        if (out.type == GRADIENT_LINEAR) {
+            std::wstring dir = parts[0];
+            std::transform(dir.begin(), dir.end(), dir.begin(), ::towlower);
+            dir.erase(std::remove_if(dir.begin(), dir.end(), isspace), dir.end());
+
+            if (dir == L"toright") { out.angle = 0; colorStartIndex = 1; }
+            else if (dir == L"tobottom") { out.angle = 90; colorStartIndex = 1; }
+            else if (dir == L"toleft") { out.angle = 180; colorStartIndex = 1; }
+            else if (dir == L"totop") { out.angle = 270; colorStartIndex = 1; }
+            else if (dir == L"tobottomright") { out.angle = 45; colorStartIndex = 1; }
+            else if (dir == L"tobottomleft") { out.angle = 135; colorStartIndex = 1; }
+            else if (dir == L"totopleft") { out.angle = 225; colorStartIndex = 1; }
+            else if (dir == L"totopright") { out.angle = 315; colorStartIndex = 1; }
+            else if (dir.find(L"deg") != std::wstring::npos) {
+                try { out.angle = std::stof(dir.substr(0, dir.find(L"deg"))); } catch(...) { out.angle = 0; }
+                colorStartIndex = 1;
+            }
+        } else {
+             std::wstring shape = parts[0];
+             std::transform(shape.begin(), shape.end(), shape.begin(), ::towlower);
+             shape.erase(std::remove_if(shape.begin(), shape.end(), isspace), shape.end());
+
+             if (shape == L"circle" || shape == L"ellipse") {
+                 out.shape = shape;
+                 colorStartIndex = 1;
+             }
+        }
+
+        out.stops.clear();
+        for (size_t i = colorStartIndex; i < parts.size(); i++) {
+            GradientStop stop;
+            if (ColorUtil::ParseRGBA(parts[i], stop.color, stop.alpha)) {
+                out.stops.push_back(stop);
+            }
+        }
+
+        if (out.stops.size() < 2) return false;
+
+        for (size_t i = 0; i < out.stops.size(); i++) {
+            out.stops[i].position = (float)i / (out.stops.size() - 1);
+        }
+
+        return true;
+    }
 
     // Helper class for standardized property reading
     class PropertyReader {
@@ -74,6 +162,17 @@ namespace PropertyParser {
         bool GetColor(const char* key, COLORREF& outColor, BYTE& outAlpha) {
             std::wstring colorStr;
             if (GetString(key, colorStr)) {
+                return ColorUtil::ParseRGBA(colorStr, outColor, outAlpha);
+            }
+            return false;
+        }
+
+        bool GetGradientOrColor(const char* key, COLORREF& outColor, BYTE& outAlpha, GradientInfo& outGradient) {
+            std::wstring colorStr;
+            if (GetString(key, colorStr)) {
+                if (ParseGradientString(colorStr, outGradient)) {
+                    return true;
+                }
                 return ColorUtil::ParseRGBA(colorStr, outColor, outAlpha);
             }
             return false;
@@ -383,7 +482,7 @@ namespace PropertyParser {
         if (!reader.GetString("fontFace", options.fontFace)) options.fontFace = L"Arial";
         reader.GetInt("fontSize", options.fontSize);
         
-        reader.GetColor("fontColor", options.fontColor, options.alpha);
+        reader.GetGradientOrColor("fontColor", options.fontColor, options.alpha, options.fontGradient);
         
         if (duk_get_prop_string(ctx, -1, "fontWeight")) {
             if (duk_is_number(ctx, -1)) {
@@ -875,6 +974,7 @@ namespace PropertyParser {
         element->SetClip(options.clip);
         element->SetFontPath(options.fontPath);
         element->SetShadows(options.shadows);
+        element->SetFontGradient(options.fontGradient);
     }
 
     /*

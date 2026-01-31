@@ -34,5 +34,13 @@ var widget = new widgetWindow({
     script: "fontPath.js"
 });
 
+var widget = new widgetWindow({
+    id: "fontGradient",
+    width: 800,
+    height: 600,
+    backgroundColor: "rgba(0, 0, 0, 1)",
+    script: "fontGradient.js"
+});
+
 
 app.enableDebugging(true);

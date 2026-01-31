@@ -179,8 +179,17 @@ void TextElement::Render(ID2D1DeviceContext* context)
     D2D1_RECT_F layoutRect = D2D1::RectF(layoutX, layoutY, layoutX + layoutW, layoutY + layoutH);
 
     // Create brush
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pBrush;
-    Direct2D::CreateSolidBrush(context, m_FontColor, m_Alpha / 255.0f, pBrush.GetAddressOf());
+    Microsoft::WRL::ComPtr<ID2D1Brush> pBrush;
+    if (m_FontGradient.type != GRADIENT_NONE)
+    {
+        Direct2D::CreateGradientBrush(context, layoutRect, m_FontGradient, pBrush.GetAddressOf());
+    }
+    else
+    {
+        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pSolidBrush;
+        Direct2D::CreateSolidBrush(context, m_FontColor, m_Alpha / 255.0f, pSolidBrush.GetAddressOf());
+        pBrush = pSolidBrush;
+    }
 
     if (pBrush)
     {

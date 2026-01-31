@@ -57,6 +57,7 @@ public:
     void SetClip(TextClipString clip) { m_ClipString = clip; }
     void SetFontPath(const std::wstring& path) { m_FontPath = path; }
     void SetShadows(const std::vector<TextShadow>& shadows) { m_Shadows = shadows; }
+    void SetFontGradient(const GradientInfo& gradient) { m_FontGradient = gradient; }
 
     const std::wstring& GetText() const { return m_Text; }
     const std::wstring& GetFontFace() const { return m_FontFace; }
@@ -69,6 +70,7 @@ public:
     TextClipString GetClipString() const { return m_ClipString; }
     const std::wstring& GetFontPath() const { return m_FontPath; }
     const std::vector<TextShadow>& GetShadows() const { return m_Shadows; }
+    const GradientInfo& GetFontGradient() const { return m_FontGradient; }
 
     virtual int GetAutoWidth() override;
     virtual int GetAutoHeight() override;
@@ -87,6 +89,7 @@ private:
     TextClipString m_ClipString;
     std::wstring m_FontPath;
     std::vector<TextShadow> m_Shadows;
+    GradientInfo m_FontGradient;
 };
 
 #endif
