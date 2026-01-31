@@ -132,6 +132,7 @@ namespace PropertyParser
         std::vector<TextShadow> shadows;
         GradientInfo fontGradient;
         float letterSpacing = 0.0f;
+        bool underLine = false;
     };
 
     /*

@@ -107,4 +107,15 @@ win.addText({
     }
 });
 
-console.log("Gradient and spacing test widget created.");
+// 9. Underline
+win.addText({
+    id: "underline-test",
+    x: 20, y: startY + spacing * 8 + 100,
+    text: "Underlined Text (Red)",
+    fontSize: 24,
+    fontWeight: 700,
+    fontColor: "#f00",
+    underLine: true
+});
+
+console.log("Gradient, spacing, and underline test widget created.");

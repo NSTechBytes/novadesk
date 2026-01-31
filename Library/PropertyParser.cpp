@@ -484,6 +484,7 @@ namespace PropertyParser {
         
         reader.GetGradientOrColor("fontColor", options.fontColor, options.alpha, options.fontGradient);
         reader.GetFloat("letterSpacing", options.letterSpacing);
+        reader.GetBool("underLine", options.underLine);
         
         if (duk_get_prop_string(ctx, -1, "fontWeight")) {
             if (duk_is_number(ctx, -1)) {
@@ -977,6 +978,7 @@ namespace PropertyParser {
         element->SetShadows(options.shadows);
         element->SetFontGradient(options.fontGradient);
         element->SetLetterSpacing(options.letterSpacing);
+        element->SetUnderline(options.underLine);
     }
 
     /*

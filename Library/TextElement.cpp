@@ -211,6 +211,11 @@ void TextElement::Render(ID2D1DeviceContext* context)
                 }
             }
 
+            if (m_UnderLine) {
+                DWRITE_TEXT_RANGE range = { 0, (UINT32)m_Text.length() };
+                pLayout->SetUnderline(TRUE, range);
+            }
+
             if (!m_Shadows.empty())
             {
                 // Create a Command List to capture the text with letter spacing for blurred shadows
@@ -322,6 +327,11 @@ int TextElement::GetAutoWidth()
         }
     }
 
+    if (m_UnderLine) {
+        DWRITE_TEXT_RANGE range = { 0, (UINT32)m_Text.length() };
+        pLayout->SetUnderline(TRUE, range);
+    }
+
     DWRITE_TEXT_METRICS metrics;
     pLayout->GetMetrics(&metrics);
 
@@ -391,6 +401,11 @@ int TextElement::GetAutoHeight()
             DWRITE_TEXT_RANGE range = { 0, (UINT32)m_Text.length() };
             pLayout1->SetCharacterSpacing(m_LetterSpacing, 0.0f, 0.0f, range);
         }
+    }
+
+    if (m_UnderLine) {
+        DWRITE_TEXT_RANGE range = { 0, (UINT32)m_Text.length() };
+        pLayout->SetUnderline(TRUE, range);
     }
 
     DWRITE_TEXT_METRICS metrics;
@@ -479,6 +494,11 @@ bool TextElement::HitTest(int x, int y)
             DWRITE_TEXT_RANGE range = { 0, (UINT32)m_Text.length() };
             pLayout1->SetCharacterSpacing(m_LetterSpacing, 0.0f, 0.0f, range);
         }
+    }
+
+    if (m_UnderLine) {
+        DWRITE_TEXT_RANGE range = { 0, (UINT32)m_Text.length() };
+        pLayout->SetUnderline(TRUE, range);
     }
 
     // Get point relative to layout area
