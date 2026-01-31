@@ -72,7 +72,14 @@ void TextElement::Render(ID2D1DeviceContext* context)
     if (!m_FontPath.empty()) {
         pCollection = FontManager::GetFontCollection(m_FontPath);
         if (pCollection) {
-            Logging::Log(LogLevel::Debug, L"TextElement(%s): Using custom font collection from '%s'", m_Id.c_str(), m_FontPath.c_str());
+            UINT32 index;
+            BOOL exists;
+            if (FAILED(pCollection->FindFamilyName(fontFace.c_str(), &index, &exists)) || !exists) {
+                Logging::Log(LogLevel::Warn, L"TextElement(%s): Font family '%s' not found in custom collection, falling back to system fonts.", m_Id.c_str(), fontFace.c_str());
+                pCollection = nullptr;
+            } else {
+                Logging::Log(LogLevel::Debug, L"TextElement(%s): Using custom font collection from '%s' (Family found)", m_Id.c_str(), m_FontPath.c_str());
+            }
         } else {
             Logging::Log(LogLevel::Warn, L"TextElement(%s): Failed to load custom collection, falling back to system fonts.", m_Id.c_str());
         }
@@ -96,18 +103,6 @@ void TextElement::Render(ID2D1DeviceContext* context)
             m_Id.c_str(), fontFace.c_str(), m_FontPath.c_str(), hr);
         context->SetTransform(originalTransform);
         return;
-    }
-    
-    // Check if the font face actually exists in the collection
-    if (pCollection) {
-        UINT32 index;
-        BOOL exists;
-        pCollection->FindFamilyName(fontFace.c_str(), &index, &exists);
-        if (!exists) {
-            Logging::Log(LogLevel::Warn, L"TextElement(%s): Font family '%s' not found in custom collection!", m_Id.c_str(), fontFace.c_str());
-        } else {
-            Logging::Log(LogLevel::Debug, L"TextElement(%s): Font family '%s' found at index %u", m_Id.c_str(), fontFace.c_str(), index);
-        }
     }
 
     // Set alignment
@@ -344,6 +339,13 @@ int TextElement::GetAutoWidth()
     Microsoft::WRL::ComPtr<IDWriteFontCollection> pCollection;
     if (!m_FontPath.empty()) {
         pCollection = FontManager::GetFontCollection(m_FontPath);
+        if (pCollection) {
+            UINT32 index;
+            BOOL exists;
+            if (FAILED(pCollection->FindFamilyName(fontFace.c_str(), &index, &exists)) || !exists) {
+                pCollection = nullptr;
+            }
+        }
     }
 
     Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
@@ -417,6 +419,13 @@ int TextElement::GetAutoHeight()
     Microsoft::WRL::ComPtr<IDWriteFontCollection> pCollection;
     if (!m_FontPath.empty()) {
         pCollection = FontManager::GetFontCollection(m_FontPath);
+        if (pCollection) {
+            UINT32 index;
+            BOOL exists;
+            if (FAILED(pCollection->FindFamilyName(fontFace.c_str(), &index, &exists)) || !exists) {
+                pCollection = nullptr;
+            }
+        }
     }
 
     Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
@@ -536,14 +545,23 @@ bool TextElement::HitTest(int x, int y)
     if ((m_HasSolidColor && m_SolidAlpha > 0) || (m_HasGradient)) return true;
 
     // Use DirectWrite for precise hit testing
+    std::wstring fontFace = m_FontFace.empty() ? L"Arial" : m_FontFace;
+
     Microsoft::WRL::ComPtr<IDWriteFontCollection> pCollection;
     if (!m_FontPath.empty()) {
         pCollection = FontManager::GetFontCollection(m_FontPath);
+        if (pCollection) {
+            UINT32 index;
+            BOOL exists;
+            if (FAILED(pCollection->FindFamilyName(fontFace.c_str(), &index, &exists)) || !exists) {
+                pCollection = nullptr;
+            }
+        }
     }
 
     Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
     HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
-        m_FontFace.c_str(), pCollection.Get(),
+        fontFace.c_str(), pCollection.Get(),
         (DWRITE_FONT_WEIGHT)m_FontWeight,
         m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL, (float)m_FontSize, L"",
