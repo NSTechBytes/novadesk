@@ -11,6 +11,7 @@
 #include "Settings.h"
 #include "PathUtils.h"
 #include <string>
+#include <cwctype>
 #include "JSApi/JSEvents.h"
 #include "JSApi/JSUtils.h"
 #include "Logging.h"
@@ -65,17 +66,12 @@ namespace PropertyParser {
             std::transform(dir.begin(), dir.end(), dir.begin(), ::towlower);
             dir.erase(std::remove_if(dir.begin(), dir.end(), isspace), dir.end());
 
-            if (dir == L"toright") { out.angle = 0; colorStartIndex = 1; }
-            else if (dir == L"tobottom") { out.angle = 90; colorStartIndex = 1; }
-            else if (dir == L"toleft") { out.angle = 180; colorStartIndex = 1; }
-            else if (dir == L"totop") { out.angle = 270; colorStartIndex = 1; }
-            else if (dir == L"tobottomright") { out.angle = 45; colorStartIndex = 1; }
-            else if (dir == L"tobottomleft") { out.angle = 135; colorStartIndex = 1; }
-            else if (dir == L"totopleft") { out.angle = 225; colorStartIndex = 1; }
-            else if (dir == L"totopright") { out.angle = 315; colorStartIndex = 1; }
-            else if (dir.find(L"deg") != std::wstring::npos) {
-                try { out.angle = std::stof(dir.substr(0, dir.find(L"deg"))); } catch(...) { out.angle = 0; }
-                colorStartIndex = 1;
+            if (!dir.empty() && (iswdigit(dir[0]) || dir[0] == L'-' || dir[0] == L'.')) {
+                try { 
+                    size_t pos = 0;
+                    out.angle = std::stof(dir, &pos);
+                    if (pos > 0) colorStartIndex = 1;
+                } catch(...) {}
             }
         } else {
              std::wstring shape = parts[0];

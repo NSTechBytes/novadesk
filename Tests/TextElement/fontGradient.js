@@ -11,7 +11,7 @@ win.addText({
     y: startY,
     fontSize: 28,
     fontWeight: 700,
-    fontColor: "linearGradient(to right, #ff8c00, #ff0080)"
+    fontColor: "linearGradient(0, #ff8c00, #ff0080)"
 });
 
 startY += 60;
@@ -23,7 +23,7 @@ win.addText({
     text: "Linear: To Right (Red -> Green -> Blue)",
     fontSize: 24,
     fontWeight: 700,
-    fontColor: "linearGradient(to right, #ff0000, #00ff00, #0000ff)"
+    fontColor: "linearGradient(0, #ff0000, #00ff00, #0000ff)"
 });
 
 // 2. Linear Gradient: Diagonal
@@ -33,7 +33,7 @@ win.addText({
     text: "Linear: 45deg (Purple -> Orange)",
     fontSize: 24,
     fontWeight: 700,
-    fontColor: "linearGradient(45deg, #a020f0, #ffa500)"
+    fontColor: "linearGradient(45, #a020f0, #ffa500)"
 });
 
 // 3. Linear Gradient: Vertical
@@ -43,7 +43,7 @@ win.addText({
     text: "Linear: To Bottom (Cyan -> White -> Magenta)",
     fontSize: 24,
     fontWeight: 700,
-    fontColor: "linearGradient(to bottom, #00ffff, #ffffff, #ff00ff)"
+    fontColor: "linearGradient(90, #00ffff, #ffffff, #ff00ff)"
 });
 
 // 4. Radial Gradient: Circle
@@ -75,8 +75,7 @@ win.addText({
     text: "Gradient + Shadow",
     fontSize: 48,
     fontWeight: 900,
-    fontColor: "linearGradient(to right, #00f, #f0f)",
-    fontShadow: "2px 2px 4px rgba(0,0,0,200)"
+    fontColor: "linearGradient(0, #00f, #f0f)",
 });
 
 // 7. Letter Spacing (Positive)
