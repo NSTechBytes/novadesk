@@ -20,6 +20,7 @@
 #include "ImageElement.h"
 #include "TextElement.h"
 #include "BarElement.h"
+#include "RoundLineElement.h"
 #include "JSApi/JSApi.h"
 #include "JSApi/JSCommon.h"
 #include "JSApi/JSEvents.h"
@@ -921,6 +922,29 @@ void Widget::AddBar(const PropertyParser::BarOptions& options)
 }
 
 /*
+** Add a round line content item to the widget.
+*/
+void Widget::AddRoundLine(const PropertyParser::RoundLineOptions& options)
+{
+    if (options.id.empty()) {
+        Logging::Log(LogLevel::Error, L"AddRoundLine failed: Element ID cannot be empty.");
+        return;
+    }
+
+    if (FindElementById(options.id)) {
+        RemoveElements(options.id);
+    }
+
+    RoundLineElement* element = new RoundLineElement(options.id, options.x, options.y, options.width, options.height, options.value);
+    
+    PropertyParser::ApplyRoundLineOptions(element, options);
+
+    m_Elements.push_back(element);
+    
+    Redraw();
+}
+
+/*
 ** Update properties of an existing element.
 */
 void Widget::SetElementProperties(const std::wstring& id, duk_context* ctx)
@@ -943,6 +967,11 @@ void Widget::SetElementProperties(const std::wstring& id, duk_context* ctx)
         PropertyParser::PreFillBarOptions(options, static_cast<BarElement*>(element));
         PropertyParser::ParseBarOptions(ctx, options);
         PropertyParser::ApplyBarOptions(static_cast<BarElement*>(element), options);
+    } else if (element->GetType() == ELEMENT_ROUNDLINE) {
+        PropertyParser::RoundLineOptions options;
+        PropertyParser::PreFillRoundLineOptions(options, static_cast<RoundLineElement*>(element));
+        PropertyParser::ParseRoundLineOptions(ctx, options);
+        PropertyParser::ApplyRoundLineOptions(static_cast<RoundLineElement*>(element), options);
     }
 
     Redraw();

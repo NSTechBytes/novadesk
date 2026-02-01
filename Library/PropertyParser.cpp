@@ -600,6 +600,66 @@ namespace PropertyParser {
         reader.GetFloat("barGradientAngle", options.barGradientAngle);
     }
 
+    void ParseRoundLineOptions(duk_context* ctx, RoundLineOptions& options, const std::wstring& baseDir) {
+        if (!duk_is_object(ctx, -1)) return;
+
+        ParseElementOptionsInternal(ctx, options);
+        PropertyReader reader(ctx);
+
+        reader.GetFloat("value", options.value);
+        reader.GetInt("radius", options.radius);
+        reader.GetInt("thickness", options.thickness);
+        reader.GetInt("endThickness", options.endThickness);
+        reader.GetFloat("startAngle", options.startAngle);
+        reader.GetFloat("totalAngle", options.totalAngle);
+        reader.GetBool("clockwise", options.clockwise);
+
+        auto parseCap = [](const std::wstring& s, RoundLineCap& cap) {
+            if (s == L"round") cap = ROUNDLINE_CAP_ROUND;
+            else if (s == L"flat") cap = ROUNDLINE_CAP_FLAT;
+        };
+
+        std::wstring capStr;
+        if (reader.GetString("capType", capStr)) {
+            parseCap(capStr, options.startCap);
+            options.endCap = options.startCap;
+        }
+        if (reader.GetString("startCap", capStr)) parseCap(capStr, options.startCap);
+        if (reader.GetString("endCap", capStr)) parseCap(capStr, options.endCap);
+
+        std::wstring dashStr;
+        if (reader.GetString("dashArray", dashStr)) {
+            auto parts = SplitByComma(dashStr);
+            for (const auto& p : parts) {
+                try { options.dashArray.push_back(std::stof(p)); } catch (...) {}
+            }
+        }
+
+        reader.GetInt("ticks", options.ticks);
+
+        std::wstring lineColorStr;
+        if (reader.GetString("lineColor", lineColorStr)) {
+            if (ColorUtil::ParseRGBA(lineColorStr, options.lineColor, options.lineAlpha)) {
+                options.hasLineColor = true;
+            }
+        }
+
+        std::wstring lineColorBgStr;
+        if (reader.GetString("lineColorBg", lineColorBgStr)) {
+            if (ColorUtil::ParseRGBA(lineColorBgStr, options.lineColorBg, options.lineAlphaBg)) {
+                options.hasLineColorBg = true;
+            }
+        }
+
+        std::wstring lineColor2Str;
+        if (reader.GetString("lineColor2", lineColor2Str)) {
+            if (ColorUtil::ParseRGBA(lineColor2Str, options.lineColor2, options.lineAlpha2)) {
+                options.hasLineGradient = true;
+            }
+        }
+        reader.GetFloat("lineGradientAngle", options.lineGradientAngle);
+    }
+
     /*
     ** Apply properties from a Duktape object to a Widget.
     */
@@ -866,6 +926,25 @@ namespace PropertyParser {
             
             duk_push_int(ctx, bar->GetBarCornerRadius()); duk_put_prop_string(ctx, -2, "barCornerRadius");
             duk_push_number(ctx, bar->GetBarGradientAngle()); duk_put_prop_string(ctx, -2, "barGradientAngle");
+        } else if (element->GetType() == ELEMENT_ROUNDLINE) {
+            RoundLineElement* rl = static_cast<RoundLineElement*>(element);
+            duk_push_number(ctx, rl->GetValue()); duk_put_prop_string(ctx, -2, "value");
+            duk_push_int(ctx, rl->GetRadius()); duk_put_prop_string(ctx, -2, "radius");
+            duk_push_int(ctx, rl->GetThickness()); duk_put_prop_string(ctx, -2, "thickness");
+            duk_push_number(ctx, rl->GetStartAngle()); duk_put_prop_string(ctx, -2, "startAngle");
+            duk_push_number(ctx, rl->GetTotalAngle()); duk_put_prop_string(ctx, -2, "totalAngle");
+            
+            duk_push_string(ctx, rl->GetCapType() == ROUNDLINE_CAP_ROUND ? "round" : "flat"); duk_put_prop_string(ctx, -2, "capType");
+
+            if (rl->HasLineColor()) {
+                 duk_push_string(ctx, Utils::ToString(ColorUtil::ToRGBAString(rl->GetLineColor(), rl->GetLineAlpha())).c_str());
+                 duk_put_prop_string(ctx, -2, "lineColor");
+            }
+            if (rl->HasLineGradient()) {
+                 duk_push_string(ctx, Utils::ToString(ColorUtil::ToRGBAString(rl->GetLineColor2(), rl->GetLineAlpha2())).c_str());
+                 duk_put_prop_string(ctx, -2, "lineColor2");
+                 duk_push_number(ctx, rl->GetLineGradientAngle()); duk_put_prop_string(ctx, -2, "lineGradientAngle");
+            }
         }
     }
 
@@ -1007,6 +1086,33 @@ namespace PropertyParser {
         }
     }
 
+    void ApplyRoundLineOptions(RoundLineElement* element, const RoundLineOptions& options) {
+        if (!element) return;
+        ApplyElementOptions(element, options);
+
+        element->SetValue(options.value);
+        element->SetRadius(options.radius);
+        element->SetThickness(options.thickness);
+        element->SetEndThickness(options.endThickness);
+        element->SetStartAngle(options.startAngle);
+        element->SetTotalAngle(options.totalAngle);
+        element->SetClockwise(options.clockwise);
+        element->SetStartCap(options.startCap);
+        element->SetEndCap(options.endCap);
+        element->SetDashArray(options.dashArray);
+        element->SetTicks(options.ticks);
+
+        if (options.hasLineColor) {
+            element->SetLineColor(options.lineColor, options.lineAlpha);
+        }
+        if (options.hasLineColorBg) {
+            element->SetLineColorBg(options.lineColorBg, options.lineAlphaBg);
+        }
+        if (options.hasLineGradient) {
+            element->SetLineColor2(options.lineColor2, options.lineAlpha2, options.lineGradientAngle);
+        }
+    }
+
     void PreFillElementOptions(ElementOptions& options, Element* element) {
         if (!element) return;
         options.id = element->GetId();
@@ -1114,5 +1220,31 @@ namespace PropertyParser {
         options.barColor2 = element->GetBarColor2();
         options.barAlpha2 = element->GetBarAlpha2();
         options.barGradientAngle = element->GetBarGradientAngle();
+    }
+
+    void PreFillRoundLineOptions(RoundLineOptions& options, RoundLineElement* element) {
+        if (!element) return;
+        PreFillElementOptions(options, element);
+        options.value = element->GetValue();
+        options.radius = element->GetRadius();
+        options.thickness = element->GetThickness();
+        options.endThickness = element->GetEndThickness();
+        options.startAngle = element->GetStartAngle();
+        options.totalAngle = element->GetTotalAngle();
+        options.clockwise = element->IsClockwise();
+        options.startCap = element->GetStartCap();
+        options.endCap = element->GetEndCap();
+        options.dashArray = element->GetDashArray();
+        options.ticks = element->GetTicks();
+        options.hasLineColor = element->HasLineColor();
+        options.lineColor = element->GetLineColor();
+        options.lineAlpha = element->GetLineAlpha();
+        options.hasLineColorBg = element->HasLineColorBg();
+        options.lineColorBg = element->GetLineColorBg();
+        options.lineAlphaBg = element->GetLineAlphaBg();
+        options.hasLineGradient = element->HasLineGradient();
+        options.lineColor2 = element->GetLineColor2();
+        options.lineAlpha2 = element->GetLineAlpha2();
+        options.lineGradientAngle = element->GetLineGradientAngle();
     }
 }

@@ -134,6 +134,7 @@
     <ClCompile Include="Library\DiskMonitor.cpp" />
     <ClCompile Include="Library\ImageElement.cpp" />
     <ClCompile Include="Library\BarElement.cpp" />
+    <ClCompile Include="Library\RoundLineElement.cpp" />
     <ClCompile Include="Library\JSApi\JSIPC.cpp" />
     <ClCompile Include="Library\JSApi\JSJson.cpp" />
     <ClCompile Include="Library\JSApi\JSPath.cpp" />

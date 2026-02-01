@@ -12,6 +12,7 @@
 #include "TextElement.h"
 #include "ImageElement.h"
 #include "BarElement.h"
+#include "RoundLineElement.h"
 
 namespace PropertyParser
 {
@@ -156,10 +157,38 @@ namespace PropertyParser
         float barGradientAngle = 0.0f;
     };
 
+    struct RoundLineOptions : public ElementOptions {
+        float value = 0.0f;
+        int radius = 0;
+        int thickness = 2;
+        int endThickness = -1;
+        float startAngle = 0.0f;
+        float totalAngle = 360.0f;
+        bool clockwise = true;
+        RoundLineCap startCap = ROUNDLINE_CAP_FLAT;
+        RoundLineCap endCap = ROUNDLINE_CAP_FLAT;
+        std::vector<float> dashArray;
+        int ticks = 0;
+
+        bool hasLineColor = false;
+        COLORREF lineColor = RGB(0, 255, 0);
+        BYTE lineAlpha = 255;
+
+        bool hasLineColorBg = false;
+        COLORREF lineColorBg = RGB(50, 50, 50);
+        BYTE lineAlphaBg = 255;
+
+        bool hasLineGradient = false;
+        COLORREF lineColor2 = 0;
+        BYTE lineAlpha2 = 255;
+        float lineGradientAngle = 0.0f;
+    };
+
     void ParseWidgetOptions(duk_context* ctx, WidgetOptions& options, const std::wstring& baseDir = L"");
     void ParseImageOptions(duk_context* ctx, ImageOptions& options, const std::wstring& baseDir = L"");
     void ParseTextOptions(duk_context* ctx, TextOptions& options, const std::wstring& baseDir = L"");
     void ParseBarOptions(duk_context* ctx, BarOptions& options, const std::wstring& baseDir = L"");
+    void ParseRoundLineOptions(duk_context* ctx, RoundLineOptions& options, const std::wstring& baseDir = L"");
     void ApplyWidgetProperties(duk_context* ctx, Widget* widget, const std::wstring& baseDir = L"");
 
     void PushWidgetProperties(duk_context* ctx, Widget* widget);
@@ -169,11 +198,13 @@ namespace PropertyParser
     void PreFillTextOptions(TextOptions& options, TextElement* element);
     void PreFillImageOptions(ImageOptions& options, ImageElement* element);
     void PreFillBarOptions(BarOptions& options, BarElement* element);
+    void PreFillRoundLineOptions(RoundLineOptions& options, RoundLineElement* element);
     void ApplyElementOptions(Element* element, const ElementOptions& options);
 
     void ApplyImageOptions(ImageElement* element, const ImageOptions& options);
     void ApplyTextOptions(TextElement* element, const TextOptions& options);
     void ApplyBarOptions(BarElement* element, const BarOptions& options);
+    void ApplyRoundLineOptions(RoundLineElement* element, const RoundLineOptions& options);
 
     std::vector<std::wstring> SplitByComma(const std::wstring& s);
     bool ParseGradientString(const std::wstring& str, GradientInfo& out);
