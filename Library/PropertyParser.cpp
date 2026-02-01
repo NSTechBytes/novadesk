@@ -11,11 +11,95 @@
 #include "Settings.h"
 #include "PathUtils.h"
 #include <string>
+#include <cwctype>
 #include "JSApi/JSEvents.h"
 #include "JSApi/JSUtils.h"
 #include "Logging.h"
 
 namespace PropertyParser {
+    
+    std::vector<std::wstring> SplitByComma(const std::wstring& s) {
+        std::vector<std::wstring> parts;
+        int depth = 0;
+        size_t last = 0;
+        for (size_t i = 0; i < s.length(); i++) {
+            if (s[i] == L'(') depth++;
+            else if (s[i] == L')') depth--;
+            else if (s[i] == L',' && depth == 0) {
+                parts.push_back(s.substr(last, i - last));
+                last = i + 1;
+            }
+        }
+        parts.push_back(s.substr(last));
+        for (auto& p : parts) {
+            p.erase(0, p.find_first_not_of(L' '));
+            p.erase(p.find_last_not_of(L' ') + 1);
+        }
+        return parts;
+    }
+
+    bool ParseGradientString(const std::wstring& str, GradientInfo& out) {
+        if (str.empty()) return false;
+        std::wstring s = str;
+        // Trim only at ends, not middle because color names like "rgba(0, 0, 0, 1)" have spaces
+        s.erase(0, s.find_first_not_of(L' '));
+        s.erase(s.find_last_not_of(L' ') + 1);
+        
+        std::wstring lowerS = s;
+        std::transform(lowerS.begin(), lowerS.end(), lowerS.begin(), ::towlower);
+
+        if (lowerS.find(L"lineargradient(") == 0) out.type = GRADIENT_LINEAR;
+        else if (lowerS.find(L"radialgradient(") == 0) out.type = GRADIENT_RADIAL;
+        else return false;
+
+        size_t start = lowerS.find(L'(') + 1;
+        size_t end = lowerS.find_last_of(L')');
+        if (end == std::wstring::npos || end <= start) return false;
+
+        std::wstring content = s.substr(start, end - start);
+        std::vector<std::wstring> parts = SplitByComma(content);
+        if (parts.empty()) return false;
+
+        int colorStartIndex = 0;
+        if (out.type == GRADIENT_LINEAR) {
+            std::wstring dir = parts[0];
+            std::transform(dir.begin(), dir.end(), dir.begin(), ::towlower);
+            dir.erase(std::remove_if(dir.begin(), dir.end(), isspace), dir.end());
+
+            if (!dir.empty() && (iswdigit(dir[0]) || dir[0] == L'-' || dir[0] == L'.')) {
+                try { 
+                    size_t pos = 0;
+                    out.angle = std::stof(dir, &pos);
+                    if (pos > 0) colorStartIndex = 1;
+                } catch(...) {}
+            }
+        } else {
+             std::wstring shape = parts[0];
+             std::transform(shape.begin(), shape.end(), shape.begin(), ::towlower);
+             shape.erase(std::remove_if(shape.begin(), shape.end(), isspace), shape.end());
+
+             if (shape == L"circle" || shape == L"ellipse") {
+                 out.shape = shape;
+                 colorStartIndex = 1;
+             }
+        }
+
+        out.stops.clear();
+        for (size_t i = colorStartIndex; i < parts.size(); i++) {
+            GradientStop stop;
+            if (ColorUtil::ParseRGBA(parts[i], stop.color, stop.alpha)) {
+                out.stops.push_back(stop);
+            }
+        }
+
+        if (out.stops.size() < 2) return false;
+
+        for (size_t i = 0; i < out.stops.size(); i++) {
+            out.stops[i].position = (float)i / (out.stops.size() - 1);
+        }
+
+        return true;
+    }
 
     // Helper class for standardized property reading
     class PropertyReader {
@@ -74,6 +158,17 @@ namespace PropertyParser {
         bool GetColor(const char* key, COLORREF& outColor, BYTE& outAlpha) {
             std::wstring colorStr;
             if (GetString(key, colorStr)) {
+                return ColorUtil::ParseRGBA(colorStr, outColor, outAlpha);
+            }
+            return false;
+        }
+
+        bool GetGradientOrColor(const char* key, COLORREF& outColor, BYTE& outAlpha, GradientInfo& outGradient) {
+            std::wstring colorStr;
+            if (GetString(key, colorStr)) {
+                if (ParseGradientString(colorStr, outGradient)) {
+                    return true;
+                }
                 return ColorUtil::ParseRGBA(colorStr, outColor, outAlpha);
             }
             return false;
@@ -383,10 +478,42 @@ namespace PropertyParser {
         if (!reader.GetString("fontFace", options.fontFace)) options.fontFace = L"Arial";
         reader.GetInt("fontSize", options.fontSize);
         
-        reader.GetColor("fontColor", options.fontColor, options.alpha);
+        reader.GetGradientOrColor("fontColor", options.fontColor, options.alpha, options.fontGradient);
+        reader.GetFloat("letterSpacing", options.letterSpacing);
+        reader.GetBool("underLine", options.underLine);
+        reader.GetBool("strikeThrough", options.strikeThrough);
+
+        std::wstring caseStr;
+        if (reader.GetString("case", caseStr)) {
+            if (caseStr == L"upper") options.textCase = TEXT_CASE_UPPER;
+            else if (caseStr == L"lower") options.textCase = TEXT_CASE_LOWER;
+            else if (caseStr == L"capitalize") options.textCase = TEXT_CASE_CAPITALIZE;
+            else if (caseStr == L"sentence") options.textCase = TEXT_CASE_SENTENCE;
+        }
         
-        std::wstring weight;
-        if (reader.GetString("fontWeight", weight) && weight == L"bold") options.bold = true;
+        if (duk_get_prop_string(ctx, -1, "fontWeight")) {
+            if (duk_is_number(ctx, -1)) {
+                 options.fontWeight = duk_get_int(ctx, -1);
+            } else if (duk_is_string(ctx, -1)) {
+                std::wstring weightStr = Utils::ToWString(duk_get_string(ctx, -1));
+                std::transform(weightStr.begin(), weightStr.end(), weightStr.begin(), ::towlower);
+                
+                if (weightStr == L"thin") options.fontWeight = 100;
+                else if (weightStr == L"extralight" || weightStr == L"ultralight") options.fontWeight = 200;
+                else if (weightStr == L"light") options.fontWeight = 300;
+                else if (weightStr == L"normal" || weightStr == L"regular") options.fontWeight = 400;
+                else if (weightStr == L"medium") options.fontWeight = 500;
+                else if (weightStr == L"semibold" || weightStr == L"demibold") options.fontWeight = 600;
+                else if (weightStr == L"bold") options.fontWeight = 700;
+                else if (weightStr == L"extrabold" || weightStr == L"ultrabold") options.fontWeight = 800;
+                else if (weightStr == L"black" || weightStr == L"heavy") options.fontWeight = 900;
+            }
+        }
+        duk_pop(ctx);
+        if (reader.GetString("fontPath", options.fontPath)) {
+            options.fontPath = PathUtils::ResolvePath(options.fontPath, baseDir);
+            Logging::Log(LogLevel::Debug, L"PropertyParser: Resolved fontPath: '%s'", options.fontPath.c_str());
+        }
         
         std::wstring style;
         if (reader.GetString("fontStyle", style) && style == L"italic") options.italic = true;
@@ -668,7 +795,7 @@ namespace PropertyParser {
             std::wstring fc = ColorUtil::ToRGBAString(t->GetFontColor(), t->GetFontAlpha());
             duk_push_string(ctx, Utils::ToString(fc).c_str()); duk_put_prop_string(ctx, -2, "fontColor");
             
-            duk_push_boolean(ctx, t->IsBold()); duk_put_prop_string(ctx, -2, "bold");
+            duk_push_int(ctx, t->GetFontWeight()); duk_put_prop_string(ctx, -2, "fontWeight");
             duk_push_boolean(ctx, t->IsItalic()); duk_put_prop_string(ctx, -2, "italic");
             
             // Align string mapping (needs inverse)
@@ -705,6 +832,10 @@ namespace PropertyParser {
                     duk_put_prop_index(ctx, -2, i);
                 }
                 duk_put_prop_string(ctx, -2, "fontShadow");
+            }
+            
+            if (!t->GetFontPath().empty()) {
+                duk_push_string(ctx, Utils::ToString(t->GetFontPath()).c_str()); duk_put_prop_string(ctx, -2, "fontPath");
             }
 
             
@@ -844,11 +975,17 @@ namespace PropertyParser {
         element->SetFontFace(options.fontFace);
         element->SetFontSize(options.fontSize);
         element->SetFontColor(options.fontColor, options.alpha);
-        element->SetBold(options.bold);
+        element->SetFontWeight(options.fontWeight);
         element->SetItalic(options.italic);
         element->SetTextAlign(options.textAlign);
         element->SetClip(options.clip);
+        element->SetFontPath(options.fontPath);
         element->SetShadows(options.shadows);
+        element->SetFontGradient(options.fontGradient);
+        element->SetLetterSpacing(options.letterSpacing);
+        element->SetUnderline(options.underLine);
+        element->SetStrikethrough(options.strikeThrough);
+        element->SetTextCase(options.textCase);
     }
 
     /*
@@ -936,10 +1073,11 @@ namespace PropertyParser {
         options.fontSize = element->GetFontSize();
         options.fontColor = element->GetFontColor();
         options.alpha = element->GetFontAlpha();
-        options.bold = element->IsBold();
+        options.fontWeight = element->GetFontWeight();
         options.italic = element->IsItalic();
         options.textAlign = element->GetTextAlign();
         options.clip = element->GetClipString();
+        options.fontPath = element->GetFontPath();
         options.shadows = element->GetShadows();
     }
 

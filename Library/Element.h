@@ -46,6 +46,33 @@ struct TextShadow {
     BYTE alpha = 255;
 };
 
+struct GradientStop {
+    COLORREF color;
+    BYTE alpha;
+    float position;
+};
+
+enum GradientType {
+    GRADIENT_NONE,
+    GRADIENT_LINEAR,
+    GRADIENT_RADIAL
+};
+
+struct GradientInfo {
+    GradientType type = GRADIENT_NONE;
+    std::vector<GradientStop> stops;
+    float angle = 0.0f; // For linear
+    std::wstring shape = L"circle"; // For radial
+};
+
+enum TextCase {
+    TEXT_CASE_NORMAL,
+    TEXT_CASE_UPPER,
+    TEXT_CASE_LOWER,
+    TEXT_CASE_CAPITALIZE,
+    TEXT_CASE_SENTENCE
+};
+
 class Element
 {
 public:

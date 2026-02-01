@@ -12,6 +12,7 @@
 #include <wincodec.h>
 #include <wrl/client.h>
 #include <string>
+#include "Element.h"
 
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
@@ -30,6 +31,7 @@ namespace Direct2D
     // Helpers
     bool CreateSolidBrush(ID2D1RenderTarget* context, COLORREF color, float alpha, ID2D1SolidColorBrush** brush);
     bool CreateLinearGradientBrush(ID2D1RenderTarget* context, const D2D1_POINT_2F& start, const D2D1_POINT_2F& end, COLORREF color1, float alpha1, COLORREF color2, float alpha2, ID2D1LinearGradientBrush** brush);
+    bool CreateGradientBrush(ID2D1RenderTarget* context, const D2D1_RECT_F& rect, const GradientInfo& info, ID2D1Brush** brush);
     bool LoadBitmapFromFile(ID2D1RenderTarget* context, const std::wstring& path, ID2D1Bitmap** bitmap, IWICBitmap** wicBitmap = nullptr);
     bool LoadWICBitmapFromFile(const std::wstring& path, IWICBitmap** wicBitmap);
     

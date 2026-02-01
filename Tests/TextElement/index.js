@@ -18,4 +18,45 @@ var widget = new widgetWindow({
     script: "fontEffect.js"
 });
 
+var widget = new widgetWindow({
+    id: "fontWeight",
+    width: 500,
+    height: 500,
+    backgroundColor: "rgba(0, 0, 0, 1)",
+    script: "fontWeight.js"
+});
+
+var widget = new widgetWindow({
+    id: "fontPath",
+    width: 500,
+    height: 500,
+    backgroundColor: "rgba(0, 0, 0, 1)",
+    script: "fontPath.js"
+});
+
+var widget = new widgetWindow({
+    id: "fontGradient",
+    width: 800,
+    height: 800,
+    backgroundColor: "rgba(0, 0, 0, 1)",
+    script: "fontGradient.js"
+});
+
+var widget = new widgetWindow({
+    id: "case",
+    width: 400,
+    height: 400,
+    backgroundColor: "rgba(0, 0, 0, 1)",
+    script: "case.js"
+});
+
+var widget = new widgetWindow({
+    id: "inlineStyle",
+    width: 600,
+    height: 600,
+    backgroundColor: "rgba(0, 0, 0, 1)",
+    script: "inlineStyle.js"
+});
+
+
 app.enableDebugging(true);

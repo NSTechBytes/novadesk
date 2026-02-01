@@ -123,12 +123,18 @@ namespace PropertyParser
         int fontSize = 12;
         COLORREF fontColor = RGB(0, 0, 0);
         BYTE alpha = 255;
-        bool bold = false;
+        int fontWeight = 400;
         bool italic = false;
         TextAlignment textAlign = TEXT_ALIGN_LEFT_TOP;
         TextClipString clip = TEXT_CLIP_NONE;
         
+        std::wstring fontPath;
         std::vector<TextShadow> shadows;
+        GradientInfo fontGradient;
+        float letterSpacing = 0.0f;
+        bool underLine = false;
+        bool strikeThrough = false;
+        TextCase textCase = TEXT_CASE_NORMAL;
     };
 
     /*
@@ -168,4 +174,7 @@ namespace PropertyParser
     void ApplyImageOptions(ImageElement* element, const ImageOptions& options);
     void ApplyTextOptions(TextElement* element, const TextOptions& options);
     void ApplyBarOptions(BarElement* element, const BarOptions& options);
+
+    std::vector<std::wstring> SplitByComma(const std::wstring& s);
+    bool ParseGradientString(const std::wstring& str, GradientInfo& out);
 }

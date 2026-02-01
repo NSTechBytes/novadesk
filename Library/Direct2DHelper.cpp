@@ -91,6 +91,52 @@ namespace Direct2D
         return SUCCEEDED(hr);
     }
 
+    bool CreateGradientBrush(ID2D1RenderTarget* context, const D2D1_RECT_F& rect, const GradientInfo& info, ID2D1Brush** brush)
+    {
+        if (!context || info.type == GRADIENT_NONE || info.stops.empty()) return false;
+
+        std::vector<D2D1_GRADIENT_STOP> stops;
+        for (const auto& s : info.stops) {
+            D2D1_GRADIENT_STOP stop;
+            stop.color = ColorToD2D(s.color, s.alpha / 255.0f);
+            stop.position = s.position;
+            stops.push_back(stop);
+        }
+
+        ComPtr<ID2D1GradientStopCollection> pStops;
+        HRESULT hr = context->CreateGradientStopCollection(stops.data(), (UINT32)stops.size(), pStops.GetAddressOf());
+        if (FAILED(hr)) return false;
+
+        if (info.type == GRADIENT_LINEAR) {
+            D2D1_POINT_2F start = FindEdgePoint(info.angle + 180.0f, rect);
+            D2D1_POINT_2F end = FindEdgePoint(info.angle, rect);
+
+            ComPtr<ID2D1LinearGradientBrush> pLinear;
+            hr = context->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(start, end), pStops.Get(), &pLinear);
+            if (SUCCEEDED(hr)) {
+                *brush = pLinear.Detach();
+                return true;
+            }
+        }
+        else if (info.type == GRADIENT_RADIAL) {
+            float cx = rect.left + (rect.right - rect.left) / 2.0f;
+            float cy = rect.top + (rect.bottom - rect.top) / 2.0f;
+            float rx = (rect.right - rect.left) / 2.0f;
+            float ry = (rect.bottom - rect.top) / 2.0f;
+
+            ComPtr<ID2D1RadialGradientBrush> pRadial;
+            hr = context->CreateRadialGradientBrush(
+                D2D1::RadialGradientBrushProperties(D2D1::Point2F(cx, cy), D2D1::Point2F(0, 0), rx, ry),
+                pStops.Get(), &pRadial);
+            if (SUCCEEDED(hr)) {
+                *brush = pRadial.Detach();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     bool LoadWICBitmapFromFile(const std::wstring& path, IWICBitmap** wicBitmap)
     {
         if (!g_pWICFactory) return false;
