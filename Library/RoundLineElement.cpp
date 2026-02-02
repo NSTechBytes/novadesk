@@ -84,21 +84,29 @@ void RoundLineElement::Render(ID2D1DeviceContext* context)
         }
     };
 
-    if (m_HasLineColorBg) {
-        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pBgBrush;
-        Direct2D::CreateSolidBrush(context, m_LineColorBg, m_LineAlphaBg / 255.0f, &pBgBrush);
+    if (m_HasLineColorBg || m_LineGradientBg.type != GRADIENT_NONE) {
+        Microsoft::WRL::ComPtr<ID2D1Brush> pBgBrush;
+        bool bgBrushCreated = false;
+        if (m_LineGradientBg.type != GRADIENT_NONE) {
+             D2D1_RECT_F rect = D2D1::RectF((float)m_X, (float)m_Y, (float)m_X + m_Width, (float)m_Y + m_Height);
+             bgBrushCreated = Direct2D::CreateGradientBrush(context, rect, m_LineGradientBg, &pBgBrush);
+        }
+        if (!bgBrushCreated) {
+            Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pSolidBg;
+            Direct2D::CreateSolidBrush(context, m_LineColorBg, m_LineAlphaBg / 255.0f, &pSolidBg);
+            pBgBrush = pSolidBg;
+        }
         drawArc(startAngle, m_TotalAngle, pBgBrush.Get(), (float)m_Thickness, -1, m_StartCap, m_EndCap, {});
     }
 
     Microsoft::WRL::ComPtr<ID2D1Brush> pBrush;
-    if (m_HasLineGradient) {
-        Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> pLinBrush;
+    bool brushCreated = false;
+    if (m_LineGradient.type != GRADIENT_NONE) {
         D2D1_RECT_F rect = D2D1::RectF((float)m_X, (float)m_Y, (float)m_X + m_Width, (float)m_Y + m_Height);
-        D2D1_POINT_2F start = Direct2D::FindEdgePoint(m_LineGradientAngle + 180.0f, rect);
-        D2D1_POINT_2F end = Direct2D::FindEdgePoint(m_LineGradientAngle, rect);
-        Direct2D::CreateLinearGradientBrush(context, start, end, m_LineColor, m_LineAlpha / 255.0f, m_LineColor2, m_LineAlpha2 / 255.0f, &pLinBrush);
-        pBrush = pLinBrush;
-    } else {
+        brushCreated = Direct2D::CreateGradientBrush(context, rect, m_LineGradient, &pBrush);
+    }
+    
+    if (!brushCreated) {
         Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pSolidBrush;
         Direct2D::CreateSolidBrush(context, m_LineColor, m_LineAlpha / 255.0f, &pSolidBrush);
         pBrush = pSolidBrush;

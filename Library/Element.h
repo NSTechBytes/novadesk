@@ -115,11 +115,8 @@ public:
         m_HasSolidColor = true; 
     }
 
-    void SetGradient(COLORREF color2, BYTE alpha2, float angle) {
-        m_SolidColor2 = color2;
-        m_SolidAlpha2 = alpha2;
-        m_GradientAngle = angle;
-        m_HasGradient = true;
+    void SetSolidGradient(const GradientInfo& gradient) {
+        m_SolidGradient = gradient;
     }
 
     void SetCornerRadius(int radius) { 
@@ -158,10 +155,7 @@ public:
     BYTE GetSolidAlpha() const { return m_SolidAlpha; }
     int GetCornerRadius() const { return m_CornerRadius; }
 
-    bool HasGradient() const { return m_HasGradient; }
-    COLORREF GetSolidColor2() const { return m_SolidColor2; }
-    BYTE GetSolidAlpha2() const { return m_SolidAlpha2; }
-    float GetGradientAngle() const { return m_GradientAngle; }
+    const GradientInfo& GetSolidGradient() const { return m_SolidGradient; }
 
     int GetBevelType() const { return m_BevelType; }
     int GetBevelWidth() const { return m_BevelWidth; }
@@ -242,10 +236,7 @@ protected:
     int m_CornerRadius = 0;
 
     // Gradient properties
-    bool m_HasGradient = false;
-    COLORREF m_SolidColor2 = 0;
-    BYTE m_SolidAlpha2 = 0;
-    float m_GradientAngle = 0.0f;
+    GradientInfo m_SolidGradient;
 
     // Bevel properties
     int m_BevelType = 0;

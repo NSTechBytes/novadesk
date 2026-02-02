@@ -69,13 +69,17 @@ public:
         m_LineAlphaBg = alpha;
         m_HasLineColorBg = true;
     }
-    
-    void SetLineColor2(COLORREF color, BYTE alpha, float angle) {
-        m_LineColor2 = color;
-        m_LineAlpha2 = alpha;
-        m_LineGradientAngle = angle;
-        m_HasLineGradient = true;
+
+    void SetLineGradientBg(const GradientInfo& gradient) {
+        m_LineGradientBg = gradient;
     }
+    
+    void SetLineGradient(const GradientInfo& gradient) {
+        m_LineGradient = gradient;
+    }
+
+    const GradientInfo& GetLineGradient() const { return m_LineGradient; }
+    const GradientInfo& GetLineGradientBg() const { return m_LineGradientBg; }
 
     bool HasLineColor() const { return m_HasLineColor; }
     COLORREF GetLineColor() const { return m_LineColor; }
@@ -85,10 +89,6 @@ public:
     COLORREF GetLineColorBg() const { return m_LineColorBg; }
     BYTE GetLineAlphaBg() const { return m_LineAlphaBg; }
 
-    bool HasLineGradient() const { return m_HasLineGradient; }
-    COLORREF GetLineColor2() const { return m_LineColor2; }
-    BYTE GetLineAlpha2() const { return m_LineAlpha2; }
-    float GetLineGradientAngle() const { return m_LineGradientAngle; }
 
 private:
     float m_Value; // 0.0 to 1.0
@@ -112,10 +112,8 @@ private:
     COLORREF m_LineColorBg = RGB(50, 50, 50);
     BYTE m_LineAlphaBg = 255;
 
-    bool m_HasLineGradient = false;
-    COLORREF m_LineColor2 = 0;
-    BYTE m_LineAlpha2 = 255;
-    float m_LineGradientAngle = 0.0f;
+    GradientInfo m_LineGradient;
+    GradientInfo m_LineGradientBg;
 };
 
 #endif

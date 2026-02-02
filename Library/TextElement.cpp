@@ -542,7 +542,7 @@ bool TextElement::HitTest(int x, int y)
     if (!Element::HitTest(x, y)) return false;
 
     // If we have a background or gradient, the entire element is clickable
-    if ((m_HasSolidColor && m_SolidAlpha > 0) || (m_HasGradient)) return true;
+    if ((m_HasSolidColor && m_SolidAlpha > 0) || (m_SolidGradient.type != GRADIENT_NONE)) return true;
 
     // Use DirectWrite for precise hit testing
     std::wstring fontFace = m_FontFace.empty() ? L"Arial" : m_FontFace;

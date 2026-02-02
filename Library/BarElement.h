@@ -31,7 +31,7 @@ public:
     void SetBarCornerRadius(int radius) { m_BarCornerRadius = radius; }
     int GetBarCornerRadius() const { return m_BarCornerRadius; }
 
-    float GetBarGradientAngle() const { return m_BarGradientAngle; }
+    const GradientInfo& GetBarGradient() const { return m_BarGradient; }
 
     void SetBarColor(COLORREF color, BYTE alpha) { 
         m_BarColor = color; 
@@ -39,20 +39,13 @@ public:
         m_HasBarColor = true;
     }
     
-    void SetBarColor2(COLORREF color, BYTE alpha, float angle) {
-        m_BarColor2 = color;
-        m_BarAlpha2 = alpha;
-        m_BarGradientAngle = angle;
-        m_HasBarGradient = true;
+    void SetBarGradient(const GradientInfo& gradient) {
+        m_BarGradient = gradient;
     }
 
     bool HasBarColor() const { return m_HasBarColor; }
     COLORREF GetBarColor() const { return m_BarColor; }
     BYTE GetBarAlpha() const { return m_BarAlpha; }
-
-    bool HasBarGradient() const { return m_HasBarGradient; }
-    COLORREF GetBarColor2() const { return m_BarColor2; }
-    BYTE GetBarAlpha2() const { return m_BarAlpha2; }
 
 private:
     float m_Value; // 0.0 to 1.0
@@ -64,10 +57,7 @@ private:
     COLORREF m_BarColor = RGB(0, 255, 0);
     BYTE m_BarAlpha = 255;
 
-    bool m_HasBarGradient = false;
-    COLORREF m_BarColor2 = 0;
-    BYTE m_BarAlpha2 = 255;
-    float m_BarGradientAngle = 0.0f;
+    GradientInfo m_BarGradient;
 };
 
 #endif

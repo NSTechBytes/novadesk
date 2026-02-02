@@ -45,7 +45,7 @@ void BarElement::Render(ID2D1DeviceContext* context) {
     // Draw background first
     RenderBackground(context);
 
-    if (m_HasBarColor || m_HasBarGradient) {
+    if (m_HasBarColor || m_BarGradient.type != GRADIENT_NONE) {
         float val = (m_Value < 0.0f) ? 0.0f : (m_Value > 1.0f) ? 1.0f : m_Value;
         
         D2D1_RECT_F barRect;
@@ -58,15 +58,13 @@ void BarElement::Render(ID2D1DeviceContext* context) {
 
         if (barRect.right > barRect.left && barRect.bottom > barRect.top) {
             Microsoft::WRL::ComPtr<ID2D1Brush> barBrush;
+            bool brushCreated = false;
             
-            if (m_HasBarGradient) {
-                D2D1_POINT_2F start = Direct2D::FindEdgePoint(m_BarGradientAngle + 180.0f, barRect);
-                D2D1_POINT_2F end = Direct2D::FindEdgePoint(m_BarGradientAngle, barRect);
-                
-                Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> lgBrush;
-                Direct2D::CreateLinearGradientBrush(context, start, end, m_BarColor, m_BarAlpha / 255.0f, m_BarColor2, m_BarAlpha2 / 255.0f, lgBrush.GetAddressOf());
-                barBrush = lgBrush;
-            } else {
+            if (m_BarGradient.type != GRADIENT_NONE) {
+                brushCreated = Direct2D::CreateGradientBrush(context, barRect, m_BarGradient, barBrush.GetAddressOf());
+            }
+            
+            if (!brushCreated) {
                 Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> sBrush;
                 Direct2D::CreateSolidBrush(context, m_BarColor, m_BarAlpha / 255.0f, sBrush.GetAddressOf());
                 barBrush = sBrush;

@@ -169,14 +169,13 @@ void Element::RenderBackground(ID2D1DeviceContext* context) {
     if (rect.right <= rect.left || rect.bottom <= rect.top) return;
 
     Microsoft::WRL::ComPtr<ID2D1Brush> brush;
-    if (m_HasGradient) {
-        D2D1_POINT_2F p1 = Direct2D::FindEdgePoint(m_GradientAngle + 180.0f, rect);
-        D2D1_POINT_2F p2 = Direct2D::FindEdgePoint(m_GradientAngle, rect);
+    bool brushCreated = false;
 
-        Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> lgBrush;
-        Direct2D::CreateLinearGradientBrush(context, p1, p2, m_SolidColor, m_SolidAlpha / 255.0f, m_SolidColor2, m_SolidAlpha2 / 255.0f, lgBrush.GetAddressOf());
-        brush = lgBrush;
-    } else {
+    if (m_SolidGradient.type != GRADIENT_NONE) {
+        brushCreated = Direct2D::CreateGradientBrush(context, rect, m_SolidGradient, brush.GetAddressOf());
+    }
+    
+    if (!brushCreated) {
         Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> sBrush;
         Direct2D::CreateSolidBrush(context, m_SolidColor, m_SolidAlpha / 255.0f, sBrush.GetAddressOf());
         brush = sBrush;

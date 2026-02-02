@@ -35,10 +35,7 @@ namespace PropertyParser
         BYTE solidAlpha = 0;
         int solidColorRadius = 0;
 
-        bool hasGradient = false;
-        COLORREF solidColor2 = 0;
-        BYTE solidAlpha2 = 0;
-        float gradientAngle = 0.0f;
+        GradientInfo solidGradient;
 
         // Bevel
         int bevelType = 0;
@@ -154,10 +151,7 @@ namespace PropertyParser
         COLORREF barColor = RGB(0, 255, 0);
         BYTE barAlpha = 255;
 
-        bool hasBarGradient = false;
-        COLORREF barColor2 = 0;
-        BYTE barAlpha2 = 255;
-        float barGradientAngle = 0.0f;
+        GradientInfo barGradient;
     };
 
     struct RoundLineOptions : public ElementOptions {
@@ -181,10 +175,8 @@ namespace PropertyParser
         COLORREF lineColorBg = RGB(50, 50, 50);
         BYTE lineAlphaBg = 255;
 
-        bool hasLineGradient = false;
-        COLORREF lineColor2 = 0;
-        BYTE lineAlpha2 = 255;
-        float lineGradientAngle = 0.0f;
+        GradientInfo lineGradient;
+        GradientInfo lineGradientBg;
     };
 
     struct ShapeOptions : public ElementOptions {
