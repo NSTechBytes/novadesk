@@ -8,7 +8,7 @@ var widget = new widgetWindow({
 });
 
 var audio = new system.audioLevel({
-    port: "Output",
+    port: "output",
     fftSize: 1024,
     fftOverlap: 512,
     bands: 20,

@@ -13,7 +13,7 @@
 #define MAX_CHANNELS 2
 
 struct AudioLevelConfig {
-    std::string port = "Output"; // "Output" or "Input"
+    std::string port = "output"; // "output" or "input"
     std::wstring deviceId = L"";
     
     int fftSize = 1024;

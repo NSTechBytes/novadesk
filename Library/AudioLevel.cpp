@@ -114,7 +114,7 @@ HRESULT AudioLevel::InitDevice()
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&m_pEnumerator);
     if (FAILED(hr)) return hr;
 
-    EDataFlow dataFlow = (m_config.port == "Input") ? eCapture : eRender;
+    EDataFlow dataFlow = (m_config.port == "input") ? eCapture : eRender;
     
     if (!m_config.deviceId.empty()) {
         hr = m_pEnumerator->GetDevice(m_config.deviceId.c_str(), &m_pDevice);
