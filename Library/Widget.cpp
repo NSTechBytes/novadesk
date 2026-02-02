@@ -404,14 +404,37 @@ void Widget::SetBackgroundColor(const std::wstring& colorStr)
 {
     COLORREF color = m_Options.color;
     BYTE alpha = m_Options.bgAlpha;
+    GradientInfo grad;
     
-    if (ColorUtil::ParseRGBA(colorStr, color, alpha))
+    bool isGradient = PropertyParser::ParseGradientString(colorStr, grad);
+    bool isColor = ColorUtil::ParseRGBA(colorStr, color, alpha);
+
+    if (isGradient || isColor)
     {
-        if (m_Options.backgroundColor != colorStr || m_Options.color != color || m_Options.bgAlpha != alpha)
-        {
+        bool changed = false;
+        if (m_Options.backgroundColor != colorStr) {
             m_Options.backgroundColor = colorStr;
-            m_Options.color = color;
-            m_Options.bgAlpha = alpha;
+            changed = true;
+        }
+
+        if (isGradient) {
+            if (m_Options.bgGradient.type != grad.type || m_Options.bgGradient.angle != grad.angle || m_Options.bgGradient.stops.size() != grad.stops.size()) {
+                m_Options.bgGradient = grad;
+                changed = true;
+            }
+        } else {
+            if (m_Options.bgGradient.type != GRADIENT_NONE) {
+                m_Options.bgGradient.type = GRADIENT_NONE;
+                changed = true;
+            }
+            if (m_Options.color != color || m_Options.bgAlpha != alpha) {
+                m_Options.color = color;
+                m_Options.bgAlpha = alpha;
+                changed = true;
+            }
+        }
+
+        if (changed) {
             Redraw();
             Settings::SaveWidget(m_Options.id, m_Options);
         }
@@ -1263,8 +1286,23 @@ void Widget::UpdateLayeredWindowContent()
 
             // Draw Background
             D2D1_RECT_F backRect = D2D1::RectF(0, 0, (float)w, (float)h);
-            Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pBackBrush;
-            Direct2D::CreateSolidBrush(m_pContext.Get(), m_Options.color, m_Options.bgAlpha / 255.0f, pBackBrush.GetAddressOf());
+            Microsoft::WRL::ComPtr<ID2D1Brush> pBackBrush;
+            
+            bool brushCreated = false;
+            if (m_Options.bgGradient.type != GRADIENT_NONE)
+            {
+                brushCreated = Direct2D::CreateGradientBrush(m_pContext.Get(), backRect, m_Options.bgGradient, pBackBrush.GetAddressOf());
+            }
+            
+            if (!brushCreated)
+            {
+                Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pSolidBrush;
+                if (Direct2D::CreateSolidBrush(m_pContext.Get(), m_Options.color, m_Options.bgAlpha / 255.0f, pSolidBrush.GetAddressOf())) {
+                    pSolidBrush.As(&pBackBrush);
+                    brushCreated = true;
+                }
+            }
+
             if (pBackBrush)
             {
                 m_pContext->FillRectangle(backRect, pBackBrush.Get());

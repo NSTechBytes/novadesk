@@ -48,6 +48,7 @@ struct WidgetOptions
     BYTE bgAlpha = 255;        // Alpha component of background color (0-255)
     BYTE windowOpacity = 255;  // Overall window opacity (0-255)
     COLORREF color = RGB(255, 255, 255);
+    GradientInfo bgGradient;
     bool draggable = true;
     bool clickThrough = false;
     bool keepOnScreen = false;

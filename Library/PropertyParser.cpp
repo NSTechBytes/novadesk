@@ -261,7 +261,7 @@ namespace PropertyParser {
         if (reader.GetInt("width", options.width)) options.m_WDefined = (options.width > 0);
         if (reader.GetInt("height", options.height)) options.m_HDefined = (options.height > 0);
         
-        reader.GetColor("backgroundColor", options.color, options.bgAlpha);
+        reader.GetGradientOrColor("backgroundColor", options.color, options.bgAlpha, options.bgGradient);
         if (duk_get_prop_string(ctx, -1, "backgroundColor")) {
              options.backgroundColor = Utils::ToWString(duk_get_string(ctx, -1));
         }
@@ -792,9 +792,11 @@ namespace PropertyParser {
 
         // Background Color
         std::wstring bgColor;
-        if (reader.GetString("backgroundColor", bgColor)) {
+        if (duk_get_prop_string(ctx, -1, "backgroundColor")) {
+            bgColor = Utils::ToWString(duk_get_string(ctx, -1));
             widget->SetBackgroundColor(bgColor);
         }
+        duk_pop(ctx);
 
         // Visibility
         bool show;
