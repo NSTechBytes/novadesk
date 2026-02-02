@@ -31,6 +31,7 @@ namespace PropertyParser {
     struct TextOptions;
     struct BarOptions;
     struct RoundLineOptions;
+    struct ShapeOptions;
 }
 
 #include "MenuItem.h"
@@ -91,6 +92,7 @@ public:
     void AddText(const PropertyParser::TextOptions& options);
     void AddBar(const PropertyParser::BarOptions& options);
     void AddRoundLine(const PropertyParser::RoundLineOptions& options);
+    void AddShape(const PropertyParser::ShapeOptions& options);
 
     void SetElementProperties(const std::wstring& id, duk_context* ctx);
     bool RemoveElements(const std::wstring& id = L"");

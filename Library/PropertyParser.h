@@ -7,12 +7,15 @@
 
 #pragma once
 #include "JSApi/duktape/duktape.h"
+#include <d2d1.h>
+#include <vector>
 #include "Widget.h"
 #include "Element.h"
 #include "TextElement.h"
 #include "ImageElement.h"
 #include "BarElement.h"
 #include "RoundLineElement.h"
+#include "ShapeElement.h"
 
 namespace PropertyParser
 {
@@ -184,27 +187,65 @@ namespace PropertyParser
         float lineGradientAngle = 0.0f;
     };
 
+    struct ShapeOptions : public ElementOptions {
+        std::wstring shapeType; // "rectangle", "ellipse", "line"
+        
+        float strokeWidth = 1.0f;
+        COLORREF strokeColor = RGB(0,0,0);
+        BYTE strokeAlpha = 255;
+        GradientInfo strokeGradient;
+        
+        COLORREF fillColor = RGB(255,255,255);
+        BYTE fillAlpha = 255;
+        GradientInfo fillGradient;
+
+        float radiusX = 0.0f;
+        float radiusY = 0.0f;
+        
+        float startX = 0.0f;
+        float startY = 0.0f;
+        float endX = 0.0f;
+        float endY = 0.0f;
+
+        float startAngle = 0.0f;
+        float endAngle = 90.0f;
+        bool clockwise = true;
+
+        std::wstring pathData;
+        
+        D2D1_CAP_STYLE strokeStartCap = D2D1_CAP_STYLE_FLAT;
+        D2D1_CAP_STYLE strokeEndCap = D2D1_CAP_STYLE_FLAT;
+        D2D1_CAP_STYLE strokeDashCap = D2D1_CAP_STYLE_FLAT;
+        D2D1_LINE_JOIN strokeLineJoin = D2D1_LINE_JOIN_MITER;
+        float strokeDashOffset = 0.0f;
+        std::vector<float> strokeDashes;
+    };
+
     void ParseWidgetOptions(duk_context* ctx, WidgetOptions& options, const std::wstring& baseDir = L"");
+    void ParseElementOptions(duk_context* ctx, Element* element);
     void ParseImageOptions(duk_context* ctx, ImageOptions& options, const std::wstring& baseDir = L"");
     void ParseTextOptions(duk_context* ctx, TextOptions& options, const std::wstring& baseDir = L"");
     void ParseBarOptions(duk_context* ctx, BarOptions& options, const std::wstring& baseDir = L"");
     void ParseRoundLineOptions(duk_context* ctx, RoundLineOptions& options, const std::wstring& baseDir = L"");
-    void ApplyWidgetProperties(duk_context* ctx, Widget* widget, const std::wstring& baseDir = L"");
-
+    void ParseShapeOptions(duk_context* ctx, ShapeOptions& options, const std::wstring& baseDir = L"");
+ 
     void PushWidgetProperties(duk_context* ctx, Widget* widget);
-    void ParseElementOptions(duk_context* ctx, Element* element);
     void PushElementProperties(duk_context* ctx, Element* element);
+
     void PreFillElementOptions(ElementOptions& options, Element* element);
     void PreFillTextOptions(TextOptions& options, TextElement* element);
     void PreFillImageOptions(ImageOptions& options, ImageElement* element);
     void PreFillBarOptions(BarOptions& options, BarElement* element);
     void PreFillRoundLineOptions(RoundLineOptions& options, RoundLineElement* element);
-    void ApplyElementOptions(Element* element, const ElementOptions& options);
+    void PreFillShapeOptions(ShapeOptions& options, ShapeElement* element);
 
+    void ApplyWidgetProperties(duk_context* ctx, Widget* widget, const std::wstring& baseDir = L"");
+    void ApplyElementOptions(Element* element, const ElementOptions& options);
     void ApplyImageOptions(ImageElement* element, const ImageOptions& options);
     void ApplyTextOptions(TextElement* element, const TextOptions& options);
     void ApplyBarOptions(BarElement* element, const BarOptions& options);
     void ApplyRoundLineOptions(RoundLineElement* element, const RoundLineOptions& options);
+    void ApplyShapeOptions(ShapeElement* element, const ShapeOptions& options);
 
     std::vector<std::wstring> SplitByComma(const std::wstring& s);
     bool ParseGradientString(const std::wstring& str, GradientInfo& out);

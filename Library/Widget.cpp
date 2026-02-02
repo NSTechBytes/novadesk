@@ -24,6 +24,12 @@
 #include "JSApi/JSApi.h"
 #include "JSApi/JSCommon.h"
 #include "JSApi/JSEvents.h"
+#include "RectangleShape.h"
+#include "EllipseShape.h"
+#include "LineShape.h"
+#include "ArcShape.h"
+#include "PathShape.h"
+#include "ShapeElement.h"
 #include "ColorUtil.h"
 #include "PathUtils.h"
 
@@ -975,6 +981,45 @@ void Widget::AddRoundLine(const PropertyParser::RoundLineOptions& options)
 
     m_Elements.push_back(element);
     
+    Redraw();
+}
+
+/*
+** Add shapes item to the widget.
+*/
+void Widget::AddShape(const PropertyParser::ShapeOptions& options)
+{
+    if (options.id.empty()) {
+        Logging::Log(LogLevel::Error, L"AddShape failed: Element ID cannot be empty.");
+        return;
+    }
+
+    if (FindElementById(options.id)) {
+        RemoveElements(options.id);
+    }
+
+    ShapeElement* element = nullptr;
+
+    if (options.shapeType == L"ellipse") {
+        element = new EllipseShape(options.id, options.x, options.y, options.width, options.height);
+    }
+    else if (options.shapeType == L"line") {
+        element = new LineShape(options.id, options.x, options.y, options.width, options.height);
+    }
+    else if (options.shapeType == L"arc") {
+        element = new ArcShape(options.id, options.x, options.y, options.width, options.height);
+    }
+    else if (options.shapeType == L"path") {
+        element = new PathShape(options.id, options.x, options.y, options.width, options.height);
+    }
+    else {
+        element = new RectangleShape(options.id, options.x, options.y, options.width, options.height);
+    }
+
+    PropertyParser::ApplyShapeOptions(element, options);
+
+    m_Elements.push_back(element);
+
     Redraw();
 }
 

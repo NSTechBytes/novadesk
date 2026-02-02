@@ -30,7 +30,8 @@ enum ElementType
     ELEMENT_IMAGE,
     ELEMENT_TEXT,
     ELEMENT_BAR,
-    ELEMENT_ROUNDLINE
+    ELEMENT_ROUNDLINE,
+    ELEMENT_SHAPE
 };
 
 struct GfxRect {

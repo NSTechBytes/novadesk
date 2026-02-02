@@ -101,6 +101,20 @@ namespace PropertyParser {
         return true;
     }
 
+    static D2D1_CAP_STYLE GetCapStyle(const std::wstring& str) {
+        if (str == L"Round") return D2D1_CAP_STYLE_ROUND;
+        if (str == L"Square") return D2D1_CAP_STYLE_SQUARE;
+        if (str == L"Triangle") return D2D1_CAP_STYLE_TRIANGLE;
+        return D2D1_CAP_STYLE_FLAT;
+    }
+
+    static D2D1_LINE_JOIN GetLineJoin(const std::wstring& str) {
+        if (str == L"Bevel") return D2D1_LINE_JOIN_BEVEL;
+        if (str == L"Round") return D2D1_LINE_JOIN_ROUND;
+        if (str == L"MiterOrBevel") return D2D1_LINE_JOIN_MITER_OR_BEVEL;
+        return D2D1_LINE_JOIN_MITER;
+    }
+
     // Helper class for standardized property reading
     class PropertyReader {
     public:
@@ -658,6 +672,70 @@ namespace PropertyParser {
             }
         }
         reader.GetFloat("lineGradientAngle", options.lineGradientAngle);
+    }
+
+    void ParseShapeOptions(duk_context* ctx, ShapeOptions& options, const std::wstring& baseDir) {
+        if (!duk_is_object(ctx, -1)) return;
+
+        // Parse base options first
+        ParseElementOptionsInternal(ctx, options);
+        PropertyReader reader(ctx);
+
+        reader.GetString("type", options.shapeType);
+
+        reader.GetFloat("strokeWidth", options.strokeWidth);
+
+        reader.GetGradientOrColor("strokeColor", options.strokeColor, options.strokeAlpha, options.strokeGradient);
+        reader.GetGradientOrColor("fillColor", options.fillColor, options.fillAlpha, options.fillGradient);
+
+        reader.GetFloat("radiusX", options.radiusX);
+        reader.GetFloat("radiusY", options.radiusY);
+        // Also support general "radius" setting both X and Y
+        float r = 0;
+        if (reader.GetFloat("radius", r)) {
+            if (options.radiusX == 0) options.radiusX = r;
+            if (options.radiusY == 0) options.radiusY = r;
+        }
+
+        reader.GetFloat("startX", options.startX);
+        reader.GetFloat("startY", options.startY);
+        reader.GetFloat("endX", options.endX);
+        reader.GetFloat("endY", options.endY);
+
+        reader.GetFloat("startAngle", options.startAngle);
+        reader.GetFloat("endAngle", options.endAngle);
+        reader.GetBool("clockwise", options.clockwise);
+
+        reader.GetString("pathData", options.pathData);
+
+        // Stroke Style Parsing
+        std::wstring capStr;
+        if (reader.GetString("strokeStartCap", capStr)) options.strokeStartCap = GetCapStyle(capStr);
+        if (reader.GetString("strokeEndCap", capStr)) options.strokeEndCap = GetCapStyle(capStr);
+        if (reader.GetString("strokeDashCap", capStr)) options.strokeDashCap = GetCapStyle(capStr);
+
+        std::wstring joinStr;
+        if (reader.GetString("strokeLineJoin", joinStr)) options.strokeLineJoin = GetLineJoin(joinStr);
+
+        reader.GetFloat("strokeDashOffset", options.strokeDashOffset);
+
+        if (duk_get_prop_string(ctx, -1, "strokeDashes")) {
+            if (duk_is_array(ctx, -1)) {
+                duk_enum(ctx, -1, DUK_ENUM_ARRAY_INDICES_ONLY);
+                while (duk_next(ctx, -1, 1)) {
+                    options.strokeDashes.push_back((float)duk_get_number(ctx, -1));
+                    duk_pop_2(ctx); // val, key
+                }
+                duk_pop(ctx); // enum
+            }
+            else if (duk_is_string(ctx, -1)) {
+                // Comma separated?
+                std::wstring dashesStr = Utils::ToWString(duk_get_string(ctx, -1));
+                auto parts = SplitByComma(dashesStr);
+                for (auto& p : parts) options.strokeDashes.push_back((float)_wtof(p.c_str()));
+            }
+            duk_pop(ctx);
+        }
     }
 
     /*
@@ -1246,5 +1324,69 @@ namespace PropertyParser {
         options.lineColor2 = element->GetLineColor2();
         options.lineAlpha2 = element->GetLineAlpha2();
         options.lineGradientAngle = element->GetLineGradientAngle();
+    }
+
+    void ApplyShapeOptions(ShapeElement* element, const ShapeOptions& options) {
+        ApplyElementOptions(element, options);
+
+        if (options.strokeGradient.type != GRADIENT_NONE) {
+            element->SetStrokeGradient(options.strokeGradient);
+        } else {
+            element->SetStroke(options.strokeWidth, options.strokeColor, options.strokeAlpha);
+        }
+
+        if (options.fillGradient.type != GRADIENT_NONE) {
+            element->SetFillGradient(options.fillGradient);
+        } else {
+            element->SetFill(options.fillColor, options.fillAlpha);
+        }
+
+        element->SetRadii(options.radiusX, options.radiusY);
+        element->SetLinePoints(options.startX, options.startY, options.endX, options.endY);
+        element->SetArcParams(options.startAngle, options.endAngle, options.clockwise);
+        element->SetPathData(options.pathData);
+        
+        element->SetStrokeStyle(
+            options.strokeStartCap, 
+            options.strokeEndCap, 
+            options.strokeDashCap, 
+            options.strokeLineJoin, 
+            options.strokeDashOffset, 
+            options.strokeDashes
+        );
+    }
+
+    void PreFillShapeOptions(ShapeOptions& options, ShapeElement* element) {
+        PreFillElementOptions(options, element);
+
+        options.strokeWidth = element->GetStrokeWidth();
+        options.strokeColor = element->GetStrokeColor();
+        options.strokeAlpha = element->GetStrokeAlpha();
+        options.strokeGradient = element->GetStrokeGradient();
+
+        options.fillColor = element->GetFillColor();
+        options.fillAlpha = element->GetFillAlpha();
+        options.fillGradient = element->GetFillGradient();
+
+        options.radiusX = element->GetRadiusX();
+        options.radiusY = element->GetRadiusY();
+
+        options.startX = element->GetStartX();
+        options.startY = element->GetStartY();
+        options.endX = element->GetEndX();
+        options.endY = element->GetEndY();
+
+        options.startAngle = element->GetStartAngle();
+        options.endAngle = element->GetEndAngle();
+        options.clockwise = element->IsClockwise();
+
+        options.pathData = element->GetPathData();
+
+        options.strokeStartCap = element->GetStrokeStartCap();
+        options.strokeEndCap = element->GetStrokeEndCap();
+        options.strokeDashCap = element->GetStrokeDashCap();
+        options.strokeLineJoin = element->GetStrokeLineJoin();
+        options.strokeDashOffset = element->GetStrokeDashOffset();
+        options.strokeDashes = element->GetStrokeDashes();
     }
 }
