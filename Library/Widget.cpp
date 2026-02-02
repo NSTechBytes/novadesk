@@ -209,6 +209,17 @@ void Widget::UnFocus()
     }
 }
 
+std::wstring Widget::GetTitle() const
+{
+    if (!m_hWnd) return L"";
+    int len = GetWindowTextLength(m_hWnd);
+    if (len == 0) return L"";
+    std::vector<wchar_t> buf(len + 1);
+    GetWindowText(m_hWnd, buf.data(), len + 1);
+    return std::wstring(buf.data());
+}
+
+
 
 /*
 ** Change the z-order position of this widget.
@@ -455,7 +466,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         return 0;
 
     case WM_KILLFOCUS:
-        if (widget) JSApi::TriggerWidgetEvent(widget, "unfocus");
+        if (widget) JSApi::TriggerWidgetEvent(widget, "unFocus");
         return 0;
 
     case WM_ERASEBKGND:

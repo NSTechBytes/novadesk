@@ -71,6 +71,7 @@ public:
     void Refresh();
     void SetFocus();
     void UnFocus();
+    std::wstring GetTitle() const;
 
     void BeginUpdate() { m_UpdateCount++; }
     void EndUpdate() { if (--m_UpdateCount == 0) Redraw(); }

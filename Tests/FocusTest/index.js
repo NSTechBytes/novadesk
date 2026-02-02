@@ -12,7 +12,7 @@ widget.on("focus", function() {
     console.log("Widget Focused");
 });
 
-widget.on("unfocus", function() {
+widget.on("unFocus", function() {
     console.log("Widget Unfocused");
 });
 
@@ -25,3 +25,12 @@ setTimeout(function() {
     widget.unFocus();
     console.log("Widget Unfocused");
 }, 4000);
+
+var windowHandle = widget.getHandle();
+console.log("Window Handle: " + windowHandle);
+
+var internalPointer = widget.getInternalPointer();
+console.log("Internal Pointer: " + internalPointer);
+
+var title = widget.getTitle();
+console.log("Title: " + title);

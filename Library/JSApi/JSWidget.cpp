@@ -229,6 +229,37 @@
          if (widget) widget->UnFocus();
          return 0;
      }
+
+     duk_ret_t js_widget_get_handle(duk_context* ctx) {
+         Widget* widget = GetWidgetFromContext(ctx);
+         if (widget) {
+             duk_push_pointer(ctx, (void*)widget->GetWindow());
+         } else {
+             duk_push_null(ctx);
+         }
+         return 1;
+     }
+
+     duk_ret_t js_widget_get_internal_pointer(duk_context* ctx) {
+         Widget* widget = GetWidgetFromContext(ctx);
+         if (widget) {
+             duk_push_pointer(ctx, (void*)widget);
+         } else {
+             duk_push_null(ctx);
+         }
+         return 1;
+     }
+
+     duk_ret_t js_widget_get_title(duk_context* ctx) {
+         Widget* widget = GetWidgetFromContext(ctx);
+         if (widget) {
+             std::wstring title = widget->GetTitle();
+             duk_push_string(ctx, Utils::ToString(title).c_str());
+         } else {
+             duk_push_string(ctx, "");
+         }
+         return 1;
+     }
  
      void BindWidgetControlMethods(duk_context* ctx) {
          duk_push_c_function(ctx, js_widget_set_properties, 1);
@@ -243,6 +274,12 @@
          duk_put_prop_string(ctx, -2, "setFocus");
          duk_push_c_function(ctx, js_widget_unfocus, 0);
          duk_put_prop_string(ctx, -2, "unFocus");
+         duk_push_c_function(ctx, js_widget_get_handle, 0);
+         duk_put_prop_string(ctx, -2, "getHandle");
+         duk_push_c_function(ctx, js_widget_get_internal_pointer, 0);
+         duk_put_prop_string(ctx, -2, "getInternalPointer");
+         duk_push_c_function(ctx, js_widget_get_title, 0);
+         duk_put_prop_string(ctx, -2, "getTitle");
          duk_push_c_function(ctx, js_widget_on, 2);
          duk_put_prop_string(ctx, -2, "on");
  
