@@ -18,15 +18,13 @@ RectangleShape::~RectangleShape()
 
 void RectangleShape::Render(ID2D1DeviceContext* context)
 {
-    ID2D1Brush* pStrokeBrush = nullptr;
-    if (m_HasStroke && m_StrokeWidth > 0) {
-        CreateBrush(context, &pStrokeBrush, true);
-    }
+    D2D1_MATRIX_3X2_F originalTransform;
+    ApplyRenderTransform(context, originalTransform);
 
-    ID2D1Brush* pFillBrush = nullptr;
-    if (m_HasFill) {
-        CreateBrush(context, &pFillBrush, false);
-    }
+    Microsoft::WRL::ComPtr<ID2D1Brush> pStrokeBrush;
+    Microsoft::WRL::ComPtr<ID2D1Brush> pFillBrush;
+    TryCreateStrokeBrush(context, pStrokeBrush);
+    TryCreateFillBrush(context, pFillBrush);
 
     D2D1_ROUNDED_RECT rect;
     rect.rect = D2D1::RectF((float)m_X, (float)m_Y, (float)(m_X + m_Width), (float)(m_Y + m_Height));
@@ -34,13 +32,11 @@ void RectangleShape::Render(ID2D1DeviceContext* context)
     rect.radiusY = m_RadiusY; 
 
     if (pFillBrush) {
-        context->FillRoundedRectangle(rect, pFillBrush);
+        context->FillRoundedRectangle(rect, pFillBrush.Get());
     }
     if (pStrokeBrush) {
         UpdateStrokeStyle(context);
-        context->DrawRoundedRectangle(rect, pStrokeBrush, m_StrokeWidth, m_StrokeStyle);
+        context->DrawRoundedRectangle(rect, pStrokeBrush.Get(), m_StrokeWidth, m_StrokeStyle);
     }
-
-    if (pStrokeBrush) pStrokeBrush->Release();
-    if (pFillBrush) pFillBrush->Release();
+    RestoreRenderTransform(context, originalTransform);
 }

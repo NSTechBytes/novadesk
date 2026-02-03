@@ -22,25 +22,7 @@ void BarElement::Render(ID2D1DeviceContext* context) {
     if (w <= 0 || h <= 0) return;
 
     D2D1_MATRIX_3X2_F originalTransform;
-    context->GetTransform(&originalTransform);
-
-    // Apply rotation around center
-    if (m_HasTransformMatrix) {
-        D2D1::Matrix3x2F matrix = D2D1::Matrix3x2F(
-            m_TransformMatrix[0], m_TransformMatrix[1],
-            m_TransformMatrix[2], m_TransformMatrix[3],
-            m_TransformMatrix[4], m_TransformMatrix[5]
-        );
-        // Logging::Log(LogLevel::Debug, L"BarElement(%s) Applying Transform: [%.2f, %.2f, %.2f, %.2f, %.2f, %.2f]", 
-        //     m_Id.c_str(), m_TransformMatrix[0], m_TransformMatrix[1], m_TransformMatrix[2], m_TransformMatrix[3], m_TransformMatrix[4], m_TransformMatrix[5]);
-        context->SetTransform(matrix * originalTransform);
-    }
-    else if (m_Rotate != 0.0f) {
-        GfxRect bounds = GetBounds();
-        float centerX = bounds.X + bounds.Width / 2.0f;
-        float centerY = bounds.Y + bounds.Height / 2.0f;
-        context->SetTransform(D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY)) * originalTransform);
-    }
+    ApplyRenderTransform(context, originalTransform);
 
     // Draw background first
     RenderBackground(context);
@@ -58,17 +40,14 @@ void BarElement::Render(ID2D1DeviceContext* context) {
 
         if (barRect.right > barRect.left && barRect.bottom > barRect.top) {
             Microsoft::WRL::ComPtr<ID2D1Brush> barBrush;
-            bool brushCreated = false;
-            
-            if (m_BarGradient.type != GRADIENT_NONE) {
-                brushCreated = Direct2D::CreateGradientBrush(context, barRect, m_BarGradient, barBrush.GetAddressOf());
-            }
-            
-            if (!brushCreated) {
-                Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> sBrush;
-                Direct2D::CreateSolidBrush(context, m_BarColor, m_BarAlpha / 255.0f, sBrush.GetAddressOf());
-                barBrush = sBrush;
-            }
+            Direct2D::CreateBrushFromGradientOrColor(
+                context,
+                barRect,
+                &m_BarGradient,
+                m_BarColor,
+                m_BarAlpha / 255.0f,
+                barBrush.GetAddressOf()
+            );
 
             if (barBrush) {
                 if (m_BarCornerRadius > 0) {
@@ -85,5 +64,5 @@ void BarElement::Render(ID2D1DeviceContext* context) {
     RenderBevel(context);
 
     // Restore transform
-    context->SetTransform(originalTransform);
+    RestoreRenderTransform(context, originalTransform);
 }

@@ -8,7 +8,6 @@
 #include "TextElement.h"
 #include "Logging.h"
 #include "Direct2DHelper.h"
-#include "Logging.h"
 #include <d2d1effects.h>
 #include <cwctype>
 #include <algorithm>
@@ -33,28 +32,7 @@ TextElement::TextElement(const std::wstring& id, int x, int y, int w, int h,
 void TextElement::Render(ID2D1DeviceContext* context)
 {
     D2D1_MATRIX_3X2_F originalTransform;
-    context->GetTransform(&originalTransform);
-
-    // Apply rotation around the center of the element's total bounds
-    GfxRect bounds = GetBounds();
-    float centerX = bounds.X + bounds.Width / 2.0f;
-    float centerY = bounds.Y + bounds.Height / 2.0f;
-
-    if (m_HasTransformMatrix)
-    {
-        D2D1::Matrix3x2F matrix = D2D1::Matrix3x2F(
-            m_TransformMatrix[0], m_TransformMatrix[1],
-            m_TransformMatrix[2], m_TransformMatrix[3],
-            m_TransformMatrix[4], m_TransformMatrix[5]
-        );
-        Logging::Log(LogLevel::Debug, L"TextElement(%s) Applying Transform: [%.2f, %.2f, %.2f, %.2f, %.2f, %.2f]", 
-            m_Id.c_str(), m_TransformMatrix[0], m_TransformMatrix[1], m_TransformMatrix[2], m_TransformMatrix[3], m_TransformMatrix[4], m_TransformMatrix[5]);
-        context->SetTransform(matrix * originalTransform);
-    }
-    else if (m_Rotate != 0.0f)
-    {
-        context->SetTransform(D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY)) * originalTransform);
-    }
+    ApplyRenderTransform(context, originalTransform);
 
     // Draw background and bevel inside the transform
     RenderBackground(context);
@@ -62,7 +40,7 @@ void TextElement::Render(ID2D1DeviceContext* context)
 
     if (m_Text.empty())
     {
-        context->SetTransform(originalTransform);
+        RestoreRenderTransform(context, originalTransform);
         return;
     }
 
@@ -102,7 +80,7 @@ void TextElement::Render(ID2D1DeviceContext* context)
     {
         Logging::Log(LogLevel::Error, L"TextElement(%s): Failed to create text format (Font: '%s', Path: '%s') (0x%08X)", 
             m_Id.c_str(), fontFace.c_str(), m_FontPath.c_str(), hr);
-        context->SetTransform(originalTransform);
+        RestoreRenderTransform(context, originalTransform);
         return;
     }
 
@@ -169,6 +147,7 @@ void TextElement::Render(ID2D1DeviceContext* context)
         }
     }
 
+    GfxRect bounds = GetBounds();
     float layoutX = (float)bounds.X + m_PaddingLeft;
     float layoutY = (float)bounds.Y + m_PaddingTop;
     float layoutW = (float)bounds.Width - m_PaddingLeft - m_PaddingRight;
@@ -181,16 +160,14 @@ void TextElement::Render(ID2D1DeviceContext* context)
 
     // Create brush
     Microsoft::WRL::ComPtr<ID2D1Brush> pBrush;
-    if (m_FontGradient.type != GRADIENT_NONE)
-    {
-        Direct2D::CreateGradientBrush(context, layoutRect, m_FontGradient, pBrush.GetAddressOf());
-    }
-    else
-    {
-        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pSolidBrush;
-        Direct2D::CreateSolidBrush(context, m_FontColor, m_Alpha / 255.0f, pSolidBrush.GetAddressOf());
-        pBrush = pSolidBrush;
-    }
+    Direct2D::CreateBrushFromGradientOrColor(
+        context,
+        layoutRect,
+        &m_FontGradient,
+        m_FontColor,
+        m_Alpha / 255.0f,
+        pBrush.GetAddressOf()
+    );
 
     if (pBrush)
     {
@@ -328,7 +305,7 @@ void TextElement::Render(ID2D1DeviceContext* context)
     }
     
     // Restore transform
-    context->SetTransform(originalTransform);
+    RestoreRenderTransform(context, originalTransform);
 }
 
 int TextElement::GetAutoWidth()

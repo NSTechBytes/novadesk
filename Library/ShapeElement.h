@@ -9,6 +9,7 @@
 #define __NOVADESK_SHAPE_ELEMENT_H__
 
 #include "Element.h"
+#include <wrl/client.h>
 
 class ShapeElement : public Element
 {
@@ -123,6 +124,9 @@ protected:
 
     void CreateBrush(ID2D1DeviceContext* context, ID2D1Brush** ppBrush, bool isStroke);
     void UpdateStrokeStyle(ID2D1DeviceContext* context);
+
+    bool TryCreateStrokeBrush(ID2D1DeviceContext* context, Microsoft::WRL::ComPtr<ID2D1Brush>& outBrush);
+    bool TryCreateFillBrush(ID2D1DeviceContext* context, Microsoft::WRL::ComPtr<ID2D1Brush>& outBrush);
 };
 
 #endif

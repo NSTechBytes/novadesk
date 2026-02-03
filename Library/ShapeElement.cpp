@@ -29,23 +29,29 @@ void ShapeElement::CreateBrush(ID2D1DeviceContext* context, ID2D1Brush** ppBrush
     bool hasGradient = isStroke ? m_HasStrokeGradient : m_HasFillGradient;
 
     D2D1_RECT_F rect = D2D1::RectF((float)m_X, (float)m_Y, (float)(m_X + m_Width), (float)(m_Y + m_Height));
-
-    bool success = false;
+    const GradientInfo* gradInfo = nullptr;
     if (hasGradient) {
-        const GradientInfo& gradInfo = isStroke ? m_StrokeGradient : m_FillGradient;
-        success = Direct2D::CreateGradientBrush(context, rect, gradInfo, ppBrush);
+        gradInfo = isStroke ? &m_StrokeGradient : &m_FillGradient;
     }
 
-    if (!success) {
+    COLORREF c = isStroke ? m_StrokeColor : m_FillColor;
+    BYTE a = isStroke ? m_StrokeAlpha : m_FillAlpha;
 
-        COLORREF c = isStroke ? m_StrokeColor : m_FillColor;
-        BYTE a = isStroke ? m_StrokeAlpha : m_FillAlpha;
+    Direct2D::CreateBrushFromGradientOrColor(context, rect, gradInfo, c, a / 255.0f, ppBrush);
+}
 
-        ID2D1SolidColorBrush* solidBrush = nullptr;
-        if (Direct2D::CreateSolidBrush(context, c, a / 255.0f, &solidBrush)) {
-            *ppBrush = solidBrush;
-        }
-    }
+bool ShapeElement::TryCreateStrokeBrush(ID2D1DeviceContext* context, Microsoft::WRL::ComPtr<ID2D1Brush>& outBrush)
+{
+    if (!m_HasStroke || m_StrokeWidth <= 0) return false;
+    CreateBrush(context, outBrush.ReleaseAndGetAddressOf(), true);
+    return outBrush != nullptr;
+}
+
+bool ShapeElement::TryCreateFillBrush(ID2D1DeviceContext* context, Microsoft::WRL::ComPtr<ID2D1Brush>& outBrush)
+{
+    if (!m_HasFill) return false;
+    CreateBrush(context, outBrush.ReleaseAndGetAddressOf(), false);
+    return outBrush != nullptr;
 }
 
 void ShapeElement::UpdateStrokeStyle(ID2D1DeviceContext* context)

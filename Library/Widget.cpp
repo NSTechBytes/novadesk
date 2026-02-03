@@ -1287,21 +1287,14 @@ void Widget::UpdateLayeredWindowContent()
             // Draw Background
             D2D1_RECT_F backRect = D2D1::RectF(0, 0, (float)w, (float)h);
             Microsoft::WRL::ComPtr<ID2D1Brush> pBackBrush;
-            
-            bool brushCreated = false;
-            if (m_Options.bgGradient.type != GRADIENT_NONE)
-            {
-                brushCreated = Direct2D::CreateGradientBrush(m_pContext.Get(), backRect, m_Options.bgGradient, pBackBrush.GetAddressOf());
-            }
-            
-            if (!brushCreated)
-            {
-                Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pSolidBrush;
-                if (Direct2D::CreateSolidBrush(m_pContext.Get(), m_Options.color, m_Options.bgAlpha / 255.0f, pSolidBrush.GetAddressOf())) {
-                    pSolidBrush.As(&pBackBrush);
-                    brushCreated = true;
-                }
-            }
+            Direct2D::CreateBrushFromGradientOrColor(
+                m_pContext.Get(),
+                backRect,
+                &m_Options.bgGradient,
+                m_Options.color,
+                m_Options.bgAlpha / 255.0f,
+                pBackBrush.GetAddressOf()
+            );
 
             if (pBackBrush)
             {

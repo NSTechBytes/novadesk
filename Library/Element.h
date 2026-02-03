@@ -270,6 +270,8 @@ protected:
 
     void RenderBackground(ID2D1DeviceContext* context);
     void RenderBevel(ID2D1DeviceContext* context);
+    void ApplyRenderTransform(ID2D1DeviceContext* context, D2D1_MATRIX_3X2_F& originalTransform);
+    void RestoreRenderTransform(ID2D1DeviceContext* context, const D2D1_MATRIX_3X2_F& originalTransform);
 };
 
 #endif

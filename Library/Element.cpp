@@ -169,17 +169,14 @@ void Element::RenderBackground(ID2D1DeviceContext* context) {
     if (rect.right <= rect.left || rect.bottom <= rect.top) return;
 
     Microsoft::WRL::ComPtr<ID2D1Brush> brush;
-    bool brushCreated = false;
-
-    if (m_SolidGradient.type != GRADIENT_NONE) {
-        brushCreated = Direct2D::CreateGradientBrush(context, rect, m_SolidGradient, brush.GetAddressOf());
-    }
-    
-    if (!brushCreated) {
-        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> sBrush;
-        Direct2D::CreateSolidBrush(context, m_SolidColor, m_SolidAlpha / 255.0f, sBrush.GetAddressOf());
-        brush = sBrush;
-    }
+    Direct2D::CreateBrushFromGradientOrColor(
+        context,
+        rect,
+        &m_SolidGradient,
+        m_SolidColor,
+        m_SolidAlpha / 255.0f,
+        brush.GetAddressOf()
+    );
 
     if (brush) {
         if (m_CornerRadius > 0) {
@@ -243,4 +240,33 @@ void Element::RenderBevel(ID2D1DeviceContext* context) {
         }
         break;
     }
+}
+
+void Element::ApplyRenderTransform(ID2D1DeviceContext* context, D2D1_MATRIX_3X2_F& originalTransform) {
+    if (!context) return;
+    context->GetTransform(&originalTransform);
+
+    if (!m_HasTransformMatrix && m_Rotate == 0.0f) {
+        return;
+    }
+
+    if (m_HasTransformMatrix) {
+        D2D1::Matrix3x2F matrix = D2D1::Matrix3x2F(
+            m_TransformMatrix[0], m_TransformMatrix[1],
+            m_TransformMatrix[2], m_TransformMatrix[3],
+            m_TransformMatrix[4], m_TransformMatrix[5]
+        );
+        context->SetTransform(matrix * originalTransform);
+        return;
+    }
+
+    GfxRect bounds = GetBounds();
+    float centerX = bounds.X + bounds.Width / 2.0f;
+    float centerY = bounds.Y + bounds.Height / 2.0f;
+    context->SetTransform(D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY)) * originalTransform);
+}
+
+void Element::RestoreRenderTransform(ID2D1DeviceContext* context, const D2D1_MATRIX_3X2_F& originalTransform) {
+    if (!context) return;
+    context->SetTransform(originalTransform);
 }

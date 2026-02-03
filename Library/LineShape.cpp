@@ -18,18 +18,18 @@ LineShape::~LineShape()
 
 void LineShape::Render(ID2D1DeviceContext* context)
 {
-    ID2D1Brush* pStrokeBrush = nullptr;
-    if (m_HasStroke && m_StrokeWidth > 0) {
-        CreateBrush(context, &pStrokeBrush, true);
-    }
+    D2D1_MATRIX_3X2_F originalTransform;
+    ApplyRenderTransform(context, originalTransform);
+
+    Microsoft::WRL::ComPtr<ID2D1Brush> pStrokeBrush;
+    TryCreateStrokeBrush(context, pStrokeBrush);
 
     D2D1_POINT_2F start = D2D1::Point2F(m_StartX, m_StartY);
     D2D1_POINT_2F end = D2D1::Point2F(m_EndX, m_EndY);
     
     if (pStrokeBrush) {
         UpdateStrokeStyle(context);
-        context->DrawLine(start, end, pStrokeBrush, m_StrokeWidth, m_StrokeStyle);
+        context->DrawLine(start, end, pStrokeBrush.Get(), m_StrokeWidth, m_StrokeStyle);
     }
-
-    if (pStrokeBrush) pStrokeBrush->Release();
+    RestoreRenderTransform(context, originalTransform);
 }

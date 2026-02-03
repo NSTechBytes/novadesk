@@ -262,26 +262,19 @@
      }
  
      void BindWidgetControlMethods(duk_context* ctx) {
-         duk_push_c_function(ctx, js_widget_set_properties, 1);
-         duk_put_prop_string(ctx, -2, "setProperties");
-         duk_push_c_function(ctx, js_widget_get_properties, 0);
-         duk_put_prop_string(ctx, -2, "getProperties");
-         duk_push_c_function(ctx, js_widget_close, 0);
-         duk_put_prop_string(ctx, -2, "close");
-         duk_push_c_function(ctx, js_widget_refresh, 0); 
-         duk_put_prop_string(ctx, -2, "refresh");
-         duk_push_c_function(ctx, js_widget_set_focus, 0);
-         duk_put_prop_string(ctx, -2, "setFocus");
-         duk_push_c_function(ctx, js_widget_unfocus, 0);
-         duk_put_prop_string(ctx, -2, "unFocus");
-         duk_push_c_function(ctx, js_widget_get_handle, 0);
-         duk_put_prop_string(ctx, -2, "getHandle");
-         duk_push_c_function(ctx, js_widget_get_internal_pointer, 0);
-         duk_put_prop_string(ctx, -2, "getInternalPointer");
-         duk_push_c_function(ctx, js_widget_get_title, 0);
-         duk_put_prop_string(ctx, -2, "getTitle");
-         duk_push_c_function(ctx, js_widget_on, 2);
-         duk_put_prop_string(ctx, -2, "on");
+         const JsBinding bindings[] = {
+             { "setProperties", js_widget_set_properties, 1 },
+             { "getProperties", js_widget_get_properties, 0 },
+             { "close", js_widget_close, 0 },
+             { "refresh", js_widget_refresh, 0 },
+             { "setFocus", js_widget_set_focus, 0 },
+             { "unFocus", js_widget_unfocus, 0 },
+             { "getHandle", js_widget_get_handle, 0 },
+             { "getInternalPointer", js_widget_get_internal_pointer, 0 },
+             { "getTitle", js_widget_get_title, 0 },
+             { "on", js_widget_on, 2 }
+         };
+         BindMethods(ctx, bindings, sizeof(bindings) / sizeof(bindings[0]));
  
          BindWidgetUIMethods(ctx);
          BindWidgetContextMenuMethods(ctx);

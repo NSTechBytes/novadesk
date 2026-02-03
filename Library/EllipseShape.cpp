@@ -18,15 +18,13 @@ EllipseShape::~EllipseShape()
 
 void EllipseShape::Render(ID2D1DeviceContext* context)
 {
-    ID2D1Brush* pStrokeBrush = nullptr;
-    if (m_HasStroke && m_StrokeWidth > 0) {
-        CreateBrush(context, &pStrokeBrush, true);
-    }
+    D2D1_MATRIX_3X2_F originalTransform;
+    ApplyRenderTransform(context, originalTransform);
 
-    ID2D1Brush* pFillBrush = nullptr;
-    if (m_HasFill) {
-        CreateBrush(context, &pFillBrush, false);
-    }
+    Microsoft::WRL::ComPtr<ID2D1Brush> pStrokeBrush;
+    Microsoft::WRL::ComPtr<ID2D1Brush> pFillBrush;
+    TryCreateStrokeBrush(context, pStrokeBrush);
+    TryCreateFillBrush(context, pFillBrush);
 
     D2D1_ELLIPSE ellipse;
     ellipse.point = D2D1::Point2F(m_X + m_Width/2.0f, m_Y + m_Height/2.0f);
@@ -38,12 +36,10 @@ void EllipseShape::Render(ID2D1DeviceContext* context)
     ellipse.radiusY = ry;
 
     if (pFillBrush) {
-        context->FillEllipse(ellipse, pFillBrush);
+        context->FillEllipse(ellipse, pFillBrush.Get());
     }
     if (pStrokeBrush) {
-        context->DrawEllipse(ellipse, pStrokeBrush, m_StrokeWidth);
+        context->DrawEllipse(ellipse, pStrokeBrush.Get(), m_StrokeWidth);
     }
-
-    if (pStrokeBrush) pStrokeBrush->Release();
-    if (pFillBrush) pFillBrush->Release();
+    RestoreRenderTransform(context, originalTransform);
 }

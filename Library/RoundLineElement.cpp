@@ -16,6 +16,9 @@ RoundLineElement::RoundLineElement(const std::wstring& id, int x, int y, int w, 
 
 void RoundLineElement::Render(ID2D1DeviceContext* context)
 {
+    D2D1_MATRIX_3X2_F originalTransform;
+    ApplyRenderTransform(context, originalTransform);
+
     RenderBackground(context);
 
     float centerX = (float)m_X + (float)m_Width / 2.0f;
@@ -26,7 +29,10 @@ void RoundLineElement::Render(ID2D1DeviceContext* context)
         radius = (min((float)m_Width, (float)m_Height) - (float)m_Thickness) / 2.0f;
     }
 
-    if (radius <= 0) return;
+    if (radius <= 0) {
+        RestoreRenderTransform(context, originalTransform);
+        return;
+    }
 
     float startAngle = m_StartAngle - 90.0f; 
     float sweepAngle = m_TotalAngle * m_Value;
@@ -86,31 +92,28 @@ void RoundLineElement::Render(ID2D1DeviceContext* context)
 
     if (m_HasLineColorBg || m_LineGradientBg.type != GRADIENT_NONE) {
         Microsoft::WRL::ComPtr<ID2D1Brush> pBgBrush;
-        bool bgBrushCreated = false;
-        if (m_LineGradientBg.type != GRADIENT_NONE) {
-             D2D1_RECT_F rect = D2D1::RectF((float)m_X, (float)m_Y, (float)m_X + m_Width, (float)m_Y + m_Height);
-             bgBrushCreated = Direct2D::CreateGradientBrush(context, rect, m_LineGradientBg, &pBgBrush);
-        }
-        if (!bgBrushCreated) {
-            Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pSolidBg;
-            Direct2D::CreateSolidBrush(context, m_LineColorBg, m_LineAlphaBg / 255.0f, &pSolidBg);
-            pBgBrush = pSolidBg;
-        }
+        D2D1_RECT_F rect = D2D1::RectF((float)m_X, (float)m_Y, (float)m_X + m_Width, (float)m_Y + m_Height);
+        Direct2D::CreateBrushFromGradientOrColor(
+            context,
+            rect,
+            &m_LineGradientBg,
+            m_LineColorBg,
+            m_LineAlphaBg / 255.0f,
+            pBgBrush.GetAddressOf()
+        );
         drawArc(startAngle, m_TotalAngle, pBgBrush.Get(), (float)m_Thickness, -1, m_StartCap, m_EndCap, {});
     }
 
     Microsoft::WRL::ComPtr<ID2D1Brush> pBrush;
-    bool brushCreated = false;
-    if (m_LineGradient.type != GRADIENT_NONE) {
-        D2D1_RECT_F rect = D2D1::RectF((float)m_X, (float)m_Y, (float)m_X + m_Width, (float)m_Y + m_Height);
-        brushCreated = Direct2D::CreateGradientBrush(context, rect, m_LineGradient, &pBrush);
-    }
-    
-    if (!brushCreated) {
-        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pSolidBrush;
-        Direct2D::CreateSolidBrush(context, m_LineColor, m_LineAlpha / 255.0f, &pSolidBrush);
-        pBrush = pSolidBrush;
-    }
+    D2D1_RECT_F rect = D2D1::RectF((float)m_X, (float)m_Y, (float)m_X + m_Width, (float)m_Y + m_Height);
+    Direct2D::CreateBrushFromGradientOrColor(
+        context,
+        rect,
+        &m_LineGradient,
+        m_LineColor,
+        m_LineAlpha / 255.0f,
+        pBrush.GetAddressOf()
+    );
 
     if (pBrush) {
         drawArc(startAngle, sweepAngle, pBrush.Get(), (float)m_Thickness, (float)m_EndThickness, m_StartCap, m_EndCap, m_DashArray);
@@ -136,4 +139,5 @@ void RoundLineElement::Render(ID2D1DeviceContext* context)
     }
 
     RenderBevel(context);
+    RestoreRenderTransform(context, originalTransform);
 }

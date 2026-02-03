@@ -88,37 +88,40 @@ void PathShape::CreatePathGeometry(ID2D1Factory* factory, ID2D1PathGeometry** pp
 
 void PathShape::Render(ID2D1DeviceContext* context)
 {
-    ID2D1Brush* pStrokeBrush = nullptr;
-    if (m_HasStroke && m_StrokeWidth > 0) {
-        CreateBrush(context, &pStrokeBrush, true);
-    }
+    D2D1_MATRIX_3X2_F originalTransform;
+    ApplyRenderTransform(context, originalTransform);
 
-    ID2D1Brush* pFillBrush = nullptr;
-    if (m_HasFill) {
-        CreateBrush(context, &pFillBrush, false);
-    }
+    Microsoft::WRL::ComPtr<ID2D1Brush> pStrokeBrush;
+    Microsoft::WRL::ComPtr<ID2D1Brush> pFillBrush;
+    TryCreateStrokeBrush(context, pStrokeBrush);
+    TryCreateFillBrush(context, pFillBrush);
 
-    if (!pStrokeBrush && !pFillBrush) return;
+    if (!pStrokeBrush && !pFillBrush) {
+        RestoreRenderTransform(context, originalTransform);
+        return;
+    }
 
     ID2D1Factory* pFactory = nullptr;
     context->GetFactory(&pFactory);
-    if (!pFactory) return;
+    if (!pFactory) {
+        RestoreRenderTransform(context, originalTransform);
+        return;
+    }
 
     ID2D1PathGeometry* pGeometry = nullptr;
     CreatePathGeometry(pFactory, &pGeometry);
 
     if (pGeometry) {
         if (pFillBrush) {
-            context->FillGeometry(pGeometry, pFillBrush);
+            context->FillGeometry(pGeometry, pFillBrush.Get());
         }
         if (pStrokeBrush) {
             UpdateStrokeStyle(context);
-            context->DrawGeometry(pGeometry, pStrokeBrush, m_StrokeWidth, m_StrokeStyle);
+            context->DrawGeometry(pGeometry, pStrokeBrush.Get(), m_StrokeWidth, m_StrokeStyle);
         }
         pGeometry->Release();
     }
 
-    if (pStrokeBrush) pStrokeBrush->Release();
-    if (pFillBrush) pFillBrush->Release();
+    RestoreRenderTransform(context, originalTransform);
 }
 
