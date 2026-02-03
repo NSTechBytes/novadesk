@@ -10,11 +10,13 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <condition_variable>
 #include <vector>
 #include <filesystem>
 #include <fstream>
 #include <cstdint>
 #include <cstring>
+#include <tlhelp32.h>
 #include "..\..\Library\json\json.hpp"
 
 #pragma comment(lib, "comctl32.lib")
@@ -114,20 +116,60 @@ bool CreateShortcut(const std::wstring& targetPath, const std::wstring& shortcut
     return SUCCEEDED(persistFile->Save(shortcutPath.c_str(), TRUE));
 }
 
+bool IsProcessRunning(const std::wstring& exeName) {
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return false;
+    PROCESSENTRY32W entry = {};
+    entry.dwSize = sizeof(entry);
+    if (Process32FirstW(snapshot, &entry)) {
+        do {
+            if (_wcsicmp(entry.szExeFile, exeName.c_str()) == 0) {
+                CloseHandle(snapshot);
+                return true;
+            }
+        } while (Process32NextW(snapshot, &entry));
+    }
+    CloseHandle(snapshot);
+    return false;
+}
+
+bool IsAppInstalled(const std::wstring& appName) {
+    std::wstring uninstallKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" + appName;
+    HKEY hKey = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, uninstallKey.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        RegCloseKey(hKey);
+        return true;
+    }
+    return false;
+}
+
 namespace {
     HWND g_hwnd = nullptr;
     HWND g_title = nullptr;
     HWND g_status = nullptr;
     HWND g_progress = nullptr;
+    HWND g_repairButton = nullptr;
+    HWND g_uninstallButton = nullptr;
+    HWND g_closeButton = nullptr;
     HFONT g_titleFont = nullptr;
     HFONT g_textFont = nullptr;
     std::atomic<uint64_t> g_done{0};
     std::atomic<uint64_t> g_total{1};
     std::atomic<bool> g_finished{false};
     std::atomic<bool> g_uninstall{false};
+    std::atomic<bool> g_forceRepair{false};
+    std::atomic<bool> g_showActions{false};
+    std::atomic<bool> g_allowClose{false};
+    std::atomic<int> g_action{0}; // 0 none, 1 repair, 2 uninstall
     std::mutex g_statusMutex;
+    std::mutex g_actionMutex;
+    std::condition_variable g_actionCv;
     std::wstring g_statusText = L"Preparing...";
     std::wstring g_appName = L"";
+    std::wstring g_appNameUi = L"Installer";
+    std::wstring g_launchExe;
+    std::wstring g_launchDir;
+    bool g_launchAfterInstall = false;
 
     void UpdateStatus(const std::wstring& text) {
         std::lock_guard<std::mutex> lock(g_statusMutex);
@@ -180,7 +222,7 @@ std::wstring LoadAppNameFromManifest() {
     return ToWString(appName);
 }
 
-bool InstallFromSelf() {
+bool InstallFromSelf(bool skipInstalledCheck) {
     wchar_t exePathBuf[MAX_PATH];
     GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
     fs::path exePath = exePathBuf;
@@ -227,14 +269,17 @@ bool InstallFromSelf() {
 
     std::string appName = manifest.value("appName", "");
     std::string version = manifest.value("version", "");
+    std::string author = manifest.value("author", "");
+    std::string description = manifest.value("description", "");
     std::string appExeRel = manifest.value("appExeRel", "");
     auto setup = manifest.value("setup", nlohmann::json::object());
-    std::string installDir = setup.value("installDir", "");
+    std::string installDirStr = setup.value("installDir", "");
     std::string startMenuFolder = setup.value("startMenuFolder", "");
     std::string setupName = setup.value("setupName", "");
     std::string setupIcon = setup.value("setupIcon", "");
-    if (appName.empty() || version.empty() || appExeRel.empty() ||
-        installDir.empty() || startMenuFolder.empty() || setupName.empty() || setupIcon.empty()) {
+    bool launchAfterInstall = setup.value("launchAfterInstall", false);
+    if (appName.empty() || version.empty() || author.empty() || description.empty() || appExeRel.empty() ||
+        installDirStr.empty() || startMenuFolder.empty() || setupName.empty() || setupIcon.empty()) {
         UpdateStatus(L"Missing required metadata.");
         return false;
     }
@@ -244,7 +289,13 @@ bool InstallFromSelf() {
     bool runOnStartup = setup.value("runOnStartup", false);
     bool enableUninstall = setup.value("enableUninstall", true);
 
-    std::wstring installDirW = ExpandEnv(ToWString(installDir));
+    std::wstring appNameW = ToWString(appName);
+    if (!skipInstalledCheck && IsAppInstalled(appNameW)) {
+        UpdateStatus(L"Already installed.");
+        return false;
+    }
+
+    std::wstring installDirW = ExpandEnv(ToWString(installDirStr));
 
     fs::path installDirPath = fs::path(installDirW);
     fs::create_directories(installDirPath);
@@ -289,8 +340,6 @@ bool InstallFromSelf() {
     fs::path appExePath = installDirPath / fs::path(appExeRel);
     std::wstring appExeW = appExePath.wstring();
     std::wstring workingDirW = installDirPath.wstring();
-    std::wstring appNameW = ToWString(appName);
-
     HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (SUCCEEDED(hr)) {
         UpdateStatus(L"Creating shortcuts...");
@@ -335,16 +384,28 @@ bool InstallFromSelf() {
             std::wstring uninstallKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" + appNameW;
             if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, uninstallKey.c_str(), 0, nullptr, 0, KEY_WRITE, nullptr, &hKey, nullptr) == ERROR_SUCCESS) {
                 std::wstring displayName = appNameW;
+                std::wstring publisher = ToWString(author);
+                std::wstring displayVersion = ToWString(version);
+                std::wstring displayDesc = ToWString(description);
                 std::wstring uninstallCmd = L"\"" + uninstallPath.wstring() + L"\" --uninstall";
+                std::wstring displayIcon = uninstallPath.wstring();
                 RegSetValueExW(hKey, L"DisplayName", 0, REG_SZ, reinterpret_cast<const BYTE*>(displayName.c_str()), static_cast<DWORD>((displayName.size() + 1) * sizeof(wchar_t)));
+                RegSetValueExW(hKey, L"Publisher", 0, REG_SZ, reinterpret_cast<const BYTE*>(publisher.c_str()), static_cast<DWORD>((publisher.size() + 1) * sizeof(wchar_t)));
+                RegSetValueExW(hKey, L"DisplayVersion", 0, REG_SZ, reinterpret_cast<const BYTE*>(displayVersion.c_str()), static_cast<DWORD>((displayVersion.size() + 1) * sizeof(wchar_t)));
+                RegSetValueExW(hKey, L"Description", 0, REG_SZ, reinterpret_cast<const BYTE*>(displayDesc.c_str()), static_cast<DWORD>((displayDesc.size() + 1) * sizeof(wchar_t)));
                 RegSetValueExW(hKey, L"UninstallString", 0, REG_SZ, reinterpret_cast<const BYTE*>(uninstallCmd.c_str()), static_cast<DWORD>((uninstallCmd.size() + 1) * sizeof(wchar_t)));
                 RegSetValueExW(hKey, L"InstallLocation", 0, REG_SZ, reinterpret_cast<const BYTE*>(installDirPath.wstring().c_str()), static_cast<DWORD>((installDirPath.wstring().size() + 1) * sizeof(wchar_t)));
+                RegSetValueExW(hKey, L"DisplayIcon", 0, REG_SZ, reinterpret_cast<const BYTE*>(displayIcon.c_str()), static_cast<DWORD>((displayIcon.size() + 1) * sizeof(wchar_t)));
                 RegCloseKey(hKey);
             }
         }
 
         CoUninitialize();
     }
+
+    g_launchAfterInstall = launchAfterInstall;
+    g_launchExe = appExeW;
+    g_launchDir = workingDirW;
 
     UpdateStatus(L"Done");
     return true;
@@ -411,9 +472,30 @@ bool UninstallSelf() {
     bool runOnStartup = setup.value("runOnStartup", false);
     bool createStartupShortcut = setup.value("createStartupShortcut", false);
 
-    fs::path installDir = exePath.parent_path();
+    std::wstring appExeNameW = fs::path(appExeRel).filename().wstring();
+    if (IsProcessRunning(appExeNameW)) {
+        UpdateStatus(L"Close the app before uninstalling.");
+        return false;
+    }
 
-    if (installDir.empty()) {
+    fs::path installDirPath;
+    HKEY hInstallKey = nullptr;
+    std::wstring installKeyPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" + ToWString(appName);
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, installKeyPath.c_str(), 0, KEY_READ, &hInstallKey) == ERROR_SUCCESS) {
+        wchar_t installPathBuf[MAX_PATH];
+        DWORD size = sizeof(installPathBuf);
+        if (RegQueryValueExW(hInstallKey, L"InstallLocation", nullptr, nullptr, reinterpret_cast<LPBYTE>(installPathBuf), &size) == ERROR_SUCCESS) {
+            if (installPathBuf[0] != L'\0') {
+                installDirPath = fs::path(installPathBuf);
+            }
+        }
+        RegCloseKey(hInstallKey);
+    }
+    if (installDirPath.empty()) {
+        installDirPath = exePath.parent_path();
+    }
+
+    if (installDirPath.empty()) {
         return true;
     }
 
@@ -443,8 +525,31 @@ bool UninstallSelf() {
 
     UpdateStatus(L"Removing files...");
     try {
-        fs::remove_all(installDir);
+        fs::remove_all(installDirPath / "Widgets");
+        fs::remove_all(installDirPath);
     } catch (...) {
+    }
+
+    // Remove Roaming AppData folder if present
+    wchar_t appDataPath[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, appDataPath))) {
+        try {
+            fs::remove_all(fs::path(appDataPath) / appNameW);
+        } catch (...) {
+        }
+    }
+
+    // Self-delete only if we are running from Uninstall.exe (not setup.exe)
+    if (_wcsicmp(exePath.filename().c_str(), L"Uninstall.exe") == 0) {
+        std::wstring deleteCmd = L"/C ping 127.0.0.1 -n 3 > nul & del /f /q \"" + exePath.wstring() + L"\" & rmdir /s /q \"" + installDirPath.wstring() + L"\"";
+        SHELLEXECUTEINFOW sei = {};
+        sei.cbSize = sizeof(sei);
+        sei.fMask = SEE_MASK_NO_CONSOLE;
+        sei.lpVerb = L"open";
+        sei.lpFile = L"cmd.exe";
+        sei.lpParameters = deleteCmd.c_str();
+        sei.nShow = SW_HIDE;
+        ShellExecuteExW(&sei);
     }
 
     HKEY hUninstall = nullptr;
@@ -461,11 +566,41 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
         case WM_TIMER:
             RefreshUi();
+            if (g_showActions.load()) {
+                ShowWindow(g_repairButton, SW_SHOW);
+                ShowWindow(g_uninstallButton, SW_SHOW);
+            }
             if (g_finished.load()) {
-                DestroyWindow(hwnd);
+                g_allowClose.store(true);
+                ShowWindow(g_closeButton, SW_SHOW);
             }
             return 0;
+        case WM_COMMAND:
+            if (LOWORD(wParam) == 1001) {
+                g_action.store(1);
+                g_showActions.store(false);
+                g_actionCv.notify_one();
+                return 0;
+            }
+            if (LOWORD(wParam) == 1002) {
+                g_action.store(2);
+                g_showActions.store(false);
+                g_actionCv.notify_one();
+                return 0;
+            }
+            if (LOWORD(wParam) == 1003) {
+                if (g_finished.load() && !g_uninstall.load() && g_launchAfterInstall && !g_launchExe.empty()) {
+                    ShellExecuteW(nullptr, L"open", g_launchExe.c_str(), nullptr, g_launchDir.c_str(), SW_SHOWNORMAL);
+                }
+                DestroyWindow(hwnd);
+                return 0;
+            }
+            break;
         case WM_CLOSE:
+            if (g_allowClose.load()) {
+                DestroyWindow(hwnd);
+                return 0;
+            }
             // Ignore close while installing
             return 0;
         case WM_DESTROY:
@@ -483,13 +618,26 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
             g_uninstall.store(true);
             break;
         }
+        if (wcscmp(argv[i], L"--repair") == 0) {
+            g_forceRepair.store(true);
+            break;
+        }
     }
     if (argv) LocalFree(argv);
 
-    g_appName = LoadAppNameFromManifest();
-    if (g_appName.empty()) {
-        g_appName = L"Installer";
+    if (!IsRunningAsAdmin()) {
+        if (g_uninstall.load()) {
+            RelaunchAsAdmin(L"--uninstall");
+        } else if (g_forceRepair.load()) {
+            RelaunchAsAdmin(L"--repair");
+        } else {
+            RelaunchAsAdmin(L"");
+        }
+        return 0;
     }
+
+    g_appName = LoadAppNameFromManifest();
+    g_appNameUi = g_appName.empty() ? L"Installer" : g_appName;
 
     INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_PROGRESS_CLASS };
     InitCommonControlsEx(&icc);
@@ -510,7 +658,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     int x = (screenW - width) / 2;
     int y = (screenH - height) / 2;
 
-    std::wstring windowTitle = g_appName + (g_uninstall.load() ? L" Uninstaller" : L" Installer");
+    std::wstring windowTitle = g_appNameUi + (g_uninstall.load() ? L" Uninstaller" : L" Installer");
     g_hwnd = CreateWindowExW(
         0, className, windowTitle.c_str(),
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
@@ -519,10 +667,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
     );
 
     if (!g_hwnd) {
-        return InstallFromSelf() ? 0 : 1;
+        return InstallFromSelf(false) ? 0 : 1;
     }
 
-    std::wstring headerText = g_uninstall.load() ? (L"Uninstalling " + g_appName) : (L"Installing " + g_appName);
+    std::wstring headerText = g_uninstall.load() ? (L"Uninstalling " + g_appNameUi) : (L"Installing " + g_appNameUi);
     g_title = CreateWindowW(L"STATIC", headerText.c_str(),
                             WS_CHILD | WS_VISIBLE,
                             24, 20, 460, 28,
@@ -547,6 +695,25 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
                                g_hwnd, nullptr, hInstance, nullptr);
     SendMessageW(g_progress, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
 
+    g_repairButton = CreateWindowW(L"BUTTON", L"Repair",
+                                   WS_CHILD | WS_VISIBLE,
+                                   24, 130, 100, 28,
+                                   g_hwnd, (HMENU)1001, hInstance, nullptr);
+    g_uninstallButton = CreateWindowW(L"BUTTON", L"Uninstall",
+                                      WS_CHILD | WS_VISIBLE,
+                                      134, 130, 100, 28,
+                                      g_hwnd, (HMENU)1002, hInstance, nullptr);
+    g_closeButton = CreateWindowW(L"BUTTON", L"Close",
+                                  WS_CHILD | WS_VISIBLE,
+                                  384, 130, 100, 28,
+                                  g_hwnd, (HMENU)1003, hInstance, nullptr);
+    SendMessageW(g_repairButton, WM_SETFONT, (WPARAM)g_textFont, TRUE);
+    SendMessageW(g_uninstallButton, WM_SETFONT, (WPARAM)g_textFont, TRUE);
+    SendMessageW(g_closeButton, WM_SETFONT, (WPARAM)g_textFont, TRUE);
+    ShowWindow(g_repairButton, SW_HIDE);
+    ShowWindow(g_uninstallButton, SW_HIDE);
+    ShowWindow(g_closeButton, SW_HIDE);
+
     ShowWindow(g_hwnd, SW_SHOW);
     UpdateWindow(g_hwnd);
 
@@ -554,9 +721,37 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
         if (g_uninstall.load()) {
             UpdateStatus(L"Removing files...");
             UninstallSelf();
-        } else {
-            InstallFromSelf();
+            g_finished.store(true);
+            return;
         }
+
+        if (g_forceRepair.load()) {
+            UpdateStatus(L"Repairing...");
+            InstallFromSelf(true);
+            g_finished.store(true);
+            return;
+        }
+
+        // If already installed, show actions and wait for user choice
+        if (!g_appName.empty() && IsAppInstalled(g_appName)) {
+            UpdateStatus(L"Already installed. Choose Repair or Uninstall.");
+            g_showActions.store(true);
+            std::unique_lock<std::mutex> lock(g_actionMutex);
+            g_actionCv.wait(lock, [] { return g_action.load() != 0; });
+            if (g_action.load() == 2) {
+                UpdateStatus(L"Removing files...");
+                UninstallSelf();
+                g_finished.store(true);
+                return;
+            } else {
+                UpdateStatus(L"Repairing...");
+                InstallFromSelf(true);
+                g_finished.store(true);
+                return;
+            }
+        }
+
+        InstallFromSelf(false);
         g_finished.store(true);
     });
     worker.detach();

@@ -12,6 +12,7 @@
     "startMenuFolder": "{NAME}",
     "setupName": "setup",
     "setupIcon": "assets/icon.ico",
-    "enableUninstall": true
+    "enableUninstall": true,
+    "launchAfterInstall": false
   }
 }

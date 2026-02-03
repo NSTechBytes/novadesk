@@ -39,6 +39,7 @@ struct SetupOptions {
     std::string setupName = "setup";
     std::string setupIcon;
     bool enableUninstall = true;
+    bool launchAfterInstall = false;
 };
 
 #pragma pack(push, 1)
@@ -372,6 +373,8 @@ bool BuildInstallerSfx(const fs::path& distDir,
                        const fs::path& stubExe,
                        const std::string& widgetRealName,
                        const std::string& version,
+                       const std::string& author,
+                       const std::string& description,
                        const SetupOptions& setupOptions) {
     std::string setupName = setupOptions.setupName.empty() ? "setup" : setupOptions.setupName;
     if (setupName.size() < 4 || setupName.substr(setupName.size() - 4) != ".exe") {
@@ -439,6 +442,8 @@ bool BuildInstallerSfx(const fs::path& distDir,
     nlohmann::json manifest;
     manifest["appName"] = widgetRealName;
     manifest["version"] = version;
+    manifest["author"] = author;
+    manifest["description"] = description;
     manifest["appExeRel"] = widgetRealName + ".exe";
     manifest["setup"] = {
         {"createDesktopShortcut", setupOptions.createDesktopShortcut},
@@ -448,7 +453,8 @@ bool BuildInstallerSfx(const fs::path& distDir,
         {"startMenuFolder", setupOptions.startMenuFolder},
         {"setupName", setupOptions.setupName},
         {"setupIcon", setupOptions.setupIcon},
-        {"enableUninstall", setupOptions.enableUninstall}
+        {"enableUninstall", setupOptions.enableUninstall},
+        {"launchAfterInstall", setupOptions.launchAfterInstall}
     };
 
     nlohmann::json fileArray = nlohmann::json::array();
@@ -666,6 +672,7 @@ bool BuildWidget() {
     setupOptions.setupName = setupJson.value("setupName", setupOptions.setupName);
     setupOptions.setupIcon = setupJson.value("setupIcon", setupOptions.setupIcon);
     setupOptions.enableUninstall = setupJson.value("enableUninstall", setupOptions.enableUninstall);
+    setupOptions.launchAfterInstall = setupJson.value("launchAfterInstall", setupOptions.launchAfterInstall);
 
     bool missing = false;
     if (widgetRealName.empty()) { std::cerr << "Error: 'name' is missing in meta.json" << std::endl; missing = true; }
@@ -754,7 +761,7 @@ bool BuildWidget() {
             }
         }
 
-        if (!BuildInstallerSfx(distDir, widgetPath, stubExe, widgetRealName, version, setupOptions)) {
+        if (!BuildInstallerSfx(distDir, widgetPath, stubExe, widgetRealName, version, author, description, setupOptions)) {
             std::cerr << "Error: Failed to build installer." << std::endl;
             return false;
         }
