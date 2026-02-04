@@ -185,10 +185,16 @@ namespace {
     std::wstring g_launchExe;
     std::wstring g_launchDir;
     bool g_launchAfterInstall = false;
-
     void UpdateStatus(const std::wstring& text) {
         std::lock_guard<std::mutex> lock(g_statusMutex);
         g_statusText = text;
+    }
+
+    void SetCloseEnabled(HWND hwnd, bool enabled) {
+        HMENU hMenu = GetSystemMenu(hwnd, FALSE);
+        if (!hMenu) return;
+        EnableMenuItem(hMenu, SC_CLOSE, MF_BYCOMMAND | (enabled ? MF_ENABLED : MF_GRAYED));
+        DrawMenuBar(hwnd);
     }
 
     void RefreshUi() {
@@ -451,6 +457,31 @@ bool UninstallSelf() {
 
     fs::path installDirPath = exePath.parent_path();
 
+    // Try to resolve install location (and uninstall string) from registry using app name if available
+    std::wstring appNameHint = g_appName;
+    std::wstring uninstallCmdFromReg;
+    if (!appNameHint.empty()) {
+        HKEY hInstallKey = nullptr;
+        std::wstring installKeyPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" + appNameHint;
+        if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, installKeyPath.c_str(), 0, KEY_READ, &hInstallKey) == ERROR_SUCCESS) {
+            wchar_t installPathBuf[MAX_PATH];
+            DWORD size = sizeof(installPathBuf);
+            if (RegQueryValueExW(hInstallKey, L"InstallLocation", nullptr, nullptr, reinterpret_cast<LPBYTE>(installPathBuf), &size) == ERROR_SUCCESS) {
+                if (installPathBuf[0] != L'\0') {
+                    installDirPath = fs::path(installPathBuf);
+                }
+            }
+            wchar_t uninstallBuf[2048];
+            DWORD uninstallSize = sizeof(uninstallBuf);
+            if (RegQueryValueExW(hInstallKey, L"UninstallString", nullptr, nullptr, reinterpret_cast<LPBYTE>(uninstallBuf), &uninstallSize) == ERROR_SUCCESS) {
+                if (uninstallBuf[0] != L'\0') {
+                    uninstallCmdFromReg = uninstallBuf;
+                }
+            }
+            RegCloseKey(hInstallKey);
+        }
+    }
+
     std::string manifestJson;
     try {
         std::ifstream mf(installDirPath / "install_manifest.json", std::ios::binary);
@@ -460,6 +491,21 @@ bool UninstallSelf() {
     } catch (...) {
     }
     if (manifestJson.empty()) {
+        if (!uninstallCmdFromReg.empty()) {
+            UpdateStatus(L"Launching uninstaller...");
+            std::wstring cmd = L"/C \"\"";
+            cmd += uninstallCmdFromReg;
+            cmd += L"\"\"";
+            SHELLEXECUTEINFOW sei = {};
+            sei.cbSize = sizeof(sei);
+            sei.fMask = SEE_MASK_NO_CONSOLE;
+            sei.lpVerb = L"open";
+            sei.lpFile = L"cmd.exe";
+            sei.lpParameters = cmd.c_str();
+            sei.nShow = SW_HIDE;
+            ShellExecuteExW(&sei);
+            return true;
+        }
         return true;
     }
 
@@ -535,10 +581,30 @@ bool UninstallSelf() {
     }
 
     UpdateStatus(L"Removing files...");
+    bool removalQueued = false;
     try {
-        fs::remove_all(installDirPath / "Widgets");
-        fs::remove_all(installDirPath);
+        std::error_code ec;
+        fs::remove_all(installDirPath / "Widgets", ec);
+        ec.clear();
+        fs::remove_all(installDirPath, ec);
+        if (ec || fs::exists(installDirPath)) {
+            removalQueued = true;
+        }
     } catch (...) {
+        removalQueued = true;
+    }
+
+    if (removalQueued && !installDirPath.empty()) {
+        UpdateStatus(L"Finishing removal...");
+        std::wstring deleteCmd = L"/C rmdir /s /q \"" + installDirPath.wstring() + L"\"";
+        SHELLEXECUTEINFOW sei = {};
+        sei.cbSize = sizeof(sei);
+        sei.fMask = SEE_MASK_NO_CONSOLE;
+        sei.lpVerb = L"open";
+        sei.lpFile = L"cmd.exe";
+        sei.lpParameters = deleteCmd.c_str();
+        sei.nShow = SW_HIDE;
+        ShellExecuteExW(&sei);
     }
 
     // Remove Roaming AppData folder if present
@@ -582,9 +648,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 ShowWindow(g_uninstallButton, SW_SHOW);
                 EnableWindow(g_repairButton, TRUE);
                 EnableWindow(g_uninstallButton, TRUE);
+                if (!g_finished.load()) {
+                    g_allowClose.store(true);
+                    SetCloseEnabled(hwnd, true);
+                }
             }
             if (g_finished.load()) {
                 g_allowClose.store(true);
+                SetCloseEnabled(hwnd, true);
                 ShowWindow(g_closeButton, SW_SHOW);
                 EnableWindow(g_repairButton, FALSE);
                 EnableWindow(g_uninstallButton, FALSE);
@@ -594,6 +665,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (LOWORD(wParam) == 1001) {
                 g_action.store(1);
                 g_showActions.store(false);
+                g_allowClose.store(false);
+                SetCloseEnabled(hwnd, false);
                 EnableWindow(g_repairButton, FALSE);
                 EnableWindow(g_uninstallButton, FALSE);
                 g_actionCv.notify_one();
@@ -602,6 +675,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (LOWORD(wParam) == 1002) {
                 g_action.store(2);
                 g_showActions.store(false);
+                g_allowClose.store(false);
+                SetCloseEnabled(hwnd, false);
                 EnableWindow(g_repairButton, FALSE);
                 EnableWindow(g_uninstallButton, FALSE);
                 g_actionCv.notify_one();
@@ -749,6 +824,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
 
     ShowWindow(g_hwnd, SW_SHOW);
     UpdateWindow(g_hwnd);
+    SetCloseEnabled(g_hwnd, false);
 
     std::thread worker([&]() {
         if (g_uninstall.load()) {
@@ -776,6 +852,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
             std::unique_lock<std::mutex> lock(g_actionMutex);
             g_actionCv.wait(lock, [] { return g_action.load() != 0; });
             if (g_action.load() == 2) {
+                g_uninstall.store(true);
+                if (g_title) {
+                    std::wstring headerText = L"Uninstalling " + g_appNameUi;
+                    SetWindowTextW(g_title, headerText.c_str());
+                }
                 UpdateStatus(L"Removing files...");
                 g_done.store(1);
                 g_total.store(1);
