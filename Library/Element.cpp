@@ -200,8 +200,14 @@ void Element::RenderBevel(ID2D1DeviceContext* context) {
 
     context->SetAntialiasMode(m_AntiAlias ? D2D1_ANTIALIAS_MODE_PER_PRIMITIVE : D2D1_ANTIALIAS_MODE_ALIASED);
 
+    const float pad = 2.0f;
     GfxRect bounds = GetBounds();
-    D2D1_RECT_F rect = D2D1::RectF((float)bounds.X, (float)bounds.Y, (float)(bounds.X + bounds.Width), (float)(bounds.Y + bounds.Height));
+    D2D1_RECT_F rect = D2D1::RectF(
+        (float)bounds.X - pad,
+        (float)bounds.Y - pad,
+        (float)(bounds.X + bounds.Width) + pad,
+        (float)(bounds.Y + bounds.Height) + pad
+    );
     
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> highlightBrush;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> shadowBrush;
