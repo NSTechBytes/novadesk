@@ -569,22 +569,30 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (g_showActions.load()) {
                 ShowWindow(g_repairButton, SW_SHOW);
                 ShowWindow(g_uninstallButton, SW_SHOW);
+                EnableWindow(g_repairButton, TRUE);
+                EnableWindow(g_uninstallButton, TRUE);
             }
             if (g_finished.load()) {
                 g_allowClose.store(true);
                 ShowWindow(g_closeButton, SW_SHOW);
+                EnableWindow(g_repairButton, FALSE);
+                EnableWindow(g_uninstallButton, FALSE);
             }
             return 0;
         case WM_COMMAND:
             if (LOWORD(wParam) == 1001) {
                 g_action.store(1);
                 g_showActions.store(false);
+                EnableWindow(g_repairButton, FALSE);
+                EnableWindow(g_uninstallButton, FALSE);
                 g_actionCv.notify_one();
                 return 0;
             }
             if (LOWORD(wParam) == 1002) {
                 g_action.store(2);
                 g_showActions.store(false);
+                EnableWindow(g_repairButton, FALSE);
+                EnableWindow(g_uninstallButton, FALSE);
                 g_actionCv.notify_one();
                 return 0;
             }
