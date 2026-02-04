@@ -761,6 +761,14 @@ bool BuildWidget() {
             }
         }
 
+        // Ensure a small stub is embedded in the payload so Uninstall.exe isn't huge
+        fs::path embeddedStub = distDir / "installer_stub.exe";
+        try {
+            fs::copy_file(stubExe, embeddedStub, fs::copy_options::overwrite_existing);
+        } catch (...) {
+            std::cerr << "Warning: Failed to embed installer_stub.exe into dist payload." << std::endl;
+        }
+
         if (!BuildInstallerSfx(distDir, widgetPath, stubExe, widgetRealName, version, author, description, setupOptions)) {
             std::cerr << "Error: Failed to build installer." << std::endl;
             return false;

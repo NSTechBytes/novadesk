@@ -300,6 +300,15 @@ bool InstallFromSelf(bool skipInstalledCheck) {
     fs::path installDirPath = fs::path(installDirW);
     fs::create_directories(installDirPath);
 
+    // Persist manifest for uninstall
+    try {
+        std::ofstream mf(installDirPath / "install_manifest.json", std::ios::binary);
+        if (mf) {
+            mf.write(manifestJson.data(), static_cast<std::streamsize>(manifestJson.size()));
+        }
+    } catch (...) {
+    }
+
     auto files = manifest.value("files", nlohmann::json::array());
     uint64_t totalBytes = 0;
     for (const auto& entry : files) {
@@ -375,8 +384,13 @@ bool InstallFromSelf(bool skipInstalledCheck) {
         if (enableUninstall) {
             UpdateStatus(L"Registering uninstall...");
             fs::path uninstallPath = installDirPath / "Uninstall.exe";
+            fs::path smallStub = installDirPath / "installer_stub.exe";
             try {
-                fs::copy_file(exePath, uninstallPath, fs::copy_options::overwrite_existing);
+                if (fs::exists(smallStub)) {
+                    fs::copy_file(smallStub, uninstallPath, fs::copy_options::overwrite_existing);
+                } else {
+                    fs::copy_file(exePath, uninstallPath, fs::copy_options::overwrite_existing);
+                }
             } catch (...) {
             }
 
@@ -423,31 +437,17 @@ bool UninstallSelf() {
     GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
     fs::path exePath = exePathBuf;
 
-    InstallerFooter footer{};
-    uint64_t footerOffset = 0;
-    if (!ReadInstallerFooter(exePath, footer, footerOffset)) {
-        return true;
+    fs::path installDirPath = exePath.parent_path();
+
+    std::string manifestJson;
+    try {
+        std::ifstream mf(installDirPath / "install_manifest.json", std::ios::binary);
+        if (mf) {
+            manifestJson.assign(std::istreambuf_iterator<char>(mf), std::istreambuf_iterator<char>());
+        }
+    } catch (...) {
     }
-
-    uint64_t exeSize = footerOffset + sizeof(InstallerFooter);
-    uint64_t payloadSize = footer.payloadSize;
-    uint64_t manifestSize = footer.manifestSize;
-    if (manifestSize == 0 || payloadSize == 0) {
-        return true;
-    }
-
-    uint64_t payloadStart = exeSize - sizeof(InstallerFooter) - manifestSize - payloadSize;
-    uint64_t manifestOffset = payloadStart + payloadSize;
-
-    std::ifstream in(exePath, std::ios::binary);
-    if (!in) {
-        return true;
-    }
-
-    in.seekg(static_cast<std::streamoff>(manifestOffset));
-    std::string manifestJson(manifestSize, '\0');
-    in.read(manifestJson.data(), static_cast<std::streamsize>(manifestSize));
-    if (!in) {
+    if (manifestJson.empty()) {
         return true;
     }
 
@@ -472,13 +472,7 @@ bool UninstallSelf() {
     bool runOnStartup = setup.value("runOnStartup", false);
     bool createStartupShortcut = setup.value("createStartupShortcut", false);
 
-    std::wstring appExeNameW = fs::path(appExeRel).filename().wstring();
-    if (IsProcessRunning(appExeNameW)) {
-        UpdateStatus(L"Close the app before uninstalling.");
-        return false;
-    }
-
-    fs::path installDirPath;
+    // If registry has a canonical install location, prefer it
     HKEY hInstallKey = nullptr;
     std::wstring installKeyPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" + ToWString(appName);
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, installKeyPath.c_str(), 0, KEY_READ, &hInstallKey) == ERROR_SUCCESS) {
@@ -491,9 +485,14 @@ bool UninstallSelf() {
         }
         RegCloseKey(hInstallKey);
     }
-    if (installDirPath.empty()) {
-        installDirPath = exePath.parent_path();
+
+    std::wstring appExeNameW = fs::path(appExeRel).filename().wstring();
+    if (IsProcessRunning(appExeNameW)) {
+        UpdateStatus(L"Close the app before uninstalling.");
+        return false;
     }
+
+    // installDirPath already resolved above
 
     if (installDirPath.empty()) {
         return true;
