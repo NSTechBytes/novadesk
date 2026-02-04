@@ -9,7 +9,9 @@
 #include <Windows.h>
 #include <shlwapi.h>
 #include <shlobj.h>
+#include <cstdio>
 #include "Version.h"
+#include "Logging.h"
 
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "version.lib")
@@ -38,6 +40,43 @@ namespace PathUtils {
             return fullPath.substr(0, lastBackslash + 1);
         }
         return L"";
+    }
+
+    /*
+    ** Check if the executable directory is writable (portable-capable).
+    ** Rule: try creating a temp file in the EXE directory.
+    */
+    bool IsPortableEnvironment() {
+        static int cached = -1; // -1 unknown, 0 false, 1 true
+        if (cached != -1) return cached == 1;
+
+        std::wstring exeDir = GetExeDir();
+        if (exeDir.empty()) {
+            cached = 0;
+            Logging::Log(LogLevel::Info, L"Standard environment detected: using AppData for settings/logs.");
+            return false;
+        }
+
+        wchar_t tempFile[MAX_PATH];
+        if (GetTempFileNameW(exeDir.c_str(), L"nds", 0, tempFile) == 0) {
+            cached = 0;
+            Logging::Log(LogLevel::Info, L"Standard environment detected: using AppData for settings/logs.");
+            return false;
+        }
+
+        HANDLE h = CreateFileW(tempFile, GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (h == INVALID_HANDLE_VALUE) {
+            DeleteFileW(tempFile);
+            cached = 0;
+            Logging::Log(LogLevel::Info, L"Standard environment detected: using AppData for settings/logs.");
+            return false;
+        }
+        CloseHandle(h);
+        DeleteFileW(tempFile);
+
+        cached = 1;
+        Logging::Log(LogLevel::Info, L"Portable environment detected: using EXE directory for settings/logs.");
+        return true;
     }
 
     /*
@@ -112,14 +151,18 @@ namespace PathUtils {
     ** Get the AppData path for the product.
     */
     std::wstring GetAppDataPath() {
+        if (IsPortableEnvironment()) {
+            return GetExeDir();
+        }
+
         wchar_t path[MAX_PATH];
         if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, path))) {
             std::wstring appData = path;
             appData += L"\\" + GetProductName() + L"\\";
-            
+
             // Ensure directory exists
             CreateDirectoryW(appData.c_str(), NULL);
-            
+
             return appData;
         }
         return GetExeDir(); // Fallback
