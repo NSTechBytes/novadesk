@@ -204,7 +204,14 @@ namespace Utils {
             if (ParseGradientString(colorStr, outGradient)) {
                 return true;
             }
-            return ColorUtil::ParseRGBA(colorStr, outColor, outAlpha);
+            if (ColorUtil::ParseRGBA(colorStr, outColor, outAlpha)) {
+                // Explicit solid color should clear any previous gradient.
+                outGradient.type = GRADIENT_NONE;
+                outGradient.stops.clear();
+                outGradient.angle = 0.0f;
+                outGradient.shape.clear();
+                return true;
+            }
         }
         return false;
     }
