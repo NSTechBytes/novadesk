@@ -385,8 +385,59 @@ bool BuildInstallerSfx(const fs::path& distDir,
         fs::remove(installerOut);
     }
 
+    // Clean up any stray stub artifacts in dist (we embed stub into setup.exe)
+    fs::path distStub = distDir / "installer_stub.exe";
+    if (fs::exists(distStub)) {
+        fs::remove(distStub);
+    }
+    fs::path distTmpStubExe = distDir / "_installer_stub.tmp.exe";
+    if (fs::exists(distTmpStubExe)) {
+        fs::remove(distTmpStubExe);
+    }
+    fs::path distTmpStub = distDir / "_installer_stub.tmp";
+    if (fs::exists(distTmpStub)) {
+        fs::remove(distTmpStub);
+    }
+
+    // Create a temp copy of the stub so we never mutate the original build artifact
+    fs::path tempStub = fs::temp_directory_path() / ("_installer_stub_" + setupName);
+    if (tempStub.extension() != ".exe") {
+        tempStub += ".exe";
+    }
+    struct TempStubCleanup {
+        fs::path path;
+        ~TempStubCleanup() {
+            if (path.empty()) return;
+            try {
+                if (fs::exists(path)) {
+                    fs::remove(path);
+                }
+            } catch (...) {
+            }
+        }
+    } tempStubCleanup{tempStub};
+
+    try {
+        fs::copy_file(stubExe, tempStub, fs::copy_options::overwrite_existing);
+    } catch (...) {
+        std::cerr << "Error: Failed to copy installer stub to temp at " << tempStub.string() << std::endl;
+        return false;
+    }
+
+    // Apply app icon to the temp stub before embedding
+    if (!setupOptions.setupIcon.empty()) {
+        fs::path iconPath = widgetPath / setupOptions.setupIcon;
+        if (fs::exists(iconPath)) {
+            rescle::ResourceUpdater stubUpdater;
+            if (stubUpdater.Load(tempStub.c_str())) {
+                stubUpdater.SetIcon(iconPath.c_str());
+                stubUpdater.Commit();
+            }
+        }
+    }
+
     {
-        std::ifstream stubIn(stubExe, std::ios::binary);
+        std::ifstream stubIn(tempStub, std::ios::binary);
         if (!stubIn) {
             std::cerr << "Error: Failed to read installer stub from " << stubExe.string() << std::endl;
             return false;
@@ -419,6 +470,42 @@ bool BuildInstallerSfx(const fs::path& distDir,
         }
     }
 
+    // Embed installer_stub.exe as RT_RCDATA so Uninstall.exe can be created from it
+    try {
+        std::ifstream stubIn(tempStub, std::ios::binary);
+        if (!stubIn) {
+            std::cerr << "Error: Failed to read installer stub for embedding." << std::endl;
+            return false;
+        }
+        std::vector<char> stubBytes((std::istreambuf_iterator<char>(stubIn)), std::istreambuf_iterator<char>());
+        if (stubBytes.empty()) {
+            std::cerr << "Error: installer stub is empty." << std::endl;
+            return false;
+        }
+
+        HANDLE hUpdate = BeginUpdateResourceW(installerOut.wstring().c_str(), FALSE);
+        if (!hUpdate) {
+            std::cerr << "Error: BeginUpdateResource failed." << std::endl;
+            return false;
+        }
+
+        if (!UpdateResourceW(hUpdate, RT_RCDATA, L"INSTALLER_STUB", MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL),
+                             stubBytes.data(), static_cast<DWORD>(stubBytes.size()))) {
+            std::cerr << "Error: UpdateResource failed." << std::endl;
+            EndUpdateResourceW(hUpdate, TRUE);
+            return false;
+        }
+
+        if (!EndUpdateResourceW(hUpdate, FALSE)) {
+            std::cerr << "Error: EndUpdateResource failed." << std::endl;
+            return false;
+        }
+
+    } catch (...) {
+        std::cerr << "Error: Failed to embed installer stub resource." << std::endl;
+        return false;
+    }
+
     struct FileMeta {
         fs::path relPath;
         uint64_t size = 0;
@@ -430,6 +517,11 @@ bool BuildInstallerSfx(const fs::path& distDir,
     for (const auto& entry : fs::recursive_directory_iterator(distDir)) {
         if (!entry.is_regular_file()) continue;
         if (entry.path() == installerOut) continue;
+
+        const std::string filename = entry.path().filename().string();
+        if (filename == "installer_stub.exe" || filename.rfind("_installer_stub.tmp", 0) == 0) {
+            continue;
+        }
 
         FileMeta meta;
         meta.relPath = fs::relative(entry.path(), distDir);
@@ -759,26 +851,6 @@ bool BuildWidget() {
                 std::cerr << "Warning: installer_stub.exe not found. Falling back to nwm.exe." << std::endl;
                 stubExe = exeDir / "nwm.exe";
             }
-        }
-
-        // Ensure a small stub is embedded in the payload so Uninstall.exe isn't huge
-        fs::path embeddedStub = distDir / "installer_stub.exe";
-        try {
-            fs::copy_file(stubExe, embeddedStub, fs::copy_options::overwrite_existing);
-            if (!setupOptions.setupIcon.empty()) {
-                fs::path iconPath = widgetPath / setupOptions.setupIcon;
-                if (fs::exists(iconPath)) {
-                    rescle::ResourceUpdater stubUpdater;
-                    if (stubUpdater.Load(embeddedStub.c_str())) {
-                        stubUpdater.SetIcon(iconPath.c_str());
-                        if (!stubUpdater.Commit()) {
-                            std::cerr << "Warning: Failed to set embedded stub icon." << std::endl;
-                        }
-                    }
-                }
-            }
-        } catch (...) {
-            std::cerr << "Warning: Failed to embed installer_stub.exe into dist payload." << std::endl;
         }
 
         if (!BuildInstallerSfx(distDir, widgetPath, stubExe, widgetRealName, version, author, description, setupOptions)) {

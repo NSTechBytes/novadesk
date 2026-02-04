@@ -116,6 +116,21 @@ bool CreateShortcut(const std::wstring& targetPath, const std::wstring& shortcut
     return SUCCEEDED(persistFile->Save(shortcutPath.c_str(), TRUE));
 }
 
+bool ExtractEmbeddedStub(const fs::path& outPath) {
+    HRSRC hRes = FindResourceW(nullptr, L"INSTALLER_STUB", RT_RCDATA);
+    if (!hRes) return false;
+    HGLOBAL hData = LoadResource(nullptr, hRes);
+    if (!hData) return false;
+    DWORD size = SizeofResource(nullptr, hRes);
+    void* data = LockResource(hData);
+    if (!data || size == 0) return false;
+
+    std::ofstream out(outPath, std::ios::binary);
+    if (!out) return false;
+    out.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(size));
+    return true;
+}
+
 bool IsProcessRunning(const std::wstring& exeName) {
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snapshot == INVALID_HANDLE_VALUE) return false;
@@ -384,11 +399,8 @@ bool InstallFromSelf(bool skipInstalledCheck) {
         if (enableUninstall) {
             UpdateStatus(L"Registering uninstall...");
             fs::path uninstallPath = installDirPath / "Uninstall.exe";
-            fs::path smallStub = installDirPath / "installer_stub.exe";
             try {
-                if (fs::exists(smallStub)) {
-                    fs::copy_file(smallStub, uninstallPath, fs::copy_options::overwrite_existing);
-                } else {
+                if (!ExtractEmbeddedStub(uninstallPath)) {
                     fs::copy_file(exePath, uninstallPath, fs::copy_options::overwrite_existing);
                 }
             } catch (...) {
