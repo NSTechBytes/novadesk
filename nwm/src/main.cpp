@@ -765,6 +765,18 @@ bool BuildWidget() {
         fs::path embeddedStub = distDir / "installer_stub.exe";
         try {
             fs::copy_file(stubExe, embeddedStub, fs::copy_options::overwrite_existing);
+            if (!setupOptions.setupIcon.empty()) {
+                fs::path iconPath = widgetPath / setupOptions.setupIcon;
+                if (fs::exists(iconPath)) {
+                    rescle::ResourceUpdater stubUpdater;
+                    if (stubUpdater.Load(embeddedStub.c_str())) {
+                        stubUpdater.SetIcon(iconPath.c_str());
+                        if (!stubUpdater.Commit()) {
+                            std::cerr << "Warning: Failed to set embedded stub icon." << std::endl;
+                        }
+                    }
+                }
+            }
         } catch (...) {
             std::cerr << "Warning: Failed to embed installer_stub.exe into dist payload." << std::endl;
         }
