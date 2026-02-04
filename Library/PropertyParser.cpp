@@ -607,10 +607,31 @@ namespace PropertyParser {
         duk_push_object(ctx);
         
         duk_push_string(ctx, Utils::ToString(element->GetId()).c_str()); duk_put_prop_string(ctx, -2, "id");
-        duk_push_int(ctx, element->GetX()); duk_put_prop_string(ctx, -2, "x");
-        duk_push_int(ctx, element->GetY()); duk_put_prop_string(ctx, -2, "y");
-        duk_push_int(ctx, element->GetWidth()); duk_put_prop_string(ctx, -2, "width");
-        duk_push_int(ctx, element->GetHeight()); duk_put_prop_string(ctx, -2, "height");
+
+        // Default bounds (content area)
+        GfxRect contentBounds = element->GetBounds();
+        GfxRect outerBounds = element->GetBackgroundBounds();
+
+        if (element->GetBevelType() != 0) {
+            const int bevelPad = 2; // Rainmeter-style bevel extends 2px outside
+            outerBounds = GfxRect(
+                outerBounds.X - bevelPad,
+                outerBounds.Y - bevelPad,
+                outerBounds.Width + bevelPad * 2,
+                outerBounds.Height + bevelPad * 2
+            );
+        }
+
+        // Preserve original content bounds for scripts that need them
+        duk_push_int(ctx, contentBounds.X); duk_put_prop_string(ctx, -2, "contentX");
+        duk_push_int(ctx, contentBounds.Y); duk_put_prop_string(ctx, -2, "contentY");
+        duk_push_int(ctx, contentBounds.Width); duk_put_prop_string(ctx, -2, "contentWidth");
+        duk_push_int(ctx, contentBounds.Height); duk_put_prop_string(ctx, -2, "contentHeight");
+
+        duk_push_int(ctx, outerBounds.X); duk_put_prop_string(ctx, -2, "x");
+        duk_push_int(ctx, outerBounds.Y); duk_put_prop_string(ctx, -2, "y");
+        duk_push_int(ctx, outerBounds.Width); duk_put_prop_string(ctx, -2, "width");
+        duk_push_int(ctx, outerBounds.Height); duk_put_prop_string(ctx, -2, "height");
         duk_push_number(ctx, element->GetRotate()); duk_put_prop_string(ctx, -2, "rotate");
         duk_push_boolean(ctx, element->GetAntiAlias()); duk_put_prop_string(ctx, -2, "antiAlias");
 
