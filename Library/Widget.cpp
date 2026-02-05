@@ -1483,6 +1483,7 @@ void Widget::UpdateLayeredWindowContent()
             // Draw Elements
             for (Element* element : m_Elements)
             {
+                if (!element->IsVisible()) continue;
                 element->Render(m_pContext.Get());
             }
 

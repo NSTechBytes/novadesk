@@ -141,6 +141,7 @@ void ShapeElement::EnsureStrokeStyle()
 
 bool ShapeElement::HitTest(int x, int y)
 {
+    if (!IsVisible()) return false;
     if (IsConsumed()) return false;
 
     // Transform the point into local (unrotated) space if needed.

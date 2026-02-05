@@ -173,6 +173,9 @@ public:
 
     bool GetAntiAlias() const { return m_AntiAlias; }
 
+    void SetShow(bool show) { m_Show = show; }
+    bool IsVisible() const { return m_Show; }
+
     virtual bool IsTransparentHit() const { return false; }
 
     bool HasAction(UINT message, WPARAM wParam) const;
@@ -250,6 +253,7 @@ protected:
 
     // Rendering properties
     bool m_AntiAlias = true;
+    bool m_Show = true;
     
     // Padding properties
     int m_PaddingLeft = 0;

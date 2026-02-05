@@ -90,6 +90,7 @@ namespace PropertyParser
         bool tooltipBalloon = false;
 
         bool antialias = true;
+        bool show = true;
         
         float rotate = 0.0f;
         bool hasTransformMatrix = false;

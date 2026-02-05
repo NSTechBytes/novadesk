@@ -76,6 +76,62 @@ win.addShape({
     strokeColor: "#2e003e",
     strokeWidth: 2
 });
+
+// Visibility test (click box to toggle show + log size)
+win.addText({
+    id: "visLabel",
+    text: "Click the box to toggle visibility",
+    x: 40, y: 220,
+    fontColor: "#111",
+    fontSize: 14
+});
+
+win.addText({
+    id: "visText",
+    text: "I hide/show",
+    x: 40, y: 240,
+    fontColor: "#1f3f66",
+    fontSize: 16
+});
+
+win.addImage({
+    id: "visImage",
+    x: 160, y: 220,
+    width: 48, height: 48,
+    path: "assets/pic.png",
+    preserveAspectRatio: "preserve"
+});
+
+var visHidden = false;
+win.addShape({
+    id: "visToggle",
+    type: "rectangle",
+    x: 240, y: 215,
+    width: 160, height: 60,
+    radius: 10,
+    fillColor: "#eeeeee",
+    strokeColor: "#333333",
+    strokeWidth: 2,
+    onLeftMouseUp: function () {
+        var beforeW = win.getElementProperty("visText", "width");
+        var beforeH = win.getElementProperty("visText", "height");
+        var beforeW2 = win.getElementProperty("visImage", "width");
+        var beforeH2 = win.getElementProperty("visImage", "height");
+
+        console.log("Before toggle - visText:", beforeW, beforeH, "visImage:", beforeW2, beforeH2);
+
+        visHidden = !visHidden;
+        win.setElementProperties("visText", { show: !visHidden });
+        win.setElementProperties("visImage", { show: !visHidden });
+
+        var afterW = win.getElementProperty("visText", "width");
+        var afterH = win.getElementProperty("visText", "height");
+        var afterW2 = win.getElementProperty("visImage", "width");
+        var afterH2 = win.getElementProperty("visImage", "height");
+
+        console.log("After toggle - visText:", afterW, afterH, "visImage:", afterW2, afterH2, "show:", !visHidden);
+    }
+});
 } catch (e) {
     console.log("Combine demo error:", e && (e.stack || e.message || e));
 }

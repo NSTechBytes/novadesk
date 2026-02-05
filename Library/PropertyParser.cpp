@@ -184,6 +184,7 @@ namespace PropertyParser {
         reader.GetBool("tooltipBalloon", options.tooltipBalloon);
 
         reader.GetBool("antiAlias", options.antialias);
+        reader.GetBool("show", options.show);
 
         if (reader.GetFloatArray("transformMatrix", options.transformMatrix, 6)) {
             options.hasTransformMatrix = true;
@@ -702,6 +703,8 @@ namespace PropertyParser {
         duk_push_int(ctx, outerBounds.Y); duk_put_prop_string(ctx, -2, "y");
         duk_push_int(ctx, outerBounds.Width); duk_put_prop_string(ctx, -2, "width");
         duk_push_int(ctx, outerBounds.Height); duk_put_prop_string(ctx, -2, "height");
+
+        duk_push_boolean(ctx, element->IsVisible()); duk_put_prop_string(ctx, -2, "show");
         duk_push_number(ctx, element->GetRotate()); duk_put_prop_string(ctx, -2, "rotate");
         duk_push_boolean(ctx, element->GetAntiAlias()); duk_put_prop_string(ctx, -2, "antiAlias");
 
@@ -875,6 +878,7 @@ namespace PropertyParser {
         element->SetSize(options.width, options.height);
         element->SetRotate(options.rotate);
         element->SetAntiAlias(options.antialias);
+        element->SetShow(options.show);
         element->SetCornerRadius(options.solidColorRadius);
         element->SetPadding(options.paddingLeft, options.paddingTop, options.paddingRight, options.paddingBottom);
         
@@ -1073,6 +1077,7 @@ namespace PropertyParser {
         
         options.rotate = element->GetRotate();
         options.antialias = element->GetAntiAlias();
+        options.show = element->IsVisible();
 
         options.hasSolidColor = element->HasSolidColor();
         options.solidColor = element->GetSolidColor();

@@ -39,6 +39,9 @@ int Element::GetHeight() {
 ** Get the bounding box of the element.
 */
 GfxRect Element::GetBounds() {
+    if (!m_Show) {
+        return GfxRect(m_X, m_Y, 0, 0);
+    }
     return GfxRect(m_X, m_Y, GetWidth(), GetHeight());
 }
 
@@ -50,6 +53,7 @@ GfxRect Element::GetBackgroundBounds() {
 ** Check if a point is within the element's bounds.
 */
 bool Element::HitTest(int x, int y) {
+    if (!m_Show) return false;
     if (!m_HasTransformMatrix && m_Rotate == 0.0f) {
         GfxRect bounds = GetBounds();
         return (x >= bounds.X && x < bounds.X + bounds.Width &&
