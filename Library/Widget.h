@@ -126,6 +126,10 @@ private:
     void OnContextMenu();
     bool BuildCombinedShapeGeometry(class PathShape* target, const PropertyParser::ShapeOptions& options);
     void ReleaseCombinedConsumes(class PathShape* target);
+    void UpdateContainerForElement(Element* element, const std::wstring& newContainerId);
+    bool WouldCreateContainerCycle(Element* element, Element* container) const;
+    void RenderContainerChildren(Element* container);
+    bool HitTestContainerChildren(Element* container, int x, int y, Element*& outElement);
 
 private:
     std::wstring m_Id;

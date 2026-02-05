@@ -91,6 +91,7 @@ namespace PropertyParser
 
         bool antialias = true;
         bool show = true;
+        std::wstring containerId;
         
         float rotate = 0.0f;
         bool hasTransformMatrix = false;

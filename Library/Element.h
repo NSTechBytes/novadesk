@@ -176,6 +176,18 @@ public:
     void SetShow(bool show) { m_Show = show; }
     bool IsVisible() const { return m_Show; }
 
+    void SetContainerId(const std::wstring& id) { m_ContainerId = id; }
+    const std::wstring& GetContainerId() const { return m_ContainerId; }
+    void SetContainer(Element* container) { m_ContainerElement = container; }
+    Element* GetContainer() const { return m_ContainerElement; }
+    bool IsContained() const { return m_ContainerElement != nullptr; }
+
+    void AddContainerItem(Element* item) { m_ContainerItems.push_back(item); }
+    void RemoveContainerItem(Element* item);
+    void ClearContainerItems();
+    const std::vector<Element*>& GetContainerItems() const { return m_ContainerItems; }
+    bool IsContainer() const { return !m_ContainerItems.empty(); }
+
     virtual bool IsTransparentHit() const { return false; }
 
     bool HasAction(UINT message, WPARAM wParam) const;
@@ -254,6 +266,10 @@ protected:
     // Rendering properties
     bool m_AntiAlias = true;
     bool m_Show = true;
+
+    std::wstring m_ContainerId;
+    Element* m_ContainerElement = nullptr;
+    std::vector<Element*> m_ContainerItems;
     
     // Padding properties
     int m_PaddingLeft = 0;

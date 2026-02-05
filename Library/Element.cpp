@@ -163,6 +163,16 @@ void Element::SetPadding(int left, int top, int right, int bottom) {
     m_PaddingBottom = bottom;
 }
 
+void Element::RemoveContainerItem(Element* item)
+{
+    m_ContainerItems.erase(std::remove(m_ContainerItems.begin(), m_ContainerItems.end(), item), m_ContainerItems.end());
+}
+
+void Element::ClearContainerItems()
+{
+    m_ContainerItems.clear();
+}
+
 /*
 ** Render the background of the element.
 */
