@@ -12,10 +12,10 @@ var win = new widgetWindow({
     id: "ShapeTestWindow",
     x: 100,
     y: 100,
-    width: 600,
-    height: 600,
+    width: 700,
+    height: 900,
     backgroundColor: "#ffffff",
-    script: "shape_ui.js"
+    script: "strokes.js"
 });
 
 // Get the path to Novadesk AppData
