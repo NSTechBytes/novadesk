@@ -18,13 +18,23 @@ public:
     virtual ~PathShape();
 
     virtual void Render(ID2D1DeviceContext* context) override;
+    virtual int GetAutoWidth() override;
+    virtual int GetAutoHeight() override;
+    virtual GfxRect GetBounds() override;
+    virtual bool HitTestLocal(const D2D1_POINT_2F& point) override;
     
-    virtual void SetPathData(const std::wstring& pathData) override { m_PathData = pathData; }
+    virtual void SetPathData(const std::wstring& pathData) override;
 
 private:
     std::wstring m_PathData;
-    
+    bool m_HasPathBounds = false;
+    float m_PathMinX = 0.0f;
+    float m_PathMinY = 0.0f;
+    float m_PathMaxX = 0.0f;
+    float m_PathMaxY = 0.0f;
+
     void CreatePathGeometry(ID2D1Factory* factory, ID2D1PathGeometry** ppGeometry);
+    void UpdatePathBounds();
 };
 
 #endif

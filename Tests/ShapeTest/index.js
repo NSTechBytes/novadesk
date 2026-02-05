@@ -15,7 +15,7 @@ var win = new widgetWindow({
     width: 700,
     height: 900,
     backgroundColor: "#ffffff",
-    script: "strokes.js"
+    script: "path.js"
 });
 
 // Get the path to Novadesk AppData

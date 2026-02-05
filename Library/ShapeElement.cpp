@@ -106,3 +106,73 @@ void ShapeElement::UpdateStrokeStyle(ID2D1DeviceContext* context)
         m_UpdateStrokeStyle = false;
     }
 }
+
+void ShapeElement::EnsureStrokeStyle()
+{
+    if (!m_UpdateStrokeStyle && m_StrokeStyle) return;
+
+    if (m_StrokeStyle) {
+        m_StrokeStyle->Release();
+        m_StrokeStyle = nullptr;
+    }
+
+    ID2D1Factory1* factory = Direct2D::GetFactory();
+    if (!factory) return;
+
+    D2D1_STROKE_STYLE_PROPERTIES1 props = D2D1::StrokeStyleProperties1(
+        m_StrokeStartCap,
+        m_StrokeEndCap,
+        m_StrokeDashCap,
+        m_StrokeLineJoin,
+        10.0f,
+        (m_StrokeDashes.empty() ? D2D1_DASH_STYLE_SOLID : D2D1_DASH_STYLE_CUSTOM),
+        m_StrokeDashOffset
+    );
+
+    factory->CreateStrokeStyle(
+        props,
+        m_StrokeDashes.data(),
+        (UINT32)m_StrokeDashes.size(),
+        &m_StrokeStyle
+    );
+
+    m_UpdateStrokeStyle = false;
+}
+
+bool ShapeElement::HitTest(int x, int y)
+{
+    // Transform the point into local (unrotated) space if needed.
+    GfxRect bounds = GetBackgroundBounds();
+    float centerX = bounds.X + bounds.Width / 2.0f;
+    float centerY = bounds.Y + bounds.Height / 2.0f;
+
+    D2D1::Matrix3x2F matrix;
+    bool needsTransform = (m_HasTransformMatrix || m_Rotate != 0.0f);
+
+    if (needsTransform) {
+        if (m_HasTransformMatrix) {
+            matrix = D2D1::Matrix3x2F(
+                m_TransformMatrix[0], m_TransformMatrix[1],
+                m_TransformMatrix[2], m_TransformMatrix[3],
+                m_TransformMatrix[4], m_TransformMatrix[5]
+            );
+        } else {
+            matrix = D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY));
+        }
+
+        if (!matrix.Invert()) return false;
+    }
+
+    D2D1_POINT_2F p = D2D1::Point2F((float)x, (float)y);
+    if (needsTransform) {
+        p = matrix.TransformPoint(p);
+    }
+
+    // Quick reject using bounds before geometry hit-test.
+    if (p.x < bounds.X || p.x >= bounds.X + bounds.Width ||
+        p.y < bounds.Y || p.y >= bounds.Y + bounds.Height) {
+        return false;
+    }
+
+    return HitTestLocal(p);
+}

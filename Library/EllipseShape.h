@@ -17,7 +17,10 @@ public:
     virtual ~EllipseShape();
 
     virtual void Render(ID2D1DeviceContext* context) override;
+    virtual int GetAutoWidth() override;
+    virtual int GetAutoHeight() override;
     virtual void SetRadii(float rx, float ry) override { m_RadiusX = rx; m_RadiusY = ry; }
+    virtual bool HitTestLocal(const D2D1_POINT_2F& point) override;
 
 private:
     float m_RadiusX = 0.0f;

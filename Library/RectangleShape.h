@@ -17,6 +17,7 @@ public:
     virtual ~RectangleShape();
 
     virtual void Render(ID2D1DeviceContext* context) override;
+    virtual bool HitTestLocal(const D2D1_POINT_2F& point) override;
     virtual void SetRadii(float rx, float ry) override { m_RadiusX = rx; m_RadiusY = ry; }
     virtual float GetRadiusX() const override { return m_RadiusX; }
     virtual float GetRadiusY() const override { return m_RadiusY; }

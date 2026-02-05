@@ -18,6 +18,7 @@ public:
     virtual ~ShapeElement();
 
     virtual void Render(ID2D1DeviceContext* context) = 0;
+    virtual bool HitTest(int x, int y) override;
 
     void SetStroke(float width, COLORREF color, BYTE alpha) {
         m_StrokeWidth = width;
@@ -125,9 +126,12 @@ protected:
 
     void CreateBrush(ID2D1DeviceContext* context, ID2D1Brush** ppBrush, bool isStroke);
     void UpdateStrokeStyle(ID2D1DeviceContext* context);
+    void EnsureStrokeStyle();
 
     bool TryCreateStrokeBrush(ID2D1DeviceContext* context, Microsoft::WRL::ComPtr<ID2D1Brush>& outBrush);
     bool TryCreateFillBrush(ID2D1DeviceContext* context, Microsoft::WRL::ComPtr<ID2D1Brush>& outBrush);
+
+    virtual bool HitTestLocal(const D2D1_POINT_2F& point) = 0;
 };
 
 #endif
