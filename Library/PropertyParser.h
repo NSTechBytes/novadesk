@@ -199,6 +199,12 @@ namespace PropertyParser
         float endX = 0.0f;
         float endY = 0.0f;
 
+        std::wstring curveType = L"quadratic"; // "quadratic" or "cubic"
+        float controlX = 0.0f;
+        float controlY = 0.0f;
+        float control2X = 0.0f;
+        float control2Y = 0.0f;
+
         float startAngle = 0.0f;
         float endAngle = 90.0f;
         bool clockwise = true;

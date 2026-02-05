@@ -205,6 +205,9 @@
     <ClInclude Include="Library\PathShape.h">
       <Filter>Library</Filter>
     </ClInclude>
+    <ClInclude Include="Library\CurveShape.h">
+      <Filter>Library</Filter>
+    </ClInclude>
     <ClInclude Include="Library\nanosvg\nanosvg.h">
       <Filter>Library</Filter>
     </ClInclude>
@@ -370,6 +373,9 @@
       <Filter>Library</Filter>
     </ClCompile>
     <ClCompile Include="Library\PathShape.cpp">
+      <Filter>Library</Filter>
+    </ClCompile>
+    <ClCompile Include="Library\CurveShape.cpp">
       <Filter>Library</Filter>
     </ClCompile>
     <ClCompile Include="Library\ArcShape.cpp">

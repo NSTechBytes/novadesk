@@ -75,10 +75,15 @@ public:
     virtual float GetStartY() const { return 0; }
     virtual float GetEndX() const { return 0; }
     virtual float GetEndY() const { return 0; }
+    virtual float GetControlX() const { return 0; }
+    virtual float GetControlY() const { return 0; }
+    virtual float GetControl2X() const { return 0; }
+    virtual float GetControl2Y() const { return 0; }
     virtual float GetStartAngle() const { return 0; }
     virtual float GetEndAngle() const { return 0; }
     virtual bool IsClockwise() const { return true; }
     virtual std::wstring GetPathData() const { return L""; }
+    virtual std::wstring GetCurveType() const { return L"quadratic"; }
     GfxRect GetBackgroundBounds() override;
 
     void SetStrokeStyle(D2D1_CAP_STYLE start, D2D1_CAP_STYLE end, D2D1_CAP_STYLE dash, D2D1_LINE_JOIN join, float offset, const std::vector<float>& dashes) {
@@ -96,6 +101,7 @@ public:
     virtual void SetArcParams(float startAngle, float endAngle, bool clockwise) {}
 
     virtual void SetPathData(const std::wstring& pathData) {}
+    virtual void SetCurveParams(float startX, float startY, float controlX, float controlY, float control2X, float control2Y, float endX, float endY, const std::wstring& curveType) {}
 
 protected:
 

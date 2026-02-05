@@ -449,6 +449,12 @@ namespace PropertyParser {
         reader.GetFloat("endX", options.endX);
         reader.GetFloat("endY", options.endY);
 
+        reader.GetString("curveType", options.curveType);
+        reader.GetFloat("controlX", options.controlX);
+        reader.GetFloat("controlY", options.controlY);
+        reader.GetFloat("control2X", options.control2X);
+        reader.GetFloat("control2Y", options.control2Y);
+
         reader.GetFloat("startAngle", options.startAngle);
         reader.GetFloat("endAngle", options.endAngle);
         reader.GetBool("clockwise", options.clockwise);
@@ -969,6 +975,17 @@ namespace PropertyParser {
         element->SetLinePoints(options.startX, options.startY, options.endX, options.endY);
         element->SetArcParams(options.startAngle, options.endAngle, options.clockwise);
         element->SetPathData(options.pathData);
+        element->SetCurveParams(
+            options.startX,
+            options.startY,
+            options.controlX,
+            options.controlY,
+            options.control2X,
+            options.control2Y,
+            options.endX,
+            options.endY,
+            options.curveType
+        );
 
         element->SetStrokeStyle(
             options.strokeStartCap,
@@ -1126,6 +1143,12 @@ namespace PropertyParser {
         options.startY = element->GetStartY();
         options.endX = element->GetEndX();
         options.endY = element->GetEndY();
+
+        options.curveType = element->GetCurveType();
+        options.controlX = element->GetControlX();
+        options.controlY = element->GetControlY();
+        options.control2X = element->GetControl2X();
+        options.control2Y = element->GetControl2Y();
 
         options.startAngle = element->GetStartAngle();
         options.endAngle = element->GetEndAngle();

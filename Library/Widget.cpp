@@ -29,6 +29,7 @@
 #include "LineShape.h"
 #include "ArcShape.h"
 #include "PathShape.h"
+#include "CurveShape.h"
 #include "ShapeElement.h"
 #include "ColorUtil.h"
 #include "PathUtils.h"
@@ -1034,6 +1035,9 @@ void Widget::AddShape(const PropertyParser::ShapeOptions& options)
     }
     else if (options.shapeType == L"path") {
         element = new PathShape(options.id, options.x, options.y, options.width, options.height);
+    }
+    else if (options.shapeType == L"curve") {
+        element = new CurveShape(options.id, options.x, options.y, options.width, options.height);
     }
     else {
         element = new RectangleShape(options.id, options.x, options.y, options.width, options.height);

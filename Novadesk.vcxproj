@@ -85,6 +85,7 @@
     <ClInclude Include="Library\LineShape.h" />
     <ClInclude Include="Library\nanosvg\nanosvg.h" />
     <ClInclude Include="Library\PathShape.h" />
+    <ClInclude Include="Library\CurveShape.h" />
     <ClInclude Include="Library\RectangleShape.h" />
     <ClInclude Include="Library\RoundLineElement.h" />
     <ClInclude Include="Library\ShapeElement.h" />
@@ -153,6 +154,7 @@
     <ClCompile Include="Library\kiss_fft130\kiss_fftr.c" />
     <ClCompile Include="Library\LineShape.cpp" />
     <ClCompile Include="Library\PathShape.cpp" />
+    <ClCompile Include="Library\CurveShape.cpp" />
     <ClCompile Include="Library\RectangleShape.cpp" />
     <ClCompile Include="Library\RoundLineElement.cpp" />
     <ClCompile Include="Library\ShapeElement.cpp" />
