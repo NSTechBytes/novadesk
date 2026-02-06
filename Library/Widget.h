@@ -152,6 +152,7 @@ private:
     bool m_DragThresholdMet = false;
     POINT m_DragStartCursor = { 0, 0 };
     POINT m_DragStartWindow = { 0, 0 };
+    bool m_IsMouseOverWidget = false;
     
     // Rendering
     Microsoft::WRL::ComPtr<ID2D1DeviceContext> m_pContext;

@@ -581,6 +581,13 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
         return 0;
 
+    case WM_MOUSELEAVE:
+        if (widget)
+        {
+            widget->HandleMouseMessage(message, wParam, lParam);
+        }
+        return 0;
+
     case WM_LBUTTONDBLCLK:
     case WM_RBUTTONDOWN:
     // case WM_RBUTTONUP: // Handled above
@@ -858,6 +865,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             LPWINDOWPOS wp = (LPWINDOWPOS)lParam;
             if (!(wp->flags & SWP_NOMOVE))
             {
+                JSApi::TriggerWidgetEvent(widget, "move");
                 widget->m_Options.x = wp->x;
                 widget->m_Options.y = wp->y;
             }
@@ -1791,6 +1799,10 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
     if (message == WM_MOUSEMOVE)
     {
+        if (!m_IsMouseOverWidget) {
+            m_IsMouseOverWidget = true;
+            JSApi::TriggerWidgetEvent(this, "over");
+        }
         m_Tooltip.Move();
     }
 
@@ -1895,6 +1907,10 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     }
     else if (message == WM_MOUSELEAVE)
     {
+        if (m_IsMouseOverWidget) {
+            m_IsMouseOverWidget = false;
+            JSApi::TriggerWidgetEvent(this, "leave");
+        }
         if (m_MouseOverElement)
         {
 
