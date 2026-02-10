@@ -207,6 +207,11 @@ Section "Uninstall"
   
   ; Remove AppData (Settings, Logs, Config)
   RMDir /r "$APPDATA\Novadesk"
+
+  ; Remove files from root directory if in portable mode
+  Delete "$INSTDIR\settings.json"
+  Delete "$INSTDIR\logs.log"
+  Delete "$INSTDIR\config.json"
   
   ; Remove nwm directory
   RMDir /r "$INSTDIR\nwm"
