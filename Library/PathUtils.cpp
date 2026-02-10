@@ -17,6 +17,7 @@
 #pragma comment(lib, "version.lib")
 
 #include <vector>
+#include <algorithm>
 
 namespace PathUtils {
 
@@ -57,6 +58,49 @@ namespace PathUtils {
             return false;
         }
 
+        // Convert to uppercase for case-insensitive comparison
+        std::wstring exeDirUpper = exeDir;
+        std::transform(exeDirUpper.begin(), exeDirUpper.end(), exeDirUpper.begin(), ::towupper);
+
+        // Check common system directories to prevent false portable detection when running as admin
+        std::vector<std::wstring> systemDirs;
+        
+        wchar_t buffer[MAX_PATH];
+        
+        // Check Program Files
+        if (GetEnvironmentVariableW(L"ProgramFiles", buffer, MAX_PATH) > 0) {
+            std::wstring dir = buffer;
+            std::transform(dir.begin(), dir.end(), dir.begin(), ::towupper);
+            if (!dir.empty() && dir.back() != L'\\') dir += L'\\';
+            systemDirs.push_back(dir);
+        }
+        
+        // Check Program Files (x86)
+        if (GetEnvironmentVariableW(L"ProgramFiles(x86)", buffer, MAX_PATH) > 0) {
+            std::wstring dir = buffer;
+            std::transform(dir.begin(), dir.end(), dir.begin(), ::towupper);
+            if (!dir.empty() && dir.back() != L'\\') dir += L'\\';
+            systemDirs.push_back(dir);
+        }
+        
+        // Check SystemRoot
+        if (GetEnvironmentVariableW(L"SystemRoot", buffer, MAX_PATH) > 0) {
+            std::wstring dir = buffer;
+            std::transform(dir.begin(), dir.end(), dir.begin(), ::towupper);
+            if (!dir.empty() && dir.back() != L'\\') dir += L'\\';
+            systemDirs.push_back(dir);
+        }
+
+        // If exe is in any system directory, it's NOT portable (even if running as admin)
+        for (const auto& sysDir : systemDirs) {
+            if (exeDirUpper.find(sysDir) == 0) {
+                cached = 0;
+                Logging::Log(LogLevel::Info, L"Standard environment detected (system directory): using AppData for settings/logs.");
+                return false;
+            }
+        }
+
+        // Not in system directory - proceed with write test for true portable detection
         wchar_t tempFile[MAX_PATH];
         if (GetTempFileNameW(exeDir.c_str(), L"nds", 0, tempFile) == 0) {
             cached = 0;
