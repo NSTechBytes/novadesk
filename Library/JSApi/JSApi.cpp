@@ -233,7 +233,7 @@ namespace JSApi {
 
         // cache[modulePath] = module.exports (update in case replaced)
         duk_dup(ctx, -1);
-        duk_put_prop_string(ctx, -4, resolvedKey.c_str());
+        duk_put_prop_string(ctx, -5, resolvedKey.c_str());
 
         duk_remove(ctx, -2); // exports
         duk_remove(ctx, -2); // module
