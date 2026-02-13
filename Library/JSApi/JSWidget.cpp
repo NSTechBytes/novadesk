@@ -87,8 +87,9 @@
                  }
                  duk_pop_2(ctx); 
 
-                 delete *it;
+                 Widget* oldWidget = *it;
                  widgets.erase(it);
+                 delete oldWidget;
                  break;
              }
          }
