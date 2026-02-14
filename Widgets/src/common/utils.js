@@ -44,11 +44,39 @@ function setJsonValue(key, value) {
     system.writeJson(config_Path, config_Data);
 }
 
+function kelvinToCelsius(kelvin) {
+    return Math.round(kelvin - 273.15);
+}
+
+function celsiusToFahrenheit(celsius) {
+    return Math.round((celsius * 9/5) + 32);
+}
+
+function getWeatherIcon(code) {
+    // Map weather codes to simple ASCII icons
+    var icons = {
+        0: "☀", // Clear sky
+        1: "🌤", // Mainly clear
+        2: "⛅", // Partly cloudy
+        3: "☁", // Overcast
+        45: "🌫", // Fog
+        51: "🌦", // Light drizzle
+        61: "🌧", // Rain
+        65: "⛈", // Heavy rain
+        71: "❄", // Snow
+        95: "⛈"  // Thunderstorm
+    };
+    return icons[code] || "?";
+}
+
 module.exports = {
     formatTime: formatTime,
     formatDay: formatDay,
     formatDate: formatDate,
     getJsonValue: getJsonValue,
     setJsonValue: setJsonValue,
+    kelvinToCelsius: kelvinToCelsius,
+    celsiusToFahrenheit: celsiusToFahrenheit,
+    getWeatherIcon: getWeatherIcon,
     pad2: pad2
 };

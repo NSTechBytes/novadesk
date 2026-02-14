@@ -49,6 +49,16 @@ function toggleTimeFormat() {
     use12h = !use12h;
 }
 
+function unloadClockWidget() {
+    if (clock_Timer) {
+        clearInterval(clock_Timer);
+        clock_Timer = null;
+    }
+    
+    clock_Widget = null;
+}
+
 module.exports = {
-    loadClockWidget
+    loadClockWidget,
+    unloadClockWidget
 }

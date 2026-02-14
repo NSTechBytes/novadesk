@@ -17,7 +17,7 @@ win.addText({
     id: "title_Text",
     x: ((win.getElementProperty("backgroundShape", "x") + win.getElementProperty("backgroundShape", "width")) / 2),
     y: 10,
-    text: "System",
+    text: "Network",
     fontSize: 25,
     fontFace: "Consolas",
     textAlign: "center",
@@ -25,14 +25,14 @@ win.addText({
 })
 
 /*
-** CPU Content
+** Download Content
 **
 */
 win.addText({
-    id: "cpu_Label",
+    id: "download_Label",
     x: 15,
     y: 45,
-    text: "CPU:",
+    text: "Download:",
     fontSize: 12,
     fontFace: "Consolas",
     textAlign: "left",
@@ -41,10 +41,10 @@ win.addText({
 
 
 win.addText({
-    id: "cpu_Text",
+    id: "download_Text",
     x: 195,
     y: 45,
-    text: "--%",
+    text: "-- KB/s",
     fontSize: 12,
     fontFace: "Consolas",
     textAlign: "right",
@@ -52,7 +52,7 @@ win.addText({
 })
 
 win.addBar({
-    id: "cpu-Bar",
+    id: "download-Bar",
     x: 15,
     y: 65,
     width: win.getElementProperty("backgroundShape", "width") - 30,
@@ -65,15 +65,15 @@ win.addBar({
 });
 
 /*
-** CPU Content
+** Upload Content
 **
 */
 
 win.addText({
-    id: "memory_Label",
+    id: "upload_Label",
     x: 15,
     y: 85,
-    text: "Memory:",
+    text: "Upload:",
     fontSize: 12,
     fontFace: "Consolas",
     textAlign: "left",
@@ -81,10 +81,10 @@ win.addText({
 })
 
 win.addText({
-    id: "memory_Text",
+    id: "upload_Text",
     x: 195,
     y: 85,
-    text: "--%",
+    text: "-- KB/s",
     fontSize: 12,
     fontFace: "Consolas",
     textAlign: "right",
@@ -92,7 +92,7 @@ win.addText({
 })
 
 win.addBar({
-    id: "memory-Bar",
+    id: "upload-Bar",
     x: 15,
     y: 105,
     width: win.getElementProperty("backgroundShape", "width") - 30,
@@ -104,10 +104,29 @@ win.addBar({
     barCornerRadius: 4
 });
 
-ipc.on("system-stats", function (data) {
-    win.setElementProperties("cpu_Text", { "text": data.cpu + "%" });
-    win.setElementProperties("cpu-Bar", { "value": data.cpu / 100 });
+// IPC listener for network stats
+ipc.on("networkStats", function(stats) {
+    // Update download text with dynamic units
+    win.setElementProperties("download_Text", { 
+        "text": stats.downloadRate + " " + stats.downloadUnit 
+    });
     
-    win.setElementProperties("memory_Text", { "text": data.memory + "%" });
-    win.setElementProperties("memory-Bar", { "value": data.memory / 100 });
-})
+    // Update upload text with dynamic units
+    win.setElementProperties("upload_Text", { 
+        "text": stats.uploadRate + " " + stats.uploadUnit 
+    });
+    
+    // Update progress bars based on rates (0.0 to 1.0 scale)
+    // Use the same maxRate for normalization regardless of display units
+    var maxRate = 1024; // 1 MB/s as max for bar scaling
+    var downloadValue = Math.min(1.0, (parseFloat(stats.downloadRate) * (stats.downloadUnit === "MB/s" ? 1024 : 1)) / maxRate);
+    var uploadValue = Math.min(1.0, (parseFloat(stats.uploadRate) * (stats.uploadUnit === "MB/s" ? 1024 : 1)) / maxRate);
+    
+    win.setElementProperties("download-Bar", { 
+        "value": downloadValue 
+    });
+    
+    win.setElementProperties("upload-Bar", { 
+        "value": uploadValue 
+    });
+});

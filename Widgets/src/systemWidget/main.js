@@ -1,11 +1,9 @@
 var system_Widget = null;
 var cpuMonitor = null;
 var memoryMonitor = null;
-
-
+var system_Timer = null;
 
 function loadSystemWidget() {
-
     if (system_Widget) {
         return; // Widget already registered
     }
@@ -20,14 +18,14 @@ function loadSystemWidget() {
     })
 
     if (app.isFirstRun()) {
-
         system_Widget.setProperties({
             x: ((system.getDisplayMetrics().primary.screenArea.width - 212) - 10),
             y: 10,
             show: true
         });
     }
-    registerIPC()
+    
+    registerIPC();
 }
 
 function registerIPC() {
@@ -42,14 +40,36 @@ function registerIPC() {
     function systemInfo() {
         var cpuUsage = cpuMonitor.usage();
         var memoryUsage = memoryMonitor.stats().percent;
-        ipc.send('cpu-usage', cpuUsage);
-        ipc.send('memory-usage', memoryUsage);
-
+        ipc.send('system-stats', {
+            cpu: cpuUsage,
+            memory: memoryUsage
+        });
     }
 
-    systemInfo()
-    setInterval(systemInfo, 1000);
+    systemInfo();
+    system_Timer = setInterval(systemInfo, 1000);
 }
+
+function unloadSystemWidget() {
+    if (system_Timer) {
+        clearInterval(system_Timer);
+        system_Timer = null;
+    }
+    
+    if (cpuMonitor) {
+        // cpuMonitor.destroy(); // Check if destroy method exists
+        cpuMonitor = null;
+    }
+    
+    if (memoryMonitor) {
+        // memoryMonitor.destroy(); // Check if destroy method exists
+        memoryMonitor = null;
+    }
+    
+    system_Widget = null;
+}
+
 module.exports = {
-    loadSystemWidget
+    loadSystemWidget,
+    unloadSystemWidget
 }
