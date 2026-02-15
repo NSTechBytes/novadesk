@@ -20,6 +20,7 @@
 #include "ImageElement.h"
 #include "BarElement.h"
 #include "Tooltip.h"
+#include "CursorManager.h"
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -156,6 +157,7 @@ private:
     POINT m_DragStartCursor = { 0, 0 };
     POINT m_DragStartWindow = { 0, 0 };
     bool m_IsMouseOverWidget = false;
+    CursorManager m_CursorManager;
     
     // Rendering
     Microsoft::WRL::ComPtr<ID2D1DeviceContext> m_pContext;

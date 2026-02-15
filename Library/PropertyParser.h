@@ -93,6 +93,9 @@ namespace PropertyParser
         bool show = true;
         std::wstring containerId;
         std::wstring groupId;
+        bool mouseEventCursor = true;
+        std::wstring mouseEventCursorName;
+        std::wstring cursorsDir;
         
         float rotate = 0.0f;
         bool hasTransformMatrix = false;

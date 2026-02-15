@@ -634,8 +634,11 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
             if (hitElement && hitElement->HasMouseAction())
             {
-                SetCursor(LoadCursor(NULL, IDC_HAND));
-                return TRUE;
+                HCURSOR cursor = widget->m_CursorManager.GetCursorForElement(hitElement);
+                if (cursor) {
+                    SetCursor(cursor);
+                    return TRUE;
+                }
             }
         }
         return DefWindowProc(hWnd, message, wParam, lParam);

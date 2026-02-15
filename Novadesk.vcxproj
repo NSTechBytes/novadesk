@@ -111,6 +111,7 @@
     <ClInclude Include="Library\System.h" />
     <ClInclude Include="Library\TextElement.h" />
     <ClInclude Include="Library\Tooltip.h" />
+    <ClInclude Include="Library\CursorManager.h" />
     <ClInclude Include="Library\Widget.h" />
     <ClInclude Include="Library\ColorUtil.h" />
     <ClInclude Include="Library\Logging.h" />
@@ -174,6 +175,7 @@
     <ClCompile Include="Library\System.cpp" />
     <ClCompile Include="Library\TextElement.cpp" />
     <ClCompile Include="Library\Tooltip.cpp" />
+    <ClCompile Include="Library\CursorManager.cpp" />
     <ClCompile Include="Library\Widget.cpp" />
     <ClCompile Include="Library\JSApi\JSApi.cpp" />
     <ClCompile Include="Library\JSApi\JSCommon.cpp" />

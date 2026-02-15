@@ -103,6 +103,9 @@
     <ClInclude Include="Library\Tooltip.h">
       <Filter>Library</Filter>
     </ClInclude>
+    <ClInclude Include="Library\CursorManager.h">
+      <Filter>Library</Filter>
+    </ClInclude>
     <ClInclude Include="Library\Utils.h">
       <Filter>Library</Filter>
     </ClInclude>
@@ -287,6 +290,9 @@
       <Filter>Library</Filter>
     </ClCompile>
     <ClCompile Include="Library\Tooltip.cpp">
+      <Filter>Library</Filter>
+    </ClCompile>
+    <ClCompile Include="Library\CursorManager.cpp">
       <Filter>Library</Filter>
     </ClCompile>
     <ClCompile Include="Library\Utils.cpp">
