@@ -134,6 +134,16 @@ private:
     bool WouldCreateContainerCycle(Element* element, Element* container) const;
     void RenderContainerChildren(Element* container);
     bool HitTestContainerChildren(Element* container, int x, int y, Element*& outElement);
+    bool HitTestContainerChildrenDetailed(
+        Element* container,
+        int x,
+        int y,
+        UINT message,
+        WPARAM wParam,
+        Element*& outHitElement,
+        Element*& outActionElement,
+        Element*& outMouseActionElement,
+        Element*& outToolTipElement);
 
 private:
     std::wstring m_Id;
@@ -144,6 +154,7 @@ private:
     ZPOSITION m_WindowZPosition;
     std::vector<Element*> m_Elements;
     Element* m_MouseOverElement = nullptr;
+    Element* m_TooltipElement = nullptr;
     bool m_IsBatchUpdating = false;
     
     // Context Menu
