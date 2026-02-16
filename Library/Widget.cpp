@@ -1841,12 +1841,13 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     bool handled = false;
     int x = GET_X_LPARAM(lParam);
     int y = GET_Y_LPARAM(lParam);
+    bool justEnteredWidget = false;
 
     if (message == WM_MOUSEMOVE)
     {
         if (!m_IsMouseOverWidget) {
             m_IsMouseOverWidget = true;
-            JSApi::TriggerWidgetEvent(this, "over");
+            justEnteredWidget = true;
         }
         m_Tooltip.Move();
     }
@@ -1858,6 +1859,46 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         ScreenToClient(m_hWnd, &pt);
         x = pt.x;
         y = pt.y;
+    }
+
+    {
+        JSApi::MouseEventData widgetEventData;
+        widgetEventData.clientX = x;
+        widgetEventData.clientY = y;
+        widgetEventData.offsetX = x;
+        widgetEventData.offsetY = y;
+
+        POINT screenPt = { x, y };
+        ClientToScreen(m_hWnd, &screenPt);
+        widgetEventData.screenX = screenPt.x;
+        widgetEventData.screenY = screenPt.y;
+
+        RECT clientRect = {};
+        if (GetClientRect(m_hWnd, &clientRect)) {
+            const int clientW = clientRect.right - clientRect.left;
+            const int clientH = clientRect.bottom - clientRect.top;
+            if (clientW > 0) {
+                widgetEventData.offsetXPercent = (int)(((widgetEventData.offsetX + 1) / (double)clientW) * 100.0);
+            }
+            if (clientH > 0) {
+                widgetEventData.offsetYPercent = (int)(((widgetEventData.offsetY + 1) / (double)clientH) * 100.0);
+            }
+        }
+
+        if (message == WM_MOUSEMOVE) {
+            if (justEnteredWidget) {
+                JSApi::TriggerWidgetEvent(this, "mouseOver", &widgetEventData);
+            }
+            JSApi::TriggerWidgetEvent(this, "mouseMove", &widgetEventData);
+        } else if (
+            message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN || message == WM_MBUTTONDOWN || message == WM_XBUTTONDOWN
+        ) {
+            JSApi::TriggerWidgetEvent(this, "mouseDown", &widgetEventData);
+        } else if (
+            message == WM_LBUTTONUP || message == WM_RBUTTONUP || message == WM_MBUTTONUP || message == WM_XBUTTONUP
+        ) {
+            JSApi::TriggerWidgetEvent(this, "mouseUp", &widgetEventData);
+        }
     }
 
     // Find element at cursor (Front to Back)
@@ -1954,7 +1995,31 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     {
         if (m_IsMouseOverWidget) {
             m_IsMouseOverWidget = false;
-            JSApi::TriggerWidgetEvent(this, "leave");
+            JSApi::MouseEventData leaveEventData;
+            POINT screenPt = {};
+            if (GetCursorPos(&screenPt)) {
+                POINT clientPt = screenPt;
+                ScreenToClient(m_hWnd, &clientPt);
+                leaveEventData.clientX = clientPt.x;
+                leaveEventData.clientY = clientPt.y;
+                leaveEventData.offsetX = clientPt.x;
+                leaveEventData.offsetY = clientPt.y;
+                leaveEventData.screenX = screenPt.x;
+                leaveEventData.screenY = screenPt.y;
+
+                RECT clientRect = {};
+                if (GetClientRect(m_hWnd, &clientRect)) {
+                    const int clientW = clientRect.right - clientRect.left;
+                    const int clientH = clientRect.bottom - clientRect.top;
+                    if (clientW > 0) {
+                        leaveEventData.offsetXPercent = (int)(((leaveEventData.offsetX + 1) / (double)clientW) * 100.0);
+                    }
+                    if (clientH > 0) {
+                        leaveEventData.offsetYPercent = (int)(((leaveEventData.offsetY + 1) / (double)clientH) * 100.0);
+                    }
+                }
+            }
+            JSApi::TriggerWidgetEvent(this, "mouseLeave", &leaveEventData);
         }
         if (m_MouseOverElement)
         {
@@ -2012,8 +2077,31 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
         if (actionId != -1)
         {
-             // Execute function callback
-             JSApi::CallEventCallback(actionId, this);
+             JSApi::MouseEventData eventData;
+             eventData.clientX = x;
+             eventData.clientY = y;
+
+             POINT screenPt = { x, y };
+             ClientToScreen(m_hWnd, &screenPt);
+             eventData.screenX = screenPt.x;
+             eventData.screenY = screenPt.y;
+
+             const int elementX = actionElement->GetX();
+             const int elementY = actionElement->GetY();
+             eventData.offsetX = x - elementX;
+             eventData.offsetY = y - elementY;
+
+             const int elementW = actionElement->GetWidth();
+             const int elementH = actionElement->GetHeight();
+             if (elementW > 0) {
+                 eventData.offsetXPercent = (int)(((eventData.offsetX + 1) / (double)elementW) * 100.0);
+             }
+             if (elementH > 0) {
+                 eventData.offsetYPercent = (int)(((eventData.offsetY + 1) / (double)elementH) * 100.0);
+             }
+
+             // Execute function callback with mouse position aliases.
+             JSApi::CallEventCallback(actionId, this, &eventData);
              handled = true;
         }
     }

@@ -15,6 +15,8 @@ class Widget;
 class Element;
 
 namespace JSApi {
+    struct MouseEventData;
+
     // Internal state accessible by modules
     extern duk_context* s_JsContext;
     extern std::wstring s_CurrentScriptPath;
@@ -25,7 +27,7 @@ namespace JSApi {
     // Helper functions
     void ExecuteScript(const std::wstring& script);
     void ExecuteWidgetScript(Widget* widget);
-    void TriggerWidgetEvent(Widget* widget, const std::string& eventName);
+    void TriggerWidgetEvent(Widget* widget, const std::string& eventName, const MouseEventData* mouseEvent = nullptr);
     void CallStoredCallback(int id);
     void CallHotkeyCallback(int callbackIdx);
     void BindWidgetControlMethods(duk_context* ctx);

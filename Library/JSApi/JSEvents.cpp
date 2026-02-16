@@ -160,7 +160,7 @@ namespace JSApi {
         duk_pop(s_JsContext);
     }
 
-    void TriggerWidgetEvent(Widget* widget, const std::string& eventName) {
+    void TriggerWidgetEvent(Widget* widget, const std::string& eventName, const MouseEventData* mouseEvent) {
         if (!s_JsContext || !widget) return;
         
         duk_push_global_stash(s_JsContext);
@@ -207,7 +207,20 @@ namespace JSApi {
                     for (duk_size_t i = 0; i < len; i++) {
                         duk_get_prop_index(s_JsContext, -1, (duk_uarridx_t)i);
                         if (duk_is_function(s_JsContext, -1)) {
-                            if (duk_pcall(s_JsContext, 0) != 0) {
+                            duk_idx_t argc = 0;
+                            if (mouseEvent) {
+                                duk_push_object(s_JsContext);
+                                duk_push_int(s_JsContext, mouseEvent->offsetX); duk_put_prop_string(s_JsContext, -2, "__offsetX");
+                                duk_push_int(s_JsContext, mouseEvent->offsetY); duk_put_prop_string(s_JsContext, -2, "__offsetY");
+                                duk_push_int(s_JsContext, mouseEvent->offsetXPercent); duk_put_prop_string(s_JsContext, -2, "__offsetXPercent");
+                                duk_push_int(s_JsContext, mouseEvent->offsetYPercent); duk_put_prop_string(s_JsContext, -2, "__offsetYPercent");
+                                duk_push_int(s_JsContext, mouseEvent->clientX); duk_put_prop_string(s_JsContext, -2, "__clientX");
+                                duk_push_int(s_JsContext, mouseEvent->clientY); duk_put_prop_string(s_JsContext, -2, "__clientY");
+                                duk_push_int(s_JsContext, mouseEvent->screenX); duk_put_prop_string(s_JsContext, -2, "__screenX");
+                                duk_push_int(s_JsContext, mouseEvent->screenY); duk_put_prop_string(s_JsContext, -2, "__screenY");
+                                argc = 1;
+                            }
+                            if (duk_pcall(s_JsContext, argc) != 0) {
                                 Logging::Log(LogLevel::Error, L"Widget Event Error (%s: %S): %S", 
                                     widget->GetOptions().id.c_str(), eventName.c_str(), duk_safe_to_string(s_JsContext, -1));
                             }
@@ -295,7 +308,7 @@ namespace JSApi {
         return id;
     }
 
-    void CallEventCallback(int id, Widget* contextWidget) {
+    void CallEventCallback(int id, Widget* contextWidget, const MouseEventData* mouseEvent) {
         if (!s_JsContext || id < 0) return;
         
         // Logging::Log(LogLevel::Debug, L"Calling event callback: %d", id);
@@ -351,7 +364,20 @@ namespace JSApi {
             duk_push_int(s_JsContext, id);
             if (duk_get_prop(s_JsContext, -2)) {
                 if (duk_is_function(s_JsContext, -1)) {
-                    if (duk_pcall(s_JsContext, 0) != 0) {
+                    duk_idx_t argc = 0;
+                    if (mouseEvent) {
+                        duk_push_object(s_JsContext);
+                        duk_push_int(s_JsContext, mouseEvent->offsetX); duk_put_prop_string(s_JsContext, -2, "__offsetX");
+                        duk_push_int(s_JsContext, mouseEvent->offsetY); duk_put_prop_string(s_JsContext, -2, "__offsetY");
+                        duk_push_int(s_JsContext, mouseEvent->offsetXPercent); duk_put_prop_string(s_JsContext, -2, "__offsetXPercent");
+                        duk_push_int(s_JsContext, mouseEvent->offsetYPercent); duk_put_prop_string(s_JsContext, -2, "__offsetYPercent");
+                        duk_push_int(s_JsContext, mouseEvent->clientX); duk_put_prop_string(s_JsContext, -2, "__clientX");
+                        duk_push_int(s_JsContext, mouseEvent->clientY); duk_put_prop_string(s_JsContext, -2, "__clientY");
+                        duk_push_int(s_JsContext, mouseEvent->screenX); duk_put_prop_string(s_JsContext, -2, "__screenX");
+                        duk_push_int(s_JsContext, mouseEvent->screenY); duk_put_prop_string(s_JsContext, -2, "__screenY");
+                        argc = 1;
+                    }
+                    if (duk_pcall(s_JsContext, argc) != 0) {
                         Logging::Log(LogLevel::Error, L"Event callback error: %S", duk_safe_to_string(s_JsContext, -1));
                     }
                 } else {

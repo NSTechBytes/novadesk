@@ -1,5 +1,22 @@
 console.log("=== Cursor Test Started ===");
 
+function logMouseAliases(name, e) {
+    if (!e) {
+        console.log(name + " clicked (no event payload)");
+        return;
+    }
+
+    console.log(
+        name +
+        " clicked: __offsetX=" + e.__offsetX +
+        ", __offsetY=" + e.__offsetY +
+        ", __offsetXPercent=" + e.__offsetXPercent +
+        ", __offsetYPercent=" + e.__offsetYPercent +
+        ", __clientX=" + e.__clientX +
+        ", __clientY=" + e.__clientY
+    );
+}
+
 win.addText({
     id: "default_hand",
     x: 16,
@@ -7,7 +24,7 @@ win.addText({
     text: "Default hand cursor",
     fontSize: 14,
     fontColor: "rgb(255,255,255)",
-    onLeftMouseUp: function () { console.log("default_hand clicked"); }
+    onLeftMouseUp: function (e) { logMouseAliases("default_hand", e); }
 });
 
 win.addText({
@@ -18,7 +35,7 @@ win.addText({
     fontSize: 14,
     fontColor: "rgb(255,220,120)",
     mouseEventCursor: false,
-    onLeftMouseUp: function () { console.log("cursor_off clicked"); }
+    onLeftMouseUp: function (e) { logMouseAliases("cursor_off", e); }
 });
 
 win.addText({
@@ -29,7 +46,7 @@ win.addText({
     fontSize: 14,
     fontColor: "rgb(120,220,255)",
     mouseEventCursorName: "busy",
-    onLeftMouseUp: function () { console.log("busy_cursor clicked"); }
+    onLeftMouseUp: function (e) { logMouseAliases("busy_cursor", e); }
 });
 
 win.addText({
@@ -41,7 +58,7 @@ win.addText({
     fontColor: "rgb(180,255,180)",
     cursorsDir: "../assets",
     mouseEventCursorName: "cur1164",
-    onLeftMouseUp: function () { console.log("custom_ani_cursor clicked"); }
+    onLeftMouseUp: function (e) { logMouseAliases("custom_ani_cursor", e); }
 });
 
 win.addText({
@@ -53,7 +70,7 @@ win.addText({
     fontColor: "rgb(255,200,200)",
     cursorsDir: "../assets",
     mouseEventCursorName: "1",
-    onLeftMouseUp: function () { console.log("custom_cur_cursor clicked"); }
+    onLeftMouseUp: function (e) { logMouseAliases("custom_cur_cursor", e); }
 });
 
 console.log("default_hand.mouseEventCursor=" + win.getElementProperty("default_hand", "mouseEventCursor"));
