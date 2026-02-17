@@ -186,6 +186,9 @@
     <ClInclude Include="Library\AudioLevel.h">
       <Filter>Library</Filter>
     </ClInclude>
+    <ClInclude Include="Library\AppVolumeControl.h">
+      <Filter>Library</Filter>
+    </ClInclude>
     <ClInclude Include="Library\kiss_fft130\kiss_fft.h">
       <Filter>Library\kiss_fft130</Filter>
     </ClInclude>
@@ -311,6 +314,9 @@
       <Filter>Library</Filter>
     </ClCompile>
     <ClCompile Include="Library\AudioLevel.cpp">
+      <Filter>Library</Filter>
+    </ClCompile>
+    <ClCompile Include="Library\AppVolumeControl.cpp">
       <Filter>Library</Filter>
     </ClCompile>
     <ClCompile Include="Library\kiss_fft130\kiss_fft.c">

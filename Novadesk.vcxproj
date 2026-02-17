@@ -93,6 +93,7 @@
     <ClInclude Include="Library\ArcShape.h" />
     <ClInclude Include="Library\ImageElement.h" />
     <ClInclude Include="Library\AudioLevel.h" />
+    <ClInclude Include="Library\AppVolumeControl.h" />
     <ClInclude Include="Library\kiss_fft130\kiss_fft.h" />
     <ClInclude Include="Library\kiss_fft130\kiss_fftr.h" />
     <ClInclude Include="Library\kiss_fft130\_kiss_fft_guts.h" />
@@ -154,6 +155,7 @@
     <ClCompile Include="Library\ImageElement.cpp" />
     <ClCompile Include="Library\BarElement.cpp" />
     <ClCompile Include="Library\AudioLevel.cpp" />
+    <ClCompile Include="Library\AppVolumeControl.cpp" />
     <ClCompile Include="Library\kiss_fft130\kiss_fft.c" />
     <ClCompile Include="Library\kiss_fft130\kiss_fftr.c" />
     <ClCompile Include="Library\LineShape.cpp" />

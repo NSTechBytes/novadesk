@@ -19,6 +19,7 @@
 #include "../MouseMonitor.h"
 #include "../DiskMonitor.h"
 #include "../BrightnessControl.h"
+#include "../AppVolumeControl.h"
 #include "../NowPlayingMonitor.h"
 #include "JSUtils.h"
 #include "JSAudio.h"
@@ -580,6 +581,122 @@ namespace JSApi {
         return 1;
     }
 
+    static bool ParseAppSelector(duk_context* ctx, int idx, DWORD& outPid, std::wstring& outProcess, bool& hasPid, bool& hasProcess)
+    {
+        hasPid = false;
+        hasProcess = false;
+        outPid = 0;
+        outProcess.clear();
+
+        if (duk_get_top(ctx) <= idx || !duk_is_object(ctx, idx)) return false;
+
+        if (duk_get_prop_string(ctx, idx, "pid")) {
+            if (!duk_is_null_or_undefined(ctx, -1)) {
+                outPid = (DWORD)duk_get_uint(ctx, -1);
+                hasPid = true;
+            }
+        }
+        duk_pop(ctx);
+
+        if (duk_get_prop_string(ctx, idx, "process")) {
+            if (!duk_is_null_or_undefined(ctx, -1) && duk_is_string(ctx, -1)) {
+                outProcess = Utils::ToWString(duk_get_string(ctx, -1));
+                hasProcess = !outProcess.empty();
+            }
+        }
+        duk_pop(ctx);
+
+        return hasPid || hasProcess;
+    }
+
+    duk_ret_t js_system_list_app_volumes(duk_context* ctx) {
+        std::vector<AppVolumeControl::SessionInfo> sessions;
+        bool ok = AppVolumeControl::ListSessions(sessions);
+
+        duk_push_array(ctx);
+        if (!ok) return 1;
+
+        for (size_t i = 0; i < sessions.size(); ++i) {
+            const auto& s = sessions[i];
+            duk_push_object(ctx);
+            duk_push_uint(ctx, s.pid); duk_put_prop_string(ctx, -2, "pid");
+            duk_push_string(ctx, Utils::ToString(s.processName).c_str()); duk_put_prop_string(ctx, -2, "process");
+            duk_push_string(ctx, Utils::ToString(s.displayName).c_str()); duk_put_prop_string(ctx, -2, "displayName");
+            duk_push_int(ctx, (int)(s.volume * 100.0f + 0.5f)); duk_put_prop_string(ctx, -2, "volume");
+            duk_push_boolean(ctx, s.muted); duk_put_prop_string(ctx, -2, "muted");
+            duk_put_prop_index(ctx, -2, (duk_uarridx_t)i);
+        }
+        return 1;
+    }
+
+    duk_ret_t js_system_get_app_volume(duk_context* ctx) {
+        DWORD pid = 0;
+        std::wstring process;
+        bool hasPid = false, hasProcess = false;
+        if (!ParseAppSelector(ctx, 0, pid, process, hasPid, hasProcess)) return DUK_RET_TYPE_ERROR;
+
+        float vol = 0.0f;
+        bool muted = false;
+        bool ok = hasPid ? AppVolumeControl::GetByPid(pid, vol, muted) : AppVolumeControl::GetByProcessName(process, vol, muted);
+        if (!ok) {
+            duk_push_null(ctx);
+            return 1;
+        }
+
+        duk_push_int(ctx, (int)(vol * 100.0f + 0.5f));
+        return 1;
+    }
+
+    duk_ret_t js_system_set_app_volume(duk_context* ctx) {
+        if (duk_get_top(ctx) < 2 || !duk_is_object(ctx, 0) || !duk_is_number(ctx, 1)) return DUK_RET_TYPE_ERROR;
+
+        DWORD pid = 0;
+        std::wstring process;
+        bool hasPid = false, hasProcess = false;
+        if (!ParseAppSelector(ctx, 0, pid, process, hasPid, hasProcess)) return DUK_RET_TYPE_ERROR;
+
+        int volPct = duk_get_int(ctx, 1);
+        if (volPct < 0) volPct = 0;
+        if (volPct > 100) volPct = 100;
+        float vol = (float)volPct / 100.0f;
+
+        bool ok = hasPid ? AppVolumeControl::SetVolumeByPid(pid, vol) : AppVolumeControl::SetVolumeByProcessName(process, vol);
+        duk_push_boolean(ctx, ok);
+        return 1;
+    }
+
+    duk_ret_t js_system_get_app_mute(duk_context* ctx) {
+        DWORD pid = 0;
+        std::wstring process;
+        bool hasPid = false, hasProcess = false;
+        if (!ParseAppSelector(ctx, 0, pid, process, hasPid, hasProcess)) return DUK_RET_TYPE_ERROR;
+
+        float vol = 0.0f;
+        bool muted = false;
+        bool ok = hasPid ? AppVolumeControl::GetByPid(pid, vol, muted) : AppVolumeControl::GetByProcessName(process, vol, muted);
+        if (!ok) {
+            duk_push_null(ctx);
+            return 1;
+        }
+
+        duk_push_boolean(ctx, muted);
+        return 1;
+    }
+
+    duk_ret_t js_system_set_app_mute(duk_context* ctx) {
+        if (duk_get_top(ctx) < 2 || !duk_is_object(ctx, 0) || !duk_is_boolean(ctx, 1)) return DUK_RET_TYPE_ERROR;
+
+        DWORD pid = 0;
+        std::wstring process;
+        bool hasPid = false, hasProcess = false;
+        if (!ParseAppSelector(ctx, 0, pid, process, hasPid, hasProcess)) return DUK_RET_TYPE_ERROR;
+
+        bool mute = duk_get_boolean(ctx, 1) != 0;
+        bool ok = hasPid ? AppVolumeControl::SetMuteByPid(pid, mute) : AppVolumeControl::SetMuteByProcessName(process, mute);
+        duk_push_boolean(ctx, ok);
+        return 1;
+    }
+
     duk_ret_t js_now_playing_constructor(duk_context* ctx) {
         if (!duk_is_constructor_call(ctx)) return DUK_RET_TYPE_ERROR;
         NowPlayingMonitor* monitor = new NowPlayingMonitor();
@@ -744,6 +861,16 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "getBrightness");
         duk_push_c_function(ctx, js_system_set_brightness, 1);
         duk_put_prop_string(ctx, -2, "setBrightness");
+        duk_push_c_function(ctx, js_system_list_app_volumes, 0);
+        duk_put_prop_string(ctx, -2, "listAppVolumes");
+        duk_push_c_function(ctx, js_system_get_app_volume, 1);
+        duk_put_prop_string(ctx, -2, "getAppVolume");
+        duk_push_c_function(ctx, js_system_set_app_volume, 2);
+        duk_put_prop_string(ctx, -2, "setAppVolume");
+        duk_push_c_function(ctx, js_system_get_app_mute, 1);
+        duk_put_prop_string(ctx, -2, "getAppMute");
+        duk_push_c_function(ctx, js_system_set_app_mute, 2);
+        duk_put_prop_string(ctx, -2, "setAppMute");
         duk_push_c_function(ctx, js_system_load_addon, 1);
         duk_put_prop_string(ctx, -2, "loadAddon");
         duk_push_c_function(ctx, js_system_unload_addon, 1);
