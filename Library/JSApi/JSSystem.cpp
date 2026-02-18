@@ -248,14 +248,9 @@ namespace JSApi {
         }
 
         if (outPath.empty()) {
-            wchar_t tempPath[MAX_PATH] = {};
-            DWORD len = GetTempPathW(MAX_PATH, tempPath);
-            if (len == 0 || len >= MAX_PATH) {
-                duk_push_null(ctx);
-                return 1;
-            }
-            std::wstring dir = std::wstring(tempPath) + L"Novadesk\\FileIcons\\";
-            CreateDirectoryW((std::wstring(tempPath) + L"Novadesk").c_str(), nullptr);
+            std::wstring baseDir = PathUtils::GetAppDataPath();
+            std::wstring dir = baseDir + L"FileIcons\\";
+            CreateDirectoryW(baseDir.c_str(), nullptr);
             CreateDirectoryW(dir.c_str(), nullptr);
             size_t h = std::hash<std::wstring>{}(sourcePath + L"|" + std::to_wstring(size));
             outPath = dir + std::to_wstring((unsigned long long)h) + L".ico";

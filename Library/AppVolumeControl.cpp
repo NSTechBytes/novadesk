@@ -7,6 +7,7 @@
 
 #include "AppVolumeControl.h"
 #include "Utils.h"
+#include "PathUtils.h"
 #include <mmdeviceapi.h>
 #include <audiopolicy.h>
 #include <endpointvolume.h>
@@ -65,11 +66,10 @@ namespace {
 
     bool EnsureIconDir(std::wstring& outDir)
     {
-        wchar_t tempPath[MAX_PATH] = {};
-        DWORD len = GetTempPathW(MAX_PATH, tempPath);
-        if (len == 0 || len >= MAX_PATH) return false;
-        outDir = std::wstring(tempPath) + L"Novadesk\\AppIcons\\";
-        CreateDirectoryW((std::wstring(tempPath) + L"Novadesk").c_str(), nullptr);
+        std::wstring baseDir = PathUtils::GetAppDataPath();
+        if (baseDir.empty()) return false;
+        outDir = baseDir + L"AppIcons\\";
+        CreateDirectoryW(baseDir.c_str(), nullptr);
         CreateDirectoryW(outDir.c_str(), nullptr);
         return true;
     }

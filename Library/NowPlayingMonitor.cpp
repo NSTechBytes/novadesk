@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "NowPlayingMonitor.h"
+#include "PathUtils.h"
 #include <algorithm>
 #include <cstdint>
 #include <chrono>
@@ -114,11 +115,10 @@ struct NowPlayingMonitor::Impl {
 
     std::wstring EnsureCoverPath() {
         if (!coverPath.empty()) return coverPath;
-        wchar_t tempPath[MAX_PATH] = { 0 };
-        DWORD len = GetTempPathW(MAX_PATH, tempPath);
-        if (len == 0 || len >= MAX_PATH) return L"";
-        std::wstring dir = std::wstring(tempPath) + L"Novadesk\\NowPlaying\\";
-        CreateDirectoryW((std::wstring(tempPath) + L"Novadesk").c_str(), nullptr);
+        std::wstring baseDir = PathUtils::GetAppDataPath();
+        if (baseDir.empty()) return L"";
+        std::wstring dir = baseDir + L"NowPlaying\\";
+        CreateDirectoryW(baseDir.c_str(), nullptr);
         CreateDirectoryW(dir.c_str(), nullptr);
         coverPath = dir + L"cover.jpg";
         return coverPath;
