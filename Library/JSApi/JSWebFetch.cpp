@@ -144,9 +144,14 @@ namespace JSApi {
         }
     }
 
-    void BindWebFetch(duk_context* ctx) {
-        // "system" object is expected to be on top of stack
+    void PushWebFetchModule(duk_context* ctx) {
+        duk_push_object(ctx);
         duk_push_c_function(ctx, js_system_fetch, 2);
         duk_put_prop_string(ctx, -2, "fetch");
+    }
+
+    void BindWebFetch(duk_context* ctx) {
+        PushWebFetchModule(ctx);
+        duk_put_prop_string(ctx, -2, "webFetch");
     }
 }

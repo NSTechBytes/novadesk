@@ -99,8 +99,8 @@ namespace JSApi {
         return 1;
     }
 
-    void BindAudioMethods(duk_context* ctx) {
-        // "system" object is expected on stack
+    void PushAudioModule(duk_context* ctx) {
+        duk_push_object(ctx);
         duk_push_c_function(ctx, js_system_setVolume, 1);
         duk_put_prop_string(ctx, -2, "setVolume");
 
@@ -112,5 +112,10 @@ namespace JSApi {
 
         duk_push_c_function(ctx, js_system_stopSound, 0);
         duk_put_prop_string(ctx, -2, "stopSound");
+    }
+
+    void BindAudioMethods(duk_context* ctx) {
+        PushAudioModule(ctx);
+        duk_put_prop_string(ctx, -2, "audio");
     }
 }

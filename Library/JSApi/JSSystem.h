@@ -33,6 +33,10 @@ namespace JSApi {
     duk_ret_t js_system_get_app_peak(duk_context* ctx);
     duk_ret_t js_system_get_app_mute(duk_context* ctx);
     duk_ret_t js_system_set_app_mute(duk_context* ctx);
+    void PushExecuteModule(duk_context* ctx);
+    void PushBrightnessModule(duk_context* ctx);
+    void PushEnvVariablesModule(duk_context* ctx);
+    void PushDisplayMetricsModule(duk_context* ctx);
 
     // Monitor Constructors/Methods
     duk_ret_t js_cpu_constructor(duk_context* ctx);

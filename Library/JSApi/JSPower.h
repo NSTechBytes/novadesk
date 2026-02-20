@@ -9,5 +9,6 @@
 #include "JSCommon.h"
 
 namespace JSApi {
+    void PushPowerModule(duk_context* ctx);
     void BindPowerMethods(duk_context* ctx);
 }

@@ -213,6 +213,12 @@ namespace JSApi {
         return 1;
     }
 
+    void PushExecuteModule(duk_context* ctx) {
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_system_execute, DUK_VARARGS);
+        duk_put_prop_string(ctx, -2, "execute");
+    }
+
     duk_ret_t js_system_set_wallpaper(duk_context* ctx) {
         if (duk_get_top(ctx) < 1 || !duk_is_string(ctx, 0)) return DUK_RET_TYPE_ERROR;
 
@@ -653,6 +659,26 @@ namespace JSApi {
         return 1;
     }
 
+    void PushBrightnessModule(duk_context* ctx) {
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_system_get_brightness, DUK_VARARGS);
+        duk_put_prop_string(ctx, -2, "getBrightness");
+        duk_push_c_function(ctx, js_system_set_brightness, 1);
+        duk_put_prop_string(ctx, -2, "setBrightness");
+    }
+
+    void PushEnvVariablesModule(duk_context* ctx) {
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_get_env, DUK_VARARGS);
+        duk_put_prop_string(ctx, -2, "getEnv");
+    }
+
+    void PushDisplayMetricsModule(duk_context* ctx) {
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_system_get_display_metrics, 0);
+        duk_put_prop_string(ctx, -2, "getDisplayMetrics");
+    }
+
     static bool ParseAppSelector(duk_context* ctx, int idx, DWORD& outPid, std::wstring& outProcess, bool& hasPid, bool& hasProcess)
     {
         hasPid = false;
@@ -942,22 +968,12 @@ namespace JSApi {
     }
 
     void BindSystemBaseMethods(duk_context* ctx) {
-        duk_push_c_function(ctx, js_get_env, DUK_VARARGS);
-        duk_put_prop_string(ctx, -2, "getEnv");
-        duk_push_c_function(ctx, js_system_execute, DUK_VARARGS);
-        duk_put_prop_string(ctx, -2, "execute");
-        duk_push_c_function(ctx, js_system_get_display_metrics, 0);
-        duk_put_prop_string(ctx, -2, "getDisplayMetrics");
         duk_push_c_function(ctx, js_system_set_wallpaper, 1);
         duk_put_prop_string(ctx, -2, "setWallpaper");
         duk_push_c_function(ctx, js_system_get_current_wallpaper_path, 0);
         duk_put_prop_string(ctx, -2, "getCurrentWallpaperPath");
         duk_push_c_function(ctx, js_system_extract_file_icon, DUK_VARARGS);
         duk_put_prop_string(ctx, -2, "extractFileIcon");
-        duk_push_c_function(ctx, js_system_get_brightness, DUK_VARARGS);
-        duk_put_prop_string(ctx, -2, "getBrightness");
-        duk_push_c_function(ctx, js_system_set_brightness, 1);
-        duk_put_prop_string(ctx, -2, "setBrightness");
         duk_push_c_function(ctx, js_system_list_app_volumes, 0);
         duk_put_prop_string(ctx, -2, "listAppVolumes");
         duk_push_c_function(ctx, js_system_get_app_volume, 1);
@@ -970,7 +986,6 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "getAppMute");
         duk_push_c_function(ctx, js_system_set_app_mute, 2);
         duk_put_prop_string(ctx, -2, "setAppMute");
-        BindAudioMethods(ctx);
     }
 
     void BindSystemMonitors(duk_context* ctx) {

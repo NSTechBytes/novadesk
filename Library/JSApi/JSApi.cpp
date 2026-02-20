@@ -151,6 +151,38 @@ namespace JSApi {
             PushAddonModule(ctx);
             return 1;
         }
+        if (request == L"execute") {
+            PushExecuteModule(ctx);
+            return 1;
+        }
+        if (request == L"birghtness") {
+            PushBrightnessModule(ctx);
+            return 1;
+        }
+        if (request == L"web-fetch") {
+            PushWebFetchModule(ctx);
+            return 1;
+        }
+        if (request == L"power") {
+            PushPowerModule(ctx);
+            return 1;
+        }
+        if (request == L"registry") {
+            PushRegistryModule(ctx);
+            return 1;
+        }
+        if (request == L"env-variables") {
+            PushEnvVariablesModule(ctx);
+            return 1;
+        }
+        if (request == L"display-metrics") {
+            PushDisplayMetricsModule(ctx);
+            return 1;
+        }
+        if (request == L"audio") {
+            PushAudioModule(ctx);
+            return 1;
+        }
 
         std::wstring basePath;
         std::wstring fallbackBaseDir;
@@ -316,10 +348,6 @@ namespace JSApi {
         duk_push_object(ctx);
         BindSystemBaseMethods(ctx);
         BindSystemMonitors(ctx);
-        BindWebFetch(ctx);
-        BindAudioMethods(ctx);
-        BindRegistryMethods(ctx);
-        BindPowerMethods(ctx);
         duk_put_global_string(ctx, "system");
 
         // Register timers

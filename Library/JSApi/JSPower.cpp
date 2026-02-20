@@ -81,8 +81,14 @@ namespace JSApi {
         return 1;
     }
 
-    void BindPowerMethods(duk_context* ctx) {
+    void PushPowerModule(duk_context* ctx) {
+        duk_push_object(ctx);
         duk_push_c_function(ctx, js_system_getPowerStatus, 0);
         duk_put_prop_string(ctx, -2, "getPowerStatus");
+    }
+
+    void BindPowerMethods(duk_context* ctx) {
+        PushPowerModule(ctx);
+        duk_put_prop_string(ctx, -2, "power");
     }
 }

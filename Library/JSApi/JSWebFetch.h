@@ -10,6 +10,7 @@
 
 namespace JSApi {
     duk_ret_t js_system_fetch(duk_context* ctx);
+    void PushWebFetchModule(duk_context* ctx);
     void BindWebFetch(duk_context* ctx);
     void HandleWebFetchMessage(UINT message, WPARAM wParam, LPARAM lParam);
 }

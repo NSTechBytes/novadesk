@@ -9,5 +9,6 @@
 #include "JSCommon.h"
 
 namespace JSApi {
+    void PushAudioModule(duk_context* ctx);
     void BindAudioMethods(duk_context* ctx);
 }

@@ -9,5 +9,6 @@
 #include "JSCommon.h"
 
 namespace JSApi {
+    void PushRegistryModule(duk_context* ctx);
     void BindRegistryMethods(duk_context* ctx);
 }
