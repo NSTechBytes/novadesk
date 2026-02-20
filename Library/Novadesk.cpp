@@ -84,6 +84,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     if (dwError == ERROR_ALREADY_EXISTS || dwError == ERROR_ACCESS_DENIED)
     {
         // Another instance is running, check arguments for commands
+        bool handledCommand = false;
         if (lpCmdLine && wcslen(lpCmdLine) > 0)
         {
             std::wstring cmd = lpCmdLine;
@@ -96,9 +97,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                          cmd.find(L"--exit") != std::wstring::npos)
                 {
                     SendMessage(hExisting, WM_COMMAND, ID_TRAY_EXIT, 0);
-                    return 0;
+                    handledCommand = true;
                 }
             }
+        }
+
+        if (!handledCommand)
+        {
+            std::wstring message = appTitle + L" is already running.";
+            MessageBoxW(nullptr, message.c_str(), appTitle.c_str(), MB_OK | MB_ICONINFORMATION);
         }
 
         if (hMutex) CloseHandle(hMutex);
