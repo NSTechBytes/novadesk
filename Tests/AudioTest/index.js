@@ -1,3 +1,6 @@
+var widgetWindow = require("widget-window");
+var AudioLevelMonitor = require("audio-level-monitor");
+var app = require("app");
 // Audio Test Widget
 var widget = new widgetWindow({
     id: "audioTest",
@@ -7,7 +10,7 @@ var widget = new widgetWindow({
     script: "ui.js"
 });
 
-var audio = new system.audioLevel({
+var audio = new AudioLevelMonitor({
     port: "output",
     fftSize: 1024,
     fftOverlap: 512,
@@ -25,7 +28,7 @@ setInterval(function() {
 }, 33); // ~30 fps
 
 widget.on("close", function() {
-    audio.release();
+    audio.destroy();
 });
 
 app.useHardwareAcceleration(true);

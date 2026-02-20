@@ -58,9 +58,6 @@ namespace JSApi {
         duk_push_global_stash(s_JsContext);
         duk_get_global_string(s_JsContext, "win");
         duk_put_prop_string(s_JsContext, -2, "original_win");
-        duk_get_global_string(s_JsContext, "path");
-        duk_put_prop_string(s_JsContext, -2, "original_path");
-
         duk_get_global_string(s_JsContext, "__dirname");
         duk_put_prop_string(s_JsContext, -2, "original_dirname");
         duk_get_global_string(s_JsContext, "__filename");
@@ -105,9 +102,9 @@ namespace JSApi {
         duk_push_string(s_JsContext, filename.c_str());
         duk_put_global_string(s_JsContext, "__filename");
 
-        std::string wrappedContent = "(function(win, ipc, path, __dirname, __filename, system, app, setInterval, setTimeout, clearInterval, clearTimeout, setImmediate, widgetWindow) {\n";
+        std::string wrappedContent = "(function(win, ipc, __dirname, __filename, system, app, setInterval, setTimeout, clearInterval, clearTimeout, setImmediate, widgetWindow) {\n";
         wrappedContent += content;
-        wrappedContent += "\n})(win, ipc, path, __dirname, __filename);";
+        wrappedContent += "\n})(win, ipc, __dirname, __filename);";
 
         widget->BeginUpdate();
         if (duk_peval_string(s_JsContext, wrappedContent.c_str()) != 0) {
@@ -120,9 +117,6 @@ namespace JSApi {
         duk_push_global_stash(s_JsContext);
         duk_get_prop_string(s_JsContext, -1, "original_win");
         duk_put_global_string(s_JsContext, "win");
-        duk_get_prop_string(s_JsContext, -1, "original_path");
-        duk_put_global_string(s_JsContext, "path");
-
         duk_get_prop_string(s_JsContext, -1, "original_dirname");
         duk_put_global_string(s_JsContext, "__dirname");
         duk_get_prop_string(s_JsContext, -1, "original_filename");
@@ -136,7 +130,7 @@ namespace JSApi {
 
         const char* context_props[] = { 
             "original_win", 
-            "original_path", "original_dirname", "original_filename" 
+            "original_dirname", "original_filename" 
         };
         for (const char* p : context_props) {
             duk_del_prop_string(s_JsContext, -1, p);
