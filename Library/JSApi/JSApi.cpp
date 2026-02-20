@@ -183,6 +183,46 @@ namespace JSApi {
             PushAudioModule(ctx);
             return 1;
         }
+        if (request == L"wallpaper") {
+            PushWallpaperModule(ctx);
+            return 1;
+        }
+        if (request == L"file-icon") {
+            PushFileIconModule(ctx);
+            return 1;
+        }
+        if (request == L"app-volume") {
+            PushAppVolumeModule(ctx);
+            return 1;
+        }
+        if (request == L"cpu-monitor") {
+            PushCpuMonitorModule(ctx);
+            return 1;
+        }
+        if (request == L"memory-monitor") {
+            PushMemoryMonitorModule(ctx);
+            return 1;
+        }
+        if (request == L"network-monitor") {
+            PushNetworkMonitorModule(ctx);
+            return 1;
+        }
+        if (request == L"mouse-monitor") {
+            PushMouseMonitorModule(ctx);
+            return 1;
+        }
+        if (request == L"disk-monitor") {
+            PushDiskMonitorModule(ctx);
+            return 1;
+        }
+        if (request == L"now-playing-monitor") {
+            PushNowPlayingMonitorModule(ctx);
+            return 1;
+        }
+        if (request == L"audio-level-monitor") {
+            PushAudioLevelMonitorModule(ctx);
+            return 1;
+        }
 
         std::wstring basePath;
         std::wstring fallbackBaseDir;
@@ -346,8 +386,6 @@ namespace JSApi {
 
         // Register system object
         duk_push_object(ctx);
-        BindSystemBaseMethods(ctx);
-        BindSystemMonitors(ctx);
         duk_put_global_string(ctx, "system");
 
         // Register timers

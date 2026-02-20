@@ -37,6 +37,17 @@ namespace JSApi {
     void PushBrightnessModule(duk_context* ctx);
     void PushEnvVariablesModule(duk_context* ctx);
     void PushDisplayMetricsModule(duk_context* ctx);
+    void PushWallpaperModule(duk_context* ctx);
+    void PushFileIconModule(duk_context* ctx);
+    void PushAppVolumeModule(duk_context* ctx);
+    void PushSystemMonitorsModule(duk_context* ctx);
+    void PushCpuMonitorModule(duk_context* ctx);
+    void PushMemoryMonitorModule(duk_context* ctx);
+    void PushNetworkMonitorModule(duk_context* ctx);
+    void PushMouseMonitorModule(duk_context* ctx);
+    void PushDiskMonitorModule(duk_context* ctx);
+    void PushNowPlayingMonitorModule(duk_context* ctx);
+    void PushAudioLevelMonitorModule(duk_context* ctx);
 
     // Monitor Constructors/Methods
     duk_ret_t js_cpu_constructor(duk_context* ctx);
@@ -79,8 +90,5 @@ namespace JSApi {
     duk_ret_t js_now_playing_destroy(duk_context* ctx);
     duk_ret_t js_now_playing_finalizer(duk_context* ctx);
 
-    // Binding functions
-    void BindSystemBaseMethods(duk_context* ctx);
-    void BindSystemMonitors(duk_context* ctx);
     void CleanupAddons();
 }

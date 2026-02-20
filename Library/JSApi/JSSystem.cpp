@@ -679,6 +679,36 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "getDisplayMetrics");
     }
 
+    void PushWallpaperModule(duk_context* ctx) {
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_system_set_wallpaper, 1);
+        duk_put_prop_string(ctx, -2, "setWallpaper");
+        duk_push_c_function(ctx, js_system_get_current_wallpaper_path, 0);
+        duk_put_prop_string(ctx, -2, "getCurrentWallpaperPath");
+    }
+
+    void PushFileIconModule(duk_context* ctx) {
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_system_extract_file_icon, DUK_VARARGS);
+        duk_put_prop_string(ctx, -2, "extractFileIcon");
+    }
+
+    void PushAppVolumeModule(duk_context* ctx) {
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_system_list_app_volumes, 0);
+        duk_put_prop_string(ctx, -2, "listAppVolumes");
+        duk_push_c_function(ctx, js_system_get_app_volume, 1);
+        duk_put_prop_string(ctx, -2, "getAppVolume");
+        duk_push_c_function(ctx, js_system_set_app_volume, 2);
+        duk_put_prop_string(ctx, -2, "setAppVolume");
+        duk_push_c_function(ctx, js_system_get_app_peak, 1);
+        duk_put_prop_string(ctx, -2, "getAppPeak");
+        duk_push_c_function(ctx, js_system_get_app_mute, 1);
+        duk_put_prop_string(ctx, -2, "getAppMute");
+        duk_push_c_function(ctx, js_system_set_app_mute, 2);
+        duk_put_prop_string(ctx, -2, "setAppMute");
+    }
+
     static bool ParseAppSelector(duk_context* ctx, int idx, DWORD& outPid, std::wstring& outProcess, bool& hasPid, bool& hasProcess)
     {
         hasPid = false;
@@ -967,29 +997,7 @@ namespace JSApi {
         return 0;
     }
 
-    void BindSystemBaseMethods(duk_context* ctx) {
-        duk_push_c_function(ctx, js_system_set_wallpaper, 1);
-        duk_put_prop_string(ctx, -2, "setWallpaper");
-        duk_push_c_function(ctx, js_system_get_current_wallpaper_path, 0);
-        duk_put_prop_string(ctx, -2, "getCurrentWallpaperPath");
-        duk_push_c_function(ctx, js_system_extract_file_icon, DUK_VARARGS);
-        duk_put_prop_string(ctx, -2, "extractFileIcon");
-        duk_push_c_function(ctx, js_system_list_app_volumes, 0);
-        duk_put_prop_string(ctx, -2, "listAppVolumes");
-        duk_push_c_function(ctx, js_system_get_app_volume, 1);
-        duk_put_prop_string(ctx, -2, "getAppVolume");
-        duk_push_c_function(ctx, js_system_set_app_volume, 2);
-        duk_put_prop_string(ctx, -2, "setAppVolume");
-        duk_push_c_function(ctx, js_system_get_app_peak, 1);
-        duk_put_prop_string(ctx, -2, "getAppPeak");
-        duk_push_c_function(ctx, js_system_get_app_mute, 1);
-        duk_put_prop_string(ctx, -2, "getAppMute");
-        duk_push_c_function(ctx, js_system_set_app_mute, 2);
-        duk_put_prop_string(ctx, -2, "setAppMute");
-    }
-
-    void BindSystemMonitors(duk_context* ctx) {
-        // CPU Class
+    static void PushCpuMonitorCtor(duk_context* ctx) {
         duk_push_c_function(ctx, js_cpu_constructor, 1);
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_cpu_usage, 0); duk_put_prop_string(ctx, -2, "usage");
@@ -997,9 +1005,9 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "prototype");
         duk_push_c_function(ctx, js_cpu_finalizer, 1);
         duk_set_finalizer(ctx, -2);
-        duk_put_prop_string(ctx, -2, "cpu");
+    }
 
-        // Memory Class
+    static void PushMemoryMonitorCtor(duk_context* ctx) {
         duk_push_c_function(ctx, js_memory_constructor, 0);
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_memory_stats, 0); duk_put_prop_string(ctx, -2, "stats");
@@ -1007,9 +1015,9 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "prototype");
         duk_push_c_function(ctx, js_memory_finalizer, 1);
         duk_set_finalizer(ctx, -2);
-        duk_put_prop_string(ctx, -2, "memory");
+    }
 
-        // Network Class
+    static void PushNetworkMonitorCtor(duk_context* ctx) {
         duk_push_c_function(ctx, js_network_constructor, 0);
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_network_stats, 0); duk_put_prop_string(ctx, -2, "stats");
@@ -1017,9 +1025,9 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "prototype");
         duk_push_c_function(ctx, js_network_finalizer, 1);
         duk_set_finalizer(ctx, -2);
-        duk_put_prop_string(ctx, -2, "network");
+    }
 
-        // Mouse Class
+    static void PushMouseMonitorCtor(duk_context* ctx) {
         duk_push_c_function(ctx, js_mouse_constructor, 0);
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_mouse_position, 0); duk_put_prop_string(ctx, -2, "position");
@@ -1027,9 +1035,9 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "prototype");
         duk_push_c_function(ctx, js_mouse_finalizer, 1);
         duk_set_finalizer(ctx, -2);
-        duk_put_prop_string(ctx, -2, "mouse");
+    }
 
-        // Disk Class
+    static void PushDiskMonitorCtor(duk_context* ctx) {
         duk_push_c_function(ctx, js_disk_constructor, 1);
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_disk_stats, 0); duk_put_prop_string(ctx, -2, "stats");
@@ -1037,9 +1045,9 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "prototype");
         duk_push_c_function(ctx, js_disk_finalizer, 1);
         duk_set_finalizer(ctx, -2);
-        duk_put_prop_string(ctx, -2, "disk");
+    }
 
-        // NowPlaying Class
+    static void PushNowPlayingMonitorCtor(duk_context* ctx) {
         duk_push_c_function(ctx, js_now_playing_constructor, 0);
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_now_playing_stats, 0); duk_put_prop_string(ctx, -2, "stats");
@@ -1057,10 +1065,39 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "prototype");
         duk_push_c_function(ctx, js_now_playing_finalizer, 1);
         duk_set_finalizer(ctx, -2);
+    }
+
+    void PushCpuMonitorModule(duk_context* ctx) { PushCpuMonitorCtor(ctx); }
+    void PushMemoryMonitorModule(duk_context* ctx) { PushMemoryMonitorCtor(ctx); }
+    void PushNetworkMonitorModule(duk_context* ctx) { PushNetworkMonitorCtor(ctx); }
+    void PushMouseMonitorModule(duk_context* ctx) { PushMouseMonitorCtor(ctx); }
+    void PushDiskMonitorModule(duk_context* ctx) { PushDiskMonitorCtor(ctx); }
+    void PushNowPlayingMonitorModule(duk_context* ctx) { PushNowPlayingMonitorCtor(ctx); }
+    void PushAudioLevelMonitorModule(duk_context* ctx) { duk_push_c_function(ctx, js_audio_constructor, 1); }
+
+    void PushSystemMonitorsModule(duk_context* ctx) {
+        duk_push_object(ctx);
+
+        PushCpuMonitorCtor(ctx);
+        duk_put_prop_string(ctx, -2, "cpu");
+
+        PushMemoryMonitorCtor(ctx);
+        duk_put_prop_string(ctx, -2, "memory");
+
+        PushNetworkMonitorCtor(ctx);
+        duk_put_prop_string(ctx, -2, "network");
+
+        PushMouseMonitorCtor(ctx);
+        duk_put_prop_string(ctx, -2, "mouse");
+
+        PushDiskMonitorCtor(ctx);
+        duk_put_prop_string(ctx, -2, "disk");
+
+        PushNowPlayingMonitorCtor(ctx);
         duk_put_prop_string(ctx, -2, "nowPlaying");
 
-        // AudioLevel Class
-        duk_push_c_function(ctx, js_audio_constructor, 1);
+        PushAudioLevelMonitorModule(ctx);
         duk_put_prop_string(ctx, -2, "audioLevel");
     }
+
 }
