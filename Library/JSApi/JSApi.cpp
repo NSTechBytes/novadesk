@@ -42,6 +42,8 @@ namespace JSApi {
     static HWND s_MessageWindow = nullptr;
     static bool WrapExportedFunctionWithModuleDir(duk_context* ctx, duk_idx_t fnIndex, const std::string& dirname);
     static void WrapModuleExportsWithDirContext(duk_context* ctx, duk_idx_t exportsIndex, const std::string& dirname);
+    static void PushAppModule(duk_context* ctx);
+    static void PushWidgetWindowModule(duk_context* ctx);
 
     static bool IsMainScriptPath(const std::wstring& scriptPath) {
         std::wstring normalized = PathUtils::NormalizePath(scriptPath);
@@ -127,6 +129,14 @@ namespace JSApi {
         if (!duk_is_string(ctx, 0)) return DUK_RET_TYPE_ERROR;
 
         std::wstring request = Utils::ToWString(duk_get_string(ctx, 0));
+        if (request == L"app") {
+            PushAppModule(ctx);
+            return 1;
+        }
+        if (request == L"widget-window") {
+            PushWidgetWindowModule(ctx);
+            return 1;
+        }
         if (request == L"path") {
             PushPathModule(ctx);
             return 1;
@@ -364,12 +374,6 @@ namespace JSApi {
         BindConsoleMethods(ctx);
         duk_put_global_string(ctx, "console");
 
-        // Register app object
-        duk_push_object(ctx);
-        BindNovadeskAppMethods(ctx);
-        BindNovadeskTrayMethods(ctx);
-        duk_put_global_string(ctx, "app");
-
         // Initialize Global Stash for Object Tracking
         duk_push_global_stash(ctx);
         duk_push_object(ctx);
@@ -401,13 +405,6 @@ namespace JSApi {
         duk_put_global_string(ctx, "clearTimeout");
         duk_push_c_function(ctx, js_set_immediate, 1);
         duk_put_global_string(ctx, "setImmediate");
-
-        // Register widgetWindow
-        duk_push_c_function(ctx, js_create_widget_window, 1);
-        duk_put_global_string(ctx, "widgetWindow");
-
-        duk_push_c_function(ctx, js_include, 1);
-        duk_put_global_string(ctx, "include");
 
         BindIPCMethods(ctx);
 
@@ -540,6 +537,16 @@ namespace JSApi {
 
     HWND GetMessageWindow() {
         return s_MessageWindow;
+    }
+
+    static void PushAppModule(duk_context* ctx) {
+        duk_push_object(ctx);
+        BindNovadeskAppMethods(ctx);
+        BindNovadeskTrayMethods(ctx);
+    }
+
+    static void PushWidgetWindowModule(duk_context* ctx) {
+        duk_push_c_function(ctx, js_create_widget_window, 1);
     }
 
         static bool WrapExportedFunctionWithModuleDir(duk_context* ctx, duk_idx_t fnIndex, const std::string& dirname) {

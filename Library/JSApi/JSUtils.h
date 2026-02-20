@@ -21,7 +21,6 @@ namespace JSApi {
     duk_ret_t js_set_immediate(duk_context* ctx);
 
     // Script API
-    duk_ret_t js_include(duk_context* ctx);
     duk_ret_t js_novadesk_saveLogToFile(duk_context* ctx);
     duk_ret_t js_novadesk_enableDebugging(duk_context* ctx);
     duk_ret_t js_novadesk_disableLogging(duk_context* ctx);

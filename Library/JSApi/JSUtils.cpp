@@ -129,25 +129,6 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_include(duk_context* ctx) {
-        std::wstring filename = Utils::ToWString(duk_require_string(ctx, 0));
-        
-        std::wstring fullPath = ResolveScriptPath(ctx, filename);
-
-        std::string content = FileUtils::ReadFileContent(fullPath);
-        if (content.empty()) {
-            return duk_error(ctx, DUK_ERR_ERROR, "Could not read file: %s", Utils::ToString(filename).c_str());
-        }
-
-        if (duk_peval_string(ctx, content.c_str()) != 0) {
-            return duk_throw(ctx);
-        }
-
-        duk_pop(ctx);
-        duk_push_boolean(ctx, true);
-        return 1;
-    }
-
     duk_ret_t js_novadesk_saveLogToFile(duk_context* ctx) {
         if (duk_get_top(ctx) == 0) return DUK_RET_TYPE_ERROR;
         bool enable = duk_get_boolean(ctx, 0);
