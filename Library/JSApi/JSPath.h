@@ -21,5 +21,6 @@ namespace JSApi {
     duk_ret_t js_path_normalize(duk_context* ctx);
     duk_ret_t js_path_relative(duk_context* ctx);
 
+    void PushPathModule(duk_context* ctx);
     void BindPathMethods(duk_context* ctx);
 }

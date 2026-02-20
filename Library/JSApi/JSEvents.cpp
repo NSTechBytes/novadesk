@@ -92,8 +92,6 @@ namespace JSApi {
         BindWidgetUIMethods(s_JsContext);
         duk_put_global_string(s_JsContext, "win");
 
-        BindPathMethods(s_JsContext);
-        
         std::string widgetId = Utils::ToString(widget->GetOptions().id);
         ClearIPCListeners(s_JsContext, widgetId);
         

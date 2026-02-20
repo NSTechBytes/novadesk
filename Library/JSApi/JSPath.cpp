@@ -211,7 +211,7 @@ namespace JSApi {
         return 1;
     }
 
-    void BindPathMethods(duk_context* ctx) {
+    void PushPathModule(duk_context* ctx) {
         duk_push_object(ctx);
         
         duk_push_c_function(ctx, js_path_join, DUK_VARARGS);
@@ -235,6 +235,10 @@ namespace JSApi {
         duk_push_c_function(ctx, js_path_relative, 2);
         duk_put_prop_string(ctx, -2, "relative");
 
+    }
+
+    void BindPathMethods(duk_context* ctx) {
+        PushPathModule(ctx);
         duk_put_global_string(ctx, "path");
     }
 }

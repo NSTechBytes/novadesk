@@ -127,6 +127,15 @@ namespace JSApi {
         if (!duk_is_string(ctx, 0)) return DUK_RET_TYPE_ERROR;
 
         std::wstring request = Utils::ToWString(duk_get_string(ctx, 0));
+        if (request == L"path") {
+            PushPathModule(ctx);
+            return 1;
+        }
+        if (request == L"fs") {
+            PushFsModule(ctx);
+            return 1;
+        }
+
         std::wstring basePath;
         std::wstring fallbackBaseDir;
         if (!GetRequireBasePath(ctx, basePath)) {
@@ -297,7 +306,6 @@ namespace JSApi {
         BindRegistryMethods(ctx);
         BindClipboardMethods(ctx);
         BindPowerMethods(ctx);
-        BindFsMethods(ctx);
         duk_put_global_string(ctx, "system");
 
         // Register timers
@@ -318,9 +326,6 @@ namespace JSApi {
         duk_push_c_function(ctx, js_create_widget_window, 1);
         duk_put_global_string(ctx, "widgetWindow");
 
-        // Register global modules
-        BindPathMethods(ctx);
-        
         duk_push_c_function(ctx, js_include, 1);
         duk_put_global_string(ctx, "include");
 

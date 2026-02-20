@@ -9,5 +9,6 @@
 #include "JSCommon.h"
 
 namespace JSApi {
+    void PushFsModule(duk_context* ctx);
     void BindFsMethods(duk_context* ctx);
 }

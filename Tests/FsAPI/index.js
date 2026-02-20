@@ -2,7 +2,8 @@
 
 console.log("=== FS API Test Started ===");
 
-var fs = system.fs;
+var fs = require("fs");
+var path = require("path");
 var baseDir = path.join(__dirname, "tmp_fs_api");
 var nestedDir = path.join(baseDir, "nested", "child");
 var fileA = path.join(baseDir, "a.txt");
