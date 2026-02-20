@@ -29,3 +29,6 @@ Novadesk is a open source powerful desktop widget platform built with C++ and po
 If you enjoy using Novadesk and want to support its development, consider becoming a patron:
 
 - ☕ [Patreon](https://www.patreon.com/c/officialnovadesk) - Support the project's growth and get exclusive updates.
+
+## Novadesk Ecosystem
+[Diagram](.github/mermaid-diagram.png)
