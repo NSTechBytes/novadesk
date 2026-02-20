@@ -9,5 +9,6 @@
 #include "JSCommon.h"
 
 namespace JSApi {
+    void PushClipperModule(duk_context* ctx);
     void BindClipboardMethods(duk_context* ctx);
 }

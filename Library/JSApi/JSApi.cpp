@@ -135,6 +135,10 @@ namespace JSApi {
             PushFsModule(ctx);
             return 1;
         }
+        if (request == L"clipper") {
+            PushClipperModule(ctx);
+            return 1;
+        }
 
         std::wstring basePath;
         std::wstring fallbackBaseDir;
@@ -304,7 +308,6 @@ namespace JSApi {
         BindWebFetch(ctx);
         BindAudioMethods(ctx);
         BindRegistryMethods(ctx);
-        BindClipboardMethods(ctx);
         BindPowerMethods(ctx);
         duk_put_global_string(ctx, "system");
 
