@@ -620,6 +620,14 @@ namespace JSApi {
         return 1;
     }
 
+    void PushAddonModule(duk_context* ctx) {
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_system_load_addon, 1);
+        duk_put_prop_string(ctx, -2, "loadAddon");
+        duk_push_c_function(ctx, js_system_unload_addon, 1);
+        duk_put_prop_string(ctx, -2, "unloadAddon");
+    }
+
     duk_ret_t js_system_set_brightness(duk_context* ctx) {
         if (duk_get_top(ctx) < 1 || !duk_is_object(ctx, 0)) return DUK_RET_TYPE_ERROR;
 
@@ -962,10 +970,6 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "getAppMute");
         duk_push_c_function(ctx, js_system_set_app_mute, 2);
         duk_put_prop_string(ctx, -2, "setAppMute");
-        duk_push_c_function(ctx, js_system_load_addon, 1);
-        duk_put_prop_string(ctx, -2, "loadAddon");
-        duk_push_c_function(ctx, js_system_unload_addon, 1);
-        duk_put_prop_string(ctx, -2, "unloadAddon");
         BindAudioMethods(ctx);
     }
 

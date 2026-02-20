@@ -147,6 +147,10 @@ namespace JSApi {
             PushHotkeysModule(ctx);
             return 1;
         }
+        if (request == L"addon") {
+            PushAddonModule(ctx);
+            return 1;
+        }
 
         std::wstring basePath;
         std::wstring fallbackBaseDir;
