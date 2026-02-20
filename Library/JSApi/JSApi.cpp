@@ -129,48 +129,88 @@ namespace JSApi {
         if (!duk_is_string(ctx, 0)) return DUK_RET_TYPE_ERROR;
 
         std::wstring request = Utils::ToWString(duk_get_string(ctx, 0));
+        if (request == L"addon") {
+            PushAddonModule(ctx);
+            return 1;
+        }
         if (request == L"app") {
             PushAppModule(ctx);
             return 1;
         }
-        if (request == L"widget-window") {
-            PushWidgetWindowModule(ctx);
+        if (request == L"audio-level-monitor") {
+            PushAudioLevelMonitorModule(ctx);
             return 1;
         }
-        if (request == L"path") {
-            PushPathModule(ctx);
+        if (request == L"audio") {
+            PushAudioModule(ctx);
             return 1;
         }
-        if (request == L"fs") {
-            PushFsModule(ctx);
+        if (request == L"app-volume") {
+            PushAppVolumeModule(ctx);
+            return 1;
+        }
+        if (request == L"brigtness") {
+            PushBrightnessModule(ctx);
             return 1;
         }
         if (request == L"clipper") {
             PushClipperModule(ctx);
             return 1;
         }
-        if (request == L"json") {
-            PushJsonModule(ctx);
+        if (request == L"cpu-monitor") {
+            PushCpuMonitorModule(ctx);
             return 1;
         }
-        if (request == L"hotkeys") {
-            PushHotkeysModule(ctx);
+        if (request == L"disk-monitor") {
+            PushDiskMonitorModule(ctx);
             return 1;
         }
-        if (request == L"addon") {
-            PushAddonModule(ctx);
+        if (request == L"display-metrics") {
+            PushDisplayMetricsModule(ctx);
+            return 1;
+        }
+        if (request == L"env-variables") {
+            PushEnvVariablesModule(ctx);
             return 1;
         }
         if (request == L"execute") {
             PushExecuteModule(ctx);
             return 1;
         }
-        if (request == L"birghtness") {
-            PushBrightnessModule(ctx);
+        if (request == L"file-icon") {
+            PushFileIconModule(ctx);
             return 1;
         }
-        if (request == L"web-fetch") {
-            PushWebFetchModule(ctx);
+        if (request == L"fs") {
+            PushFsModule(ctx);
+            return 1;
+        }
+        if (request == L"hotkeys") {
+            PushHotkeysModule(ctx);
+            return 1;
+        }
+        if (request == L"json") {
+            PushJsonModule(ctx);
+            return 1;
+        }
+        if (request == L"memory-monitor") {
+            PushMemoryMonitorModule(ctx);
+            return 1;
+        }
+        if (request == L"mouse-monitor") {
+            PushMouseMonitorModule(ctx);
+            return 1;
+        }
+        if (request == L"network-monitor") {
+            PushNetworkMonitorModule(ctx);
+            return 1;
+        }
+        if (request == L"now-playing-monitor") {
+            PushNowPlayingMonitorModule(ctx);
+            return 1;
+        }
+        if (request == L"path") {
+            PushPathModule(ctx);
             return 1;
         }
         if (request == L"power") {
@@ -181,56 +221,16 @@ namespace JSApi {
             PushRegistryModule(ctx);
             return 1;
         }
-        if (request == L"env-variables") {
-            PushEnvVariablesModule(ctx);
-            return 1;
-        }
-        if (request == L"display-metrics") {
-            PushDisplayMetricsModule(ctx);
-            return 1;
-        }
-        if (request == L"audio") {
-            PushAudioModule(ctx);
-            return 1;
-        }
         if (request == L"wallpaper") {
             PushWallpaperModule(ctx);
             return 1;
         }
-        if (request == L"file-icon") {
-            PushFileIconModule(ctx);
+        if (request == L"web-fetch") {
+            PushWebFetchModule(ctx);
             return 1;
         }
-        if (request == L"app-volume") {
-            PushAppVolumeModule(ctx);
-            return 1;
-        }
-        if (request == L"cpu-monitor") {
-            PushCpuMonitorModule(ctx);
-            return 1;
-        }
-        if (request == L"memory-monitor") {
-            PushMemoryMonitorModule(ctx);
-            return 1;
-        }
-        if (request == L"network-monitor") {
-            PushNetworkMonitorModule(ctx);
-            return 1;
-        }
-        if (request == L"mouse-monitor") {
-            PushMouseMonitorModule(ctx);
-            return 1;
-        }
-        if (request == L"disk-monitor") {
-            PushDiskMonitorModule(ctx);
-            return 1;
-        }
-        if (request == L"now-playing-monitor") {
-            PushNowPlayingMonitorModule(ctx);
-            return 1;
-        }
-        if (request == L"audio-level-monitor") {
-            PushAudioLevelMonitorModule(ctx);
+        if (request == L"widget-window") {
+            PushWidgetWindowModule(ctx);
             return 1;
         }
 
