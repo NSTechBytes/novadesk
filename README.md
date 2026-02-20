@@ -31,4 +31,4 @@ If you enjoy using Novadesk and want to support its development, consider becomi
 - ☕ [Patreon](https://www.patreon.com/c/officialnovadesk) - Support the project's growth and get exclusive updates.
 
 ## Novadesk Ecosystem
-![Diagram](https://github.com/NSTechBytes/novadesk/blob/main/.github/mermaid-diagram.png?raw=true)
+![Diagram](.github/mermaid-diagram.png)
