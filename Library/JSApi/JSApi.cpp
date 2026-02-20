@@ -143,6 +143,10 @@ namespace JSApi {
             PushJsonModule(ctx);
             return 1;
         }
+        if (request == L"hotkeys") {
+            PushHotkeysModule(ctx);
+            return 1;
+        }
 
         std::wstring basePath;
         std::wstring fallbackBaseDir;

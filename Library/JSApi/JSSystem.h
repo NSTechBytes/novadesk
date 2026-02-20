@@ -15,6 +15,7 @@ namespace JSApi {
     // Hotkey API
     duk_ret_t js_register_hotkey(duk_context* ctx);
     duk_ret_t js_unregister_hotkey(duk_context* ctx);
+    void PushHotkeysModule(duk_context* ctx);
 
     // System API
     duk_ret_t js_system_execute(duk_context* ctx);

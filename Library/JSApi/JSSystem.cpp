@@ -130,6 +130,14 @@ namespace JSApi {
         return 1;
     }
 
+    void PushHotkeysModule(duk_context* ctx) {
+        duk_push_object(ctx);
+        duk_push_c_function(ctx, js_register_hotkey, 2);
+        duk_put_prop_string(ctx, -2, "registerHotkey");
+        duk_push_c_function(ctx, js_unregister_hotkey, 1);
+        duk_put_prop_string(ctx, -2, "unregisterHotkey");
+    }
+
     duk_ret_t js_system_get_display_metrics(duk_context* ctx) {
         const MultiMonitorInfo& info = System::GetMultiMonitorInfo();
         duk_push_object(ctx);
@@ -928,10 +936,6 @@ namespace JSApi {
     void BindSystemBaseMethods(duk_context* ctx) {
         duk_push_c_function(ctx, js_get_env, DUK_VARARGS);
         duk_put_prop_string(ctx, -2, "getEnv");
-        duk_push_c_function(ctx, js_register_hotkey, 2);
-        duk_put_prop_string(ctx, -2, "registerHotkey");
-        duk_push_c_function(ctx, js_unregister_hotkey, 1);
-        duk_put_prop_string(ctx, -2, "unregisterHotkey");
         duk_push_c_function(ctx, js_system_execute, DUK_VARARGS);
         duk_put_prop_string(ctx, -2, "execute");
         duk_push_c_function(ctx, js_system_get_display_metrics, 0);
