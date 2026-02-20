@@ -139,6 +139,10 @@ namespace JSApi {
             PushClipperModule(ctx);
             return 1;
         }
+        if (request == L"json") {
+            PushJsonModule(ctx);
+            return 1;
+        }
 
         std::wstring basePath;
         std::wstring fallbackBaseDir;
@@ -303,7 +307,6 @@ namespace JSApi {
         // Register system object
         duk_push_object(ctx);
         BindSystemBaseMethods(ctx);
-        BindJsonMethods(ctx);
         BindSystemMonitors(ctx);
         BindWebFetch(ctx);
         BindAudioMethods(ctx);

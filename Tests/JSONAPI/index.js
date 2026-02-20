@@ -1,11 +1,12 @@
 // JSON API Test
-// Tests system.readJson and system.writeJson
+// Tests json.readJson and json.writeJson
+var json = require("json");
 
 console.log("=== JSON API Test Started ===");
 
 // Test 1: Read existing JSON file
 console.log("Test 1: Read existing JSON file");
-var jsonData = system.readJson("test_config.json");
+var jsonData = json.readJson("test_config.json");
 console.log("Read result: " + (jsonData ? "Success" : "Failed"));
 
 if (jsonData) {
@@ -14,7 +15,7 @@ if (jsonData) {
 
 // Test 2: Read non-existent JSON file
 console.log("Test 2: Read non-existent JSON file");
-var jsonData2 = system.readJson("nonexistent.json");
+var jsonData2 = json.readJson("nonexistent.json");
 console.log("Non-existent read result: " + jsonData2);
 
 // Test 3: Write JSON data
@@ -29,14 +30,14 @@ var testData = {
     }
 };
 
-var writeResult = system.writeJson("output_test.json", testData);
+var writeResult = json.writeJson("output_test.json", testData);
 console.log("Write result: " + writeResult);
 
 // Test 4: Write and read back
 console.log("Test 4: Write and read verification");
 var verifyData = {test: "verification", number: 42};
-system.writeJson("verify.json", verifyData);
-var readBack = system.readJson("verify.json");
+json.writeJson("verify.json", verifyData);
+var readBack = json.readJson("verify.json");
 console.log("Read back result: " + (readBack ? "Success" : "Failed"));
 
 if (readBack) {
@@ -52,7 +53,7 @@ var patchData = {
     newKey: true
 };
 
-var mergeResult = system.writeJson("merge_base.json", patchData);
+var mergeResult = json.writeJson("merge_base.json", patchData);
 console.log("Merge write result: " + mergeResult);
 
 system.fetch("merge_base.json", function(data) {
@@ -61,7 +62,7 @@ system.fetch("merge_base.json", function(data) {
     console.log("Preserved inner comment: " + (data.indexOf("// inner comment") !== -1));
 });
 
-var mergedJson = system.readJson("merge_base.json");
+var mergedJson = json.readJson("merge_base.json");
 if (mergedJson) {
     console.log("Merged obj.b == 20: " + (mergedJson.obj && mergedJson.obj.b === 20));
     console.log("Merged obj.c == 3: " + (mergedJson.obj && mergedJson.obj.c === 3));

@@ -477,13 +477,17 @@ namespace JSApi {
         return 1;
     }
 
-    void BindJsonMethods(duk_context* ctx) {
-        // "system" object is already on top of the stack
-        
+    void PushJsonModule(duk_context* ctx) {
+        duk_push_object(ctx);
         duk_push_c_function(ctx, js_read_json, 1);
         duk_put_prop_string(ctx, -2, "readJson");
         
         duk_push_c_function(ctx, js_write_json, 2);
         duk_put_prop_string(ctx, -2, "writeJson");
+    }
+
+    void BindJsonMethods(duk_context* ctx) {
+        PushJsonModule(ctx);
+        duk_put_prop_string(ctx, -2, "json");
     }
 }

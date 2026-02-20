@@ -1,8 +1,8 @@
 {
-    "enabled": 1,
+    "enabled": true,
     "name": "Test Config",
     "settings": {
-        "debug": 0,
+        "debug": false,
         "timeout": 5000.0
 },
     "version": 1.0

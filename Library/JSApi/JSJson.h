@@ -9,5 +9,6 @@
 #include "JSCommon.h"
 
 namespace JSApi {
+    void PushJsonModule(duk_context* ctx);
     void BindJsonMethods(duk_context* ctx);
 }
