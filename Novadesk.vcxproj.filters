@@ -137,6 +137,9 @@
     <ClInclude Include="Library\JSApi\JSClipboard.h">
       <Filter>Library\JSApi</Filter>
     </ClInclude>
+    <ClInclude Include="Library\JSApi\JSFs.h">
+      <Filter>Library\JSApi</Filter>
+    </ClInclude>
     <ClInclude Include="Library\JSApi\JSCommon.h">
       <Filter>Library\JSApi</Filter>
     </ClInclude>
@@ -336,6 +339,9 @@
       <Filter>Library\JSApi</Filter>
     </ClCompile>
     <ClCompile Include="Library\JSApi\JSClipboard.cpp">
+      <Filter>Library\JSApi</Filter>
+    </ClCompile>
+    <ClCompile Include="Library\JSApi\JSFs.cpp">
       <Filter>Library\JSApi</Filter>
     </ClCompile>
     <ClCompile Include="Library\JSApi\JSCommon.cpp">

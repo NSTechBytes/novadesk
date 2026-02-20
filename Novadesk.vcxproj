@@ -106,6 +106,7 @@
     <ClInclude Include="Library\JSApi\JSAudioLevel.h" />
     <ClInclude Include="Library\JSApi\JSRegistry.h" />
     <ClInclude Include="Library\JSApi\JSClipboard.h" />
+    <ClInclude Include="Library\JSApi\JSFs.h" />
     <ClInclude Include="Library\JSApi\JSPower.h" />
     <ClInclude Include="Library\JSApi\JSNovadeskTray.h" />
     <ClInclude Include="Library\MouseMonitor.h" />
@@ -173,6 +174,7 @@
     <ClCompile Include="Library\JSApi\JSAudioLevel.cpp" />
     <ClCompile Include="Library\JSApi\JSRegistry.cpp" />
     <ClCompile Include="Library\JSApi\JSClipboard.cpp" />
+    <ClCompile Include="Library\JSApi\JSFs.cpp" />
     <ClCompile Include="Library\JSApi\JSPower.cpp" />
     <ClCompile Include="Library\JSApi\JSNovadeskTray.cpp" />
     <ClCompile Include="Library\MouseMonitor.cpp" />

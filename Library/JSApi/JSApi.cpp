@@ -22,6 +22,7 @@
 #include "JSRegistry.h"
 #include "JSClipboard.h"
 #include "JSPower.h"
+#include "JSFs.h"
 #include "../Widget.h"
 #include "../Settings.h"
 #include "../Logging.h"
@@ -296,6 +297,7 @@ namespace JSApi {
         BindRegistryMethods(ctx);
         BindClipboardMethods(ctx);
         BindPowerMethods(ctx);
+        BindFsMethods(ctx);
         duk_put_global_string(ctx, "system");
 
         // Register timers
