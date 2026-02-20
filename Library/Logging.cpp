@@ -14,6 +14,18 @@
 #include <vector>
 #include "PathUtils.h"
 
+static WORD GetConsoleColorForLevel(LogLevel level)
+{
+    switch (level)
+    {
+    case LogLevel::Debug: return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE; // White
+    case LogLevel::Info:  return FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY; // Cyan
+    case LogLevel::Warn:  return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY; // Yellow
+    case LogLevel::Error: return FOREGROUND_RED | FOREGROUND_INTENSITY; // Bright Red
+    default:              return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+    }
+}
+
 // Static member initialization
 bool Logging::s_ConsoleEnabled = true;
 bool Logging::s_FileEnabled = false;
@@ -81,9 +93,22 @@ void Logging::Log(LogLevel level, const wchar_t* format, ...)
     // Output to console (debug output)
     if (s_ConsoleEnabled)
     {
+        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        CONSOLE_SCREEN_BUFFER_INFO csbi = {};
+        bool canColor = (hOut != INVALID_HANDLE_VALUE) && GetConsoleScreenBufferInfo(hOut, &csbi);
+        if (canColor)
+        {
+            SetConsoleTextAttribute(hOut, GetConsoleColorForLevel(level));
+        }
+
         OutputDebugStringW(output.data());
         wprintf(L"%s", output.data());
         fflush(stdout);
+
+        if (canColor)
+        {
+            SetConsoleTextAttribute(hOut, csbi.wAttributes);
+        }
     }
 
     // Output to file
