@@ -480,10 +480,10 @@ namespace JSApi {
     void PushJsonModule(duk_context* ctx) {
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_read_json, 1);
-        duk_put_prop_string(ctx, -2, "readJson");
+        duk_put_prop_string(ctx, -2, "readData");
         
         duk_push_c_function(ctx, js_write_json, 2);
-        duk_put_prop_string(ctx, -2, "writeJson");
+        duk_put_prop_string(ctx, -2, "writeData");
     }
 
     void BindJsonMethods(duk_context* ctx) {

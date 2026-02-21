@@ -64,10 +64,10 @@ namespace JSApi {
     void PushClipperModule(duk_context* ctx) {
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_module_getClipboardText, 0);
-        duk_put_prop_string(ctx, -2, "getClipboardText");
+        duk_put_prop_string(ctx, -2, "getText");
 
         duk_push_c_function(ctx, js_module_setClipboardText, 1);
-        duk_put_prop_string(ctx, -2, "setClipboardText");
+        duk_put_prop_string(ctx, -2, "setText");
     }
 
     void BindClipboardMethods(duk_context* ctx) {

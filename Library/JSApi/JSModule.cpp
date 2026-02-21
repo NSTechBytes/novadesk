@@ -629,9 +629,9 @@ namespace JSApi {
     void PushAddonModule(duk_context* ctx) {
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_module_load_addon, 1);
-        duk_put_prop_string(ctx, -2, "loadAddon");
+        duk_put_prop_string(ctx, -2, "load");
         duk_push_c_function(ctx, js_module_unload_addon, 1);
-        duk_put_prop_string(ctx, -2, "unloadAddon");
+        duk_put_prop_string(ctx, -2, "unload");
     }
 
     duk_ret_t js_module_set_brightness(duk_context* ctx) {
@@ -662,9 +662,9 @@ namespace JSApi {
     void PushBrightnessModule(duk_context* ctx) {
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_module_get_brightness, DUK_VARARGS);
-        duk_put_prop_string(ctx, -2, "getBrightness");
+        duk_put_prop_string(ctx, -2, "getValue");
         duk_push_c_function(ctx, js_module_set_brightness, 1);
-        duk_put_prop_string(ctx, -2, "setBrightness");
+        duk_put_prop_string(ctx, -2, "setValue");
     }
 
     void PushEnvVariablesModule(duk_context* ctx) {
@@ -676,15 +676,15 @@ namespace JSApi {
     void PushDisplayMetricsModule(duk_context* ctx) {
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_module_get_display_metrics, 0);
-        duk_put_prop_string(ctx, -2, "getDisplayMetrics");
+        duk_put_prop_string(ctx, -2, "getMetrics");
     }
 
     void PushWallpaperModule(duk_context* ctx) {
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_module_set_wallpaper, 1);
-        duk_put_prop_string(ctx, -2, "setWallpaper");
+        duk_put_prop_string(ctx, -2, "set");
         duk_push_c_function(ctx, js_module_get_current_wallpaper_path, 0);
-        duk_put_prop_string(ctx, -2, "getCurrentWallpaperPath");
+        duk_put_prop_string(ctx, -2, "getCurrentPath");
     }
 
     void PushFileIconModule(duk_context* ctx) {

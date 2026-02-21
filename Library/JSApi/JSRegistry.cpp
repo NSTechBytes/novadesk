@@ -111,10 +111,10 @@ namespace JSApi {
     void PushRegistryModule(duk_context* ctx) {
         duk_push_object(ctx);
         duk_push_c_function(ctx, js_module_readRegistry, 2);
-        duk_put_prop_string(ctx, -2, "readRegistry");
+        duk_put_prop_string(ctx, -2, "readData");
 
         duk_push_c_function(ctx, js_module_writeRegistry, 3);
-        duk_put_prop_string(ctx, -2, "writeRegistry");
+        duk_put_prop_string(ctx, -2, "writeData");
     }
 
     void BindRegistryMethods(duk_context* ctx) {
