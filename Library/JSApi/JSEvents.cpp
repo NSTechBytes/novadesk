@@ -14,7 +14,7 @@
 #include "../PathUtils.h"
 #include "JSWidget.h"
 #include "JSElement.h"
-#include "JSSystem.h"
+#include "JSModule.h"
 #include "JSUtils.h"
 #include "JSIPC.h"
 #include "JSJson.h"

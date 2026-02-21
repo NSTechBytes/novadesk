@@ -21,7 +21,7 @@ namespace JSApi {
         return NULL;
     }
 
-    duk_ret_t js_system_readRegistry(duk_context* ctx) {
+    duk_ret_t js_module_readRegistry(duk_context* ctx) {
         if (duk_get_top(ctx) < 2) return DUK_RET_TYPE_ERROR;
 
         std::wstring fullPath = Utils::ToWString(duk_get_string(ctx, 0));
@@ -70,7 +70,7 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_system_writeRegistry(duk_context* ctx) {
+    duk_ret_t js_module_writeRegistry(duk_context* ctx) {
         if (duk_get_top(ctx) < 3) return DUK_RET_TYPE_ERROR;
 
         std::wstring fullPath = Utils::ToWString(duk_get_string(ctx, 0));
@@ -110,10 +110,10 @@ namespace JSApi {
 
     void PushRegistryModule(duk_context* ctx) {
         duk_push_object(ctx);
-        duk_push_c_function(ctx, js_system_readRegistry, 2);
+        duk_push_c_function(ctx, js_module_readRegistry, 2);
         duk_put_prop_string(ctx, -2, "readRegistry");
 
-        duk_push_c_function(ctx, js_system_writeRegistry, 3);
+        duk_push_c_function(ctx, js_module_writeRegistry, 3);
         duk_put_prop_string(ctx, -2, "writeRegistry");
     }
 

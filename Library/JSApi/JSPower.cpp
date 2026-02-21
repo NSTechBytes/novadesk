@@ -24,7 +24,7 @@ namespace JSApi {
         ULONG CurrentIdleState;
     } PROCESSOR_POWER_INFORMATION, *PPROCESSOR_POWER_INFORMATION;
 
-    duk_ret_t js_system_getPowerStatus(duk_context* ctx) {
+    duk_ret_t js_module_getPowerStatus(duk_context* ctx) {
         SYSTEM_POWER_STATUS sps;
         if (!GetSystemPowerStatus(&sps)) {
             return 0;
@@ -83,7 +83,7 @@ namespace JSApi {
 
     void PushPowerModule(duk_context* ctx) {
         duk_push_object(ctx);
-        duk_push_c_function(ctx, js_system_getPowerStatus, 0);
+        duk_push_c_function(ctx, js_module_getPowerStatus, 0);
         duk_put_prop_string(ctx, -2, "getPowerStatus");
     }
 

@@ -83,7 +83,7 @@ namespace JSApi {
         }
     }
 
-    duk_ret_t js_system_fetch(duk_context* ctx) {
+    duk_ret_t js_module_fetch(duk_context* ctx) {
         if (duk_get_top(ctx) < 2) return DUK_RET_TYPE_ERROR;
 
         std::wstring url = Utils::ToWString(duk_get_string(ctx, 0));
@@ -146,7 +146,7 @@ namespace JSApi {
 
     void PushWebFetchModule(duk_context* ctx) {
         duk_push_object(ctx);
-        duk_push_c_function(ctx, js_system_fetch, 2);
+        duk_push_c_function(ctx, js_module_fetch, 2);
         duk_put_prop_string(ctx, -2, "fetch");
     }
 

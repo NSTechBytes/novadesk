@@ -170,7 +170,7 @@
     <ClInclude Include="Library\JSApi\JSRegistry.h">
       <Filter>Library\JSApi</Filter>
     </ClInclude>
-    <ClInclude Include="Library\JSApi\JSSystem.h">
+    <ClInclude Include="Library\JSApi\JSModule.h">
       <Filter>Library\JSApi</Filter>
     </ClInclude>
     <ClInclude Include="Library\JSApi\JSUtils.h">
@@ -374,7 +374,7 @@
     <ClCompile Include="Library\JSApi\JSRegistry.cpp">
       <Filter>Library\JSApi</Filter>
     </ClCompile>
-    <ClCompile Include="Library\JSApi\JSSystem.cpp">
+    <ClCompile Include="Library\JSApi\JSModule.cpp">
       <Filter>Library\JSApi</Filter>
     </ClCompile>
     <ClCompile Include="Library\JSApi\JSUtils.cpp">

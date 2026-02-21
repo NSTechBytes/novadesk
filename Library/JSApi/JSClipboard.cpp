@@ -11,7 +11,7 @@
 
 namespace JSApi {
 
-    duk_ret_t js_system_getClipboardText(duk_context* ctx) {
+    duk_ret_t js_module_getClipboardText(duk_context* ctx) {
         if (!OpenClipboard(NULL)) return 0;
 
         HANDLE hData = GetClipboardData(CF_UNICODETEXT);
@@ -29,7 +29,7 @@ namespace JSApi {
         return 0;
     }
 
-    duk_ret_t js_system_setClipboardText(duk_context* ctx) {
+    duk_ret_t js_module_setClipboardText(duk_context* ctx) {
         if (duk_get_top(ctx) < 1) return DUK_RET_TYPE_ERROR;
         std::wstring text = Utils::ToWString(duk_get_string(ctx, 0));
 
@@ -63,10 +63,10 @@ namespace JSApi {
 
     void PushClipperModule(duk_context* ctx) {
         duk_push_object(ctx);
-        duk_push_c_function(ctx, js_system_getClipboardText, 0);
+        duk_push_c_function(ctx, js_module_getClipboardText, 0);
         duk_put_prop_string(ctx, -2, "getClipboardText");
 
-        duk_push_c_function(ctx, js_system_setClipboardText, 1);
+        duk_push_c_function(ctx, js_module_setClipboardText, 1);
         duk_put_prop_string(ctx, -2, "setClipboardText");
     }
 

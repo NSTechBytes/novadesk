@@ -5,7 +5,7 @@
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
-#include "JSSystem.h"
+#include "JSModule.h"
 #include "../Logging.h"
 #include "../PathUtils.h"
 #include "../Utils.h"
@@ -138,7 +138,7 @@ namespace JSApi {
         duk_put_prop_string(ctx, -2, "unregisterHotkey");
     }
 
-    duk_ret_t js_system_get_display_metrics(duk_context* ctx) {
+    duk_ret_t js_module_get_display_metrics(duk_context* ctx) {
         const MultiMonitorInfo& info = System::GetMultiMonitorInfo();
         duk_push_object(ctx);
         const MonitorInfo* primary = (info.primaryIndex < (int)info.monitors.size()) ? &info.monitors[info.primaryIndex] : (info.monitors.empty() ? nullptr : &info.monitors[0]);
@@ -179,7 +179,7 @@ namespace JSApi {
         return 1;
     }
     
-    duk_ret_t js_system_execute(duk_context* ctx) {
+    duk_ret_t js_module_execute(duk_context* ctx) {
         if (duk_get_top(ctx) < 1) return DUK_RET_TYPE_ERROR;
 
         std::wstring target = Utils::ToWString(duk_get_string(ctx, 0));
@@ -215,11 +215,11 @@ namespace JSApi {
 
     void PushExecuteModule(duk_context* ctx) {
         duk_push_object(ctx);
-        duk_push_c_function(ctx, js_system_execute, DUK_VARARGS);
+        duk_push_c_function(ctx, js_module_execute, DUK_VARARGS);
         duk_put_prop_string(ctx, -2, "execute");
     }
 
-    duk_ret_t js_system_set_wallpaper(duk_context* ctx) {
+    duk_ret_t js_module_set_wallpaper(duk_context* ctx) {
         if (duk_get_top(ctx) < 1 || !duk_is_string(ctx, 0)) return DUK_RET_TYPE_ERROR;
 
         std::wstring imagePath = Utils::ToWString(duk_get_string(ctx, 0));
@@ -240,7 +240,7 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_system_get_current_wallpaper_path(duk_context* ctx) {
+    duk_ret_t js_module_get_current_wallpaper_path(duk_context* ctx) {
         std::wstring currentPath;
         if (!System::GetCurrentWallpaperPath(currentPath) || currentPath.empty()) {
             duk_push_null(ctx);
@@ -251,7 +251,7 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_system_extract_file_icon(duk_context* ctx) {
+    duk_ret_t js_module_extract_file_icon(duk_context* ctx) {
         if (duk_get_top(ctx) < 1 || !duk_is_string(ctx, 0)) return DUK_RET_TYPE_ERROR;
 
         std::wstring sourcePath = Utils::ToWString(duk_get_string(ctx, 0));
@@ -295,7 +295,7 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_system_load_addon(duk_context* ctx) {
+    duk_ret_t js_module_load_addon(duk_context* ctx) {
         if (duk_get_top(ctx) < 1) return DUK_RET_TYPE_ERROR;
         std::wstring addonPath = Utils::ToWString(duk_get_string(ctx, 0));
 
@@ -344,7 +344,7 @@ namespace JSApi {
         return 0;
     }
 
-    duk_ret_t js_system_unload_addon(duk_context* ctx) {
+    duk_ret_t js_module_unload_addon(duk_context* ctx) {
         if (duk_get_top(ctx) < 1) return DUK_RET_TYPE_ERROR;
         std::wstring addonPath = Utils::ToWString(duk_get_string(ctx, 0));
 
@@ -604,7 +604,7 @@ namespace JSApi {
         return 0;
     }
 
-    duk_ret_t js_system_get_brightness(duk_context* ctx) {
+    duk_ret_t js_module_get_brightness(duk_context* ctx) {
         int displayIndex = 0;
         if (duk_get_top(ctx) > 0 && duk_is_object(ctx, 0)) {
             if (duk_get_prop_string(ctx, 0, "display")) {
@@ -628,13 +628,13 @@ namespace JSApi {
 
     void PushAddonModule(duk_context* ctx) {
         duk_push_object(ctx);
-        duk_push_c_function(ctx, js_system_load_addon, 1);
+        duk_push_c_function(ctx, js_module_load_addon, 1);
         duk_put_prop_string(ctx, -2, "loadAddon");
-        duk_push_c_function(ctx, js_system_unload_addon, 1);
+        duk_push_c_function(ctx, js_module_unload_addon, 1);
         duk_put_prop_string(ctx, -2, "unloadAddon");
     }
 
-    duk_ret_t js_system_set_brightness(duk_context* ctx) {
+    duk_ret_t js_module_set_brightness(duk_context* ctx) {
         if (duk_get_top(ctx) < 1 || !duk_is_object(ctx, 0)) return DUK_RET_TYPE_ERROR;
 
         int displayIndex = 0;
@@ -661,9 +661,9 @@ namespace JSApi {
 
     void PushBrightnessModule(duk_context* ctx) {
         duk_push_object(ctx);
-        duk_push_c_function(ctx, js_system_get_brightness, DUK_VARARGS);
+        duk_push_c_function(ctx, js_module_get_brightness, DUK_VARARGS);
         duk_put_prop_string(ctx, -2, "getBrightness");
-        duk_push_c_function(ctx, js_system_set_brightness, 1);
+        duk_push_c_function(ctx, js_module_set_brightness, 1);
         duk_put_prop_string(ctx, -2, "setBrightness");
     }
 
@@ -675,37 +675,37 @@ namespace JSApi {
 
     void PushDisplayMetricsModule(duk_context* ctx) {
         duk_push_object(ctx);
-        duk_push_c_function(ctx, js_system_get_display_metrics, 0);
+        duk_push_c_function(ctx, js_module_get_display_metrics, 0);
         duk_put_prop_string(ctx, -2, "getDisplayMetrics");
     }
 
     void PushWallpaperModule(duk_context* ctx) {
         duk_push_object(ctx);
-        duk_push_c_function(ctx, js_system_set_wallpaper, 1);
+        duk_push_c_function(ctx, js_module_set_wallpaper, 1);
         duk_put_prop_string(ctx, -2, "setWallpaper");
-        duk_push_c_function(ctx, js_system_get_current_wallpaper_path, 0);
+        duk_push_c_function(ctx, js_module_get_current_wallpaper_path, 0);
         duk_put_prop_string(ctx, -2, "getCurrentWallpaperPath");
     }
 
     void PushFileIconModule(duk_context* ctx) {
         duk_push_object(ctx);
-        duk_push_c_function(ctx, js_system_extract_file_icon, DUK_VARARGS);
+        duk_push_c_function(ctx, js_module_extract_file_icon, DUK_VARARGS);
         duk_put_prop_string(ctx, -2, "extractFileIcon");
     }
 
     void PushAppVolumeModule(duk_context* ctx) {
         duk_push_object(ctx);
-        duk_push_c_function(ctx, js_system_list_app_volumes, 0);
+        duk_push_c_function(ctx, js_module_list_app_volumes, 0);
         duk_put_prop_string(ctx, -2, "listAppVolumes");
-        duk_push_c_function(ctx, js_system_get_app_volume, 1);
+        duk_push_c_function(ctx, js_module_get_app_volume, 1);
         duk_put_prop_string(ctx, -2, "getAppVolume");
-        duk_push_c_function(ctx, js_system_set_app_volume, 2);
+        duk_push_c_function(ctx, js_module_set_app_volume, 2);
         duk_put_prop_string(ctx, -2, "setAppVolume");
-        duk_push_c_function(ctx, js_system_get_app_peak, 1);
+        duk_push_c_function(ctx, js_module_get_app_peak, 1);
         duk_put_prop_string(ctx, -2, "getAppPeak");
-        duk_push_c_function(ctx, js_system_get_app_mute, 1);
+        duk_push_c_function(ctx, js_module_get_app_mute, 1);
         duk_put_prop_string(ctx, -2, "getAppMute");
-        duk_push_c_function(ctx, js_system_set_app_mute, 2);
+        duk_push_c_function(ctx, js_module_set_app_mute, 2);
         duk_put_prop_string(ctx, -2, "setAppMute");
     }
 
@@ -737,7 +737,7 @@ namespace JSApi {
         return hasPid || hasProcess;
     }
 
-    duk_ret_t js_system_list_app_volumes(duk_context* ctx) {
+    duk_ret_t js_module_list_app_volumes(duk_context* ctx) {
         std::vector<AppVolumeControl::SessionInfo> sessions;
         bool ok = AppVolumeControl::ListSessions(sessions);
 
@@ -761,7 +761,7 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_system_get_app_volume(duk_context* ctx) {
+    duk_ret_t js_module_get_app_volume(duk_context* ctx) {
         DWORD pid = 0;
         std::wstring process;
         bool hasPid = false, hasProcess = false;
@@ -780,7 +780,7 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_system_get_app_peak(duk_context* ctx) {
+    duk_ret_t js_module_get_app_peak(duk_context* ctx) {
         DWORD pid = 0;
         std::wstring process;
         bool hasPid = false, hasProcess = false;
@@ -798,7 +798,7 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_system_set_app_volume(duk_context* ctx) {
+    duk_ret_t js_module_set_app_volume(duk_context* ctx) {
         if (duk_get_top(ctx) < 2 || !duk_is_object(ctx, 0) || !duk_is_number(ctx, 1)) return DUK_RET_TYPE_ERROR;
 
         DWORD pid = 0;
@@ -816,7 +816,7 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_system_get_app_mute(duk_context* ctx) {
+    duk_ret_t js_module_get_app_mute(duk_context* ctx) {
         DWORD pid = 0;
         std::wstring process;
         bool hasPid = false, hasProcess = false;
@@ -835,7 +835,7 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_system_set_app_mute(duk_context* ctx) {
+    duk_ret_t js_module_set_app_mute(duk_context* ctx) {
         if (duk_get_top(ctx) < 2 || !duk_is_object(ctx, 0) || !duk_is_boolean(ctx, 1)) return DUK_RET_TYPE_ERROR;
 
         DWORD pid = 0;

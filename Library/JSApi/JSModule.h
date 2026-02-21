@@ -19,20 +19,20 @@ namespace JSApi {
     void PushAddonModule(duk_context* ctx);
 
     // System API
-    duk_ret_t js_system_execute(duk_context* ctx);
-    duk_ret_t js_system_get_display_metrics(duk_context* ctx);
-    duk_ret_t js_system_load_addon(duk_context* ctx);
-    duk_ret_t js_system_set_wallpaper(duk_context* ctx);
-    duk_ret_t js_system_get_current_wallpaper_path(duk_context* ctx);
-    duk_ret_t js_system_get_brightness(duk_context* ctx);
-    duk_ret_t js_system_set_brightness(duk_context* ctx);
-    duk_ret_t js_system_extract_file_icon(duk_context* ctx);
-    duk_ret_t js_system_list_app_volumes(duk_context* ctx);
-    duk_ret_t js_system_get_app_volume(duk_context* ctx);
-    duk_ret_t js_system_set_app_volume(duk_context* ctx);
-    duk_ret_t js_system_get_app_peak(duk_context* ctx);
-    duk_ret_t js_system_get_app_mute(duk_context* ctx);
-    duk_ret_t js_system_set_app_mute(duk_context* ctx);
+    duk_ret_t js_module_execute(duk_context* ctx);
+    duk_ret_t js_module_get_display_metrics(duk_context* ctx);
+    duk_ret_t js_module_load_addon(duk_context* ctx);
+    duk_ret_t js_module_set_wallpaper(duk_context* ctx);
+    duk_ret_t js_module_get_current_wallpaper_path(duk_context* ctx);
+    duk_ret_t js_module_get_brightness(duk_context* ctx);
+    duk_ret_t js_module_set_brightness(duk_context* ctx);
+    duk_ret_t js_module_extract_file_icon(duk_context* ctx);
+    duk_ret_t js_module_list_app_volumes(duk_context* ctx);
+    duk_ret_t js_module_get_app_volume(duk_context* ctx);
+    duk_ret_t js_module_set_app_volume(duk_context* ctx);
+    duk_ret_t js_module_get_app_peak(duk_context* ctx);
+    duk_ret_t js_module_get_app_mute(duk_context* ctx);
+    duk_ret_t js_module_set_app_mute(duk_context* ctx);
     void PushExecuteModule(duk_context* ctx);
     void PushBrightnessModule(duk_context* ctx);
     void PushEnvVariablesModule(duk_context* ctx);

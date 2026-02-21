@@ -8,7 +8,7 @@
 #include "JSApi.h"
 #include "JSCommon.h"
 #include "JSUtils.h"
-#include "JSSystem.h"
+#include "JSModule.h"
 #include "JSWidget.h"
 #include "JSElement.h"
 #include "JSContextMenu.h"

@@ -40,7 +40,7 @@ namespace JSApi {
         return pVolume;
     }
 
-    duk_ret_t js_system_setVolume(duk_context* ctx) {
+    duk_ret_t js_module_setVolume(duk_context* ctx) {
         if (duk_get_top(ctx) < 1) return DUK_RET_TYPE_ERROR;
         int volume = duk_get_int(ctx, 0);
         if (volume < 0) volume = 0;
@@ -65,7 +65,7 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_system_getVolume(duk_context* ctx) {
+    duk_ret_t js_module_getVolume(duk_context* ctx) {
         IAudioEndpointVolume* pVolume = GetVolumeInterface();
         if (pVolume) {
             float fVolume = 0;
@@ -78,7 +78,7 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_system_playSound(duk_context* ctx) {
+    duk_ret_t js_module_playSound(duk_context* ctx) {
         if (duk_get_top(ctx) < 1) return DUK_RET_TYPE_ERROR;
         std::wstring path = Utils::ToWString(duk_get_string(ctx, 0));
         bool loop = duk_get_boolean_default(ctx, 1, false);
@@ -93,7 +93,7 @@ namespace JSApi {
         return 1;
     }
 
-    duk_ret_t js_system_stopSound(duk_context* ctx) {
+    duk_ret_t js_module_stopSound(duk_context* ctx) {
         PlaySoundW(NULL, NULL, 0);
         duk_push_boolean(ctx, true);
         return 1;
@@ -101,16 +101,16 @@ namespace JSApi {
 
     void PushAudioModule(duk_context* ctx) {
         duk_push_object(ctx);
-        duk_push_c_function(ctx, js_system_setVolume, 1);
+        duk_push_c_function(ctx, js_module_setVolume, 1);
         duk_put_prop_string(ctx, -2, "setVolume");
 
-        duk_push_c_function(ctx, js_system_getVolume, 0);
+        duk_push_c_function(ctx, js_module_getVolume, 0);
         duk_put_prop_string(ctx, -2, "getVolume");
 
-        duk_push_c_function(ctx, js_system_playSound, DUK_VARARGS);
+        duk_push_c_function(ctx, js_module_playSound, DUK_VARARGS);
         duk_put_prop_string(ctx, -2, "playSound");
 
-        duk_push_c_function(ctx, js_system_stopSound, 0);
+        duk_push_c_function(ctx, js_module_stopSound, 0);
         duk_put_prop_string(ctx, -2, "stopSound");
     }
 

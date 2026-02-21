@@ -122,7 +122,7 @@
     <ClInclude Include="Library\JSApi\JSApi.h" />
     <ClInclude Include="Library\JSApi\JSCommon.h" />
     <ClInclude Include="Library\JSApi\JSUtils.h" />
-    <ClInclude Include="Library\JSApi\JSSystem.h" />
+    <ClInclude Include="Library\JSApi\JSModule.h" />
     <ClInclude Include="Library\JSApi\JSWidget.h" />
     <ClInclude Include="Library\JSApi\JSElement.h" />
     <ClInclude Include="Library\JSApi\JSContextMenu.h" />
@@ -188,7 +188,7 @@
     <ClCompile Include="Library\JSApi\JSApi.cpp" />
     <ClCompile Include="Library\JSApi\JSCommon.cpp" />
     <ClCompile Include="Library\JSApi\JSUtils.cpp" />
-    <ClCompile Include="Library\JSApi\JSSystem.cpp" />
+    <ClCompile Include="Library\JSApi\JSModule.cpp" />
     <ClCompile Include="Library\JSApi\JSWidget.cpp" />
     <ClCompile Include="Library\JSApi\JSElement.cpp" />
     <ClCompile Include="Library\JSApi\JSContextMenu.cpp" />

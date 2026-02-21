@@ -3,8 +3,10 @@
 #include "../Logging.h"
 #include "../Utils.h"
 #include "JSUtils.h"
+#include <unordered_set>
 
 namespace JSApi {
+    static std::unordered_set<AudioLevel*> s_DestroyedAudioPtrs;
 
     duk_ret_t js_audio_constructor(duk_context* ctx) {
         if (!duk_is_constructor_call(ctx)) return DUK_RET_TYPE_ERROR;
@@ -157,9 +159,10 @@ namespace JSApi {
         duk_get_prop_string(ctx, -1, "\xFF" "audioPtr");
         AudioLevel* audio = (AudioLevel*)duk_get_pointer(ctx, -1);
         if (audio) {
-            delete audio;
-            duk_push_null(ctx);
-            duk_put_prop_string(ctx, -2, "\xFF" "audioPtr");
+            if (s_DestroyedAudioPtrs.find(audio) == s_DestroyedAudioPtrs.end()) {
+                delete audio;
+                s_DestroyedAudioPtrs.insert(audio);
+            }
         }
         duk_pop_2(ctx);
         return 0;
@@ -169,7 +172,10 @@ namespace JSApi {
         duk_get_prop_string(ctx, 0, "\xFF" "audioPtr");
         AudioLevel* audio = (AudioLevel*)duk_get_pointer(ctx, -1);
         if (audio) {
-            delete audio;
+            if (s_DestroyedAudioPtrs.find(audio) == s_DestroyedAudioPtrs.end()) {
+                delete audio;
+                s_DestroyedAudioPtrs.insert(audio);
+            }
         }
         duk_pop(ctx);
         return 0;
