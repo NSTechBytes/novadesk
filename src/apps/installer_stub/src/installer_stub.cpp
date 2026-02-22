@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <shellapi.h>
 #include <winreg.h>
 #include <commctrl.h>
 #include <shlobj.h>
@@ -17,7 +18,7 @@
 #include <cstdint>
 #include <cstring>
 #include <tlhelp32.h>
-#include "..\..\Library\json\json.hpp"
+#include  "../../../third_party/json/json.hpp"
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "advapi32.lib")

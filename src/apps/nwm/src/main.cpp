@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstring>
 #include <windows.h>
+#include <shellapi.h>
 #include <winreg.h>
 #include <shlobj.h>
 #include <shobjidl.h>
@@ -15,7 +16,7 @@
 #include <atlbase.h>
 #include <atlcomcli.h>
 #include "rescle.h"
-#include "../../Library/json/json.hpp"
+#include "../../../third_party/json/json.hpp"
 
 #pragma comment(lib, "version.lib")
 #pragma comment(lib, "shell32.lib")
