@@ -34,7 +34,7 @@ Write-Host ""
 
 # Run MSBuild
 # Using /m for parallel build to speed up things
-& $msbuildPath "Novadesk.sln" /t:Build /p:Configuration=$Configuration /p:Platform=$Platform /m /v:minimal
+& $msbuildPath "Project.sln" /t:Build /p:Configuration=$Configuration /p:Platform=$Platform /m /v:minimal
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""

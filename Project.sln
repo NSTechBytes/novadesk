@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36623.8 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Novadesk", "Novadesk.vcxproj", "{58809BD0-217B-4F83-8881-27E2746EC1A2}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Novadesk", "apps\novadesk\Novadesk.vcxproj", "{58809BD0-217B-4F83-8881-27E2746EC1A2}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "nwm", "nwm\nwm.vcxproj", "{AABBCCDD-1122-3344-5566-77889900AABB}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "nwm", "apps\nwm\nwm.vcxproj", "{AABBCCDD-1122-3344-5566-77889900AABB}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "installer_stub", "installer_stub\installer_stub.vcxproj", "{B1B2B3B4-1111-2222-3333-444455556666}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "installer_stub", "apps\installer_stub\installer_stub.vcxproj", "{B1B2B3B4-1111-2222-3333-444455556666}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
