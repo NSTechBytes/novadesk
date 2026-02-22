@@ -83,7 +83,7 @@ namespace JSApi {
     static duk_ret_t js_fs_read_file(duk_context* ctx) {
         if (duk_get_top(ctx) < 1 || !duk_is_string(ctx, 0)) return DUK_RET_TYPE_ERROR;
         std::wstring p = ResolveFsPath(ctx, Utils::ToWString(duk_get_string(ctx, 0)));
-        std::ifstream in(p, std::ios::binary);
+        std::ifstream in(fs::path(p), std::ios::binary);
         if (!in.is_open()) { duk_push_null(ctx); return 1; }
         std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         duk_push_lstring(ctx, data.data(), data.size());
@@ -94,7 +94,7 @@ namespace JSApi {
         if (duk_get_top(ctx) < 2 || !duk_is_string(ctx, 0)) return DUK_RET_TYPE_ERROR;
         std::wstring p = ResolveFsPath(ctx, Utils::ToWString(duk_get_string(ctx, 0)));
         std::string data = duk_safe_to_string(ctx, 1);
-        std::ofstream out(p, std::ios::binary | std::ios::trunc);
+        std::ofstream out(fs::path(p), std::ios::binary | std::ios::trunc);
         bool ok = out.is_open();
         if (ok) out.write(data.data(), (std::streamsize)data.size());
         duk_push_boolean(ctx, ok);
@@ -105,7 +105,7 @@ namespace JSApi {
         if (duk_get_top(ctx) < 2 || !duk_is_string(ctx, 0)) return DUK_RET_TYPE_ERROR;
         std::wstring p = ResolveFsPath(ctx, Utils::ToWString(duk_get_string(ctx, 0)));
         std::string data = duk_safe_to_string(ctx, 1);
-        std::ofstream out(p, std::ios::binary | std::ios::app);
+        std::ofstream out(fs::path(p), std::ios::binary | std::ios::app);
         bool ok = out.is_open();
         if (ok) out.write(data.data(), (std::streamsize)data.size());
         duk_push_boolean(ctx, ok);

@@ -108,7 +108,6 @@ bool AppVolumeControl::ListSessions(std::vector<SessionInfo>& sessions)
             IAudioSessionControl* control = nullptr;
             IAudioSessionControl2* control2 = nullptr;
             ISimpleAudioVolume* simpleVol = nullptr;
-            IAudioMeterInformation* meterInfo = nullptr;
 
             if (FAILED(sessionEnum->GetSession(i, &control)) || !control) continue;
             if (FAILED(control->QueryInterface(__uuidof(IAudioSessionControl2), (void**)&control2)) || !control2) {
@@ -120,7 +119,6 @@ bool AppVolumeControl::ListSessions(std::vector<SessionInfo>& sessions)
                 control->Release();
                 continue;
             }
-            control->QueryInterface(__uuidof(IAudioMeterInformation), (void**)&meterInfo);
 
             DWORD pid = 0;
             control2->GetProcessId(&pid);
@@ -138,7 +136,9 @@ bool AppVolumeControl::ListSessions(std::vector<SessionInfo>& sessions)
             BOOL mute = FALSE;
             simpleVol->GetMasterVolume(&vol);
             simpleVol->GetMute(&mute);
-            if (meterInfo) meterInfo->GetPeakValue(&peak);
+            // MinGW's endpointvolume headers only forward-declare
+            // IAudioMeterInformation, so peak metering isn't available here.
+            peak = 0.0f;
 
             LPWSTR displayName = nullptr;
             std::wstring display;
@@ -167,7 +167,6 @@ bool AppVolumeControl::ListSessions(std::vector<SessionInfo>& sessions)
             info.muted = mute != FALSE;
             sessions.push_back(info);
 
-            if (meterInfo) meterInfo->Release();
             simpleVol->Release();
             control2->Release();
             control->Release();

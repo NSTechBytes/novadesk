@@ -13,7 +13,7 @@
               if ((punk) != NULL)  \
                 { (punk)->Release(); (punk) = NULL; }
 
-#define CLAMP01(x) max(0.0f, min(1.0f, (x)))
+#define CLAMP01(x) std::max(0.0f, std::min(1.0f, (x)))
 
 AudioLevel::AudioLevel(const AudioLevelConfig& config)
     : m_config(config)
@@ -277,7 +277,7 @@ void AudioLevel::ProduceFFT(int channel)
             for (int k = idx1; k <= idx2; k++) {
                 float valL = m_fftOut[0][k];
                 float valR = m_fftOut[1][k];
-                maxVal = max(maxVal, max(valL, valR)); // Peak of both channels
+                maxVal = std::max(maxVal, std::max(valL, valR)); // Peak of both channels
             }
 
             // Apply sensitivity dB scaling roughly

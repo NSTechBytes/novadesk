@@ -7,6 +7,7 @@
 
 #include "RoundLineElement.h"
 #include "Direct2DHelper.h"
+#include <algorithm>
 #include <cmath>
 
 RoundLineElement::RoundLineElement(const std::wstring& id, int x, int y, int w, int h, float value)
@@ -73,7 +74,7 @@ bool RoundLineElement::HitTest(int x, int y)
     float radius = (float)m_Radius;
 
     if (radius <= 0) {
-        radius = (min((float)m_Width, (float)m_Height) - (float)m_Thickness) / 2.0f;
+        radius = (std::min((float)m_Width, (float)m_Height) - (float)m_Thickness) / 2.0f;
     }
     if (radius <= 0) return false;
 
@@ -196,7 +197,7 @@ void RoundLineElement::Render(ID2D1DeviceContext* context)
     float radius = (float)m_Radius;
 
     if (radius <= 0) {
-        radius = (min((float)m_Width, (float)m_Height) - (float)m_Thickness) / 2.0f;
+        radius = (std::min((float)m_Width, (float)m_Height) - (float)m_Thickness) / 2.0f;
     }
 
     if (radius <= 0) {

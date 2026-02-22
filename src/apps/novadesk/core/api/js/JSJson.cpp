@@ -12,6 +12,7 @@
 #include "Utils.h"
 #include "Logging.h"
 #include <fstream>
+#include <filesystem>
 #include <unordered_map>
 #include "JSUtils.h"
 
@@ -407,7 +408,7 @@ namespace JSApi {
         std::wstring wpath = ResolveScriptPath(ctx, Utils::ToWString(duk_get_string(ctx, 0)));
 
         try {
-            std::ifstream f(wpath);
+            std::ifstream f{ std::filesystem::path(wpath) };
             if (!f.is_open()) {
                 Logging::Log(LogLevel::Error, L"Failed to open JSON file: %s", wpath.c_str());
                 return 0;
@@ -440,7 +441,7 @@ namespace JSApi {
             // Convert Duktape object to json
             json j = PushDukToJson(ctx, 1);
 
-            std::ifstream existing(wpath);
+            std::ifstream existing{ std::filesystem::path(wpath) };
             if (existing.is_open()) {
                 std::string text((std::istreambuf_iterator<char>(existing)), std::istreambuf_iterator<char>());
                 existing.close();
@@ -448,7 +449,7 @@ namespace JSApi {
                 bool hasContent = (text.find_first_not_of(" \t\r\n") != std::string::npos);
 
                 if (MergeIntoJsonText(text, j)) {
-                    std::ofstream out(wpath, std::ios::binary);
+                    std::ofstream out{ std::filesystem::path(wpath), std::ios::binary };
                     if (out.is_open()) {
                         out << text;
                         out.close();
@@ -461,7 +462,7 @@ namespace JSApi {
                 }
             }
 
-            std::ofstream out(wpath, std::ios::binary);
+            std::ofstream out{ std::filesystem::path(wpath), std::ios::binary };
             if (out.is_open()) {
                 out << j.dump(4); // Pretty print with 4 spaces
                 out.close();

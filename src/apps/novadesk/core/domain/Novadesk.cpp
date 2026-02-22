@@ -44,6 +44,35 @@ void ShowTrayMenu(HWND hWnd);
 void ShowTrayIconDynamic();
 void HideTrayIconDynamic();
 
+static void EnableDpiAwarenessCompat()
+{
+    HMODULE user32 = GetModuleHandleW(L"user32.dll");
+    if (user32) {
+        typedef BOOL(WINAPI* SetProcessDpiAwarenessContextFn)(HANDLE);
+        SetProcessDpiAwarenessContextFn setCtx =
+            (SetProcessDpiAwarenessContextFn)GetProcAddress(user32, "SetProcessDpiAwarenessContext");
+        if (setCtx) {
+#ifdef DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+            if (setCtx((HANDLE)DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)) {
+                return;
+            }
+#else
+            // Value used by Win10+ API for PER_MONITOR_AWARE_V2.
+            if (setCtx((HANDLE)-4)) {
+                return;
+            }
+#endif
+        }
+
+        typedef BOOL(WINAPI* SetProcessDPIAwareFn)(void);
+        SetProcessDPIAwareFn setLegacy =
+            (SetProcessDPIAwareFn)GetProcAddress(user32, "SetProcessDPIAware");
+        if (setLegacy) {
+            setLegacy();
+        }
+    }
+}
+
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
                      _In_ LPWSTR    lpCmdLine,
@@ -62,7 +91,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     DeleteFileW(logPath.c_str());
 
     // Enable DPI Awareness
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    EnableDpiAwarenessCompat();
 
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(nCmdShow);

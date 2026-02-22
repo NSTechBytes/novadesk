@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "Direct2DHelper.h"
+#include <cmath>
 #include "Logging.h"
 
 using namespace Microsoft::WRL;

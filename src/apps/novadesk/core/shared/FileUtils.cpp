@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "FileUtils.h"
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include "Utils.h"
@@ -19,7 +20,7 @@ namespace FileUtils {
     ** Returns an empty string if the file cannot be opened.
     */
     std::string ReadFileContent(const std::wstring& path) {
-        std::ifstream file(path, std::ios::binary);
+        std::ifstream file{ std::filesystem::path(path), std::ios::binary };
         if (!file.is_open()) return "";
 
         // Get file size

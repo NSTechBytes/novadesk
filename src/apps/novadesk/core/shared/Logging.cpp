@@ -8,7 +8,9 @@
 #include "Logging.h"
 #include <cstdio>
 #include <cstdarg>
+#include <filesystem>
 #include <fstream>
+#include <cstring>
 #include <ctime>
 #include <chrono>
 #include <vector>
@@ -47,15 +49,17 @@ void Logging::Log(LogLevel level, const wchar_t* format, ...)
     va_list args;
     va_start(args, format);
 
-    // Determine required size
-    int len = _vscwprintf(format, args);
+    va_list argsCopy;
+    va_copy(argsCopy, args);
+    int len = vswprintf(nullptr, 0, format, argsCopy);
+    va_end(argsCopy);
     if (len < 0) {
         va_end(args);
         return;
     }
 
     std::vector<wchar_t> buffer(len + 1);
-    vswprintf_s(buffer.data(), buffer.size(), format, args);
+    vswprintf(buffer.data(), buffer.size(), format, args);
     va_end(args);
 
     const wchar_t* levelStr = L"";
@@ -73,22 +77,28 @@ void Logging::Log(LogLevel level, const wchar_t* format, ...)
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
 
     tm timeInfo;
+#if defined(_MSC_VER)
     localtime_s(&timeInfo, &now_c);
+#elif defined(__STDC_LIB_EXT1__)
+    localtime_s(&now_c, &timeInfo);
+#else
+    tm* tmp = localtime(&now_c);
+    if (tmp) {
+        timeInfo = *tmp;
+    } else {
+        memset(&timeInfo, 0, sizeof(timeInfo));
+    }
+#endif
 
     wchar_t timestamp[64];
-    swprintf_s(timestamp, L"[%04d-%02d-%02d %02d:%02d:%02d.%03lld]",
+    swprintf(timestamp, 64, L"[%04d-%02d-%02d %02d:%02d:%02d.%03lld]",
         timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday,
         timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec, ms.count());
 
     // Prepare final output string dynamically
     // format: timestamp + " [" + productName + "] " + levelStr + " " + buffer + "\n"
     std::wstring productName = PathUtils::GetProductName();
-    int outputLen = _scwprintf(L"%s [%s] %s %s\n", timestamp, productName.c_str(), levelStr, buffer.data());
-
-    if (outputLen < 0) return;
-
-    std::vector<wchar_t> output(outputLen + 1);
-    swprintf_s(output.data(), output.size(), L"%s [%s] %s %s\n", timestamp, productName.c_str(), levelStr, buffer.data());
+    std::wstring line = std::wstring(timestamp) + L" [" + productName + L"] " + levelStr + L" " + buffer.data() + L"\n";
 
     // Output to console (debug output)
     if (s_ConsoleEnabled)
@@ -101,8 +111,8 @@ void Logging::Log(LogLevel level, const wchar_t* format, ...)
             SetConsoleTextAttribute(hOut, GetConsoleColorForLevel(level));
         }
 
-        OutputDebugStringW(output.data());
-        wprintf(L"%s", output.data());
+        OutputDebugStringW(line.c_str());
+        wprintf(L"%ls", line.c_str());
         fflush(stdout);
 
         if (canColor)
@@ -114,10 +124,10 @@ void Logging::Log(LogLevel level, const wchar_t* format, ...)
     // Output to file
     if (s_FileEnabled && !s_LogFilePath.empty())
     {
-        std::wofstream logFile(s_LogFilePath, std::ios::app);
+        std::wofstream logFile{ std::filesystem::path(s_LogFilePath), std::ios::app };
         if (logFile.is_open())
         {
-            logFile << output.data();
+            logFile << line;
             logFile.close();
         }
     }
@@ -144,7 +154,7 @@ void Logging::SetFileLogging(const std::wstring& filePath, bool clearFile)
     if (s_FileEnabled && clearFile)
     {
         // Truncate the file
-        std::wofstream logFile(s_LogFilePath, std::ios::trunc);
+        std::wofstream logFile{ std::filesystem::path(s_LogFilePath), std::ios::trunc };
         if (logFile.is_open())
         {
             logFile.close();

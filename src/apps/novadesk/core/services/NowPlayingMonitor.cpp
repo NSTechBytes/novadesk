@@ -18,12 +18,15 @@
 #include <thread>
 #include <vector>
 #include <windows.h>
+#if !defined(__MINGW32__)
 #include <winrt/base.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Storage.Streams.h>
 #include <winrt/Windows.Media.h>
 #include <winrt/Windows.Media.Control.h>
+#endif
 
+#if !defined(__MINGW32__)
 using namespace winrt;
 using namespace winrt::Windows::Foundation;
 using namespace winrt::Windows::Media;
@@ -492,4 +495,42 @@ bool NowPlayingMonitor::SetRepeat(int mode) {
     m_Impl->QueueAction(NowPlayingAction::SetRepeat, mode, false);
     return true;
 }
+#else
+// MinGW fallback: C++/WinRT headers are unavailable in this toolchain.
+struct NowPlayingMonitor::Impl {
+    Stats cachedStats{};
+    Impl() {
+        cachedStats.available = false;
+        cachedStats.duration = 0;
+        cachedStats.position = 0;
+        cachedStats.progress = 0;
+        cachedStats.state = 0;
+        cachedStats.status = 0;
+        cachedStats.shuffle = false;
+        cachedStats.repeat = false;
+    }
+};
+
+NowPlayingMonitor::NowPlayingMonitor() : m_Impl(new Impl()) {}
+
+NowPlayingMonitor::~NowPlayingMonitor() {
+    delete m_Impl;
+    m_Impl = nullptr;
+}
+
+NowPlayingMonitor::Stats NowPlayingMonitor::GetStats() {
+    return m_Impl->cachedStats;
+}
+
+bool NowPlayingMonitor::Play() { return false; }
+bool NowPlayingMonitor::Pause() { return false; }
+bool NowPlayingMonitor::PlayPause() { return false; }
+bool NowPlayingMonitor::Stop() { return false; }
+bool NowPlayingMonitor::Next() { return false; }
+bool NowPlayingMonitor::Previous() { return false; }
+bool NowPlayingMonitor::SetPosition(int, bool) { return false; }
+bool NowPlayingMonitor::SetShuffle(bool) { return false; }
+bool NowPlayingMonitor::ToggleShuffle() { return false; }
+bool NowPlayingMonitor::SetRepeat(int) { return false; }
+#endif
 

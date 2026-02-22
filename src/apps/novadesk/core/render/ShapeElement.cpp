@@ -12,6 +12,27 @@
 #include <d2d1effects.h>
 #include <cmath>
 
+static D2D1_STROKE_STYLE_PROPERTIES1 MakeStrokeStyleProps(
+    D2D1_CAP_STYLE startCap,
+    D2D1_CAP_STYLE endCap,
+    D2D1_CAP_STYLE dashCap,
+    D2D1_LINE_JOIN lineJoin,
+    float miterLimit,
+    D2D1_DASH_STYLE dashStyle,
+    float dashOffset)
+{
+    D2D1_STROKE_STYLE_PROPERTIES1 props = {};
+    props.startCap = startCap;
+    props.endCap = endCap;
+    props.dashCap = dashCap;
+    props.lineJoin = lineJoin;
+    props.miterLimit = miterLimit;
+    props.dashStyle = dashStyle;
+    props.dashOffset = dashOffset;
+    props.transformType = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
+    return props;
+}
+
 ShapeElement::ShapeElement(const std::wstring& id, int x, int y, int width, int height)
     : Element(ELEMENT_SHAPE, id, x, y, width, height)
 {
@@ -83,16 +104,14 @@ void ShapeElement::UpdateStrokeStyle(ID2D1DeviceContext* context)
         }
 
         if (factory1) {
-            D2D1_STROKE_STYLE_PROPERTIES1 props = D2D1::StrokeStyleProperties1(
+            D2D1_STROKE_STYLE_PROPERTIES1 props = MakeStrokeStyleProps(
                 m_StrokeStartCap,
                 m_StrokeEndCap,
                 m_StrokeDashCap,
                 m_StrokeLineJoin,
                 10.0f,
-
                 (m_StrokeDashes.empty() ? D2D1_DASH_STYLE_SOLID : D2D1_DASH_STYLE_CUSTOM),
-                m_StrokeDashOffset
-            );
+                m_StrokeDashOffset);
 
             factory1->CreateStrokeStyle(
                 props,
@@ -119,15 +138,14 @@ void ShapeElement::EnsureStrokeStyle()
     ID2D1Factory1* factory = Direct2D::GetFactory();
     if (!factory) return;
 
-    D2D1_STROKE_STYLE_PROPERTIES1 props = D2D1::StrokeStyleProperties1(
+    D2D1_STROKE_STYLE_PROPERTIES1 props = MakeStrokeStyleProps(
         m_StrokeStartCap,
         m_StrokeEndCap,
         m_StrokeDashCap,
         m_StrokeLineJoin,
         10.0f,
         (m_StrokeDashes.empty() ? D2D1_DASH_STYLE_SOLID : D2D1_DASH_STYLE_CUSTOM),
-        m_StrokeDashOffset
-    );
+        m_StrokeDashOffset);
 
     factory->CreateStrokeStyle(
         props,
