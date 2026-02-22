@@ -5,23 +5,18 @@ if(NOT WIN32)
   message(FATAL_ERROR "Novadesk currently builds on Windows only.")
 endif()
 
+if(NOT (MINGW OR MSYS))
+  message(FATAL_ERROR "This CMake project is configured for MSYS2/MinGW only. Use the MSYS2 MinGW64 shell/toolchain.")
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-if(MINGW OR MSYS)
-  set(NOVADESK_BUILD_QUICKJS_DEFAULT ON)
-else()
-  set(NOVADESK_BUILD_QUICKJS_DEFAULT OFF)
-endif()
+set(NOVADESK_BUILD_QUICKJS_DEFAULT ON)
 option(NOVADESK_BUILD_QUICKJS "Build bundled QuickJS sources" ${NOVADESK_BUILD_QUICKJS_DEFAULT})
-
-if(MSVC AND NOVADESK_BUILD_QUICKJS)
-  message(WARNING "Bundled QuickJS source build is currently intended for MSYS/MinGW. Disabling NOVADESK_BUILD_QUICKJS for MSVC.")
-  set(NOVADESK_BUILD_QUICKJS OFF)
-endif()
 
 set(NOVADESK_CORE_ROOT "${CMAKE_SOURCE_DIR}/src/apps/novadesk/core")
 set(NOVADESK_THIRD_PARTY_ROOT "${CMAKE_SOURCE_DIR}/src/third_party")
@@ -130,8 +125,7 @@ if(NOVADESK_BUILD_QUICKJS)
 endif()
 
 if(MINGW)
-  target_link_options(novadesk PRIVATE -municode)
-  target_link_options(novadesk PRIVATE -static -static-libstdc++ -static-libgcc)
+  target_link_options(novadesk PRIVATE -municode -s)
 endif()
 
 # Copy Widgets folder to target output, matching existing VS post-build behavior.
@@ -143,41 +137,53 @@ if(NOVADESK_WIDGETS_ROOT)
 endif()
 
 if(MINGW)
-  message(STATUS "MinGW static runtime enabled for novadesk (-static).")
+  message(STATUS "MinGW dynamic runtime build enabled for novadesk.")
 endif()
 
-if(MSVC)
-  add_executable(nwm
-    "${CMAKE_SOURCE_DIR}/src/apps/nwm/src/main.cpp"
-    "${CMAKE_SOURCE_DIR}/src/apps/nwm/src/rescle.cc"
-    "${CMAKE_SOURCE_DIR}/src/apps/nwm/nwm.rc"
-  )
-  target_include_directories(nwm PRIVATE "${CMAKE_SOURCE_DIR}/src/apps/nwm/src")
-  target_compile_definitions(nwm PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
-  target_link_libraries(nwm PRIVATE
-    user32
-    shell32
-    shlwapi
-    advapi32
-    version
-  )
+add_executable(nwm
+  "${CMAKE_SOURCE_DIR}/src/apps/nwm/src/main.cpp"
+  "${CMAKE_SOURCE_DIR}/src/apps/nwm/src/rescle.cc"
+  "${CMAKE_SOURCE_DIR}/src/apps/nwm/nwm.rc"
+)
+target_include_directories(nwm PRIVATE "${CMAKE_SOURCE_DIR}/src/apps/nwm/src")
+target_compile_definitions(nwm PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
+if(MINGW)
+  target_link_options(nwm PRIVATE -s)
+endif()
+target_link_libraries(nwm PRIVATE
+  user32
+  shell32
+  shlwapi
+  advapi32
+  version
+  ole32
+  comctl32
+)
 
-  add_executable(installer_stub WIN32
-    "${CMAKE_SOURCE_DIR}/src/apps/installer_stub/src/installer_stub.cpp"
-    "${CMAKE_SOURCE_DIR}/src/apps/installer_stub/installer_stub.rc"
-  )
-  target_include_directories(installer_stub PRIVATE
-    "${CMAKE_SOURCE_DIR}/src/apps/nwm/src"
-    "${NOVADESK_THIRD_PARTY_ROOT}/json"
-  )
-  target_compile_definitions(installer_stub PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
-  target_link_libraries(installer_stub PRIVATE
-    user32
-    shell32
-    shlwapi
-    advapi32
-    version
-  )
-else()
-  message(STATUS "Skipping nwm/installer_stub on non-MSVC toolchains (ATL dependency).")
+add_executable(installer_stub WIN32
+  "${CMAKE_SOURCE_DIR}/src/apps/installer_stub/src/installer_stub.cpp"
+  "${CMAKE_SOURCE_DIR}/src/apps/installer_stub/installer_stub.rc"
+)
+target_include_directories(installer_stub PRIVATE
+  "${CMAKE_SOURCE_DIR}/src/apps/nwm/src"
+  "${NOVADESK_THIRD_PARTY_ROOT}/json"
+)
+target_compile_definitions(installer_stub PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
+if(MINGW)
+  target_link_options(installer_stub PRIVATE -municode -s)
+endif()
+target_link_libraries(installer_stub PRIVATE
+  user32
+  shell32
+  shlwapi
+  advapi32
+  version
+  ole32
+  comctl32
+)
+
+if(MINGW)
+  foreach(tgt IN ITEMS novadesk nwm installer_stub)
+    target_compile_options(${tgt} PRIVATE -Os)
+  endforeach()
 endif()

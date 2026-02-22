@@ -5,8 +5,6 @@
 #include <shlobj.h>
 #include <shobjidl.h>
 #include <objbase.h>
-#include <atlbase.h>
-#include <atlcomcli.h>
 #include <string>
 #include <thread>
 #include <atomic>
@@ -24,7 +22,6 @@
 #pragma comment(lib, "advapi32.lib")
 
 namespace fs = std::filesystem;
-using ATL::CComPtr;
 
 static const std::string INSTALLER_MAGIC = "NWSFX1";
 
@@ -101,7 +98,7 @@ bool RelaunchAsAdmin(const std::wstring& arguments) {
 }
 
 bool CreateShortcut(const std::wstring& targetPath, const std::wstring& shortcutPath, const std::wstring& workingDir, const std::wstring& description) {
-    CComPtr<IShellLinkW> shellLink;
+    IShellLinkW* shellLink = nullptr;
     HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&shellLink));
     if (FAILED(hr)) return false;
 
@@ -110,11 +107,17 @@ bool CreateShortcut(const std::wstring& targetPath, const std::wstring& shortcut
     shellLink->SetDescription(description.c_str());
     shellLink->SetIconLocation(targetPath.c_str(), 0);
 
-    CComPtr<IPersistFile> persistFile;
+    IPersistFile* persistFile = nullptr;
     hr = shellLink->QueryInterface(IID_PPV_ARGS(&persistFile));
-    if (FAILED(hr)) return false;
+    if (FAILED(hr)) {
+        shellLink->Release();
+        return false;
+    }
 
-    return SUCCEEDED(persistFile->Save(shortcutPath.c_str(), TRUE));
+    bool ok = SUCCEEDED(persistFile->Save(shortcutPath.c_str(), TRUE));
+    persistFile->Release();
+    shellLink->Release();
+    return ok;
 }
 
 bool ExtractEmbeddedStub(const fs::path& outPath) {

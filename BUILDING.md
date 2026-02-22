@@ -25,13 +25,12 @@ Use a MinGW shell (for example, `MSYS2 MinGW x64`) and run:
 
 ```bash
 cmake -S . -B out/build-msys -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DNOVADESK_BUILD_QUICKJS=ON
-cmake --build out/build-msys -j
+cmake --build out/build-msys --target nwm -j1
+cmake --build out/build-msys --target installer_stub -j1
+cmake --build out/build-msys --target novadesk -j1
 ```
 
 ## Targets
 - `novadesk`
 - `nwm`
 - `installer_stub`
-
-D:/Novadesk-Project/novadesk
-D:\Novadesk-Project\novadesk
