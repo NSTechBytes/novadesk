@@ -13,6 +13,8 @@ set(QUICKJS_DIR "${THIRD_PARTY_DIR}/quick-js")
 
 add_executable(novadesk
     "${APP_SRC_DIR}/main.cpp"
+    "${APP_SRC_DIR}/domain/Widget.cpp"
+    "${APP_SRC_DIR}/shared/Utils.cpp"
     "${QUICKJS_DIR}/quickjs.c"
     "${QUICKJS_DIR}/libregexp.c"
     "${QUICKJS_DIR}/libunicode.c"

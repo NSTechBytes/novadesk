@@ -1,33 +1,18 @@
 #include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <regex>
-#include <sstream>
 #include <string>
-#include <vector>
 #include <cstring>
 
 #include "quickjs.h"
-
-#define RGFW_IMPLEMENTATION
-#include "RGFW.h"
+#include "domain/Widget.h"
+#include "shared/Utils.h"
 
 namespace {
-std::vector<RGFW_window*> g_windows;
 bool g_debug = false;
 
-std::string ReadTextFile(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::in | std::ios::binary);
-    if (!in) {
-        return {};
-    }
-    std::ostringstream buffer;
-    buffer << in.rdbuf();
-    return buffer.str();
-}
-
 std::string ReadMainFromMeta(const std::filesystem::path& meta_path) {
-    const std::string meta = ReadTextFile(meta_path);
+    const std::string meta = novadesk::shared::utils::ReadTextFile(meta_path);
     if (meta.empty()) {
         return {};
     }
@@ -51,27 +36,10 @@ JSValue JsCreateWindow(JSContext* ctx, JSValueConst, int argc, JSValueConst* arg
         JS_ToInt32(ctx, &height, argv[1]);
     }
 
-    if (g_debug) {
-        std::cerr << "[novadesk] JsCreateWindow width=" << width << " height=" << height << std::endl;
-    }
-
-    const RGFW_windowFlags flags =
-        RGFW_windowCenter |
-        RGFW_windowFocusOnShow;
-
-    RGFW_window* win = RGFW_createWindow("Novadesk", 100, 100, width, height, flags);
+    RGFW_window* win = novadesk::domain::widget::CreateWidgetWindow(width, height, g_debug);
     if (!win) {
         return JS_ThrowInternalError(ctx, "Failed to create RGFW window");
     }
-
-    RGFW_window_show(win);
-    RGFW_window_restore(win);
-    RGFW_window_focus(win);
-    RGFW_window_raise(win);
-    RGFW_pollEvents();
-    RGFW_window_setBorder(win, RGFW_FALSE);
-
-    g_windows.push_back(win);
     return JS_UNDEFINED;
 }
 
@@ -118,7 +86,7 @@ JSModuleDef* ModuleLoader(JSContext* ctx, const char* module_name, void*) {
             "  }\n"
             "}\n";
     } else {
-        source = ReadTextFile(module_name);
+        source = novadesk::shared::utils::ReadTextFile(module_name);
         if (source.empty()) {
             JS_ThrowReferenceError(ctx, "Cannot load module: %s", module_name);
             return nullptr;
@@ -178,7 +146,7 @@ int main(int argc, char** argv) {
     if (g_debug) {
         std::cerr << "[novadesk] main path: " << main_path.string() << std::endl;
     }
-    const std::string script_source = ReadTextFile(main_path);
+    const std::string script_source = novadesk::shared::utils::ReadTextFile(main_path);
     if (script_source.empty()) {
         std::cerr << "Cannot read main script: " << main_path.string() << std::endl;
         return 1;
@@ -227,23 +195,8 @@ int main(int argc, char** argv) {
     }
     JS_FreeValue(ctx, result);
 
-    while (!g_windows.empty()) {
-        RGFW_pollEvents();
-
-        for (auto it = g_windows.begin(); it != g_windows.end();) {
-            RGFW_window* win = *it;
-            RGFW_event event;
-            while (RGFW_window_checkEvent(win, &event)) {
-                // Drain event queue; close decision is based on shouldClose.
-            }
-
-            if (RGFW_window_shouldClose(win) == RGFW_TRUE) {
-                RGFW_window_close(win);
-                it = g_windows.erase(it);
-            } else {
-                ++it;
-            }
-        }
+    while (novadesk::domain::widget::HasOpenWindows()) {
+        novadesk::domain::widget::PollAndUpdateWindows();
     }
 
     if (g_debug) {
