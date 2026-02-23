@@ -1,112 +1,15 @@
 #include <filesystem>
 #include <iostream>
-#include <regex>
 #include <string>
-#include <cstring>
 
 #include "quickjs.h"
 #include "domain/Widget.h"
+#include "scripting/quickjs/ModuleSystem.h"
+#include "scripting/quickjs/parser/PropertyParser.h"
 #include "shared/Utils.h"
 
 namespace {
 bool g_debug = false;
-
-std::string ReadMainFromMeta(const std::filesystem::path& meta_path) {
-    const std::string meta = novadesk::shared::utils::ReadTextFile(meta_path);
-    if (meta.empty()) {
-        return {};
-    }
-
-    std::smatch match;
-    const std::regex main_regex("\"main\"\\s*:\\s*\"([^\"]+)\"");
-    if (std::regex_search(meta, match, main_regex) && match.size() > 1) {
-        return match[1].str();
-    }
-    return {};
-}
-
-JSValue JsCreateWindow(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
-    int width = 800;
-    int height = 600;
-
-    if (argc > 0) {
-        JS_ToInt32(ctx, &width, argv[0]);
-    }
-    if (argc > 1) {
-        JS_ToInt32(ctx, &height, argv[1]);
-    }
-
-    RGFW_window* win = novadesk::domain::widget::CreateWidgetWindow(width, height, g_debug);
-    if (!win) {
-        return JS_ThrowInternalError(ctx, "Failed to create RGFW window");
-    }
-    return JS_UNDEFINED;
-}
-
-std::string NormalizeModuleName(const std::string& base_name, const std::string& module_name) {
-    if (module_name == "novadesk") {
-        return module_name;
-    }
-
-    const std::filesystem::path module_path(module_name);
-    if (module_path.is_absolute()) {
-        return module_path.lexically_normal().string();
-    }
-
-    std::filesystem::path base(base_name);
-    if (!base.empty()) {
-        base = base.parent_path();
-    }
-    return (base / module_path).lexically_normal().string();
-}
-
-char* ModuleNormalizeName(JSContext* ctx, const char* base_name, const char* name, void*) {
-    const std::string normalized = NormalizeModuleName(base_name ? base_name : "", name ? name : "");
-    char* out = static_cast<char*>(js_malloc(ctx, normalized.size() + 1));
-    if (!out) {
-        return nullptr;
-    }
-    std::memcpy(out, normalized.c_str(), normalized.size() + 1);
-    return out;
-}
-
-JSModuleDef* ModuleLoader(JSContext* ctx, const char* module_name, void*) {
-    std::string source;
-    if (g_debug) {
-        std::cerr << "[novadesk] ModuleLoader: " << (module_name ? module_name : "<null>") << std::endl;
-    }
-
-    if (std::string(module_name) == "novadesk") {
-        source =
-            "export class WidgetWindow {\n"
-            "  constructor(opts = {}) {\n"
-            "    const width = Number(opts.width ?? 800);\n"
-            "    const height = Number(opts.height ?? 600);\n"
-            "    globalThis.__nativeCreateWindow(width, height);\n"
-            "  }\n"
-            "}\n";
-    } else {
-        source = novadesk::shared::utils::ReadTextFile(module_name);
-        if (source.empty()) {
-            JS_ThrowReferenceError(ctx, "Cannot load module: %s", module_name);
-            return nullptr;
-        }
-    }
-
-    JSValue func = JS_Eval(
-        ctx,
-        source.c_str(),
-        source.size(),
-        module_name,
-        JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY
-    );
-
-    if (JS_IsException(func)) {
-        return nullptr;
-    }
-
-    return static_cast<JSModuleDef*>(JS_VALUE_GET_PTR(func));
-}
 
 void PrintException(JSContext* ctx) {
     JSValue exception = JS_GetException(ctx);
@@ -126,29 +29,32 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::filesystem::path exe_path = argc > 0 ? std::filesystem::path(argv[0]) : std::filesystem::current_path();
-    exe_path = std::filesystem::absolute(exe_path).parent_path();
+    std::filesystem::path exePath = argc > 0 ? std::filesystem::path(argv[0]) : std::filesystem::current_path();
+    exePath = std::filesystem::absolute(exePath).parent_path();
     if (g_debug) {
-        std::cerr << "[novadesk] exe dir: " << exe_path.string() << std::endl;
+        std::cerr << "[novadesk] exe dir: " << exePath.string() << std::endl;
     }
 
-    const std::filesystem::path meta_path = exe_path / "meta.json";
+    const std::filesystem::path metaPath = exePath / "meta.json";
     if (g_debug) {
-        std::cerr << "[novadesk] meta path: " << meta_path.string() << std::endl;
+        std::cerr << "[novadesk] meta path: " << metaPath.string() << std::endl;
     }
-    const std::string main_file = ReadMainFromMeta(meta_path);
-    if (main_file.empty()) {
+
+    const std::string mainFile = novadesk::scripting::quickjs::parser::ParseMainFromMeta(
+        novadesk::shared::utils::ReadTextFile(metaPath));
+    if (mainFile.empty()) {
         std::cerr << "meta.json missing or invalid. Expected key: \"main\"" << std::endl;
         return 1;
     }
 
-    const std::filesystem::path main_path = exe_path / main_file;
+    const std::filesystem::path mainPath = exePath / mainFile;
     if (g_debug) {
-        std::cerr << "[novadesk] main path: " << main_path.string() << std::endl;
+        std::cerr << "[novadesk] main path: " << mainPath.string() << std::endl;
     }
-    const std::string script_source = novadesk::shared::utils::ReadTextFile(main_path);
-    if (script_source.empty()) {
-        std::cerr << "Cannot read main script: " << main_path.string() << std::endl;
+
+    const std::string scriptSource = novadesk::shared::utils::ReadTextFile(mainPath);
+    if (scriptSource.empty()) {
+        std::cerr << "Cannot read main script: " << mainPath.string() << std::endl;
         return 1;
     }
 
@@ -159,20 +65,21 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    JS_SetModuleLoaderFunc(rt, ModuleNormalizeName, ModuleLoader, nullptr);
-
-    JSValue global = JS_GetGlobalObject(ctx);
-    JS_SetPropertyStr(ctx, global, "__nativeCreateWindow",
-                      JS_NewCFunction(ctx, JsCreateWindow, "__nativeCreateWindow", 2));
-    JS_FreeValue(ctx, global);
+    novadesk::scripting::quickjs::SetModuleSystemDebug(g_debug);
+    JS_SetModuleLoaderFunc(
+        rt,
+        novadesk::scripting::quickjs::ModuleNormalizeName,
+        novadesk::scripting::quickjs::ModuleLoader,
+        nullptr);
 
     JSValue compiled = JS_Eval(
         ctx,
-        script_source.c_str(),
-        script_source.size(),
-        main_path.string().c_str(),
+        scriptSource.c_str(),
+        scriptSource.size(),
+        mainPath.string().c_str(),
         JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY
     );
+
     if (JS_IsException(compiled)) {
         if (g_debug) {
             std::cerr << "[novadesk] JS compile failed" << std::endl;

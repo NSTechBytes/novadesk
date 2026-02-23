@@ -10,11 +10,15 @@ set(APP_SRC_DIR "${CMAKE_SOURCE_DIR}/src/apps/novadesk")
 set(APP_ASSETS_DIR "${CMAKE_SOURCE_DIR}/src/Widgets/builtin")
 set(THIRD_PARTY_DIR "${CMAKE_SOURCE_DIR}/src/third_party")
 set(QUICKJS_DIR "${THIRD_PARTY_DIR}/quick-js")
+set(RAPIDJSON_DIR "${THIRD_PARTY_DIR}/rapidjson/include")
 
 add_executable(novadesk
     "${APP_SRC_DIR}/main.cpp"
     "${APP_SRC_DIR}/domain/Widget.cpp"
     "${APP_SRC_DIR}/shared/Utils.cpp"
+    "${APP_SRC_DIR}/scripting/quickjs/ModuleSystem.cpp"
+    "${APP_SRC_DIR}/scripting/quickjs/NovadeskModule.cpp"
+    "${APP_SRC_DIR}/scripting/quickjs/parser/PropertyParser.cpp"
     "${QUICKJS_DIR}/quickjs.c"
     "${QUICKJS_DIR}/libregexp.c"
     "${QUICKJS_DIR}/libunicode.c"
@@ -23,6 +27,7 @@ add_executable(novadesk
 
 target_include_directories(novadesk PRIVATE
     "${QUICKJS_DIR}"
+    "${RAPIDJSON_DIR}"
 )
 
 if(WIN32)
