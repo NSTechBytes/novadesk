@@ -1,227 +1,68 @@
 cmake_minimum_required(VERSION 3.20)
-project(Novadesk LANGUAGES C CXX)
 
-if(NOT WIN32)
-  message(FATAL_ERROR "Novadesk currently builds on Windows only.")
-endif()
+project(novadesk_runner LANGUAGES C CXX)
 
-if(NOT (MINGW OR MSYS))
-  message(FATAL_ERROR "This CMake project is configured for MSYS2/MinGW only. Use the MSYS2 MinGW64 shell/toolchain.")
-endif()
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(NOVADESK_BUILD_QUICKJS_DEFAULT ON)
-option(NOVADESK_BUILD_QUICKJS "Build bundled QuickJS sources" ${NOVADESK_BUILD_QUICKJS_DEFAULT})
+set(APP_SRC_DIR "${CMAKE_SOURCE_DIR}/src/apps/novadesk")
+set(APP_ASSETS_DIR "${CMAKE_SOURCE_DIR}/src/Widgets/builtin")
+set(THIRD_PARTY_DIR "${CMAKE_SOURCE_DIR}/src/third_party")
+set(QUICKJS_DIR "${THIRD_PARTY_DIR}/quick-js")
 
-set(NOVADESK_CORE_ROOT "${CMAKE_SOURCE_DIR}/src/apps/novadesk/core")
-set(NOVADESK_THIRD_PARTY_ROOT "${CMAKE_SOURCE_DIR}/src/third_party")
-if(EXISTS "${CMAKE_SOURCE_DIR}/Widgets")
-  set(NOVADESK_WIDGETS_ROOT "${CMAKE_SOURCE_DIR}/Widgets")
-elseif(EXISTS "${CMAKE_SOURCE_DIR}/src/Widgets")
-  set(NOVADESK_WIDGETS_ROOT "${CMAKE_SOURCE_DIR}/src/Widgets")
-else()
-  set(NOVADESK_WIDGETS_ROOT "")
-  message(WARNING "Widgets folder not found (expected Widgets/ or src/Widgets/).")
-endif()
-
-file(GLOB_RECURSE NOVADESK_CORE_CPP CONFIGURE_DEPENDS
-  "${NOVADESK_CORE_ROOT}/*.cpp"
+add_executable(novadesk
+    "${APP_SRC_DIR}/main.cpp"
+    "${QUICKJS_DIR}/quickjs.c"
+    "${QUICKJS_DIR}/libregexp.c"
+    "${QUICKJS_DIR}/libunicode.c"
+    "${QUICKJS_DIR}/dtoa.c"
 )
-file(GLOB_RECURSE NOVADESK_CORE_C CONFIGURE_DEPENDS
-  "${NOVADESK_CORE_ROOT}/*.c"
-)
-
-set(NOVADESK_THIRD_PARTY_C
-  "${NOVADESK_THIRD_PARTY_ROOT}/duktape/duktape.c"
-  "${NOVADESK_THIRD_PARTY_ROOT}/kiss_fft130/kiss_fft.c"
-  "${NOVADESK_THIRD_PARTY_ROOT}/kiss_fft130/kiss_fftr.c"
-)
-
-set(NOVADESK_QUICKJS_C
-  "${NOVADESK_THIRD_PARTY_ROOT}/quickjs/cutils.c"
-  "${NOVADESK_THIRD_PARTY_ROOT}/quickjs/libregexp.c"
-  "${NOVADESK_THIRD_PARTY_ROOT}/quickjs/libunicode.c"
-  "${NOVADESK_THIRD_PARTY_ROOT}/quickjs/dtoa.c"
-  "${NOVADESK_THIRD_PARTY_ROOT}/quickjs/quickjs.c"
-)
-
-set(NOVADESK_APP_SOURCES
-  "${CMAKE_SOURCE_DIR}/src/apps/novadesk/core/domain/Novadesk.cpp"
-  "${CMAKE_SOURCE_DIR}/src/apps/novadesk/Novadesk.rc"
-)
-
-add_executable(novadesk WIN32
-  ${NOVADESK_APP_SOURCES}
-  ${NOVADESK_CORE_CPP}
-  ${NOVADESK_CORE_C}
-  ${NOVADESK_THIRD_PARTY_C}
-)
-
-if(NOVADESK_BUILD_QUICKJS)
-  add_library(novadesk_quickjs STATIC
-    ${NOVADESK_QUICKJS_C}
-  )
-
-  target_include_directories(novadesk_quickjs PUBLIC
-    "${NOVADESK_THIRD_PARTY_ROOT}/quickjs"
-  )
-
-  target_compile_definitions(novadesk_quickjs PRIVATE
-    _CRT_SECURE_NO_WARNINGS
-    CONFIG_VERSION=\"novadesk-msys\"
-  )
-endif()
 
 target_include_directories(novadesk PRIVATE
-  "${NOVADESK_CORE_ROOT}/domain"
-  "${NOVADESK_CORE_ROOT}/render"
-  "${NOVADESK_CORE_ROOT}/platform/win32"
-  "${NOVADESK_CORE_ROOT}/services"
-  "${NOVADESK_CORE_ROOT}/parsing"
-  "${NOVADESK_CORE_ROOT}/scripting/duktape"
-  "${NOVADESK_CORE_ROOT}/api/js"
-  "${NOVADESK_CORE_ROOT}/shared"
-  "${NOVADESK_THIRD_PARTY_ROOT}/duktape"
-  "${NOVADESK_THIRD_PARTY_ROOT}/json"
-  "${NOVADESK_THIRD_PARTY_ROOT}/kiss_fft130"
-  "${NOVADESK_THIRD_PARTY_ROOT}/nanosvg"
+    "${QUICKJS_DIR}"
 )
 
-target_compile_definitions(novadesk PRIVATE
-  UNICODE
-  _UNICODE
-  WIN32_LEAN_AND_MEAN
-)
-if(NOVADESK_BUILD_QUICKJS)
-  target_compile_definitions(novadesk PRIVATE NOVADESK_HAS_QUICKJS=1)
-endif()
-target_link_libraries(novadesk PRIVATE
-  d2d1
-  dwrite
-  windowscodecs
-  winmm
-  iphlpapi
-  wininet
-  shlwapi
-  shell32
-  comctl32
-  ole32
-  oleaut32
-  uuid
-  user32
-  gdi32
-  advapi32
-  powrprof
-  version
-  ksuser
-)
-if(NOVADESK_BUILD_QUICKJS)
-  target_link_libraries(novadesk PRIVATE novadesk_quickjs)
+if(WIN32)
+    target_include_directories(novadesk PRIVATE "${THIRD_PARTY_DIR}/RGFW/win/include")
+    target_link_libraries(novadesk PRIVATE user32 gdi32 opengl32 winmm shell32)
+else()
+    target_include_directories(novadesk PRIVATE "${THIRD_PARTY_DIR}/RGFW/linux/include")
+    target_link_libraries(novadesk PRIVATE X11 GL Xrandr m pthread dl)
 endif()
 
-if(MINGW)
-  target_link_options(novadesk PRIVATE -municode -s)
-endif()
+add_custom_command(TARGET novadesk POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${APP_ASSETS_DIR}/meta.json"
+        "$<TARGET_FILE_DIR:novadesk>/meta.json"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${APP_ASSETS_DIR}/main.js"
+        "$<TARGET_FILE_DIR:novadesk>/main.js"
+)
 
-# Copy widget assets to target output.
-# - builtins content goes directly into output Widgets/ (no builtins subfolder)
-# - templates are copied to output templates/
-if(NOVADESK_WIDGETS_ROOT)
-  if(EXISTS "${NOVADESK_WIDGETS_ROOT}/builtins")
-    add_custom_command(TARGET novadesk POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${NOVADESK_WIDGETS_ROOT}/builtins" "$<TARGET_FILE_DIR:novadesk>/Widgets"
+if(WIN32 AND MINGW)
+    get_filename_component(MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+
+    set(MINGW_RUNTIME_DLLS
+        "${MINGW_BIN_DIR}/libstdc++-6.dll"
+        "${MINGW_BIN_DIR}/libwinpthread-1.dll"
     )
-  endif()
-  if(EXISTS "${NOVADESK_WIDGETS_ROOT}/templates")
-    add_custom_command(TARGET novadesk POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${NOVADESK_WIDGETS_ROOT}/templates" "$<TARGET_FILE_DIR:novadesk>/templates"
-    )
-  endif()
-endif()
 
-if(MINGW)
-  message(STATUS "MinGW dynamic runtime build enabled for novadesk.")
-endif()
+    if(EXISTS "${MINGW_BIN_DIR}/libgcc_s_seh-1.dll")
+        list(APPEND MINGW_RUNTIME_DLLS "${MINGW_BIN_DIR}/libgcc_s_seh-1.dll")
+    elseif(EXISTS "${MINGW_BIN_DIR}/libgcc_s_dw2-1.dll")
+        list(APPEND MINGW_RUNTIME_DLLS "${MINGW_BIN_DIR}/libgcc_s_dw2-1.dll")
+    elseif(EXISTS "${MINGW_BIN_DIR}/libgcc_s_sjlj-1.dll")
+        list(APPEND MINGW_RUNTIME_DLLS "${MINGW_BIN_DIR}/libgcc_s_sjlj-1.dll")
+    endif()
 
-add_executable(nwm
-  "${CMAKE_SOURCE_DIR}/src/apps/nwm/src/main.cpp"
-  "${CMAKE_SOURCE_DIR}/src/apps/nwm/src/rescle.cc"
-  "${CMAKE_SOURCE_DIR}/src/apps/nwm/nwm.rc"
-)
-target_include_directories(nwm PRIVATE "${CMAKE_SOURCE_DIR}/src/apps/nwm/src")
-target_compile_definitions(nwm PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
-if(MINGW)
-  target_link_options(nwm PRIVATE -s)
-endif()
-target_link_libraries(nwm PRIVATE
-  user32
-  shell32
-  shlwapi
-  advapi32
-  version
-  ole32
-  comctl32
-)
-if(NOVADESK_WIDGETS_ROOT AND EXISTS "${NOVADESK_WIDGETS_ROOT}/templates")
-  add_custom_command(TARGET nwm POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-      "${NOVADESK_WIDGETS_ROOT}/templates" "$<TARGET_FILE_DIR:nwm>/templates"
-  )
-endif()
-
-add_executable(installer_stub WIN32
-  "${CMAKE_SOURCE_DIR}/src/apps/installer_stub/src/installer_stub.cpp"
-  "${CMAKE_SOURCE_DIR}/src/apps/installer_stub/installer_stub.rc"
-)
-target_include_directories(installer_stub PRIVATE
-  "${CMAKE_SOURCE_DIR}/src/apps/nwm/src"
-  "${NOVADESK_THIRD_PARTY_ROOT}/json"
-)
-target_compile_definitions(installer_stub PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN)
-if(MINGW)
-  target_link_options(installer_stub PRIVATE -municode -s)
-endif()
-target_link_libraries(installer_stub PRIVATE
-  user32
-  shell32
-  shlwapi
-  advapi32
-  version
-  ole32
-  comctl32
-)
-if(NOVADESK_WIDGETS_ROOT AND EXISTS "${NOVADESK_WIDGETS_ROOT}/templates")
-  add_custom_command(TARGET installer_stub POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-      "${NOVADESK_WIDGETS_ROOT}/templates" "$<TARGET_FILE_DIR:installer_stub>/templates"
-  )
-endif()
-
-if(MINGW)
-  foreach(tgt IN ITEMS novadesk nwm installer_stub)
-    target_compile_options(${tgt} PRIVATE -Os)
-  endforeach()
-
-  get_filename_component(NOVADESK_MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
-  foreach(tgt IN ITEMS novadesk nwm installer_stub)
-    add_custom_command(TARGET ${tgt} POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${NOVADESK_MINGW_BIN_DIR}/libwinpthread-1.dll"
-        "$<TARGET_FILE_DIR:${tgt}>/libwinpthread-1.dll"
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${NOVADESK_MINGW_BIN_DIR}/libstdc++-6.dll"
-        "$<TARGET_FILE_DIR:${tgt}>/libstdc++-6.dll"
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${NOVADESK_MINGW_BIN_DIR}/libgcc_s_seh-1.dll"
-        "$<TARGET_FILE_DIR:${tgt}>/libgcc_s_seh-1.dll"
-      VERBATIM
-    )
-  endforeach()
+    foreach(MINGW_DLL IN LISTS MINGW_RUNTIME_DLLS)
+        if(EXISTS "${MINGW_DLL}")
+            add_custom_command(TARGET novadesk POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${MINGW_DLL}"
+                    "$<TARGET_FILE_DIR:novadesk>"
+            )
+        endif()
+    endforeach()
 endif()
