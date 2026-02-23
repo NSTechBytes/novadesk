@@ -25,7 +25,7 @@ namespace fs = std::filesystem;
 
 // Constants
 const std::string NOVADESK_EXE = "Novadesk.exe";
-const std::string WIDGETS_DIR = "Widgets";
+const std::string TEMPLATES_DIR = "templates";
 const std::string INSTALLER_MAGIC = "NWSFX1";
 
 struct SetupOptions {
@@ -635,12 +635,7 @@ bool InitWidget(const std::string& name) {
 
     try {
         fs::path exeDir = GetExeDir();
-        fs::path templateDir = exeDir / "widget";
-
-        // Check if template exists in exe dir or source dir (for dev)
-        if (!fs::exists(templateDir)) {
-            templateDir = exeDir.parent_path().parent_path().parent_path() / "nwm" / "widget";
-        }
+        fs::path templateDir = exeDir / TEMPLATES_DIR;
 
         if (fs::exists(templateDir)) {
             fs::copy(templateDir, baseDir, fs::copy_options::recursive);
@@ -705,11 +700,7 @@ bool RunWidget() {
     }
 
     fs::path exeDir = GetExeDir();
-    fs::path novadeskExe = exeDir.parent_path() / NOVADESK_EXE;
-    if (!fs::exists(novadeskExe)) {
-        // Fallback for dev environment
-        novadeskExe = exeDir.parent_path().parent_path() / NOVADESK_EXE;
-    }
+    fs::path novadeskExe = exeDir / NOVADESK_EXE;
 
     if (!fs::exists(novadeskExe)) {
         std::cerr << "Error: Novadesk.exe not found." << std::endl;
@@ -789,10 +780,7 @@ bool BuildWidget() {
         fs::create_directories(distDir);
 
         fs::path exeDir = GetExeDir();
-        fs::path srcExe = exeDir.parent_path() / NOVADESK_EXE;
-        if (!fs::exists(srcExe)) {
-            srcExe = exeDir.parent_path().parent_path() / NOVADESK_EXE;
-        }
+        fs::path srcExe = exeDir / NOVADESK_EXE;
 
         fs::path destExe = distDir / (widgetRealName + ".exe");
         fs::copy_file(srcExe, destExe, fs::copy_options::overwrite_existing);

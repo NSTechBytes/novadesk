@@ -128,12 +128,22 @@ if(MINGW)
   target_link_options(novadesk PRIVATE -municode -s)
 endif()
 
-# Copy Widgets folder to target output, matching existing VS post-build behavior.
+# Copy widget assets to target output.
+# - builtins content goes directly into output Widgets/ (no builtins subfolder)
+# - templates are copied to output templates/
 if(NOVADESK_WIDGETS_ROOT)
-  add_custom_command(TARGET novadesk POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-      "${NOVADESK_WIDGETS_ROOT}" "$<TARGET_FILE_DIR:novadesk>/Widgets"
-  )
+  if(EXISTS "${NOVADESK_WIDGETS_ROOT}/builtins")
+    add_custom_command(TARGET novadesk POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${NOVADESK_WIDGETS_ROOT}/builtins" "$<TARGET_FILE_DIR:novadesk>/Widgets"
+    )
+  endif()
+  if(EXISTS "${NOVADESK_WIDGETS_ROOT}/templates")
+    add_custom_command(TARGET novadesk POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${NOVADESK_WIDGETS_ROOT}/templates" "$<TARGET_FILE_DIR:novadesk>/templates"
+    )
+  endif()
 endif()
 
 if(MINGW)
@@ -159,6 +169,12 @@ target_link_libraries(nwm PRIVATE
   ole32
   comctl32
 )
+if(NOVADESK_WIDGETS_ROOT AND EXISTS "${NOVADESK_WIDGETS_ROOT}/templates")
+  add_custom_command(TARGET nwm POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      "${NOVADESK_WIDGETS_ROOT}/templates" "$<TARGET_FILE_DIR:nwm>/templates"
+  )
+endif()
 
 add_executable(installer_stub WIN32
   "${CMAKE_SOURCE_DIR}/src/apps/installer_stub/src/installer_stub.cpp"
@@ -181,9 +197,31 @@ target_link_libraries(installer_stub PRIVATE
   ole32
   comctl32
 )
+if(NOVADESK_WIDGETS_ROOT AND EXISTS "${NOVADESK_WIDGETS_ROOT}/templates")
+  add_custom_command(TARGET installer_stub POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      "${NOVADESK_WIDGETS_ROOT}/templates" "$<TARGET_FILE_DIR:installer_stub>/templates"
+  )
+endif()
 
 if(MINGW)
   foreach(tgt IN ITEMS novadesk nwm installer_stub)
     target_compile_options(${tgt} PRIVATE -Os)
+  endforeach()
+
+  get_filename_component(NOVADESK_MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+  foreach(tgt IN ITEMS novadesk nwm installer_stub)
+    add_custom_command(TARGET ${tgt} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${NOVADESK_MINGW_BIN_DIR}/libwinpthread-1.dll"
+        "$<TARGET_FILE_DIR:${tgt}>/libwinpthread-1.dll"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${NOVADESK_MINGW_BIN_DIR}/libstdc++-6.dll"
+        "$<TARGET_FILE_DIR:${tgt}>/libstdc++-6.dll"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${NOVADESK_MINGW_BIN_DIR}/libgcc_s_seh-1.dll"
+        "$<TARGET_FILE_DIR:${tgt}>/libgcc_s_seh-1.dll"
+      VERBATIM
+    )
   endforeach()
 endif()
