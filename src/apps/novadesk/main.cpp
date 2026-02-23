@@ -14,6 +14,7 @@
 
 namespace {
 std::vector<RGFW_window*> g_windows;
+bool g_debug = false;
 
 std::string ReadTextFile(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::in | std::ios::binary);
@@ -50,10 +51,25 @@ JSValue JsCreateWindow(JSContext* ctx, JSValueConst, int argc, JSValueConst* arg
         JS_ToInt32(ctx, &height, argv[1]);
     }
 
-    RGFW_window* win = RGFW_createWindow("Novadesk", 100, 100, width, height, 0);
+    if (g_debug) {
+        std::cerr << "[novadesk] JsCreateWindow width=" << width << " height=" << height << std::endl;
+    }
+
+    const RGFW_windowFlags flags =
+        RGFW_windowCenter |
+        RGFW_windowFocusOnShow;
+
+    RGFW_window* win = RGFW_createWindow("Novadesk", 100, 100, width, height, flags);
     if (!win) {
         return JS_ThrowInternalError(ctx, "Failed to create RGFW window");
     }
+
+    RGFW_window_show(win);
+    RGFW_window_restore(win);
+    RGFW_window_focus(win);
+    RGFW_window_raise(win);
+    RGFW_pollEvents();
+    RGFW_window_setBorder(win, RGFW_FALSE);
 
     g_windows.push_back(win);
     return JS_UNDEFINED;
@@ -88,6 +104,9 @@ char* ModuleNormalizeName(JSContext* ctx, const char* base_name, const char* nam
 
 JSModuleDef* ModuleLoader(JSContext* ctx, const char* module_name, void*) {
     std::string source;
+    if (g_debug) {
+        std::cerr << "[novadesk] ModuleLoader: " << (module_name ? module_name : "<null>") << std::endl;
+    }
 
     if (std::string(module_name) == "novadesk") {
         source =
@@ -133,10 +152,22 @@ void PrintException(JSContext* ctx) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--debug") {
+            g_debug = true;
+        }
+    }
+
     std::filesystem::path exe_path = argc > 0 ? std::filesystem::path(argv[0]) : std::filesystem::current_path();
     exe_path = std::filesystem::absolute(exe_path).parent_path();
+    if (g_debug) {
+        std::cerr << "[novadesk] exe dir: " << exe_path.string() << std::endl;
+    }
 
     const std::filesystem::path meta_path = exe_path / "meta.json";
+    if (g_debug) {
+        std::cerr << "[novadesk] meta path: " << meta_path.string() << std::endl;
+    }
     const std::string main_file = ReadMainFromMeta(meta_path);
     if (main_file.empty()) {
         std::cerr << "meta.json missing or invalid. Expected key: \"main\"" << std::endl;
@@ -144,6 +175,9 @@ int main(int argc, char** argv) {
     }
 
     const std::filesystem::path main_path = exe_path / main_file;
+    if (g_debug) {
+        std::cerr << "[novadesk] main path: " << main_path.string() << std::endl;
+    }
     const std::string script_source = ReadTextFile(main_path);
     if (script_source.empty()) {
         std::cerr << "Cannot read main script: " << main_path.string() << std::endl;
@@ -172,6 +206,9 @@ int main(int argc, char** argv) {
         JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY
     );
     if (JS_IsException(compiled)) {
+        if (g_debug) {
+            std::cerr << "[novadesk] JS compile failed" << std::endl;
+        }
         PrintException(ctx);
         JS_FreeContext(ctx);
         JS_FreeRuntime(rt);
@@ -180,6 +217,9 @@ int main(int argc, char** argv) {
 
     JSValue result = JS_EvalFunction(ctx, compiled);
     if (JS_IsException(result)) {
+        if (g_debug) {
+            std::cerr << "[novadesk] JS run failed" << std::endl;
+        }
         PrintException(ctx);
         JS_FreeContext(ctx);
         JS_FreeRuntime(rt);
@@ -187,23 +227,27 @@ int main(int argc, char** argv) {
     }
     JS_FreeValue(ctx, result);
 
-    RGFW_event event;
     while (!g_windows.empty()) {
+        RGFW_pollEvents();
+
         for (auto it = g_windows.begin(); it != g_windows.end();) {
             RGFW_window* win = *it;
+            RGFW_event event;
             while (RGFW_window_checkEvent(win, &event)) {
-                if (event.type == RGFW_quit) {
-                    RGFW_window_close(win);
-                    it = g_windows.erase(it);
-                    win = nullptr;
-                    break;
-                }
+                // Drain event queue; close decision is based on shouldClose.
             }
-            if (win) {
+
+            if (RGFW_window_shouldClose(win) == RGFW_TRUE) {
+                RGFW_window_close(win);
+                it = g_windows.erase(it);
+            } else {
                 ++it;
             }
         }
-        RGFW_pollEvents();
+    }
+
+    if (g_debug) {
+        std::cerr << "[novadesk] exiting: no windows left" << std::endl;
     }
 
     JS_FreeContext(ctx);
