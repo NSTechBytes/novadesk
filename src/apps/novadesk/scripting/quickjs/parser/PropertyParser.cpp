@@ -65,7 +65,7 @@ bool GetBoolProp(JSContext* ctx, JSValueConst obj, const char* key, bool& out) {
 
 bool GetFloatArrayProp(JSContext* ctx, JSValueConst obj, const char* key, std::vector<float>& out, int minSize) {
     JSValue v = JS_GetPropertyStr(ctx, obj, key);
-    if (JS_IsException(v) || !JS_IsArray(ctx, v)) {
+    if (JS_IsException(v) || !JS_IsArray(v)) {
         JS_FreeValue(ctx, v);
         return false;
     }
@@ -152,7 +152,7 @@ void ParseElementOptions(JSContext* ctx, JSValueConst obj, ElementOptions& optio
         if (JS_ToInt32(ctx, &p, pad) == 0) {
             options.paddingLeft = options.paddingTop = options.paddingRight = options.paddingBottom = p;
         }
-    } else if (JS_IsArray(ctx, pad)) {
+    } else if (JS_IsArray(pad)) {
         std::vector<float> arr;
         if (GetFloatArrayProp(ctx, obj, "padding", arr, 1)) {
             if (arr.size() >= 4) {
@@ -385,7 +385,7 @@ void ParseShapeOptions(JSContext* ctx, JSValueConst obj, ShapeOptions& options, 
     options.hasCombineConsumeAll = true;
 
     JSValue ops = JS_GetPropertyStr(ctx, obj, "combineOps");
-    if (JS_IsArray(ctx, ops)) {
+    if (JS_IsArray(ops)) {
         uint32_t len = 0;
         JSValue lenV = JS_GetPropertyStr(ctx, ops, "length");
         if (JS_ToUint32(ctx, &len, lenV) == 0) {

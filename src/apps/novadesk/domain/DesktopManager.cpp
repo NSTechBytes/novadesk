@@ -53,14 +53,14 @@ void System::Initialize(HINSTANCE instance)
     EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, 0);
 
     // Register a specialized class for system tracking
-    WNDCLASS wc = { 0 };
+    WNDCLASSW wc = { 0 };
     wc.lpfnWndProc = (WNDPROC)System::WndProc;
     wc.hInstance = instance;
     wc.lpszClassName = L"NovadeskSystem";
-    RegisterClass(&wc);
+    RegisterClassW(&wc);
 
     // Create a dummy window for System tracking
-    c_Window = CreateWindowEx(
+    c_Window = CreateWindowExW(
         WS_EX_TOOLWINDOW,
         L"NovadeskSystem",
         L"System",
@@ -104,16 +104,16 @@ BOOL CALLBACK System::MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT 
     info.screen = *lprcMonitor;
     info.active = true;
     
-    MONITORINFOEX mi;
+    MONITORINFOEXW mi;
     mi.cbSize = sizeof(mi);
-    if (GetMonitorInfo(hMonitor, &mi))
+    if (GetMonitorInfoW(hMonitor, &mi))
     {
         info.work = mi.rcWork;
         info.deviceName = mi.szDevice;
 
-        DISPLAY_DEVICE ddm = { sizeof(DISPLAY_DEVICE) };
+        DISPLAY_DEVICEW ddm = { sizeof(DISPLAY_DEVICEW) };
         DWORD dwMon = 0;
-        while (EnumDisplayDevices(info.deviceName.c_str(), dwMon++, &ddm, 0))
+        while (EnumDisplayDevicesW(info.deviceName.c_str(), dwMon++, &ddm, 0))
         {
             if (ddm.StateFlags & DISPLAY_DEVICE_ACTIVE && ddm.StateFlags & DISPLAY_DEVICE_ATTACHED)
             {
@@ -149,7 +149,7 @@ bool System::ShouldUseShellWindowAsDesktopIconsHost()
 {
     // Check for the existence of GetCurrentMonitorTopologyId, which should be present only
     // on Windows 11 build 10.0.26100.2454.
-    static bool result = GetProcAddress(GetModuleHandle(L"user32"), "GetCurrentMonitorTopologyId") != nullptr;
+    static bool result = GetProcAddress(GetModuleHandleW(L"user32"), "GetCurrentMonitorTopologyId") != nullptr;
     return result;
 }
 
@@ -165,7 +165,7 @@ HWND System::GetDesktopIconsHostWindow()
 
     if (ShouldUseShellWindowAsDesktopIconsHost())
     {
-        if (FindWindowEx(shellW, nullptr, L"SHELLDLL_DefView", L""))
+        if (FindWindowExW(shellW, nullptr, L"SHELLDLL_DefView", L""))
         {
             return shellW;
         }
@@ -173,10 +173,10 @@ HWND System::GetDesktopIconsHostWindow()
 
     HWND workerW = nullptr;
     HWND defView = nullptr;
-    while (workerW = FindWindowEx(nullptr, workerW, L"WorkerW", L""))
+    while (workerW = FindWindowExW(nullptr, workerW, L"WorkerW", L""))
     {
         if (IsWindowVisible(workerW) &&
-            (defView = FindWindowEx(workerW, nullptr, L"SHELLDLL_DefView", L"")))
+            (defView = FindWindowExW(workerW, nullptr, L"SHELLDLL_DefView", L"")))
         {
             break;
         }
@@ -194,12 +194,12 @@ void System::PrepareHelperWindow(HWND desktopIconsHostWindow)
 {
     if (!c_HelperWindow || !IsWindow(c_HelperWindow))
     {
-        c_HelperWindow = CreateWindowEx(
+        c_HelperWindow = CreateWindowExW(
             WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
             L"NovadeskSystem", L"PositioningHelper",
             WS_POPUP,
             0, 0, 0, 0,
-            nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
+            nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     }
 
     if (!desktopIconsHostWindow) desktopIconsHostWindow = GetDesktopIconsHostWindow();
@@ -230,7 +230,7 @@ bool System::CheckDesktopState(HWND desktopIconsHostWindow)
 
     if (desktopIconsHostWindow && IsWindowVisible(desktopIconsHostWindow))
     {
-        hwnd = FindWindowEx(nullptr, desktopIconsHostWindow, L"NovadeskSystem", L"System");
+        hwnd = FindWindowExW(nullptr, desktopIconsHostWindow, L"NovadeskSystem", L"System");
     }
 
     bool stateChanged = (hwnd && !c_ShowDesktop) || (!hwnd && c_ShowDesktop);
@@ -293,7 +293,7 @@ LRESULT CALLBACK System::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPa
         }
         break;
     }
-    return DefWindowProc(hWnd, uMsg, wParam, lParam);
+    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 
 /*

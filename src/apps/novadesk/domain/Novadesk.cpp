@@ -15,6 +15,7 @@
 #include <shellapi.h>
 #include <fcntl.h>
 #include <io.h>
+#include <windef.h>
 #include "Utils.h"
 #include "PathUtils.h"
 #include <commctrl.h>
@@ -57,8 +58,19 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     std::wstring logPath = PathUtils::GetAppDataPath() + L"logs.log";
     DeleteFileW(logPath.c_str());
 
-    // Enable DPI Awareness
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    // Enable DPI awareness with runtime fallback for older SDK headers/toolchains.
+    HMODULE user32 = GetModuleHandleW(L"user32.dll");
+    if (user32) {
+        using SetProcessDpiAwarenessContextFn = BOOL(WINAPI*)(HANDLE);
+        auto setDpiCtx = reinterpret_cast<SetProcessDpiAwarenessContextFn>(
+            GetProcAddress(user32, "SetProcessDpiAwarenessContext"));
+        if (setDpiCtx) {
+            static constexpr HANDLE kPerMonitorAwareV2 = reinterpret_cast<HANDLE>(-4);
+            setDpiCtx(kPerMonitorAwareV2);
+        } else {
+            SetProcessDPIAware();
+        }
+    }
 
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(nCmdShow);
