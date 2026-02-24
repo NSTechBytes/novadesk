@@ -12,6 +12,7 @@
 #include <ctime>
 #include <chrono>
 #include <vector>
+#include <filesystem>
 #include "PathUtils.h"
 
 static WORD GetConsoleColorForLevel(LogLevel level)
@@ -114,7 +115,7 @@ void Logging::Log(LogLevel level, const wchar_t* format, ...)
     // Output to file
     if (s_FileEnabled && !s_LogFilePath.empty())
     {
-        std::wofstream logFile(s_LogFilePath, std::ios::app);
+        std::wofstream logFile(std::filesystem::path(s_LogFilePath), std::ios::app);
         if (logFile.is_open())
         {
             logFile << output.data();
@@ -144,7 +145,7 @@ void Logging::SetFileLogging(const std::wstring& filePath, bool clearFile)
     if (s_FileEnabled && clearFile)
     {
         // Truncate the file
-        std::wofstream logFile(s_LogFilePath, std::ios::trunc);
+        std::wofstream logFile(std::filesystem::path(s_LogFilePath), std::ios::trunc);
         if (logFile.is_open())
         {
             logFile.close();

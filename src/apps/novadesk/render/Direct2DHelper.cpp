@@ -7,6 +7,7 @@
 
 #include "Direct2DHelper.h"
 #include "../shared/Logging.h"
+#include <cmath>
 
 using namespace Microsoft::WRL;
 
@@ -198,12 +199,12 @@ namespace Direct2D
         float height = r.bottom - r.top;
         float base_angle = angle;
         while (base_angle < 0.0f) base_angle += 360.0f;
-        base_angle = fmodf(base_angle, 360.0f);
+        base_angle = std::fmod(base_angle, 360.0f);
 
         const float M_PI_F = 3.14159265f;
         const float base_radians = base_angle * (M_PI_F / 180.0f);
-        const float rectangle_tangent = atan2f(height, width);
-        const int quadrant = (int)fmodf(base_angle / 90.0f, 4.0f) + 1;
+        const float rectangle_tangent = std::atan2(height, width);
+        const int quadrant = (int)std::fmod(base_angle / 90.0f, 4.0f) + 1;
 
         const float axis_angle = [&]() -> float {
             switch (quadrant) {
@@ -215,12 +216,12 @@ namespace Direct2D
             }
         }();
 
-        const float half_area = sqrtf(powf(width, 2.0f) + powf(height, 2.0f)) / 2.0f;
-        const float cos_axis = cosf(fabsf(axis_angle - rectangle_tangent));
+        const float half_area = std::sqrt(std::pow(width, 2.0f) + std::pow(height, 2.0f)) / 2.0f;
+        const float cos_axis = std::cos(std::fabs(axis_angle - rectangle_tangent));
 
         return D2D1::Point2F(
-            r.left + (width / 2.0f) + (half_area * cos_axis * cosf(base_radians)),
-            r.top + (height / 2.0f) + (half_area * cos_axis * sinf(base_radians))
+            r.left + (width / 2.0f) + (half_area * cos_axis * std::cos(base_radians)),
+            r.top + (height / 2.0f) + (half_area * cos_axis * std::sin(base_radians))
         );
     }
 }

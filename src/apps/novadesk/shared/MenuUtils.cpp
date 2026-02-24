@@ -14,7 +14,7 @@ namespace MenuUtils {
         {
             if (item.isSeparator)
             {
-                AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+                AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
             }
             else if (!item.children.empty())
             {
@@ -24,13 +24,13 @@ namespace MenuUtils {
                 UINT flags = MF_POPUP | MF_STRING;
                 if (item.checked) flags |= MF_CHECKED;
 
-                AppendMenu(hMenu, flags, (UINT_PTR)hSubMenu, item.text.c_str());
+                AppendMenuW(hMenu, flags, (UINT_PTR)hSubMenu, item.text.c_str());
             }
             else
             {
                 UINT flags = MF_STRING;
                 if (item.checked) flags |= MF_CHECKED;
-                AppendMenu(hMenu, flags, item.id, item.text.c_str());
+                AppendMenuW(hMenu, flags, item.id, item.text.c_str());
             }
         }
     }

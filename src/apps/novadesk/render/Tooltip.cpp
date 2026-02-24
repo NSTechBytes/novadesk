@@ -24,13 +24,13 @@ bool Tooltip::Initialize(HWND parentHWnd, HINSTANCE hInstance)
     m_ParentHWnd = parentHWnd;
 
     // Create standard tooltip control
-    m_ToolTipHWnd = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASS, nullptr,
+    m_ToolTipHWnd = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr,
         WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
         parentHWnd, nullptr, hInstance, nullptr);
 
     // Create balloon tooltip control
-    m_ToolTipBalloonHWnd = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASS, nullptr,
+    m_ToolTipBalloonHWnd = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr,
         WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP | TTS_BALLOON,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
         parentHWnd, nullptr, hInstance, nullptr);
@@ -51,14 +51,14 @@ void Tooltip::InitializeToolTip(HWND hwnd)
 {
     if (!hwnd) return;
 
-    TOOLINFO ti = { sizeof(TOOLINFO) };
+    TOOLINFOW ti = { sizeof(TOOLINFOW) };
     ti.uFlags = TTF_TRACK | TTF_ABSOLUTE;
     ti.hwnd = m_ParentHWnd;
     ti.uId = 0;
     ti.lpszText = nullptr;
 
-    SendMessage(hwnd, TTM_ADDTOOL, 0, (LPARAM)&ti);
-    SendMessage(hwnd, TTM_SETDELAYTIME, TTDT_INITIAL, 0);
+    SendMessageW(hwnd, TTM_ADDTOOLW, 0, (LPARAM)&ti);
+    SendMessageW(hwnd, TTM_SETDELAYTIME, TTDT_INITIAL, 0);
 
     // Ensure it's topmost without affecting owner Z-order
     SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
@@ -79,7 +79,7 @@ void Tooltip::Update(Element* element)
 
         m_ActiveToolTipHWnd = targetTT;
 
-        TOOLINFO ti = { sizeof(TOOLINFO) };
+        TOOLINFOW ti = { sizeof(TOOLINFOW) };
         ti.hwnd = m_ParentHWnd;
         ti.uId = 0;
 
@@ -88,7 +88,7 @@ void Tooltip::Update(Element* element)
 
         // Update Text
         ti.lpszText = (LPWSTR)element->GetToolTipText().c_str();
-        SendMessage(m_ActiveToolTipHWnd, TTM_UPDATETIPTEXT, 0, (LPARAM)&ti);
+        SendMessageW(m_ActiveToolTipHWnd, TTM_UPDATETIPTEXTW, 0, (LPARAM)&ti);
 
         // Update Title and Icon
         HICON hIcon = nullptr;
@@ -98,11 +98,11 @@ void Tooltip::Update(Element* element)
         else if (tipIcon == L"error") hIcon = (HICON)TTI_ERROR;
         else if (tipIcon == L"warning") hIcon = (HICON)TTI_WARNING;
 
-        SendMessage(m_ActiveToolTipHWnd, TTM_SETTITLE, (WPARAM)hIcon, (LPARAM)element->GetToolTipTitle().c_str());
+        SendMessageW(m_ActiveToolTipHWnd, TTM_SETTITLEW, (WPARAM)hIcon, (LPARAM)element->GetToolTipTitle().c_str());
         
         // Set max width and height
         int maxWidth = element->GetToolTipMaxWidth() > 0 ? element->GetToolTipMaxWidth() : 1000;
-        SendMessage(m_ActiveToolTipHWnd, TTM_SETMAXTIPWIDTH, 0, maxWidth);
+        SendMessageW(m_ActiveToolTipHWnd, TTM_SETMAXTIPWIDTH, 0, maxWidth);
         
         // Note: TTM_SETMAXHEIGHT doesn't exist in standard tooltip API
         // Height is automatically calculated based on content and width
@@ -110,7 +110,7 @@ void Tooltip::Update(Element* element)
         // Position and Show
         Move();
 
-        SendMessage(m_ActiveToolTipHWnd, TTM_TRACKACTIVATE, TRUE, (LPARAM)&ti);
+        SendMessageW(m_ActiveToolTipHWnd, TTM_TRACKACTIVATE, TRUE, (LPARAM)&ti);
     }
 }
 
@@ -139,7 +139,7 @@ void Tooltip::Move()
         }
         m_LastMoveTime = currentTime;
         
-        SendMessage(m_ActiveToolTipHWnd, TTM_TRACKPOSITION, 0, MAKELPARAM(pt.x + 15, pt.y + 15));
+        SendMessageW(m_ActiveToolTipHWnd, TTM_TRACKPOSITION, 0, MAKELPARAM(pt.x + 15, pt.y + 15));
     }
 }
 
@@ -148,10 +148,10 @@ void Tooltip::DeactivateCurrent()
     if (m_ActiveToolTipHWnd)
     {
 
-        TOOLINFO ti = { sizeof(TOOLINFO) };
+        TOOLINFOW ti = { sizeof(TOOLINFOW) };
         ti.hwnd = m_ParentHWnd;
         ti.uId = 0;
-        SendMessage(m_ActiveToolTipHWnd, TTM_TRACKACTIVATE, FALSE, (LPARAM)&ti);
+        SendMessageW(m_ActiveToolTipHWnd, TTM_TRACKACTIVATE, FALSE, (LPARAM)&ti);
         m_ActiveToolTipHWnd = nullptr;
     }
 }

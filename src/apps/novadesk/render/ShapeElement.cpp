@@ -83,16 +83,15 @@ void ShapeElement::UpdateStrokeStyle(ID2D1DeviceContext* context)
         }
 
         if (factory1) {
-            D2D1_STROKE_STYLE_PROPERTIES1 props = D2D1::StrokeStyleProperties1(
-                m_StrokeStartCap,
-                m_StrokeEndCap,
-                m_StrokeDashCap,
-                m_StrokeLineJoin,
-                10.0f,
-
-                (m_StrokeDashes.empty() ? D2D1_DASH_STYLE_SOLID : D2D1_DASH_STYLE_CUSTOM),
-                m_StrokeDashOffset
-            );
+            D2D1_STROKE_STYLE_PROPERTIES1 props = {};
+            props.startCap = m_StrokeStartCap;
+            props.endCap = m_StrokeEndCap;
+            props.dashCap = m_StrokeDashCap;
+            props.lineJoin = m_StrokeLineJoin;
+            props.miterLimit = 10.0f;
+            props.dashStyle = (m_StrokeDashes.empty() ? D2D1_DASH_STYLE_SOLID : D2D1_DASH_STYLE_CUSTOM);
+            props.dashOffset = m_StrokeDashOffset;
+            props.transformType = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
 
             factory1->CreateStrokeStyle(
                 props,
@@ -119,15 +118,15 @@ void ShapeElement::EnsureStrokeStyle()
     ID2D1Factory1* factory = Direct2D::GetFactory();
     if (!factory) return;
 
-    D2D1_STROKE_STYLE_PROPERTIES1 props = D2D1::StrokeStyleProperties1(
-        m_StrokeStartCap,
-        m_StrokeEndCap,
-        m_StrokeDashCap,
-        m_StrokeLineJoin,
-        10.0f,
-        (m_StrokeDashes.empty() ? D2D1_DASH_STYLE_SOLID : D2D1_DASH_STYLE_CUSTOM),
-        m_StrokeDashOffset
-    );
+    D2D1_STROKE_STYLE_PROPERTIES1 props = {};
+    props.startCap = m_StrokeStartCap;
+    props.endCap = m_StrokeEndCap;
+    props.dashCap = m_StrokeDashCap;
+    props.lineJoin = m_StrokeLineJoin;
+    props.miterLimit = 10.0f;
+    props.dashStyle = (m_StrokeDashes.empty() ? D2D1_DASH_STYLE_SOLID : D2D1_DASH_STYLE_CUSTOM);
+    props.dashOffset = m_StrokeDashOffset;
+    props.transformType = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
 
     factory->CreateStrokeStyle(
         props,
