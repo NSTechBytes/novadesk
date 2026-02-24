@@ -13,10 +13,6 @@
 #include <cwctype>
 #include <filesystem>
 
-#ifndef IDC_PEN
-#define IDC_PEN IDC_CROSS
-#endif
-
 CursorManager::~CursorManager()
 {
     for (auto& kv : m_CustomCursorCache)
@@ -53,26 +49,26 @@ HCURSOR CursorManager::GetCursorForElement(Element* element)
     std::wstring name = element->GetMouseEventCursorName();
     std::transform(name.begin(), name.end(), name.begin(), ::towlower);
 
-    const struct CursorMapItem { const wchar_t* name; LPCWSTR id; } cursorMap[] = {
-        { L"hand", IDC_HAND },
-        { L"text", IDC_IBEAM },
-        { L"help", IDC_HELP },
-        { L"busy", IDC_APPSTARTING },
-        { L"cross", IDC_CROSS },
-        { L"pen", IDC_PEN },
-        { L"no", IDC_NO },
-        { L"size_all", IDC_SIZEALL },
-        { L"size_nesw", IDC_SIZENESW },
-        { L"size_ns", IDC_SIZENS },
-        { L"size_nwse", IDC_SIZENWSE },
-        { L"size_we", IDC_SIZEWE },
-        { L"uparrow", IDC_UPARROW },
-        { L"wait", IDC_WAIT }
+    const struct CursorMapItem { const wchar_t* name; WORD id; } cursorMap[] = {
+        { L"hand", 32649 },      // OCR_HAND
+        { L"text", 32513 },      // OCR_IBEAM
+        { L"help", 32651 },      // OCR_HELP
+        { L"busy", 32650 },      // OCR_APPSTARTING
+        { L"cross", 32515 },     // OCR_CROSS
+        { L"pen", 32515 },       // OCR_CROSS
+        { L"no", 32648 },        // OCR_NO
+        { L"size_all", 32646 },  // OCR_SIZEALL
+        { L"size_nesw", 32643 }, // OCR_SIZENESW
+        { L"size_ns", 32645 },   // OCR_SIZENS
+        { L"size_nwse", 32642 }, // OCR_SIZENWSE
+        { L"size_we", 32644 },   // OCR_SIZEWE
+        { L"uparrow", 32516 },   // OCR_UP
+        { L"wait", 32514 }       // OCR_WAIT
     };
 
     for (const auto& item : cursorMap) {
         if (name == item.name) {
-            return LoadCursor(nullptr, item.id);
+            return LoadCursorW(nullptr, MAKEINTRESOURCEW(item.id));
         }
     }
 
@@ -92,6 +88,5 @@ HCURSOR CursorManager::GetCursorForElement(Element* element)
         }
     }
 
-    return LoadCursor(nullptr, IDC_HAND);
+    return LoadCursorW(nullptr, MAKEINTRESOURCEW(32649)); // OCR_HAND
 }
-

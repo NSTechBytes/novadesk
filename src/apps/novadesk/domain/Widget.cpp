@@ -29,6 +29,7 @@
 #include "ShapeElement.h"
 #include "ColorUtil.h"
 #include "PathUtils.h"
+#include "../scripting/quickjs/engine/JSEngine.h"
 
 #define WIDGET_CLASS_NAME L"NovadeskWidget"
 #define ZPOS_FLAGS (SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOSENDCHANGING)
@@ -2198,11 +2199,11 @@ void Widget::OnContextMenu()
         }
         
         HMENU hSubMenu = CreatePopupMenu();
-        AppendMenu(hSubMenu, MF_STRING, 1001, L"Refresh");
-        AppendMenu(hSubMenu, MF_STRING, 1003, L"Exit");
+        AppendMenuW(hSubMenu, MF_STRING, 1001, L"Refresh");
+        AppendMenuW(hSubMenu, MF_STRING, 1003, L"Exit");
         
         std::wstring appTitle = PathUtils::GetProductName();
-        AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hSubMenu, appTitle.c_str());
+        AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hSubMenu, appTitle.c_str());
     }
 
     SetForegroundWindow(m_hWnd);
@@ -2237,4 +2238,3 @@ void Widget::EndUpdate()
     m_IsBatchUpdating = false;
     Redraw();
 }
-

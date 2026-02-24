@@ -15,6 +15,7 @@
 #include <shellapi.h>
 #include <fcntl.h>
 #include <io.h>
+#include "../shared/MenuUtils.h"
 #include <windef.h>
 #include "Utils.h"
 #include "PathUtils.h"
@@ -22,6 +23,7 @@
 #include "Direct2DHelper.h"
 #include "FontManager.h"
 #include "../shared/Logging.h"
+#include "../scripting/quickjs/engine/JSEngine.h"
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -32,7 +34,7 @@ HINSTANCE hInst;                                // current instance
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 duk_context *ctx = nullptr;
 std::vector<Widget*> widgets;
-NOTIFYICONDATA nid = {};
+NOTIFYICONDATAW nid = {};
 
 // Forward declarations of functions included in this code module:
 void InitTrayIcon(HWND hWnd);
@@ -62,13 +64,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     HMODULE user32 = GetModuleHandleW(L"user32.dll");
     if (user32) {
         using SetProcessDpiAwarenessContextFn = BOOL(WINAPI*)(HANDLE);
+        using SetProcessDPIAwareFn = BOOL(WINAPI*)();
         auto setDpiCtx = reinterpret_cast<SetProcessDpiAwarenessContextFn>(
             GetProcAddress(user32, "SetProcessDpiAwarenessContext"));
         if (setDpiCtx) {
-            static constexpr HANDLE kPerMonitorAwareV2 = reinterpret_cast<HANDLE>(-4);
+            HANDLE kPerMonitorAwareV2 = reinterpret_cast<HANDLE>(static_cast<intptr_t>(-4));
             setDpiCtx(kPerMonitorAwareV2);
         } else {
-            SetProcessDPIAware();
+            auto setDpiAware = reinterpret_cast<SetProcessDPIAwareFn>(
+                GetProcAddress(user32, "SetProcessDPIAware"));
+            if (setDpiAware) {
+                setDpiAware();
+            }
         }
     }
 
@@ -203,13 +210,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     JSApi::SetMessageWindow(hWnd);
     InitTrayIcon(hWnd);
 
-    // Initialize Duktape
-    Logging::Log(LogLevel::Info, L"Initializing Duktape (version %ld)...", (long)DUK_VERSION);
-    ctx = duk_create_heap_default();
-    if (!ctx) {
-        Logging::Log(LogLevel::Error, L"Failed to create Duktape heap.");
-        return FALSE;
-    }
+    // Scripting runtime context is handled by the migrated QuickJS path.
+    ctx = nullptr;
 
     // Initialize JavaScript API
     JSApi::InitializeJavaScriptAPI(ctx);
@@ -262,7 +264,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     widgets.clear();
     for (auto w : widgetsCopy) delete w;
     
-    duk_destroy_heap(ctx);
+    ctx = nullptr;
     System::Finalize();
     
     // Convert GDI+ shutdown
@@ -283,20 +285,20 @@ void InitTrayIcon(HWND hWnd)
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_TRAYICON;
     nid.hIcon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_NOVADESK));
-    wcscpy_s(nid.szTip, szTitle);
+    wcscpy_s(nid.szTip, _countof(nid.szTip), szTitle);
 
     if (Settings::GetGlobalBool("hideTrayIcon", false)) {
         Logging::Log(LogLevel::Info, L"Tray icon hidden by settings");
         return;
     }
 
-    Shell_NotifyIcon(NIM_ADD, &nid);
+    Shell_NotifyIconW(NIM_ADD, &nid);
     Logging::Log(LogLevel::Info, L"Tray icon initialized");
 }
 
 void RemoveTrayIcon()
 {
-    Shell_NotifyIcon(NIM_DELETE, &nid);
+    Shell_NotifyIconW(NIM_DELETE, &nid);
     Logging::Log(LogLevel::Info, L"Tray icon removed");
 }
 
@@ -316,18 +318,18 @@ void ShowTrayMenu(HWND hWnd)
     {
         if (!g_TrayMenu.empty())
         {
-            AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
         }
         
         HMENU hSubMenu = CreatePopupMenu();
-        AppendMenu(hSubMenu, MF_STRING, ID_TRAY_REFRESH, L"Refresh");
-        AppendMenu(hSubMenu, MF_STRING, ID_TRAY_EXIT, L"Exit");
+        AppendMenuW(hSubMenu, MF_STRING, ID_TRAY_REFRESH, L"Refresh");
+        AppendMenuW(hSubMenu, MF_STRING, ID_TRAY_EXIT, L"Exit");
         
-        AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hSubMenu, szTitle);
+        AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hSubMenu, szTitle);
     }
 
     SetForegroundWindow(hWnd);
-    TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hWnd, NULL);
+    TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hWnd, nullptr);
     DestroyMenu(hMenu);
 }
 
@@ -335,7 +337,7 @@ void ShowTrayIconDynamic()
 {
     if (nid.hWnd)
     {
-        Shell_NotifyIcon(NIM_ADD, &nid);
+        Shell_NotifyIconW(NIM_ADD, &nid);
         Logging::Log(LogLevel::Info, L"Tray icon shown");
     }
 }
@@ -344,7 +346,7 @@ void HideTrayIconDynamic()
 {
     if (nid.hWnd)
     {
-        Shell_NotifyIcon(NIM_DELETE, &nid);
+        Shell_NotifyIconW(NIM_DELETE, &nid);
         Logging::Log(LogLevel::Info, L"Tray icon hidden");
     }
 }

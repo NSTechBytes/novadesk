@@ -538,7 +538,7 @@ void ApplyShapeOptions(ShapeElement* element, const ShapeOptions& options) {
         options.strokeDashes);
 }
 
-void PreFillImageOptions(ImageOptions& options, const ImageElement* element) {
+void PreFillImageOptions(ImageOptions& options, ImageElement* element) {
     if (!element) return;
     options.id = element->GetId();
     options.x = element->GetX();
@@ -558,7 +558,7 @@ void PreFillImageOptions(ImageOptions& options, const ImageElement* element) {
     }
 }
 
-void PreFillTextOptions(TextOptions& options, const TextElement* element) {
+void PreFillTextOptions(TextOptions& options, TextElement* element) {
     if (!element) return;
     options.id = element->GetId();
     options.x = element->GetX();
@@ -584,7 +584,7 @@ void PreFillTextOptions(TextOptions& options, const TextElement* element) {
     options.textCase = element->GetTextCase();
 }
 
-void PreFillBarOptions(BarOptions& options, const BarElement* element) {
+void PreFillBarOptions(BarOptions& options, BarElement* element) {
     if (!element) return;
     options.id = element->GetId();
     options.x = element->GetX();
@@ -601,7 +601,7 @@ void PreFillBarOptions(BarOptions& options, const BarElement* element) {
     options.barGradient = element->GetBarGradient();
 }
 
-void PreFillRoundLineOptions(RoundLineOptions& options, const RoundLineElement* element) {
+void PreFillRoundLineOptions(RoundLineOptions& options, RoundLineElement* element) {
     if (!element) return;
     options.id = element->GetId();
     options.x = element->GetX();
@@ -630,7 +630,7 @@ void PreFillRoundLineOptions(RoundLineOptions& options, const RoundLineElement* 
     options.lineGradientBg = element->GetLineGradientBg();
 }
 
-void PreFillShapeOptions(ShapeOptions& options, const ShapeElement* element) {
+void PreFillShapeOptions(ShapeOptions& options, ShapeElement* element) {
     if (!element) return;
     options.id = element->GetId();
     options.x = element->GetX();

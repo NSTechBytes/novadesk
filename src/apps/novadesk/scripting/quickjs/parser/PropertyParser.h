@@ -183,11 +183,11 @@ void ApplyBarOptions(BarElement* element, const BarOptions& options);
 void ApplyRoundLineOptions(RoundLineElement* element, const RoundLineOptions& options);
 void ApplyShapeOptions(ShapeElement* element, const ShapeOptions& options);
 
-void PreFillImageOptions(ImageOptions& options, const ImageElement* element);
-void PreFillTextOptions(TextOptions& options, const TextElement* element);
-void PreFillBarOptions(BarOptions& options, const BarElement* element);
-void PreFillRoundLineOptions(RoundLineOptions& options, const RoundLineElement* element);
-void PreFillShapeOptions(ShapeOptions& options, const ShapeElement* element);
+void PreFillImageOptions(ImageOptions& options, ImageElement* element);
+void PreFillTextOptions(TextOptions& options, TextElement* element);
+void PreFillBarOptions(BarOptions& options, BarElement* element);
+void PreFillRoundLineOptions(RoundLineOptions& options, RoundLineElement* element);
+void PreFillShapeOptions(ShapeOptions& options, ShapeElement* element);
 
 void ParseElementOptions(duk_context* ctx, ElementOptions& options);
 void ParseImageOptions(duk_context* ctx, ImageOptions& options);

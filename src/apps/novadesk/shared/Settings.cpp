@@ -11,6 +11,7 @@
 #include "ColorUtil.h"
 #include "PathUtils.h"
 #include "Novadesk.h"
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 
@@ -31,7 +32,7 @@ std::wstring Settings::GetSettingsPath()
 void Settings::Load()
 {
     std::wstring path = GetSettingsPath();
-    std::ifstream i(path);
+    std::ifstream i{std::filesystem::path(path)};
     if (i.is_open())
     {
         // check for empty file
@@ -111,7 +112,7 @@ void Settings::Save()
     if (!s_Dirty) return;
     
     std::wstring path = GetSettingsPath();
-    std::ofstream o(path);
+    std::ofstream o{std::filesystem::path(path)};
     if (o.is_open())
     {
         o << std::setw(4) << s_Data << std::endl;
