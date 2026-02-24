@@ -16,10 +16,13 @@ set(THIRD_PARTY_DIR "${CMAKE_SOURCE_DIR}/src/third_party")
 set(QUICKJS_DIR "${THIRD_PARTY_DIR}/quick-js")
 set(RAPIDJSON_DIR "${THIRD_PARTY_DIR}/rapidjson/include")
 
-add_executable(novadesk
-    "${APP_SRC_DIR}/main.cpp"
+set(NOVADESK_SOURCES
     "${APP_SRC_DIR}/domain/Widget.cpp"
     "${APP_SRC_DIR}/shared/Utils.cpp"
+)
+
+set(NOVADESK_RUNTIME_SOURCES
+    "${APP_SRC_DIR}/main.cpp"
     "${APP_SRC_DIR}/scripting/quickjs/ModuleSystem.cpp"
     "${APP_SRC_DIR}/scripting/quickjs/NovadeskModule.cpp"
     "${APP_SRC_DIR}/scripting/quickjs/parser/PropertyParser.cpp"
@@ -29,7 +32,38 @@ add_executable(novadesk
     "${QUICKJS_DIR}/dtoa.c"
 )
 
+set(NOVADESK_LEGACY_SOURCES
+    "${APP_SRC_DIR}/domain/Novadesk.cpp"
+    "${APP_SRC_DIR}/domain/System.cpp"
+    "${APP_SRC_DIR}/Novadesk.rc"
+)
+
+if(EXISTS "${APP_SRC_DIR}/main.cpp")
+    list(APPEND NOVADESK_SOURCES ${NOVADESK_RUNTIME_SOURCES})
+elseif(EXISTS "${APP_SRC_DIR}/domain/Novadesk.cpp")
+    if(NOT EXISTS "${APP_SRC_DIR}/JSApi/JSApi.h")
+        message(FATAL_ERROR
+            "Legacy layout detected but required file is missing: "
+            "'${APP_SRC_DIR}/JSApi/JSApi.h'. "
+            "Restore legacy JSApi files or add '${APP_SRC_DIR}/main.cpp' runtime entrypoint.")
+    endif()
+    list(APPEND NOVADESK_SOURCES ${NOVADESK_LEGACY_SOURCES})
+else()
+    message(FATAL_ERROR
+        "No supported Novadesk entrypoint found. Expected either "
+        "'${APP_SRC_DIR}/main.cpp' (runtime layout) or "
+        "'${APP_SRC_DIR}/domain/Novadesk.cpp' (legacy layout).")
+endif()
+
+add_executable(novadesk ${NOVADESK_SOURCES})
+
 target_include_directories(novadesk PRIVATE
+    "${APP_SRC_DIR}"
+    "${APP_SRC_DIR}/domain"
+    "${APP_SRC_DIR}/shared"
+    "${APP_SRC_DIR}/render"
+    "${APP_SRC_DIR}/scripting/quickjs"
+    "${APP_SRC_DIR}/scripting/quickjs/parser"
     "${QUICKJS_DIR}"
     "${RAPIDJSON_DIR}"
 )
