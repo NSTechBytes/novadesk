@@ -38,23 +38,6 @@ set(NOVADESK_LEGACY_SOURCES
     "${APP_SRC_DIR}/Novadesk.rc"
 )
 
-if(EXISTS "${APP_SRC_DIR}/main.cpp")
-    list(APPEND NOVADESK_SOURCES ${NOVADESK_RUNTIME_SOURCES})
-elseif(EXISTS "${APP_SRC_DIR}/domain/Novadesk.cpp")
-    if(NOT EXISTS "${APP_SRC_DIR}/JSApi/JSApi.h")
-        message(FATAL_ERROR
-            "Legacy layout detected but required file is missing: "
-            "'${APP_SRC_DIR}/JSApi/JSApi.h'. "
-            "Restore legacy JSApi files or add '${APP_SRC_DIR}/main.cpp' runtime entrypoint.")
-    endif()
-    list(APPEND NOVADESK_SOURCES ${NOVADESK_LEGACY_SOURCES})
-else()
-    message(FATAL_ERROR
-        "No supported Novadesk entrypoint found. Expected either "
-        "'${APP_SRC_DIR}/main.cpp' (runtime layout) or "
-        "'${APP_SRC_DIR}/domain/Novadesk.cpp' (legacy layout).")
-endif()
-
 add_executable(novadesk ${NOVADESK_SOURCES})
 
 target_include_directories(novadesk PRIVATE

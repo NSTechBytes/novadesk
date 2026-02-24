@@ -8,8 +8,6 @@
 #include "Utils.h"
 #include <Windows.h>
 #include "ColorUtil.h"
-#include "JSApi/JSEvents.h"
-#include "Logging.h"
 #include <algorithm>
 #include <cwctype>
 #include <shellapi.h>
@@ -268,53 +266,22 @@ namespace Utils {
         return D2D1_LINE_JOIN_MITER;
     }
 
-    PropertyReader::PropertyReader(duk_context* ctx) : m_Ctx(ctx) {}
+
 
     bool PropertyReader::GetString(const char* key, std::wstring& outStr) {
-        if (duk_get_prop_string(m_Ctx, -1, key)) {
-            if (duk_is_string(m_Ctx, -1)) {
-                outStr = Utils::ToWString(duk_get_string(m_Ctx, -1));
-                duk_pop(m_Ctx);
-                return true;
-            }
-        }
-        duk_pop(m_Ctx);
+
         return false;
     }
         
     bool PropertyReader::GetInt(const char* key, int& outInt) {
-        if (duk_get_prop_string(m_Ctx, -1, key)) {
-            if (duk_is_number(m_Ctx, -1)) {
-                outInt = duk_get_int(m_Ctx, -1);
-                duk_pop(m_Ctx);
-                return true;
-            }
-        }
-        duk_pop(m_Ctx);
         return false;
     }
 
     bool PropertyReader::GetFloat(const char* key, float& outFloat) {
-        if (duk_get_prop_string(m_Ctx, -1, key)) {
-            if (duk_is_number(m_Ctx, -1)) {
-                outFloat = (float)duk_get_number(m_Ctx, -1);
-                duk_pop(m_Ctx);
-                return true;
-            }
-        }
-        duk_pop(m_Ctx);
         return false;
     }
 
     bool PropertyReader::GetBool(const char* key, bool& outBool) {
-        if (duk_get_prop_string(m_Ctx, -1, key)) {
-            if (duk_is_boolean(m_Ctx, -1)) {
-                outBool = duk_get_boolean(m_Ctx, -1) != 0;
-                duk_pop(m_Ctx);
-                return true;
-            }
-        }
-        duk_pop(m_Ctx);
         return false;
     }
 
@@ -345,103 +312,16 @@ namespace Utils {
     }
 
     bool PropertyReader::GetFloatArray(const char* key, std::vector<float>& outArray, int minSize) {
-        if (duk_get_prop_string(m_Ctx, -1, key)) {
-            if (duk_is_array(m_Ctx, -1)) {
-                int len = (int)duk_get_length(m_Ctx, -1);
-                if (len >= minSize) {
-                     outArray.resize(len);
-                     for (int i = 0; i < len; i++) {
-                         duk_get_prop_index(m_Ctx, -1, i);
-                         outArray[i] = (float)duk_get_number(m_Ctx, -1);
-                         duk_pop(m_Ctx);
-                     }
-                     duk_pop(m_Ctx);
-                     return true;
-                }
-            }
-        }
-        duk_pop(m_Ctx);
+
         return false;
     }
 
     void PropertyReader::GetEvent(const char* key, int& outId) {
-        if (duk_get_prop_string(m_Ctx, -1, key)) {
-            if (duk_is_function(m_Ctx, -1)) {
-                outId = JSApi::RegisterEventCallback(m_Ctx, -1);
-            }
-        }
-        duk_pop(m_Ctx);
+
     }
 
     bool PropertyReader::ParseShadow(TextShadow& shadow) {
-        if (duk_is_object(m_Ctx, -1)) {
-            if (duk_get_prop_string(m_Ctx, -1, "x")) shadow.offsetX = (float)duk_get_number(m_Ctx, -1);
-            duk_pop(m_Ctx);
-            if (duk_get_prop_string(m_Ctx, -1, "y")) shadow.offsetY = (float)duk_get_number(m_Ctx, -1);
-            duk_pop(m_Ctx);
-            if (duk_get_prop_string(m_Ctx, -1, "blur")) shadow.blur = (float)duk_get_number(m_Ctx, -1);
-            duk_pop(m_Ctx);
-            
-            if (duk_get_prop_string(m_Ctx, -1, "color")) {
-                std::wstring colorStr = Utils::ToWString(duk_get_string(m_Ctx, -1));
-                ColorUtil::ParseRGBA(colorStr, shadow.color, shadow.alpha);
-            }
-            duk_pop(m_Ctx);
-            return true;
-        }
+
         return false;
     }
-
-    bool ExtractFileIconToIco(const std::wstring& filePath, const std::wstring& outIcoPath, int size)
-    {
-        if (filePath.empty() || outIcoPath.empty()) return false;
-        if (size <= 0) size = 48;
-        if (size > 256) size = 256;
-
-        const int candidates[] = { size, 32, 48, 64 };
-        for (int s : candidates) {
-            if (s <= 0 || s > 256) continue;
-
-            HICON icon = nullptr;
-            UINT extracted = PrivateExtractIconsW(
-                filePath.c_str(),
-                0,
-                s,
-                s,
-                &icon,
-                nullptr,
-                1,
-                LR_LOADTRANSPARENT);
-
-            if (extracted == 0 || !icon) {
-                SHFILEINFO shFileInfo = {};
-                UINT flags = SHGFI_ICON;
-                flags |= (s <= 16) ? SHGFI_SMALLICON : SHGFI_LARGEICON;
-                if (!SHGetFileInfoW(filePath.c_str(), 0, &shFileInfo, sizeof(shFileInfo), flags)) {
-                    continue;
-                }
-                icon = shFileInfo.hIcon;
-                if (!icon) continue;
-            }
-
-            FILE* fp = nullptr;
-            errno_t error = _wfopen_s(&fp, outIcoPath.c_str(), L"wb");
-            bool ok = false;
-            if (error == 0 && fp) {
-                ok = SaveIconToIcoFile(icon, fp);
-                fclose(fp);
-            }
-            DestroyIcon(icon);
-
-            if (ok) return true;
-        }
-
-        FILE* clearFp = nullptr;
-        if (_wfopen_s(&clearFp, outIcoPath.c_str(), L"wb") == 0 && clearFp) {
-            fwrite(outIcoPath.c_str(), 1, 1, clearFp);
-            fclose(clearFp);
-        }
-        return false;
-    }
-
 }

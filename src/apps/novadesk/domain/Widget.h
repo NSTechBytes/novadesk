@@ -14,13 +14,13 @@
 #include <vector>
 #include <d2d1_1.h>
 #include <wrl/client.h>
-#include "System.h"
-#include "Element.h"
-#include "TextElement.h"
-#include "ImageElement.h"
-#include "BarElement.h"
-#include "Tooltip.h"
-#include "CursorManager.h"
+#include "DesktopManager.h"
+#include "../render/Element.h"
+#include "../render/TextElement.h"
+#include "../render/ImageElement.h"
+#include "../render/BarElement.h"
+#include "../render/Tooltip.h"
+#include "../render/CursorManager.h"
 
 #pragma comment(lib, "comctl32.lib")
 

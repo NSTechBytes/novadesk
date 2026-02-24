@@ -10,8 +10,8 @@
 
 #include <string>
 #include <map>
-#include "Widget.h"
-#include "json/json.hpp"
+#include "../domain/Widget.h"
+#include "../../third_party/json/json.hpp"
 
 using json = nlohmann::json;
 

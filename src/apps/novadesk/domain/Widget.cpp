@@ -7,11 +7,10 @@
 
 #include "Widget.h"
 #include "PropertyParser.h"
-#include "Logging.h"
+#include "../shared/Logging.h"
 #include "Settings.h"
 #include "Resource.h"
-#include "MenuUtils.h"
-#include "JSApi/JSContextMenu.h"
+#include "../shared/MenuUtils.h"
 #include "Utils.h"
 #include <vector>
 #include <windowsx.h>
@@ -21,9 +20,6 @@
 #include "TextElement.h"
 #include "BarElement.h"
 #include "RoundLineElement.h"
-#include "JSApi/JSApi.h"
-#include "JSApi/JSCommon.h"
-#include "JSApi/JSEvents.h"
 #include "RectangleShape.h"
 #include "EllipseShape.h"
 #include "LineShape.h"

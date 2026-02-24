@@ -7,19 +7,14 @@
 
 #include "framework.h"
 #include "Novadesk.h"
-#include "JSApi/duktape/duktape.h"
 #include "Widget.h"
 #include "System.h"
-#include "Logging.h"
-#include "JSApi/JSApi.h"
-#include "JSApi/JSNovadeskTray.h"
 #include "Settings.h"
 #include "Resource.h"
 #include <vector>
 #include <shellapi.h>
 #include <fcntl.h>
 #include <io.h>
-#include "MenuUtils.h"
 #include "Utils.h"
 #include "PathUtils.h"
 #include <commctrl.h>
