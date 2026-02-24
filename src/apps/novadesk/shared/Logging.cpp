@@ -13,6 +13,7 @@
 #include <chrono>
 #include <vector>
 #include <filesystem>
+#include <string>
 #include "PathUtils.h"
 
 static WORD GetConsoleColorForLevel(LogLevel level)
@@ -92,7 +93,7 @@ void Logging::Log(LogLevel level, const wchar_t* format, ...)
     swprintf_s(output.data(), output.size(), L"%s [%s] %s %s\n", timestamp, productName.c_str(), levelStr, buffer.data());
 
     // Output to console (debug output)
-    if (s_ConsoleEnabled)
+    if (s_ConsoleEnabled || IsDebuggerPresent())
     {
         HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
         CONSOLE_SCREEN_BUFFER_INFO csbi = {};
@@ -103,8 +104,25 @@ void Logging::Log(LogLevel level, const wchar_t* format, ...)
         }
 
         OutputDebugStringW(output.data());
-        wprintf(L"%s", output.data());
-        fflush(stdout);
+        DWORD mode = 0;
+        if (hOut != INVALID_HANDLE_VALUE && GetConsoleMode(hOut, &mode))
+        {
+            DWORD written = 0;
+            WriteConsoleW(hOut, output.data(), (DWORD)wcslen(output.data()), &written, nullptr);
+        }
+        else
+        {
+            int utf8Len = WideCharToMultiByte(CP_UTF8, 0, output.data(), -1, nullptr, 0, nullptr, nullptr);
+            if (utf8Len > 1)
+            {
+                std::string utf8(utf8Len - 1, '\0');
+                WideCharToMultiByte(CP_UTF8, 0, output.data(), -1, utf8.data(), utf8Len - 1, nullptr, nullptr);
+                fwrite(utf8.data(), 1, utf8.size(), stdout);
+                fflush(stdout);
+                fwrite(utf8.data(), 1, utf8.size(), stderr);
+                fflush(stderr);
+            }
+        }
 
         if (canColor)
         {

@@ -21,7 +21,7 @@ file(GLOB_RECURSE NOVADESK_APP_SOURCES CONFIGURE_DEPENDS
     "${APP_SRC_DIR}/*.cpp"
 )
 
-add_executable(novadesk
+add_executable(novadesk WIN32
     ${NOVADESK_APP_SOURCES}
     "${APP_SRC_DIR}/Novadesk.rc"
     "${QUICKJS_DIR}/quickjs.c"

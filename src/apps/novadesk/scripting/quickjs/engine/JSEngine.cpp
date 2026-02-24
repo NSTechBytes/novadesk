@@ -3,6 +3,7 @@
 #include "quickjs.h"
 
 #include <string>
+#include <vector>
 
 #include "../../shared/FileUtils.h"
 #include "../../shared/Logging.h"
@@ -16,6 +17,67 @@ HWND g_messageWindow = nullptr;
 JSRuntime* g_runtime = nullptr;
 JSContext* g_context = nullptr;
 std::wstring g_lastScriptPath;
+
+enum class ConsoleLevel {
+    Log = 0,
+    Info = 1,
+    Warn = 2,
+    Error = 3,
+    Debug = 4
+};
+
+std::wstring JsValueToWString(JSContext* ctx, JSValueConst value) {
+    const char* s = JS_ToCString(ctx, value);
+    if (!s) {
+        return L"<unprintable>";
+    }
+    std::wstring out = Utils::ToWString(s);
+    JS_FreeCString(ctx, s);
+    return out;
+}
+
+JSValue JsConsoleWrite(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv, int magic) {
+    std::wstring msg;
+    for (int i = 0; i < argc; ++i) {
+        if (!msg.empty()) msg += L" ";
+        msg += JsValueToWString(ctx, argv[i]);
+    }
+
+    LogLevel lvl = LogLevel::Info;
+    switch (static_cast<ConsoleLevel>(magic)) {
+    case ConsoleLevel::Log:   lvl = LogLevel::Info; break;
+    case ConsoleLevel::Info:  lvl = LogLevel::Info; break;
+    case ConsoleLevel::Warn:  lvl = LogLevel::Warn; break;
+    case ConsoleLevel::Error: lvl = LogLevel::Error; break;
+    case ConsoleLevel::Debug: lvl = LogLevel::Debug; break;
+    }
+    Logging::Log(lvl, L"%s", msg.c_str());
+    return JS_UNDEFINED;
+}
+
+void RegisterConsoleBindings(JSContext* ctx) {
+    JSValue global = JS_GetGlobalObject(ctx);
+
+    JSValue printFn = JS_NewCFunction(ctx, [](JSContext* c, JSValueConst thisVal, int argc, JSValueConst* argv) -> JSValue {
+        return JsConsoleWrite(c, thisVal, argc, argv, static_cast<int>(ConsoleLevel::Log));
+    }, "print", 1);
+    JS_SetPropertyStr(ctx, global, "print", printFn);
+
+    JSValue consoleObj = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, consoleObj, "log",
+        JS_NewCFunctionMagic(ctx, JsConsoleWrite, "log", 1, JS_CFUNC_generic_magic, static_cast<int>(ConsoleLevel::Log)));
+    JS_SetPropertyStr(ctx, consoleObj, "info",
+        JS_NewCFunctionMagic(ctx, JsConsoleWrite, "info", 1, JS_CFUNC_generic_magic, static_cast<int>(ConsoleLevel::Info)));
+    JS_SetPropertyStr(ctx, consoleObj, "warn",
+        JS_NewCFunctionMagic(ctx, JsConsoleWrite, "warn", 1, JS_CFUNC_generic_magic, static_cast<int>(ConsoleLevel::Warn)));
+    JS_SetPropertyStr(ctx, consoleObj, "error",
+        JS_NewCFunctionMagic(ctx, JsConsoleWrite, "error", 1, JS_CFUNC_generic_magic, static_cast<int>(ConsoleLevel::Error)));
+    JS_SetPropertyStr(ctx, consoleObj, "debug",
+        JS_NewCFunctionMagic(ctx, JsConsoleWrite, "debug", 1, JS_CFUNC_generic_magic, static_cast<int>(ConsoleLevel::Debug)));
+    JS_SetPropertyStr(ctx, global, "console", consoleObj);
+
+    JS_FreeValue(ctx, global);
+}
 
 void LogQuickJsException(JSContext* ctx) {
     JSValue ex = JS_GetException(ctx);
@@ -50,6 +112,7 @@ bool EnsureRuntime() {
 
     JS_SetModuleLoaderFunc(g_runtime, novadesk::scripting::quickjs::ModuleNormalizeName, novadesk::scripting::quickjs::ModuleLoader, nullptr);
     novadesk::scripting::quickjs::SetModuleSystemDebug(false);
+    RegisterConsoleBindings(g_context);
     return true;
 }
 
