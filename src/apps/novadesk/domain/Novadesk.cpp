@@ -277,6 +277,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     return (int) msg.wParam;
 }
 
+int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR, int nCmdShow)
+{
+    LPWSTR cmdLineW = GetCommandLineW();
+    return wWinMain(hInstance, hPrevInstance, cmdLineW, nCmdShow);
+}
+
 void InitTrayIcon(HWND hWnd)
 {
     nid.cbSize = sizeof(NOTIFYICONDATA);

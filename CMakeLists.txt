@@ -29,6 +29,8 @@ add_executable(novadesk
     "${QUICKJS_DIR}/dtoa.c"
 )
 
+target_compile_definitions(novadesk PRIVATE UNICODE _UNICODE)
+
 target_include_directories(novadesk PRIVATE
     "${APP_SRC_DIR}"
     "${APP_SRC_DIR}/domain"
@@ -41,7 +43,19 @@ target_include_directories(novadesk PRIVATE
 )
 
 target_include_directories(novadesk PRIVATE "${THIRD_PARTY_DIR}/RGFW/win/include")
-target_link_libraries(novadesk PRIVATE user32 gdi32 opengl32 winmm shell32)
+target_link_libraries(novadesk PRIVATE
+    user32
+    gdi32
+    opengl32
+    winmm
+    shell32
+    comctl32
+    d2d1
+    dwrite
+    windowscodecs
+    shlwapi
+    version
+)
 
 add_custom_command(TARGET novadesk POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
