@@ -1,4 +1,4 @@
-# Building Novadesk (Windows + Linux)
+# Building Novadesk (Windows Only)
 
 This project currently builds a minimal Novadesk runtime app at:
 
@@ -21,17 +21,6 @@ The executable reads `meta.json` from the same output directory and loads the `m
 - `mingw32-make` (or compatible make)
 - Ensure `cmake` and MinGW binaries are on `PATH`
 
-### Linux
-
-- GCC/G++ or Clang
-- Make or Ninja
-- X11/OpenGL development packages (names vary by distro), typically:
-  - `libx11-dev`
-  - `libxrandr-dev`
-  - `libgl1-mesa-dev`
-  - `libpthread-stubs0-dev` (or pthread via libc toolchain)
-  - `libdl` (usually provided by glibc toolchain)
-
 ## Build
 
 ### Windows (MinGW Makefiles)
@@ -47,24 +36,11 @@ Run:
 .\build-mingw\novadesk.exe
 ```
 
-### Linux
-
-```bash
-cmake -S . -B build-linux
-cmake --build build-linux -j
-```
-
-Run:
-
-```bash
-./build-linux/novadesk
-```
-
 ## Output Layout
 
 After build, the output folder contains:
 
-- `novadesk` or `novadesk.exe`
+- `novadesk.exe`
 - `meta.json` (copied from `src/Widgets/builtin/meta.json`)
 - `main.js` (copied from `src/Widgets/builtin/main.js`)
 - On MinGW (Windows), runtime DLLs are copied automatically when found:
@@ -91,6 +67,5 @@ RGFW is compiled in header-only mode (`RGFW_IMPLEMENTATION`) inside the app targ
 - Linker cannot find RGFW:
   - Ensure `RGFW.h` is available under:
     - `src/third_party/RGFW/win/include` (Windows)
-    - `src/third_party/RGFW/linux/include` (Linux)
 - App prints `meta.json missing or invalid`:
   - Ensure `meta.json` exists beside the executable and contains `"main"`.

@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.20)
 
 project(novadesk_runner LANGUAGES C CXX)
 
+if(NOT WIN32)
+    message(FATAL_ERROR "This project is configured for Windows only.")
+endif()
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,13 +34,8 @@ target_include_directories(novadesk PRIVATE
     "${RAPIDJSON_DIR}"
 )
 
-if(WIN32)
-    target_include_directories(novadesk PRIVATE "${THIRD_PARTY_DIR}/RGFW/win/include")
-    target_link_libraries(novadesk PRIVATE user32 gdi32 opengl32 winmm shell32)
-else()
-    target_include_directories(novadesk PRIVATE "${THIRD_PARTY_DIR}/RGFW/linux/include")
-    target_link_libraries(novadesk PRIVATE X11 GL Xrandr m pthread dl)
-endif()
+target_include_directories(novadesk PRIVATE "${THIRD_PARTY_DIR}/RGFW/win/include")
+target_link_libraries(novadesk PRIVATE user32 gdi32 opengl32 winmm shell32)
 
 add_custom_command(TARGET novadesk POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different

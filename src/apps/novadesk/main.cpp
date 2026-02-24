@@ -1,6 +1,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <cstdlib>
 
 #include "quickjs.h"
 #include "domain/Widget.h"
@@ -23,6 +24,12 @@ void PrintException(JSContext* ctx) {
 }  // namespace
 
 int main(int argc, char** argv) {
+#if defined(__linux__)
+    // Force non-ARGB visuals on X11 to avoid compositor bleed-through artifacts
+    // seen with some Mesa/Xlib/compositor combinations.
+    setenv("XLIB_SKIP_ARGB_VISUALS", "1", 0);
+#endif
+
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) == "--debug") {
             g_debug = true;
