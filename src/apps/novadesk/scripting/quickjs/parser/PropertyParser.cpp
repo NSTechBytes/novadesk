@@ -675,3 +675,27 @@ void ParseBarOptions(duk_context*, BarOptions&) {}
 void ParseRoundLineOptions(duk_context*, RoundLineOptions&) {}
 void ParseShapeOptions(duk_context*, ShapeOptions&) {}
 }
+
+namespace novadesk::scripting::quickjs::parser {
+void ParseWidgetWindowSize(JSContext* ctx, JSValueConst options, int& width, int& height) {
+    width = 800;
+    height = 600;
+
+    if (!JS_IsObject(options)) {
+        return;
+    }
+
+    JSValue widthVal = JS_GetPropertyStr(ctx, options, "width");
+    JSValue heightVal = JS_GetPropertyStr(ctx, options, "height");
+
+    if (!JS_IsUndefined(widthVal)) {
+        JS_ToInt32(ctx, &width, widthVal);
+    }
+    if (!JS_IsUndefined(heightVal)) {
+        JS_ToInt32(ctx, &height, heightVal);
+    }
+
+    JS_FreeValue(ctx, widthVal);
+    JS_FreeValue(ctx, heightVal);
+}
+}  // namespace novadesk::scripting::quickjs::parser

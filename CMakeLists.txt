@@ -12,6 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(APP_SRC_DIR "${CMAKE_SOURCE_DIR}/src/apps/novadesk")
 set(APP_ASSETS_DIR "${CMAKE_SOURCE_DIR}/src/Widgets/builtin")
+set(APP_WIDGETS_DIR "${APP_ASSETS_DIR}/Widgets")
 set(THIRD_PARTY_DIR "${CMAKE_SOURCE_DIR}/src/third_party")
 set(QUICKJS_DIR "${THIRD_PARTY_DIR}/quick-js")
 set(RAPIDJSON_DIR "${THIRD_PARTY_DIR}/rapidjson/include")
@@ -64,6 +65,11 @@ add_custom_command(TARGET novadesk POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${APP_ASSETS_DIR}/main.js"
         "$<TARGET_FILE_DIR:novadesk>/main.js"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:novadesk>/Widgets"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${APP_WIDGETS_DIR}/index.js"
+        "$<TARGET_FILE_DIR:novadesk>/Widgets/index.js"
 )
 
 if(WIN32 AND MINGW)
