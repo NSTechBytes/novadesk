@@ -10,7 +10,7 @@
 ** Most of the Code taken from Rainmeter (https://github.com/rainmeter/rainmeter/blob/master/Library/System.cpp)
 */
 
-#include "System.h"
+#include "DesktopManager.h"
 #include "Widget.h"
 #include <algorithm>
 #include <shellapi.h>

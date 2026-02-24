@@ -7,7 +7,7 @@
 
 #include "FontManager.h"
 #include "Direct2DHelper.h"
-#include "Logging.h"
+#include "../shared/Logging.h"
 #include "Utils.h"
 #include <filesystem>
 #include <algorithm>

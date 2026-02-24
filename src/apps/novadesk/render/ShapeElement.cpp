@@ -7,7 +7,7 @@
 
 #include "ShapeElement.h"
 #include "Utils.h"
-#include "Logging.h"
+#include "../shared/Logging.h"
 #include "Direct2DHelper.h"
 #include <d2d1effects.h>
 #include <cmath>

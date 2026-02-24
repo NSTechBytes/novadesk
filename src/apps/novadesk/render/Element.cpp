@@ -6,7 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "Element.h"
-#include "Logging.h"
+#include "../shared/Logging.h"
 #include "Direct2DHelper.h"
 #include <algorithm>
 

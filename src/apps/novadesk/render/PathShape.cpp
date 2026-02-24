@@ -6,14 +6,14 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "PathShape.h"
-#include "Utils.h"
+#include "../shared/Utils.h"
 #include "Direct2DHelper.h"
 #include <cmath>
 
 #define NANOSVG_IMPLEMENTATION
 #pragma warning(push)
 #pragma warning(disable: 4244)
-#include "nanosvg/nanosvg.h"
+#include "../../third_party/nanosvg/nanosvg.h"
 #pragma warning(pop)
 
 #include <vector>

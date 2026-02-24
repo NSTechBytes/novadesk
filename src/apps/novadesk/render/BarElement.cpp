@@ -7,7 +7,7 @@
 
 #include "BarElement.h"
 #include "Direct2DHelper.h"
-#include "Logging.h"
+#include "../shared/Logging.h"
 
 BarElement::BarElement(const std::wstring& id, int x, int y, int w, int h, float value, BarOrientation orientation)
     : Element(ELEMENT_BAR, id, x, y, w, h), m_Value(value), m_Orientation(orientation)

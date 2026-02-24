@@ -8,7 +8,7 @@
 #include "ImageElement.h"
 #include "Direct2DHelper.h"
 #include <d2d1effects.h>
-#include "Logging.h"
+#include "../shared/Logging.h"
 
 ImageElement::ImageElement(const std::wstring& id, int x, int y, int w, int h,
              const std::wstring& path)

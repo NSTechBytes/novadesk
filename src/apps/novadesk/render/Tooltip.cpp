@@ -7,7 +7,7 @@
 
 #include "Tooltip.h"
 #include "Element.h"
-#include "Logging.h"
+#include "../shared/Logging.h"
 #include <algorithm>
 
 Tooltip::Tooltip()

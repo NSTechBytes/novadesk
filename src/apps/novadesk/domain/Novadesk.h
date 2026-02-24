@@ -7,13 +7,13 @@
 
 #pragma once
 
-#include "Resource.h"
+#include "../Resource.h"
 
 // Tray icon control functions
 void ShowTrayIconDynamic();
 void HideTrayIconDynamic();
 
-#include "MenuItem.h"
+#include "../../shared/MenuItem.h"
 
 void SetTrayMenu(const std::vector<MenuItem>& menu);
 void ClearTrayMenu();

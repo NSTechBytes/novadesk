@@ -8,7 +8,7 @@
 #include "framework.h"
 #include "Novadesk.h"
 #include "Widget.h"
-#include "System.h"
+#include "DesktopManager.h"
 #include "Settings.h"
 #include "Resource.h"
 #include <vector>
@@ -20,6 +20,7 @@
 #include <commctrl.h>
 #include "Direct2DHelper.h"
 #include "FontManager.h"
+#include "../shared/Logging.h"
 
 #pragma comment(lib, "comctl32.lib")
 

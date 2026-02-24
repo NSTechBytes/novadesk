@@ -16,29 +16,18 @@ set(THIRD_PARTY_DIR "${CMAKE_SOURCE_DIR}/src/third_party")
 set(QUICKJS_DIR "${THIRD_PARTY_DIR}/quick-js")
 set(RAPIDJSON_DIR "${THIRD_PARTY_DIR}/rapidjson/include")
 
-set(NOVADESK_SOURCES
-    "${APP_SRC_DIR}/domain/Widget.cpp"
-    "${APP_SRC_DIR}/shared/Utils.cpp"
+file(GLOB_RECURSE NOVADESK_APP_SOURCES CONFIGURE_DEPENDS
+    "${APP_SRC_DIR}/*.cpp"
 )
 
-set(NOVADESK_RUNTIME_SOURCES
-    "${APP_SRC_DIR}/main.cpp"
-    "${APP_SRC_DIR}/scripting/quickjs/ModuleSystem.cpp"
-    "${APP_SRC_DIR}/scripting/quickjs/NovadeskModule.cpp"
-    "${APP_SRC_DIR}/scripting/quickjs/parser/PropertyParser.cpp"
+add_executable(novadesk
+    ${NOVADESK_APP_SOURCES}
+    "${APP_SRC_DIR}/Novadesk.rc"
     "${QUICKJS_DIR}/quickjs.c"
     "${QUICKJS_DIR}/libregexp.c"
     "${QUICKJS_DIR}/libunicode.c"
     "${QUICKJS_DIR}/dtoa.c"
 )
-
-set(NOVADESK_LEGACY_SOURCES
-    "${APP_SRC_DIR}/domain/Novadesk.cpp"
-    "${APP_SRC_DIR}/domain/System.cpp"
-    "${APP_SRC_DIR}/Novadesk.rc"
-)
-
-add_executable(novadesk ${NOVADESK_SOURCES})
 
 target_include_directories(novadesk PRIVATE
     "${APP_SRC_DIR}"

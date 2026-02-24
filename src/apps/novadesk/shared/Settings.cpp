@@ -7,7 +7,7 @@
 
 #include "Settings.h"
 #include "Utils.h"
-#include "Logging.h"
+#include "../shared/Logging.h"
 #include "ColorUtil.h"
 #include "PathUtils.h"
 #include "Novadesk.h"
