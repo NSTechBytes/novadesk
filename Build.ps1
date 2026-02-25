@@ -117,19 +117,6 @@ function Copy-DirectoryContent {
     Copy-Item -Path (Join-Path $SourceDir "*") -Destination $DestinationDir -Recurse -Force
 }
 
-function Copy-IfExists {
-    param(
-        [string]$SourcePath,
-        [string]$DestinationPath
-    )
-
-    if (Test-Path $SourcePath) {
-        Copy-Item -Path $SourcePath -Destination $DestinationPath -Force
-        return $true
-    }
-    return $false
-}
-
 function Get-CachedCMakeBuildType {
     param(
         [string]$CacheFilePath
@@ -164,9 +151,10 @@ try {
     Build-Solution -MSBuildPath $msbuild -SolutionPath $installerSln -Config $Configuration -Plat $Platform
     Build-Solution -MSBuildPath $msbuild -SolutionPath $nwmSln -Config $Configuration -Plat $Platform
 
+    $cmakeBuildType = if ($Configuration -eq "Release") { "MinSizeRel" } else { "Debug" }
     $cacheFile = Join-Path $BuildDir "CMakeCache.txt"
     $cachedBuildType = Get-CachedCMakeBuildType -CacheFilePath $cacheFile
-    $needsConfigure = $Reconfigure -or -not (Test-Path $cacheFile) -or ($cachedBuildType -ne $Configuration)
+    $needsConfigure = $Reconfigure -or -not (Test-Path $cacheFile) -or ($cachedBuildType -ne $cmakeBuildType)
 
     if ($needsConfigure) {
         Write-Host "Configuring MinGW build..." -ForegroundColor Cyan
@@ -174,7 +162,7 @@ try {
             -DCMAKE_MAKE_PROGRAM="$mingwMake" `
             -DCMAKE_C_COMPILER="$mingwCC" `
             -DCMAKE_CXX_COMPILER="$mingwCXX" `
-            -DCMAKE_BUILD_TYPE="$Configuration"
+            -DCMAKE_BUILD_TYPE="$cmakeBuildType"
         if ($LASTEXITCODE -ne 0) {
             throw "CMake configure failed."
         }
@@ -198,16 +186,12 @@ try {
     $nwmExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\nwm\nwm.exe"
     $nwmTemplateSrc = Join-Path $RepoRoot "src\Widgets\template"
     $installerStubExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\installer_stub\installer_stub.exe"
-    $libStdCppSrc = Join-Path $mingwBin "libstdc++-6.dll"
-    $libWinpthreadSrc = Join-Path $mingwBin "libwinpthread-1.dll"
 
     Assert-PathExists -PathValue $novadeskExeSrc -Label "novadesk.exe"
     Assert-PathExists -PathValue $widgetsSrc -Label "Widgets source"
     Assert-PathExists -PathValue $nwmExeSrc -Label "nwm.exe"
     Assert-PathExists -PathValue $nwmTemplateSrc -Label "nwm template source"
     Assert-PathExists -PathValue $installerStubExeSrc -Label "installer_stub.exe"
-    Assert-PathExists -PathValue $libStdCppSrc -Label "libstdc++-6.dll"
-    Assert-PathExists -PathValue $libWinpthreadSrc -Label "libwinpthread-1.dll"
 
     New-Item -ItemType Directory -Path $distDir -Force | Out-Null
     New-Item -ItemType Directory -Path $distNwmDir -Force | Out-Null
@@ -215,15 +199,6 @@ try {
     Write-Host "Copying build outputs to dist..." -ForegroundColor Cyan
     Copy-Item -Path $novadeskExeSrc -Destination (Join-Path $distDir "novadesk.exe") -Force
     Copy-DirectoryContent -SourceDir $widgetsSrc -DestinationDir $distWidgetsDir
-    Copy-Item -Path $libStdCppSrc -Destination (Join-Path $distDir "libstdc++-6.dll") -Force
-    Copy-Item -Path $libWinpthreadSrc -Destination (Join-Path $distDir "libwinpthread-1.dll") -Force
-    $gccCopied = $false
-    $gccCopied = $gccCopied -or (Copy-IfExists -SourcePath (Join-Path $mingwBin "libgcc_s_seh-1.dll") -DestinationPath (Join-Path $distDir "libgcc_s_seh-1.dll"))
-    $gccCopied = $gccCopied -or (Copy-IfExists -SourcePath (Join-Path $mingwBin "libgcc_s_dw2-1.dll") -DestinationPath (Join-Path $distDir "libgcc_s_dw2-1.dll"))
-    $gccCopied = $gccCopied -or (Copy-IfExists -SourcePath (Join-Path $mingwBin "libgcc_s_sjlj-1.dll") -DestinationPath (Join-Path $distDir "libgcc_s_sjlj-1.dll"))
-    if (-not $gccCopied) {
-        throw "No libgcc runtime DLL was found in $mingwBin"
-    }
     Copy-Item -Path $nwmExeSrc -Destination (Join-Path $distNwmDir "nwm.exe") -Force
     Copy-DirectoryContent -SourceDir $nwmTemplateSrc -DestinationDir $distNwmTemplateDir
     Copy-Item -Path $installerStubExeSrc -Destination (Join-Path $distNwmDir "installer_stub.exe") -Force

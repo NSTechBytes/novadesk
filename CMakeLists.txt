@@ -1,22 +1,13 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(novadesk_runner LANGUAGES C CXX)
+option(NOVADESK_ENABLE_LTO "Enable LTO for MinGW MinSizeRel builds" OFF)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
-endif()
-
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -s")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffunction-sections -fdata-sections")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Os")
+    set(CMAKE_BUILD_TYPE MinSizeRel CACHE STRING "Build type" FORCE)
 endif()
 
 set(APP_SRC_DIR "${CMAKE_SOURCE_DIR}/src/apps/novadesk")
@@ -62,3 +53,31 @@ target_link_libraries(novadesk PRIVATE
     shlwapi
     version
 )
+
+if(MINGW)
+    # Statically link MinGW runtimes so dist does not require
+    # libgcc/libstdc++/libwinpthread DLLs next to novadesk.exe.
+    target_link_options(novadesk PRIVATE
+        -static
+        -static-libgcc
+        -static-libstdc++
+    )
+endif()
+
+if(MINGW)
+    # Release-size profile: MinSizeRel + LTO + gc-sections + strip.
+    target_compile_options(novadesk PRIVATE
+        $<$<CONFIG:MinSizeRel>:-Os -ffunction-sections -fdata-sections -s>
+    )
+    target_link_options(novadesk PRIVATE
+        $<$<CONFIG:MinSizeRel>:-Wl,--gc-sections -s>
+    )
+    if(NOVADESK_ENABLE_LTO)
+        target_compile_options(novadesk PRIVATE
+            $<$<CONFIG:MinSizeRel>:-flto>
+        )
+        target_link_options(novadesk PRIVATE
+            $<$<CONFIG:MinSizeRel>:-flto>
+        )
+    endif()
+endif()
