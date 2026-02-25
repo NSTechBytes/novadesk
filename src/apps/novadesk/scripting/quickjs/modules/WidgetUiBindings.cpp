@@ -15,6 +15,7 @@
 #include "../../shared/PathUtils.h"
 #include "../../shared/Settings.h"
 #include "../../shared/Utils.h"
+#include "../engine/JSEngine.h"
 #include "../parser/PropertyParser.h"
 
 extern std::vector<Widget*> widgets;
@@ -235,9 +236,11 @@ bool RunWidgetUiScript(JSContext* ctx, Widget* widget, const std::wstring& scrip
 
     JSValue global = JS_GetGlobalObject(ctx);
     JS_SetPropertyStr(ctx, global, "__novadesk_ui__", JS_DupValue(ctx, uiObj));
+    JSValue ipcObj = JSApi::CreateUiIpcObject(ctx);
+    JS_SetPropertyStr(ctx, global, "__novadesk_ui_ipc__", JS_DupValue(ctx, ipcObj));
     JS_FreeValue(ctx, global);
 
-    const std::string wrapped = "(function(ui){\n" + scriptSource + "\n})(globalThis.__novadesk_ui__);";
+    const std::string wrapped = "(function(ui, ipcRenderer){\n" + scriptSource + "\n})(globalThis.__novadesk_ui__, globalThis.__novadesk_ui_ipc__);";
     const std::string fileName = Utils::ToString(absPath);
     JSValue evalResult = JS_Eval(ctx, wrapped.c_str(), wrapped.size(), fileName.c_str(), JS_EVAL_TYPE_GLOBAL);
 
@@ -245,8 +248,12 @@ bool RunWidgetUiScript(JSContext* ctx, Widget* widget, const std::wstring& scrip
     JSAtom uiAtom = JS_NewAtom(ctx, "__novadesk_ui__");
     JS_DeleteProperty(ctx, global2, uiAtom, 0);
     JS_FreeAtom(ctx, uiAtom);
+    JSAtom ipcAtom = JS_NewAtom(ctx, "__novadesk_ui_ipc__");
+    JS_DeleteProperty(ctx, global2, ipcAtom, 0);
+    JS_FreeAtom(ctx, ipcAtom);
     JS_FreeValue(ctx, global2);
     JS_FreeValue(ctx, uiObj);
+    JS_FreeValue(ctx, ipcObj);
 
     if (JS_IsException(evalResult)) {
         JSValue ex = JS_GetException(ctx);

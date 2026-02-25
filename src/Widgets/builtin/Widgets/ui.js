@@ -59,3 +59,27 @@ ui.addText({
 });
 
 ui.endUpdate();
+
+ipcRenderer.on("main-ready", (_event, payload) => {
+  console.log("[ui] from main-ready:", JSON.stringify(payload ?? {}));
+  ui.setElementProperties("status", {
+    text: "main-ready"
+  });
+});
+
+ipcRenderer.on("main-ping", (_event, payload) => {
+  console.log("[ui] from main-ping:", JSON.stringify(payload ?? {}));
+  ui.setElementProperties("status", {
+    text: "main-ping received"
+  });
+  ipcRenderer.send("ui-ping", { ts: Date.now(), replyTo: "main-ping" });
+});
+
+ipcRenderer.on("main-pong", (_event, payload) => {
+  console.log("[ui] from main-pong:", JSON.stringify(payload ?? {}));
+  ui.setElementProperties("status", {
+    text: "main-pong received"
+  });
+});
+
+ipcRenderer.send("ui-ready", { ts: Date.now() });

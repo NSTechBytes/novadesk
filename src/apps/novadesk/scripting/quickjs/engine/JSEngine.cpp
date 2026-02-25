@@ -3,6 +3,7 @@
 #include "quickjs.h"
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "../../domain/Widget.h"
@@ -19,6 +20,11 @@ JSRuntime* g_runtime = nullptr;
 JSContext* g_context = nullptr;
 std::wstring g_lastScriptPath;
 std::vector<JSValue> g_eventCallbacks;
+std::vector<JSValue> g_mainIpcListeners;
+std::vector<JSValue> g_uiIpcListeners;
+std::unordered_map<std::string, std::vector<JSValue>> g_mainIpcChannelListeners;
+std::unordered_map<std::string, std::vector<JSValue>> g_uiIpcChannelListeners;
+std::unordered_map<std::string, JSValue> g_mainIpcHandlers;
 
 enum class ConsoleLevel {
     Log = 0,
@@ -93,6 +99,217 @@ void LogQuickJsException(JSContext* ctx) {
     JS_FreeValue(ctx, ex);
 }
 
+void ClearCallbacks(std::vector<JSValue>& list) {
+    for (JSValue& v : list) {
+        JS_FreeValue(g_context, v);
+    }
+    list.clear();
+}
+
+void ClearChannelMap(std::unordered_map<std::string, std::vector<JSValue>>& map) {
+    for (auto& kv : map) {
+        for (JSValue& v : kv.second) {
+            JS_FreeValue(g_context, v);
+        }
+    }
+    map.clear();
+}
+
+void ClearHandlerMap(std::unordered_map<std::string, JSValue>& map) {
+    for (auto& kv : map) {
+        JS_FreeValue(g_context, kv.second);
+    }
+    map.clear();
+}
+
+int RegisterCallback(std::vector<JSValue>& list, JSContext* ctx, JSValueConst fn) {
+    if (!ctx || !JS_IsFunction(ctx, fn) || ctx != g_context) {
+        return -1;
+    }
+    list.push_back(JS_DupValue(g_context, fn));
+    return static_cast<int>(list.size() - 1);
+}
+
+bool GetChannelArg(JSContext* ctx, JSValueConst v, std::string& out) {
+    const char* s = JS_ToCString(ctx, v);
+    if (!s || !*s) {
+        if (s) JS_FreeCString(ctx, s);
+        return false;
+    }
+    out = s;
+    JS_FreeCString(ctx, s);
+    return true;
+}
+
+void RegisterChannelListener(std::unordered_map<std::string, std::vector<JSValue>>& map, JSContext* ctx, const std::string& channel, JSValueConst fn) {
+    map[channel].push_back(JS_DupValue(ctx, fn));
+}
+
+JSValue BuildIpcMessage(JSContext* ctx, JSValueConst typeVal, JSValueConst payloadVal, const char* from, const char* to, const char* channel) {
+    JSValue msg = JS_NewObject(ctx);
+
+    std::string type = "message";
+    const char* t = JS_ToCString(ctx, typeVal);
+    if (t && *t) {
+        type = t;
+    }
+    if (t) JS_FreeCString(ctx, t);
+
+    JS_SetPropertyStr(ctx, msg, "type", JS_NewString(ctx, type.c_str()));
+    JS_SetPropertyStr(ctx, msg, "payload", JS_DupValue(ctx, payloadVal));
+    JS_SetPropertyStr(ctx, msg, "from", JS_NewString(ctx, from));
+    JS_SetPropertyStr(ctx, msg, "to", JS_NewString(ctx, to));
+    JS_SetPropertyStr(ctx, msg, "channel", JS_NewString(ctx, channel ? channel : type.c_str()));
+    return msg;
+}
+
+void DispatchIpc(std::vector<JSValue>& listeners, JSValueConst message) {
+    for (JSValue& cb : listeners) {
+        JSValue argv[1] = { JS_DupValue(g_context, message) };
+        JSValue ret = JS_Call(g_context, cb, JS_UNDEFINED, 1, argv);
+        JS_FreeValue(g_context, argv[0]);
+        if (JS_IsException(ret)) {
+            LogQuickJsException(g_context);
+        } else {
+            JS_FreeValue(g_context, ret);
+        }
+    }
+}
+
+void DispatchChannelIpc(std::unordered_map<std::string, std::vector<JSValue>>& listeners, const std::string& channel, const char* from, const char* to, JSValueConst payload) {
+    auto it = listeners.find(channel);
+    if (it == listeners.end()) return;
+
+    JSValue channelVal = JS_NewString(g_context, channel.c_str());
+    JSValue eventObj = BuildIpcMessage(g_context, channelVal, payload, from, to, channel.c_str());
+    JS_FreeValue(g_context, channelVal);
+
+    for (JSValue& cb : it->second) {
+        JSValue argv[2] = { JS_DupValue(g_context, eventObj), JS_DupValue(g_context, payload) };
+        JSValue ret = JS_Call(g_context, cb, JS_UNDEFINED, 2, argv);
+        JS_FreeValue(g_context, argv[0]);
+        JS_FreeValue(g_context, argv[1]);
+        if (JS_IsException(ret)) {
+            LogQuickJsException(g_context);
+        } else {
+            JS_FreeValue(g_context, ret);
+        }
+    }
+
+    JS_FreeValue(g_context, eventObj);
+}
+
+JSValue JsMainIpcOn(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 2 || !JS_IsFunction(ctx, argv[1])) {
+        return JS_ThrowTypeError(ctx, "ipcMain.on requires (channel, listener)");
+    }
+    std::string channel;
+    if (!GetChannelArg(ctx, argv[0], channel)) {
+        return JS_ThrowTypeError(ctx, "ipcMain.on channel must be non-empty string");
+    }
+    RegisterChannelListener(g_mainIpcChannelListeners, ctx, channel, argv[1]);
+    return JS_UNDEFINED;
+}
+
+JSValue JsMainIpcHandle(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 2 || !JS_IsFunction(ctx, argv[1])) {
+        return JS_ThrowTypeError(ctx, "ipcMain.handle requires (channel, handler)");
+    }
+    std::string channel;
+    if (!GetChannelArg(ctx, argv[0], channel)) {
+        return JS_ThrowTypeError(ctx, "ipcMain.handle channel must be non-empty string");
+    }
+    auto it = g_mainIpcHandlers.find(channel);
+    if (it != g_mainIpcHandlers.end()) {
+        JS_FreeValue(ctx, it->second);
+    }
+    g_mainIpcHandlers[channel] = JS_DupValue(ctx, argv[1]);
+    return JS_UNDEFINED;
+}
+
+JSValue JsMainIpcSend(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) {
+        return JS_ThrowTypeError(ctx, "ipc.sendToUi requires at least a type");
+    }
+    JSValue payload = (argc > 1) ? argv[1] : JS_UNDEFINED;
+    JSValue msg = BuildIpcMessage(ctx, argv[0], payload, "main", "ui", nullptr);
+    DispatchIpc(g_uiIpcListeners, msg);
+    JS_FreeValue(ctx, msg);
+    std::string channel;
+    if (GetChannelArg(ctx, argv[0], channel)) {
+        DispatchChannelIpc(g_uiIpcChannelListeners, channel, "main", "ui", payload);
+    }
+    return JS_UNDEFINED;
+}
+
+JSValue JsUiIpcOn(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 2 || !JS_IsFunction(ctx, argv[1])) {
+        return JS_ThrowTypeError(ctx, "ipcRenderer.on requires (channel, listener)");
+    }
+    std::string channel;
+    if (!GetChannelArg(ctx, argv[0], channel)) {
+        return JS_ThrowTypeError(ctx, "ipcRenderer.on channel must be non-empty string");
+    }
+    RegisterChannelListener(g_uiIpcChannelListeners, ctx, channel, argv[1]);
+    return JS_UNDEFINED;
+}
+
+JSValue JsUiIpcSend(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) {
+        return JS_ThrowTypeError(ctx, "ipc.sendToMain requires at least a type");
+    }
+    JSValue payload = (argc > 1) ? argv[1] : JS_UNDEFINED;
+    JSValue msg = BuildIpcMessage(ctx, argv[0], payload, "ui", "main", nullptr);
+    DispatchIpc(g_mainIpcListeners, msg);
+    JS_FreeValue(ctx, msg);
+    std::string channel;
+    if (GetChannelArg(ctx, argv[0], channel)) {
+        DispatchChannelIpc(g_mainIpcChannelListeners, channel, "ui", "main", payload);
+    }
+    return JS_UNDEFINED;
+}
+
+JSValue JsUiIpcInvoke(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) {
+        return JS_ThrowTypeError(ctx, "ipcRenderer.invoke requires at least a channel");
+    }
+    std::string channel;
+    if (!GetChannelArg(ctx, argv[0], channel)) {
+        return JS_ThrowTypeError(ctx, "ipcRenderer.invoke channel must be non-empty string");
+    }
+    auto it = g_mainIpcHandlers.find(channel);
+    if (it == g_mainIpcHandlers.end()) {
+        return JS_ThrowReferenceError(ctx, "No ipcMain handler for channel: %s", channel.c_str());
+    }
+
+    JSValue payload = (argc > 1) ? argv[1] : JS_UNDEFINED;
+    JSValue channelVal = JS_NewString(ctx, channel.c_str());
+    JSValue eventObj = BuildIpcMessage(ctx, channelVal, payload, "ui", "main", channel.c_str());
+    JS_FreeValue(ctx, channelVal);
+
+    JSValue callArgs[2] = { eventObj, JS_DupValue(ctx, payload) };
+    JSValue ret = JS_Call(ctx, it->second, JS_UNDEFINED, 2, callArgs);
+    JS_FreeValue(ctx, callArgs[0]);
+    JS_FreeValue(ctx, callArgs[1]);
+    return ret;
+}
+
+JSValue CreateMainIpcObject(JSContext* ctx) {
+    JSValue ipc = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, ipc, "on", JS_NewCFunction(ctx, JsMainIpcOn, "on", 2));
+    JS_SetPropertyStr(ctx, ipc, "handle", JS_NewCFunction(ctx, JsMainIpcHandle, "handle", 2));
+    JS_SetPropertyStr(ctx, ipc, "send", JS_NewCFunction(ctx, JsMainIpcSend, "send", 2));
+    return ipc;
+}
+
+JSValue CreateUiIpcObjectImpl(JSContext* ctx) {
+    JSValue ipc = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, ipc, "on", JS_NewCFunction(ctx, JsUiIpcOn, "on", 2));
+    JS_SetPropertyStr(ctx, ipc, "send", JS_NewCFunction(ctx, JsUiIpcSend, "send", 2));
+    JS_SetPropertyStr(ctx, ipc, "invoke", JS_NewCFunction(ctx, JsUiIpcInvoke, "invoke", 2));
+    return ipc;
+}
+
 bool EnsureRuntime() {
     if (g_runtime && g_context) {
         return true;
@@ -117,6 +334,11 @@ bool EnsureRuntime() {
     RegisterConsoleBindings(g_context);
     g_eventCallbacks.clear();
     g_eventCallbacks.push_back(JS_UNDEFINED);  // callback id 0 is invalid
+    g_mainIpcListeners.clear();
+    g_uiIpcListeners.clear();
+    g_mainIpcChannelListeners.clear();
+    g_uiIpcChannelListeners.clear();
+    g_mainIpcHandlers.clear();
     return true;
 }
 
@@ -144,6 +366,11 @@ bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath) {
     }
     g_eventCallbacks.clear();
     g_eventCallbacks.push_back(JS_UNDEFINED);
+    ClearCallbacks(g_mainIpcListeners);
+    ClearCallbacks(g_uiIpcListeners);
+    ClearChannelMap(g_mainIpcChannelListeners);
+    ClearChannelMap(g_uiIpcChannelListeners);
+    ClearHandlerMap(g_mainIpcHandlers);
 
     const std::string script = FileUtils::ReadFileContent(finalScriptPath);
     if (script.empty()) {
@@ -152,6 +379,12 @@ bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath) {
     }
 
     const std::string fileName = Utils::ToString(finalScriptPath);
+    JSValue global = JS_GetGlobalObject(g_context);
+    JSValue mainIpc = CreateMainIpcObject(g_context);
+    JS_SetPropertyStr(g_context, global, "ipcMain", JS_DupValue(g_context, mainIpc));
+    JS_FreeValue(g_context, mainIpc);
+    JS_FreeValue(g_context, global);
+
     JSValue result = JS_Eval(
         g_context,
         script.c_str(),
@@ -280,5 +513,9 @@ int RegisterEventCallback(JSContext* ctx, JSValueConst fn) {
 
     g_eventCallbacks.push_back(JS_DupValue(g_context, fn));
     return static_cast<int>(g_eventCallbacks.size() - 1);
+}
+
+JSValue CreateUiIpcObject(JSContext* ctx) {
+    return CreateUiIpcObjectImpl(ctx);
 }
 }  // namespace JSApi

@@ -67,9 +67,9 @@ add_custom_command(TARGET novadesk POST_BUILD
         "$<TARGET_FILE_DIR:novadesk>/main.js"
     COMMAND ${CMAKE_COMMAND} -E make_directory
         "$<TARGET_FILE_DIR:novadesk>/Widgets"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${APP_WIDGETS_DIR}/index.js"
-        "$<TARGET_FILE_DIR:novadesk>/Widgets/index.js"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${APP_WIDGETS_DIR}"
+        "$<TARGET_FILE_DIR:novadesk>/Widgets"
 )
 
 if(WIN32 AND MINGW)
