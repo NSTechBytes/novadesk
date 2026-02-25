@@ -211,7 +211,7 @@ const JSCFunctionListEntry kWidgetProtoFuncs[] = {
     JS_CFUNC_DEF("endUpdate", 0, JsWidgetEndUpdate),
 };
 
-bool RunWidgetUiScript(JSContext* ctx, Widget* widget, const std::wstring& scriptPath) {
+bool RunWidgetUiScriptImpl(JSContext* ctx, Widget* widget, const std::wstring& scriptPath) {
     if (!widget || scriptPath.empty()) return true;
 
     const std::wstring absPath = PathUtils::ResolvePath(scriptPath, PathUtils::GetWidgetsDir());
@@ -364,8 +364,12 @@ JSValue JsWidgetWindowCtor(JSContext* ctx, JSValueConst, int argc, JSValueConst*
     JS_SetOpaque(obj, widget);
 
     if (!options.scriptPath.empty()) {
-        RunWidgetUiScript(ctx, widget, options.scriptPath);
+        RunWidgetUiScriptImpl(ctx, widget, options.scriptPath);
     }
     return obj;
+}
+
+bool ExecuteWidgetUiScript(JSContext* ctx, Widget* widget, const std::wstring& scriptPath) {
+    return RunWidgetUiScriptImpl(ctx, widget, scriptPath);
 }
 }  // namespace novadesk::scripting::quickjs

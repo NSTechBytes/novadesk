@@ -38,6 +38,9 @@ void TriggerWidgetEvent(Widget* widget, const char* eventName, const MouseEventD
 void CallEventCallback(int callbackId, Widget* widget = nullptr, const MouseEventData* data = nullptr);
 int RegisterEventCallback(JSContext* ctx, JSValueConst fn);
 bool RegisterWidgetEventListener(JSContext* ctx, Widget* widget, const std::string& eventName, JSValueConst fn);
+bool RegisterWidgetContextMenuCallback(JSContext* ctx, const std::wstring& widgetId, int commandId, JSValueConst fn);
+void ClearWidgetContextMenuCallbacks(const std::wstring& widgetId);
+bool ExecuteWidgetScript(Widget* widget);
 JSValue CreateUiIpcObject(JSContext* ctx);
 
 static const UINT WM_NOVADESK_DISPATCH = WM_USER + 101;

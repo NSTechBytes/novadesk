@@ -191,9 +191,10 @@ void Widget::Refresh()
 
     BeginUpdate();
     RemoveElements(L""); // Clear all elements
-    // UI script execution is handled by the QuickJS widget bridge at window creation time.
-    // Keep refresh as a visual/content reset plus event trigger.
-    Redraw();
+    if (!m_Options.scriptPath.empty())
+    {
+        JSEngine::ExecuteWidgetScript(this);
+    }
     EndUpdate();
 }
 

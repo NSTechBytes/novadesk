@@ -12,6 +12,7 @@
 #include "../../shared/PathUtils.h"
 #include "../../shared/Utils.h"
 #include "../modules/ModuleSystem.h"
+#include "../modules/WidgetUiBindings.h"
 
 namespace JSEngine {
 namespace {
@@ -21,6 +22,7 @@ JSContext* g_context = nullptr;
 std::wstring g_lastScriptPath;
 std::vector<JSValue> g_eventCallbacks;
 std::unordered_map<Widget*, std::unordered_map<std::string, std::vector<int>>> g_widgetEventListeners;
+std::unordered_map<std::wstring, std::unordered_map<int, JSValue>> g_widgetContextMenuCallbacks;
 std::vector<JSValue> g_mainIpcListeners;
 std::vector<JSValue> g_uiIpcListeners;
 std::unordered_map<std::string, std::vector<JSValue>> g_mainIpcChannelListeners;
@@ -125,6 +127,16 @@ void ClearHandlerMap(std::unordered_map<std::string, JSValue>& map) {
 
 void ClearWidgetEventListeners() {
     g_widgetEventListeners.clear();
+}
+
+void ClearAllWidgetContextMenuCallbacks() {
+    if (!g_context) return;
+    for (auto& wkv : g_widgetContextMenuCallbacks) {
+        for (auto& ckv : wkv.second) {
+            JS_FreeValue(g_context, ckv.second);
+        }
+    }
+    g_widgetContextMenuCallbacks.clear();
 }
 
 int RegisterCallback(std::vector<JSValue>& list, JSContext* ctx, JSValueConst fn) {
@@ -377,6 +389,7 @@ bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath) {
     ClearChannelMap(g_uiIpcChannelListeners);
     ClearHandlerMap(g_mainIpcHandlers);
     ClearWidgetEventListeners();
+    ClearAllWidgetContextMenuCallbacks();
 
     const std::string script = FileUtils::ReadFileContent(finalScriptPath);
     if (script.empty()) {
@@ -450,8 +463,17 @@ void OnTrayCommand(int commandId) {
 }
 
 void OnWidgetContextCommand(const std::wstring& widgetId, int commandId) {
-    (void)widgetId;
-    (void)commandId;
+    auto wit = g_widgetContextMenuCallbacks.find(widgetId);
+    if (wit == g_widgetContextMenuCallbacks.end()) return;
+    auto cit = wit->second.find(commandId);
+    if (cit == wit->second.end()) return;
+
+    JSValue ret = JS_Call(g_context, cit->second, JS_UNDEFINED, 0, nullptr);
+    if (JS_IsException(ret)) {
+        LogQuickJsException(g_context);
+    } else {
+        JS_FreeValue(g_context, ret);
+    }
 }
 
 void TriggerWidgetEvent(Widget* widget, const char* eventName, const MouseEventData* data) {
@@ -548,6 +570,40 @@ bool RegisterWidgetEventListener(JSContext* ctx, Widget* widget, const std::stri
 
     g_widgetEventListeners[widget][eventName].push_back(callbackId);
     return true;
+}
+
+bool RegisterWidgetContextMenuCallback(JSContext* ctx, const std::wstring& widgetId, int commandId, JSValueConst fn) {
+    if (!ctx || ctx != g_context || widgetId.empty() || commandId <= 0 || !JS_IsFunction(ctx, fn)) {
+        return false;
+    }
+
+    auto& bucket = g_widgetContextMenuCallbacks[widgetId];
+    auto it = bucket.find(commandId);
+    if (it != bucket.end()) {
+        JS_FreeValue(ctx, it->second);
+    }
+    bucket[commandId] = JS_DupValue(ctx, fn);
+    return true;
+}
+
+void ClearWidgetContextMenuCallbacks(const std::wstring& widgetId) {
+    auto it = g_widgetContextMenuCallbacks.find(widgetId);
+    if (it == g_widgetContextMenuCallbacks.end()) return;
+    for (auto& kv : it->second) {
+        JS_FreeValue(g_context, kv.second);
+    }
+    g_widgetContextMenuCallbacks.erase(it);
+}
+
+bool ExecuteWidgetScript(Widget* widget) {
+    if (!widget || !g_context) {
+        return false;
+    }
+    const std::wstring& scriptPath = widget->GetOptions().scriptPath;
+    if (scriptPath.empty()) {
+        return false;
+    }
+    return novadesk::scripting::quickjs::ExecuteWidgetUiScript(g_context, widget, scriptPath);
 }
 
 JSValue CreateUiIpcObject(JSContext* ctx) {
