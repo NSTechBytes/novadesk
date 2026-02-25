@@ -1,6 +1,7 @@
 param(
     [string]$BuildDir = "build-mingw",
-    [string]$Configuration = "Release",
+    [ValidateSet("Debug", "Release")]
+    [string]$Configuration = "Debug",
     [string]$Platform = "x64",
     [switch]$Reconfigure
 )
@@ -129,6 +130,23 @@ function Copy-IfExists {
     return $false
 }
 
+function Get-CachedCMakeBuildType {
+    param(
+        [string]$CacheFilePath
+    )
+
+    if (-not (Test-Path $CacheFilePath)) {
+        return $null
+    }
+
+    $line = Select-String -Path $CacheFilePath -Pattern "^CMAKE_BUILD_TYPE:STRING=" | Select-Object -First 1
+    if (-not $line) {
+        return $null
+    }
+
+    return ($line.Line -replace "^CMAKE_BUILD_TYPE:STRING=", "").Trim()
+}
+
 try {
     $cmake = Resolve-CMake
     $msbuild = Resolve-MSBuild
@@ -147,17 +165,21 @@ try {
     Build-Solution -MSBuildPath $msbuild -SolutionPath $nwmSln -Config $Configuration -Plat $Platform
 
     $cacheFile = Join-Path $BuildDir "CMakeCache.txt"
-    if ($Reconfigure -or -not (Test-Path $cacheFile)) {
+    $cachedBuildType = Get-CachedCMakeBuildType -CacheFilePath $cacheFile
+    $needsConfigure = $Reconfigure -or -not (Test-Path $cacheFile) -or ($cachedBuildType -ne $Configuration)
+
+    if ($needsConfigure) {
         Write-Host "Configuring MinGW build..." -ForegroundColor Cyan
         & $cmake -S . -B $BuildDir -G "MinGW Makefiles" `
             -DCMAKE_MAKE_PROGRAM="$mingwMake" `
             -DCMAKE_C_COMPILER="$mingwCC" `
-            -DCMAKE_CXX_COMPILER="$mingwCXX"
+            -DCMAKE_CXX_COMPILER="$mingwCXX" `
+            -DCMAKE_BUILD_TYPE="$Configuration"
         if ($LASTEXITCODE -ne 0) {
             throw "CMake configure failed."
         }
     } else {
-        Write-Host "Using existing CMake configuration in $BuildDir" -ForegroundColor DarkGray
+        Write-Host "Using existing CMake configuration in $BuildDir (CMAKE_BUILD_TYPE=$cachedBuildType)" -ForegroundColor DarkGray
     }
 
     Write-Host "Building MinGW target(s)..." -ForegroundColor Cyan
