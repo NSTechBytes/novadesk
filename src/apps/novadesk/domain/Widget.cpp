@@ -66,7 +66,6 @@ Widget::Widget(const WidgetOptions& options)
 Widget::~Widget()
 {
     JSApi::TriggerWidgetEvent(this, "close");
-    // JSApi::CleanupWidget(m_Options.id);
 
     if (m_hWnd)
     {
@@ -192,10 +191,9 @@ void Widget::Refresh()
 
     BeginUpdate();
     RemoveElements(L""); // Clear all elements
-    if (!m_Options.scriptPath.empty())
-    {
-        // JSApi::ExecuteWidgetScript(this);
-    }
+    // UI script execution is handled by the QuickJS widget bridge at window creation time.
+    // Keep refresh as a visual/content reset plus event trigger.
+    Redraw();
     EndUpdate();
 }
 
@@ -727,7 +725,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         
                         int leaveId = widget->m_MouseOverElement->m_OnMouseLeaveCallbackId;
                         if (leaveId != -1)
-                            //  JSApi::CallEventCallback(leaveId);
+                            JSApi::CallEventCallback(leaveId);
                              
                         widget->m_MouseOverElement = nullptr;
                     }
