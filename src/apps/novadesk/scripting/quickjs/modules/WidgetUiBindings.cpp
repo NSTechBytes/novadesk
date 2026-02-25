@@ -13,6 +13,7 @@
 #include "../../shared/FileUtils.h"
 #include "../../shared/Logging.h"
 #include "../../shared/PathUtils.h"
+#include "../../shared/Settings.h"
 #include "../../shared/Utils.h"
 #include "../parser/PropertyParser.h"
 
@@ -292,27 +293,46 @@ JSValue JsWidgetWindowCtor(JSContext* ctx, JSValueConst, int argc, JSValueConst*
     }
 
     WidgetOptions options;
-    options.id = parsed.id;
-    options.width = parsed.width;
-    options.height = parsed.height;
-    options.m_WDefined = (parsed.width > 0);
-    options.m_HDefined = (parsed.height > 0);
-    options.show = parsed.show;
-    options.scriptPath = parsed.scriptPath;
-    options.draggable = parsed.draggable;
-    options.clickThrough = parsed.clickThrough;
-    options.keepOnScreen = parsed.keepOnScreen;
-    options.snapEdges = parsed.snapEdges;
-    options.backgroundColor = parsed.backgroundColor;
-    options.color = parsed.color;
-    options.bgAlpha = parsed.bgAlpha;
-    options.bgGradient = parsed.bgGradient;
-    options.windowOpacity = parsed.windowOpacity;
-    if (parsed.zPos != -1) {
-        options.zPos = static_cast<ZPOSITION>(parsed.zPos);
+    options.id = parsed.id.empty() ? L"widget" : parsed.id;
+
+    if (!options.id.empty()) {
+        Settings::LoadWidget(options.id, options);
     }
+
     if (parsed.hasX) options.x = parsed.x;
     if (parsed.hasY) options.y = parsed.y;
+
+    if (parsed.hasWidth) {
+        options.width = parsed.width;
+        options.m_WDefined = (parsed.width > 0);
+    } else {
+        options.width = 0;
+        options.m_WDefined = false;
+    }
+    if (parsed.hasHeight) {
+        options.height = parsed.height;
+        options.m_HDefined = (parsed.height > 0);
+    } else {
+        options.height = 0;
+        options.m_HDefined = false;
+    }
+
+    if (parsed.hasShow) options.show = parsed.show;
+    if (parsed.hasScriptPath) options.scriptPath = parsed.scriptPath;
+    if (parsed.hasDraggable) options.draggable = parsed.draggable;
+    if (parsed.hasClickThrough) options.clickThrough = parsed.clickThrough;
+    if (parsed.hasKeepOnScreen) options.keepOnScreen = parsed.keepOnScreen;
+    if (parsed.hasSnapEdges) options.snapEdges = parsed.snapEdges;
+    if (parsed.hasBackgroundColor) {
+        options.backgroundColor = parsed.backgroundColor;
+        options.color = parsed.color;
+        options.bgAlpha = parsed.bgAlpha;
+        options.bgGradient = parsed.bgGradient;
+    }
+    if (parsed.hasWindowOpacity) options.windowOpacity = parsed.windowOpacity;
+    if (parsed.hasZPos) {
+        options.zPos = static_cast<ZPOSITION>(parsed.zPos);
+    }
 
     Widget* widget = new Widget(options);
     if (!widget->Create()) {

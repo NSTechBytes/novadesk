@@ -765,11 +765,17 @@ void ParseWidgetWindowOptions(JSContext* ctx, JSValueConst options, WidgetWindow
 
     int32_t v = 0;
     JSValue widthVal = JS_GetPropertyStr(ctx, options, "width");
-    if (!JS_IsUndefined(widthVal) && JS_ToInt32(ctx, &v, widthVal) == 0) out.width = static_cast<int>(v);
+    if (!JS_IsUndefined(widthVal) && !JS_IsNull(widthVal) && JS_ToInt32(ctx, &v, widthVal) == 0) {
+        out.width = static_cast<int>(v);
+        out.hasWidth = true;
+    }
     JS_FreeValue(ctx, widthVal);
 
     JSValue heightVal = JS_GetPropertyStr(ctx, options, "height");
-    if (!JS_IsUndefined(heightVal) && JS_ToInt32(ctx, &v, heightVal) == 0) out.height = static_cast<int>(v);
+    if (!JS_IsUndefined(heightVal) && !JS_IsNull(heightVal) && JS_ToInt32(ctx, &v, heightVal) == 0) {
+        out.height = static_cast<int>(v);
+        out.hasHeight = true;
+    }
     JS_FreeValue(ctx, heightVal);
 
     JSValue xVal = JS_GetPropertyStr(ctx, options, "x");
@@ -786,17 +792,18 @@ void ParseWidgetWindowOptions(JSContext* ctx, JSValueConst options, WidgetWindow
     }
     JS_FreeValue(ctx, yVal);
 
-    PropertyParser::GetBoolProp(ctx, options, "draggable", out.draggable);
-    PropertyParser::GetBoolProp(ctx, options, "clickThrough", out.clickThrough);
-    PropertyParser::GetBoolProp(ctx, options, "keepOnScreen", out.keepOnScreen);
-    PropertyParser::GetBoolProp(ctx, options, "snapEdges", out.snapEdges);
-    PropertyParser::GetBoolProp(ctx, options, "show", out.show);
+    out.hasDraggable = PropertyParser::GetBoolProp(ctx, options, "draggable", out.draggable);
+    out.hasClickThrough = PropertyParser::GetBoolProp(ctx, options, "clickThrough", out.clickThrough);
+    out.hasKeepOnScreen = PropertyParser::GetBoolProp(ctx, options, "keepOnScreen", out.keepOnScreen);
+    out.hasSnapEdges = PropertyParser::GetBoolProp(ctx, options, "snapEdges", out.snapEdges);
+    out.hasShow = PropertyParser::GetBoolProp(ctx, options, "show", out.show);
     
     std::wstring bg = PropertyParser::GetStringProp(ctx, options, "backgroundColor");
     if (!bg.empty()) {
         out.backgroundColor = bg;
         bool hasBg = false;
         PropertyParser::ParseGradientOrColor(bg, out.color, out.bgAlpha, out.bgGradient, hasBg);
+        out.hasBackgroundColor = true;
     }
 
     JSValue opacityVal = JS_GetPropertyStr(ctx, options, "opacity");
@@ -813,6 +820,7 @@ void ParseWidgetWindowOptions(JSContext* ctx, JSValueConst options, WidgetWindow
                         float pct = std::stof(ws);
                         pct = std::max(0.0f, std::min(100.0f, pct));
                         out.windowOpacity = static_cast<BYTE>((pct / 100.0f) * 255.0f);
+                        out.hasWindowOpacity = true;
                     } catch (...) {
                     }
                 } else {
@@ -821,6 +829,7 @@ void ParseWidgetWindowOptions(JSContext* ctx, JSValueConst options, WidgetWindow
                         if (val <= 1.0f) val *= 255.0f;
                         val = std::max(0.0f, std::min(255.0f, val));
                         out.windowOpacity = static_cast<BYTE>(val);
+                        out.hasWindowOpacity = true;
                     } catch (...) {
                     }
                 }
@@ -831,6 +840,7 @@ void ParseWidgetWindowOptions(JSContext* ctx, JSValueConst options, WidgetWindow
                 if (d <= 1.0) d *= 255.0;
                 d = std::max(0.0, std::min(255.0, d));
                 out.windowOpacity = static_cast<BYTE>(d);
+                out.hasWindowOpacity = true;
             }
         }
     }
@@ -838,13 +848,14 @@ void ParseWidgetWindowOptions(JSContext* ctx, JSValueConst options, WidgetWindow
 
     std::wstring zPosStr = PropertyParser::GetStringProp(ctx, options, "zPos");
     std::transform(zPosStr.begin(), zPosStr.end(), zPosStr.begin(), ::towlower);
-    if (zPosStr == L"ondesktop") out.zPos = -2;
-    else if (zPosStr == L"onbottom") out.zPos = -1;
-    else if (zPosStr == L"normal") out.zPos = 0;
-    else if (zPosStr == L"ontop") out.zPos = 1;
-    else if (zPosStr == L"ontopmost") out.zPos = 2;
+    if (zPosStr == L"ondesktop") { out.zPos = -2; out.hasZPos = true; }
+    else if (zPosStr == L"onbottom") { out.zPos = -1; out.hasZPos = true; }
+    else if (zPosStr == L"normal") { out.zPos = 0; out.hasZPos = true; }
+    else if (zPosStr == L"ontop") { out.zPos = 1; out.hasZPos = true; }
+    else if (zPosStr == L"ontopmost") { out.zPos = 2; out.hasZPos = true; }
 
     out.scriptPath = PropertyParser::GetStringProp(ctx, options, "script");
+    out.hasScriptPath = !out.scriptPath.empty();
 }
 
 void ParseWidgetWindowSize(JSContext* ctx, JSValueConst options, int& width, int& height) {

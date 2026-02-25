@@ -231,10 +231,22 @@ void CallEventCallback(int callbackId, Widget* widget, const MouseEventData* dat
         return;
     }
 
-    JSValue arg = JS_UNDEFINED;
-    int argc = 0;
+    JSValue arg = JS_NewObject(g_context);
+    JS_SetPropertyStr(g_context, arg, "clientX", JS_NewInt32(g_context, 0));
+    JS_SetPropertyStr(g_context, arg, "clientY", JS_NewInt32(g_context, 0));
+    JS_SetPropertyStr(g_context, arg, "screenX", JS_NewInt32(g_context, 0));
+    JS_SetPropertyStr(g_context, arg, "screenY", JS_NewInt32(g_context, 0));
+    JS_SetPropertyStr(g_context, arg, "offsetX", JS_NewInt32(g_context, 0));
+    JS_SetPropertyStr(g_context, arg, "offsetY", JS_NewInt32(g_context, 0));
+    JS_SetPropertyStr(g_context, arg, "offsetXPercent", JS_NewInt32(g_context, 0));
+    JS_SetPropertyStr(g_context, arg, "offsetYPercent", JS_NewInt32(g_context, 0));
+    if (widget) {
+        JS_SetPropertyStr(g_context, arg, "widgetId",
+            JS_NewString(g_context, Utils::ToString(widget->GetOptions().id).c_str()));
+    }
+
+    int argc = 1;
     if (data) {
-        arg = JS_NewObject(g_context);
         JS_SetPropertyStr(g_context, arg, "clientX", JS_NewInt32(g_context, data->clientX));
         JS_SetPropertyStr(g_context, arg, "clientY", JS_NewInt32(g_context, data->clientY));
         JS_SetPropertyStr(g_context, arg, "screenX", JS_NewInt32(g_context, data->screenX));
@@ -243,18 +255,11 @@ void CallEventCallback(int callbackId, Widget* widget, const MouseEventData* dat
         JS_SetPropertyStr(g_context, arg, "offsetY", JS_NewInt32(g_context, data->offsetY));
         JS_SetPropertyStr(g_context, arg, "offsetXPercent", JS_NewInt32(g_context, data->offsetXPercent));
         JS_SetPropertyStr(g_context, arg, "offsetYPercent", JS_NewInt32(g_context, data->offsetYPercent));
-        if (widget) {
-            JS_SetPropertyStr(g_context, arg, "widgetId",
-                JS_NewString(g_context, Utils::ToString(widget->GetOptions().id).c_str()));
-        }
-        argc = 1;
     }
 
     JSValue argv[1] = { arg };
     JSValue ret = JS_Call(g_context, callback, JS_UNDEFINED, argc, argv);
-    if (argc == 1) {
-        JS_FreeValue(g_context, arg);
-    }
+    JS_FreeValue(g_context, arg);
     if (JS_IsException(ret)) {
         LogQuickJsException(g_context);
     } else {

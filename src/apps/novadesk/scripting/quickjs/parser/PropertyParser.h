@@ -227,24 +227,35 @@ void ParseShapeOptions(duk_context* ctx, ShapeOptions& options);
 namespace novadesk::scripting::quickjs::parser {
 struct WidgetWindowOptions {
     std::wstring id = L"widget";
-    int width = 800;
-    int height = 600;
+    int width = 0;
+    int height = 0;
+    bool hasWidth = false;
+    bool hasHeight = false;
     int x = 0;
     int y = 0;
     bool hasX = false;
     bool hasY = false;
     bool draggable = true;
+    bool hasDraggable = false;
     bool clickThrough = false;
+    bool hasClickThrough = false;
     bool keepOnScreen = false;
+    bool hasKeepOnScreen = false;
     bool snapEdges = true;
+    bool hasSnapEdges = false;
     bool show = true;
+    bool hasShow = false;
     std::wstring backgroundColor = L"rgba(0,0,0,0)";
     COLORREF color = RGB(0, 0, 0);
     BYTE bgAlpha = 0;
     GradientInfo bgGradient;
+    bool hasBackgroundColor = false;
     BYTE windowOpacity = 255;
+    bool hasWindowOpacity = false;
     int zPos = -1;
+    bool hasZPos = false;
     std::wstring scriptPath;
+    bool hasScriptPath = false;
 };
 
 void ParseWidgetWindowOptions(JSContext* ctx, JSValueConst options, WidgetWindowOptions& out);

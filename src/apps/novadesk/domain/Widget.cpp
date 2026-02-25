@@ -2000,6 +2000,31 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
         if (hoverElement != m_MouseOverElement)
         {
+            auto buildElementEventData = [&](Element* el) {
+                JSApi::MouseEventData eventData;
+                eventData.clientX = x;
+                eventData.clientY = y;
+
+                POINT screenPt = { x, y };
+                ClientToScreen(m_hWnd, &screenPt);
+                eventData.screenX = screenPt.x;
+                eventData.screenY = screenPt.y;
+
+                const int elementX = el ? el->GetX() : 0;
+                const int elementY = el ? el->GetY() : 0;
+                eventData.offsetX = x - elementX;
+                eventData.offsetY = y - elementY;
+
+                const int elementW = el ? el->GetWidth() : 0;
+                const int elementH = el ? el->GetHeight() : 0;
+                if (elementW > 0) {
+                    eventData.offsetXPercent = (int)(((eventData.offsetX + 1) / (double)elementW) * 100.0);
+                }
+                if (elementH > 0) {
+                    eventData.offsetYPercent = (int)(((eventData.offsetY + 1) / (double)elementH) * 100.0);
+                }
+                return eventData;
+            };
 
             if (m_MouseOverElement)
             {
@@ -2007,7 +2032,10 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 m_MouseOverElement->m_IsMouseOver = false;
                 int leaveId = m_MouseOverElement->m_OnMouseLeaveCallbackId;
                 if (leaveId != -1)
-                    JSApi::CallEventCallback(leaveId);
+                {
+                    JSApi::MouseEventData leaveData = buildElementEventData(m_MouseOverElement);
+                    JSApi::CallEventCallback(leaveId, this, &leaveData);
+                }
                 
                 // If callback cleared the elements, m_MouseOverElement is now invalid
                 if (m_Elements.empty()) {
@@ -2023,7 +2051,10 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 hoverElement->m_IsMouseOver = true;
                 int overId = hoverElement->m_OnMouseOverCallbackId;
                 if (overId != -1)
-                    JSApi::CallEventCallback(overId);
+                {
+                    JSApi::MouseEventData overData = buildElementEventData(hoverElement);
+                    JSApi::CallEventCallback(overId, this, &overData);
+                }
 
                 // If callback cleared the elements, hitElement is now invalid
                 if (m_Elements.empty()) {
@@ -2095,7 +2126,30 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
              m_MouseOverElement->m_IsMouseOver = false;
              int leaveId = m_MouseOverElement->m_OnMouseLeaveCallbackId;
              if (leaveId != -1)
-                 JSApi::CallEventCallback(leaveId);
+             {
+                 JSApi::MouseEventData elementLeaveData;
+                 POINT screenPt = {};
+                 if (GetCursorPos(&screenPt)) {
+                     POINT clientPt = screenPt;
+                     ScreenToClient(m_hWnd, &clientPt);
+                     elementLeaveData.clientX = clientPt.x;
+                     elementLeaveData.clientY = clientPt.y;
+                     elementLeaveData.offsetX = clientPt.x - m_MouseOverElement->GetX();
+                     elementLeaveData.offsetY = clientPt.y - m_MouseOverElement->GetY();
+                     elementLeaveData.screenX = screenPt.x;
+                     elementLeaveData.screenY = screenPt.y;
+
+                     const int elementW = m_MouseOverElement->GetWidth();
+                     const int elementH = m_MouseOverElement->GetHeight();
+                     if (elementW > 0) {
+                         elementLeaveData.offsetXPercent = (int)(((elementLeaveData.offsetX + 1) / (double)elementW) * 100.0);
+                     }
+                     if (elementH > 0) {
+                         elementLeaveData.offsetYPercent = (int)(((elementLeaveData.offsetY + 1) / (double)elementH) * 100.0);
+                     }
+                 }
+                 JSApi::CallEventCallback(leaveId, this, &elementLeaveData);
+             }
              m_MouseOverElement = nullptr;
              m_TooltipElement = nullptr;
         }
