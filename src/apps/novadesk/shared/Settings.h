@@ -11,7 +11,7 @@
 #include <string>
 #include <map>
 #include "../domain/Widget.h"
-#include "../../third_party/json/json.hpp"
+#include "../../../third_party/json/json.hpp"
 
 using json = nlohmann::json;
 
