@@ -65,14 +65,14 @@ Widget::Widget(const WidgetOptions& options)
 */
 Widget::~Widget()
 {
-    // JSApi::TriggerWidgetEvent(this, "close");
+    JSApi::TriggerWidgetEvent(this, "close");
     // JSApi::CleanupWidget(m_Options.id);
 
     if (m_hWnd)
     {
         DestroyWindow(m_hWnd);
     }
-    // JSApi::TriggerWidgetEvent(this, "closed");
+    JSApi::TriggerWidgetEvent(this, "closed");
     
     // Clean up elements
     for (auto* element : m_Elements)
@@ -173,7 +173,7 @@ void Widget::Show()
     {
         ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
         UpdateWindow(m_hWnd);
-        // JSApi::TriggerWidgetEvent(this, "show");
+        JSApi::TriggerWidgetEvent(this, "show");
     }
 }
 
@@ -182,13 +182,13 @@ void Widget::Hide()
     if (m_hWnd)
     {
         ShowWindow(m_hWnd, SW_HIDE);
-        // JSApi::TriggerWidgetEvent(this, "hide");
+        JSApi::TriggerWidgetEvent(this, "hide");
     }
 }
 
 void Widget::Refresh()
 {
-    // JSApi::TriggerWidgetEvent(this, "refresh");
+    JSApi::TriggerWidgetEvent(this, "refresh");
 
     BeginUpdate();
     RemoveElements(L""); // Clear all elements
@@ -489,11 +489,11 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     switch (message)
     {
     case WM_SETFOCUS:
-        // if (widget) JSApi::TriggerWidgetEvent(widget, "focus");
+        if (widget) JSApi::TriggerWidgetEvent(widget, "focus");
         return 0;
 
     case WM_KILLFOCUS:
-        // if (widget) JSApi::TriggerWidgetEvent(widget, "unFocus");
+        if (widget) JSApi::TriggerWidgetEvent(widget, "unFocus");
         return 0;
 
     case WM_ERASEBKGND:
@@ -876,7 +876,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             LPWINDOWPOS wp = (LPWINDOWPOS)lParam;
             if (!(wp->flags & SWP_NOMOVE))
             {
-                // JSApi::TriggerWidgetEvent(widget, "move");
+                JSApi::TriggerWidgetEvent(widget, "move");
                 widget->m_Options.x = wp->x;
                 widget->m_Options.y = wp->y;
             }

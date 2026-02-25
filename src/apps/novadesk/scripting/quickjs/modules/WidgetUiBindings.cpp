@@ -17,6 +17,7 @@
 #include "../../shared/Utils.h"
 #include "../engine/JSEngine.h"
 #include "../parser/PropertyParser.h"
+#include "WidgetWindowEventBindings.h"
 
 extern std::vector<Widget*> widgets;
 
@@ -285,9 +286,11 @@ JSClassID EnsureWidgetWindowClass(JSContext* ctx) {
         cls.class_name = "WidgetWindow";
         cls.finalizer = JsWidgetFinalizer;
         JS_NewClass(JS_GetRuntime(ctx), g_widgetWindowClassId, &cls);
+        InitWidgetWindowEventBindings(g_widgetWindowClassId);
 
         JSValue proto = JS_NewObject(ctx);
         JS_SetPropertyFunctionList(ctx, proto, kWidgetProtoFuncs, sizeof(kWidgetProtoFuncs) / sizeof(kWidgetProtoFuncs[0]));
+        AttachWidgetWindowEventMethods(ctx, proto);
         JS_SetClassProto(ctx, g_widgetWindowClassId, proto);
     }
     return g_widgetWindowClassId;

@@ -20,6 +20,7 @@ JSRuntime* g_runtime = nullptr;
 JSContext* g_context = nullptr;
 std::wstring g_lastScriptPath;
 std::vector<JSValue> g_eventCallbacks;
+std::unordered_map<Widget*, std::unordered_map<std::string, std::vector<int>>> g_widgetEventListeners;
 std::vector<JSValue> g_mainIpcListeners;
 std::vector<JSValue> g_uiIpcListeners;
 std::unordered_map<std::string, std::vector<JSValue>> g_mainIpcChannelListeners;
@@ -120,6 +121,10 @@ void ClearHandlerMap(std::unordered_map<std::string, JSValue>& map) {
         JS_FreeValue(g_context, kv.second);
     }
     map.clear();
+}
+
+void ClearWidgetEventListeners() {
+    g_widgetEventListeners.clear();
 }
 
 int RegisterCallback(std::vector<JSValue>& list, JSContext* ctx, JSValueConst fn) {
@@ -371,6 +376,7 @@ bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath) {
     ClearChannelMap(g_mainIpcChannelListeners);
     ClearChannelMap(g_uiIpcChannelListeners);
     ClearHandlerMap(g_mainIpcHandlers);
+    ClearWidgetEventListeners();
 
     const std::string script = FileUtils::ReadFileContent(finalScriptPath);
     if (script.empty()) {
@@ -449,9 +455,24 @@ void OnWidgetContextCommand(const std::wstring& widgetId, int commandId) {
 }
 
 void TriggerWidgetEvent(Widget* widget, const char* eventName, const MouseEventData* data) {
-    (void)widget;
-    (void)eventName;
-    (void)data;
+    if (!widget || !eventName || !*eventName) {
+        return;
+    }
+
+    auto widgetIt = g_widgetEventListeners.find(widget);
+    if (widgetIt == g_widgetEventListeners.end()) {
+        return;
+    }
+
+    const std::string eventKey(eventName);
+    auto eventIt = widgetIt->second.find(eventKey);
+    if (eventIt == widgetIt->second.end()) {
+        return;
+    }
+
+    for (int callbackId : eventIt->second) {
+        CallEventCallback(callbackId, widget, data);
+    }
 }
 
 void CallEventCallback(int callbackId, Widget* widget, const MouseEventData* data) {
@@ -513,6 +534,20 @@ int RegisterEventCallback(JSContext* ctx, JSValueConst fn) {
 
     g_eventCallbacks.push_back(JS_DupValue(g_context, fn));
     return static_cast<int>(g_eventCallbacks.size() - 1);
+}
+
+bool RegisterWidgetEventListener(JSContext* ctx, Widget* widget, const std::string& eventName, JSValueConst fn) {
+    if (!widget || eventName.empty()) {
+        return false;
+    }
+
+    const int callbackId = RegisterEventCallback(ctx, fn);
+    if (callbackId < 0) {
+        return false;
+    }
+
+    g_widgetEventListeners[widget][eventName].push_back(callbackId);
+    return true;
 }
 
 JSValue CreateUiIpcObject(JSContext* ctx) {

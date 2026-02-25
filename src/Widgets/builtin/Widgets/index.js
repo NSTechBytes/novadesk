@@ -19,6 +19,21 @@ function createWindow() {
   });
 
   ipcMain.send("main-ready", { ts: Date.now(), note: "hello from main" });
+  ipcMain.send("main-ping", { ts: Date.now(), note: "startup ping" });
+
+  win.on("show", () => console.log("[main] window show"));
+  win.on("hide", () => console.log("[main] window hide"));
+  win.on("focus", () => console.log("[main] window focus"));
+  win.on("unFocus", () => console.log("[main] window unFocus"));
+  win.on("move", () => console.log("[main] window move"));
+  win.on("refresh", () => console.log("[main] window refresh"));
+  win.on("mouseOver", (e) => console.log("[main] window mouseOver", e.clientX, e.clientY));
+  win.on("mouseMove", (e) => console.log("[main] window mouseMove", e.clientX, e.clientY));
+  win.on("mouseDown", (e) => console.log("[main] window mouseDown", e.clientX, e.clientY));
+  win.on("mouseUp", (e) => console.log("[main] window mouseUp", e.clientX, e.clientY));
+  win.on("mouseLeave", () => console.log("[main] window mouseLeave"));
+  win.on("close", () => console.log("[main] window close"));
+  win.on("closed", () => console.log("[main] window closed"));
 
   globalThis.sendPingToUi = () => {
     ipcMain.send("main-ping", { ts: Date.now() });
