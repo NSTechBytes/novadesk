@@ -40,6 +40,8 @@ int RegisterEventCallback(JSContext* ctx, JSValueConst fn);
 bool RegisterWidgetEventListener(JSContext* ctx, Widget* widget, const std::string& eventName, JSValueConst fn);
 bool RegisterWidgetContextMenuCallback(JSContext* ctx, const std::wstring& widgetId, int commandId, JSValueConst fn);
 void ClearWidgetContextMenuCallbacks(const std::wstring& widgetId);
+bool RegisterTrayCommandCallback(JSContext* ctx, int commandId, JSValueConst fn);
+void ClearTrayCommandCallbacks();
 bool ExecuteWidgetScript(Widget* widget);
 JSValue CreateUiIpcObject(JSContext* ctx);
 

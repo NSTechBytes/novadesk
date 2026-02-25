@@ -23,6 +23,7 @@ std::wstring g_lastScriptPath;
 std::vector<JSValue> g_eventCallbacks;
 std::unordered_map<Widget*, std::unordered_map<std::string, std::vector<int>>> g_widgetEventListeners;
 std::unordered_map<std::wstring, std::unordered_map<int, JSValue>> g_widgetContextMenuCallbacks;
+std::unordered_map<int, JSValue> g_trayCommandCallbacks;
 std::vector<JSValue> g_mainIpcListeners;
 std::vector<JSValue> g_uiIpcListeners;
 std::unordered_map<std::string, std::vector<JSValue>> g_mainIpcChannelListeners;
@@ -137,6 +138,14 @@ void ClearAllWidgetContextMenuCallbacks() {
         }
     }
     g_widgetContextMenuCallbacks.clear();
+}
+
+void ClearAllTrayCommandCallbacks() {
+    if (!g_context) return;
+    for (auto& kv : g_trayCommandCallbacks) {
+        JS_FreeValue(g_context, kv.second);
+    }
+    g_trayCommandCallbacks.clear();
 }
 
 int RegisterCallback(std::vector<JSValue>& list, JSContext* ctx, JSValueConst fn) {
@@ -390,6 +399,7 @@ bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath) {
     ClearHandlerMap(g_mainIpcHandlers);
     ClearWidgetEventListeners();
     ClearAllWidgetContextMenuCallbacks();
+    ClearAllTrayCommandCallbacks();
 
     const std::string script = FileUtils::ReadFileContent(finalScriptPath);
     if (script.empty()) {
@@ -459,7 +469,14 @@ HWND GetMessageWindow() {
 }
 
 void OnTrayCommand(int commandId) {
-    (void)commandId;
+    auto it = g_trayCommandCallbacks.find(commandId);
+    if (it == g_trayCommandCallbacks.end()) return;
+    JSValue ret = JS_Call(g_context, it->second, JS_UNDEFINED, 0, nullptr);
+    if (JS_IsException(ret)) {
+        LogQuickJsException(g_context);
+    } else {
+        JS_FreeValue(g_context, ret);
+    }
 }
 
 void OnWidgetContextCommand(const std::wstring& widgetId, int commandId) {
@@ -593,6 +610,22 @@ void ClearWidgetContextMenuCallbacks(const std::wstring& widgetId) {
         JS_FreeValue(g_context, kv.second);
     }
     g_widgetContextMenuCallbacks.erase(it);
+}
+
+bool RegisterTrayCommandCallback(JSContext* ctx, int commandId, JSValueConst fn) {
+    if (!ctx || ctx != g_context || commandId <= 0 || !JS_IsFunction(ctx, fn)) {
+        return false;
+    }
+    auto it = g_trayCommandCallbacks.find(commandId);
+    if (it != g_trayCommandCallbacks.end()) {
+        JS_FreeValue(ctx, it->second);
+    }
+    g_trayCommandCallbacks[commandId] = JS_DupValue(ctx, fn);
+    return true;
+}
+
+void ClearTrayCommandCallbacks() {
+    ClearAllTrayCommandCallbacks();
 }
 
 bool ExecuteWidgetScript(Widget* widget) {

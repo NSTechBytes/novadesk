@@ -1,4 +1,4 @@
-import { WidgetWindow } from 'novadesk';
+import { WidgetWindow, app } from 'novadesk';
 
 ipcMain.on("ui-ready", (_event, payload) => {
   console.log("[main] from ui-ready:", JSON.stringify(payload ?? {}));
@@ -55,4 +55,13 @@ function createWindow() {
 
 createWindow();
 
+app.setTrayMenu([
+  { text: "Reload", action: () => app.reload() },
+  { type: "separator" },
+  { text: "Toggle Tray Icon", action: () => app.hideTrayIcon(false) },
+  { text: "Exit", action: () => app.exit() }
+]);
+app.showDefaultTrayItems(true);
+
+console.log("Novadesk version:", app.getNovadeskVersion());
 console.log("Window created");
