@@ -1,4 +1,19 @@
 import { WidgetWindow, app } from 'novadesk';
+import * as std from 'std';
+
+console.log("OS:", JSON.stringify(std.getenviron()));
+// let dir = os.opendir('.');
+// if (dir) {
+//   for(;;) {
+//     let entry = os.readdir(dir);
+//     if (!entry) break;
+//     std.out.puts(entry.name + "\n");
+//   }
+//   os.closedir(dir);
+// } else {
+//   std.out.puts("Cannot open directory\n");
+// }
+
 
 ipcMain.on("ui-ready", (_event, payload) => {
   console.log("[main] from ui-ready:", JSON.stringify(payload ?? {}));

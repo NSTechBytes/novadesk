@@ -6,6 +6,7 @@
 #include <string>
 
 #include "NovadeskModule.h"
+#include "quickjs-libc.h"
 #include "../../shared/FileUtils.h"
 #include "../../shared/Utils.h"
 
@@ -14,7 +15,7 @@ namespace {
 bool g_moduleSystemDebug = false;
 
 std::string NormalizeModuleNameImpl(const std::string& baseName, const std::string& moduleName) {
-    if (moduleName == "novadesk") {
+    if (moduleName == "novadesk" || moduleName == "os" || moduleName == "std") {
         return moduleName;
     }
 
@@ -29,6 +30,7 @@ std::string NormalizeModuleNameImpl(const std::string& baseName, const std::stri
     }
     return (base / modulePath).lexically_normal().string();
 }
+
 }  // namespace
 
 void SetModuleSystemDebug(bool debug) {
@@ -53,6 +55,12 @@ JSModuleDef* ModuleLoader(JSContext* ctx, const char* moduleName, void*) {
 
     if (moduleName && std::string(moduleName) == "novadesk") {
         return EnsureNovadeskModule(ctx, moduleName);
+    }
+    if (moduleName && std::string(moduleName) == "os") {
+        return js_init_module_os(ctx, moduleName);
+    }
+    if (moduleName && std::string(moduleName) == "std") {
+        return js_init_module_std(ctx, moduleName);
     }
 
     const std::wstring modulePath = Utils::ToWString(moduleName ? moduleName : "");

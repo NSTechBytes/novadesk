@@ -25,6 +25,7 @@ add_executable(novadesk WIN32
     ${NOVADESK_APP_SOURCES}
     "${APP_SRC_DIR}/Novadesk.rc"
     "${QUICKJS_DIR}/quickjs.c"
+    "${QUICKJS_DIR}/quickjs-libc.c"
     "${QUICKJS_DIR}/libregexp.c"
     "${QUICKJS_DIR}/libunicode.c"
     "${QUICKJS_DIR}/dtoa.c"
