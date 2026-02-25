@@ -1,10 +1,12 @@
 #include "PropertyParser.h"
 
 #include <algorithm>
+#include <cwctype>
 
 #include "../../../shared/ColorUtil.h"
 #include "../../../shared/PathUtils.h"
 #include "../../../shared/Utils.h"
+#include "../engine/JSEngine.h"
 
 namespace PropertyParser {
 namespace {
@@ -96,6 +98,21 @@ bool GetFloatArrayProp(JSContext* ctx, JSValueConst obj, const char* key, std::v
     return true;
 }
 
+bool GetEventCallbackProp(JSContext* ctx, JSValueConst obj, const char* key, int& outId) {
+    JSValue v = JS_GetPropertyStr(ctx, obj, key);
+    if (JS_IsException(v) || JS_IsUndefined(v) || JS_IsNull(v)) {
+        JS_FreeValue(ctx, v);
+        return false;
+    }
+    if (!JS_IsFunction(ctx, v)) {
+        JS_FreeValue(ctx, v);
+        return false;
+    }
+    outId = JSApi::RegisterEventCallback(ctx, v);
+    JS_FreeValue(ctx, v);
+    return outId >= 0;
+}
+
 void ParseGradientOrColor(const std::wstring& v, COLORREF& color, BYTE& alpha, GradientInfo& gradient, bool& hasColor) {
     if (v.empty()) return;
     GradientInfo parsed;
@@ -182,6 +199,35 @@ void ParseElementOptions(JSContext* ctx, JSValueConst obj, ElementOptions& optio
     if (GetFloatArrayProp(ctx, obj, "transformMatrix", options.transformMatrix, 6)) {
         options.hasTransformMatrix = true;
     }
+
+    GetEventCallbackProp(ctx, obj, "onLeftMouseUp", options.onLeftMouseUpCallbackId);
+    GetEventCallbackProp(ctx, obj, "onLeftMouseDown", options.onLeftMouseDownCallbackId);
+    GetEventCallbackProp(ctx, obj, "onLeftDoubleClick", options.onLeftDoubleClickCallbackId);
+    GetEventCallbackProp(ctx, obj, "onRightMouseUp", options.onRightMouseUpCallbackId);
+    GetEventCallbackProp(ctx, obj, "onRightMouseDown", options.onRightMouseDownCallbackId);
+    GetEventCallbackProp(ctx, obj, "onRightDoubleClick", options.onRightDoubleClickCallbackId);
+    GetEventCallbackProp(ctx, obj, "onMiddleMouseUp", options.onMiddleMouseUpCallbackId);
+    GetEventCallbackProp(ctx, obj, "onMiddleMouseDown", options.onMiddleMouseDownCallbackId);
+    GetEventCallbackProp(ctx, obj, "onMiddleDoubleClick", options.onMiddleDoubleClickCallbackId);
+    GetEventCallbackProp(ctx, obj, "onX1MouseUp", options.onX1MouseUpCallbackId);
+    GetEventCallbackProp(ctx, obj, "onX1MouseDown", options.onX1MouseDownCallbackId);
+    GetEventCallbackProp(ctx, obj, "onX1DoubleClick", options.onX1DoubleClickCallbackId);
+    GetEventCallbackProp(ctx, obj, "onX2MouseUp", options.onX2MouseUpCallbackId);
+    GetEventCallbackProp(ctx, obj, "onX2MouseDown", options.onX2MouseDownCallbackId);
+    GetEventCallbackProp(ctx, obj, "onX2DoubleClick", options.onX2DoubleClickCallbackId);
+    GetEventCallbackProp(ctx, obj, "onScrollUp", options.onScrollUpCallbackId);
+    GetEventCallbackProp(ctx, obj, "onScrollDown", options.onScrollDownCallbackId);
+    GetEventCallbackProp(ctx, obj, "onScrollLeft", options.onScrollLeftCallbackId);
+    GetEventCallbackProp(ctx, obj, "onScrollRight", options.onScrollRightCallbackId);
+    GetEventCallbackProp(ctx, obj, "onMouseOver", options.onMouseOverCallbackId);
+    GetEventCallbackProp(ctx, obj, "onMouseLeave", options.onMouseLeaveCallbackId);
+
+    options.tooltipText = GetStringProp(ctx, obj, "tooltipText");
+    options.tooltipTitle = GetStringProp(ctx, obj, "tooltipTitle");
+    options.tooltipIcon = GetStringProp(ctx, obj, "tooltipIcon");
+    GetIntProp(ctx, obj, "tooltipMaxWidth", options.tooltipMaxWidth);
+    GetIntProp(ctx, obj, "tooltipMaxHeight", options.tooltipMaxHeight);
+    GetBoolProp(ctx, obj, "tooltipBalloon", options.tooltipBalloon);
 }
 
 void ParseImageOptions(JSContext* ctx, JSValueConst obj, ImageOptions& options, const std::wstring&) {
@@ -436,6 +482,38 @@ void ApplyElementOptions(Element* element, const ElementOptions& options) {
     if (options.hasTransformMatrix && options.transformMatrix.size() >= 6) {
         element->SetTransformMatrix(options.transformMatrix.data());
     }
+
+    if (options.onLeftMouseUpCallbackId != -1) element->m_OnLeftMouseUpCallbackId = options.onLeftMouseUpCallbackId;
+    if (options.onLeftMouseDownCallbackId != -1) element->m_OnLeftMouseDownCallbackId = options.onLeftMouseDownCallbackId;
+    if (options.onLeftDoubleClickCallbackId != -1) element->m_OnLeftDoubleClickCallbackId = options.onLeftDoubleClickCallbackId;
+    if (options.onRightMouseUpCallbackId != -1) element->m_OnRightMouseUpCallbackId = options.onRightMouseUpCallbackId;
+    if (options.onRightMouseDownCallbackId != -1) element->m_OnRightMouseDownCallbackId = options.onRightMouseDownCallbackId;
+    if (options.onRightDoubleClickCallbackId != -1) element->m_OnRightDoubleClickCallbackId = options.onRightDoubleClickCallbackId;
+    if (options.onMiddleMouseUpCallbackId != -1) element->m_OnMiddleMouseUpCallbackId = options.onMiddleMouseUpCallbackId;
+    if (options.onMiddleMouseDownCallbackId != -1) element->m_OnMiddleMouseDownCallbackId = options.onMiddleMouseDownCallbackId;
+    if (options.onMiddleDoubleClickCallbackId != -1) element->m_OnMiddleDoubleClickCallbackId = options.onMiddleDoubleClickCallbackId;
+    if (options.onX1MouseUpCallbackId != -1) element->m_OnX1MouseUpCallbackId = options.onX1MouseUpCallbackId;
+    if (options.onX1MouseDownCallbackId != -1) element->m_OnX1MouseDownCallbackId = options.onX1MouseDownCallbackId;
+    if (options.onX1DoubleClickCallbackId != -1) element->m_OnX1DoubleClickCallbackId = options.onX1DoubleClickCallbackId;
+    if (options.onX2MouseUpCallbackId != -1) element->m_OnX2MouseUpCallbackId = options.onX2MouseUpCallbackId;
+    if (options.onX2MouseDownCallbackId != -1) element->m_OnX2MouseDownCallbackId = options.onX2MouseDownCallbackId;
+    if (options.onX2DoubleClickCallbackId != -1) element->m_OnX2DoubleClickCallbackId = options.onX2DoubleClickCallbackId;
+    if (options.onScrollUpCallbackId != -1) element->m_OnScrollUpCallbackId = options.onScrollUpCallbackId;
+    if (options.onScrollDownCallbackId != -1) element->m_OnScrollDownCallbackId = options.onScrollDownCallbackId;
+    if (options.onScrollLeftCallbackId != -1) element->m_OnScrollLeftCallbackId = options.onScrollLeftCallbackId;
+    if (options.onScrollRightCallbackId != -1) element->m_OnScrollRightCallbackId = options.onScrollRightCallbackId;
+    if (options.onMouseOverCallbackId != -1) element->m_OnMouseOverCallbackId = options.onMouseOverCallbackId;
+    if (options.onMouseLeaveCallbackId != -1) element->m_OnMouseLeaveCallbackId = options.onMouseLeaveCallbackId;
+
+    if (!options.tooltipText.empty()) {
+        element->SetToolTip(
+            options.tooltipText,
+            options.tooltipTitle,
+            options.tooltipIcon,
+            options.tooltipMaxWidth,
+            options.tooltipMaxHeight,
+            options.tooltipBalloon);
+    }
 }
 
 void ApplyImageOptions(ImageElement* element, const ImageOptions& options) {
@@ -677,25 +755,102 @@ void ParseShapeOptions(duk_context*, ShapeOptions&) {}
 }
 
 namespace novadesk::scripting::quickjs::parser {
-void ParseWidgetWindowSize(JSContext* ctx, JSValueConst options, int& width, int& height) {
-    width = 800;
-    height = 600;
-
+void ParseWidgetWindowOptions(JSContext* ctx, JSValueConst options, WidgetWindowOptions& out) {
     if (!JS_IsObject(options)) {
         return;
     }
 
+    std::wstring id = PropertyParser::GetStringProp(ctx, options, "id");
+    if (!id.empty()) out.id = id;
+
+    int32_t v = 0;
     JSValue widthVal = JS_GetPropertyStr(ctx, options, "width");
-    JSValue heightVal = JS_GetPropertyStr(ctx, options, "height");
-
-    if (!JS_IsUndefined(widthVal)) {
-        JS_ToInt32(ctx, &width, widthVal);
-    }
-    if (!JS_IsUndefined(heightVal)) {
-        JS_ToInt32(ctx, &height, heightVal);
-    }
-
+    if (!JS_IsUndefined(widthVal) && JS_ToInt32(ctx, &v, widthVal) == 0) out.width = static_cast<int>(v);
     JS_FreeValue(ctx, widthVal);
+
+    JSValue heightVal = JS_GetPropertyStr(ctx, options, "height");
+    if (!JS_IsUndefined(heightVal) && JS_ToInt32(ctx, &v, heightVal) == 0) out.height = static_cast<int>(v);
     JS_FreeValue(ctx, heightVal);
+
+    JSValue xVal = JS_GetPropertyStr(ctx, options, "x");
+    if (!JS_IsUndefined(xVal) && JS_ToInt32(ctx, &v, xVal) == 0) {
+        out.x = static_cast<int>(v);
+        out.hasX = true;
+    }
+    JS_FreeValue(ctx, xVal);
+
+    JSValue yVal = JS_GetPropertyStr(ctx, options, "y");
+    if (!JS_IsUndefined(yVal) && JS_ToInt32(ctx, &v, yVal) == 0) {
+        out.y = static_cast<int>(v);
+        out.hasY = true;
+    }
+    JS_FreeValue(ctx, yVal);
+
+    PropertyParser::GetBoolProp(ctx, options, "draggable", out.draggable);
+    PropertyParser::GetBoolProp(ctx, options, "clickThrough", out.clickThrough);
+    PropertyParser::GetBoolProp(ctx, options, "keepOnScreen", out.keepOnScreen);
+    PropertyParser::GetBoolProp(ctx, options, "snapEdges", out.snapEdges);
+    PropertyParser::GetBoolProp(ctx, options, "show", out.show);
+    
+    std::wstring bg = PropertyParser::GetStringProp(ctx, options, "backgroundColor");
+    if (!bg.empty()) {
+        out.backgroundColor = bg;
+        bool hasBg = false;
+        PropertyParser::ParseGradientOrColor(bg, out.color, out.bgAlpha, out.bgGradient, hasBg);
+    }
+
+    JSValue opacityVal = JS_GetPropertyStr(ctx, options, "opacity");
+    if (!JS_IsUndefined(opacityVal) && !JS_IsNull(opacityVal)) {
+        if (JS_IsString(opacityVal)) {
+            const char* s = JS_ToCString(ctx, opacityVal);
+            if (s) {
+                std::wstring ws = Utils::ToWString(s);
+                JS_FreeCString(ctx, s);
+                ws.erase(std::remove_if(ws.begin(), ws.end(), iswspace), ws.end());
+                if (!ws.empty() && ws.back() == L'%') {
+                    ws.pop_back();
+                    try {
+                        float pct = std::stof(ws);
+                        pct = std::max(0.0f, std::min(100.0f, pct));
+                        out.windowOpacity = static_cast<BYTE>((pct / 100.0f) * 255.0f);
+                    } catch (...) {
+                    }
+                } else {
+                    try {
+                        float val = std::stof(ws);
+                        if (val <= 1.0f) val *= 255.0f;
+                        val = std::max(0.0f, std::min(255.0f, val));
+                        out.windowOpacity = static_cast<BYTE>(val);
+                    } catch (...) {
+                    }
+                }
+            }
+        } else {
+            double d = 1.0;
+            if (JS_ToFloat64(ctx, &d, opacityVal) == 0) {
+                if (d <= 1.0) d *= 255.0;
+                d = std::max(0.0, std::min(255.0, d));
+                out.windowOpacity = static_cast<BYTE>(d);
+            }
+        }
+    }
+    JS_FreeValue(ctx, opacityVal);
+
+    std::wstring zPosStr = PropertyParser::GetStringProp(ctx, options, "zPos");
+    std::transform(zPosStr.begin(), zPosStr.end(), zPosStr.begin(), ::towlower);
+    if (zPosStr == L"ondesktop") out.zPos = -2;
+    else if (zPosStr == L"onbottom") out.zPos = -1;
+    else if (zPosStr == L"normal") out.zPos = 0;
+    else if (zPosStr == L"ontop") out.zPos = 1;
+    else if (zPosStr == L"ontopmost") out.zPos = 2;
+
+    out.scriptPath = PropertyParser::GetStringProp(ctx, options, "script");
+}
+
+void ParseWidgetWindowSize(JSContext* ctx, JSValueConst options, int& width, int& height) {
+    WidgetWindowOptions parsed;
+    ParseWidgetWindowOptions(ctx, options, parsed);
+    width = parsed.width;
+    height = parsed.height;
 }
 }  // namespace novadesk::scripting::quickjs::parser

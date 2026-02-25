@@ -57,11 +57,38 @@ struct ElementOptions {
     float rotate = 0.0f;
     bool hasTransformMatrix = false;
     std::vector<float> transformMatrix;
+    int onLeftMouseUpCallbackId = -1;
+    int onLeftMouseDownCallbackId = -1;
+    int onLeftDoubleClickCallbackId = -1;
+    int onRightMouseUpCallbackId = -1;
+    int onRightMouseDownCallbackId = -1;
+    int onRightDoubleClickCallbackId = -1;
+    int onMiddleMouseUpCallbackId = -1;
+    int onMiddleMouseDownCallbackId = -1;
+    int onMiddleDoubleClickCallbackId = -1;
+    int onX1MouseUpCallbackId = -1;
+    int onX1MouseDownCallbackId = -1;
+    int onX1DoubleClickCallbackId = -1;
+    int onX2MouseUpCallbackId = -1;
+    int onX2MouseDownCallbackId = -1;
+    int onX2DoubleClickCallbackId = -1;
+    int onScrollUpCallbackId = -1;
+    int onScrollDownCallbackId = -1;
+    int onScrollLeftCallbackId = -1;
+    int onScrollRightCallbackId = -1;
+    int onMouseOverCallbackId = -1;
+    int onMouseLeaveCallbackId = -1;
+    std::wstring tooltipText;
+    std::wstring tooltipTitle;
+    std::wstring tooltipIcon;
+    int tooltipMaxWidth = 0;
+    int tooltipMaxHeight = 0;
+    bool tooltipBalloon = false;
 };
 
 struct ImageOptions : public ElementOptions {
     std::wstring path;
-    ImageAspectRatio preserveAspectRatio = static_cast<ImageAspectRatio>(0);
+    ImageAspectRatio preserveAspectRatio = IMAGE_ASPECT_STRETCH;
     BYTE imageAlpha = 255;
     bool grayscale = false;
     bool tile = false;
@@ -76,14 +103,14 @@ struct ImageOptions : public ElementOptions {
 
 struct TextOptions : public ElementOptions {
     std::wstring text;
-    std::wstring fontFace = L"Segoe UI";
-    int fontSize = 14;
-    COLORREF fontColor = RGB(255, 255, 255);
+    std::wstring fontFace = L"Arial";
+    int fontSize = 12;
+    COLORREF fontColor = RGB(0, 0, 0);
     BYTE alpha = 255;
     int fontWeight = 400;
     bool italic = false;
-    TextAlignment textAlign = static_cast<TextAlignment>(0);
-    TextClipString clip = static_cast<TextClipString>(0);
+    TextAlignment textAlign = TEXT_ALIGN_LEFT_TOP;
+    TextClipString clip = TEXT_CLIP_NONE;
     std::wstring fontPath;
     std::vector<TextShadow> shadows;
     GradientInfo fontGradient;
@@ -95,7 +122,7 @@ struct TextOptions : public ElementOptions {
 
 struct BarOptions : public ElementOptions {
     float value = 0.0f;
-    BarOrientation orientation = static_cast<BarOrientation>(0);
+    BarOrientation orientation = BAR_HORIZONTAL;
     int barCornerRadius = 0;
     bool hasBarColor = false;
     COLORREF barColor = RGB(0, 255, 0);
@@ -134,7 +161,7 @@ struct ShapeCombineOp {
 
 struct ShapeOptions : public ElementOptions {
     bool isCombine = false;
-    std::wstring shapeType = L"rectangle";
+    std::wstring shapeType;
     float strokeWidth = 1.0f;
     COLORREF strokeColor = RGB(0, 0, 0);
     BYTE strokeAlpha = 255;
@@ -198,5 +225,28 @@ void ParseShapeOptions(duk_context* ctx, ShapeOptions& options);
 }  // namespace PropertyParser
 
 namespace novadesk::scripting::quickjs::parser {
+struct WidgetWindowOptions {
+    std::wstring id = L"widget";
+    int width = 800;
+    int height = 600;
+    int x = 0;
+    int y = 0;
+    bool hasX = false;
+    bool hasY = false;
+    bool draggable = true;
+    bool clickThrough = false;
+    bool keepOnScreen = false;
+    bool snapEdges = true;
+    bool show = true;
+    std::wstring backgroundColor = L"rgba(0,0,0,0)";
+    COLORREF color = RGB(0, 0, 0);
+    BYTE bgAlpha = 0;
+    GradientInfo bgGradient;
+    BYTE windowOpacity = 255;
+    int zPos = -1;
+    std::wstring scriptPath;
+};
+
+void ParseWidgetWindowOptions(JSContext* ctx, JSValueConst options, WidgetWindowOptions& out);
 void ParseWidgetWindowSize(JSContext* ctx, JSValueConst options, int& width, int& height);
 }  // namespace novadesk::scripting::quickjs::parser

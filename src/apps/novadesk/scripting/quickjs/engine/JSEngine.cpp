@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "../../domain/Widget.h"
 #include "../../shared/FileUtils.h"
 #include "../../shared/Logging.h"
 #include "../../shared/PathUtils.h"
@@ -17,6 +18,7 @@ HWND g_messageWindow = nullptr;
 JSRuntime* g_runtime = nullptr;
 JSContext* g_context = nullptr;
 std::wstring g_lastScriptPath;
+std::vector<JSValue> g_eventCallbacks;
 
 enum class ConsoleLevel {
     Log = 0,
@@ -113,6 +115,8 @@ bool EnsureRuntime() {
     JS_SetModuleLoaderFunc(g_runtime, novadesk::scripting::quickjs::ModuleNormalizeName, novadesk::scripting::quickjs::ModuleLoader, nullptr);
     novadesk::scripting::quickjs::SetModuleSystemDebug(false);
     RegisterConsoleBindings(g_context);
+    g_eventCallbacks.clear();
+    g_eventCallbacks.push_back(JS_UNDEFINED);  // callback id 0 is invalid
     return true;
 }
 
@@ -134,6 +138,12 @@ bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath) {
 
     const std::wstring finalScriptPath = ResolveEntryScript(scriptPath);
     g_lastScriptPath = finalScriptPath;
+
+    for (size_t i = 1; i < g_eventCallbacks.size(); ++i) {
+        JS_FreeValue(g_context, g_eventCallbacks[i]);
+    }
+    g_eventCallbacks.clear();
+    g_eventCallbacks.push_back(JS_UNDEFINED);
 
     const std::string script = FileUtils::ReadFileContent(finalScriptPath);
     if (script.empty()) {
@@ -212,8 +222,58 @@ void TriggerWidgetEvent(Widget* widget, const char* eventName, const MouseEventD
 }
 
 void CallEventCallback(int callbackId, Widget* widget, const MouseEventData* data) {
-    (void)callbackId;
-    (void)widget;
-    (void)data;
+    if (!g_context || callbackId <= 0 || callbackId >= static_cast<int>(g_eventCallbacks.size())) {
+        return;
+    }
+
+    JSValue callback = g_eventCallbacks[callbackId];
+    if (JS_IsUndefined(callback) || JS_IsNull(callback)) {
+        return;
+    }
+
+    JSValue arg = JS_UNDEFINED;
+    int argc = 0;
+    if (data) {
+        arg = JS_NewObject(g_context);
+        JS_SetPropertyStr(g_context, arg, "clientX", JS_NewInt32(g_context, data->clientX));
+        JS_SetPropertyStr(g_context, arg, "clientY", JS_NewInt32(g_context, data->clientY));
+        JS_SetPropertyStr(g_context, arg, "screenX", JS_NewInt32(g_context, data->screenX));
+        JS_SetPropertyStr(g_context, arg, "screenY", JS_NewInt32(g_context, data->screenY));
+        JS_SetPropertyStr(g_context, arg, "offsetX", JS_NewInt32(g_context, data->offsetX));
+        JS_SetPropertyStr(g_context, arg, "offsetY", JS_NewInt32(g_context, data->offsetY));
+        JS_SetPropertyStr(g_context, arg, "offsetXPercent", JS_NewInt32(g_context, data->offsetXPercent));
+        JS_SetPropertyStr(g_context, arg, "offsetYPercent", JS_NewInt32(g_context, data->offsetYPercent));
+        if (widget) {
+            JS_SetPropertyStr(g_context, arg, "widgetId",
+                JS_NewString(g_context, Utils::ToString(widget->GetOptions().id).c_str()));
+        }
+        argc = 1;
+    }
+
+    JSValue argv[1] = { arg };
+    JSValue ret = JS_Call(g_context, callback, JS_UNDEFINED, argc, argv);
+    if (argc == 1) {
+        JS_FreeValue(g_context, arg);
+    }
+    if (JS_IsException(ret)) {
+        LogQuickJsException(g_context);
+    } else {
+        JS_FreeValue(g_context, ret);
+    }
+}
+
+int RegisterEventCallback(JSContext* ctx, JSValueConst fn) {
+    if (!ctx || !JS_IsFunction(ctx, fn)) {
+        return -1;
+    }
+    if (!EnsureRuntime() || !g_context) {
+        return -1;
+    }
+    if (ctx != g_context) {
+        return -1;
+    }
+
+    g_eventCallbacks.push_back(JS_DupValue(g_context, fn));
+    return static_cast<int>(g_eventCallbacks.size() - 1);
 }
 }  // namespace JSApi

@@ -44,9 +44,9 @@ struct WidgetOptions
     int y = 0;
     int width = 0;
     int height = 0;
-    std::wstring backgroundColor = L"rgba(255,255,255,255)";
+    std::wstring backgroundColor = L"rgba(0,0,0,0)";
     ZPOSITION zPos = ZPOSITION_NORMAL;
-    BYTE bgAlpha = 255;        // Alpha component of background color (0-255)
+    BYTE bgAlpha = 0;          // Alpha component of background color (0-255)
     BYTE windowOpacity = 255;  // Overall window opacity (0-255)
     COLORREF color = RGB(255, 255, 255);
     GradientInfo bgGradient;
