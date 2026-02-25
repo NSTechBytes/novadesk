@@ -108,11 +108,6 @@ try {
     Build-Solution -MSBuildPath $msbuild -SolutionPath $installerSln -Config $Configuration -Plat $Platform
     Build-Solution -MSBuildPath $msbuild -SolutionPath $nwmSln -Config $Configuration -Plat $Platform
 
-    if (Test-Path $BuildDir) {
-        Write-Host "Removing existing $BuildDir for a clean MinGW configure..." -ForegroundColor DarkGray
-        Remove-Item -Recurse -Force $BuildDir
-    }
-
     Write-Host "Configuring MinGW build..." -ForegroundColor Cyan
     & $cmake -S . -B $BuildDir -G "MinGW Makefiles" `
         -DCMAKE_MAKE_PROGRAM="$mingwMake" `
