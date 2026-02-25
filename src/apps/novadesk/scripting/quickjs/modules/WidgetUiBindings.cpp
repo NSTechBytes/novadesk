@@ -237,7 +237,7 @@ bool RunWidgetUiScript(JSContext* ctx, Widget* widget, const std::wstring& scrip
 
     JSValue global = JS_GetGlobalObject(ctx);
     JS_SetPropertyStr(ctx, global, "__novadesk_ui__", JS_DupValue(ctx, uiObj));
-    JSValue ipcObj = JSApi::CreateUiIpcObject(ctx);
+    JSValue ipcObj = JSEngine::CreateUiIpcObject(ctx);
     JS_SetPropertyStr(ctx, global, "__novadesk_ui_ipc__", JS_DupValue(ctx, ipcObj));
     JS_FreeValue(ctx, global);
 

@@ -65,13 +65,13 @@ Widget::Widget(const WidgetOptions& options)
 */
 Widget::~Widget()
 {
-    JSApi::TriggerWidgetEvent(this, "close");
+    JSEngine::TriggerWidgetEvent(this, "close");
 
     if (m_hWnd)
     {
         DestroyWindow(m_hWnd);
     }
-    JSApi::TriggerWidgetEvent(this, "closed");
+    JSEngine::TriggerWidgetEvent(this, "closed");
     
     // Clean up elements
     for (auto* element : m_Elements)
@@ -172,7 +172,7 @@ void Widget::Show()
     {
         ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
         UpdateWindow(m_hWnd);
-        JSApi::TriggerWidgetEvent(this, "show");
+        JSEngine::TriggerWidgetEvent(this, "show");
     }
 }
 
@@ -181,13 +181,13 @@ void Widget::Hide()
     if (m_hWnd)
     {
         ShowWindow(m_hWnd, SW_HIDE);
-        JSApi::TriggerWidgetEvent(this, "hide");
+        JSEngine::TriggerWidgetEvent(this, "hide");
     }
 }
 
 void Widget::Refresh()
 {
-    JSApi::TriggerWidgetEvent(this, "refresh");
+    JSEngine::TriggerWidgetEvent(this, "refresh");
 
     BeginUpdate();
     RemoveElements(L""); // Clear all elements
@@ -487,11 +487,11 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     switch (message)
     {
     case WM_SETFOCUS:
-        if (widget) JSApi::TriggerWidgetEvent(widget, "focus");
+        if (widget) JSEngine::TriggerWidgetEvent(widget, "focus");
         return 0;
 
     case WM_KILLFOCUS:
-        if (widget) JSApi::TriggerWidgetEvent(widget, "unFocus");
+        if (widget) JSEngine::TriggerWidgetEvent(widget, "unFocus");
         return 0;
 
     case WM_ERASEBKGND:
@@ -725,7 +725,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         
                         int leaveId = widget->m_MouseOverElement->m_OnMouseLeaveCallbackId;
                         if (leaveId != -1)
-                            JSApi::CallEventCallback(leaveId);
+                            JSEngine::CallEventCallback(leaveId);
                              
                         widget->m_MouseOverElement = nullptr;
                     }
@@ -874,7 +874,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             LPWINDOWPOS wp = (LPWINDOWPOS)lParam;
             if (!(wp->flags & SWP_NOMOVE))
             {
-                JSApi::TriggerWidgetEvent(widget, "move");
+                JSEngine::TriggerWidgetEvent(widget, "move");
                 widget->m_Options.x = wp->x;
                 widget->m_Options.y = wp->y;
             }
@@ -1912,7 +1912,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     }
 
     {
-        JSApi::MouseEventData widgetEventData;
+        JSEngine::MouseEventData widgetEventData;
         widgetEventData.clientX = x;
         widgetEventData.clientY = y;
         widgetEventData.offsetX = x;
@@ -1937,17 +1937,17 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
         if (message == WM_MOUSEMOVE) {
             if (justEnteredWidget) {
-                JSApi::TriggerWidgetEvent(this, "mouseOver", &widgetEventData);
+                JSEngine::TriggerWidgetEvent(this, "mouseOver", &widgetEventData);
             }
-            JSApi::TriggerWidgetEvent(this, "mouseMove", &widgetEventData);
+            JSEngine::TriggerWidgetEvent(this, "mouseMove", &widgetEventData);
         } else if (
             message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN || message == WM_MBUTTONDOWN || message == WM_XBUTTONDOWN
         ) {
-            JSApi::TriggerWidgetEvent(this, "mouseDown", &widgetEventData);
+            JSEngine::TriggerWidgetEvent(this, "mouseDown", &widgetEventData);
         } else if (
             message == WM_LBUTTONUP || message == WM_RBUTTONUP || message == WM_MBUTTONUP || message == WM_XBUTTONUP
         ) {
-            JSApi::TriggerWidgetEvent(this, "mouseUp", &widgetEventData);
+            JSEngine::TriggerWidgetEvent(this, "mouseUp", &widgetEventData);
         }
     }
 
@@ -1999,7 +1999,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         if (hoverElement != m_MouseOverElement)
         {
             auto buildElementEventData = [&](Element* el) {
-                JSApi::MouseEventData eventData;
+                JSEngine::MouseEventData eventData;
                 eventData.clientX = x;
                 eventData.clientY = y;
 
@@ -2031,8 +2031,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 int leaveId = m_MouseOverElement->m_OnMouseLeaveCallbackId;
                 if (leaveId != -1)
                 {
-                    JSApi::MouseEventData leaveData = buildElementEventData(m_MouseOverElement);
-                    JSApi::CallEventCallback(leaveId, this, &leaveData);
+                    JSEngine::MouseEventData leaveData = buildElementEventData(m_MouseOverElement);
+                    JSEngine::CallEventCallback(leaveId, this, &leaveData);
                 }
                 
                 // If callback cleared the elements, m_MouseOverElement is now invalid
@@ -2050,8 +2050,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 int overId = hoverElement->m_OnMouseOverCallbackId;
                 if (overId != -1)
                 {
-                    JSApi::MouseEventData overData = buildElementEventData(hoverElement);
-                    JSApi::CallEventCallback(overId, this, &overData);
+                    JSEngine::MouseEventData overData = buildElementEventData(hoverElement);
+                    JSEngine::CallEventCallback(overId, this, &overData);
                 }
 
                 // If callback cleared the elements, hitElement is now invalid
@@ -2092,7 +2092,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     {
         if (m_IsMouseOverWidget) {
             m_IsMouseOverWidget = false;
-            JSApi::MouseEventData leaveEventData;
+            JSEngine::MouseEventData leaveEventData;
             POINT screenPt = {};
             if (GetCursorPos(&screenPt)) {
                 POINT clientPt = screenPt;
@@ -2116,7 +2116,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                     }
                 }
             }
-            JSApi::TriggerWidgetEvent(this, "mouseLeave", &leaveEventData);
+            JSEngine::TriggerWidgetEvent(this, "mouseLeave", &leaveEventData);
         }
         if (m_MouseOverElement)
         {
@@ -2125,7 +2125,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
              int leaveId = m_MouseOverElement->m_OnMouseLeaveCallbackId;
              if (leaveId != -1)
              {
-                 JSApi::MouseEventData elementLeaveData;
+                 JSEngine::MouseEventData elementLeaveData;
                  POINT screenPt = {};
                  if (GetCursorPos(&screenPt)) {
                      POINT clientPt = screenPt;
@@ -2146,7 +2146,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                          elementLeaveData.offsetYPercent = (int)(((elementLeaveData.offsetY + 1) / (double)elementH) * 100.0);
                      }
                  }
-                 JSApi::CallEventCallback(leaveId, this, &elementLeaveData);
+                 JSEngine::CallEventCallback(leaveId, this, &elementLeaveData);
              }
              m_MouseOverElement = nullptr;
              m_TooltipElement = nullptr;
@@ -2197,7 +2197,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
         if (actionId != -1)
         {
-             JSApi::MouseEventData eventData;
+             JSEngine::MouseEventData eventData;
              eventData.clientX = x;
              eventData.clientY = y;
 
@@ -2221,7 +2221,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
              }
 
              // Execute function callback with mouse position aliases.
-             JSApi::CallEventCallback(actionId, this, &eventData);
+             JSEngine::CallEventCallback(actionId, this, &eventData);
              handled = true;
         }
     }
@@ -2264,11 +2264,11 @@ void Widget::OnContextMenu()
 
     if (cmd >= 2000)
     {
-        JSApi::OnWidgetContextCommand(m_Options.id, cmd);
+        JSEngine::OnWidgetContextCommand(m_Options.id, cmd);
     }
     else if (cmd == 1001)
     {
-        JSApi::Reload();
+        JSEngine::Reload();
     }
     else if (cmd == 1002)
     {

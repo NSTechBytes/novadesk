@@ -108,7 +108,7 @@ bool GetEventCallbackProp(JSContext* ctx, JSValueConst obj, const char* key, int
         JS_FreeValue(ctx, v);
         return false;
     }
-    outId = JSApi::RegisterEventCallback(ctx, v);
+    outId = JSEngine::RegisterEventCallback(ctx, v);
     JS_FreeValue(ctx, v);
     return outId >= 0;
 }

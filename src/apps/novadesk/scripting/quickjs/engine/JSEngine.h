@@ -10,7 +10,7 @@ using duk_context = duk_hthread;
 
 class Widget;
 
-namespace JSApi {
+namespace JSEngine {
 struct MouseEventData {
     int clientX = 0;
     int clientY = 0;
@@ -41,4 +41,4 @@ bool RegisterWidgetEventListener(JSContext* ctx, Widget* widget, const std::stri
 JSValue CreateUiIpcObject(JSContext* ctx);
 
 static const UINT WM_NOVADESK_DISPATCH = WM_USER + 101;
-}  // namespace JSApi
+}  // namespace JSEngine

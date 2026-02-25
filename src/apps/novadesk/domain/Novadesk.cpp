@@ -152,13 +152,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     WNDCLASSEXW wcex = {};
     wcex.cbSize = sizeof(WNDCLASSEX);
     wcex.lpfnWndProc = [](HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) -> LRESULT {
-        // Route custom JSApi messages and timers
-        JSApi::OnMessage(message, wParam, lParam);
+        // Route custom JSEngine messages and timers
+        JSEngine::OnMessage(message, wParam, lParam);
 
         switch (message)
         {
         case WM_TIMER:
-            JSApi::OnTimer(wParam);
+            JSEngine::OnTimer(wParam);
             break;
         case WM_TRAYICON:
             if (lParam == WM_RBUTTONUP || lParam == WM_LBUTTONUP)
@@ -175,11 +175,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             }
             else if (wmId == ID_TRAY_REFRESH)
             {
-                JSApi::Reload();
+                JSEngine::Reload();
             }
             else if (wmId >= 2000)
             {
-                JSApi::OnTrayCommand(wmId);
+                JSEngine::OnTrayCommand(wmId);
             }
 
         }
@@ -207,14 +207,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
     // Initialize tray icon and JS message routing
-    JSApi::SetMessageWindow(hWnd);
+    JSEngine::SetMessageWindow(hWnd);
     InitTrayIcon(hWnd);
 
     // Scripting runtime context is handled by the migrated QuickJS path.
     ctx = nullptr;
 
     // Initialize JavaScript API
-    JSApi::InitializeJavaScriptAPI(ctx);
+    JSEngine::InitializeJavaScriptAPI(ctx);
 
     // Parse command line for custom script path
     std::wstring scriptPath;
@@ -248,7 +248,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
     // Load and execute script (with optional custom path)
-    JSApi::LoadAndExecuteScript(ctx, scriptPath.empty() ? L"" : scriptPath);
+    JSEngine::LoadAndExecuteScript(ctx, scriptPath.empty() ? L"" : scriptPath);
 
     MSG msg;
 

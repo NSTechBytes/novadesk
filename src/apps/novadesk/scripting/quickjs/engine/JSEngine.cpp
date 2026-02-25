@@ -13,7 +13,7 @@
 #include "../../shared/Utils.h"
 #include "../modules/ModuleSystem.h"
 
-namespace JSApi {
+namespace JSEngine {
 namespace {
 HWND g_messageWindow = nullptr;
 JSRuntime* g_runtime = nullptr;
@@ -553,4 +553,4 @@ bool RegisterWidgetEventListener(JSContext* ctx, Widget* widget, const std::stri
 JSValue CreateUiIpcObject(JSContext* ctx) {
     return CreateUiIpcObjectImpl(ctx);
 }
-}  // namespace JSApi
+}  // namespace JSEngine

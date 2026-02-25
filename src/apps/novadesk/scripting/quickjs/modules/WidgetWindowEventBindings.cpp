@@ -37,7 +37,7 @@ JSValue JsWidgetWindowOn(JSContext* ctx, JSValueConst thisVal, int argc, JSValue
     const std::string event(eventName);
     JS_FreeCString(ctx, eventName);
 
-    if (!JSApi::RegisterWidgetEventListener(ctx, widget, event, argv[1])) {
+    if (!JSEngine::RegisterWidgetEventListener(ctx, widget, event, argv[1])) {
         return JS_ThrowInternalError(ctx, "failed to register widget event listener");
     }
 
