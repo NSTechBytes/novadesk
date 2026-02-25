@@ -631,11 +631,11 @@ bool InitWidget(const std::string& name) {
 
     try {
         fs::path exeDir = GetExeDir();
-        fs::path templateDir = exeDir / "widget";
+        fs::path templateDir = exeDir / "template";
 
         // Check if template exists in exe dir or source dir (for dev)
         if (!fs::exists(templateDir)) {
-            templateDir = exeDir.parent_path().parent_path().parent_path() / "nwm" / "widget";
+            templateDir = exeDir.parent_path().parent_path().parent_path() / "nwm" / "template";
         }
 
         if (fs::exists(templateDir)) {

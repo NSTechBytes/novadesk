@@ -1,7 +1,8 @@
 param(
     [string]$BuildDir = "build-mingw",
     [string]$Configuration = "Release",
-    [string]$Platform = "x64"
+    [string]$Platform = "x64",
+    [switch]$Reconfigure
 )
 
 $ErrorActionPreference = "Stop"
@@ -108,13 +109,18 @@ try {
     Build-Solution -MSBuildPath $msbuild -SolutionPath $installerSln -Config $Configuration -Plat $Platform
     Build-Solution -MSBuildPath $msbuild -SolutionPath $nwmSln -Config $Configuration -Plat $Platform
 
-    Write-Host "Configuring MinGW build..." -ForegroundColor Cyan
-    & $cmake -S . -B $BuildDir -G "MinGW Makefiles" `
-        -DCMAKE_MAKE_PROGRAM="$mingwMake" `
-        -DCMAKE_C_COMPILER="$mingwCC" `
-        -DCMAKE_CXX_COMPILER="$mingwCXX"
-    if ($LASTEXITCODE -ne 0) {
-        throw "CMake configure failed."
+    $cacheFile = Join-Path $BuildDir "CMakeCache.txt"
+    if ($Reconfigure -or -not (Test-Path $cacheFile)) {
+        Write-Host "Configuring MinGW build..." -ForegroundColor Cyan
+        & $cmake -S . -B $BuildDir -G "MinGW Makefiles" `
+            -DCMAKE_MAKE_PROGRAM="$mingwMake" `
+            -DCMAKE_C_COMPILER="$mingwCC" `
+            -DCMAKE_CXX_COMPILER="$mingwCXX"
+        if ($LASTEXITCODE -ne 0) {
+            throw "CMake configure failed."
+        }
+    } else {
+        Write-Host "Using existing CMake configuration in $BuildDir" -ForegroundColor DarkGray
     }
 
     Write-Host "Building MinGW target(s)..." -ForegroundColor Cyan
