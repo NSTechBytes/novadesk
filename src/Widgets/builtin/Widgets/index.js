@@ -85,7 +85,23 @@ console.log("Power status:", JSON.stringify(power.getStatus?.() ?? {}));
 console.log("Display metrics count:", displayMetrics.getMetrics().count);
 console.log("System modules:", !!wallpaper, !!audio, !!brightness, !!fileIcon);
 
-const testHotkeyId = hotkey.register("K", {
+const timeoutId = setTimeout(() => {
+  console.log("[timer] setTimeout fired after 1500ms");
+}, 1500);
+console.log("Timeout id:", timeoutId);
+
+let intervalTick = 0;
+const intervalId = setInterval(() => {
+  intervalTick += 1;
+  console.log(`[timer] setInterval tick ${intervalTick}`);
+  if (intervalTick >= 5) {
+    clearInterval(intervalId);
+    console.log("[timer] interval cleared after 5 ticks");
+  }
+}, 1000);
+console.log("Interval id:", intervalId);
+
+const testHotkeyId = hotkey.register("CTRL+ALT+K", {
   onKeyDown: () => console.log("[hotkey] down CTRL+ALT+K"),
   onKeyUp: () => console.log("[hotkey] up CTRL+ALT+K")
 });
@@ -94,6 +110,12 @@ console.log("Hotkey registered id:", testHotkeyId);
 globalThis.unregisterTestHotkey = () => {
   const ok = hotkey.unregister(testHotkeyId);
   console.log("Hotkey unregistered:", ok);
+};
+
+globalThis.stopTimerTests = () => {
+  clearTimeout(timeoutId);
+  clearInterval(intervalId);
+  console.log("[timer] test timers stopped");
 };
 
 console.log("Window created");

@@ -27,6 +27,13 @@ std::vector<JSValue> g_eventCallbacks;
 std::unordered_map<Widget*, std::unordered_map<std::string, std::vector<int>>> g_widgetEventListeners;
 std::unordered_map<std::wstring, std::unordered_map<int, JSValue>> g_widgetContextMenuCallbacks;
 std::unordered_map<int, JSValue> g_trayCommandCallbacks;
+struct TimerEntry {
+    JSValue callback = JS_UNDEFINED;
+    std::vector<JSValue> args;
+    bool repeat = false;
+};
+std::unordered_map<UINT_PTR, TimerEntry> g_timers;
+UINT_PTR g_nextTimerId = 50000;
 std::vector<JSValue> g_mainIpcListeners;
 std::vector<JSValue> g_uiIpcListeners;
 std::unordered_map<std::string, std::vector<JSValue>> g_mainIpcChannelListeners;
@@ -70,6 +77,48 @@ JSValue JsConsoleWrite(JSContext* ctx, JSValueConst, int argc, JSValueConst* arg
     return JS_UNDEFINED;
 }
 
+JSValue JsSetTimerImpl(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv, int magic) {
+    if (argc < 1 || !JS_IsFunction(ctx, argv[0])) {
+        return JS_ThrowTypeError(ctx, "timer requires callback");
+    }
+    if (!g_messageWindow) {
+        return JS_ThrowInternalError(ctx, "Message window is not initialized");
+    }
+
+    int32_t delay = 0;
+    if (argc > 1) JS_ToInt32(ctx, &delay, argv[1]);
+    if (delay < 0) delay = 0;
+
+    UINT_PTR id = g_nextTimerId++;
+    if (SetTimer(g_messageWindow, id, static_cast<UINT>(delay), nullptr) == 0) {
+        return JS_ThrowInternalError(ctx, "SetTimer failed");
+    }
+
+    TimerEntry entry{};
+    entry.callback = JS_DupValue(ctx, argv[0]);
+    entry.repeat = (magic != 0);
+    for (int i = 2; i < argc; ++i) {
+        entry.args.push_back(JS_DupValue(ctx, argv[i]));
+    }
+    g_timers[id] = std::move(entry);
+    return JS_NewInt64(ctx, static_cast<int64_t>(id));
+}
+
+JSValue JsClearTimerImpl(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_UNDEFINED;
+    int64_t id64 = 0;
+    if (JS_ToInt64(ctx, &id64, argv[0]) != 0) return JS_UNDEFINED;
+    UINT_PTR id = static_cast<UINT_PTR>(id64);
+    auto it = g_timers.find(id);
+    if (it == g_timers.end()) return JS_UNDEFINED;
+
+    if (g_messageWindow) KillTimer(g_messageWindow, id);
+    JS_FreeValue(ctx, it->second.callback);
+    for (JSValue& a : it->second.args) JS_FreeValue(ctx, a);
+    g_timers.erase(it);
+    return JS_UNDEFINED;
+}
+
 void RegisterConsoleBindings(JSContext* ctx) {
     JSValue global = JS_GetGlobalObject(ctx);
 
@@ -90,6 +139,14 @@ void RegisterConsoleBindings(JSContext* ctx) {
     JS_SetPropertyStr(ctx, consoleObj, "debug",
         JS_NewCFunctionMagic(ctx, JsConsoleWrite, "debug", 1, JS_CFUNC_generic_magic, static_cast<int>(ConsoleLevel::Debug)));
     JS_SetPropertyStr(ctx, global, "console", consoleObj);
+    JS_SetPropertyStr(ctx, global, "setTimeout",
+        JS_NewCFunctionMagic(ctx, JsSetTimerImpl, "setTimeout", 2, JS_CFUNC_generic_magic, 0));
+    JS_SetPropertyStr(ctx, global, "setInterval",
+        JS_NewCFunctionMagic(ctx, JsSetTimerImpl, "setInterval", 2, JS_CFUNC_generic_magic, 1));
+    JS_SetPropertyStr(ctx, global, "clearTimeout",
+        JS_NewCFunction(ctx, JsClearTimerImpl, "clearTimeout", 1));
+    JS_SetPropertyStr(ctx, global, "clearInterval",
+        JS_NewCFunction(ctx, JsClearTimerImpl, "clearInterval", 1));
 
     JS_FreeValue(ctx, global);
 }
@@ -149,6 +206,21 @@ void ClearAllTrayCommandCallbacks() {
         JS_FreeValue(g_context, kv.second);
     }
     g_trayCommandCallbacks.clear();
+}
+
+void ClearAllTimers() {
+    if (g_messageWindow) {
+        for (const auto& kv : g_timers) {
+            KillTimer(g_messageWindow, kv.first);
+        }
+    }
+    for (auto& kv : g_timers) {
+        JS_FreeValue(g_context, kv.second.callback);
+        for (JSValue& a : kv.second.args) {
+            JS_FreeValue(g_context, a);
+        }
+    }
+    g_timers.clear();
 }
 
 
@@ -429,6 +501,7 @@ bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath) {
     ClearWidgetEventListeners();
     ClearAllWidgetContextMenuCallbacks();
     ClearAllTrayCommandCallbacks();
+    ClearAllTimers();
     novadesk::shared::system::ClearHotkeys(g_messageWindow);
 
     const std::string script = FileUtils::ReadFileContent(finalScriptPath);
@@ -488,7 +561,32 @@ void Reload() {
 }
 
 void OnTimer(UINT_PTR id) {
-    (void)id;
+    auto it = g_timers.find(id);
+    if (it == g_timers.end()) return;
+
+    if (it->second.repeat) {
+        TimerEntry& entry = it->second;
+        JSValue ret = JS_Call(g_context, entry.callback, JS_UNDEFINED, static_cast<int>(entry.args.size()), entry.args.data());
+        if (JS_IsException(ret)) {
+            LogQuickJsException(g_context);
+        } else {
+            JS_FreeValue(g_context, ret);
+        }
+        return;
+    }
+
+    TimerEntry entry = std::move(it->second);
+    if (g_messageWindow) KillTimer(g_messageWindow, id);
+    g_timers.erase(it);
+
+    JSValue ret = JS_Call(g_context, entry.callback, JS_UNDEFINED, static_cast<int>(entry.args.size()), entry.args.data());
+    if (JS_IsException(ret)) {
+        LogQuickJsException(g_context);
+    } else {
+        JS_FreeValue(g_context, ret);
+    }
+    JS_FreeValue(g_context, entry.callback);
+    for (JSValue& a : entry.args) JS_FreeValue(g_context, a);
 }
 
 void OnMessage(UINT message, WPARAM wParam, LPARAM lParam) {
