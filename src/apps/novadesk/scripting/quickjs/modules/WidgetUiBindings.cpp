@@ -16,6 +16,7 @@
 #include "../../shared/Settings.h"
 #include "../../shared/Utils.h"
 #include "../engine/JSEngine.h"
+#include "ModuleSystem.h"
 #include "../parser/PropertyParser.h"
 #include "WidgetWindowEventBindings.h"
 
@@ -240,23 +241,24 @@ bool RunWidgetUiScriptImpl(JSContext* ctx, Widget* widget, const std::wstring& s
     JS_SetOpaque(uiObj, widget);
 
     JSValue global = JS_GetGlobalObject(ctx);
-    JS_SetPropertyStr(ctx, global, "__novadesk_ui__", JS_DupValue(ctx, uiObj));
     JSValue ipcObj = JSEngine::CreateUiIpcObject(ctx);
-    JS_SetPropertyStr(ctx, global, "__novadesk_ui_ipc__", JS_DupValue(ctx, ipcObj));
+    JS_SetPropertyStr(ctx, global, "ui", JS_DupValue(ctx, uiObj));
+    JS_SetPropertyStr(ctx, global, "ipcRenderer", JS_DupValue(ctx, ipcObj));
     const std::string fileName = Utils::ToString(absPath);
     const std::string dirName = Utils::ToString(PathUtils::GetParentDir(absPath));
     JS_SetPropertyStr(ctx, global, "__filename", JS_NewString(ctx, fileName.c_str()));
     JS_SetPropertyStr(ctx, global, "__dirname", JS_NewString(ctx, dirName.c_str()));
     JS_FreeValue(ctx, global);
 
-    const std::string wrapped = "(function(ui, ipcRenderer){\n" + scriptSource + "\n})(globalThis.__novadesk_ui__, globalThis.__novadesk_ui_ipc__);";
-    JSValue evalResult = JS_Eval(ctx, wrapped.c_str(), wrapped.size(), fileName.c_str(), JS_EVAL_TYPE_GLOBAL);
+    SetUiScriptImportRestricted(true);
+    JSValue evalResult = JS_Eval(ctx, scriptSource.c_str(), scriptSource.size(), fileName.c_str(), JS_EVAL_TYPE_MODULE);
+    SetUiScriptImportRestricted(false);
 
     JSValue global2 = JS_GetGlobalObject(ctx);
-    JSAtom uiAtom = JS_NewAtom(ctx, "__novadesk_ui__");
+    JSAtom uiAtom = JS_NewAtom(ctx, "ui");
     JS_DeleteProperty(ctx, global2, uiAtom, 0);
     JS_FreeAtom(ctx, uiAtom);
-    JSAtom ipcAtom = JS_NewAtom(ctx, "__novadesk_ui_ipc__");
+    JSAtom ipcAtom = JS_NewAtom(ctx, "ipcRenderer");
     JS_DeleteProperty(ctx, global2, ipcAtom, 0);
     JS_FreeAtom(ctx, ipcAtom);
     JSAtom filename2Atom = JS_NewAtom(ctx, "__filename");

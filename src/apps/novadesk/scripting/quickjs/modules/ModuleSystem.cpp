@@ -14,9 +14,14 @@
 namespace novadesk::scripting::quickjs {
 namespace {
 bool g_moduleSystemDebug = false;
+thread_local bool g_uiScriptImportRestricted = false;
+
+bool IsBuiltinModuleName(const std::string& name) {
+    return name == "novadesk" || name == "system" || name == "os" || name == "std";
+}
 
 std::string NormalizeModuleNameImpl(const std::string& baseName, const std::string& moduleName) {
-    if (moduleName == "novadesk" || moduleName == "system" || moduleName == "os" || moduleName == "std") {
+    if (IsBuiltinModuleName(moduleName)) {
         return moduleName;
     }
 
@@ -39,6 +44,10 @@ void SetModuleSystemDebug(bool debug) {
     SetModuleDebug(debug);
 }
 
+void SetUiScriptImportRestricted(bool restricted) {
+    g_uiScriptImportRestricted = restricted;
+}
+
 char* ModuleNormalizeName(JSContext* ctx, const char* baseName, const char* name, void*) {
     const std::string normalized = NormalizeModuleNameImpl(baseName ? baseName : "", name ? name : "");
     char* out = static_cast<char*>(js_malloc(ctx, normalized.size() + 1));
@@ -54,16 +63,22 @@ JSModuleDef* ModuleLoader(JSContext* ctx, const char* moduleName, void*) {
         std::cerr << "[novadesk] ModuleLoader: " << (moduleName ? moduleName : "<null>") << std::endl;
     }
 
-    if (moduleName && std::string(moduleName) == "novadesk") {
+    const std::string requested = moduleName ? std::string(moduleName) : std::string();
+    if (g_uiScriptImportRestricted && IsBuiltinModuleName(requested)) {
+        JS_ThrowReferenceError(ctx, "Module not allowed in ui script: %s", moduleName ? moduleName : "<null>");
+        return nullptr;
+    }
+
+    if (moduleName && requested == "novadesk") {
         return EnsureNovadeskModule(ctx, moduleName);
     }
-    if (moduleName && std::string(moduleName) == "system") {
+    if (moduleName && requested == "system") {
         return EnsureSystemModule(ctx, moduleName);
     }
-    if (moduleName && std::string(moduleName) == "os") {
+    if (moduleName && requested == "os") {
         return js_init_module_os(ctx, moduleName);
     }
-    if (moduleName && std::string(moduleName) == "std") {
+    if (moduleName && requested == "std") {
         return js_init_module_std(ctx, moduleName);
     }
 
