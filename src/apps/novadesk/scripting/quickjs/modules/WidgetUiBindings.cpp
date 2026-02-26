@@ -287,7 +287,7 @@ JSClassID EnsureWidgetWindowClass(JSContext* ctx) {
     if (g_widgetWindowClassId == 0) {
         JS_NewClassID(JS_GetRuntime(ctx), &g_widgetWindowClassId);
         JSClassDef cls{};
-        cls.class_name = "WidgetWindow";
+        cls.class_name = "widgetWindow";
         cls.finalizer = JsWidgetFinalizer;
         JS_NewClass(JS_GetRuntime(ctx), g_widgetWindowClassId, &cls);
         InitWidgetWindowEventBindings(g_widgetWindowClassId);

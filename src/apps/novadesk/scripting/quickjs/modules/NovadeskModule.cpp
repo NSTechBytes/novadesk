@@ -195,10 +195,10 @@ int InitAppExport(JSContext* ctx, JSModuleDef* m) {
 
 int NovadeskModuleInit(JSContext* ctx, JSModuleDef* m) {
     EnsureWidgetWindowClass(ctx);
-    JSValue ctor = JS_NewCFunction2(ctx, JsWidgetWindowCtor, "WidgetWindow", 1, JS_CFUNC_constructor, 0);
+    JSValue ctor = JS_NewCFunction2(ctx, JsWidgetWindowCtor, "widgetWindow", 1, JS_CFUNC_constructor, 0);
     JSValue proto = JS_GetClassProto(ctx, EnsureWidgetWindowClass(ctx));
     JS_SetConstructor(ctx, ctor, proto);
-    JS_SetModuleExport(ctx, m, "WidgetWindow", ctor);
+    JS_SetModuleExport(ctx, m, "widgetWindow", ctor);
     JS_FreeValue(ctx, proto);
     InitAppExport(ctx, m);
     return 0;
@@ -215,7 +215,7 @@ JSModuleDef* EnsureNovadeskModule(JSContext* ctx, const char* moduleName) {
     if (!m) {
         return nullptr;
     }
-    if (JS_AddModuleExport(ctx, m, "WidgetWindow") < 0) {
+    if (JS_AddModuleExport(ctx, m, "widgetWindow") < 0) {
         return nullptr;
     }
     if (JS_AddModuleExport(ctx, m, "app") < 0) {

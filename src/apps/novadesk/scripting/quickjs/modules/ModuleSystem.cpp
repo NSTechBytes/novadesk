@@ -6,6 +6,7 @@
 #include <string>
 
 #include "NovadeskModule.h"
+#include "SystemModule.h"
 #include "quickjs-libc.h"
 #include "../../shared/FileUtils.h"
 #include "../../shared/Utils.h"
@@ -15,7 +16,7 @@ namespace {
 bool g_moduleSystemDebug = false;
 
 std::string NormalizeModuleNameImpl(const std::string& baseName, const std::string& moduleName) {
-    if (moduleName == "novadesk" || moduleName == "os" || moduleName == "std") {
+    if (moduleName == "novadesk" || moduleName == "system" || moduleName == "os" || moduleName == "std") {
         return moduleName;
     }
 
@@ -55,6 +56,9 @@ JSModuleDef* ModuleLoader(JSContext* ctx, const char* moduleName, void*) {
 
     if (moduleName && std::string(moduleName) == "novadesk") {
         return EnsureNovadeskModule(ctx, moduleName);
+    }
+    if (moduleName && std::string(moduleName) == "system") {
+        return EnsureSystemModule(ctx, moduleName);
     }
     if (moduleName && std::string(moduleName) == "os") {
         return js_init_module_os(ctx, moduleName);

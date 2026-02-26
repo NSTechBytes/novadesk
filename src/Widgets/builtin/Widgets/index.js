@@ -1,4 +1,5 @@
-import { WidgetWindow, app } from 'novadesk';
+import { widgetWindow, app } from 'novadesk';
+import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics } from 'system';
 import * as std from 'std';
 
 console.log("OS:", JSON.stringify(std.getenviron()));
@@ -25,7 +26,7 @@ ipcMain.on("ui-ping", (_event, payload) => {
 });
 
 function createWindow() {
-  const win = new WidgetWindow({
+  const win = new widgetWindow({
     id: "test",
     width: 400,
     height: 400,
@@ -79,4 +80,8 @@ app.setTrayMenu([
 app.showDefaultTrayItems(true);
 
 console.log("Novadesk version:", app.getNovadeskVersion());
+console.log("Clipboard before:", clipboard.getText());
+console.log("Power status:", JSON.stringify(power.getStatus?.() ?? {}));
+console.log("Display metrics count:", displayMetrics.getMetrics().count);
+console.log("System modules:", !!wallpaper, !!audio, !!brightness, !!fileIcon);
 console.log("Window created");

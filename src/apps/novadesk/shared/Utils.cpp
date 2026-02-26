@@ -143,6 +143,58 @@ namespace Utils {
         }
     }
 
+    bool ExtractFileIconToIco(const std::wstring& filePath, const std::wstring& outIcoPath, int size)
+    {
+        if (filePath.empty() || outIcoPath.empty()) return false;
+        if (size <= 0) size = 48;
+        if (size > 256) size = 256;
+
+        const int candidates[] = { size, 32, 48, 64 };
+        for (int s : candidates) {
+            if (s <= 0 || s > 256) continue;
+
+            HICON icon = nullptr;
+            UINT extracted = PrivateExtractIconsW(
+                filePath.c_str(),
+                0,
+                s,
+                s,
+                &icon,
+                nullptr,
+                1,
+                LR_LOADTRANSPARENT);
+
+            if (extracted == 0 || !icon) {
+                SHFILEINFO shFileInfo = {};
+                UINT flags = SHGFI_ICON;
+                flags |= (s <= 16) ? SHGFI_SMALLICON : SHGFI_LARGEICON;
+                if (!SHGetFileInfoW(filePath.c_str(), 0, &shFileInfo, sizeof(shFileInfo), flags)) {
+                    continue;
+                }
+                icon = shFileInfo.hIcon;
+                if (!icon) continue;
+            }
+
+            FILE* fp = nullptr;
+            errno_t error = _wfopen_s(&fp, outIcoPath.c_str(), L"wb");
+            bool ok = false;
+            if (error == 0 && fp) {
+                ok = SaveIconToIcoFile(icon, fp);
+                fclose(fp);
+            }
+            DestroyIcon(icon);
+
+            if (ok) return true;
+        }
+
+        FILE* clearFp = nullptr;
+        if (_wfopen_s(&clearFp, outIcoPath.c_str(), L"wb") == 0 && clearFp) {
+            fwrite(outIcoPath.c_str(), 1, 1, clearFp);
+            fclose(clearFp);
+        }
+        return false;
+    }
+
     /*
     ** Convert a UTF-8 encoded std::string to a wide character std::wstring.
     ** Returns an empty wstring if the input string is empty.

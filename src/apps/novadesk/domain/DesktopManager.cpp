@@ -13,8 +13,6 @@
 #include "DesktopManager.h"
 #include "Widget.h"
 #include <algorithm>
-#include <shellapi.h>
-#include <winreg.h>
 
 extern std::vector<Widget*> widgets; // Defined in Novadesk.cpp
 

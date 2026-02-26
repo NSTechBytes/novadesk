@@ -45,6 +45,7 @@ target_link_libraries(novadesk PRIVATE
     gdi32
     opengl32
     winmm
+    powrprof
     shell32
     comctl32
     d2d1
