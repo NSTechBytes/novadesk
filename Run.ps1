@@ -5,20 +5,11 @@ param(
     [string]$Script = "$PSScriptRoot\src\Widgets\builtin\Widgets\index.js"
 )
 
-$exePath = "$PSScriptRoot\build-mingw\Novadesk.exe"
-$srcWidgetsDir = "$PSScriptRoot\src\Widgets\builtin\Widgets"
-$buildWidgetsDir = "$PSScriptRoot\build-mingw\Widgets"
+$exePath = "$PSScriptRoot\dist\novadesk.exe"
 
 if (-not (Test-Path $exePath)) {
     Write-Host "Error: Novadesk.exe not found at $exePath" -ForegroundColor Red
     exit 1
-}
-
-if (Test-Path $srcWidgetsDir) {
-    if (-not (Test-Path $buildWidgetsDir)) {
-        New-Item -ItemType Directory -Path $buildWidgetsDir | Out-Null
-    }
-    Copy-Item -Path "$srcWidgetsDir\*" -Destination $buildWidgetsDir -Recurse -Force
 }
 
 if (-not (Test-Path $Script)) {
