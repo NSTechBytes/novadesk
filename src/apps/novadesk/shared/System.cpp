@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <cwchar>
+#include <filesystem>
 #include <unordered_map>
 
 #include <mmdeviceapi.h>
@@ -565,6 +566,69 @@ bool ResolveHotkeyMessage(int id, HotkeyBinding& outBinding) {
     if (it == g_hotkeys.end()) return false;
     outBinding = it->second.binding;
     return true;
+}
+
+std::wstring PathJoin(const std::vector<std::wstring>& parts) {
+    std::filesystem::path out;
+    for (const auto& part : parts) {
+        out /= std::filesystem::path(part);
+    }
+    return out.lexically_normal().wstring();
+}
+
+std::wstring PathBasename(const std::wstring& path, const std::wstring& ext) {
+    std::filesystem::path p(path);
+    std::wstring base = p.filename().wstring();
+    if (!ext.empty() && base.size() >= ext.size() &&
+        base.compare(base.size() - ext.size(), ext.size(), ext) == 0) {
+        base.resize(base.size() - ext.size());
+    }
+    return base;
+}
+
+std::wstring PathDirname(const std::wstring& path) {
+    std::filesystem::path p(path);
+    std::wstring dir = p.parent_path().wstring();
+    if (dir.empty()) {
+        dir = L".";
+    }
+    return dir;
+}
+
+std::wstring PathExtname(const std::wstring& path) {
+    return std::filesystem::path(path).extension().wstring();
+}
+
+bool PathIsAbsolute(const std::wstring& path) {
+    return std::filesystem::path(path).is_absolute();
+}
+
+std::wstring PathNormalize(const std::wstring& path) {
+    return std::filesystem::path(path).lexically_normal().wstring();
+}
+
+std::wstring PathRelative(const std::wstring& from, const std::wstring& to) {
+    return std::filesystem::path(to).lexically_relative(std::filesystem::path(from)).wstring();
+}
+
+PathParts PathParse(const std::wstring& path) {
+    std::filesystem::path p(path);
+    PathParts out;
+    out.root = p.root_path().wstring();
+    out.dir = p.parent_path().wstring();
+    out.base = p.filename().wstring();
+    out.ext = p.extension().wstring();
+    out.name = p.stem().wstring();
+    return out;
+}
+
+std::wstring PathFormat(const PathParts& parts) {
+    std::wstring base = parts.base;
+    if (base.empty()) {
+        base = parts.name + parts.ext;
+    }
+    std::filesystem::path out = parts.dir.empty() ? std::filesystem::path(base) : (std::filesystem::path(parts.dir) / base);
+    return out.lexically_normal().wstring();
 }
 
 }  // namespace novadesk::shared::system

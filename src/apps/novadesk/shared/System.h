@@ -57,6 +57,14 @@ struct HotkeyBinding {
     int onKeyUpCallbackId = -1;
 };
 
+struct PathParts {
+    std::wstring root;
+    std::wstring dir;
+    std::wstring base;
+    std::wstring ext;
+    std::wstring name;
+};
+
 bool ClipboardSetText(const std::wstring& text);
 bool ClipboardGetText(std::wstring& outText);
 
@@ -79,5 +87,15 @@ int RegisterHotkey(HWND messageWindow, const std::wstring& hotkey, int onKeyDown
 bool UnregisterHotkey(HWND messageWindow, int id);
 void ClearHotkeys(HWND messageWindow);
 bool ResolveHotkeyMessage(int id, HotkeyBinding& outBinding);
+
+std::wstring PathJoin(const std::vector<std::wstring>& parts);
+std::wstring PathBasename(const std::wstring& path, const std::wstring& ext = L"");
+std::wstring PathDirname(const std::wstring& path);
+std::wstring PathExtname(const std::wstring& path);
+bool PathIsAbsolute(const std::wstring& path);
+std::wstring PathNormalize(const std::wstring& path);
+std::wstring PathRelative(const std::wstring& from, const std::wstring& to);
+PathParts PathParse(const std::wstring& path);
+std::wstring PathFormat(const PathParts& parts);
 
 }  // namespace novadesk::shared::system
