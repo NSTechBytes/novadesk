@@ -1,5 +1,6 @@
 #include "SystemModule.h"
 
+#include <chrono>
 #include <string>
 
 #include "../../shared/System.h"
@@ -8,6 +9,25 @@
 
 namespace novadesk::scripting::quickjs {
 namespace {
+shared::system::NetworkStats g_cachedNetworkStats{};
+std::chrono::steady_clock::time_point g_cachedNetworkAt = std::chrono::steady_clock::time_point::min();
+
+bool ReadNetworkCached(shared::system::NetworkStats& out) {
+    const auto now = std::chrono::steady_clock::now();
+    constexpr auto kMinResample = std::chrono::milliseconds(400);
+
+    if (g_cachedNetworkAt == std::chrono::steady_clock::time_point::min() ||
+        (now - g_cachedNetworkAt) >= kMinResample) {
+        if (!shared::system::GetNetworkStats(g_cachedNetworkStats)) {
+            return false;
+        }
+        g_cachedNetworkAt = now;
+    }
+
+    out = g_cachedNetworkStats;
+    return true;
+}
+
 JSValue JsClipboardSetText(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
     if (argc < 1) return JS_ThrowTypeError(ctx, "clipboard.setText(text) requires text");
     const char* s = JS_ToCString(ctx, argv[0]);
@@ -60,6 +80,78 @@ JSValue JsPowerGetStatus(JSContext* ctx, JSValueConst, int, JSValueConst*) {
     JS_SetPropertyStr(ctx, out, "mhz", JS_NewFloat64(ctx, status.mhz));
     JS_SetPropertyStr(ctx, out, "hz", JS_NewFloat64(ctx, status.hz));
     return out;
+}
+
+JSValue JsCpuUsage(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    shared::system::CpuStats stats;
+    if (!shared::system::GetCpuStats(stats)) {
+        return JS_NewFloat64(ctx, 0.0);
+    }
+    return JS_NewFloat64(ctx, stats.usage);
+}
+
+JSValue JsMemoryTotalBytes(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    shared::system::MemoryStats stats;
+    if (!shared::system::GetMemoryStats(stats)) return JS_NewFloat64(ctx, 0.0);
+    return JS_NewFloat64(ctx, stats.total);
+}
+
+JSValue JsMemoryAvailableBytes(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    shared::system::MemoryStats stats;
+    if (!shared::system::GetMemoryStats(stats)) return JS_NewFloat64(ctx, 0.0);
+    return JS_NewFloat64(ctx, stats.available);
+}
+
+JSValue JsMemoryUsedBytes(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    shared::system::MemoryStats stats;
+    if (!shared::system::GetMemoryStats(stats)) return JS_NewFloat64(ctx, 0.0);
+    return JS_NewFloat64(ctx, stats.used);
+}
+
+JSValue JsMemoryUsagePercent(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    shared::system::MemoryStats stats;
+    if (!shared::system::GetMemoryStats(stats)) return JS_NewInt32(ctx, 0);
+    return JS_NewInt32(ctx, stats.percent);
+}
+
+JSValue JsNetworkRxSpeed(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    shared::system::NetworkStats stats;
+    if (!ReadNetworkCached(stats)) return JS_NewFloat64(ctx, 0.0);
+    return JS_NewFloat64(ctx, stats.netIn);
+}
+
+JSValue JsNetworkTxSpeed(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    shared::system::NetworkStats stats;
+    if (!ReadNetworkCached(stats)) return JS_NewFloat64(ctx, 0.0);
+    return JS_NewFloat64(ctx, stats.netOut);
+}
+
+JSValue JsNetworkBytesReceived(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    shared::system::NetworkStats stats;
+    if (!ReadNetworkCached(stats)) return JS_NewFloat64(ctx, 0.0);
+    return JS_NewFloat64(ctx, stats.totalIn);
+}
+
+JSValue JsNetworkBytesSent(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    shared::system::NetworkStats stats;
+    if (!ReadNetworkCached(stats)) return JS_NewFloat64(ctx, 0.0);
+    return JS_NewFloat64(ctx, stats.totalOut);
+}
+
+JSValue JsMouseClientX(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    shared::system::MousePosition pos;
+    if (!shared::system::GetMousePosition(pos)) {
+        return JS_NewInt32(ctx, 0);
+    }
+    return JS_NewInt32(ctx, pos.x);
+}
+
+JSValue JsMouseClientY(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    shared::system::MousePosition pos;
+    if (!shared::system::GetMousePosition(pos)) {
+        return JS_NewInt32(ctx, 0);
+    }
+    return JS_NewInt32(ctx, pos.y);
 }
 
 JSValue JsFileIconExtractIcon(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
@@ -265,6 +357,29 @@ int SystemModuleInit(JSContext* ctx, JSModuleDef* m) {
     JS_SetPropertyStr(ctx, power, "getStatus", JS_NewCFunction(ctx, JsPowerGetStatus, "getStatus", 0));
     JS_SetModuleExport(ctx, m, "power", power);
 
+    JSValue cpu = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, cpu, "usage", JS_NewCFunction(ctx, JsCpuUsage, "usage", 0));
+    JS_SetModuleExport(ctx, m, "cpu", cpu);
+
+    JSValue memory = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, memory, "totalBytes", JS_NewCFunction(ctx, JsMemoryTotalBytes, "totalBytes", 0));
+    JS_SetPropertyStr(ctx, memory, "availableBytes", JS_NewCFunction(ctx, JsMemoryAvailableBytes, "availableBytes", 0));
+    JS_SetPropertyStr(ctx, memory, "usedBytes", JS_NewCFunction(ctx, JsMemoryUsedBytes, "usedBytes", 0));
+    JS_SetPropertyStr(ctx, memory, "usagePercent", JS_NewCFunction(ctx, JsMemoryUsagePercent, "usagePercent", 0));
+    JS_SetModuleExport(ctx, m, "memory", memory);
+
+    JSValue network = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, network, "rxSpeed", JS_NewCFunction(ctx, JsNetworkRxSpeed, "rxSpeed", 0));
+    JS_SetPropertyStr(ctx, network, "txSpeed", JS_NewCFunction(ctx, JsNetworkTxSpeed, "txSpeed", 0));
+    JS_SetPropertyStr(ctx, network, "bytesReceived", JS_NewCFunction(ctx, JsNetworkBytesReceived, "bytesReceived", 0));
+    JS_SetPropertyStr(ctx, network, "bytesSent", JS_NewCFunction(ctx, JsNetworkBytesSent, "bytesSent", 0));
+    JS_SetModuleExport(ctx, m, "network", network);
+
+    JSValue mouse = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, mouse, "clientX", JS_NewCFunction(ctx, JsMouseClientX, "clientX", 0));
+    JS_SetPropertyStr(ctx, mouse, "clientY", JS_NewCFunction(ctx, JsMouseClientY, "clientY", 0));
+    JS_SetModuleExport(ctx, m, "mouse", mouse);
+
     JSValue audio = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, audio, "setVolume", JS_NewCFunction(ctx, JsAudioSetVolume, "setVolume", 1));
     JS_SetPropertyStr(ctx, audio, "getVolume", JS_NewCFunction(ctx, JsAudioGetVolume, "getVolume", 0));
@@ -307,6 +422,10 @@ JSModuleDef* EnsureSystemModule(JSContext* ctx, const char* moduleName) {
     if (JS_AddModuleExport(ctx, m, "clipboard") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "wallpaper") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "power") < 0) return nullptr;
+    if (JS_AddModuleExport(ctx, m, "cpu") < 0) return nullptr;
+    if (JS_AddModuleExport(ctx, m, "memory") < 0) return nullptr;
+    if (JS_AddModuleExport(ctx, m, "network") < 0) return nullptr;
+    if (JS_AddModuleExport(ctx, m, "mouse") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "audio") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "brightness") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "fileIcon") < 0) return nullptr;

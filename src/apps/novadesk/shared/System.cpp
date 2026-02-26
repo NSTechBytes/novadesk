@@ -3,18 +3,21 @@
 #include <cstring>
 #include <cwchar>
 #include <filesystem>
+#include <chrono>
 #include <unordered_map>
 
 #include <mmdeviceapi.h>
 #include <mmsystem.h>
 #include <endpointvolume.h>
 #include <powrprof.h>
+#include <iphlpapi.h>
 
 #include "../domain/DesktopManager.h"
 #include "Utils.h"
 
 #pragma comment(lib, "Winmm.lib")
 #pragma comment(lib, "PowrProf.lib")
+#pragma comment(lib, "Iphlpapi.lib")
 
 namespace novadesk::shared::system {
 
@@ -30,6 +33,15 @@ std::unordered_map<int, RegisteredHotkey> g_hotkeys;
 int g_nextHotkeyId = 10000;
 HHOOK g_keyboardHook = nullptr;
 HWND g_hotkeyMessageWindow = nullptr;
+
+ULONGLONG g_lastIdleTime = 0;
+ULONGLONG g_lastKernelTime = 0;
+ULONGLONG g_lastUserTime = 0;
+bool g_cpuInitialized = false;
+
+ULONGLONG g_lastTotalIn = 0;
+ULONGLONG g_lastTotalOut = 0;
+std::chrono::steady_clock::time_point g_lastNetworkSample = std::chrono::steady_clock::time_point::min();
 
 typedef struct _PROCESSOR_POWER_INFORMATION_LOCAL {
     ULONG Number;
@@ -218,6 +230,118 @@ void MaybeRemoveKeyboardHook() {
 }
 
 }  // namespace
+
+bool GetCpuStats(CpuStats& outStats) {
+    FILETIME idleFt{}, kernelFt{}, userFt{};
+    if (!GetSystemTimes(&idleFt, &kernelFt, &userFt)) {
+        return false;
+    }
+
+    ULARGE_INTEGER idle{}, kernel{}, user{};
+    idle.LowPart = idleFt.dwLowDateTime;
+    idle.HighPart = idleFt.dwHighDateTime;
+    kernel.LowPart = kernelFt.dwLowDateTime;
+    kernel.HighPart = kernelFt.dwHighDateTime;
+    user.LowPart = userFt.dwLowDateTime;
+    user.HighPart = userFt.dwHighDateTime;
+
+    if (!g_cpuInitialized) {
+        g_lastIdleTime = idle.QuadPart;
+        g_lastKernelTime = kernel.QuadPart;
+        g_lastUserTime = user.QuadPart;
+        g_cpuInitialized = true;
+        outStats.usage = 0.0;
+        return true;
+    }
+
+    const ULONGLONG idleDelta = idle.QuadPart - g_lastIdleTime;
+    const ULONGLONG kernelDelta = kernel.QuadPart - g_lastKernelTime;
+    const ULONGLONG userDelta = user.QuadPart - g_lastUserTime;
+    const ULONGLONG totalDelta = kernelDelta + userDelta;
+
+    g_lastIdleTime = idle.QuadPart;
+    g_lastKernelTime = kernel.QuadPart;
+    g_lastUserTime = user.QuadPart;
+
+    if (totalDelta == 0) {
+        outStats.usage = 0.0;
+        return true;
+    }
+
+    double usage = (static_cast<double>(totalDelta - idleDelta) * 100.0) / static_cast<double>(totalDelta);
+    if (usage < 0.0) usage = 0.0;
+    if (usage > 100.0) usage = 100.0;
+    outStats.usage = usage;
+    return true;
+}
+
+bool GetMemoryStats(MemoryStats& outStats) {
+    MEMORYSTATUSEX mem{};
+    mem.dwLength = sizeof(mem);
+    if (!GlobalMemoryStatusEx(&mem)) {
+        return false;
+    }
+
+    outStats.total = static_cast<double>(mem.ullTotalPhys);
+    outStats.available = static_cast<double>(mem.ullAvailPhys);
+    outStats.used = static_cast<double>(mem.ullTotalPhys - mem.ullAvailPhys);
+    outStats.percent = static_cast<int>(mem.dwMemoryLoad);
+    return true;
+}
+
+bool GetNetworkStats(NetworkStats& outStats) {
+    ULONG size = 0;
+    if (GetIfTable(nullptr, &size, FALSE) != ERROR_INSUFFICIENT_BUFFER) {
+        return false;
+    }
+
+    std::vector<BYTE> buffer(size);
+    auto* table = reinterpret_cast<PMIB_IFTABLE>(buffer.data());
+    if (GetIfTable(table, &size, FALSE) != NO_ERROR) {
+        return false;
+    }
+
+    ULONGLONG totalIn = 0;
+    ULONGLONG totalOut = 0;
+    for (DWORD i = 0; i < table->dwNumEntries; ++i) {
+        const MIB_IFROW& row = table->table[i];
+        if (row.dwOperStatus == IF_OPER_STATUS_OPERATIONAL) {
+            totalIn += row.dwInOctets;
+            totalOut += row.dwOutOctets;
+        }
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    double netIn = 0.0;
+    double netOut = 0.0;
+    if (g_lastNetworkSample != std::chrono::steady_clock::time_point::min()) {
+        const double dt = std::chrono::duration<double>(now - g_lastNetworkSample).count();
+        if (dt > 0.0) {
+            netIn = static_cast<double>(totalIn - g_lastTotalIn) / dt;
+            netOut = static_cast<double>(totalOut - g_lastTotalOut) / dt;
+        }
+    }
+
+    g_lastTotalIn = totalIn;
+    g_lastTotalOut = totalOut;
+    g_lastNetworkSample = now;
+
+    outStats.netIn = netIn;
+    outStats.netOut = netOut;
+    outStats.totalIn = static_cast<double>(totalIn);
+    outStats.totalOut = static_cast<double>(totalOut);
+    return true;
+}
+
+bool GetMousePosition(MousePosition& outPos) {
+    POINT p{};
+    if (!GetCursorPos(&p)) {
+        return false;
+    }
+    outPos.x = static_cast<int>(p.x);
+    outPos.y = static_cast<int>(p.y);
+    return true;
+}
 
 bool ClipboardSetText(const std::wstring& text) {
     if (!OpenClipboard(nullptr)) {

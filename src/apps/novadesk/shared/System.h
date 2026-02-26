@@ -40,6 +40,29 @@ struct PowerStatus {
     double hz = 0.0;
 };
 
+struct CpuStats {
+    double usage = 0.0;
+};
+
+struct MemoryStats {
+    double total = 0.0;
+    double available = 0.0;
+    double used = 0.0;
+    int percent = 0;
+};
+
+struct NetworkStats {
+    double netIn = 0.0;
+    double netOut = 0.0;
+    double totalIn = 0.0;
+    double totalOut = 0.0;
+};
+
+struct MousePosition {
+    int x = 0;
+    int y = 0;
+};
+
 enum class RegistryValueType {
     None = 0,
     String,
@@ -72,6 +95,10 @@ bool SetWallpaper(const std::wstring& imagePath, const std::wstring& style = L"f
 bool GetCurrentWallpaperPath(std::wstring& outPath);
 
 bool GetPowerStatus(PowerStatus& outStatus);
+bool GetCpuStats(CpuStats& outStats);
+bool GetMemoryStats(MemoryStats& outStats);
+bool GetNetworkStats(NetworkStats& outStats);
+bool GetMousePosition(MousePosition& outPos);
 DisplayMetrics GetDisplayMetrics();
 
 bool AudioSetVolume(int volumePercent);

@@ -52,6 +52,7 @@ target_link_libraries(novadesk PRIVATE
     dwrite
     windowscodecs
     shlwapi
+    iphlpapi
     version
 )
 

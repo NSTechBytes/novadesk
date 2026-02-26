@@ -1,5 +1,5 @@
 import { widgetWindow, app } from 'novadesk';
-import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics, hotkey } from 'system';
+import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics, hotkey, cpu, memory, network, mouse } from 'system';
 import * as std from 'std';
 
 // console.log("OS:", JSON.stringify(std.getenviron()));
@@ -79,11 +79,45 @@ app.setTrayMenu([
 ]);
 app.showDefaultTrayItems(true);
 
+const MB = 1024 * 1024;
+const toMB = (bytes) => (Number(bytes) / MB).toFixed(2);
+const toMBps = (bytesPerSec) => (Number(bytesPerSec) / MB).toFixed(3);
+
 console.log("Novadesk version:", app.getNovadeskVersion());
 console.log("Clipboard before:", clipboard.getText());
 console.log("Power status:", JSON.stringify(power.getStatus?.() ?? {}));
 console.log("Display metrics count:", displayMetrics.getMetrics().count);
 console.log("System modules:", !!wallpaper, !!audio, !!brightness, !!fileIcon);
+console.log("CPU usage:", cpu.usage());
+console.log("Memory totalMB:", toMB(memory.totalBytes()));
+console.log("Memory availableMB:", toMB(memory.availableBytes()));
+console.log("Memory usedMB:", toMB(memory.usedBytes()));
+console.log("Memory usagePercent:", memory.usagePercent());
+console.log("Network rxSpeedMBps:", toMBps(network.rxSpeed()));
+console.log("Network txSpeedMBps:", toMBps(network.txSpeed()));
+console.log("Network bytesReceivedMB:", toMB(network.bytesReceived()));
+console.log("Network bytesSentMB:", toMB(network.bytesSent()));
+console.log("Mouse clientX:", mouse.clientX());
+console.log("Mouse clientY:", mouse.clientY());
+let systemTick = 0;
+const systemIntervalId = setInterval(() => {
+  systemTick += 1;
+  console.log(`[system] tick ${systemTick} cpu:`, cpu.usage());
+  console.log(`[system] tick ${systemTick} memory totalMB:`, toMB(memory.totalBytes()));
+  console.log(`[system] tick ${systemTick} memory availableMB:`, toMB(memory.availableBytes()));
+  console.log(`[system] tick ${systemTick} memory usedMB:`, toMB(memory.usedBytes()));
+  console.log(`[system] tick ${systemTick} memory usagePercent:`, memory.usagePercent());
+  console.log(`[system] tick ${systemTick} network rxSpeedMBps:`, toMBps(network.rxSpeed()));
+  console.log(`[system] tick ${systemTick} network txSpeedMBps:`, toMBps(network.txSpeed()));
+  console.log(`[system] tick ${systemTick} network bytesReceivedMB:`, toMB(network.bytesReceived()));
+  console.log(`[system] tick ${systemTick} network bytesSentMB:`, toMB(network.bytesSent()));
+  console.log(`[system] tick ${systemTick} mouse clientX:`, mouse.clientX());
+  console.log(`[system] tick ${systemTick} mouse clientY:`, mouse.clientY());
+  if (systemTick >= 10) {
+    clearInterval(systemIntervalId);
+    console.log("[system] monitor interval stopped");
+  }
+}, 1000);
 console.log("Path module type:", typeof path);
 console.log("__dirname:", __dirname);
 console.log("__filename:", __filename);
