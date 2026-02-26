@@ -343,6 +343,32 @@ bool GetMousePosition(MousePosition& outPos) {
     return true;
 }
 
+bool GetDiskStats(const std::wstring& path, DiskStats& outStats) {
+    std::wstring target = path;
+    if (target.empty()) {
+        std::error_code ec;
+        target = std::filesystem::current_path(ec).root_path().wstring();
+        if (target.empty()) {
+            target = L"C:\\";
+        }
+    }
+
+    ULARGE_INTEGER freeBytesAvailable{};
+    ULARGE_INTEGER totalBytes{};
+    ULARGE_INTEGER totalFreeBytes{};
+    if (!GetDiskFreeSpaceExW(target.c_str(), &freeBytesAvailable, &totalBytes, &totalFreeBytes)) {
+        return false;
+    }
+
+    outStats.total = static_cast<double>(totalBytes.QuadPart);
+    outStats.available = static_cast<double>(freeBytesAvailable.QuadPart);
+    outStats.used = static_cast<double>(totalBytes.QuadPart - totalFreeBytes.QuadPart);
+    outStats.percent = (outStats.total > 0.0)
+        ? static_cast<int>((outStats.used * 100.0) / outStats.total + 0.5)
+        : 0;
+    return true;
+}
+
 bool ClipboardSetText(const std::wstring& text) {
     if (!OpenClipboard(nullptr)) {
         return false;

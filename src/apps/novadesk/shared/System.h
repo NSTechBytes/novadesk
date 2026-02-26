@@ -63,6 +63,13 @@ struct MousePosition {
     int y = 0;
 };
 
+struct DiskStats {
+    double total = 0.0;
+    double available = 0.0;
+    double used = 0.0;
+    int percent = 0;
+};
+
 enum class RegistryValueType {
     None = 0,
     String,
@@ -99,6 +106,7 @@ bool GetCpuStats(CpuStats& outStats);
 bool GetMemoryStats(MemoryStats& outStats);
 bool GetNetworkStats(NetworkStats& outStats);
 bool GetMousePosition(MousePosition& outPos);
+bool GetDiskStats(const std::wstring& path, DiskStats& outStats);
 DisplayMetrics GetDisplayMetrics();
 
 bool AudioSetVolume(int volumePercent);

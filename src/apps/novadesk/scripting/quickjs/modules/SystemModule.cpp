@@ -154,6 +154,41 @@ JSValue JsMouseClientY(JSContext* ctx, JSValueConst, int, JSValueConst*) {
     return JS_NewInt32(ctx, pos.y);
 }
 
+std::wstring ReadOptionalPathArg(JSContext* ctx, int argc, JSValueConst* argv) {
+    if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0])) {
+        return L"";
+    }
+    const char* s = JS_ToCString(ctx, argv[0]);
+    if (!s) return L"";
+    std::wstring out = Utils::ToWString(s);
+    JS_FreeCString(ctx, s);
+    return out;
+}
+
+JSValue JsDiskTotalBytes(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    shared::system::DiskStats stats;
+    if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv), stats)) return JS_NewFloat64(ctx, 0.0);
+    return JS_NewFloat64(ctx, stats.total);
+}
+
+JSValue JsDiskAvailableBytes(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    shared::system::DiskStats stats;
+    if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv), stats)) return JS_NewFloat64(ctx, 0.0);
+    return JS_NewFloat64(ctx, stats.available);
+}
+
+JSValue JsDiskUsedBytes(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    shared::system::DiskStats stats;
+    if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv), stats)) return JS_NewFloat64(ctx, 0.0);
+    return JS_NewFloat64(ctx, stats.used);
+}
+
+JSValue JsDiskUsagePercent(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    shared::system::DiskStats stats;
+    if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv), stats)) return JS_NewInt32(ctx, 0);
+    return JS_NewInt32(ctx, stats.percent);
+}
+
 JSValue JsFileIconExtractIcon(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
     if (argc < 2) return JS_ThrowTypeError(ctx, "fileIcon.extractIcon(filePath, outIcoPath[, size])");
     const char* p1 = JS_ToCString(ctx, argv[0]);
@@ -380,6 +415,13 @@ int SystemModuleInit(JSContext* ctx, JSModuleDef* m) {
     JS_SetPropertyStr(ctx, mouse, "clientY", JS_NewCFunction(ctx, JsMouseClientY, "clientY", 0));
     JS_SetModuleExport(ctx, m, "mouse", mouse);
 
+    JSValue disk = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, disk, "totalBytes", JS_NewCFunction(ctx, JsDiskTotalBytes, "totalBytes", 1));
+    JS_SetPropertyStr(ctx, disk, "availableBytes", JS_NewCFunction(ctx, JsDiskAvailableBytes, "availableBytes", 1));
+    JS_SetPropertyStr(ctx, disk, "usedBytes", JS_NewCFunction(ctx, JsDiskUsedBytes, "usedBytes", 1));
+    JS_SetPropertyStr(ctx, disk, "usagePercent", JS_NewCFunction(ctx, JsDiskUsagePercent, "usagePercent", 1));
+    JS_SetModuleExport(ctx, m, "disk", disk);
+
     JSValue audio = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, audio, "setVolume", JS_NewCFunction(ctx, JsAudioSetVolume, "setVolume", 1));
     JS_SetPropertyStr(ctx, audio, "getVolume", JS_NewCFunction(ctx, JsAudioGetVolume, "getVolume", 0));
@@ -426,6 +468,7 @@ JSModuleDef* EnsureSystemModule(JSContext* ctx, const char* moduleName) {
     if (JS_AddModuleExport(ctx, m, "memory") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "network") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "mouse") < 0) return nullptr;
+    if (JS_AddModuleExport(ctx, m, "disk") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "audio") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "brightness") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "fileIcon") < 0) return nullptr;

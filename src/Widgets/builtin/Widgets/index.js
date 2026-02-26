@@ -1,5 +1,5 @@
 import { widgetWindow, app } from 'novadesk';
-import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics, hotkey, cpu, memory, network, mouse } from 'system';
+import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics, hotkey, cpu, memory, network, mouse, disk } from 'system';
 import * as std from 'std';
 
 // console.log("OS:", JSON.stringify(std.getenviron()));
@@ -99,6 +99,10 @@ console.log("Network bytesReceivedMB:", toMB(network.bytesReceived()));
 console.log("Network bytesSentMB:", toMB(network.bytesSent()));
 console.log("Mouse clientX:", mouse.clientX());
 console.log("Mouse clientY:", mouse.clientY());
+console.log("Disk totalMB:", toMB(disk.totalBytes()));
+console.log("Disk availableMB:", toMB(disk.availableBytes()));
+console.log("Disk usedMB:", toMB(disk.usedBytes()));
+console.log("Disk usagePercent:", disk.usagePercent());
 let systemTick = 0;
 const systemIntervalId = setInterval(() => {
   systemTick += 1;
@@ -113,6 +117,10 @@ const systemIntervalId = setInterval(() => {
   console.log(`[system] tick ${systemTick} network bytesSentMB:`, toMB(network.bytesSent()));
   console.log(`[system] tick ${systemTick} mouse clientX:`, mouse.clientX());
   console.log(`[system] tick ${systemTick} mouse clientY:`, mouse.clientY());
+  console.log(`[system] tick ${systemTick} disk totalMB:`, toMB(disk.totalBytes()));
+  console.log(`[system] tick ${systemTick} disk availableMB:`, toMB(disk.availableBytes()));
+  console.log(`[system] tick ${systemTick} disk usedMB:`, toMB(disk.usedBytes()));
+  console.log(`[system] tick ${systemTick} disk usagePercent:`, disk.usagePercent());
   if (systemTick >= 10) {
     clearInterval(systemIntervalId);
     console.log("[system] monitor interval stopped");
