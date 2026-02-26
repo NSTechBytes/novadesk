@@ -250,8 +250,13 @@ bool RunWidgetUiScriptImpl(JSContext* ctx, Widget* widget, const std::wstring& s
     JS_SetPropertyStr(ctx, global, "__dirname", JS_NewString(ctx, dirName.c_str()));
     JS_FreeValue(ctx, global);
 
+    const std::string modulePrelude =
+        "const ui = globalThis.ui;\n"
+        "const ipcRenderer = globalThis.ipcRenderer;\n";
+    const std::string moduleSource = modulePrelude + scriptSource;
+
     SetUiScriptImportRestricted(true);
-    JSValue evalResult = JS_Eval(ctx, scriptSource.c_str(), scriptSource.size(), fileName.c_str(), JS_EVAL_TYPE_MODULE);
+    JSValue evalResult = JS_Eval(ctx, moduleSource.c_str(), moduleSource.size(), fileName.c_str(), JS_EVAL_TYPE_MODULE);
     SetUiScriptImportRestricted(false);
 
     JSValue global2 = JS_GetGlobalObject(ctx);

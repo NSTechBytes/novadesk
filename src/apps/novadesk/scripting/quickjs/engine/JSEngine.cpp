@@ -119,6 +119,153 @@ JSValue JsClearTimerImpl(JSContext* ctx, JSValueConst, int argc, JSValueConst* a
     return JS_UNDEFINED;
 }
 
+JSValue JsPathJoin(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    std::filesystem::path out;
+    for (int i = 0; i < argc; ++i) {
+        const char* s = JS_ToCString(ctx, argv[i]);
+        if (!s) return JS_EXCEPTION;
+        out /= std::filesystem::path(s);
+        JS_FreeCString(ctx, s);
+    }
+    return JS_NewString(ctx, out.lexically_normal().string().c_str());
+}
+
+JSValue JsPathBasename(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_NewString(ctx, "");
+    const char* s = JS_ToCString(ctx, argv[0]);
+    if (!s) return JS_EXCEPTION;
+    std::filesystem::path p(s);
+    std::string base = p.filename().string();
+    if (argc > 1) {
+        const char* ext = JS_ToCString(ctx, argv[1]);
+        if (ext) {
+            std::string e(ext);
+            if (!e.empty() && base.size() >= e.size() && base.compare(base.size() - e.size(), e.size(), e) == 0) {
+                base.resize(base.size() - e.size());
+            }
+            JS_FreeCString(ctx, ext);
+        }
+    }
+    JS_FreeCString(ctx, s);
+    return JS_NewString(ctx, base.c_str());
+}
+
+JSValue JsPathDirname(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_NewString(ctx, ".");
+    const char* s = JS_ToCString(ctx, argv[0]);
+    if (!s) return JS_EXCEPTION;
+    std::filesystem::path p(s);
+    std::string dir = p.parent_path().string();
+    JS_FreeCString(ctx, s);
+    if (dir.empty()) dir = ".";
+    return JS_NewString(ctx, dir.c_str());
+}
+
+JSValue JsPathExtname(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_NewString(ctx, "");
+    const char* s = JS_ToCString(ctx, argv[0]);
+    if (!s) return JS_EXCEPTION;
+    std::filesystem::path p(s);
+    std::string ext = p.extension().string();
+    JS_FreeCString(ctx, s);
+    return JS_NewString(ctx, ext.c_str());
+}
+
+JSValue JsPathIsAbsolute(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_NewBool(ctx, 0);
+    const char* s = JS_ToCString(ctx, argv[0]);
+    if (!s) return JS_EXCEPTION;
+    bool abs = std::filesystem::path(s).is_absolute();
+    JS_FreeCString(ctx, s);
+    return JS_NewBool(ctx, abs ? 1 : 0);
+}
+
+JSValue JsPathNormalize(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_NewString(ctx, ".");
+    const char* s = JS_ToCString(ctx, argv[0]);
+    if (!s) return JS_EXCEPTION;
+    std::filesystem::path p(s);
+    std::string n = p.lexically_normal().string();
+    JS_FreeCString(ctx, s);
+    return JS_NewString(ctx, n.c_str());
+}
+
+JSValue JsPathRelative(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 2) return JS_NewString(ctx, "");
+    const char* from = JS_ToCString(ctx, argv[0]);
+    const char* to = JS_ToCString(ctx, argv[1]);
+    if (!from || !to) {
+        if (from) JS_FreeCString(ctx, from);
+        if (to) JS_FreeCString(ctx, to);
+        return JS_EXCEPTION;
+    }
+    std::filesystem::path pfrom(from), pto(to);
+    std::string rel = pto.lexically_relative(pfrom).string();
+    JS_FreeCString(ctx, from);
+    JS_FreeCString(ctx, to);
+    return JS_NewString(ctx, rel.c_str());
+}
+
+JSValue JsPathParse(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_ThrowTypeError(ctx, "path.parse(path) requires path");
+    const char* s = JS_ToCString(ctx, argv[0]);
+    if (!s) return JS_EXCEPTION;
+    std::filesystem::path p(s);
+    JS_FreeCString(ctx, s);
+
+    JSValue obj = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, obj, "root", JS_NewString(ctx, p.root_path().string().c_str()));
+    JS_SetPropertyStr(ctx, obj, "dir", JS_NewString(ctx, p.parent_path().string().c_str()));
+    JS_SetPropertyStr(ctx, obj, "base", JS_NewString(ctx, p.filename().string().c_str()));
+    JS_SetPropertyStr(ctx, obj, "ext", JS_NewString(ctx, p.extension().string().c_str()));
+    JS_SetPropertyStr(ctx, obj, "name", JS_NewString(ctx, p.stem().string().c_str()));
+    return obj;
+}
+
+JSValue JsPathFormat(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1 || !JS_IsObject(argv[0])) {
+        return JS_ThrowTypeError(ctx, "path.format(obj) requires object");
+    }
+    std::string dir;
+    std::string base;
+    std::string name;
+    std::string ext;
+
+    JSValue v = JS_GetPropertyStr(ctx, argv[0], "dir");
+    if (!JS_IsUndefined(v) && !JS_IsNull(v)) {
+        const char* s = JS_ToCString(ctx, v);
+        if (s) { dir = s; JS_FreeCString(ctx, s); }
+    }
+    JS_FreeValue(ctx, v);
+
+    v = JS_GetPropertyStr(ctx, argv[0], "base");
+    if (!JS_IsUndefined(v) && !JS_IsNull(v)) {
+        const char* s = JS_ToCString(ctx, v);
+        if (s) { base = s; JS_FreeCString(ctx, s); }
+    }
+    JS_FreeValue(ctx, v);
+
+    if (base.empty()) {
+        v = JS_GetPropertyStr(ctx, argv[0], "name");
+        if (!JS_IsUndefined(v) && !JS_IsNull(v)) {
+            const char* s = JS_ToCString(ctx, v);
+            if (s) { name = s; JS_FreeCString(ctx, s); }
+        }
+        JS_FreeValue(ctx, v);
+
+        v = JS_GetPropertyStr(ctx, argv[0], "ext");
+        if (!JS_IsUndefined(v) && !JS_IsNull(v)) {
+            const char* s = JS_ToCString(ctx, v);
+            if (s) { ext = s; JS_FreeCString(ctx, s); }
+        }
+        JS_FreeValue(ctx, v);
+        base = name + ext;
+    }
+
+    std::filesystem::path out = dir.empty() ? std::filesystem::path(base) : (std::filesystem::path(dir) / base);
+    return JS_NewString(ctx, out.lexically_normal().string().c_str());
+}
+
 void RegisterConsoleBindings(JSContext* ctx) {
     JSValue global = JS_GetGlobalObject(ctx);
 
@@ -147,6 +294,18 @@ void RegisterConsoleBindings(JSContext* ctx) {
         JS_NewCFunction(ctx, JsClearTimerImpl, "clearTimeout", 1));
     JS_SetPropertyStr(ctx, global, "clearInterval",
         JS_NewCFunction(ctx, JsClearTimerImpl, "clearInterval", 1));
+
+    JSValue pathObj = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, pathObj, "join", JS_NewCFunction(ctx, JsPathJoin, "join", 1));
+    JS_SetPropertyStr(ctx, pathObj, "basename", JS_NewCFunction(ctx, JsPathBasename, "basename", 2));
+    JS_SetPropertyStr(ctx, pathObj, "dirname", JS_NewCFunction(ctx, JsPathDirname, "dirname", 1));
+    JS_SetPropertyStr(ctx, pathObj, "extname", JS_NewCFunction(ctx, JsPathExtname, "extname", 1));
+    JS_SetPropertyStr(ctx, pathObj, "isAbsolute", JS_NewCFunction(ctx, JsPathIsAbsolute, "isAbsolute", 1));
+    JS_SetPropertyStr(ctx, pathObj, "normalize", JS_NewCFunction(ctx, JsPathNormalize, "normalize", 1));
+    JS_SetPropertyStr(ctx, pathObj, "relative", JS_NewCFunction(ctx, JsPathRelative, "relative", 2));
+    JS_SetPropertyStr(ctx, pathObj, "parse", JS_NewCFunction(ctx, JsPathParse, "parse", 1));
+    JS_SetPropertyStr(ctx, pathObj, "format", JS_NewCFunction(ctx, JsPathFormat, "format", 1));
+    JS_SetPropertyStr(ctx, global, "path", pathObj);
 
     JS_FreeValue(ctx, global);
 }
@@ -521,10 +680,17 @@ bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath) {
     JS_FreeValue(g_context, mainIpc);
     JS_FreeValue(g_context, global);
 
+    const std::string modulePrelude =
+        "const ipcMain = globalThis.ipcMain;\n"
+        "const __filename = globalThis.__filename;\n"
+        "const __dirname = globalThis.__dirname;\n"
+        "const path = globalThis.path;\n";
+    const std::string moduleSource = modulePrelude + script;
+
     JSValue result = JS_Eval(
         g_context,
-        script.c_str(),
-        script.size(),
+        moduleSource.c_str(),
+        moduleSource.size(),
         fileName.c_str(),
         JS_EVAL_TYPE_MODULE
     );

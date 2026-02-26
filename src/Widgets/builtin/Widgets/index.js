@@ -2,7 +2,7 @@ import { widgetWindow, app } from 'novadesk';
 import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics, hotkey } from 'system';
 import * as std from 'std';
 
-console.log("OS:", JSON.stringify(std.getenviron()));
+// console.log("OS:", JSON.stringify(std.getenviron()));
 // let dir = os.opendir('.');
 // if (dir) {
 //   for(;;) {
@@ -84,6 +84,28 @@ console.log("Clipboard before:", clipboard.getText());
 console.log("Power status:", JSON.stringify(power.getStatus?.() ?? {}));
 console.log("Display metrics count:", displayMetrics.getMetrics().count);
 console.log("System modules:", !!wallpaper, !!audio, !!brightness, !!fileIcon);
+console.log("Path module type:", typeof path);
+console.log("__dirname:", __dirname);
+console.log("__filename:", __filename);
+try {
+  const p = path;
+  if (!p) {
+    console.warn("Path module is not available");
+  } else {
+    console.log("Path join:", p.join(__dirname, "assets", "icon.png"));
+    console.log("Path dirname:", p.dirname(__filename));
+    console.log("Path basename:", p.basename(__filename));
+    console.log("Path extname:", p.extname(__filename));
+    console.log("Path normalize:", p.normalize(__dirname + "/../Widgets/./ui.js"));
+    console.log("Path isAbsolute __filename:", p.isAbsolute(__filename));
+    console.log("Path relative:", p.relative(__dirname, p.join(__dirname, "ui.js")));
+    const parsedPath = p.parse(__filename);
+    console.log("Path parse:", JSON.stringify(parsedPath));
+    console.log("Path format:", p.format(parsedPath));
+  }
+} catch (err) {
+  console.error("Path diagnostics failed:", String(err));
+}
 
 const timeoutId = setTimeout(() => {
   console.log("[timer] setTimeout fired after 1500ms");
