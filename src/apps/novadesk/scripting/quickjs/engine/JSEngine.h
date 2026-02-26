@@ -24,6 +24,7 @@ struct MouseEventData {
 
 void InitializeJavaScriptAPI(duk_context* ctx);
 bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath = L"");
+std::wstring GetEntryScriptDir();
 void Reload();
 
 void OnTimer(UINT_PTR id);

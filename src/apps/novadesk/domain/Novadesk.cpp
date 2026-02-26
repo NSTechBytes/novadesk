@@ -100,9 +100,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     {
         // Another instance is running, check arguments for commands
         bool handledCommand = false;
-        if (lpCmdLine && wcslen(lpCmdLine) > 0)
+        int argc = 0;
+        LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+        if (argv && argc > 1)
         {
-            std::wstring cmd = lpCmdLine;
+            std::wstring cmd;
+            for (int i = 1; i < argc; ++i) {
+                if (!cmd.empty()) cmd += L" ";
+                cmd += argv[i];
+            }
             HWND hExisting = FindWindowW(className.c_str(), NULL);
 
             if (hExisting)
@@ -115,6 +121,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     handledCommand = true;
                 }
             }
+        }
+        if (argv) {
+            LocalFree(argv);
         }
 
         if (!handledCommand)
@@ -216,35 +225,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // Initialize JavaScript API
     JSEngine::InitializeJavaScriptAPI(ctx);
 
-    // Parse command line for custom script path
+    // Parse command line for custom script path using argv semantics.
+    // argv[0] is the executable path; the first user arg is argv[1].
     std::wstring scriptPath;
-    if (lpCmdLine && wcslen(lpCmdLine) > 0)
+    int argc = 0;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (argv)
     {
-        scriptPath = lpCmdLine;
-        
-        // Trim leading and trailing whitespace
-        size_t first = scriptPath.find_first_not_of(L" \t\r\n");
-        if (std::wstring::npos != first) {
-            size_t last = scriptPath.find_last_not_of(L" \t\r\n");
-            scriptPath = scriptPath.substr(first, (last - first + 1));
-        }
-
-        // Remove quotes if present
-        if (!scriptPath.empty() && scriptPath.front() == L'"' && scriptPath.back() == L'"')
+        if (argc > 1)
         {
-            scriptPath = scriptPath.substr(1, scriptPath.length() - 2);
+            scriptPath = argv[1];
+            if (!scriptPath.empty())
+            {
+                Logging::Log(LogLevel::Info, L"Using custom script: %s", scriptPath.c_str());
+            }
         }
-        
-        // Trim again after quote removal in case there were spaces inside quotes (unlikely but safe)
-        first = scriptPath.find_first_not_of(L" \t\r\n");
-        if (std::wstring::npos != first) {
-            size_t last = scriptPath.find_last_not_of(L" \t\r\n");
-            scriptPath = scriptPath.substr(first, (last - first + 1));
-        }
-
-        if (!scriptPath.empty()) {
-            Logging::Log(LogLevel::Info, L"Using custom script: %s", scriptPath.c_str());
-        }
+        LocalFree(argv);
     }
 
     // Load and execute script (with optional custom path)
@@ -279,8 +275,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR, int nCmdShow)
 {
-    LPWSTR cmdLineW = GetCommandLineW();
-    return wWinMain(hInstance, hPrevInstance, cmdLineW, nCmdShow);
+    // Forward an empty command line; wWinMain now reads argv directly via GetCommandLineW().
+    return wWinMain(hInstance, hPrevInstance, nullptr, nCmdShow);
 }
 
 void InitTrayIcon(HWND hWnd)

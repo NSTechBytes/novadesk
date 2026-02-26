@@ -214,7 +214,11 @@ const JSCFunctionListEntry kWidgetProtoFuncs[] = {
 bool RunWidgetUiScriptImpl(JSContext* ctx, Widget* widget, const std::wstring& scriptPath) {
     if (!widget || scriptPath.empty()) return true;
 
-    const std::wstring absPath = PathUtils::ResolvePath(scriptPath, PathUtils::GetWidgetsDir());
+    const std::wstring baseDir = JSEngine::GetEntryScriptDir();
+    const std::wstring absPath = PathUtils::ResolvePath(
+        scriptPath,
+        baseDir.empty() ? PathUtils::GetWidgetsDir() : baseDir
+    );
     const std::string scriptSource = FileUtils::ReadFileContent(absPath);
     if (scriptSource.empty()) {
         Logging::Log(LogLevel::Error, L"[novadesk] widget ui script not found: %s", absPath.c_str());

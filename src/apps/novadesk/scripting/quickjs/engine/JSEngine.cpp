@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <filesystem>
 
 #include "../../domain/Widget.h"
 #include "../../shared/FileUtils.h"
@@ -374,8 +375,28 @@ bool EnsureRuntime() {
     return true;
 }
 
-std::wstring ResolveEntryScript(const std::wstring&) {
-    return PathUtils::ResolvePath(L"index.js", PathUtils::GetWidgetsDir());
+std::wstring ResolveEntryScript(const std::wstring& scriptPath) {
+    if (scriptPath.empty()) {
+        return PathUtils::ResolvePath(L"index.js", PathUtils::GetWidgetsDir());
+    }
+
+    // Respect explicit custom script paths first.
+    if (!PathUtils::IsPathRelative(scriptPath)) {
+        return PathUtils::NormalizePath(scriptPath);
+    }
+
+    // For relative custom paths, resolve from current working directory first.
+    std::error_code ec;
+    const std::filesystem::path cwd = std::filesystem::current_path(ec);
+    if (!ec) {
+        const std::wstring fromCwd = PathUtils::ResolvePath(scriptPath, cwd.wstring());
+        if (std::filesystem::exists(std::filesystem::path(fromCwd), ec)) {
+            return fromCwd;
+        }
+    }
+
+    // Fallback: resolve relative to Widgets folder.
+    return PathUtils::ResolvePath(scriptPath, PathUtils::GetWidgetsDir());
 }
 }  // namespace
 
@@ -446,6 +467,13 @@ bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath) {
     }
 
     return true;
+}
+
+std::wstring GetEntryScriptDir() {
+    if (g_lastScriptPath.empty()) {
+        return PathUtils::GetWidgetsDir();
+    }
+    return PathUtils::GetParentDir(g_lastScriptPath);
 }
 
 void Reload() {
