@@ -1,5 +1,5 @@
 import { widgetWindow, app } from 'novadesk';
-import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics } from 'system';
+import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics, hotkey } from 'system';
 import * as std from 'std';
 
 console.log("OS:", JSON.stringify(std.getenviron()));
@@ -84,4 +84,16 @@ console.log("Clipboard before:", clipboard.getText());
 console.log("Power status:", JSON.stringify(power.getStatus?.() ?? {}));
 console.log("Display metrics count:", displayMetrics.getMetrics().count);
 console.log("System modules:", !!wallpaper, !!audio, !!brightness, !!fileIcon);
+
+const testHotkeyId = hotkey.register("K", {
+  onKeyDown: () => console.log("[hotkey] down CTRL+ALT+K"),
+  onKeyUp: () => console.log("[hotkey] up CTRL+ALT+K")
+});
+console.log("Hotkey registered id:", testHotkeyId);
+
+globalThis.unregisterTestHotkey = () => {
+  const ok = hotkey.unregister(testHotkeyId);
+  console.log("Hotkey unregistered:", ok);
+};
+
 console.log("Window created");

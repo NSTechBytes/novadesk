@@ -222,6 +222,16 @@ namespace Utils {
         return strTo;
     }
 
+    std::wstring TrimUpper(const std::wstring& s) {
+        size_t a = 0;
+        while (a < s.size() && iswspace(s[a])) ++a;
+        size_t b = s.size();
+        while (b > a && iswspace(s[b - 1])) --b;
+        std::wstring out = s.substr(a, b - a);
+        for (auto& ch : out) ch = towupper(ch);
+        return out;
+    }
+
     std::vector<std::wstring> SplitByComma(const std::wstring& s) {
         std::vector<std::wstring> parts;
         int depth = 0;

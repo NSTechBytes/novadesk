@@ -1,9 +1,11 @@
 #pragma once
 
+#include <windows.h>
 #include <vector>
 #include <string>
 
 namespace novadesk::shared::system {
+constexpr UINT WM_NOVADESK_HOTKEY_UP = WM_APP + 120;
 
 struct DisplayRect {
     int left = 0;
@@ -50,6 +52,11 @@ struct RegistryValue {
     double numberValue = 0.0;
 };
 
+struct HotkeyBinding {
+    int onKeyDownCallbackId = -1;
+    int onKeyUpCallbackId = -1;
+};
+
 bool ClipboardSetText(const std::wstring& text);
 bool ClipboardGetText(std::wstring& outText);
 
@@ -67,5 +74,10 @@ void AudioStopSound();
 bool RegistryReadData(const std::wstring& fullPath, const std::wstring& valueName, RegistryValue& outValue);
 bool RegistryWriteString(const std::wstring& fullPath, const std::wstring& valueName, const std::wstring& value);
 bool RegistryWriteNumber(const std::wstring& fullPath, const std::wstring& valueName, double value);
+
+int RegisterHotkey(HWND messageWindow, const std::wstring& hotkey, int onKeyDownCallbackId, int onKeyUpCallbackId);
+bool UnregisterHotkey(HWND messageWindow, int id);
+void ClearHotkeys(HWND messageWindow);
+bool ResolveHotkeyMessage(int id, HotkeyBinding& outBinding);
 
 }  // namespace novadesk::shared::system

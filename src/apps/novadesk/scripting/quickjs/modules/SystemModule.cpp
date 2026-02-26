@@ -4,6 +4,7 @@
 
 #include "../../shared/System.h"
 #include "../../shared/Utils.h"
+#include "../engine/JSEngine.h"
 
 namespace novadesk::scripting::quickjs {
 namespace {
@@ -210,6 +211,45 @@ JSValue JsRegistryWriteData(JSContext* ctx, JSValueConst, int argc, JSValueConst
     return JS_NewBool(ctx, ok ? 1 : 0);
 }
 
+JSValue JsHotkeyRegisterHotkey(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 2) return JS_ThrowTypeError(ctx, "hotkey.register(hotkey, handler)");
+    const char* hotkeyC = JS_ToCString(ctx, argv[0]);
+    if (!hotkeyC) return JS_EXCEPTION;
+    std::wstring hotkey = Utils::ToWString(hotkeyC);
+    JS_FreeCString(ctx, hotkeyC);
+
+    int keyDownId = -1;
+    int keyUpId = -1;
+    if (JS_IsFunction(ctx, argv[1])) {
+        keyDownId = JSEngine::RegisterEventCallback(ctx, argv[1]);
+    } else if (JS_IsObject(argv[1])) {
+        JSValue kd = JS_GetPropertyStr(ctx, argv[1], "onKeyDown");
+        if (JS_IsFunction(ctx, kd)) {
+            keyDownId = JSEngine::RegisterEventCallback(ctx, kd);
+        }
+        JS_FreeValue(ctx, kd);
+        JSValue ku = JS_GetPropertyStr(ctx, argv[1], "onKeyUp");
+        if (JS_IsFunction(ctx, ku)) {
+            keyUpId = JSEngine::RegisterEventCallback(ctx, ku);
+        }
+        JS_FreeValue(ctx, ku);
+    } else {
+        return JS_ThrowTypeError(ctx, "hotkey.register handler must be function or object");
+    }
+
+    int id = shared::system::RegisterHotkey(JSEngine::GetMessageWindow(), hotkey, keyDownId, keyUpId);
+    return JS_NewInt32(ctx, id);
+}
+
+JSValue JsHotkeyUnregisterHotkey(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_ThrowTypeError(ctx, "hotkey.unregister(id)");
+    int32_t id = 0;
+    if (JS_ToInt32(ctx, &id, argv[0]) != 0) {
+        return JS_ThrowTypeError(ctx, "hotkey.unregister(id) expects number");
+    }
+    return JS_NewBool(ctx, shared::system::UnregisterHotkey(JSEngine::GetMessageWindow(), id) ? 1 : 0);
+}
+
 int SystemModuleInit(JSContext* ctx, JSModuleDef* m) {
     JSValue clipboard = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, clipboard, "setText", JS_NewCFunction(ctx, JsClipboardSetText, "setText", 1));
@@ -252,6 +292,11 @@ int SystemModuleInit(JSContext* ctx, JSModuleDef* m) {
     JS_SetPropertyStr(ctx, registry, "writeData", JS_NewCFunction(ctx, JsRegistryWriteData, "writeData", 3));
     JS_SetModuleExport(ctx, m, "registry", registry);
 
+    JSValue hotkey = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, hotkey, "register", JS_NewCFunction(ctx, JsHotkeyRegisterHotkey, "register", 2));
+    JS_SetPropertyStr(ctx, hotkey, "unregister", JS_NewCFunction(ctx, JsHotkeyUnregisterHotkey, "unregister", 1));
+    JS_SetModuleExport(ctx, m, "hotkey", hotkey);
+
     return 0;
 }
 }  // namespace
@@ -267,6 +312,7 @@ JSModuleDef* EnsureSystemModule(JSContext* ctx, const char* moduleName) {
     if (JS_AddModuleExport(ctx, m, "fileIcon") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "displayMetrics") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "registry") < 0) return nullptr;
+    if (JS_AddModuleExport(ctx, m, "hotkey") < 0) return nullptr;
     return m;
 }
 }  // namespace novadesk::scripting::quickjs

@@ -12,6 +12,7 @@
 #include "../../shared/FileUtils.h"
 #include "../../shared/Logging.h"
 #include "../../shared/PathUtils.h"
+#include "../../shared/System.h"
 #include "../../shared/Utils.h"
 #include "../modules/ModuleSystem.h"
 #include "../modules/WidgetUiBindings.h"
@@ -149,6 +150,7 @@ void ClearAllTrayCommandCallbacks() {
     }
     g_trayCommandCallbacks.clear();
 }
+
 
 int RegisterCallback(std::vector<JSValue>& list, JSContext* ctx, JSValueConst fn) {
     if (!ctx || !JS_IsFunction(ctx, fn) || ctx != g_context) {
@@ -427,6 +429,7 @@ bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath) {
     ClearWidgetEventListeners();
     ClearAllWidgetContextMenuCallbacks();
     ClearAllTrayCommandCallbacks();
+    novadesk::shared::system::ClearHotkeys(g_messageWindow);
 
     const std::string script = FileUtils::ReadFileContent(finalScriptPath);
     if (script.empty()) {
@@ -490,6 +493,18 @@ void OnMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         DispatchFn fn = reinterpret_cast<DispatchFn>(wParam);
         if (fn) {
             fn(reinterpret_cast<void*>(lParam));
+        }
+    }
+    if (message == WM_HOTKEY) {
+        novadesk::shared::system::HotkeyBinding binding{};
+        if (novadesk::shared::system::ResolveHotkeyMessage(static_cast<int>(wParam), binding) && binding.onKeyDownCallbackId > 0) {
+            CallEventCallback(binding.onKeyDownCallbackId, nullptr, nullptr);
+        }
+    }
+    if (message == novadesk::shared::system::WM_NOVADESK_HOTKEY_UP) {
+        novadesk::shared::system::HotkeyBinding binding{};
+        if (novadesk::shared::system::ResolveHotkeyMessage(static_cast<int>(wParam), binding) && binding.onKeyUpCallbackId > 0) {
+            CallEventCallback(binding.onKeyUpCallbackId, nullptr, nullptr);
         }
     }
 }

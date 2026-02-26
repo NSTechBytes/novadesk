@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <cwchar>
+#include <unordered_map>
 
 #include <mmdeviceapi.h>
 #include <mmsystem.h>
@@ -17,6 +18,18 @@
 namespace novadesk::shared::system {
 
 namespace {
+struct RegisteredHotkey {
+    HotkeyBinding binding;
+    UINT modifiers = 0;
+    UINT vk = 0;
+    bool pressed = false;
+};
+
+std::unordered_map<int, RegisteredHotkey> g_hotkeys;
+int g_nextHotkeyId = 10000;
+HHOOK g_keyboardHook = nullptr;
+HWND g_hotkeyMessageWindow = nullptr;
+
 typedef struct _PROCESSOR_POWER_INFORMATION_LOCAL {
     ULONG Number;
     ULONG MaxMhz;
@@ -79,6 +92,128 @@ bool SplitRegistryPath(const std::wstring& fullPath, HKEY& outRoot, std::wstring
     outSubKey = fullPath.substr(p + 1);
     outRoot = GetRegistryRootKey(rootPart);
     return outRoot != nullptr && !outSubKey.empty();
+}
+
+bool ParseHotkeyString(const std::wstring& hotkey, UINT& modifiers, UINT& vk) {
+    modifiers = 0;
+    vk = 0;
+
+    size_t start = 0;
+    while (start <= hotkey.size()) {
+        size_t plus = hotkey.find(L'+', start);
+        std::wstring token = (plus == std::wstring::npos) ? hotkey.substr(start) : hotkey.substr(start, plus - start);
+        token = Utils::TrimUpper(token);
+
+        if (token == L"CTRL" || token == L"CONTROL") modifiers |= MOD_CONTROL;
+        else if (token == L"ALT") modifiers |= MOD_ALT;
+        else if (token == L"SHIFT") modifiers |= MOD_SHIFT;
+        else if (token == L"WIN" || token == L"WINDOWS") modifiers |= MOD_WIN;
+        else if (token.size() == 1 && token[0] >= L'A' && token[0] <= L'Z') vk = static_cast<UINT>(token[0]);
+        else if (token.size() == 1 && token[0] >= L'0' && token[0] <= L'9') vk = static_cast<UINT>(token[0]);
+        else if (token.size() >= 2 && token[0] == L'F') {
+            int f = _wtoi(token.c_str() + 1);
+            if (f >= 1 && f <= 24) vk = VK_F1 + (f - 1);
+        } else if (token == L"SPACE") vk = VK_SPACE;
+        else if (token == L"ENTER" || token == L"RETURN") vk = VK_RETURN;
+        else if (token == L"TAB") vk = VK_TAB;
+        else if (token == L"ESC" || token == L"ESCAPE") vk = VK_ESCAPE;
+        else if (token == L"BACKSPACE") vk = VK_BACK;
+        else if (token == L"DELETE" || token == L"DEL") vk = VK_DELETE;
+        else if (token == L"INSERT" || token == L"INS") vk = VK_INSERT;
+        else if (token == L"HOME") vk = VK_HOME;
+        else if (token == L"END") vk = VK_END;
+        else if (token == L"PAGEUP" || token == L"PGUP") vk = VK_PRIOR;
+        else if (token == L"PAGEDOWN" || token == L"PGDN") vk = VK_NEXT;
+        else if (token == L"LEFT") vk = VK_LEFT;
+        else if (token == L"RIGHT") vk = VK_RIGHT;
+        else if (token == L"UP") vk = VK_UP;
+        else if (token == L"DOWN") vk = VK_DOWN;
+
+        if (plus == std::wstring::npos) break;
+        start = plus + 1;
+    }
+    return vk != 0;
+}
+
+bool IsModifierVk(UINT vk) {
+    return vk == VK_CONTROL || vk == VK_LCONTROL || vk == VK_RCONTROL ||
+           vk == VK_MENU || vk == VK_LMENU || vk == VK_RMENU ||
+           vk == VK_SHIFT || vk == VK_LSHIFT || vk == VK_RSHIFT ||
+           vk == VK_LWIN || vk == VK_RWIN;
+}
+
+bool IsDownWithEvent(UINT checkVk, UINT eventVk, bool eventDown) {
+    if (checkVk == VK_CONTROL) {
+        if (eventVk == VK_LCONTROL || eventVk == VK_RCONTROL || eventVk == VK_CONTROL) return eventDown;
+        return (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+    }
+    if (checkVk == VK_MENU) {
+        if (eventVk == VK_LMENU || eventVk == VK_RMENU || eventVk == VK_MENU) return eventDown;
+        return (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+    }
+    if (checkVk == VK_SHIFT) {
+        if (eventVk == VK_LSHIFT || eventVk == VK_RSHIFT || eventVk == VK_SHIFT) return eventDown;
+        return (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    }
+    if (checkVk == VK_LWIN || checkVk == VK_RWIN) {
+        if (eventVk == checkVk) return eventDown;
+        return (GetAsyncKeyState(checkVk) & 0x8000) != 0;
+    }
+    if (eventVk == checkVk) return eventDown;
+    return (GetAsyncKeyState(checkVk) & 0x8000) != 0;
+}
+
+bool IsHotkeyPressedNow(const RegisteredHotkey& hk, UINT eventVk, bool eventDown) {
+    if ((hk.modifiers & MOD_CONTROL) && !IsDownWithEvent(VK_CONTROL, eventVk, eventDown)) return false;
+    if ((hk.modifiers & MOD_ALT) && !IsDownWithEvent(VK_MENU, eventVk, eventDown)) return false;
+    if ((hk.modifiers & MOD_SHIFT) && !IsDownWithEvent(VK_SHIFT, eventVk, eventDown)) return false;
+    if ((hk.modifiers & MOD_WIN) &&
+        !IsDownWithEvent(VK_LWIN, eventVk, eventDown) &&
+        !IsDownWithEvent(VK_RWIN, eventVk, eventDown)) return false;
+    return IsDownWithEvent(hk.vk, eventVk, eventDown);
+}
+
+LRESULT CALLBACK KeyboardHookProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode == HC_ACTION && lParam) {
+        const auto* kb = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
+        const UINT vk = kb->vkCode;
+        const bool isDown = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
+        const bool isUp = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
+        if ((isDown || isUp) && g_hotkeyMessageWindow) {
+            const bool relevant = IsModifierVk(vk);
+            for (auto& kv : g_hotkeys) {
+                RegisteredHotkey& hk = kv.second;
+                if (!relevant && vk != hk.vk) {
+                    continue;
+                }
+
+                const bool nowPressed = IsHotkeyPressedNow(hk, vk, isDown);
+                if (nowPressed && !hk.pressed) {
+                    hk.pressed = true;
+                    PostMessageW(g_hotkeyMessageWindow, WM_HOTKEY, static_cast<WPARAM>(kv.first), 0);
+                } else if (!nowPressed && hk.pressed) {
+                    hk.pressed = false;
+                    PostMessageW(g_hotkeyMessageWindow, WM_NOVADESK_HOTKEY_UP, static_cast<WPARAM>(kv.first), 0);
+                }
+            }
+        }
+    }
+    return CallNextHookEx(g_keyboardHook, nCode, wParam, lParam);
+}
+
+void EnsureKeyboardHook(HWND messageWindow) {
+    g_hotkeyMessageWindow = messageWindow;
+    if (!g_keyboardHook) {
+        g_keyboardHook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardHookProc, GetModuleHandleW(nullptr), 0);
+    }
+}
+
+void MaybeRemoveKeyboardHook() {
+    if (g_hotkeys.empty() && g_keyboardHook) {
+        UnhookWindowsHookEx(g_keyboardHook);
+        g_keyboardHook = nullptr;
+        g_hotkeyMessageWindow = nullptr;
+    }
 }
 
 }  // namespace
@@ -389,6 +524,47 @@ bool RegistryWriteNumber(const std::wstring& fullPath, const std::wstring& value
         sizeof(dword)) == ERROR_SUCCESS);
     RegCloseKey(key);
     return ok;
+}
+
+int RegisterHotkey(HWND messageWindow, const std::wstring& hotkey, int onKeyDownCallbackId, int onKeyUpCallbackId) {
+    if (!messageWindow) return -1;
+    UINT modifiers = 0;
+    UINT vk = 0;
+    if (!ParseHotkeyString(hotkey, modifiers, vk)) return -1;
+
+    int id = g_nextHotkeyId++;
+    EnsureKeyboardHook(messageWindow);
+    if (!g_keyboardHook) return -1;
+
+    RegisteredHotkey entry{};
+    entry.binding.onKeyDownCallbackId = onKeyDownCallbackId;
+    entry.binding.onKeyUpCallbackId = onKeyUpCallbackId;
+    entry.modifiers = modifiers;
+    entry.vk = vk;
+    g_hotkeys[id] = entry;
+    return id;
+}
+
+bool UnregisterHotkey(HWND messageWindow, int id) {
+    auto it = g_hotkeys.find(id);
+    if (it == g_hotkeys.end()) return false;
+    (void)messageWindow;
+    g_hotkeys.erase(it);
+    MaybeRemoveKeyboardHook();
+    return true;
+}
+
+void ClearHotkeys(HWND messageWindow) {
+    (void)messageWindow;
+    g_hotkeys.clear();
+    MaybeRemoveKeyboardHook();
+}
+
+bool ResolveHotkeyMessage(int id, HotkeyBinding& outBinding) {
+    auto it = g_hotkeys.find(id);
+    if (it == g_hotkeys.end()) return false;
+    outBinding = it->second.binding;
+    return true;
 }
 
 }  // namespace novadesk::shared::system
