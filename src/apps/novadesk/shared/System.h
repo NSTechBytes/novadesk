@@ -38,6 +38,18 @@ struct PowerStatus {
     double hz = 0.0;
 };
 
+enum class RegistryValueType {
+    None = 0,
+    String,
+    Number
+};
+
+struct RegistryValue {
+    RegistryValueType type = RegistryValueType::None;
+    std::wstring stringValue;
+    double numberValue = 0.0;
+};
+
 bool ClipboardSetText(const std::wstring& text);
 bool ClipboardGetText(std::wstring& outText);
 
@@ -51,5 +63,9 @@ bool AudioSetVolume(int volumePercent);
 int AudioGetVolume();
 bool AudioPlaySound(const std::wstring& path, bool loop);
 void AudioStopSound();
+
+bool RegistryReadData(const std::wstring& fullPath, const std::wstring& valueName, RegistryValue& outValue);
+bool RegistryWriteString(const std::wstring& fullPath, const std::wstring& valueName, const std::wstring& value);
+bool RegistryWriteNumber(const std::wstring& fullPath, const std::wstring& valueName, double value);
 
 }  // namespace novadesk::shared::system

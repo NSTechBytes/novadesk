@@ -62,6 +62,25 @@ IAudioEndpointVolume* GetVolumeInterface() {
     return volume;
 }
 
+HKEY GetRegistryRootKey(const std::wstring& root) {
+    if (root == L"HKCU" || root == L"HKEY_CURRENT_USER") return HKEY_CURRENT_USER;
+    if (root == L"HKLM" || root == L"HKEY_LOCAL_MACHINE") return HKEY_LOCAL_MACHINE;
+    if (root == L"HKCR" || root == L"HKEY_CLASSES_ROOT") return HKEY_CLASSES_ROOT;
+    if (root == L"HKU" || root == L"HKEY_USERS") return HKEY_USERS;
+    return nullptr;
+}
+
+bool SplitRegistryPath(const std::wstring& fullPath, HKEY& outRoot, std::wstring& outSubKey) {
+    const size_t p = fullPath.find(L'\\');
+    if (p == std::wstring::npos) {
+        return false;
+    }
+    const std::wstring rootPart = fullPath.substr(0, p);
+    outSubKey = fullPath.substr(p + 1);
+    outRoot = GetRegistryRootKey(rootPart);
+    return outRoot != nullptr && !outSubKey.empty();
+}
+
 }  // namespace
 
 bool ClipboardSetText(const std::wstring& text) {
@@ -283,6 +302,93 @@ bool AudioPlaySound(const std::wstring& path, bool loop) {
 
 void AudioStopSound() {
     PlaySoundW(nullptr, nullptr, 0);
+}
+
+bool RegistryReadData(const std::wstring& fullPath, const std::wstring& valueName, RegistryValue& outValue) {
+    outValue = RegistryValue{};
+
+    HKEY root = nullptr;
+    std::wstring subKey;
+    if (!SplitRegistryPath(fullPath, root, subKey)) {
+        return false;
+    }
+
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(root, subKey.c_str(), 0, KEY_READ, &key) != ERROR_SUCCESS) {
+        return false;
+    }
+
+    DWORD type = 0;
+    DWORD size = 0;
+    if (RegQueryValueExW(key, valueName.c_str(), nullptr, &type, nullptr, &size) != ERROR_SUCCESS) {
+        RegCloseKey(key);
+        return false;
+    }
+
+    if (type == REG_SZ || type == REG_EXPAND_SZ) {
+        std::vector<wchar_t> buf(size / sizeof(wchar_t) + 1, L'\0');
+        if (RegQueryValueExW(key, valueName.c_str(), nullptr, &type, reinterpret_cast<LPBYTE>(buf.data()), &size) == ERROR_SUCCESS) {
+            outValue.type = RegistryValueType::String;
+            outValue.stringValue = buf.data();
+            RegCloseKey(key);
+            return true;
+        }
+    } else if (type == REG_DWORD) {
+        DWORD value = 0;
+        DWORD dwordSize = sizeof(value);
+        if (RegQueryValueExW(key, valueName.c_str(), nullptr, &type, reinterpret_cast<LPBYTE>(&value), &dwordSize) == ERROR_SUCCESS) {
+            outValue.type = RegistryValueType::Number;
+            outValue.numberValue = static_cast<double>(value);
+            RegCloseKey(key);
+            return true;
+        }
+    }
+
+    RegCloseKey(key);
+    return false;
+}
+
+bool RegistryWriteString(const std::wstring& fullPath, const std::wstring& valueName, const std::wstring& value) {
+    HKEY root = nullptr;
+    std::wstring subKey;
+    if (!SplitRegistryPath(fullPath, root, subKey)) {
+        return false;
+    }
+
+    HKEY key = nullptr;
+    if (RegCreateKeyExW(root, subKey.c_str(), 0, nullptr, REG_OPTION_NON_VOLATILE, KEY_WRITE, nullptr, &key, nullptr) != ERROR_SUCCESS) {
+        return false;
+    }
+
+    const auto* raw = reinterpret_cast<const BYTE*>(value.c_str());
+    const DWORD rawSize = static_cast<DWORD>((value.size() + 1) * sizeof(wchar_t));
+    const bool ok = (RegSetValueExW(key, valueName.c_str(), 0, REG_SZ, raw, rawSize) == ERROR_SUCCESS);
+    RegCloseKey(key);
+    return ok;
+}
+
+bool RegistryWriteNumber(const std::wstring& fullPath, const std::wstring& valueName, double value) {
+    HKEY root = nullptr;
+    std::wstring subKey;
+    if (!SplitRegistryPath(fullPath, root, subKey)) {
+        return false;
+    }
+
+    HKEY key = nullptr;
+    if (RegCreateKeyExW(root, subKey.c_str(), 0, nullptr, REG_OPTION_NON_VOLATILE, KEY_WRITE, nullptr, &key, nullptr) != ERROR_SUCCESS) {
+        return false;
+    }
+
+    const DWORD dword = static_cast<DWORD>(value);
+    const bool ok = (RegSetValueExW(
+        key,
+        valueName.c_str(),
+        0,
+        REG_DWORD,
+        reinterpret_cast<const BYTE*>(&dword),
+        sizeof(dword)) == ERROR_SUCCESS);
+    RegCloseKey(key);
+    return ok;
 }
 
 }  // namespace novadesk::shared::system

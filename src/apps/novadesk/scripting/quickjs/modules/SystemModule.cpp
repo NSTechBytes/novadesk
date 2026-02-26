@@ -150,6 +150,66 @@ JSValue JsBrightnessSetValue(JSContext* ctx, JSValueConst, int, JSValueConst*) {
     return JS_NewBool(ctx, 0);
 }
 
+JSValue JsRegistryReadData(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 2) return JS_ThrowTypeError(ctx, "registry.readData(path, valueName)");
+    const char* p = JS_ToCString(ctx, argv[0]);
+    const char* v = JS_ToCString(ctx, argv[1]);
+    if (!p || !v) {
+        if (p) JS_FreeCString(ctx, p);
+        if (v) JS_FreeCString(ctx, v);
+        return JS_EXCEPTION;
+    }
+
+    std::wstring fullPath = Utils::ToWString(p);
+    std::wstring valueName = Utils::ToWString(v);
+    JS_FreeCString(ctx, p);
+    JS_FreeCString(ctx, v);
+
+    shared::system::RegistryValue out;
+    if (!shared::system::RegistryReadData(fullPath, valueName, out)) {
+        return JS_NULL;
+    }
+
+    if (out.type == shared::system::RegistryValueType::String) {
+        return JS_NewString(ctx, Utils::ToString(out.stringValue).c_str());
+    }
+    if (out.type == shared::system::RegistryValueType::Number) {
+        return JS_NewFloat64(ctx, out.numberValue);
+    }
+    return JS_NULL;
+}
+
+JSValue JsRegistryWriteData(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 3) return JS_ThrowTypeError(ctx, "registry.writeData(path, valueName, value)");
+    const char* p = JS_ToCString(ctx, argv[0]);
+    const char* v = JS_ToCString(ctx, argv[1]);
+    if (!p || !v) {
+        if (p) JS_FreeCString(ctx, p);
+        if (v) JS_FreeCString(ctx, v);
+        return JS_EXCEPTION;
+    }
+
+    std::wstring fullPath = Utils::ToWString(p);
+    std::wstring valueName = Utils::ToWString(v);
+    JS_FreeCString(ctx, p);
+    JS_FreeCString(ctx, v);
+
+    bool ok = false;
+    if (JS_IsString(argv[2])) {
+        const char* s = JS_ToCString(ctx, argv[2]);
+        if (!s) return JS_EXCEPTION;
+        ok = shared::system::RegistryWriteString(fullPath, valueName, Utils::ToWString(s));
+        JS_FreeCString(ctx, s);
+    } else {
+        double n = 0;
+        if (JS_ToFloat64(ctx, &n, argv[2]) == 0) {
+            ok = shared::system::RegistryWriteNumber(fullPath, valueName, n);
+        }
+    }
+
+    return JS_NewBool(ctx, ok ? 1 : 0);
+}
+
 int SystemModuleInit(JSContext* ctx, JSModuleDef* m) {
     JSValue clipboard = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, clipboard, "setText", JS_NewCFunction(ctx, JsClipboardSetText, "setText", 1));
@@ -187,6 +247,11 @@ int SystemModuleInit(JSContext* ctx, JSModuleDef* m) {
     JS_SetPropertyStr(ctx, displayMetrics, "get", JS_NewCFunction(ctx, JsDisplayMetricsGetMetrics, "get", 0));
     JS_SetModuleExport(ctx, m, "displayMetrics", displayMetrics);
 
+    JSValue registry = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, registry, "readData", JS_NewCFunction(ctx, JsRegistryReadData, "readData", 2));
+    JS_SetPropertyStr(ctx, registry, "writeData", JS_NewCFunction(ctx, JsRegistryWriteData, "writeData", 3));
+    JS_SetModuleExport(ctx, m, "registry", registry);
+
     return 0;
 }
 }  // namespace
@@ -201,6 +266,7 @@ JSModuleDef* EnsureSystemModule(JSContext* ctx, const char* moduleName) {
     if (JS_AddModuleExport(ctx, m, "brightness") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "fileIcon") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "displayMetrics") < 0) return nullptr;
+    if (JS_AddModuleExport(ctx, m, "registry") < 0) return nullptr;
     return m;
 }
 }  // namespace novadesk::scripting::quickjs
