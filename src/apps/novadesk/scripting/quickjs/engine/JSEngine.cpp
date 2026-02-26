@@ -438,9 +438,13 @@ bool LoadAndExecuteScript(duk_context* ctx, const std::wstring& scriptPath) {
     }
 
     const std::string fileName = Utils::ToString(finalScriptPath);
+    const std::wstring scriptDir = PathUtils::GetParentDir(finalScriptPath);
+    const std::string dirName = Utils::ToString(scriptDir);
     JSValue global = JS_GetGlobalObject(g_context);
     JSValue mainIpc = CreateMainIpcObject(g_context);
     JS_SetPropertyStr(g_context, global, "ipcMain", JS_DupValue(g_context, mainIpc));
+    JS_SetPropertyStr(g_context, global, "__filename", JS_NewString(g_context, fileName.c_str()));
+    JS_SetPropertyStr(g_context, global, "__dirname", JS_NewString(g_context, dirName.c_str()));
     JS_FreeValue(g_context, mainIpc);
     JS_FreeValue(g_context, global);
 

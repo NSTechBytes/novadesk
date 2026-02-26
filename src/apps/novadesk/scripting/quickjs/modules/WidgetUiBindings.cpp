@@ -243,10 +243,13 @@ bool RunWidgetUiScriptImpl(JSContext* ctx, Widget* widget, const std::wstring& s
     JS_SetPropertyStr(ctx, global, "__novadesk_ui__", JS_DupValue(ctx, uiObj));
     JSValue ipcObj = JSEngine::CreateUiIpcObject(ctx);
     JS_SetPropertyStr(ctx, global, "__novadesk_ui_ipc__", JS_DupValue(ctx, ipcObj));
+    const std::string fileName = Utils::ToString(absPath);
+    const std::string dirName = Utils::ToString(PathUtils::GetParentDir(absPath));
+    JS_SetPropertyStr(ctx, global, "__filename", JS_NewString(ctx, fileName.c_str()));
+    JS_SetPropertyStr(ctx, global, "__dirname", JS_NewString(ctx, dirName.c_str()));
     JS_FreeValue(ctx, global);
 
     const std::string wrapped = "(function(ui, ipcRenderer){\n" + scriptSource + "\n})(globalThis.__novadesk_ui__, globalThis.__novadesk_ui_ipc__);";
-    const std::string fileName = Utils::ToString(absPath);
     JSValue evalResult = JS_Eval(ctx, wrapped.c_str(), wrapped.size(), fileName.c_str(), JS_EVAL_TYPE_GLOBAL);
 
     JSValue global2 = JS_GetGlobalObject(ctx);
@@ -256,6 +259,12 @@ bool RunWidgetUiScriptImpl(JSContext* ctx, Widget* widget, const std::wstring& s
     JSAtom ipcAtom = JS_NewAtom(ctx, "__novadesk_ui_ipc__");
     JS_DeleteProperty(ctx, global2, ipcAtom, 0);
     JS_FreeAtom(ctx, ipcAtom);
+    JSAtom filename2Atom = JS_NewAtom(ctx, "__filename");
+    JS_DeleteProperty(ctx, global2, filename2Atom, 0);
+    JS_FreeAtom(ctx, filename2Atom);
+    JSAtom dirname2Atom = JS_NewAtom(ctx, "__dirname");
+    JS_DeleteProperty(ctx, global2, dirname2Atom, 0);
+    JS_FreeAtom(ctx, dirname2Atom);
     JS_FreeValue(ctx, global2);
     JS_FreeValue(ctx, uiObj);
     JS_FreeValue(ctx, ipcObj);
