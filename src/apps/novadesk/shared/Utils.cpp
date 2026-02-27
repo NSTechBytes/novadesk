@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 OfficialNovadesk 
+/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -15,52 +15,61 @@
 
 #pragma comment(lib, "version.lib")
 
-namespace Utils {
+namespace Utils
+{
 
-    namespace {
-        bool SaveIconToIcoFile(HICON hIcon, FILE* fp)
+    namespace
+    {
+        bool SaveIconToIcoFile(HICON hIcon, FILE *fp)
         {
             ICONINFO iconInfo = {};
             BITMAP bmColor = {};
             BITMAP bmMask = {};
             if (!fp || !hIcon || !GetIconInfo(hIcon, &iconInfo) ||
                 !GetObject(iconInfo.hbmColor, sizeof(bmColor), &bmColor) ||
-                !GetObject(iconInfo.hbmMask, sizeof(bmMask), &bmMask)) {
-                if (iconInfo.hbmColor) DeleteObject(iconInfo.hbmColor);
-                if (iconInfo.hbmMask) DeleteObject(iconInfo.hbmMask);
+                !GetObject(iconInfo.hbmMask, sizeof(bmMask), &bmMask))
+            {
+                if (iconInfo.hbmColor)
+                    DeleteObject(iconInfo.hbmColor);
+                if (iconInfo.hbmMask)
+                    DeleteObject(iconInfo.hbmMask);
                 return false;
             }
 
             // Keep plugin-safe ICO serialization path:
             // this writer only supports 16/32 bpp icon bitmaps.
-            if (bmColor.bmBitsPixel != 16 && bmColor.bmBitsPixel != 32) {
+            if (bmColor.bmBitsPixel != 16 && bmColor.bmBitsPixel != 32)
+            {
                 DeleteObject(iconInfo.hbmColor);
                 DeleteObject(iconInfo.hbmMask);
                 return false;
             }
 
             HDC dc = GetDC(nullptr);
-            if (!dc) {
+            if (!dc)
+            {
                 DeleteObject(iconInfo.hbmColor);
                 DeleteObject(iconInfo.hbmMask);
                 return false;
             }
 
             BYTE bmiBytes[sizeof(BITMAPINFOHEADER) + 256 * sizeof(RGBQUAD)] = {};
-            BITMAPINFO* bmi = (BITMAPINFO*)bmiBytes;
+            BITMAPINFO *bmi = (BITMAPINFO *)bmiBytes;
 
             memset(bmi, 0, sizeof(BITMAPINFO));
             bmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
             GetDIBits(dc, iconInfo.hbmColor, 0, bmColor.bmHeight, nullptr, bmi, DIB_RGB_COLORS);
             int colorBytesCount = (int)bmi->bmiHeader.biSizeImage;
-            if (colorBytesCount <= 0 || colorBytesCount > (64 * 1024 * 1024)) {
+            if (colorBytesCount <= 0 || colorBytesCount > (64 * 1024 * 1024))
+            {
                 ReleaseDC(nullptr, dc);
                 DeleteObject(iconInfo.hbmColor);
                 DeleteObject(iconInfo.hbmMask);
                 return false;
             }
-            BYTE* colorBits = new BYTE[colorBytesCount];
-            if (!GetDIBits(dc, iconInfo.hbmColor, 0, bmColor.bmHeight, colorBits, bmi, DIB_RGB_COLORS)) {
+            BYTE *colorBits = new BYTE[colorBytesCount];
+            if (!GetDIBits(dc, iconInfo.hbmColor, 0, bmColor.bmHeight, colorBits, bmi, DIB_RGB_COLORS))
+            {
                 delete[] colorBits;
                 ReleaseDC(nullptr, dc);
                 DeleteObject(iconInfo.hbmColor);
@@ -72,15 +81,17 @@ namespace Utils {
             bmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
             GetDIBits(dc, iconInfo.hbmMask, 0, bmMask.bmHeight, nullptr, bmi, DIB_RGB_COLORS);
             int maskBytesCount = (int)bmi->bmiHeader.biSizeImage;
-            if (maskBytesCount <= 0 || maskBytesCount > (64 * 1024 * 1024)) {
+            if (maskBytesCount <= 0 || maskBytesCount > (64 * 1024 * 1024))
+            {
                 delete[] colorBits;
                 ReleaseDC(nullptr, dc);
                 DeleteObject(iconInfo.hbmColor);
                 DeleteObject(iconInfo.hbmMask);
                 return false;
             }
-            BYTE* maskBits = new BYTE[maskBytesCount];
-            if (!GetDIBits(dc, iconInfo.hbmMask, 0, bmMask.bmHeight, maskBits, bmi, DIB_RGB_COLORS)) {
+            BYTE *maskBits = new BYTE[maskBytesCount];
+            if (!GetDIBits(dc, iconInfo.hbmMask, 0, bmMask.bmHeight, maskBits, bmi, DIB_RGB_COLORS))
+            {
                 delete[] colorBits;
                 delete[] maskBits;
                 ReleaseDC(nullptr, dc);
@@ -90,8 +101,9 @@ namespace Utils {
             }
             ReleaseDC(nullptr, dc);
 
-            #pragma pack(push, 1)
-            struct ICONDIRENTRY_LOCAL {
+#pragma pack(push, 1)
+            struct ICONDIRENTRY_LOCAL
+            {
                 BYTE bWidth;
                 BYTE bHeight;
                 BYTE bColorCount;
@@ -101,13 +113,14 @@ namespace Utils {
                 DWORD dwBytesInRes;
                 DWORD dwImageOffset;
             };
-            struct ICONDIR_LOCAL {
+            struct ICONDIR_LOCAL
+            {
                 WORD idReserved;
                 WORD idType;
                 WORD idCount;
                 ICONDIRENTRY_LOCAL idEntries[1];
             };
-            #pragma pack(pop)
+#pragma pack(pop)
 
             BITMAPINFOHEADER bmihIcon = {};
             bmihIcon.biSize = sizeof(BITMAPINFOHEADER);
@@ -143,15 +156,20 @@ namespace Utils {
         }
     }
 
-    bool ExtractFileIconToIco(const std::wstring& filePath, const std::wstring& outIcoPath, int size)
+    bool ExtractFileIconToIco(const std::wstring &filePath, const std::wstring &outIcoPath, int size)
     {
-        if (filePath.empty() || outIcoPath.empty()) return false;
-        if (size <= 0) size = 48;
-        if (size > 256) size = 256;
+        if (filePath.empty() || outIcoPath.empty())
+            return false;
+        if (size <= 0)
+            size = 48;
+        if (size > 256)
+            size = 256;
 
-        const int candidates[] = { size, 32, 48, 64 };
-        for (int s : candidates) {
-            if (s <= 0 || s > 256) continue;
+        const int candidates[] = {size, 32, 48, 64};
+        for (int s : candidates)
+        {
+            if (s <= 0 || s > 256)
+                continue;
 
             HICON icon = nullptr;
             UINT extracted = PrivateExtractIconsW(
@@ -164,31 +182,37 @@ namespace Utils {
                 1,
                 LR_LOADTRANSPARENT);
 
-            if (extracted == 0 || !icon) {
+            if (extracted == 0 || !icon)
+            {
                 SHFILEINFO shFileInfo = {};
                 UINT flags = SHGFI_ICON;
                 flags |= (s <= 16) ? SHGFI_SMALLICON : SHGFI_LARGEICON;
-                if (!SHGetFileInfoW(filePath.c_str(), 0, &shFileInfo, sizeof(shFileInfo), flags)) {
+                if (!SHGetFileInfoW(filePath.c_str(), 0, &shFileInfo, sizeof(shFileInfo), flags))
+                {
                     continue;
                 }
                 icon = shFileInfo.hIcon;
-                if (!icon) continue;
+                if (!icon)
+                    continue;
             }
 
-            FILE* fp = nullptr;
+            FILE *fp = nullptr;
             errno_t error = _wfopen_s(&fp, outIcoPath.c_str(), L"wb");
             bool ok = false;
-            if (error == 0 && fp) {
+            if (error == 0 && fp)
+            {
                 ok = SaveIconToIcoFile(icon, fp);
                 fclose(fp);
             }
             DestroyIcon(icon);
 
-            if (ok) return true;
+            if (ok)
+                return true;
         }
 
-        FILE* clearFp = nullptr;
-        if (_wfopen_s(&clearFp, outIcoPath.c_str(), L"wb") == 0 && clearFp) {
+        FILE *clearFp = nullptr;
+        if (_wfopen_s(&clearFp, outIcoPath.c_str(), L"wb") == 0 && clearFp)
+        {
             fwrite(outIcoPath.c_str(), 1, 1, clearFp);
             fclose(clearFp);
         }
@@ -201,8 +225,10 @@ namespace Utils {
     ** Uses Windows MultiByteToWideChar for conversion.
     */
 
-    std::wstring ToWString(const std::string& str) {
-        if (str.empty()) return std::wstring();
+    std::wstring ToWString(const std::string &str)
+    {
+        if (str.empty())
+            return std::wstring();
         int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
         std::wstring wstrTo(size_needed, 0);
         MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
@@ -214,154 +240,203 @@ namespace Utils {
     ** Returns an empty string if the input wstring is empty.
     */
 
-    std::string ToString(const std::wstring& wstr) {
-        if (wstr.empty()) return std::string();
+    std::string ToString(const std::wstring &wstr)
+    {
+        if (wstr.empty())
+            return std::string();
         int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
         std::string strTo(size_needed, 0);
         WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
         return strTo;
     }
 
-    std::wstring TrimUpper(const std::wstring& s) {
+    std::wstring TrimUpper(const std::wstring &s)
+    {
         size_t a = 0;
-        while (a < s.size() && iswspace(s[a])) ++a;
+        while (a < s.size() && iswspace(s[a]))
+            ++a;
         size_t b = s.size();
-        while (b > a && iswspace(s[b - 1])) --b;
+        while (b > a && iswspace(s[b - 1]))
+            --b;
         std::wstring out = s.substr(a, b - a);
-        for (auto& ch : out) ch = towupper(ch);
+        for (auto &ch : out)
+            ch = towupper(ch);
         return out;
     }
 
-    std::vector<std::wstring> SplitByComma(const std::wstring& s) {
+    std::vector<std::wstring> SplitByComma(const std::wstring &s)
+    {
         std::vector<std::wstring> parts;
         int depth = 0;
         size_t last = 0;
-        for (size_t i = 0; i < s.length(); i++) {
-            if (s[i] == L'(') depth++;
-            else if (s[i] == L')') depth--;
-            else if (s[i] == L',' && depth == 0) {
+        for (size_t i = 0; i < s.length(); i++)
+        {
+            if (s[i] == L'(')
+                depth++;
+            else if (s[i] == L')')
+                depth--;
+            else if (s[i] == L',' && depth == 0)
+            {
                 parts.push_back(s.substr(last, i - last));
                 last = i + 1;
             }
         }
         parts.push_back(s.substr(last));
-        for (auto& p : parts) {
+        for (auto &p : parts)
+        {
             p.erase(0, p.find_first_not_of(L' '));
             p.erase(p.find_last_not_of(L' ') + 1);
         }
         return parts;
     }
 
-    bool ParseGradientString(const std::wstring& str, GradientInfo& out) {
-        if (str.empty()) return false;
+    bool ParseGradientString(const std::wstring &str, GradientInfo &out)
+    {
+        if (str.empty())
+            return false;
         std::wstring s = str;
         s.erase(0, s.find_first_not_of(L' '));
         s.erase(s.find_last_not_of(L' ') + 1);
-        
+
         std::wstring lowerS = s;
         std::transform(lowerS.begin(), lowerS.end(), lowerS.begin(), ::towlower);
 
-        if (lowerS.find(L"lineargradient(") == 0) out.type = GRADIENT_LINEAR;
-        else if (lowerS.find(L"radialgradient(") == 0) out.type = GRADIENT_RADIAL;
-        else return false;
+        if (lowerS.find(L"lineargradient(") == 0)
+            out.type = GRADIENT_LINEAR;
+        else if (lowerS.find(L"radialgradient(") == 0)
+            out.type = GRADIENT_RADIAL;
+        else
+            return false;
 
         size_t start = lowerS.find(L'(') + 1;
         size_t end = lowerS.find_last_of(L')');
-        if (end == std::wstring::npos || end <= start) return false;
+        if (end == std::wstring::npos || end <= start)
+            return false;
 
         std::wstring content = s.substr(start, end - start);
         std::vector<std::wstring> parts = SplitByComma(content);
-        if (parts.empty()) return false;
+        if (parts.empty())
+            return false;
 
         int colorStartIndex = 0;
-        if (out.type == GRADIENT_LINEAR) {
+        if (out.type == GRADIENT_LINEAR)
+        {
             std::wstring dir = parts[0];
             std::transform(dir.begin(), dir.end(), dir.begin(), ::towlower);
             dir.erase(std::remove_if(dir.begin(), dir.end(), isspace), dir.end());
 
-            if (!dir.empty() && (iswdigit(dir[0]) || dir[0] == L'-' || dir[0] == L'.')) {
-                try { 
+            if (!dir.empty() && (iswdigit(dir[0]) || dir[0] == L'-' || dir[0] == L'.'))
+            {
+                try
+                {
                     size_t pos = 0;
                     out.angle = std::stof(dir, &pos);
-                    if (pos > 0) colorStartIndex = 1;
-                } catch(...) {}
+                    if (pos > 0)
+                        colorStartIndex = 1;
+                }
+                catch (...)
+                {
+                }
             }
-        } else {
-             std::wstring shape = parts[0];
-             std::transform(shape.begin(), shape.end(), shape.begin(), ::towlower);
-             shape.erase(std::remove_if(shape.begin(), shape.end(), isspace), shape.end());
+        }
+        else
+        {
+            std::wstring shape = parts[0];
+            std::transform(shape.begin(), shape.end(), shape.begin(), ::towlower);
+            shape.erase(std::remove_if(shape.begin(), shape.end(), isspace), shape.end());
 
-             if (shape == L"circle" || shape == L"ellipse") {
-                 out.shape = shape;
-                 colorStartIndex = 1;
-             }
+            if (shape == L"circle" || shape == L"ellipse")
+            {
+                out.shape = shape;
+                colorStartIndex = 1;
+            }
         }
 
         out.stops.clear();
-        for (size_t i = colorStartIndex; i < parts.size(); i++) {
+        for (size_t i = colorStartIndex; i < parts.size(); i++)
+        {
             GradientStop stop;
-            if (ColorUtil::ParseRGBA(parts[i], stop.color, stop.alpha)) {
+            if (ColorUtil::ParseRGBA(parts[i], stop.color, stop.alpha))
+            {
                 out.stops.push_back(stop);
             }
         }
 
-        if (out.stops.size() < 2) return false;
+        if (out.stops.size() < 2)
+            return false;
 
-        for (size_t i = 0; i < out.stops.size(); i++) {
+        for (size_t i = 0; i < out.stops.size(); i++)
+        {
             out.stops[i].position = (float)i / (out.stops.size() - 1);
         }
 
         return true;
     }
 
-    D2D1_CAP_STYLE GetCapStyle(const std::wstring& str) {
-        if (str == L"Round") return D2D1_CAP_STYLE_ROUND;
-        if (str == L"Square") return D2D1_CAP_STYLE_SQUARE;
-        if (str == L"Triangle") return D2D1_CAP_STYLE_TRIANGLE;
+    D2D1_CAP_STYLE GetCapStyle(const std::wstring &str)
+    {
+        if (str == L"Round")
+            return D2D1_CAP_STYLE_ROUND;
+        if (str == L"Square")
+            return D2D1_CAP_STYLE_SQUARE;
+        if (str == L"Triangle")
+            return D2D1_CAP_STYLE_TRIANGLE;
         return D2D1_CAP_STYLE_FLAT;
     }
 
-    D2D1_LINE_JOIN GetLineJoin(const std::wstring& str) {
-        if (str == L"Bevel") return D2D1_LINE_JOIN_BEVEL;
-        if (str == L"Round") return D2D1_LINE_JOIN_ROUND;
-        if (str == L"MiterOrBevel") return D2D1_LINE_JOIN_MITER_OR_BEVEL;
+    D2D1_LINE_JOIN GetLineJoin(const std::wstring &str)
+    {
+        if (str == L"Bevel")
+            return D2D1_LINE_JOIN_BEVEL;
+        if (str == L"Round")
+            return D2D1_LINE_JOIN_ROUND;
+        if (str == L"MiterOrBevel")
+            return D2D1_LINE_JOIN_MITER_OR_BEVEL;
         return D2D1_LINE_JOIN_MITER;
     }
 
-
-
-    bool PropertyReader::GetString(const char* key, std::wstring& outStr) {
+    bool PropertyReader::GetString(const char *key, std::wstring &outStr)
+    {
 
         return false;
     }
-        
-    bool PropertyReader::GetInt(const char* key, int& outInt) {
+
+    bool PropertyReader::GetInt(const char *key, int &outInt)
+    {
         return false;
     }
 
-    bool PropertyReader::GetFloat(const char* key, float& outFloat) {
+    bool PropertyReader::GetFloat(const char *key, float &outFloat)
+    {
         return false;
     }
 
-    bool PropertyReader::GetBool(const char* key, bool& outBool) {
+    bool PropertyReader::GetBool(const char *key, bool &outBool)
+    {
         return false;
     }
 
-    bool PropertyReader::GetColor(const char* key, COLORREF& outColor, BYTE& outAlpha) {
+    bool PropertyReader::GetColor(const char *key, COLORREF &outColor, BYTE &outAlpha)
+    {
         std::wstring colorStr;
-        if (GetString(key, colorStr)) {
+        if (GetString(key, colorStr))
+        {
             return ColorUtil::ParseRGBA(colorStr, outColor, outAlpha);
         }
         return false;
     }
 
-    bool PropertyReader::GetGradientOrColor(const char* key, COLORREF& outColor, BYTE& outAlpha, GradientInfo& outGradient) {
+    bool PropertyReader::GetGradientOrColor(const char *key, COLORREF &outColor, BYTE &outAlpha, GradientInfo &outGradient)
+    {
         std::wstring colorStr;
-        if (GetString(key, colorStr)) {
-            if (ParseGradientString(colorStr, outGradient)) {
+        if (GetString(key, colorStr))
+        {
+            if (ParseGradientString(colorStr, outGradient))
+            {
                 return true;
             }
-            if (ColorUtil::ParseRGBA(colorStr, outColor, outAlpha)) {
+            if (ColorUtil::ParseRGBA(colorStr, outColor, outAlpha))
+            {
                 // Explicit solid color should clear any previous gradient.
                 outGradient.type = GRADIENT_NONE;
                 outGradient.stops.clear();
@@ -373,16 +448,18 @@ namespace Utils {
         return false;
     }
 
-    bool PropertyReader::GetFloatArray(const char* key, std::vector<float>& outArray, int minSize) {
+    bool PropertyReader::GetFloatArray(const char *key, std::vector<float> &outArray, int minSize)
+    {
 
         return false;
     }
 
-    void PropertyReader::GetEvent(const char* key, int& outId) {
-
+    void PropertyReader::GetEvent(const char *key, int &outId)
+    {
     }
 
-    bool PropertyReader::ParseShadow(TextShadow& shadow) {
+    bool PropertyReader::ParseShadow(TextShadow &shadow)
+    {
 
         return false;
     }

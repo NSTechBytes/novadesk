@@ -1,10 +1,9 @@
-/* Copyright (C) 2026 OfficialNovadesk 
+/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
-
 
 /*
 ** Most of the Code taken from Rainmeter (https://github.com/rainmeter/rainmeter/blob/master/Library/System.cpp)
@@ -14,21 +13,22 @@
 #include "Widget.h"
 #include <algorithm>
 
-extern std::vector<Widget*> widgets; // Defined in Novadesk.cpp
+extern std::vector<Widget *> widgets; // Defined in Novadesk.cpp
 
 HWND System::c_Window = nullptr;
 HWND System::c_HelperWindow = nullptr;
-MultiMonitorInfo System::c_Monitors = { 0 };
+MultiMonitorInfo System::c_Monitors = {0};
 bool System::c_ShowDesktop = false;
 
 #define ZPOS_FLAGS (SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOSENDCHANGING)
 
 // Internal helper for GetBackmostTopWindow
-static Widget* FindWidget(HWND hWnd)
+static Widget *FindWidget(HWND hWnd)
 {
     for (auto w : widgets)
     {
-        if (w->GetWindow() == hWnd) return w;
+        if (w->GetWindow() == hWnd)
+            return w;
     }
     return nullptr;
 }
@@ -51,7 +51,7 @@ void System::Initialize(HINSTANCE instance)
     EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, 0);
 
     // Register a specialized class for system tracking
-    WNDCLASSW wc = { 0 };
+    WNDCLASSW wc = {0};
     wc.lpfnWndProc = (WNDPROC)System::WndProc;
     wc.hInstance = instance;
     wc.lpszClassName = L"NovadeskSystem";
@@ -101,7 +101,7 @@ BOOL CALLBACK System::MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT 
     info.handle = hMonitor;
     info.screen = *lprcMonitor;
     info.active = true;
-    
+
     MONITORINFOEXW mi;
     mi.cbSize = sizeof(mi);
     if (GetMonitorInfoW(hMonitor, &mi))
@@ -109,7 +109,7 @@ BOOL CALLBACK System::MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT 
         info.work = mi.rcWork;
         info.deviceName = mi.szDevice;
 
-        DISPLAY_DEVICEW ddm = { sizeof(DISPLAY_DEVICEW) };
+        DISPLAY_DEVICEW ddm = {sizeof(DISPLAY_DEVICEW)};
         DWORD dwMon = 0;
         while (EnumDisplayDevicesW(info.deviceName.c_str(), dwMon++, &ddm, 0))
         {
@@ -125,7 +125,7 @@ BOOL CALLBACK System::MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT 
             c_Monitors.primaryIndex = (int)c_Monitors.monitors.size();
         }
     }
-    
+
     c_Monitors.monitors.push_back(info);
     return TRUE;
 }
@@ -159,7 +159,8 @@ bool System::ShouldUseShellWindowAsDesktopIconsHost()
 HWND System::GetDesktopIconsHostWindow()
 {
     HWND shellW = GetDefaultShellWindow();
-    if (!shellW) return nullptr;
+    if (!shellW)
+        return nullptr;
 
     if (ShouldUseShellWindowAsDesktopIconsHost())
     {
@@ -200,7 +201,8 @@ void System::PrepareHelperWindow(HWND desktopIconsHostWindow)
             nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     }
 
-    if (!desktopIconsHostWindow) desktopIconsHostWindow = GetDesktopIconsHostWindow();
+    if (!desktopIconsHostWindow)
+        desktopIconsHostWindow = GetDesktopIconsHostWindow();
 
     SetWindowPos(c_Window, HWND_BOTTOM, 0, 0, 0, 0, ZPOS_FLAGS);
 
@@ -248,8 +250,8 @@ bool System::CheckDesktopState(HWND desktopIconsHostWindow)
 
 static BOOL CALLBACK EnumWidgetsProc(HWND hwnd, LPARAM lParam)
 {
-    std::vector<Widget*>* windowsInZOrder = (std::vector<Widget*>*)lParam;
-    Widget* widget = FindWidget(hwnd);
+    std::vector<Widget *> *windowsInZOrder = (std::vector<Widget *> *)lParam;
+    Widget *widget = FindWidget(hwnd);
     if (widget)
     {
         windowsInZOrder->push_back(widget);
@@ -264,11 +266,11 @@ static BOOL CALLBACK EnumWidgetsProc(HWND hwnd, LPARAM lParam)
 
 void System::ChangeZPosInOrder()
 {
-    std::vector<Widget*> windowsInZOrder;
-    
+    std::vector<Widget *> windowsInZOrder;
+
     // Enumerate all windows to get current Z-order
     EnumWindows(EnumWidgetsProc, (LPARAM)(&windowsInZOrder));
-    
+
     // Reapply Z-positions in the order they were found (preserves user's stacking)
     for (auto w : windowsInZOrder)
     {
@@ -302,12 +304,13 @@ LRESULT CALLBACK System::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 HWND System::GetBackmostTopWindow()
 {
     HWND winPos = c_HelperWindow;
-    if (!winPos) return HWND_NOTOPMOST;
+    if (!winPos)
+        return HWND_NOTOPMOST;
 
     // Skip all ZPOSITION_ONDESKTOP, ZPOSITION_ONBOTTOM, and ZPOSITION_NORMAL windows
     while (winPos = ::GetNextWindow(winPos, GW_HWNDPREV))
     {
-        Widget* wnd = FindWidget(winPos);
+        Widget *wnd = FindWidget(winPos);
         if (!wnd ||
             (wnd->GetWindowZPosition() != ZPOSITION_NORMAL &&
              wnd->GetWindowZPosition() != ZPOSITION_ONDESKTOP &&

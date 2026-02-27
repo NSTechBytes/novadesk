@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 OfficialNovadesk 
+/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -18,13 +18,13 @@
 
 // Helper macros for color extraction from COLORREF (0x00BBGGRR)
 #ifndef GetRValue
-#define GetRValue(rgb)      (LOBYTE(rgb))
+#define GetRValue(rgb) (LOBYTE(rgb))
 #endif
 #ifndef GetGValue
-#define GetGValue(rgb)      (LOBYTE((WORD)(rgb) >> 8))
+#define GetGValue(rgb) (LOBYTE((WORD)(rgb) >> 8))
 #endif
 #ifndef GetBValue
-#define GetBValue(rgb)      (LOBYTE((rgb) >> 16))
+#define GetBValue(rgb) (LOBYTE((rgb) >> 16))
 #endif
 
 class ColorUtil
@@ -36,9 +36,10 @@ public:
     ** Values: r,g,b are 0-255, alpha is 0-255 (defaults to 255 if not specified).
     ** Returns true on successful parse, false otherwise.
     */
-    static bool ParseRGBA(const std::wstring& rgbaStr, COLORREF& color, BYTE& alpha)
+    static bool ParseRGBA(const std::wstring &rgbaStr, COLORREF &color, BYTE &alpha)
     {
-        if (rgbaStr.empty()) return false;
+        if (rgbaStr.empty())
+            return false;
 
         // Strip whitespace for easier matching
         std::wstring s = rgbaStr;
@@ -95,14 +96,16 @@ public:
         // 2. Handle rgba(r,g,b,alpha) or rgb(r,g,b)
         int r = 0, g = 0, b = 0;
         float af = 1.0f;
-        
+
         if (swscanf_s(s.c_str(), L"rgba(%d,%d,%d,%f)", &r, &g, &b, &af) == 4)
         {
             color = RGB(r, g, b);
-            // If af > 1.0, treat it as 0-255. 
+            // If af > 1.0, treat it as 0-255.
             // This is a common pattern in desk-widgets where transparency is often 0-255.
-            if (af > 1.1f) alpha = (BYTE)std::min(255.0f, af);
-            else alpha = (BYTE)std::max(0.0f, std::min(255.0f, af * 255.0f));
+            if (af > 1.1f)
+                alpha = (BYTE)std::min(255.0f, af);
+            else
+                alpha = (BYTE)std::max(0.0f, std::min(255.0f, af * 255.0f));
             return true;
         }
         else if (swscanf_s(s.c_str(), L"rgb(%d,%d,%d)", &r, &g, &b) == 3)
@@ -111,7 +114,7 @@ public:
             alpha = 255;
             return true;
         }
-        
+
         return false;
     }
 
