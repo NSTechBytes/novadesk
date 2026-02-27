@@ -1,5 +1,5 @@
 import { widgetWindow, app } from 'novadesk';
-import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics, hotkey, cpu, memory, network, mouse, disk, audioLevel } from 'system';
+import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics, hotkey, cpu, memory, network, mouse, disk, audioLevel, appVolume } from 'system';
 import * as std from 'std';
 
 // console.log("OS:", JSON.stringify(std.getenviron()));
@@ -104,6 +104,11 @@ console.log("Disk availableMB:", toMB(disk.availableBytes()));
 console.log("Disk usedMB:", toMB(disk.usedBytes()));
 console.log("Disk usagePercent:", disk.usagePercent());
 console.log("AudioLevel stats:", JSON.stringify(audioLevel.stats({ bands: 10 }) ?? {}));
+const appSessions = appVolume.listSessions();
+console.log("AppVolume session count:", appSessions.length);
+if (appSessions.length > 0) {
+  console.log("AppVolume first session:", JSON.stringify(appSessions[0]));
+}
 let systemTick = 0;
 const systemIntervalId = setInterval(() => {
   systemTick += 1;
@@ -123,6 +128,11 @@ const systemIntervalId = setInterval(() => {
   console.log(`[system] tick ${systemTick} disk usedMB:`, toMB(disk.usedBytes()));
   console.log(`[system] tick ${systemTick} disk usagePercent:`, disk.usagePercent());
   console.log(`[system] tick ${systemTick} audioLevel:`, JSON.stringify(audioLevel.stats({ bands: 10 }) ?? {}));
+  const appSessions = appVolume.listSessions();
+console.log("AppVolume session count:", appSessions.length);
+if (appSessions.length > 0) {
+  console.log("AppVolume first session:", JSON.stringify(appSessions[0]));
+}
   if (systemTick >= 10) {
     clearInterval(systemIntervalId);
     console.log("[system] monitor interval stopped");

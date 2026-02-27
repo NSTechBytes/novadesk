@@ -455,6 +455,100 @@ JSValue JsHotkeyUnregisterHotkey(JSContext* ctx, JSValueConst, int argc, JSValue
     return JS_NewBool(ctx, shared::system::UnregisterHotkey(JSEngine::GetMessageWindow(), id) ? 1 : 0);
 }
 
+JSValue JsAppVolumeListSessions(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    std::vector<shared::system::AppVolumeSessionInfo> sessions;
+    if (!shared::system::AppVolumeListSessions(sessions)) {
+        return JS_NewArray(ctx);
+    }
+
+    JSValue arr = JS_NewArray(ctx);
+    uint32_t i = 0;
+    for (const auto& s : sessions) {
+        JSValue o = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, o, "pid", JS_NewInt32(ctx, static_cast<int32_t>(s.pid)));
+        JS_SetPropertyStr(ctx, o, "processName", JS_NewString(ctx, Utils::ToString(s.processName).c_str()));
+        JS_SetPropertyStr(ctx, o, "fileName", JS_NewString(ctx, Utils::ToString(s.fileName).c_str()));
+        JS_SetPropertyStr(ctx, o, "filePath", JS_NewString(ctx, Utils::ToString(s.filePath).c_str()));
+        JS_SetPropertyStr(ctx, o, "iconPath", JS_NewString(ctx, Utils::ToString(s.iconPath).c_str()));
+        JS_SetPropertyStr(ctx, o, "displayName", JS_NewString(ctx, Utils::ToString(s.displayName).c_str()));
+        JS_SetPropertyStr(ctx, o, "volume", JS_NewFloat64(ctx, s.volume));
+        JS_SetPropertyStr(ctx, o, "peak", JS_NewFloat64(ctx, s.peak));
+        JS_SetPropertyStr(ctx, o, "muted", JS_NewBool(ctx, s.muted ? 1 : 0));
+        JS_SetPropertyUint32(ctx, arr, i++, o);
+    }
+    return arr;
+}
+
+JSValue JsAppVolumeGetByPid(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_ThrowTypeError(ctx, "appVolume.getByPid(pid)");
+    int32_t pid = 0;
+    if (JS_ToInt32(ctx, &pid, argv[0]) != 0 || pid <= 0) return JS_ThrowTypeError(ctx, "appVolume.getByPid expects pid > 0");
+    float volume = 0.0f;
+    bool muted = false;
+    float peak = 0.0f;
+    if (!shared::system::AppVolumeGetByPid(static_cast<uint32_t>(pid), volume, muted, peak)) return JS_NULL;
+    JSValue out = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, out, "volume", JS_NewFloat64(ctx, volume));
+    JS_SetPropertyStr(ctx, out, "muted", JS_NewBool(ctx, muted ? 1 : 0));
+    JS_SetPropertyStr(ctx, out, "peak", JS_NewFloat64(ctx, peak));
+    return out;
+}
+
+JSValue JsAppVolumeGetByProcessName(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_ThrowTypeError(ctx, "appVolume.getByProcessName(name)");
+    const char* n = JS_ToCString(ctx, argv[0]);
+    if (!n) return JS_EXCEPTION;
+    std::wstring name = Utils::ToWString(n);
+    JS_FreeCString(ctx, n);
+    float volume = 0.0f;
+    bool muted = false;
+    float peak = 0.0f;
+    if (!shared::system::AppVolumeGetByProcessName(name, volume, muted, peak)) return JS_NULL;
+    JSValue out = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, out, "volume", JS_NewFloat64(ctx, volume));
+    JS_SetPropertyStr(ctx, out, "muted", JS_NewBool(ctx, muted ? 1 : 0));
+    JS_SetPropertyStr(ctx, out, "peak", JS_NewFloat64(ctx, peak));
+    return out;
+}
+
+JSValue JsAppVolumeSetVolumeByPid(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 2) return JS_ThrowTypeError(ctx, "appVolume.setVolumeByPid(pid, volume01)");
+    int32_t pid = 0;
+    double volume = 0.0;
+    if (JS_ToInt32(ctx, &pid, argv[0]) != 0 || pid <= 0) return JS_ThrowTypeError(ctx, "appVolume.setVolumeByPid expects pid > 0");
+    if (JS_ToFloat64(ctx, &volume, argv[1]) != 0) return JS_ThrowTypeError(ctx, "appVolume.setVolumeByPid expects volume");
+    return JS_NewBool(ctx, shared::system::AppVolumeSetVolumeByPid(static_cast<uint32_t>(pid), static_cast<float>(volume)) ? 1 : 0);
+}
+
+JSValue JsAppVolumeSetVolumeByProcessName(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 2) return JS_ThrowTypeError(ctx, "appVolume.setVolumeByProcessName(name, volume01)");
+    const char* n = JS_ToCString(ctx, argv[0]);
+    if (!n) return JS_EXCEPTION;
+    std::wstring name = Utils::ToWString(n);
+    JS_FreeCString(ctx, n);
+    double volume = 0.0;
+    if (JS_ToFloat64(ctx, &volume, argv[1]) != 0) return JS_ThrowTypeError(ctx, "appVolume.setVolumeByProcessName expects volume");
+    return JS_NewBool(ctx, shared::system::AppVolumeSetVolumeByProcessName(name, static_cast<float>(volume)) ? 1 : 0);
+}
+
+JSValue JsAppVolumeSetMuteByPid(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 2) return JS_ThrowTypeError(ctx, "appVolume.setMuteByPid(pid, mute)");
+    int32_t pid = 0;
+    if (JS_ToInt32(ctx, &pid, argv[0]) != 0 || pid <= 0) return JS_ThrowTypeError(ctx, "appVolume.setMuteByPid expects pid > 0");
+    int mute = JS_ToBool(ctx, argv[1]);
+    return JS_NewBool(ctx, shared::system::AppVolumeSetMuteByPid(static_cast<uint32_t>(pid), mute != 0) ? 1 : 0);
+}
+
+JSValue JsAppVolumeSetMuteByProcessName(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 2) return JS_ThrowTypeError(ctx, "appVolume.setMuteByProcessName(name, mute)");
+    const char* n = JS_ToCString(ctx, argv[0]);
+    if (!n) return JS_EXCEPTION;
+    std::wstring name = Utils::ToWString(n);
+    JS_FreeCString(ctx, n);
+    int mute = JS_ToBool(ctx, argv[1]);
+    return JS_NewBool(ctx, shared::system::AppVolumeSetMuteByProcessName(name, mute != 0) ? 1 : 0);
+}
+
 int SystemModuleInit(JSContext* ctx, JSModuleDef* m) {
     JSValue clipboard = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, clipboard, "setText", JS_NewCFunction(ctx, JsClipboardSetText, "setText", 1));
@@ -536,6 +630,16 @@ int SystemModuleInit(JSContext* ctx, JSModuleDef* m) {
     JS_SetPropertyStr(ctx, hotkey, "unregister", JS_NewCFunction(ctx, JsHotkeyUnregisterHotkey, "unregister", 1));
     JS_SetModuleExport(ctx, m, "hotkey", hotkey);
 
+    JSValue appVolume = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, appVolume, "listSessions", JS_NewCFunction(ctx, JsAppVolumeListSessions, "listSessions", 0));
+    JS_SetPropertyStr(ctx, appVolume, "getByPid", JS_NewCFunction(ctx, JsAppVolumeGetByPid, "getByPid", 1));
+    JS_SetPropertyStr(ctx, appVolume, "getByProcessName", JS_NewCFunction(ctx, JsAppVolumeGetByProcessName, "getByProcessName", 1));
+    JS_SetPropertyStr(ctx, appVolume, "setVolumeByPid", JS_NewCFunction(ctx, JsAppVolumeSetVolumeByPid, "setVolumeByPid", 2));
+    JS_SetPropertyStr(ctx, appVolume, "setVolumeByProcessName", JS_NewCFunction(ctx, JsAppVolumeSetVolumeByProcessName, "setVolumeByProcessName", 2));
+    JS_SetPropertyStr(ctx, appVolume, "setMuteByPid", JS_NewCFunction(ctx, JsAppVolumeSetMuteByPid, "setMuteByPid", 2));
+    JS_SetPropertyStr(ctx, appVolume, "setMuteByProcessName", JS_NewCFunction(ctx, JsAppVolumeSetMuteByProcessName, "setMuteByProcessName", 2));
+    JS_SetModuleExport(ctx, m, "appVolume", appVolume);
+
     return 0;
 }
 }  // namespace
@@ -558,6 +662,7 @@ JSModuleDef* EnsureSystemModule(JSContext* ctx, const char* moduleName) {
     if (JS_AddModuleExport(ctx, m, "displayMetrics") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "registry") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "hotkey") < 0) return nullptr;
+    if (JS_AddModuleExport(ctx, m, "appVolume") < 0) return nullptr;
     return m;
 }
 }  // namespace novadesk::scripting::quickjs

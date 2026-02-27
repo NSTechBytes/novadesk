@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <vector>
 #include <string>
+#include <cstdint>
 
 namespace novadesk::shared::system {
 constexpr UINT WM_NOVADESK_HOTKEY_UP = WM_APP + 120;
@@ -76,6 +77,18 @@ struct AudioLevelStats {
     std::vector<float> bands;
 };
 
+struct AppVolumeSessionInfo {
+    uint32_t pid = 0;
+    std::wstring processName;
+    std::wstring fileName;
+    std::wstring filePath;
+    std::wstring iconPath;
+    std::wstring displayName;
+    float volume = 0.0f; // 0..1
+    float peak = 0.0f;   // 0..1
+    bool muted = false;
+};
+
 struct AudioLevelConfig {
     std::string port = "output"; // "output" or "input"
     std::wstring deviceId;
@@ -143,6 +156,13 @@ bool AudioSetVolume(int volumePercent);
 int AudioGetVolume();
 bool AudioPlaySound(const std::wstring& path, bool loop);
 void AudioStopSound();
+bool AppVolumeListSessions(std::vector<AppVolumeSessionInfo>& sessions);
+bool AppVolumeGetByPid(uint32_t pid, float& outVolume, bool& outMuted, float& outPeak);
+bool AppVolumeGetByProcessName(const std::wstring& processName, float& outVolume, bool& outMuted, float& outPeak);
+bool AppVolumeSetVolumeByPid(uint32_t pid, float volume01);
+bool AppVolumeSetVolumeByProcessName(const std::wstring& processName, float volume01);
+bool AppVolumeSetMuteByPid(uint32_t pid, bool mute);
+bool AppVolumeSetMuteByProcessName(const std::wstring& processName, bool mute);
 
 bool RegistryReadData(const std::wstring& fullPath, const std::wstring& valueName, RegistryValue& outValue);
 bool RegistryWriteString(const std::wstring& fullPath, const std::wstring& valueName, const std::wstring& value);
