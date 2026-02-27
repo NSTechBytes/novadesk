@@ -1,5 +1,5 @@
 import { widgetWindow, app } from 'novadesk';
-import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics, hotkey, cpu, memory, network, mouse, disk, audioLevel, appVolume, nowPlaying } from 'system';
+import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics, hotkey, cpu, memory, network, mouse, disk, audioLevel, appVolume, nowPlaying, json } from 'system';
 import * as std from 'std';
 
 // console.log("OS:", JSON.stringify(std.getenviron()));
@@ -106,6 +106,7 @@ console.log("Disk usagePercent:", disk.usagePercent());
 console.log("AudioLevel stats:", JSON.stringify(audioLevel.stats({ bands: 10 }) ?? {}));
 console.log("NowPlaying stats:", JSON.stringify(nowPlaying.stats() ?? {}));
 console.log("NowPlaying backend:", nowPlaying.backend?.() ?? "unknown");
+console.log("JSON parse test:", JSON.stringify(json.parse('{"ok":true}')));
 const appSessions = appVolume.listSessions();
 console.log("AppVolume session count:", appSessions.length);
 if (appSessions.length > 0) {

@@ -191,6 +191,9 @@ bool NowPlayingSetShuffle(bool enabled);
 bool NowPlayingToggleShuffle();
 bool NowPlayingSetRepeat(int mode);
 std::string NowPlayingBackend();
+bool JsonReadTextFile(const std::wstring& path, std::string& outText);
+bool JsonWriteTextFile(const std::wstring& path, const std::string& text);
+bool JsonMergePatchFile(const std::wstring& path, const std::string& patchText);
 
 bool RegistryReadData(const std::wstring& fullPath, const std::wstring& valueName, RegistryValue& outValue);
 bool RegistryWriteString(const std::wstring& fullPath, const std::wstring& valueName, const std::wstring& value);

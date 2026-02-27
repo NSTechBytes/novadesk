@@ -1,10 +1,12 @@
 #include "SystemModule.h"
 
 #include <chrono>
+#include <cstring>
 #include <string>
 
 #include "../../shared/System.h"
 #include "../../shared/Utils.h"
+#include "../../shared/PathUtils.h"
 #include "../engine/JSEngine.h"
 
 namespace novadesk::scripting::quickjs {
@@ -455,6 +457,15 @@ JSValue JsHotkeyUnregisterHotkey(JSContext* ctx, JSValueConst, int argc, JSValue
     return JS_NewBool(ctx, shared::system::UnregisterHotkey(JSEngine::GetMessageWindow(), id) ? 1 : 0);
 }
 
+std::wstring ResolveModulePath(JSContext* ctx, JSValueConst v) {
+    const char* s = JS_ToCString(ctx, v);
+    if (!s) return L"";
+    std::wstring path = Utils::ToWString(s);
+    JS_FreeCString(ctx, s);
+    if (!PathUtils::IsPathRelative(path)) return PathUtils::NormalizePath(path);
+    return PathUtils::ResolvePath(path, JSEngine::GetEntryScriptDir());
+}
+
 JSValue JsAppVolumeListSessions(JSContext* ctx, JSValueConst, int, JSValueConst*) {
     std::vector<shared::system::AppVolumeSessionInfo> sessions;
     if (!shared::system::AppVolumeListSessions(sessions)) {
@@ -606,6 +617,67 @@ JSValue JsNowPlayingSetRepeat(JSContext* ctx, JSValueConst, int argc, JSValueCon
     return JS_NewBool(ctx, shared::system::NowPlayingSetRepeat(static_cast<int>(mode)) ? 1 : 0);
 }
 
+JSValue JsJsonParse(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_ThrowTypeError(ctx, "json.parse(text)");
+    const char* text = JS_ToCString(ctx, argv[0]);
+    if (!text) return JS_EXCEPTION;
+    size_t len = std::strlen(text);
+    JSValue out = JS_ParseJSON(ctx, text, len, "<json.parse>");
+    JS_FreeCString(ctx, text);
+    return out;
+}
+
+JSValue JsJsonStringify(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_ThrowTypeError(ctx, "json.stringify(value[, space])");
+    JSValue space = JS_UNDEFINED;
+    if (argc > 1) space = JS_DupValue(ctx, argv[1]);
+    JSValue s = JS_JSONStringify(ctx, argv[0], JS_UNDEFINED, space);
+    if (!JS_IsUndefined(space)) JS_FreeValue(ctx, space);
+    return s;
+}
+
+JSValue JsJsonRead(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_ThrowTypeError(ctx, "json.read(path)");
+    const std::wstring path = ResolveModulePath(ctx, argv[0]);
+    if (path.empty()) return JS_ThrowTypeError(ctx, "json.read invalid path");
+
+    std::string text;
+    if (!shared::system::JsonReadTextFile(path, text)) {
+        return JS_NULL;
+    }
+    if (text.find_first_not_of(" \t\r\n") == std::string::npos) {
+        return JS_NewObject(ctx);
+    }
+    return JS_ParseJSON(ctx, text.c_str(), text.size(), Utils::ToString(path).c_str());
+}
+
+JSValue JsJsonWrite(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 2) return JS_ThrowTypeError(ctx, "json.write(path, value[, merge])");
+    const std::wstring path = ResolveModulePath(ctx, argv[0]);
+    if (path.empty()) return JS_ThrowTypeError(ctx, "json.write invalid path");
+
+    int merge = 0;
+    if (argc > 2) merge = JS_ToBool(ctx, argv[2]);
+
+    JSValue indent = JS_NewInt32(ctx, 4);
+    JSValue s = JS_JSONStringify(ctx, argv[1], JS_UNDEFINED, indent);
+    JS_FreeValue(ctx, indent);
+    if (JS_IsException(s)) return s;
+    const char* text = JS_ToCString(ctx, s);
+    if (!text) {
+        JS_FreeValue(ctx, s);
+        return JS_EXCEPTION;
+    }
+
+    bool ok = false;
+    if (merge != 0) ok = shared::system::JsonMergePatchFile(path, text);
+    else ok = shared::system::JsonWriteTextFile(path, text);
+
+    JS_FreeCString(ctx, text);
+    JS_FreeValue(ctx, s);
+    return JS_NewBool(ctx, ok ? 1 : 0);
+}
+
 int SystemModuleInit(JSContext* ctx, JSModuleDef* m) {
     JSValue clipboard = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, clipboard, "setText", JS_NewCFunction(ctx, JsClipboardSetText, "setText", 1));
@@ -712,6 +784,13 @@ int SystemModuleInit(JSContext* ctx, JSModuleDef* m) {
     JS_SetPropertyStr(ctx, nowPlaying, "setRepeat", JS_NewCFunction(ctx, JsNowPlayingSetRepeat, "setRepeat", 1));
     JS_SetModuleExport(ctx, m, "nowPlaying", nowPlaying);
 
+    JSValue json = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, json, "parse", JS_NewCFunction(ctx, JsJsonParse, "parse", 1));
+    JS_SetPropertyStr(ctx, json, "stringify", JS_NewCFunction(ctx, JsJsonStringify, "stringify", 2));
+    JS_SetPropertyStr(ctx, json, "read", JS_NewCFunction(ctx, JsJsonRead, "read", 1));
+    JS_SetPropertyStr(ctx, json, "write", JS_NewCFunction(ctx, JsJsonWrite, "write", 3));
+    JS_SetModuleExport(ctx, m, "json", json);
+
     return 0;
 }
 }  // namespace
@@ -736,6 +815,7 @@ JSModuleDef* EnsureSystemModule(JSContext* ctx, const char* moduleName) {
     if (JS_AddModuleExport(ctx, m, "hotkey") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "appVolume") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "nowPlaying") < 0) return nullptr;
+    if (JS_AddModuleExport(ctx, m, "json") < 0) return nullptr;
     return m;
 }
 }  // namespace novadesk::scripting::quickjs

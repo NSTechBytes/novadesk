@@ -4360,6 +4360,11 @@ void js_std_set_worker_new_context_func(JSContext *(*func)(JSRuntime *rt))
 
 #define OS_FLAG(x) JS_PROP_INT32_DEF(#x, x, JS_PROP_CONFIGURABLE )
 
+/* Novadesk note:
+   Keep docs in sync with this export table in:
+   novadesk-docs/docs/api/modules/os.md
+   Availability of some APIs is platform/compile-flag dependent
+   (for example _WIN32, __wasi__, and USE_WORKER). */
 static const JSCFunctionListEntry js_os_funcs[] = {
     JS_CFUNC_DEF("open", 2, js_os_open ),
     OS_FLAG(O_RDONLY),
