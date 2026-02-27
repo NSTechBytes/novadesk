@@ -1,7 +1,6 @@
 #include "JSEngine.h"
 
 #include "quickjs.h"
-#include "quickjs-libc.h"
 
 #include <string>
 #include <unordered_map>
@@ -742,13 +741,8 @@ namespace JSEngine
             }
 
             JS_SetModuleLoaderFunc(g_runtime, novadesk::scripting::quickjs::ModuleNormalizeName, novadesk::scripting::quickjs::ModuleLoader, nullptr);
-            js_std_init_handlers(g_runtime);
-            js_std_set_worker_new_context_func(JS_NewContext);
-            js_std_set_worker_new_runtime_func(JS_NewRuntime);
             novadesk::scripting::quickjs::SetModuleSystemDebug(false);
             RegisterConsoleBindings(g_context);
-            js_init_module_std(g_context, "std");
-            js_init_module_os(g_context, "os");
             g_eventCallbacks.clear();
             g_eventCallbacks.push_back(JS_UNDEFINED); // callback id 0 is invalid
             g_mainIpcListeners.clear();

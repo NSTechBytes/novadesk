@@ -7,7 +7,6 @@
 
 #include "NovadeskModule.h"
 #include "SystemModule.h"
-#include "quickjs-libc.h"
 #include "../../shared/FileUtils.h"
 #include "../../shared/Utils.h"
 
@@ -20,7 +19,7 @@ namespace novadesk::scripting::quickjs
 
         bool IsBuiltinModuleName(const std::string &name)
         {
-            return name == "novadesk" || name == "system" || name == "os" || name == "std";
+            return name == "novadesk" || name == "system";
         }
 
         std::string NormalizeModuleNameImpl(const std::string &baseName, const std::string &moduleName)
@@ -91,15 +90,6 @@ namespace novadesk::scripting::quickjs
         {
             return EnsureSystemModule(ctx, moduleName);
         }
-        if (moduleName && requested == "os")
-        {
-            return js_init_module_os(ctx, moduleName);
-        }
-        if (moduleName && requested == "std")
-        {
-            return js_init_module_std(ctx, moduleName);
-        }
-
         const std::wstring modulePath = Utils::ToWString(moduleName ? moduleName : "");
         const std::string source = FileUtils::ReadFileContent(modulePath);
         if (source.empty())
