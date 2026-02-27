@@ -8,6 +8,10 @@
 #include <cmath>
 #include <algorithm>
 #include <cstdlib>
+#include <mutex>
+#include <queue>
+#include <condition_variable>
+#include <fstream>
 
 #include <mmdeviceapi.h>
 #include <mmsystem.h>
@@ -17,6 +21,16 @@
 #include <powrprof.h>
 #include <iphlpapi.h>
 #include <functiondiscoverykeys.h>
+#include <roapi.h>
+
+#if ((__cplusplus >= 202002L) || defined(__cpp_impl_coroutine)) && __has_include(<winrt/base.h>) && __has_include(<winrt/Windows.Media.Control.h>) && __has_include(<winrt/Windows.Storage.Streams.h>)
+#define NOVADESK_HAS_WINRT_NOWPLAYING 1
+#include <winrt/base.h>
+#include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Storage.Streams.h>
+#include <winrt/Windows.Media.h>
+#include <winrt/Windows.Media.Control.h>
+#endif
 
 #include "../domain/DesktopManager.h"
 #include "PathUtils.h"
@@ -26,6 +40,7 @@
 #pragma comment(lib, "Winmm.lib")
 #pragma comment(lib, "PowrProf.lib")
 #pragma comment(lib, "Iphlpapi.lib")
+#pragma comment(lib, "runtimeobject.lib")
 
 namespace novadesk::shared::system {
 
@@ -1191,6 +1206,417 @@ bool AppVolumeSetMuteByPid(uint32_t pid, bool mute) {
 
 bool AppVolumeSetMuteByProcessName(const std::wstring& processName, bool mute) {
     return SetForMatchingSessions(0, processName, false, nullptr, &mute);
+}
+
+#if NOVADESK_HAS_WINRT_NOWPLAYING
+namespace {
+using namespace winrt;
+using namespace winrt::Windows::Foundation;
+using namespace winrt::Windows::Media;
+using namespace winrt::Windows::Media::Control;
+using namespace winrt::Windows::Storage::Streams;
+
+enum class NowPlayingAction {
+    Play,
+    Pause,
+    PlayPause,
+    Stop,
+    Next,
+    Previous,
+    SetPosition,
+    SetShuffle,
+    ToggleShuffle,
+    SetRepeat
+};
+
+struct NowPlayingActionItem {
+    NowPlayingAction action{};
+    int value = 0;
+    bool flag = false;
+};
+
+class NowPlayingController {
+public:
+    NowPlayingController() {
+        m_worker = std::thread(&NowPlayingController::WorkerMain, this);
+    }
+    ~NowPlayingController() {
+        {
+            std::lock_guard<std::mutex> lock(m_actionMutex);
+            m_stopWorker = true;
+        }
+        m_actionSignal.notify_all();
+        if (m_worker.joinable()) m_worker.join();
+    }
+
+    NowPlayingStats ReadStats() {
+        std::lock_guard<std::mutex> lock(m_statsMutex);
+        return m_stats;
+    }
+
+    bool Play() { Queue(NowPlayingAction::Play); return true; }
+    bool Pause() { Queue(NowPlayingAction::Pause); return true; }
+    bool PlayPause() { Queue(NowPlayingAction::PlayPause); return true; }
+    bool Stop() { Queue(NowPlayingAction::Stop); return true; }
+    bool Next() { Queue(NowPlayingAction::Next); return true; }
+    bool Previous() { Queue(NowPlayingAction::Previous); return true; }
+    bool SetPosition(int value, bool isPercent) { Queue(NowPlayingAction::SetPosition, value, isPercent); return true; }
+    bool SetShuffle(bool enabled) { Queue(NowPlayingAction::SetShuffle, 0, enabled); return true; }
+    bool ToggleShuffle() { Queue(NowPlayingAction::ToggleShuffle); return true; }
+    bool SetRepeat(int mode) { Queue(NowPlayingAction::SetRepeat, mode, false); return true; }
+
+private:
+    std::mutex m_statsMutex;
+    NowPlayingStats m_stats{};
+
+    std::mutex m_actionMutex;
+    std::queue<NowPlayingActionItem> m_actions;
+    std::condition_variable m_actionSignal;
+    bool m_stopWorker = false;
+    std::thread m_worker;
+
+    GlobalSystemMediaTransportControlsSessionManager m_manager{ nullptr };
+    std::wstring m_coverPath;
+    std::wstring m_coverTrackKey;
+    std::chrono::steady_clock::time_point m_localPosTime{};
+    double m_localPosSec = 0.0;
+    bool m_hasLocalPos = false;
+
+    static int ToSeconds(TimeSpan span) {
+        return static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(span).count());
+    }
+
+    std::wstring BuildTrackKey(const NowPlayingStats& s) {
+        return s.player + L"|" + s.artist + L"|" + s.album + L"|" + s.title;
+    }
+
+    std::wstring EnsureCoverPath() {
+        if (!m_coverPath.empty()) return m_coverPath;
+        std::wstring base = PathUtils::GetAppDataPath();
+        if (base.empty()) return L"";
+        std::wstring dir = base + L"NowPlaying\\";
+        CreateDirectoryW(base.c_str(), nullptr);
+        CreateDirectoryW(dir.c_str(), nullptr);
+        m_coverPath = dir + L"cover.jpg";
+        return m_coverPath;
+    }
+
+    bool SaveThumbnail(IRandomAccessStreamReference const& thumb) {
+        try {
+            const std::wstring path = EnsureCoverPath();
+            if (path.empty()) return false;
+            auto stream = thumb.OpenReadAsync().get();
+            uint64_t size = stream.Size();
+            if (size == 0 || size > (16ULL * 1024ULL * 1024ULL)) return false;
+
+            Buffer buffer((uint32_t)size);
+            auto rb = stream.ReadAsync(buffer, (uint32_t)size, InputStreamOptions::None).get();
+            uint32_t len = rb.Length();
+            if (len == 0) return false;
+            DataReader reader = DataReader::FromBuffer(rb);
+            std::vector<uint8_t> bytes(len);
+            reader.ReadBytes(bytes);
+            std::ofstream out(std::filesystem::path(path), std::ios::binary | std::ios::trunc);
+            if (!out.is_open()) return false;
+            out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+            return true;
+        } catch (...) {
+            return false;
+        }
+    }
+
+    GlobalSystemMediaTransportControlsSession Session() {
+        if (m_manager == nullptr) return nullptr;
+        try { return m_manager.GetCurrentSession(); } catch (...) { return nullptr; }
+    }
+
+    void Queue(NowPlayingAction action, int value = 0, bool flag = false) {
+        std::lock_guard<std::mutex> lock(m_actionMutex);
+        if (m_stopWorker) return;
+        m_actions.push(NowPlayingActionItem{ action, value, flag });
+        m_actionSignal.notify_one();
+    }
+
+    void ProcessActions(std::queue<NowPlayingActionItem>& pending) {
+        while (!pending.empty()) {
+            auto action = pending.front();
+            pending.pop();
+            try {
+                auto session = Session();
+                if (session == nullptr) continue;
+                switch (action.action) {
+                case NowPlayingAction::Play: session.TryPlayAsync(); break;
+                case NowPlayingAction::Pause: session.TryPauseAsync(); break;
+                case NowPlayingAction::PlayPause: session.TryTogglePlayPauseAsync(); break;
+                case NowPlayingAction::Stop: session.TryStopAsync(); break;
+                case NowPlayingAction::Next: session.TrySkipNextAsync(); break;
+                case NowPlayingAction::Previous: session.TrySkipPreviousAsync(); break;
+                case NowPlayingAction::SetPosition: {
+                    auto timeline = session.GetTimelineProperties();
+                    int duration = 0;
+                    if (timeline != nullptr) duration = (std::max)(0, ToSeconds(timeline.EndTime()) - ToSeconds(timeline.StartTime()));
+                    int sec = action.flag ? ((duration > 0) ? (duration * action.value / 100) : 0) : action.value;
+                    sec = (std::max)(0, (std::min)(duration > 0 ? duration : sec, sec));
+                    auto ticks = TimeSpan(std::chrono::seconds(sec)).count();
+                    session.TryChangePlaybackPositionAsync(ticks);
+                    break;
+                }
+                case NowPlayingAction::SetShuffle:
+                    session.TryChangeShuffleActiveAsync(action.flag);
+                    break;
+                case NowPlayingAction::ToggleShuffle: {
+                    auto pb = session.GetPlaybackInfo();
+                    bool curr = false;
+                    if (pb != nullptr) {
+                        auto sh = pb.IsShuffleActive();
+                        if (sh != nullptr) curr = sh.Value();
+                    }
+                    session.TryChangeShuffleActiveAsync(!curr);
+                    break;
+                }
+                case NowPlayingAction::SetRepeat: {
+                    MediaPlaybackAutoRepeatMode mode = MediaPlaybackAutoRepeatMode::None;
+                    if (action.value == 1) mode = MediaPlaybackAutoRepeatMode::Track;
+                    else if (action.value == 2) mode = MediaPlaybackAutoRepeatMode::List;
+                    session.TryChangeAutoRepeatModeAsync(mode);
+                    break;
+                }
+                }
+            } catch (...) {}
+        }
+    }
+
+    void RefreshStats() {
+        NowPlayingStats stats{};
+        auto prev = ReadStats();
+        auto nowSteady = std::chrono::steady_clock::now();
+
+        auto session = Session();
+        if (session != nullptr) {
+            stats.available = true;
+            stats.status = 1;
+            try { stats.player = session.SourceAppUserModelId().c_str(); } catch (...) {}
+            try {
+                auto props = session.TryGetMediaPropertiesAsync().get();
+                if (props != nullptr) {
+                    stats.artist = props.Artist().c_str();
+                    stats.album = props.AlbumTitle().c_str();
+                    stats.title = props.Title().c_str();
+                    std::wstring trackKey = BuildTrackKey(stats);
+                    auto thumb = props.Thumbnail();
+                    if (thumb != nullptr) {
+                        if (trackKey != m_coverTrackKey || m_coverPath.empty()) {
+                            if (SaveThumbnail(thumb)) m_coverTrackKey = trackKey;
+                        }
+                        stats.thumbnail = m_coverPath;
+                    } else {
+                        m_coverTrackKey.clear();
+                    }
+                }
+            } catch (...) {}
+            try {
+                auto tl = session.GetTimelineProperties();
+                if (tl != nullptr) {
+                    stats.duration = (std::max)(0, ToSeconds(tl.EndTime()) - ToSeconds(tl.StartTime()));
+                    stats.position = (std::max)(0, ToSeconds(tl.Position()));
+                }
+            } catch (...) {}
+            try {
+                auto pb = session.GetPlaybackInfo();
+                if (pb != nullptr) {
+                    auto ps = pb.PlaybackStatus();
+                    if (ps == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing) stats.state = 1;
+                    else if (ps == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Paused) stats.state = 2;
+                    else stats.state = 0;
+                    auto sh = pb.IsShuffleActive();
+                    if (sh != nullptr) stats.shuffle = sh.Value();
+                    auto rp = pb.AutoRepeatMode();
+                    if (rp != nullptr) stats.repeat = rp.Value() != MediaPlaybackAutoRepeatMode::None;
+                }
+            } catch (...) {}
+
+            if (stats.state == 1 && stats.duration > 0) {
+                try {
+                    auto tl = session.GetTimelineProperties();
+                    if (tl != nullptr) {
+                        auto last = tl.LastUpdatedTime().time_since_epoch();
+                        auto now = winrt::clock::now().time_since_epoch();
+                        int elapsed = (int)std::chrono::duration_cast<std::chrono::seconds>(now - last).count();
+                        if (elapsed > 0 && elapsed <= 3) stats.position += elapsed;
+                    }
+                } catch (...) {}
+
+                bool sameTrack =
+                    !prev.title.empty() &&
+                    prev.player == stats.player &&
+                    prev.artist == stats.artist &&
+                    prev.album == stats.album &&
+                    prev.title == stats.title &&
+                    prev.duration == stats.duration;
+                if (!sameTrack || !m_hasLocalPos) {
+                    m_localPosSec = (double)stats.position;
+                    m_localPosTime = nowSteady;
+                    m_hasLocalPos = true;
+                } else {
+                    double elapsedLocal = std::chrono::duration<double>(nowSteady - m_localPosTime).count();
+                    if (elapsedLocal > 0.0 && elapsedLocal < 5.0) m_localPosSec += elapsedLocal;
+                    m_localPosTime = nowSteady;
+                    int predicted = (int)m_localPosSec;
+                    if (stats.duration > 0) predicted = (std::min)(predicted, stats.duration);
+                    if (stats.position < predicted || (stats.duration > 0 && stats.position >= stats.duration && predicted < stats.duration)) {
+                        stats.position = predicted;
+                    } else if (stats.position > predicted + 1) {
+                        m_localPosSec = (double)stats.position;
+                        m_localPosTime = nowSteady;
+                    }
+                }
+            } else {
+                m_hasLocalPos = false;
+            }
+            if (stats.duration > 0) {
+                stats.position = (std::min)(stats.position, stats.duration);
+                stats.progress = (std::min)(100, (stats.position * 100) / stats.duration);
+            }
+        }
+
+        std::lock_guard<std::mutex> lock(m_statsMutex);
+        m_stats = stats;
+    }
+
+    void WorkerMain() {
+        HRESULT hr = RoInitialize(RO_INIT_MULTITHREADED);
+        bool uninit = SUCCEEDED(hr);
+        auto nextRefresh = std::chrono::steady_clock::now();
+        while (true) {
+            std::queue<NowPlayingActionItem> pending;
+            {
+                std::unique_lock<std::mutex> lock(m_actionMutex);
+                m_actionSignal.wait_until(lock, nextRefresh, [&] { return m_stopWorker || !m_actions.empty(); });
+                if (m_stopWorker) break;
+                std::swap(pending, m_actions);
+            }
+            if (m_manager == nullptr) {
+                try { m_manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().get(); }
+                catch (...) { m_manager = nullptr; }
+            }
+            ProcessActions(pending);
+            auto now = std::chrono::steady_clock::now();
+            if (now >= nextRefresh) {
+                RefreshStats();
+                nextRefresh = now + std::chrono::milliseconds(500);
+            }
+        }
+        if (uninit) RoUninitialize();
+    }
+};
+
+NowPlayingController& GetNowPlayingController() {
+    static NowPlayingController s;
+    return s;
+}
+} // namespace
+#endif
+
+bool GetNowPlayingStats(NowPlayingStats& outStats) {
+#if NOVADESK_HAS_WINRT_NOWPLAYING
+    outStats = GetNowPlayingController().ReadStats();
+    return true;
+#else
+    outStats = NowPlayingStats{};
+    return true;
+#endif
+}
+
+bool NowPlayingPlay() {
+#if NOVADESK_HAS_WINRT_NOWPLAYING
+    return GetNowPlayingController().Play();
+#else
+    return false;
+#endif
+}
+
+bool NowPlayingPause() {
+#if NOVADESK_HAS_WINRT_NOWPLAYING
+    return GetNowPlayingController().Pause();
+#else
+    return false;
+#endif
+}
+
+bool NowPlayingPlayPause() {
+#if NOVADESK_HAS_WINRT_NOWPLAYING
+    return GetNowPlayingController().PlayPause();
+#else
+    return false;
+#endif
+}
+
+bool NowPlayingStop() {
+#if NOVADESK_HAS_WINRT_NOWPLAYING
+    return GetNowPlayingController().Stop();
+#else
+    return false;
+#endif
+}
+
+bool NowPlayingNext() {
+#if NOVADESK_HAS_WINRT_NOWPLAYING
+    return GetNowPlayingController().Next();
+#else
+    return false;
+#endif
+}
+
+bool NowPlayingPrevious() {
+#if NOVADESK_HAS_WINRT_NOWPLAYING
+    return GetNowPlayingController().Previous();
+#else
+    return false;
+#endif
+}
+
+bool NowPlayingSetPosition(int value, bool isPercent) {
+#if NOVADESK_HAS_WINRT_NOWPLAYING
+    return GetNowPlayingController().SetPosition(value, isPercent);
+#else
+    (void)value;
+    (void)isPercent;
+    return false;
+#endif
+}
+
+bool NowPlayingSetShuffle(bool enabled) {
+#if NOVADESK_HAS_WINRT_NOWPLAYING
+    return GetNowPlayingController().SetShuffle(enabled);
+#else
+    (void)enabled;
+    return false;
+#endif
+}
+
+bool NowPlayingToggleShuffle() {
+#if NOVADESK_HAS_WINRT_NOWPLAYING
+    return GetNowPlayingController().ToggleShuffle();
+#else
+    return false;
+#endif
+}
+
+bool NowPlayingSetRepeat(int mode) {
+#if NOVADESK_HAS_WINRT_NOWPLAYING
+    return GetNowPlayingController().SetRepeat(mode);
+#else
+    (void)mode;
+    return false;
+#endif
+}
+
+std::string NowPlayingBackend() {
+#if NOVADESK_HAS_WINRT_NOWPLAYING
+    return "winrt";
+#else
+    return "disabled";
+#endif
 }
 
 bool RegistryReadData(const std::wstring& fullPath, const std::wstring& valueName, RegistryValue& outValue) {

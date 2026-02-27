@@ -549,6 +549,63 @@ JSValue JsAppVolumeSetMuteByProcessName(JSContext* ctx, JSValueConst, int argc, 
     return JS_NewBool(ctx, shared::system::AppVolumeSetMuteByProcessName(name, mute != 0) ? 1 : 0);
 }
 
+JSValue JsNowPlayingStats(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    shared::system::NowPlayingStats stats;
+    shared::system::GetNowPlayingStats(stats);
+    JSValue out = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, out, "available", JS_NewBool(ctx, stats.available ? 1 : 0));
+    JS_SetPropertyStr(ctx, out, "player", JS_NewString(ctx, Utils::ToString(stats.player).c_str()));
+    JS_SetPropertyStr(ctx, out, "artist", JS_NewString(ctx, Utils::ToString(stats.artist).c_str()));
+    JS_SetPropertyStr(ctx, out, "album", JS_NewString(ctx, Utils::ToString(stats.album).c_str()));
+    JS_SetPropertyStr(ctx, out, "title", JS_NewString(ctx, Utils::ToString(stats.title).c_str()));
+    JS_SetPropertyStr(ctx, out, "thumbnail", JS_NewString(ctx, Utils::ToString(stats.thumbnail).c_str()));
+    JS_SetPropertyStr(ctx, out, "duration", JS_NewInt32(ctx, stats.duration));
+    JS_SetPropertyStr(ctx, out, "position", JS_NewInt32(ctx, stats.position));
+    JS_SetPropertyStr(ctx, out, "progress", JS_NewInt32(ctx, stats.progress));
+    JS_SetPropertyStr(ctx, out, "state", JS_NewInt32(ctx, stats.state));
+    JS_SetPropertyStr(ctx, out, "status", JS_NewInt32(ctx, stats.status));
+    JS_SetPropertyStr(ctx, out, "shuffle", JS_NewBool(ctx, stats.shuffle ? 1 : 0));
+    JS_SetPropertyStr(ctx, out, "repeat", JS_NewBool(ctx, stats.repeat ? 1 : 0));
+    return out;
+}
+
+JSValue JsNowPlayingBackend(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    return JS_NewString(ctx, shared::system::NowPlayingBackend().c_str());
+}
+
+JSValue JsNowPlayingPlay(JSContext* ctx, JSValueConst, int, JSValueConst*) { return JS_NewBool(ctx, shared::system::NowPlayingPlay() ? 1 : 0); }
+JSValue JsNowPlayingPause(JSContext* ctx, JSValueConst, int, JSValueConst*) { return JS_NewBool(ctx, shared::system::NowPlayingPause() ? 1 : 0); }
+JSValue JsNowPlayingPlayPause(JSContext* ctx, JSValueConst, int, JSValueConst*) { return JS_NewBool(ctx, shared::system::NowPlayingPlayPause() ? 1 : 0); }
+JSValue JsNowPlayingStop(JSContext* ctx, JSValueConst, int, JSValueConst*) { return JS_NewBool(ctx, shared::system::NowPlayingStop() ? 1 : 0); }
+JSValue JsNowPlayingNext(JSContext* ctx, JSValueConst, int, JSValueConst*) { return JS_NewBool(ctx, shared::system::NowPlayingNext() ? 1 : 0); }
+JSValue JsNowPlayingPrevious(JSContext* ctx, JSValueConst, int, JSValueConst*) { return JS_NewBool(ctx, shared::system::NowPlayingPrevious() ? 1 : 0); }
+
+JSValue JsNowPlayingSetPosition(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_ThrowTypeError(ctx, "nowPlaying.setPosition(value[, isPercent])");
+    int32_t value = 0;
+    if (JS_ToInt32(ctx, &value, argv[0]) != 0) return JS_ThrowTypeError(ctx, "nowPlaying.setPosition expects number");
+    int isPercent = 0;
+    if (argc > 1) isPercent = JS_ToBool(ctx, argv[1]);
+    return JS_NewBool(ctx, shared::system::NowPlayingSetPosition(static_cast<int>(value), isPercent != 0) ? 1 : 0);
+}
+
+JSValue JsNowPlayingSetShuffle(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_ThrowTypeError(ctx, "nowPlaying.setShuffle(enabled)");
+    int enabled = JS_ToBool(ctx, argv[0]);
+    return JS_NewBool(ctx, shared::system::NowPlayingSetShuffle(enabled != 0) ? 1 : 0);
+}
+
+JSValue JsNowPlayingToggleShuffle(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+    return JS_NewBool(ctx, shared::system::NowPlayingToggleShuffle() ? 1 : 0);
+}
+
+JSValue JsNowPlayingSetRepeat(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    if (argc < 1) return JS_ThrowTypeError(ctx, "nowPlaying.setRepeat(mode)");
+    int32_t mode = 0;
+    if (JS_ToInt32(ctx, &mode, argv[0]) != 0) return JS_ThrowTypeError(ctx, "nowPlaying.setRepeat expects number");
+    return JS_NewBool(ctx, shared::system::NowPlayingSetRepeat(static_cast<int>(mode)) ? 1 : 0);
+}
+
 int SystemModuleInit(JSContext* ctx, JSModuleDef* m) {
     JSValue clipboard = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, clipboard, "setText", JS_NewCFunction(ctx, JsClipboardSetText, "setText", 1));
@@ -640,6 +697,21 @@ int SystemModuleInit(JSContext* ctx, JSModuleDef* m) {
     JS_SetPropertyStr(ctx, appVolume, "setMuteByProcessName", JS_NewCFunction(ctx, JsAppVolumeSetMuteByProcessName, "setMuteByProcessName", 2));
     JS_SetModuleExport(ctx, m, "appVolume", appVolume);
 
+    JSValue nowPlaying = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, nowPlaying, "stats", JS_NewCFunction(ctx, JsNowPlayingStats, "stats", 0));
+    JS_SetPropertyStr(ctx, nowPlaying, "backend", JS_NewCFunction(ctx, JsNowPlayingBackend, "backend", 0));
+    JS_SetPropertyStr(ctx, nowPlaying, "play", JS_NewCFunction(ctx, JsNowPlayingPlay, "play", 0));
+    JS_SetPropertyStr(ctx, nowPlaying, "pause", JS_NewCFunction(ctx, JsNowPlayingPause, "pause", 0));
+    JS_SetPropertyStr(ctx, nowPlaying, "playPause", JS_NewCFunction(ctx, JsNowPlayingPlayPause, "playPause", 0));
+    JS_SetPropertyStr(ctx, nowPlaying, "stop", JS_NewCFunction(ctx, JsNowPlayingStop, "stop", 0));
+    JS_SetPropertyStr(ctx, nowPlaying, "next", JS_NewCFunction(ctx, JsNowPlayingNext, "next", 0));
+    JS_SetPropertyStr(ctx, nowPlaying, "previous", JS_NewCFunction(ctx, JsNowPlayingPrevious, "previous", 0));
+    JS_SetPropertyStr(ctx, nowPlaying, "setPosition", JS_NewCFunction(ctx, JsNowPlayingSetPosition, "setPosition", 2));
+    JS_SetPropertyStr(ctx, nowPlaying, "setShuffle", JS_NewCFunction(ctx, JsNowPlayingSetShuffle, "setShuffle", 1));
+    JS_SetPropertyStr(ctx, nowPlaying, "toggleShuffle", JS_NewCFunction(ctx, JsNowPlayingToggleShuffle, "toggleShuffle", 0));
+    JS_SetPropertyStr(ctx, nowPlaying, "setRepeat", JS_NewCFunction(ctx, JsNowPlayingSetRepeat, "setRepeat", 1));
+    JS_SetModuleExport(ctx, m, "nowPlaying", nowPlaying);
+
     return 0;
 }
 }  // namespace
@@ -663,6 +735,7 @@ JSModuleDef* EnsureSystemModule(JSContext* ctx, const char* moduleName) {
     if (JS_AddModuleExport(ctx, m, "registry") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "hotkey") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "appVolume") < 0) return nullptr;
+    if (JS_AddModuleExport(ctx, m, "nowPlaying") < 0) return nullptr;
     return m;
 }
 }  // namespace novadesk::scripting::quickjs

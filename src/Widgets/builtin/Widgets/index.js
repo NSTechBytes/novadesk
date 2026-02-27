@@ -1,5 +1,5 @@
 import { widgetWindow, app } from 'novadesk';
-import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics, hotkey, cpu, memory, network, mouse, disk, audioLevel, appVolume } from 'system';
+import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics, hotkey, cpu, memory, network, mouse, disk, audioLevel, appVolume, nowPlaying } from 'system';
 import * as std from 'std';
 
 // console.log("OS:", JSON.stringify(std.getenviron()));
@@ -104,6 +104,8 @@ console.log("Disk availableMB:", toMB(disk.availableBytes()));
 console.log("Disk usedMB:", toMB(disk.usedBytes()));
 console.log("Disk usagePercent:", disk.usagePercent());
 console.log("AudioLevel stats:", JSON.stringify(audioLevel.stats({ bands: 10 }) ?? {}));
+console.log("NowPlaying stats:", JSON.stringify(nowPlaying.stats() ?? {}));
+console.log("NowPlaying backend:", nowPlaying.backend?.() ?? "unknown");
 const appSessions = appVolume.listSessions();
 console.log("AppVolume session count:", appSessions.length);
 if (appSessions.length > 0) {
@@ -128,6 +130,7 @@ const systemIntervalId = setInterval(() => {
   console.log(`[system] tick ${systemTick} disk usedMB:`, toMB(disk.usedBytes()));
   console.log(`[system] tick ${systemTick} disk usagePercent:`, disk.usagePercent());
   console.log(`[system] tick ${systemTick} audioLevel:`, JSON.stringify(audioLevel.stats({ bands: 10 }) ?? {}));
+  console.log(`[system] tick ${systemTick} nowPlaying:`, JSON.stringify(nowPlaying.stats() ?? {}));
   const appSessions = appVolume.listSessions();
 console.log("AppVolume session count:", appSessions.length);
 if (appSessions.length > 0) {

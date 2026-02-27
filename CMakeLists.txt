@@ -4,7 +4,7 @@ project(novadesk_runner LANGUAGES C CXX)
 option(NOVADESK_ENABLE_LTO "Enable LTO for MinGW MinSizeRel builds" OFF)
 
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE MinSizeRel CACHE STRING "Build type" FORCE)
@@ -57,6 +57,7 @@ target_link_libraries(novadesk PRIVATE
     shlwapi
     iphlpapi
     version
+    runtimeobject
 )
 
 if(MINGW)
