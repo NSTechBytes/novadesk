@@ -70,6 +70,35 @@ struct DiskStats {
     int percent = 0;
 };
 
+struct AudioLevelStats {
+    float rms[2] = {0.0f, 0.0f};
+    float peak[2] = {0.0f, 0.0f};
+    std::vector<float> bands;
+};
+
+struct AudioLevelConfig {
+    std::string port = "output"; // "output" or "input"
+    std::wstring deviceId;
+
+    int fftSize = 1024;
+    int fftOverlap = 512;
+    int bands = 10;
+
+    double freqMin = 20.0;
+    double freqMax = 20000.0;
+    double sensitivity = 35.0;
+
+    int rmsAttack = 300;
+    int rmsDecay = 300;
+    int peakAttack = 50;
+    int peakDecay = 2500;
+    int fftAttack = 300;
+    int fftDecay = 300;
+
+    double rmsGain = 1.0;
+    double peakGain = 1.0;
+};
+
 enum class RegistryValueType {
     None = 0,
     String,
@@ -107,6 +136,7 @@ bool GetMemoryStats(MemoryStats& outStats);
 bool GetNetworkStats(NetworkStats& outStats);
 bool GetMousePosition(MousePosition& outPos);
 bool GetDiskStats(const std::wstring& path, DiskStats& outStats);
+bool GetAudioLevelStats(AudioLevelStats& outStats, const AudioLevelConfig& config);
 DisplayMetrics GetDisplayMetrics();
 
 bool AudioSetVolume(int volumePercent);

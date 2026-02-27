@@ -189,6 +189,84 @@ JSValue JsDiskUsagePercent(JSContext* ctx, JSValueConst, int argc, JSValueConst*
     return JS_NewInt32(ctx, stats.percent);
 }
 
+JSValue JsAudioLevelStats(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
+    shared::system::AudioLevelConfig cfg;
+
+    if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]) && JS_IsObject(argv[0])) {
+        JSValue v = JS_GetPropertyStr(ctx, argv[0], "port");
+        if (!JS_IsUndefined(v) && !JS_IsNull(v)) {
+            const char* s = JS_ToCString(ctx, v);
+            if (s) { cfg.port = s; JS_FreeCString(ctx, s); }
+        }
+        JS_FreeValue(ctx, v);
+
+        v = JS_GetPropertyStr(ctx, argv[0], "id");
+        if (!JS_IsUndefined(v) && !JS_IsNull(v)) {
+            const char* s = JS_ToCString(ctx, v);
+            if (s) { cfg.deviceId = Utils::ToWString(s); JS_FreeCString(ctx, s); }
+        }
+        JS_FreeValue(ctx, v);
+
+        auto readInt = [&](const char* key, int& dst) {
+            JSValue iv = JS_GetPropertyStr(ctx, argv[0], key);
+            if (!JS_IsUndefined(iv) && !JS_IsNull(iv)) {
+                int32_t x = dst;
+                if (JS_ToInt32(ctx, &x, iv) == 0) dst = static_cast<int>(x);
+            }
+            JS_FreeValue(ctx, iv);
+        };
+        auto readDouble = [&](const char* key, double& dst) {
+            JSValue dv = JS_GetPropertyStr(ctx, argv[0], key);
+            if (!JS_IsUndefined(dv) && !JS_IsNull(dv)) {
+                double x = dst;
+                if (JS_ToFloat64(ctx, &x, dv) == 0) dst = x;
+            }
+            JS_FreeValue(ctx, dv);
+        };
+
+        readInt("fftSize", cfg.fftSize);
+        readInt("fftOverlap", cfg.fftOverlap);
+        readInt("bands", cfg.bands);
+        readInt("rmsAttack", cfg.rmsAttack);
+        readInt("rmsDecay", cfg.rmsDecay);
+        readInt("peakAttack", cfg.peakAttack);
+        readInt("peakDecay", cfg.peakDecay);
+        readInt("fftAttack", cfg.fftAttack);
+        readInt("fftDecay", cfg.fftDecay);
+
+        readDouble("freqMin", cfg.freqMin);
+        readDouble("freqMax", cfg.freqMax);
+        readDouble("sensitivity", cfg.sensitivity);
+        readDouble("rmsGain", cfg.rmsGain);
+        readDouble("peakGain", cfg.peakGain);
+    }
+
+    shared::system::AudioLevelStats stats;
+    if (!shared::system::GetAudioLevelStats(stats, cfg)) {
+        return JS_NULL;
+    }
+
+    JSValue out = JS_NewObject(ctx);
+
+    JSValue rms = JS_NewArray(ctx);
+    JS_SetPropertyUint32(ctx, rms, 0, JS_NewFloat64(ctx, stats.rms[0]));
+    JS_SetPropertyUint32(ctx, rms, 1, JS_NewFloat64(ctx, stats.rms[1]));
+    JS_SetPropertyStr(ctx, out, "rms", rms);
+
+    JSValue peak = JS_NewArray(ctx);
+    JS_SetPropertyUint32(ctx, peak, 0, JS_NewFloat64(ctx, stats.peak[0]));
+    JS_SetPropertyUint32(ctx, peak, 1, JS_NewFloat64(ctx, stats.peak[1]));
+    JS_SetPropertyStr(ctx, out, "peak", peak);
+
+    JSValue bandsArr = JS_NewArray(ctx);
+    for (uint32_t i = 0; i < static_cast<uint32_t>(stats.bands.size()); ++i) {
+        JS_SetPropertyUint32(ctx, bandsArr, i, JS_NewFloat64(ctx, stats.bands[i]));
+    }
+    JS_SetPropertyStr(ctx, out, "bands", bandsArr);
+
+    return out;
+}
+
 JSValue JsFileIconExtractIcon(JSContext* ctx, JSValueConst, int argc, JSValueConst* argv) {
     if (argc < 2) return JS_ThrowTypeError(ctx, "fileIcon.extractIcon(filePath, outIcoPath[, size])");
     const char* p1 = JS_ToCString(ctx, argv[0]);
@@ -422,6 +500,10 @@ int SystemModuleInit(JSContext* ctx, JSModuleDef* m) {
     JS_SetPropertyStr(ctx, disk, "usagePercent", JS_NewCFunction(ctx, JsDiskUsagePercent, "usagePercent", 1));
     JS_SetModuleExport(ctx, m, "disk", disk);
 
+    JSValue audioLevel = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, audioLevel, "stats", JS_NewCFunction(ctx, JsAudioLevelStats, "stats", 1));
+    JS_SetModuleExport(ctx, m, "audioLevel", audioLevel);
+
     JSValue audio = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, audio, "setVolume", JS_NewCFunction(ctx, JsAudioSetVolume, "setVolume", 1));
     JS_SetPropertyStr(ctx, audio, "getVolume", JS_NewCFunction(ctx, JsAudioGetVolume, "getVolume", 0));
@@ -469,6 +551,7 @@ JSModuleDef* EnsureSystemModule(JSContext* ctx, const char* moduleName) {
     if (JS_AddModuleExport(ctx, m, "network") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "mouse") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "disk") < 0) return nullptr;
+    if (JS_AddModuleExport(ctx, m, "audioLevel") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "audio") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "brightness") < 0) return nullptr;
     if (JS_AddModuleExport(ctx, m, "fileIcon") < 0) return nullptr;
