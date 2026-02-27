@@ -1,6 +1,6 @@
 import { widgetWindow, app } from 'novadesk';
 import { clipboard, wallpaper, power, audio, brightness, fileIcon, displayMetrics, hotkey, cpu, memory, network, mouse, disk, audioLevel, appVolume, nowPlaying, json } from 'system';
-import * as std from 'std';
+// import * as std from 'std';
 
 // console.log("OS:", JSON.stringify(std.getenviron()));
 // let dir = os.opendir('.');

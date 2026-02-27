@@ -22,6 +22,7 @@
 #include <iphlpapi.h>
 #include <functiondiscoverykeys.h>
 #include <roapi.h>
+#include <wininet.h>
 
 #if ((__cplusplus >= 202002L) || defined(__cpp_impl_coroutine)) && __has_include(<winrt/base.h>) && __has_include(<winrt/Windows.Media.Control.h>) && __has_include(<winrt/Windows.Storage.Streams.h>)
 #define NOVADESK_HAS_WINRT_NOWPLAYING 1
@@ -43,6 +44,7 @@
 #pragma comment(lib, "PowrProf.lib")
 #pragma comment(lib, "Iphlpapi.lib")
 #pragma comment(lib, "runtimeobject.lib")
+#pragma comment(lib, "Wininet.lib")
 
 namespace novadesk::shared::system
 {
@@ -865,7 +867,7 @@ namespace novadesk::shared::system
             }
         }
 
-    } // namespace
+    }
 
     bool GetCpuStats(CpuStats &outStats)
     {
@@ -1992,7 +1994,7 @@ namespace novadesk::shared::system
             static NowPlayingController s;
             return s;
         }
-    } // namespace
+    }
 #endif
 
     bool GetNowPlayingStats(NowPlayingStats &outStats)
@@ -2720,60 +2722,184 @@ namespace novadesk::shared::system
 
         return MergeObjectInText(text, root, patch);
     }
-}
 
-bool novadesk::shared::system::JsonReadTextFile(const std::wstring &path, std::string &outText)
-{
-    outText.clear();
-    std::ifstream f(std::filesystem::path(path), std::ios::binary);
-    if (!f.is_open())
+    bool JsonReadTextFile(const std::wstring &path, std::string &outText)
     {
-        return false;
+        outText.clear();
+        std::ifstream f(std::filesystem::path(path), std::ios::binary);
+        if (!f.is_open())
+        {
+            return false;
+        }
+        outText.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+        return true;
     }
-    outText.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
-    return true;
-}
 
-bool novadesk::shared::system::JsonWriteTextFile(const std::wstring &path, const std::string &text)
-{
-    std::ofstream out(std::filesystem::path(path), std::ios::binary | std::ios::trunc);
-    if (!out.is_open())
+    bool JsonWriteTextFile(const std::wstring &path, const std::string &text)
     {
-        return false;
+        std::ofstream out(std::filesystem::path(path), std::ios::binary | std::ios::trunc);
+        if (!out.is_open())
+        {
+            return false;
+        }
+        out.write(text.data(), static_cast<std::streamsize>(text.size()));
+        return true;
     }
-    out.write(text.data(), static_cast<std::streamsize>(text.size()));
-    return true;
-}
 
-bool novadesk::shared::system::JsonMergePatchFile(const std::wstring &path, const std::string &patchText)
-{
-    try
+    bool JsonMergePatchFile(const std::wstring &path, const std::string &patchText)
     {
-        const nlohmann::json patch = nlohmann::json::parse(patchText, nullptr, true, true);
-        if (!patch.is_object())
+        try
+        {
+            const nlohmann::json patch = nlohmann::json::parse(patchText, nullptr, true, true);
+            if (!patch.is_object())
+            {
+                return false;
+            }
+
+            std::string current;
+            if (novadesk::shared::system::JsonReadTextFile(path, current) && current.find_first_not_of(" \t\r\n") != std::string::npos)
+            {
+                if (::novadesk::shared::system::MergeIntoJsonText(current, patch))
+                {
+                    return novadesk::shared::system::JsonWriteTextFile(path, current);
+                }
+                ::Logging::Log(::LogLevel::Warn, L"JSON merge failed; rewriting without preserving comments: %s", path.c_str());
+            }
+
+            return novadesk::shared::system::JsonWriteTextFile(path, patch.dump(4));
+        }
+        catch (const nlohmann::json::parse_error &e)
+        {
+            ::Logging::Log(::LogLevel::Error, L"JSON parse error in merge patch: %S", e.what());
+            return false;
+        }
+        catch (...)
+        {
+            return false;
+        }
+    }
+
+    std::wstring GetEnv(const std::wstring &name)
+    {
+        if (name.empty())
+        {
+            return L"";
+        }
+
+        const DWORD size = GetEnvironmentVariableW(name.c_str(), nullptr, 0);
+        if (size == 0)
+        {
+            return L"";
+        }
+
+        std::wstring value(size, L'\0');
+        DWORD written = GetEnvironmentVariableW(name.c_str(), value.data(), size);
+        if (written == 0)
+        {
+            return L"";
+        }
+        if (!value.empty() && value.back() == L'\0')
+        {
+            value.pop_back();
+        }
+        return value;
+    }
+
+    std::vector<std::pair<std::wstring, std::wstring>> GetAllEnv()
+    {
+        std::vector<std::pair<std::wstring, std::wstring>> out;
+        LPWCH block = GetEnvironmentStringsW();
+        if (!block)
+        {
+            return out;
+        }
+
+        LPCWCH p = block;
+        while (*p)
+        {
+            std::wstring entry(p);
+            const size_t eq = entry.find(L'=');
+            if (eq != std::wstring::npos && eq > 0)
+            {
+                out.emplace_back(entry.substr(0, eq), entry.substr(eq + 1));
+            }
+            p += entry.size() + 1;
+        }
+
+        FreeEnvironmentStringsW(block);
+        return out;
+    }
+
+    bool Execute(const std::wstring &target, const std::wstring &parameters, const std::wstring &workingDir, int show)
+    {
+        HINSTANCE result = ShellExecuteW(
+            nullptr,
+            L"open",
+            target.c_str(),
+            parameters.empty() ? nullptr : parameters.c_str(),
+            workingDir.empty() ? nullptr : workingDir.c_str(),
+            show);
+        return reinterpret_cast<INT_PTR>(result) > 32;
+    }
+
+    bool WebFetch(const std::wstring &url, std::string &outData)
+    {
+        outData.clear();
+        if (url.empty())
         {
             return false;
         }
 
-        std::string current;
-        if (novadesk::shared::system::JsonReadTextFile(path, current) && current.find_first_not_of(" \t\r\n") != std::string::npos)
+        const bool isHttp = (url.rfind(L"http://", 0) == 0 || url.rfind(L"https://", 0) == 0);
+        if (!isHttp)
         {
-            if (::novadesk::shared::system::MergeIntoJsonText(current, patch))
+            std::wstring path = url;
+            if (url.rfind(L"file://", 0) == 0)
             {
-                return novadesk::shared::system::JsonWriteTextFile(path, current);
+                path = url.substr(7);
+                if (!path.empty() && path[0] == L'/' && path.size() > 2 && path[2] == L':')
+                {
+                    path = path.substr(1);
+                }
             }
-            ::Logging::Log(::LogLevel::Warn, L"JSON merge failed; rewriting without preserving comments: %s", path.c_str());
+
+            std::ifstream f(std::filesystem::path(path), std::ios::binary);
+            if (!f.is_open())
+            {
+                return false;
+            }
+            outData.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+            return true;
         }
 
-        return novadesk::shared::system::JsonWriteTextFile(path, patch.dump(4));
+        HINTERNET hInternet = InternetOpenW(L"Novadesk WebFetch", INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, 0);
+        if (!hInternet)
+        {
+            return false;
+        }
+
+        DWORD flags = INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE;
+        if (url.rfind(L"https://", 0) == 0)
+        {
+            flags |= INTERNET_FLAG_SECURE;
+        }
+        HINTERNET hUrl = InternetOpenUrlW(hInternet, url.c_str(), nullptr, 0, flags, 0);
+        if (!hUrl)
+        {
+            InternetCloseHandle(hInternet);
+            return false;
+        }
+
+        char buffer[4096];
+        DWORD bytesRead = 0;
+        while (InternetReadFile(hUrl, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
+        {
+            outData.append(buffer, bytesRead);
+        }
+
+        InternetCloseHandle(hUrl);
+        InternetCloseHandle(hInternet);
+        return true;
     }
-    catch (const nlohmann::json::parse_error &e)
-    {
-        ::Logging::Log(::LogLevel::Error, L"JSON parse error in merge patch: %S", e.what());
-        return false;
-    }
-    catch (...)
-    {
-        return false;
-    }
+
 } // namespace novadesk::shared::system

@@ -859,6 +859,111 @@ namespace novadesk::scripting::quickjs
             return JS_NewBool(ctx, ok ? 1 : 0);
         }
 
+        JSValue JsGetEnv(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
+            {
+                JSValue all = JS_NewObject(ctx);
+                const auto vars = shared::system::GetAllEnv();
+                for (const auto &kv : vars)
+                {
+                    const std::string key = Utils::ToString(kv.first);
+                    const std::string val = Utils::ToString(kv.second);
+                    JS_SetPropertyStr(ctx, all, key.c_str(), JS_NewString(ctx, val.c_str()));
+                }
+                return all;
+            }
+
+            const char *n = JS_ToCString(ctx, argv[0]);
+            if (!n)
+                return JS_EXCEPTION;
+            std::wstring name = Utils::ToWString(n);
+            JS_FreeCString(ctx, n);
+
+            std::wstring value = shared::system::GetEnv(name);
+            if (value.empty() && argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1]))
+            {
+                const char *d = JS_ToCString(ctx, argv[1]);
+                if (d)
+                {
+                    value = Utils::ToWString(d);
+                    JS_FreeCString(ctx, d);
+                }
+            }
+
+            return JS_NewString(ctx, Utils::ToString(value).c_str());
+        }
+
+        JSValue JsExecute(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "execute(target[, parameters, workingDir, show])");
+
+            const char *t = JS_ToCString(ctx, argv[0]);
+            if (!t)
+                return JS_EXCEPTION;
+            std::wstring target = Utils::ToWString(t);
+            JS_FreeCString(ctx, t);
+
+            std::wstring parameters;
+            std::wstring workingDir;
+            int32_t show = SW_SHOWNORMAL;
+
+            if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1]))
+            {
+                const char *p = JS_ToCString(ctx, argv[1]);
+                if (p)
+                {
+                    parameters = Utils::ToWString(p);
+                    JS_FreeCString(ctx, p);
+                }
+            }
+            if (argc > 2 && !JS_IsUndefined(argv[2]) && !JS_IsNull(argv[2]))
+            {
+                const char *w = JS_ToCString(ctx, argv[2]);
+                if (w)
+                {
+                    workingDir = Utils::ToWString(w);
+                    JS_FreeCString(ctx, w);
+                }
+            }
+            if (argc > 3 && !JS_IsUndefined(argv[3]) && !JS_IsNull(argv[3]))
+            {
+                JS_ToInt32(ctx, &show, argv[3]);
+            }
+
+            bool ok = shared::system::Execute(target, parameters, workingDir, static_cast<int>(show));
+            return JS_NewBool(ctx, ok ? 1 : 0);
+        }
+
+        JSValue JsWebFetch(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "webFetch(urlOrPath)");
+
+            const char *s = JS_ToCString(ctx, argv[0]);
+            if (!s)
+                return JS_EXCEPTION;
+            std::wstring pathOrUrl = Utils::ToWString(s);
+            JS_FreeCString(ctx, s);
+            if (pathOrUrl.empty())
+                return JS_ThrowTypeError(ctx, "webFetch invalid url/path");
+            if (PathUtils::IsPathRelative(pathOrUrl) &&
+                pathOrUrl.rfind(L"http://", 0) != 0 &&
+                pathOrUrl.rfind(L"https://", 0) != 0 &&
+                pathOrUrl.rfind(L"file://", 0) != 0)
+            {
+                pathOrUrl = PathUtils::ResolvePath(pathOrUrl, JSEngine::GetEntryScriptDir());
+            }
+
+            std::string data;
+            if (!shared::system::WebFetch(pathOrUrl, data))
+            {
+                return JS_NULL;
+            }
+            return JS_NewStringLen(ctx, data.data(), data.size());
+        }
+
         int SystemModuleInit(JSContext *ctx, JSModuleDef *m)
         {
             JSValue clipboard = JS_NewObject(ctx);
@@ -973,6 +1078,10 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, json, "write", JS_NewCFunction(ctx, JsJsonWrite, "write", 3));
             JS_SetModuleExport(ctx, m, "json", json);
 
+            JS_SetModuleExport(ctx, m, "getEnv", JS_NewCFunction(ctx, JsGetEnv, "getEnv", 2));
+            JS_SetModuleExport(ctx, m, "execute", JS_NewCFunction(ctx, JsExecute, "execute", 4));
+            JS_SetModuleExport(ctx, m, "webFetch", JS_NewCFunction(ctx, JsWebFetch, "webFetch", 1));
+
             return 0;
         }
     } // namespace
@@ -1017,6 +1126,12 @@ namespace novadesk::scripting::quickjs
         if (JS_AddModuleExport(ctx, m, "nowPlaying") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "json") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "getEnv") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "execute") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "webFetch") < 0)
             return nullptr;
         return m;
     }

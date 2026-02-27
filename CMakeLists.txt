@@ -55,6 +55,7 @@ target_link_libraries(novadesk PRIVATE
     windowscodecs
     shlwapi
     iphlpapi
+    wininet
     version
     runtimeobject
 )
