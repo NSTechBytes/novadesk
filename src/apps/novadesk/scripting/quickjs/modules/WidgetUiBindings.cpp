@@ -308,11 +308,14 @@ namespace novadesk::scripting::quickjs
             JS_FreeValue(ctx, global);
 
             const std::string scriptPrelude =
-                "const ui = globalThis.ui;\n"
-                "const ipcRenderer = globalThis.ipcRenderer;\n"
-                "const __filename = globalThis.__filename;\n"
-                "const __dirname = globalThis.__dirname;\n";
-            const std::string scriptSourceWithPrelude = scriptPrelude + scriptSource;
+                "(function(ui, ipcRenderer, __filename, __dirname){\n"
+                "const setTimeout = undefined;\n"
+                "const setInterval = undefined;\n"
+                "const clearTimeout = undefined;\n"
+                "const clearInterval = undefined;\n";
+            const std::string scriptSuffix =
+                "\n})(globalThis.ui, globalThis.ipcRenderer, globalThis.__filename, globalThis.__dirname);\n";
+            const std::string scriptSourceWithPrelude = scriptPrelude + scriptSource + scriptSuffix;
 
             JSValue evalResult = JS_Eval(ctx, scriptSourceWithPrelude.c_str(), scriptSourceWithPrelude.size(), fileName.c_str(), JS_EVAL_TYPE_GLOBAL);
 
