@@ -13,6 +13,7 @@
 #include "../../shared/Settings.h"
 #include "../../shared/Utils.h"
 #include "../engine/JSEngine.h"
+#include "ModuleSystem.h"
 #include "WidgetUiBindings.h"
 
 namespace novadesk::scripting::quickjs
@@ -677,6 +678,27 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
+        JSValue JsAppEnableDebugging(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+            {
+                return JS_ThrowTypeError(ctx, "app.enableDebugging(enable) requires boolean");
+            }
+
+            int b = JS_ToBool(ctx, argv[0]);
+            if (b < 0)
+            {
+                return JS_ThrowTypeError(ctx, "app.enableDebugging(enable) expects boolean");
+            }
+
+            const bool enable = (b != 0);
+            Settings::SetGlobalBool("enableDebugging", enable);
+            Logging::SetLogLevel(enable ? LogLevel::Debug : LogLevel::Info);
+            SetModuleDebug(enable);
+            SetModuleSystemDebug(enable);
+            return JS_NewBool(ctx, 1);
+        }
+
         JSValue JsAddonLoad(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
             if (argc < 1)
@@ -833,6 +855,7 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, app, "setTrayMenu", JS_NewCFunction(ctx, JsAppSetTrayMenu, "setTrayMenu", 1));
             JS_SetPropertyStr(ctx, app, "clearTrayMenu", JS_NewCFunction(ctx, JsAppClearTrayMenu, "clearTrayMenu", 0));
             JS_SetPropertyStr(ctx, app, "showDefaultTrayItems", JS_NewCFunction(ctx, JsAppShowDefaultTrayItems, "showDefaultTrayItems", 1));
+            JS_SetPropertyStr(ctx, app, "enableDebugging", JS_NewCFunction(ctx, JsAppEnableDebugging, "enableDebugging", 1));
             JS_SetModuleExport(ctx, m, "app", app);
 
             JSValue addon = JS_NewObject(ctx);
