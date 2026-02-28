@@ -394,16 +394,43 @@ namespace JSEngine
         void LogQuickJsException(JSContext *ctx)
         {
             JSValue ex = JS_GetException(ctx);
-            const char *msg = JS_ToCString(ctx, ex);
+
+            // Prefer Error.message when available; fall back to exception string.
+            JSValue msgV = JS_GetPropertyStr(ctx, ex, "message");
+            const char *msg = nullptr;
+            if (!JS_IsException(msgV) && !JS_IsUndefined(msgV) && !JS_IsNull(msgV))
+            {
+                msg = JS_ToCString(ctx, msgV);
+            }
+            if (!msg)
+            {
+                msg = JS_ToCString(ctx, ex);
+            }
+
             if (msg)
             {
-                Logging::Log(LogLevel::Error, L"QuickJS error: %S", msg);
+                Logging::Log(LogLevel::Error, L"QuickJS uncaught exception: %S", msg);
                 JS_FreeCString(ctx, msg);
             }
             else
             {
-                Logging::Log(LogLevel::Error, L"QuickJS error (unknown)");
+                Logging::Log(LogLevel::Error, L"QuickJS uncaught exception (unknown)");
             }
+            JS_FreeValue(ctx, msgV);
+
+            // Log stack trace when present (works for Error objects).
+            JSValue stackV = JS_GetPropertyStr(ctx, ex, "stack");
+            if (!JS_IsException(stackV) && !JS_IsUndefined(stackV) && !JS_IsNull(stackV))
+            {
+                const char *stack = JS_ToCString(ctx, stackV);
+                if (stack && stack[0] != '\0')
+                {
+                    Logging::Log(LogLevel::Error, L"QuickJS stack:\n%S", stack);
+                    JS_FreeCString(ctx, stack);
+                }
+            }
+            JS_FreeValue(ctx, stackV);
+
             JS_FreeValue(ctx, ex);
         }
 

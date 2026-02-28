@@ -244,7 +244,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
     // Load and execute script (with optional custom path)
-    JSEngine::LoadAndExecuteScript(ctx, scriptPath.empty() ? L"" : scriptPath);
+    if (!JSEngine::LoadAndExecuteScript(ctx, scriptPath.empty() ? L"" : scriptPath))
+    {
+        Logging::Log(LogLevel::Error, L"Script execution failed. See QuickJS exception logs above.");
+    }
 
     MSG msg;
 
