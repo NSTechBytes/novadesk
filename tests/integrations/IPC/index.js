@@ -17,7 +17,7 @@ const win = new widgetWindow({
   id: "demo",
   width: 400,
   height: 400,
-  script: "ui/ui.js",
+  script: "ui/script.ui.js",
   backgroundColor: "rgb(10,10,10)"
 });
 

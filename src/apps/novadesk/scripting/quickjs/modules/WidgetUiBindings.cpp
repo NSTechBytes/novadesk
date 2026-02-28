@@ -270,6 +270,18 @@ namespace novadesk::scripting::quickjs
             if (!widget || scriptPath.empty())
                 return true;
 
+            {
+                std::wstring lower = scriptPath;
+                std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
+                const std::wstring requiredSuffix = L".ui.js";
+                if (lower.size() < requiredSuffix.size() ||
+                    lower.compare(lower.size() - requiredSuffix.size(), requiredSuffix.size(), requiredSuffix) != 0)
+                {
+                    Logging::Log(LogLevel::Error, L"[novadesk] widget ui script must end with '.ui.js': %s", scriptPath.c_str());
+                    return false;
+                }
+            }
+
             const std::wstring baseDir = JSEngine::GetEntryScriptDir();
             const std::wstring absPath = PathUtils::ResolvePath(
                 scriptPath,
