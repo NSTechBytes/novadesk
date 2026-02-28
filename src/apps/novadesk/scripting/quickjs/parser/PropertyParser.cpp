@@ -12,6 +12,40 @@ namespace PropertyParser
 {
     namespace
     {
+        std::vector<std::wstring> SplitByComma(const std::wstring &s)
+        {
+            std::vector<std::wstring> parts;
+            int depth = 0;
+            size_t last = 0;
+            for (size_t i = 0; i < s.length(); i++)
+            {
+                if (s[i] == L'(')
+                    depth++;
+                else if (s[i] == L')')
+                    depth--;
+                else if (s[i] == L',' && depth == 0)
+                {
+                    parts.push_back(s.substr(last, i - last));
+                    last = i + 1;
+                }
+            }
+            parts.push_back(s.substr(last));
+            for (auto &p : parts)
+            {
+                p.erase(0, p.find_first_not_of(L' '));
+                p.erase(p.find_last_not_of(L' ') + 1);
+            }
+            return parts;
+        }
+
+        JSValue GetGlobalProperty(JSContext *ctx, const char *key)
+        {
+            JSValue global = JS_GetGlobalObject(ctx);
+            JSValue v = JS_GetPropertyStr(ctx, global, key);
+            JS_FreeValue(ctx, global);
+            return v;
+        }
+
         std::wstring GetStringProp(JSContext *ctx, JSValueConst obj, const char *key)
         {
             JSValue v = JS_GetPropertyStr(ctx, obj, key);
@@ -141,7 +175,7 @@ namespace PropertyParser
             if (v.empty())
                 return;
             GradientInfo parsed;
-            if (Utils::ParseGradientString(v, parsed))
+            if (ParseGradientString(v, parsed))
             {
                 gradient = parsed;
                 hasColor = true;
@@ -164,6 +198,296 @@ namespace PropertyParser
             return D2D1_COMBINE_MODE_UNION;
         }
     } // namespace
+
+    bool ParseGradientString(const std::wstring &str, GradientInfo &out)
+    {
+        if (str.empty())
+            return false;
+        std::wstring s = str;
+        s.erase(0, s.find_first_not_of(L' '));
+        s.erase(s.find_last_not_of(L' ') + 1);
+
+        std::wstring lowerS = s;
+        std::transform(lowerS.begin(), lowerS.end(), lowerS.begin(), ::towlower);
+
+        if (lowerS.find(L"lineargradient(") == 0)
+            out.type = GRADIENT_LINEAR;
+        else if (lowerS.find(L"radialgradient(") == 0)
+            out.type = GRADIENT_RADIAL;
+        else
+            return false;
+
+        size_t start = lowerS.find(L'(') + 1;
+        size_t end = lowerS.find_last_of(L')');
+        if (end == std::wstring::npos || end <= start)
+            return false;
+
+        std::wstring content = s.substr(start, end - start);
+        std::vector<std::wstring> parts = SplitByComma(content);
+        if (parts.empty())
+            return false;
+
+        int colorStartIndex = 0;
+        if (out.type == GRADIENT_LINEAR)
+        {
+            std::wstring dir = parts[0];
+            std::transform(dir.begin(), dir.end(), dir.begin(), ::towlower);
+            dir.erase(std::remove_if(dir.begin(), dir.end(), isspace), dir.end());
+
+            if (!dir.empty() && (iswdigit(dir[0]) || dir[0] == L'-' || dir[0] == L'.'))
+            {
+                try
+                {
+                    size_t pos = 0;
+                    out.angle = std::stof(dir, &pos);
+                    if (pos > 0)
+                        colorStartIndex = 1;
+                }
+                catch (...)
+                {
+                }
+            }
+        }
+        else
+        {
+            std::wstring shape = parts[0];
+            std::transform(shape.begin(), shape.end(), shape.begin(), ::towlower);
+            shape.erase(std::remove_if(shape.begin(), shape.end(), isspace), shape.end());
+
+            if (shape == L"circle" || shape == L"ellipse")
+            {
+                out.shape = shape;
+                colorStartIndex = 1;
+            }
+        }
+
+        out.stops.clear();
+        for (size_t i = colorStartIndex; i < parts.size(); i++)
+        {
+            GradientStop stop;
+            if (ColorUtil::ParseRGBA(parts[i], stop.color, stop.alpha))
+            {
+                out.stops.push_back(stop);
+            }
+        }
+
+        if (out.stops.size() < 2)
+            return false;
+
+        for (size_t i = 0; i < out.stops.size(); i++)
+        {
+            out.stops[i].position = (float)i / (out.stops.size() - 1);
+        }
+
+        return true;
+    }
+
+    D2D1_CAP_STYLE GetCapStyle(const std::wstring &str)
+    {
+        if (str == L"Round")
+            return D2D1_CAP_STYLE_ROUND;
+        if (str == L"Square")
+            return D2D1_CAP_STYLE_SQUARE;
+        if (str == L"Triangle")
+            return D2D1_CAP_STYLE_TRIANGLE;
+        return D2D1_CAP_STYLE_FLAT;
+    }
+
+    D2D1_LINE_JOIN GetLineJoin(const std::wstring &str)
+    {
+        if (str == L"Bevel")
+            return D2D1_LINE_JOIN_BEVEL;
+        if (str == L"Round")
+            return D2D1_LINE_JOIN_ROUND;
+        if (str == L"MiterOrBevel")
+            return D2D1_LINE_JOIN_MITER_OR_BEVEL;
+        return D2D1_LINE_JOIN_MITER;
+    }
+
+    PropertyReader::PropertyReader(duk_context *ctx)
+        : m_Ctx(ctx)
+    {
+    }
+
+    bool PropertyReader::GetString(const char *key, std::wstring &outStr)
+    {
+        if (!m_Ctx || !key)
+            return false;
+        JSContext *ctx = reinterpret_cast<JSContext *>(m_Ctx);
+        JSValue v = GetGlobalProperty(ctx, key);
+        if (JS_IsException(v) || JS_IsUndefined(v) || JS_IsNull(v))
+        {
+            JS_FreeValue(ctx, v);
+            return false;
+        }
+        const char *s = JS_ToCString(ctx, v);
+        if (!s)
+        {
+            JS_FreeValue(ctx, v);
+            return false;
+        }
+        outStr = Utils::ToWString(s);
+        JS_FreeCString(ctx, s);
+        JS_FreeValue(ctx, v);
+        return true;
+    }
+
+    bool PropertyReader::GetInt(const char *key, int &outInt)
+    {
+        if (!m_Ctx || !key)
+            return false;
+        JSContext *ctx = reinterpret_cast<JSContext *>(m_Ctx);
+        JSValue v = GetGlobalProperty(ctx, key);
+        if (JS_IsException(v))
+        {
+            JS_FreeValue(ctx, v);
+            return false;
+        }
+        int32_t tmp = 0;
+        bool ok = (JS_ToInt32(ctx, &tmp, v) == 0);
+        JS_FreeValue(ctx, v);
+        if (!ok)
+            return false;
+        outInt = static_cast<int>(tmp);
+        return true;
+    }
+
+    bool PropertyReader::GetFloat(const char *key, float &outFloat)
+    {
+        if (!m_Ctx || !key)
+            return false;
+        JSContext *ctx = reinterpret_cast<JSContext *>(m_Ctx);
+        JSValue v = GetGlobalProperty(ctx, key);
+        if (JS_IsException(v))
+        {
+            JS_FreeValue(ctx, v);
+            return false;
+        }
+        double tmp = 0.0;
+        bool ok = (JS_ToFloat64(ctx, &tmp, v) == 0);
+        JS_FreeValue(ctx, v);
+        if (!ok)
+            return false;
+        outFloat = static_cast<float>(tmp);
+        return true;
+    }
+
+    bool PropertyReader::GetBool(const char *key, bool &outBool)
+    {
+        if (!m_Ctx || !key)
+            return false;
+        JSContext *ctx = reinterpret_cast<JSContext *>(m_Ctx);
+        JSValue v = GetGlobalProperty(ctx, key);
+        if (JS_IsException(v))
+        {
+            JS_FreeValue(ctx, v);
+            return false;
+        }
+        int b = JS_ToBool(ctx, v);
+        JS_FreeValue(ctx, v);
+        if (b < 0)
+            return false;
+        outBool = (b != 0);
+        return true;
+    }
+
+    bool PropertyReader::GetColor(const char *key, COLORREF &outColor, BYTE &outAlpha)
+    {
+        std::wstring colorStr;
+        return GetString(key, colorStr) && ColorUtil::ParseRGBA(colorStr, outColor, outAlpha);
+    }
+
+    bool PropertyReader::GetGradientOrColor(const char *key, COLORREF &outColor, BYTE &outAlpha, GradientInfo &outGradient)
+    {
+        std::wstring colorStr;
+        if (!GetString(key, colorStr))
+            return false;
+        if (ParseGradientString(colorStr, outGradient))
+            return true;
+        if (ColorUtil::ParseRGBA(colorStr, outColor, outAlpha))
+        {
+            outGradient.type = GRADIENT_NONE;
+            outGradient.stops.clear();
+            outGradient.angle = 0.0f;
+            outGradient.shape.clear();
+            return true;
+        }
+        return false;
+    }
+
+    bool PropertyReader::GetFloatArray(const char *key, std::vector<float> &outArray, int minSize)
+    {
+        if (!m_Ctx || !key)
+            return false;
+        JSContext *ctx = reinterpret_cast<JSContext *>(m_Ctx);
+        JSValue arr = GetGlobalProperty(ctx, key);
+        if (JS_IsException(arr) || !JS_IsArray(arr))
+        {
+            JS_FreeValue(ctx, arr);
+            return false;
+        }
+        uint32_t len = 0;
+        JSValue lenV = JS_GetPropertyStr(ctx, arr, "length");
+        bool okLen = (JS_ToUint32(ctx, &len, lenV) == 0);
+        JS_FreeValue(ctx, lenV);
+        if (!okLen || static_cast<int>(len) < minSize)
+        {
+            JS_FreeValue(ctx, arr);
+            return false;
+        }
+
+        std::vector<float> out;
+        out.reserve(len);
+        for (uint32_t i = 0; i < len; ++i)
+        {
+            JSValue iv = JS_GetPropertyUint32(ctx, arr, i);
+            double n = 0.0;
+            bool ok = (JS_ToFloat64(ctx, &n, iv) == 0);
+            JS_FreeValue(ctx, iv);
+            if (!ok)
+            {
+                JS_FreeValue(ctx, arr);
+                return false;
+            }
+            out.push_back(static_cast<float>(n));
+        }
+        JS_FreeValue(ctx, arr);
+        outArray = std::move(out);
+        return true;
+    }
+
+    void PropertyReader::GetEvent(const char *key, int &outId)
+    {
+        if (!m_Ctx || !key)
+            return;
+        JSContext *ctx = reinterpret_cast<JSContext *>(m_Ctx);
+        JSValue fn = GetGlobalProperty(ctx, key);
+        if (!JS_IsException(fn) && JS_IsFunction(ctx, fn))
+        {
+            outId = JSEngine::RegisterEventCallback(ctx, fn);
+        }
+        JS_FreeValue(ctx, fn);
+    }
+
+    bool PropertyReader::ParseShadow(TextShadow &shadow)
+    {
+        if (!m_Ctx)
+            return false;
+        float f = 0.0f;
+        if (GetFloat("x", f))
+            shadow.offsetX = f;
+        if (GetFloat("y", f))
+            shadow.offsetY = f;
+        if (GetFloat("blur", f))
+            shadow.blur = f;
+
+        std::wstring colorStr;
+        if (GetString("color", colorStr))
+        {
+            ColorUtil::ParseRGBA(colorStr, shadow.color, shadow.alpha);
+        }
+        return true;
+    }
 
     void ParseElementOptions(JSContext *ctx, JSValueConst obj, ElementOptions &options, const std::wstring &)
     {
@@ -523,17 +847,17 @@ namespace PropertyParser
 
         std::wstring cap = GetStringProp(ctx, obj, "strokeStartCap");
         if (!cap.empty())
-            options.strokeStartCap = Utils::GetCapStyle(cap);
+            options.strokeStartCap = GetCapStyle(cap);
         cap = GetStringProp(ctx, obj, "strokeEndCap");
         if (!cap.empty())
-            options.strokeEndCap = Utils::GetCapStyle(cap);
+            options.strokeEndCap = GetCapStyle(cap);
         cap = GetStringProp(ctx, obj, "strokeDashCap");
         if (!cap.empty())
-            options.strokeDashCap = Utils::GetCapStyle(cap);
+            options.strokeDashCap = GetCapStyle(cap);
 
         std::wstring join = GetStringProp(ctx, obj, "strokeLineJoin");
         if (!join.empty())
-            options.strokeLineJoin = Utils::GetLineJoin(join);
+            options.strokeLineJoin = GetLineJoin(join);
         GetFloatProp(ctx, obj, "strokeDashOffset", options.strokeDashOffset);
         GetFloatArrayProp(ctx, obj, "strokeDashes", options.strokeDashes, 1);
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 OfficialNovadesk 
+/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -20,11 +20,16 @@ static WORD GetConsoleColorForLevel(LogLevel level)
 {
     switch (level)
     {
-    case LogLevel::Debug: return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE; // White
-    case LogLevel::Info:  return FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY; // Cyan
-    case LogLevel::Warn:  return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY; // Yellow
-    case LogLevel::Error: return FOREGROUND_RED | FOREGROUND_INTENSITY; // Bright Red
-    default:              return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+    case LogLevel::Debug:
+        return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE; // White
+    case LogLevel::Info:
+        return FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY; // Cyan
+    case LogLevel::Warn:
+        return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY; // Yellow
+    case LogLevel::Error:
+        return FOREGROUND_RED | FOREGROUND_INTENSITY; // Bright Red
+    default:
+        return FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
     }
 }
 
@@ -40,18 +45,21 @@ LogLevel Logging::s_MinLevel = LogLevel::Info;
 ** Messages are prefixed with [INFO], [ERROR], or [DEBUG] based on level.
 */
 
-void Logging::Log(LogLevel level, const wchar_t* format, ...)
+void Logging::Log(LogLevel level, const wchar_t *format, ...)
 {
     // Check if this log level should be displayed
-    if (level < s_MinLevel) return;
-    if (!s_ConsoleEnabled && !s_FileEnabled) return;
+    if (level < s_MinLevel)
+        return;
+    if (!s_ConsoleEnabled && !s_FileEnabled)
+        return;
 
     va_list args;
     va_start(args, format);
-    
+
     // Determine required size
     int len = _vscwprintf(format, args);
-    if (len < 0) {
+    if (len < 0)
+    {
         va_end(args);
         return;
     }
@@ -60,34 +68,43 @@ void Logging::Log(LogLevel level, const wchar_t* format, ...)
     vswprintf_s(buffer.data(), buffer.size(), format, args);
     va_end(args);
 
-    const wchar_t* levelStr = L"";
+    const wchar_t *levelStr = L"";
     switch (level)
     {
-    case LogLevel::Info:  levelStr = L"[LOG]"; break;
-    case LogLevel::Warn:  levelStr = L"[WARN]"; break;
-    case LogLevel::Error: levelStr = L"[ERROR]"; break;
-    case LogLevel::Debug: levelStr = L"[DEBUG]"; break;
+    case LogLevel::Info:
+        levelStr = L"[LOG]";
+        break;
+    case LogLevel::Warn:
+        levelStr = L"[WARN]";
+        break;
+    case LogLevel::Error:
+        levelStr = L"[ERROR]";
+        break;
+    case LogLevel::Debug:
+        levelStr = L"[DEBUG]";
+        break;
     }
 
     // Get current timestamp
     auto now = std::chrono::system_clock::now();
     auto now_c = std::chrono::system_clock::to_time_t(now);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
-    
+
     tm timeInfo;
     localtime_s(&timeInfo, &now_c);
-    
+
     wchar_t timestamp[64];
     swprintf_s(timestamp, L"[%04d-%02d-%02d %02d:%02d:%02d.%03lld]",
-        timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday,
-        timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec, ms.count());
+               timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday,
+               timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec, ms.count());
 
     // Prepare final output string dynamically
     // format: timestamp + " [" + productName + "] " + levelStr + " " + buffer + "\n"
     std::wstring productName = PathUtils::GetProductName();
     int outputLen = _scwprintf(L"%s [%s] %s %s\n", timestamp, productName.c_str(), levelStr, buffer.data());
-    
-    if (outputLen < 0) return;
+
+    if (outputLen < 0)
+        return;
 
     std::vector<wchar_t> output(outputLen + 1);
     swprintf_s(output.data(), output.size(), L"%s [%s] %s %s\n", timestamp, productName.c_str(), levelStr, buffer.data());
@@ -155,7 +172,7 @@ void Logging::SetConsoleLogging(bool enable)
 ** Enable or disable file logging with an option to clear the file.
 ** If filePath is empty, file logging is disabled.
 */
-void Logging::SetFileLogging(const std::wstring& filePath, bool clearFile)
+void Logging::SetFileLogging(const std::wstring &filePath, bool clearFile)
 {
     s_LogFilePath = filePath;
     s_FileEnabled = !filePath.empty();

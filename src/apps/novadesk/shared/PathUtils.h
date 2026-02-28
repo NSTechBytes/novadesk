@@ -7,8 +7,17 @@
 
 #pragma once
 #include <string>
+#include <vector>
 
 namespace PathUtils {
+    struct PathParts
+    {
+        std::wstring root;
+        std::wstring dir;
+        std::wstring base;
+        std::wstring ext;
+        std::wstring name;
+    };
 
     std::wstring GetExePath();
     std::wstring GetExeDir();
@@ -19,6 +28,14 @@ namespace PathUtils {
     std::wstring GetParentDir(const std::wstring& path);
 
     bool IsPathRelative(const std::wstring& path);
+    std::wstring Join(const std::vector<std::wstring>& parts);
+    std::wstring Basename(const std::wstring& path, const std::wstring& ext = L"");
+    std::wstring Dirname(const std::wstring& path);
+    std::wstring Extname(const std::wstring& path);
+    bool IsAbsolute(const std::wstring& path);
+    std::wstring Relative(const std::wstring& from, const std::wstring& to);
+    PathParts Parse(const std::wstring& path);
+    std::wstring Format(const PathParts& parts);
 
     std::wstring NormalizePath(const std::wstring& path);
     std::wstring ResolvePath(const std::wstring& path, const std::wstring& baseDir = L"");

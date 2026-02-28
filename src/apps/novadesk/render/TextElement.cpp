@@ -685,7 +685,7 @@ void TextElement::ParseInlineStyles()
                         std::wstring colorStr = tag.substr(6);
                         
                         GradientInfo gi;
-                        if (Utils::ParseGradientString(colorStr, gi))
+                        if (PropertyParser::ParseGradientString(colorStr, gi))
                         {
                             currentStyle.gradient = gi;
                             currentStyle.color.reset();

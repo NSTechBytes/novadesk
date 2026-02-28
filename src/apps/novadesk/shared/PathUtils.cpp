@@ -18,6 +18,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <filesystem>
 
 namespace PathUtils {
 
@@ -128,6 +129,65 @@ namespace PathUtils {
     */
     bool IsPathRelative(const std::wstring& path) {
         return PathIsRelativeW(path.c_str()) != FALSE;
+    }
+
+    std::wstring Join(const std::vector<std::wstring>& parts) {
+        std::filesystem::path out;
+        for (const auto& part : parts) {
+            out /= std::filesystem::path(part);
+        }
+        return out.lexically_normal().wstring();
+    }
+
+    std::wstring Basename(const std::wstring& path, const std::wstring& ext) {
+        std::filesystem::path p(path);
+        std::wstring base = p.filename().wstring();
+        if (!ext.empty() && base.size() >= ext.size() &&
+            base.compare(base.size() - ext.size(), ext.size(), ext) == 0) {
+            base.resize(base.size() - ext.size());
+        }
+        return base;
+    }
+
+    std::wstring Dirname(const std::wstring& path) {
+        std::filesystem::path p(path);
+        std::wstring dir = p.parent_path().wstring();
+        if (dir.empty()) {
+            dir = L".";
+        }
+        return dir;
+    }
+
+    std::wstring Extname(const std::wstring& path) {
+        return std::filesystem::path(path).extension().wstring();
+    }
+
+    bool IsAbsolute(const std::wstring& path) {
+        return std::filesystem::path(path).is_absolute();
+    }
+
+    std::wstring Relative(const std::wstring& from, const std::wstring& to) {
+        return std::filesystem::path(to).lexically_relative(std::filesystem::path(from)).wstring();
+    }
+
+    PathParts Parse(const std::wstring& path) {
+        std::filesystem::path p(path);
+        PathParts out;
+        out.root = p.root_path().wstring();
+        out.dir = p.parent_path().wstring();
+        out.base = p.filename().wstring();
+        out.ext = p.extension().wstring();
+        out.name = p.stem().wstring();
+        return out;
+    }
+
+    std::wstring Format(const PathParts& parts) {
+        std::wstring base = parts.base;
+        if (base.empty()) {
+            base = parts.name + parts.ext;
+        }
+        std::filesystem::path out = parts.dir.empty() ? std::filesystem::path(base) : (std::filesystem::path(parts.dir) / base);
+        return out.lexically_normal().wstring();
     }
 
     /*

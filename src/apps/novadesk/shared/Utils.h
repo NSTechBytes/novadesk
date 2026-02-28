@@ -19,27 +19,6 @@ namespace Utils {
     std::string ToString(const std::wstring& wstr);
     std::wstring TrimUpper(const std::wstring& s);
 
-    class PropertyReader {
-    public:
-        PropertyReader(duk_context* ctx);
-
-        bool GetString(const char* key, std::wstring& outStr);
-        bool GetInt(const char* key, int& outInt);
-        bool GetFloat(const char* key, float& outFloat);
-        bool GetBool(const char* key, bool& outBool);
-        bool GetColor(const char* key, COLORREF& outColor, BYTE& outAlpha);
-        bool GetGradientOrColor(const char* key, COLORREF& outColor, BYTE& outAlpha, GradientInfo& outGradient);
-        bool GetFloatArray(const char* key, std::vector<float>& outArray, int minSize);
-        void GetEvent(const char* key, int& outId);
-        bool ParseShadow(TextShadow& shadow);
-
-    private:
-        duk_context* m_Ctx;
-    };
-
     std::vector<std::wstring> SplitByComma(const std::wstring& s);
-    bool ParseGradientString(const std::wstring& str, GradientInfo& out);
-    D2D1_CAP_STYLE GetCapStyle(const std::wstring& str);
-    D2D1_LINE_JOIN GetLineJoin(const std::wstring& str);
     bool ExtractFileIconToIco(const std::wstring& filePath, const std::wstring& outIcoPath, int size = 48);
 }

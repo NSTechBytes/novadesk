@@ -163,7 +163,7 @@ namespace JSEngine
                 parts.push_back(Utils::ToWString(s));
                 JS_FreeCString(ctx, s);
             }
-            const std::wstring out = novadesk::shared::system::PathJoin(parts);
+            const std::wstring out = PathUtils::Join(parts);
             const std::string utf8 = Utils::ToString(out);
             return JS_NewString(ctx, utf8.c_str());
         }
@@ -187,7 +187,7 @@ namespace JSEngine
                 }
             }
             JS_FreeCString(ctx, s);
-            const std::wstring base = novadesk::shared::system::PathBasename(input, ext);
+            const std::wstring base = PathUtils::Basename(input, ext);
             const std::string utf8 = Utils::ToString(base);
             return JS_NewString(ctx, utf8.c_str());
         }
@@ -199,7 +199,7 @@ namespace JSEngine
             const char *s = JS_ToCString(ctx, argv[0]);
             if (!s)
                 return JS_EXCEPTION;
-            const std::wstring dir = novadesk::shared::system::PathDirname(Utils::ToWString(s));
+            const std::wstring dir = PathUtils::Dirname(Utils::ToWString(s));
             JS_FreeCString(ctx, s);
             const std::string utf8 = Utils::ToString(dir);
             return JS_NewString(ctx, utf8.c_str());
@@ -212,7 +212,7 @@ namespace JSEngine
             const char *s = JS_ToCString(ctx, argv[0]);
             if (!s)
                 return JS_EXCEPTION;
-            const std::wstring ext = novadesk::shared::system::PathExtname(Utils::ToWString(s));
+            const std::wstring ext = PathUtils::Extname(Utils::ToWString(s));
             JS_FreeCString(ctx, s);
             const std::string utf8 = Utils::ToString(ext);
             return JS_NewString(ctx, utf8.c_str());
@@ -225,7 +225,7 @@ namespace JSEngine
             const char *s = JS_ToCString(ctx, argv[0]);
             if (!s)
                 return JS_EXCEPTION;
-            bool abs = novadesk::shared::system::PathIsAbsolute(Utils::ToWString(s));
+            bool abs = PathUtils::IsAbsolute(Utils::ToWString(s));
             JS_FreeCString(ctx, s);
             return JS_NewBool(ctx, abs ? 1 : 0);
         }
@@ -237,7 +237,7 @@ namespace JSEngine
             const char *s = JS_ToCString(ctx, argv[0]);
             if (!s)
                 return JS_EXCEPTION;
-            const std::wstring n = novadesk::shared::system::PathNormalize(Utils::ToWString(s));
+            const std::wstring n = PathUtils::NormalizePath(Utils::ToWString(s));
             JS_FreeCString(ctx, s);
             const std::string utf8 = Utils::ToString(n);
             return JS_NewString(ctx, utf8.c_str());
@@ -257,7 +257,7 @@ namespace JSEngine
                     JS_FreeCString(ctx, to);
                 return JS_EXCEPTION;
             }
-            const std::wstring rel = novadesk::shared::system::PathRelative(Utils::ToWString(from), Utils::ToWString(to));
+            const std::wstring rel = PathUtils::Relative(Utils::ToWString(from), Utils::ToWString(to));
             JS_FreeCString(ctx, from);
             JS_FreeCString(ctx, to);
             const std::string utf8 = Utils::ToString(rel);
@@ -271,7 +271,7 @@ namespace JSEngine
             const char *s = JS_ToCString(ctx, argv[0]);
             if (!s)
                 return JS_EXCEPTION;
-            const auto parts = novadesk::shared::system::PathParse(Utils::ToWString(s));
+            const auto parts = PathUtils::Parse(Utils::ToWString(s));
             JS_FreeCString(ctx, s);
 
             JSValue obj = JS_NewObject(ctx);
@@ -289,7 +289,7 @@ namespace JSEngine
             {
                 return JS_ThrowTypeError(ctx, "path.format(obj) requires object");
             }
-            novadesk::shared::system::PathParts parts;
+            PathUtils::PathParts parts;
 
             JSValue v = JS_GetPropertyStr(ctx, argv[0], "dir");
             if (!JS_IsUndefined(v) && !JS_IsNull(v))
@@ -342,7 +342,7 @@ namespace JSEngine
                 JS_FreeValue(ctx, v);
             }
 
-            const std::wstring out = novadesk::shared::system::PathFormat(parts);
+            const std::wstring out = PathUtils::Format(parts);
             const std::string utf8 = Utils::ToString(out);
             return JS_NewString(ctx, utf8.c_str());
         }

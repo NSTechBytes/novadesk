@@ -869,6 +869,9 @@ namespace novadesk::shared::system
 
     }
 
+    // -----------------------------------------------------------------------------
+    // System Metrics
+    // -----------------------------------------------------------------------------
     bool GetCpuStats(CpuStats &outStats)
     {
         FILETIME idleFt{}, kernelFt{}, userFt{};
@@ -1037,6 +1040,9 @@ namespace novadesk::shared::system
         return true;
     }
 
+    // -----------------------------------------------------------------------------
+    // Clipboard
+    // -----------------------------------------------------------------------------
     bool ClipboardSetText(const std::wstring &text)
     {
         if (!OpenClipboard(nullptr))
@@ -1102,6 +1108,9 @@ namespace novadesk::shared::system
         return true;
     }
 
+    // -----------------------------------------------------------------------------
+    // Wallpaper
+    // -----------------------------------------------------------------------------
     bool SetWallpaper(const std::wstring &imagePath, const std::wstring &style)
     {
         const wchar_t *wallpaperStyle = L"10";
@@ -1182,6 +1191,9 @@ namespace novadesk::shared::system
         return !outPath.empty();
     }
 
+    // -----------------------------------------------------------------------------
+    // Power
+    // -----------------------------------------------------------------------------
     bool GetPowerStatus(PowerStatus &outStatus)
     {
         SYSTEM_POWER_STATUS sps{};
@@ -1257,6 +1269,9 @@ namespace novadesk::shared::system
         return out;
     }
 
+    // -----------------------------------------------------------------------------
+    // Audio (Master + Sessions + Analyzer)
+    // -----------------------------------------------------------------------------
     bool AudioSetVolume(int volumePercent)
     {
         if (volumePercent < 0)
@@ -1523,6 +1538,9 @@ namespace novadesk::shared::system
         return SetForMatchingSessions(0, processName, false, nullptr, &mute);
     }
 
+    // -----------------------------------------------------------------------------
+    // Now Playing (WinRT media transport controls)
+    // -----------------------------------------------------------------------------
 #if NOVADESK_HAS_WINRT_NOWPLAYING
     namespace
     {
@@ -2111,6 +2129,9 @@ namespace novadesk::shared::system
 #endif
     }
 
+    // -----------------------------------------------------------------------------
+    // Registry
+    // -----------------------------------------------------------------------------
     bool RegistryReadData(const std::wstring &fullPath, const std::wstring &valueName, RegistryValue &outValue)
     {
         outValue = RegistryValue{};
@@ -2213,6 +2234,9 @@ namespace novadesk::shared::system
         return ok;
     }
 
+    // -----------------------------------------------------------------------------
+    // Global Hotkeys
+    // -----------------------------------------------------------------------------
     int RegisterHotkey(HWND messageWindow, const std::wstring &hotkey, int onKeyDownCallbackId, int onKeyUpCallbackId)
     {
         if (!messageWindow)
@@ -2263,82 +2287,9 @@ namespace novadesk::shared::system
         return true;
     }
 
-    std::wstring PathJoin(const std::vector<std::wstring> &parts)
-    {
-        std::filesystem::path out;
-        for (const auto &part : parts)
-        {
-            out /= std::filesystem::path(part);
-        }
-        return out.lexically_normal().wstring();
-    }
-
-    std::wstring PathBasename(const std::wstring &path, const std::wstring &ext)
-    {
-        std::filesystem::path p(path);
-        std::wstring base = p.filename().wstring();
-        if (!ext.empty() && base.size() >= ext.size() &&
-            base.compare(base.size() - ext.size(), ext.size(), ext) == 0)
-        {
-            base.resize(base.size() - ext.size());
-        }
-        return base;
-    }
-
-    std::wstring PathDirname(const std::wstring &path)
-    {
-        std::filesystem::path p(path);
-        std::wstring dir = p.parent_path().wstring();
-        if (dir.empty())
-        {
-            dir = L".";
-        }
-        return dir;
-    }
-
-    std::wstring PathExtname(const std::wstring &path)
-    {
-        return std::filesystem::path(path).extension().wstring();
-    }
-
-    bool PathIsAbsolute(const std::wstring &path)
-    {
-        return std::filesystem::path(path).is_absolute();
-    }
-
-    std::wstring PathNormalize(const std::wstring &path)
-    {
-        return std::filesystem::path(path).lexically_normal().wstring();
-    }
-
-    std::wstring PathRelative(const std::wstring &from, const std::wstring &to)
-    {
-        return std::filesystem::path(to).lexically_relative(std::filesystem::path(from)).wstring();
-    }
-
-    PathParts PathParse(const std::wstring &path)
-    {
-        std::filesystem::path p(path);
-        PathParts out;
-        out.root = p.root_path().wstring();
-        out.dir = p.parent_path().wstring();
-        out.base = p.filename().wstring();
-        out.ext = p.extension().wstring();
-        out.name = p.stem().wstring();
-        return out;
-    }
-
-    std::wstring PathFormat(const PathParts &parts)
-    {
-        std::wstring base = parts.base;
-        if (base.empty())
-        {
-            base = parts.name + parts.ext;
-        }
-        std::filesystem::path out = parts.dir.empty() ? std::filesystem::path(base) : (std::filesystem::path(parts.dir) / base);
-        return out.lexically_normal().wstring();
-    }
-
+    // -----------------------------------------------------------------------------
+    // JSON Merge Utilities (comment-preserving patch support)
+    // -----------------------------------------------------------------------------
     bool IsWhitespace(char c)
     {
         return c == ' ' || c == '\t' || c == '\r' || c == '\n';
@@ -2723,6 +2674,9 @@ namespace novadesk::shared::system
         return MergeObjectInText(text, root, patch);
     }
 
+    // -----------------------------------------------------------------------------
+    // JSON File APIs
+    // -----------------------------------------------------------------------------
     bool JsonReadTextFile(const std::wstring &path, std::string &outText)
     {
         outText.clear();
@@ -2779,6 +2733,9 @@ namespace novadesk::shared::system
         }
     }
 
+    // -----------------------------------------------------------------------------
+    // Environment
+    // -----------------------------------------------------------------------------
     std::wstring GetEnv(const std::wstring &name)
     {
         if (name.empty())
@@ -2830,6 +2787,9 @@ namespace novadesk::shared::system
         return out;
     }
 
+    // -----------------------------------------------------------------------------
+    // Process / Network Utilities
+    // -----------------------------------------------------------------------------
     bool Execute(const std::wstring &target, const std::wstring &parameters, const std::wstring &workingDir, int show)
     {
         HINSTANCE result = ShellExecuteW(
