@@ -1,6 +1,6 @@
 import { app } from "novadesk";
-// app.enableDebugging(true);
-const enableDebugging = app.enableDebuggin(true);
+
+const enableDebugging = app.enableDebugging(true);
 
 if (enableDebugging) {
   console.log("Debugging is enabled");
