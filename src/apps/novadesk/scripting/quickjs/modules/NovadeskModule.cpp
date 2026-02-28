@@ -602,6 +602,13 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
+        JSValue JsAppRefresh(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            (void)ctx;
+            JSEngine::Reload();
+            return JS_UNDEFINED;
+        }
+
         JSValue JsAppExit(JSContext *ctx, JSValueConst, int, JSValueConst *)
         {
             (void)ctx;
@@ -639,6 +646,31 @@ namespace novadesk::scripting::quickjs
         JSValue JsAppGetNovadeskVersion(JSContext *ctx, JSValueConst, int, JSValueConst *)
         {
             return JS_NewString(ctx, NOVADESK_VERSION);
+        }
+
+        JSValue JsAppGetAppDataPath(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewString(ctx, Utils::ToString(PathUtils::GetAppDataPath()).c_str());
+        }
+
+        JSValue JsAppGetSettingsFilePath(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewString(ctx, Utils::ToString(Settings::GetSettingsPath()).c_str());
+        }
+
+        JSValue JsAppGetLogPath(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewString(ctx, Utils::ToString(Settings::GetLogPath()).c_str());
+        }
+
+        JSValue JsAppIsPortable(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewBool(ctx, PathUtils::IsPortableEnvironment() ? 1 : 0);
+        }
+
+        JSValue JsAppIsFirstRun(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewBool(ctx, Settings::IsFirstRun() ? 1 : 0);
         }
 
         JSValue JsAppSetTrayMenu(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
@@ -847,11 +879,17 @@ namespace novadesk::scripting::quickjs
         {
             JSValue app = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, app, "reload", JS_NewCFunction(ctx, JsAppReload, "reload", 0));
+            JS_SetPropertyStr(ctx, app, "refresh", JS_NewCFunction(ctx, JsAppRefresh, "refresh", 0));
             JS_SetPropertyStr(ctx, app, "exit", JS_NewCFunction(ctx, JsAppExit, "exit", 0));
             JS_SetPropertyStr(ctx, app, "hideTrayIcon", JS_NewCFunction(ctx, JsAppHideTrayIcon, "hideTrayIcon", 1));
             JS_SetPropertyStr(ctx, app, "getProductVersion", JS_NewCFunction(ctx, JsAppGetProductVersion, "getProductVersion", 0));
             JS_SetPropertyStr(ctx, app, "getFileVersion", JS_NewCFunction(ctx, JsAppGetFileVersion, "getFileVersion", 0));
             JS_SetPropertyStr(ctx, app, "getNovadeskVersion", JS_NewCFunction(ctx, JsAppGetNovadeskVersion, "getNovadeskVersion", 0));
+            JS_SetPropertyStr(ctx, app, "getAppDataPath", JS_NewCFunction(ctx, JsAppGetAppDataPath, "getAppDataPath", 0));
+            JS_SetPropertyStr(ctx, app, "getSettingsFilePath", JS_NewCFunction(ctx, JsAppGetSettingsFilePath, "getSettingsFilePath", 0));
+            JS_SetPropertyStr(ctx, app, "getLogPath", JS_NewCFunction(ctx, JsAppGetLogPath, "getLogPath", 0));
+            JS_SetPropertyStr(ctx, app, "isPortable", JS_NewCFunction(ctx, JsAppIsPortable, "isPortable", 0));
+            JS_SetPropertyStr(ctx, app, "isFirstRun", JS_NewCFunction(ctx, JsAppIsFirstRun, "isFirstRun", 0));
             JS_SetPropertyStr(ctx, app, "setTrayMenu", JS_NewCFunction(ctx, JsAppSetTrayMenu, "setTrayMenu", 1));
             JS_SetPropertyStr(ctx, app, "clearTrayMenu", JS_NewCFunction(ctx, JsAppClearTrayMenu, "clearTrayMenu", 0));
             JS_SetPropertyStr(ctx, app, "showDefaultTrayItems", JS_NewCFunction(ctx, JsAppShowDefaultTrayItems, "showDefaultTrayItems", 1));
