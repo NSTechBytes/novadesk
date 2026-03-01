@@ -668,11 +668,6 @@ namespace PropertyParser
             options.path = PathUtils::ResolvePath(options.path, baseDir);
             std::error_code ec;
             const bool exists = std::filesystem::exists(std::filesystem::path(options.path), ec);
-            Logging::Log(
-                exists ? LogLevel::Info : LogLevel::Error,
-                L"[novadesk] image path resolved: %s (exists=%s)",
-                options.path.c_str(),
-                exists ? L"true" : L"false");
         }
 
         std::wstring aspect = GetStringProp(ctx, obj, "preserveAspectRatio");

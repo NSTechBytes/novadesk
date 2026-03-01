@@ -38,10 +38,6 @@ void ImageElement::EnsureBitmap(ID2D1DeviceContext* context)
         {
             Logging::Log(LogLevel::Error, L"[novadesk] failed to load image bitmap: %s", m_ImagePath.c_str());
         }
-        else
-        {
-            Logging::Log(LogLevel::Info, L"[novadesk] loaded image bitmap: %s", m_ImagePath.c_str());
-        }
     }
 }
 
