@@ -434,6 +434,52 @@ namespace JSEngine
             JS_FreeValue(ctx, ex);
         }
 
+        void LogQuickJsValue(JSContext *ctx, JSValueConst value, const wchar_t *prefix)
+        {
+            JSValue msgV = JS_GetPropertyStr(ctx, value, "message");
+            const char *msg = nullptr;
+            if (!JS_IsException(msgV) && !JS_IsUndefined(msgV) && !JS_IsNull(msgV))
+            {
+                msg = JS_ToCString(ctx, msgV);
+            }
+            if (!msg)
+            {
+                msg = JS_ToCString(ctx, value);
+            }
+
+            if (msg)
+            {
+                Logging::Log(LogLevel::Error, L"%s: %S", prefix, msg);
+                JS_FreeCString(ctx, msg);
+            }
+            else
+            {
+                Logging::Log(LogLevel::Error, L"%s", prefix);
+            }
+            JS_FreeValue(ctx, msgV);
+
+            JSValue stackV = JS_GetPropertyStr(ctx, value, "stack");
+            if (!JS_IsException(stackV) && !JS_IsUndefined(stackV) && !JS_IsNull(stackV))
+            {
+                const char *stack = JS_ToCString(ctx, stackV);
+                if (stack && stack[0] != '\0')
+                {
+                    Logging::Log(LogLevel::Error, L"QuickJS stack:\n%S", stack);
+                    JS_FreeCString(ctx, stack);
+                }
+            }
+            JS_FreeValue(ctx, stackV);
+        }
+
+        void HostPromiseRejectionTracker(JSContext *ctx, JSValueConst, JSValueConst reason, bool is_handled, void *)
+        {
+            if (is_handled)
+            {
+                return;
+            }
+            LogQuickJsValue(ctx, reason, L"QuickJS unhandled promise rejection");
+        }
+
         void ClearCallbacks(std::vector<JSValue> &list)
         {
             for (JSValue &v : list)
@@ -768,6 +814,7 @@ namespace JSEngine
             }
 
             JS_SetModuleLoaderFunc(g_runtime, novadesk::scripting::quickjs::ModuleNormalizeName, novadesk::scripting::quickjs::ModuleLoader, nullptr);
+            JS_SetHostPromiseRejectionTracker(g_runtime, HostPromiseRejectionTracker, nullptr);
             novadesk::scripting::quickjs::SetModuleSystemDebug(false);
             RegisterConsoleBindings(g_context);
             g_eventCallbacks.clear();
