@@ -17,7 +17,7 @@
   <img src="https://img.shields.io/github/issues/Official-Novadesk/novadesk?style=for-the-badge" alt="Issues"/>
 </p>
 
-Novadesk is a open source powerful desktop widget platform built with C++ and powered by the Duktape JavaScript engine. It allows users to create system monitors, custom interfaces, and desktop enhancements using familiar JavaScript syntax.
+Novadesk is a open source powerful desktop widget platform built with C++. It allows users to create system monitors, custom interfaces, and desktop enhancements using familiar JavaScript syntax.
 
 ## 🔗 Resources
 
