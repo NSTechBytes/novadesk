@@ -123,7 +123,8 @@ void TextElement::Render(ID2D1DeviceContext* context)
         break;
     }
 
-    bool allowWrap = (m_ClipString == TEXT_CLIP_NONE || m_ClipString == TEXT_CLIP_WRAP);
+    // Compatibility: when width is not explicitly set, default to single-line text.
+    bool allowWrap = (m_ClipString == TEXT_CLIP_WRAP) || (m_ClipString == TEXT_CLIP_NONE && m_WDefined);
     
     if (allowWrap)
     {
@@ -417,7 +418,8 @@ int TextElement::GetAutoHeight()
     if (FAILED(hr)) return 0;
 
     float maxWidth = 10000.0f;
-    bool wrap = (m_ClipString == TEXT_CLIP_NONE || m_ClipString == TEXT_CLIP_WRAP);
+    // Keep auto-size text single-line unless wrap is explicitly requested.
+    bool wrap = (m_ClipString == TEXT_CLIP_WRAP) || (m_ClipString == TEXT_CLIP_NONE && m_WDefined);
 
     if (wrap)
     {
@@ -553,7 +555,7 @@ bool TextElement::HitTest(int x, int y)
     if (layoutW < 0) layoutW = 1;
     if (layoutH < 0) layoutH = 1;
 
-    bool allowWrap = (m_ClipString == TEXT_CLIP_NONE || m_ClipString == TEXT_CLIP_WRAP);
+    bool allowWrap = (m_ClipString == TEXT_CLIP_WRAP) || (m_ClipString == TEXT_CLIP_NONE && m_WDefined);
     pTextFormat->SetWordWrapping(allowWrap ? DWRITE_WORD_WRAPPING_WRAP : DWRITE_WORD_WRAPPING_NO_WRAP);
 
     std::wstring processedText = GetProcessedText();

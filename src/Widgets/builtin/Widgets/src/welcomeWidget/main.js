@@ -1,4 +1,6 @@
-var utils = require('../common/utils');
+import * as utils from "../common/utils.js";
+import { app, widgetWindow } from "novadesk";
+import * as system from "system";
 
 var welcome_Widget = null;
 
@@ -9,16 +11,17 @@ function loadWelcomeWidget() {
 
     welcome_Widget = new widgetWindow({
         id: 'welcome_Window',
-        script: 'ui/widget.ui.js',
+        script: './src/welcomeWidget/ui/widget.ui.js',
         width: 300,
         height: 300,
         show: !app.isFirstRun()
     })
 
     if (app.isFirstRun()) {
+        var metrics = system.displayMetrics.get();
         welcome_Widget.setProperties({
-            x: ((system.getDisplayMetrics().primary.screenArea.width - 300) / 2),
-            y: ((system.getDisplayMetrics().primary.screenArea.height - 300) / 2),
+            x: ((metrics.primary.screenArea.width - 300) / 2),
+            y: ((metrics.primary.screenArea.height - 300) / 2),
             show: true
         });
     }
@@ -61,8 +64,5 @@ function unloadWelcomeWidget() {
     }
 }
 
-module.exports = {
-    loadWelcomeWidget,
-    unloadWelcomeWidget
-}
+export { loadWelcomeWidget, unloadWelcomeWidget };
 

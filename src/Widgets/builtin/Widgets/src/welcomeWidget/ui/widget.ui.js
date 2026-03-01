@@ -1,5 +1,5 @@
 // Background Shape
-win.addShape({
+ui.addShape({
     id: "backgroundShape",
     type: "rectangle",
     x: 1,
@@ -13,9 +13,9 @@ win.addShape({
 })
 
 // Novadesk Logo
-win.addImage({
+ui.addImage({
     id: "logo_Image",
-    x: ((win.getElementProperty("backgroundShape", "x") + win.getElementProperty("backgroundShape", "width")) / 2) - 50,
+    x: 100,
     y: 40,
     width: 100,
     height: 100,
@@ -24,9 +24,9 @@ win.addImage({
 })
 
 // Welcome Title
-win.addText({
+ui.addText({
     id: "title_Text",
-    x: ((win.getElementProperty("backgroundShape", "x") + win.getElementProperty("backgroundShape", "width")) / 2),
+    x: 150,
     y: 160,
     text: "Welcome to Novadesk!",
     fontSize: 18,
@@ -36,9 +36,9 @@ win.addText({
 })
 
 // Description Text
-win.addText({
+ui.addText({
     id: "desc_Text",
-    x: ((win.getElementProperty("backgroundShape", "x") + win.getElementProperty("backgroundShape", "width")) / 2),
+    x: 150,
     y: 190,
     text: "A desktop customization platform",
     fontSize: 12,
@@ -48,7 +48,7 @@ win.addText({
 })
 
 // Website Button
-win.addShape({
+ui.addShape({
     id: "website_Button",
     type: "rectangle",
     x: 60,
@@ -60,10 +60,10 @@ win.addShape({
     radius: 8,
     strokeWidth: 1,
     onMouseOver: function() {
-        win.setElementProperties("website_Button", {"fillColor": "rgba(81, 188, 254, 0.5)"});
+        ui.setElementProperties("website_Button", {"fillColor": "rgba(81, 188, 254, 0.5)"});
     },
     onMouseLeave: function() {
-        win.setElementProperties("website_Button", {"fillColor": "rgba(81, 188, 254, 0.3)"});
+        ui.setElementProperties("website_Button", {"fillColor": "rgba(81, 188, 254, 0.3)"});
     },
     onLeftMouseUp: function() {
         ipcRenderer.send("openWebsite");
@@ -71,7 +71,7 @@ win.addShape({
 })
 
 // Website Button Text
-win.addText({
+ui.addText({
     id: "website_Text",
     x: 100,
     y: 245,
@@ -83,7 +83,7 @@ win.addText({
 })
 
 // Docs Button
-win.addShape({
+ui.addShape({
     id: "docs_Button",
     type: "rectangle",
     x: 160,
@@ -95,10 +95,10 @@ win.addShape({
     radius: 8,
     strokeWidth: 1,
     onMouseOver: function() {
-        win.setElementProperties("docs_Button", {"fillColor": "rgba(189, 52, 254, 0.5)"});
+        ui.setElementProperties("docs_Button", {"fillColor": "rgba(189, 52, 254, 0.5)"});
     },
     onMouseLeave: function() {
-        win.setElementProperties("docs_Button", {"fillColor": "rgba(189, 52, 254, 0.3)"});
+        ui.setElementProperties("docs_Button", {"fillColor": "rgba(189, 52, 254, 0.3)"});
     },
     onLeftMouseUp: function() {
         ipcRenderer.send("openDocs");
@@ -106,7 +106,7 @@ win.addShape({
 })
 
 // Docs Button Text
-win.addText({
+ui.addText({
     id: "docs_Text",
     x: 200,
     y: 245,
@@ -116,4 +116,6 @@ win.addText({
     textAlign: "centercenter",
     fontColor: "rgb(255,255,255)",
 })
+
+
 

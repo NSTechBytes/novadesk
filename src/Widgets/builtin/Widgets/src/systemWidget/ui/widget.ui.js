@@ -1,5 +1,5 @@
 // Background Shape
-win.addShape({
+ui.addShape({
     id: "backgroundShape",
     type: "rectangle",
     x: 1,
@@ -13,9 +13,9 @@ win.addShape({
 })
 
 // Title Text
-win.addText({
+ui.addText({
     id: "title_Text",
-    x: ((win.getElementProperty("backgroundShape", "x") + win.getElementProperty("backgroundShape", "width")) / 2),
+    x: 106,
     y: 10,
     text: "System",
     fontSize: 25,
@@ -28,7 +28,7 @@ win.addText({
 ** CPU Content
 **
 */
-win.addText({
+ui.addText({
     id: "cpu_Label",
     x: 15,
     y: 45,
@@ -40,7 +40,7 @@ win.addText({
 })
 
 
-win.addText({
+ui.addText({
     id: "cpu_Text",
     x: 195,
     y: 45,
@@ -51,11 +51,11 @@ win.addText({
     fontColor: "rgb(255,255,255)",
 })
 
-win.addBar({
+ui.addBar({
     id: "cpu-Bar",
     x: 15,
     y: 65,
-    width: win.getElementProperty("backgroundShape", "width") - 30,
+    width: 180,
     height: 8,
     value: 0,
     barColor: "linearGradient(120deg, #51BCFE, #BD34FE)",
@@ -69,7 +69,7 @@ win.addBar({
 **
 */
 
-win.addText({
+ui.addText({
     id: "memory_Label",
     x: 15,
     y: 85,
@@ -80,7 +80,7 @@ win.addText({
     fontColor: "rgb(255,255,255)",
 })
 
-win.addText({
+ui.addText({
     id: "memory_Text",
     x: 195,
     y: 85,
@@ -91,11 +91,11 @@ win.addText({
     fontColor: "rgb(255,255,255)",
 })
 
-win.addBar({
+ui.addBar({
     id: "memory-Bar",
     x: 15,
     y: 105,
-    width: win.getElementProperty("backgroundShape", "width") - 30,
+    width: 180,
     height: 8,
     value: 0,
     barColor: "linearGradient(120deg, #51BCFE, #BD34FE)",
@@ -105,10 +105,12 @@ win.addBar({
 });
 
 ipcRenderer.on("system-stats", function (data) {
-    win.setElementProperties("cpu_Text", { "text": data.cpu + "%" });
-    win.setElementProperties("cpu-Bar", { "value": data.cpu / 100 });
+    ui.setElementProperties("cpu_Text", { "text": data.cpu + "%" });
+    ui.setElementProperties("cpu-Bar", { "value": data.cpu / 100 });
     
-    win.setElementProperties("memory_Text", { "text": data.memory + "%" });
-    win.setElementProperties("memory-Bar", { "value": data.memory / 100 });
+    ui.setElementProperties("memory_Text", { "text": data.memory + "%" });
+    ui.setElementProperties("memory-Bar", { "value": data.memory / 100 });
 })
+
+
 

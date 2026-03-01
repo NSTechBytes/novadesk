@@ -1,4 +1,4 @@
-win.addShape({
+ui.addShape({
     id: "backgroundShape",
     type: "rectangle",
     x: 1,
@@ -11,9 +11,9 @@ win.addShape({
     strokeWidth: 2
 })
 
-win.addText({
+ui.addText({
     id: "time_Text",
-    x: ((win.getElementProperty("backgroundShape", "x") + win.getElementProperty("backgroundShape", "width")) / 2),
+    x: 106,
     y: 10,
     text: "00:00",
     fontSize: 25,
@@ -22,7 +22,7 @@ win.addText({
     fontColor: "linearGradient(120deg, #51BCFE, #BD34FE)",
 })
 
-win.addText({
+ui.addText({
     id: "day_Text",
     x: 15,
     y: 45,
@@ -33,7 +33,7 @@ win.addText({
     fontColor: "rgb(255,255,255)",
 })
 
-win.addText({
+ui.addText({
     id: "date_Text",
     x: 195,
     y: 45,
@@ -46,14 +46,16 @@ win.addText({
 
 
 ipcRenderer.on("timeUpdate", function (timeStr) {
-    win.setElementProperties("time_Text", { "text": timeStr });
+    ui.setElementProperties("time_Text", { "text": timeStr });
 });
 
 ipcRenderer.on("dayUpdate", function (dayStr) {
-    win.setElementProperties("day_Text", { "text": dayStr });
+    ui.setElementProperties("day_Text", { "text": dayStr });
 });
 
 ipcRenderer.on("dateUpdate", function (dateStr) {
-    win.setElementProperties("date_Text", { "text": dateStr });
+    ui.setElementProperties("date_Text", { "text": dateStr });
 });
+
+
 

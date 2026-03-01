@@ -1,5 +1,5 @@
 // Background Shape
-win.addShape({
+ui.addShape({
     id: "backgroundShape",
     type: "rectangle",
     x: 1,
@@ -13,9 +13,9 @@ win.addShape({
 })
 
 // Title Text
-win.addText({
+ui.addText({
     id: "title_Text",
-    x: ((win.getElementProperty("backgroundShape", "x") + win.getElementProperty("backgroundShape", "width")) / 2),
+    x: 106,
     y: 10,
     text: "Network",
     fontSize: 25,
@@ -28,7 +28,7 @@ win.addText({
 ** Download Content
 **
 */
-win.addText({
+ui.addText({
     id: "download_Label",
     x: 15,
     y: 45,
@@ -40,7 +40,7 @@ win.addText({
 })
 
 
-win.addText({
+ui.addText({
     id: "download_Text",
     x: 195,
     y: 45,
@@ -51,11 +51,11 @@ win.addText({
     fontColor: "rgb(255,255,255)",
 })
 
-win.addBar({
+ui.addBar({
     id: "download-Bar",
     x: 15,
     y: 65,
-    width: win.getElementProperty("backgroundShape", "width") - 30,
+    width: 180,
     height: 8,
     value: 0,
     barColor: "linearGradient(120deg, #51BCFE, #BD34FE)",
@@ -69,7 +69,7 @@ win.addBar({
 **
 */
 
-win.addText({
+ui.addText({
     id: "upload_Label",
     x: 15,
     y: 85,
@@ -80,7 +80,7 @@ win.addText({
     fontColor: "rgb(255,255,255)",
 })
 
-win.addText({
+ui.addText({
     id: "upload_Text",
     x: 195,
     y: 85,
@@ -91,11 +91,11 @@ win.addText({
     fontColor: "rgb(255,255,255)",
 })
 
-win.addBar({
+ui.addBar({
     id: "upload-Bar",
     x: 15,
     y: 105,
-    width: win.getElementProperty("backgroundShape", "width") - 30,
+    width: 180,
     height: 8,
     value: 0,
     barColor: "linearGradient(120deg, #51BCFE, #BD34FE)",
@@ -107,12 +107,12 @@ win.addBar({
 // ipcRenderer listener for network stats
 ipcRenderer.on("networkStats", function(stats) {
     // Update download text with dynamic units
-    win.setElementProperties("download_Text", { 
+    ui.setElementProperties("download_Text", { 
         "text": stats.downloadRate + " " + stats.downloadUnit 
     });
     
     // Update upload text with dynamic units
-    win.setElementProperties("upload_Text", { 
+    ui.setElementProperties("upload_Text", { 
         "text": stats.uploadRate + " " + stats.uploadUnit 
     });
     
@@ -122,11 +122,13 @@ ipcRenderer.on("networkStats", function(stats) {
     var downloadValue = Math.min(1.0, (parseFloat(stats.downloadRate) * (stats.downloadUnit === "MB/s" ? 1024 : 1)) / maxRate);
     var uploadValue = Math.min(1.0, (parseFloat(stats.uploadRate) * (stats.uploadUnit === "MB/s" ? 1024 : 1)) / maxRate);
     
-    win.setElementProperties("download-Bar", { 
+    ui.setElementProperties("download-Bar", { 
         "value": downloadValue 
     });
     
-    win.setElementProperties("upload-Bar", { 
+    ui.setElementProperties("upload-Bar", { 
         "value": uploadValue 
     });
 });
+
+

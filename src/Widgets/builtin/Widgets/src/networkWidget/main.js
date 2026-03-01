@@ -1,7 +1,8 @@
-var utils = require('../common/utils');
+import * as utils from "../common/utils.js";
+import { app, widgetWindow } from "novadesk";
+import * as system from "system";
 
 var network_Widget = null;
-var network_Monitor = null;
 var network_Timer = null;
 
 function loadNetworkWidget() {
@@ -9,20 +10,18 @@ function loadNetworkWidget() {
         return; // Widget already registered
     }
 
-    // Create network monitor
-    network_Monitor = new system.network();
-
     network_Widget = new widgetWindow({
         id: 'network_Window',
-        script: 'ui/widget.ui.js',
+        script: './src/networkWidget/ui/widget.ui.js',
         width: 212,
         height: 122, 
         show: !app.isFirstRun()
     })
 
     if (app.isFirstRun()) {
+        var metrics = system.displayMetrics.get();
         network_Widget.setProperties({
-            x: ((system.getDisplayMetrics().primary.screenArea.width - 212) - 10),
+            x: ((metrics.primary.screenArea.width - 212) - 10),
             y: 224,
             show: true
         });
@@ -54,9 +53,12 @@ function loadNetworkWidget() {
 
 function registerIPC() {
     function publishNetworkStats() {
-        if (!network_Monitor) return;
-
-        var stats = network_Monitor.stats();
+        var stats = {
+            netIn: system.network.rxSpeed(),
+            netOut: system.network.txSpeed(),
+            totalIn: system.network.bytesReceived(),
+            totalOut: system.network.bytesSent()
+        };
 
         // Convert bytes to appropriate units
         var netInKB = stats.netIn / 1024;
@@ -107,18 +109,10 @@ function unloadNetworkWidget() {
         network_Timer = null;
     }
 
-    if (network_Monitor) {
-        network_Monitor.destroy();
-        network_Monitor = null;
-    }
-
     if (network_Widget) {
         network_Widget.close();
         network_Widget = null;
     }
 }
 
-module.exports = {
-    loadNetworkWidget,
-    unloadNetworkWidget
-}
+export { loadNetworkWidget, unloadNetworkWidget };

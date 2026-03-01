@@ -628,7 +628,7 @@ namespace JSEngine
             }
         }
 
-        void DispatchChannelIpc(std::unordered_map<std::string, std::vector<JSValue>> &listeners, const std::string &channel, const char *from, const char *to, JSValueConst payload)
+        void DispatchChannelIpc(std::unordered_map<std::string, std::vector<JSValue>> &listeners, const std::string &channel, const char *from, const char *to, JSValueConst payload, bool payloadFirst = false)
         {
             auto it = listeners.find(channel);
             if (it == listeners.end())
@@ -640,7 +640,19 @@ namespace JSEngine
 
             for (JSValue &cb : it->second)
             {
-                JSValue argv[2] = {JS_DupValue(g_context, eventObj), JS_DupValue(g_context, payload)};
+                JSValue argv[2] = {JS_UNDEFINED, JS_UNDEFINED};
+                if (payloadFirst)
+                {
+                    // Backward compatibility for legacy UI scripts: callback(payload, event)
+                    argv[0] = JS_DupValue(g_context, payload);
+                    argv[1] = JS_DupValue(g_context, eventObj);
+                }
+                else
+                {
+                    // Default callback(event, payload)
+                    argv[0] = JS_DupValue(g_context, eventObj);
+                    argv[1] = JS_DupValue(g_context, payload);
+                }
                 JSValue ret = JS_Call(g_context, cb, JS_UNDEFINED, 2, argv);
                 JS_FreeValue(g_context, argv[0]);
                 JS_FreeValue(g_context, argv[1]);
@@ -705,7 +717,8 @@ namespace JSEngine
             std::string channel;
             if (GetChannelArg(ctx, argv[0], channel))
             {
-                DispatchChannelIpc(g_uiIpcChannelListeners, channel, "main", "ui", payload);
+                // UI listeners historically expected callback(payload), not callback(event, payload).
+                DispatchChannelIpc(g_uiIpcChannelListeners, channel, "main", "ui", payload, true);
             }
             return JS_UNDEFINED;
         }

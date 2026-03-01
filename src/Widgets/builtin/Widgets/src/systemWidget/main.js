@@ -1,7 +1,7 @@
-var utils = require('../common/utils');
+import * as utils from "../common/utils.js";
+import { app, widgetWindow } from "novadesk";
+import * as system from "system";
 var system_Widget = null;
-var cpuMonitor = null;
-var memoryMonitor = null;
 var system_Timer = null;
 
 function loadSystemWidget() {
@@ -11,15 +11,16 @@ function loadSystemWidget() {
 
     system_Widget = new widgetWindow({
         id: 'system_Window',
-        script: path.join(__dirname, 'ui/widget.ui.js'),
+        script: './src/systemWidget/ui/widget.ui.js',
         width: 212,
         height: 122,
         show: !app.isFirstRun()
     })
 
     if (app.isFirstRun()) {
+        var metrics = system.displayMetrics.get();
         system_Widget.setProperties({
-            x: ((system.getDisplayMetrics().primary.screenArea.width - 212) - 10),
+            x: ((metrics.primary.screenArea.width - 212) - 10),
             y: 92,
             show: true
         });
@@ -50,17 +51,9 @@ function loadSystemWidget() {
 }
 
 function registerIPC() {
-    if (!cpuMonitor) {
-        cpuMonitor = new system.cpu();
-    }
-
-    if (!memoryMonitor) {
-        memoryMonitor = new system.memory();
-    }
-
     function systemInfo() {
-        var cpuUsage = cpuMonitor.usage();
-        var memoryUsage = memoryMonitor.stats().percent;
+        var cpuUsage = system.cpu.usage();
+        var memoryUsage = system.memory.usagePercent();
         ipcMain.send('system-stats', {
             cpu: cpuUsage,
             memory: memoryUsage
@@ -77,23 +70,10 @@ function unloadSystemWidget() {
         system_Timer = null;
     }
     
-    if (cpuMonitor) {
-        // cpuMonitor.destroy(); // Check if destroy method exists
-        cpuMonitor = null;
-    }
-    
-    if (memoryMonitor) {
-        // memoryMonitor.destroy(); // Check if destroy method exists
-        memoryMonitor = null;
-    }
-    
     if (system_Widget) {
         system_Widget.close();
         system_Widget = null;
     }
 }
 
-module.exports = {
-    loadSystemWidget,
-    unloadSystemWidget
-}
+export { loadSystemWidget, unloadSystemWidget };

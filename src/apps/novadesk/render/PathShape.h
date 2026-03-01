@@ -31,6 +31,7 @@ public:
     virtual bool CreateGeometry(ID2D1Factory* factory, Microsoft::WRL::ComPtr<ID2D1Geometry>& geometry) const override;
     
     virtual void SetPathData(const std::wstring& pathData) override;
+    virtual std::wstring GetPathData() const override { return m_PathData; }
 
     void SetCombinedGeometry(Microsoft::WRL::ComPtr<ID2D1Geometry> geometry, const D2D1_RECT_F& bounds);
     void ClearCombinedGeometry();

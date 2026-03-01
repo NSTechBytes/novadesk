@@ -24,6 +24,10 @@ public:
         m_StartX = x1; m_StartY = y1;
         m_EndX = x2; m_EndY = y2;
     }
+    virtual float GetStartX() const override { return m_StartX; }
+    virtual float GetStartY() const override { return m_StartY; }
+    virtual float GetEndX() const override { return m_EndX; }
+    virtual float GetEndY() const override { return m_EndY; }
 
 private:
     float m_StartX = 0.0f;

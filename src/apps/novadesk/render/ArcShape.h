@@ -28,6 +28,11 @@ public:
         m_EndAngle = endAngle;
         m_Clockwise = clockwise;
     }
+    virtual float GetRadiusX() const override { return m_RadiusX; }
+    virtual float GetRadiusY() const override { return m_RadiusY; }
+    virtual float GetStartAngle() const override { return m_StartAngle; }
+    virtual float GetEndAngle() const override { return m_EndAngle; }
+    virtual bool IsClockwise() const override { return m_Clockwise; }
 
 private:
     float m_RadiusX = 0.0f;

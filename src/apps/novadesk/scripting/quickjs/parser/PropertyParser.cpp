@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cwctype>
+#include <filesystem>
 
 #include "../../../shared/ColorUtil.h"
+#include "../../../shared/Logging.h"
 #include "../../../shared/PathUtils.h"
 #include "../../../shared/Utils.h"
 #include "../engine/JSEngine.h"
@@ -12,6 +14,55 @@ namespace PropertyParser
 {
     namespace
     {
+        void PreFillElementBaseOptions(ElementOptions &options, Element *element)
+        {
+            if (!element)
+                return;
+
+            options.id = element->GetId();
+            options.x = element->GetX();
+            options.y = element->GetY();
+            options.width = element->IsWDefined() ? (element->GetWidth() - element->GetPaddingLeft() - element->GetPaddingRight()) : 0;
+            options.height = element->IsHDefined() ? (element->GetHeight() - element->GetPaddingTop() - element->GetPaddingBottom()) : 0;
+
+            options.show = element->IsVisible();
+            options.containerId = element->GetContainerId();
+            options.groupId = element->GetGroupId();
+            options.mouseEventCursor = element->GetMouseEventCursor();
+            options.mouseEventCursorName = element->GetMouseEventCursorName();
+            options.cursorsDir = element->GetCursorsDir();
+            options.rotate = element->GetRotate();
+            options.antialias = element->GetAntiAlias();
+            options.solidColorRadius = element->GetCornerRadius();
+
+            options.paddingLeft = element->GetPaddingLeft();
+            options.paddingTop = element->GetPaddingTop();
+            options.paddingRight = element->GetPaddingRight();
+            options.paddingBottom = element->GetPaddingBottom();
+
+            if (element->HasSolidColor())
+            {
+                options.hasSolidColor = true;
+                options.solidColor = element->GetSolidColor();
+                options.solidAlpha = element->GetSolidAlpha();
+                options.solidGradient = element->GetSolidGradient();
+            }
+
+            options.bevelType = element->GetBevelType();
+            options.bevelWidth = element->GetBevelWidth();
+            options.bevelColor = element->GetBevelColor();
+            options.bevelAlpha = element->GetBevelAlpha();
+            options.bevelColor2 = element->GetBevelColor2();
+            options.bevelAlpha2 = element->GetBevelAlpha2();
+
+            if (element->HasTransformMatrix())
+            {
+                options.hasTransformMatrix = true;
+                const float *m = element->GetTransformMatrix();
+                options.transformMatrix.assign(m, m + 6);
+            }
+        }
+
         std::vector<std::wstring> SplitByComma(const std::wstring &s)
         {
             std::vector<std::wstring> parts;
@@ -503,7 +554,11 @@ namespace PropertyParser
 
         std::wstring bg = GetStringProp(ctx, obj, "backgroundColor");
         ParseGradientOrColor(bg, options.solidColor, options.solidAlpha, options.solidGradient, options.hasSolidColor);
-        GetIntProp(ctx, obj, "backgroundColorRadius", options.solidColorRadius);
+        if (!GetIntProp(ctx, obj, "backgroundColorRadius", options.solidColorRadius))
+        {
+            // Backward compatibility: many scripts use "radius" for element background corner radius.
+            GetIntProp(ctx, obj, "radius", options.solidColorRadius);
+        }
 
         std::wstring bevelType = GetStringProp(ctx, obj, "bevelType");
         if (bevelType == L"raised")
@@ -604,13 +659,20 @@ namespace PropertyParser
         GetBoolProp(ctx, obj, "tooltipBalloon", options.tooltipBalloon);
     }
 
-    void ParseImageOptions(JSContext *ctx, JSValueConst obj, ImageOptions &options, const std::wstring &)
+    void ParseImageOptions(JSContext *ctx, JSValueConst obj, ImageOptions &options, const std::wstring &baseDir)
     {
         ParseElementOptions(ctx, obj, options);
         options.path = GetStringProp(ctx, obj, "path");
         if (!options.path.empty())
         {
-            options.path = PathUtils::ResolvePath(options.path);
+            options.path = PathUtils::ResolvePath(options.path, baseDir);
+            std::error_code ec;
+            const bool exists = std::filesystem::exists(std::filesystem::path(options.path), ec);
+            Logging::Log(
+                exists ? LogLevel::Info : LogLevel::Error,
+                L"[novadesk] image path resolved: %s (exists=%s)",
+                options.path.c_str(),
+                exists ? L"true" : L"false");
         }
 
         std::wstring aspect = GetStringProp(ctx, obj, "preserveAspectRatio");
@@ -819,6 +881,11 @@ namespace PropertyParser
         ParseElementOptions(ctx, obj, options, baseDir);
 
         options.shapeType = GetStringProp(ctx, obj, "shapeType");
+        if (options.shapeType.empty())
+        {
+            // Backward compatibility with legacy scripts: "type" was used.
+            options.shapeType = GetStringProp(ctx, obj, "type");
+        }
         GetFloatProp(ctx, obj, "strokeWidth", options.strokeWidth);
 
         std::wstring stroke = GetStringProp(ctx, obj, "strokeColor");
@@ -829,8 +896,17 @@ namespace PropertyParser
         bool hasFill = false;
         ParseGradientOrColor(fill, options.fillColor, options.fillAlpha, options.fillGradient, hasFill);
 
-        GetFloatProp(ctx, obj, "radiusX", options.radiusX);
-        GetFloatProp(ctx, obj, "radiusY", options.radiusY);
+        bool hasRadiusX = GetFloatProp(ctx, obj, "radiusX", options.radiusX);
+        bool hasRadiusY = GetFloatProp(ctx, obj, "radiusY", options.radiusY);
+        float uniformRadius = 0.0f;
+        if (GetFloatProp(ctx, obj, "radius", uniformRadius))
+        {
+            // Legacy alias: radius applies to both X/Y when specific values are not provided.
+            if (!hasRadiusX)
+                options.radiusX = uniformRadius;
+            if (!hasRadiusY)
+                options.radiusY = uniformRadius;
+        }
         GetFloatProp(ctx, obj, "startX", options.startX);
         GetFloatProp(ctx, obj, "startY", options.startY);
         GetFloatProp(ctx, obj, "endX", options.endX);
@@ -1117,12 +1193,7 @@ namespace PropertyParser
     {
         if (!element)
             return;
-        options.id = element->GetId();
-        options.x = element->GetX();
-        options.y = element->GetY();
-        options.width = element->GetWidth();
-        options.height = element->GetHeight();
-        options.containerId = element->GetContainerId();
+        PreFillElementBaseOptions(options, element);
         options.path = element->GetImagePath();
         options.preserveAspectRatio = element->GetPreserveAspectRatio();
         options.imageAlpha = element->GetImageAlpha();
@@ -1140,12 +1211,7 @@ namespace PropertyParser
     {
         if (!element)
             return;
-        options.id = element->GetId();
-        options.x = element->GetX();
-        options.y = element->GetY();
-        options.width = element->GetWidth();
-        options.height = element->GetHeight();
-        options.containerId = element->GetContainerId();
+        PreFillElementBaseOptions(options, element);
         options.text = element->GetText();
         options.fontFace = element->GetFontFace();
         options.fontSize = element->GetFontSize();
@@ -1168,12 +1234,7 @@ namespace PropertyParser
     {
         if (!element)
             return;
-        options.id = element->GetId();
-        options.x = element->GetX();
-        options.y = element->GetY();
-        options.width = element->GetWidth();
-        options.height = element->GetHeight();
-        options.containerId = element->GetContainerId();
+        PreFillElementBaseOptions(options, element);
         options.value = element->GetValue();
         options.orientation = element->GetOrientation();
         options.barCornerRadius = element->GetBarCornerRadius();
@@ -1187,12 +1248,7 @@ namespace PropertyParser
     {
         if (!element)
             return;
-        options.id = element->GetId();
-        options.x = element->GetX();
-        options.y = element->GetY();
-        options.width = element->GetWidth();
-        options.height = element->GetHeight();
-        options.containerId = element->GetContainerId();
+        PreFillElementBaseOptions(options, element);
         options.value = element->GetValue();
         options.radius = element->GetRadius();
         options.thickness = element->GetThickness();
@@ -1218,12 +1274,7 @@ namespace PropertyParser
     {
         if (!element)
             return;
-        options.id = element->GetId();
-        options.x = element->GetX();
-        options.y = element->GetY();
-        options.width = element->GetWidth();
-        options.height = element->GetHeight();
-        options.containerId = element->GetContainerId();
+        PreFillElementBaseOptions(options, element);
         options.strokeWidth = element->GetStrokeWidth();
         options.strokeColor = element->GetStrokeColor();
         options.strokeAlpha = element->GetStrokeAlpha();

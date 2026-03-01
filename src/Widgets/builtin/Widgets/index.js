@@ -1,8 +1,10 @@
-const clock_Widget = require('./src/clockWidget/main');
-const utils = require('./src/common/utils');
-const system_Widget = require('./src/systemWidget/main');
-const network_Widget = require('./src/networkWidget/main');
-const welcome_Widget = require('./src/welcomeWidget/main');
+import * as clock_Widget from "./src/clockWidget/main.js";
+import * as utils from "./src/common/utils.js";
+import * as system_Widget from "./src/systemWidget/main.js";
+import * as network_Widget from "./src/networkWidget/main.js";
+import * as welcome_Widget from "./src/welcomeWidget/main.js";
+import { app } from "novadesk";
+import * as system from "system";
 
 var isFirstRun = !!app.isFirstRun();
 
@@ -45,13 +47,13 @@ function setupTrayMenu() {
     app.setTrayMenu([
         {
             text: "Website",
-            action: function() {
+            action: function () {
                 system.execute("https://novadesk.pages.dev/");
             }
         },
         {
             text: "Docs",
-            action: function() {
+            action: function () {
                 system.execute("https://novadesk-docs.pages.dev/");
             }
         },
@@ -62,7 +64,7 @@ function setupTrayMenu() {
                 {
                     text: "Clock Widget",
                     checked: !!utils.getJsonValue('clock_Widget_Active'),
-                    action: function() {
+                    action: function () {
                         var isActive = !!utils.getJsonValue('clock_Widget_Active');
                         if (isActive) {
                             // Unload widget
@@ -82,7 +84,7 @@ function setupTrayMenu() {
                 {
                     text: "System Widget",
                     checked: !!utils.getJsonValue('system_Widget_Active'),
-                    action: function() {
+                    action: function () {
                         var isActive = !!utils.getJsonValue('system_Widget_Active');
                         if (isActive) {
                             // Unload widget
@@ -101,7 +103,7 @@ function setupTrayMenu() {
                 {
                     text: "Network Widget",
                     checked: !!utils.getJsonValue('network_Widget_Active'),
-                    action: function() {
+                    action: function () {
                         var isActive = !!utils.getJsonValue('network_Widget_Active');
                         if (isActive) {
                             // Unload widget
@@ -120,7 +122,7 @@ function setupTrayMenu() {
                 {
                     text: "Welcome Widget",
                     checked: !!utils.getJsonValue('welcome_Widget_Active'),
-                    action: function() {
+                    action: function () {
                         var isActive = !!utils.getJsonValue('welcome_Widget_Active');
                         if (isActive) {
                             // Unload widget
@@ -141,7 +143,7 @@ function setupTrayMenu() {
         { type: "separator" },
         {
             text: "Exit",
-            action: function() {
+            action: function () {
                 app.exit();
             }
         }

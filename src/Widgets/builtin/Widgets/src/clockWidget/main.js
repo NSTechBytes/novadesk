@@ -1,4 +1,6 @@
-var utils = require('../common/utils');
+import * as utils from "../common/utils.js";
+import { app, widgetWindow } from "novadesk";
+import * as system from "system";
 
 var clock_Widget = null;
 var clock_Timer = null;
@@ -11,15 +13,16 @@ function loadClockWidget() {
 
     clock_Widget = new widgetWindow({
         id: 'clock_Window',
-        script: 'ui/widget.ui.js',
+        script: './src/clockWidget/ui/widget.ui.js',
         width: 212,
         height: 72, 
         show: !app.isFirstRun()
     })
 
     if (app.isFirstRun()) {
+        var metrics = system.displayMetrics.get();
         clock_Widget.setProperties({
-            x: ((system.getDisplayMetrics().primary.screenArea.width - 212) - 10),
+            x: ((metrics.primary.screenArea.width - 212) - 10),
             y: 10,
             show: true
         });
@@ -80,7 +83,4 @@ function unloadClockWidget() {
     }
 }
 
-module.exports = {
-    loadClockWidget,
-    unloadClockWidget
-}
+export { loadClockWidget, unloadClockWidget };

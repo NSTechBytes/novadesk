@@ -1,4 +1,6 @@
-var config_Path = path.join(app.getAppDataPath(), 'config.json');
+import { app } from "novadesk";
+import * as system from "system";
+var config_Path = app.getAppDataPath() + "\\config.json";
 
 // Default configuration values
 var default_Config = {
@@ -9,12 +11,12 @@ var default_Config = {
 };
 
 // Try to read config, if failed use default
-var config_Data = system.readJson(config_Path);
+var config_Data = system.json.read(config_Path);
 
 // If config is invalid (null, undefined, or not an object), use default
 if (!config_Data || typeof config_Data !== 'object') {
     config_Data = default_Config;
-    system.writeJson(config_Path, config_Data);
+    system.json.write(config_Path, config_Data);
 }
 
 
@@ -69,7 +71,7 @@ function setJsonValue(key, value) {
         config_Data = {};
     }
     config_Data[key] = value;
-    system.writeJson(config_Path, config_Data);
+    system.json.write(config_Path, config_Data);
 }
 
 function kelvinToCelsius(kelvin) {
@@ -80,13 +82,13 @@ function celsiusToFahrenheit(celsius) {
     return Math.round((celsius * 9/5) + 32);
 }
 
-module.exports = {
-    formatTime: formatTime,
-    formatDay: formatDay,
-    formatDate: formatDate,
-    getJsonValue: getJsonValue,
-    setJsonValue: setJsonValue,
-    kelvinToCelsius: kelvinToCelsius,
-    celsiusToFahrenheit: celsiusToFahrenheit,
-    pad2: pad2
+export {
+    formatTime,
+    formatDay,
+    formatDate,
+    getJsonValue,
+    setJsonValue,
+    kelvinToCelsius,
+    celsiusToFahrenheit,
+    pad2
 };
