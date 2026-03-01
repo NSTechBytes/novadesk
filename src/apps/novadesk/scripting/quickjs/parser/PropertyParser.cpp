@@ -14,55 +14,6 @@ namespace PropertyParser
 {
     namespace
     {
-        void PreFillElementBaseOptions(ElementOptions &options, Element *element)
-        {
-            if (!element)
-                return;
-
-            options.id = element->GetId();
-            options.x = element->GetX();
-            options.y = element->GetY();
-            options.width = element->IsWDefined() ? (element->GetWidth() - element->GetPaddingLeft() - element->GetPaddingRight()) : 0;
-            options.height = element->IsHDefined() ? (element->GetHeight() - element->GetPaddingTop() - element->GetPaddingBottom()) : 0;
-
-            options.show = element->IsVisible();
-            options.containerId = element->GetContainerId();
-            options.groupId = element->GetGroupId();
-            options.mouseEventCursor = element->GetMouseEventCursor();
-            options.mouseEventCursorName = element->GetMouseEventCursorName();
-            options.cursorsDir = element->GetCursorsDir();
-            options.rotate = element->GetRotate();
-            options.antialias = element->GetAntiAlias();
-            options.solidColorRadius = element->GetCornerRadius();
-
-            options.paddingLeft = element->GetPaddingLeft();
-            options.paddingTop = element->GetPaddingTop();
-            options.paddingRight = element->GetPaddingRight();
-            options.paddingBottom = element->GetPaddingBottom();
-
-            if (element->HasSolidColor())
-            {
-                options.hasSolidColor = true;
-                options.solidColor = element->GetSolidColor();
-                options.solidAlpha = element->GetSolidAlpha();
-                options.solidGradient = element->GetSolidGradient();
-            }
-
-            options.bevelType = element->GetBevelType();
-            options.bevelWidth = element->GetBevelWidth();
-            options.bevelColor = element->GetBevelColor();
-            options.bevelAlpha = element->GetBevelAlpha();
-            options.bevelColor2 = element->GetBevelColor2();
-            options.bevelAlpha2 = element->GetBevelAlpha2();
-
-            if (element->HasTransformMatrix())
-            {
-                options.hasTransformMatrix = true;
-                const float *m = element->GetTransformMatrix();
-                options.transformMatrix.assign(m, m + 6);
-            }
-        }
-
         std::vector<std::wstring> SplitByComma(const std::wstring &s)
         {
             std::vector<std::wstring> parts;
@@ -1188,7 +1139,48 @@ namespace PropertyParser
     {
         if (!element)
             return;
-        PreFillElementBaseOptions(options, element);
+        options.id = element->GetId();
+        options.x = element->GetX();
+        options.y = element->GetY();
+        options.width = element->IsWDefined() ? (element->GetWidth() - element->GetPaddingLeft() - element->GetPaddingRight()) : 0;
+        options.height = element->IsHDefined() ? (element->GetHeight() - element->GetPaddingTop() - element->GetPaddingBottom()) : 0;
+
+        options.show = element->IsVisible();
+        options.containerId = element->GetContainerId();
+        options.groupId = element->GetGroupId();
+        options.mouseEventCursor = element->GetMouseEventCursor();
+        options.mouseEventCursorName = element->GetMouseEventCursorName();
+        options.cursorsDir = element->GetCursorsDir();
+        options.rotate = element->GetRotate();
+        options.antialias = element->GetAntiAlias();
+        options.solidColorRadius = element->GetCornerRadius();
+
+        options.paddingLeft = element->GetPaddingLeft();
+        options.paddingTop = element->GetPaddingTop();
+        options.paddingRight = element->GetPaddingRight();
+        options.paddingBottom = element->GetPaddingBottom();
+
+        if (element->HasSolidColor())
+        {
+            options.hasSolidColor = true;
+            options.solidColor = element->GetSolidColor();
+            options.solidAlpha = element->GetSolidAlpha();
+            options.solidGradient = element->GetSolidGradient();
+        }
+
+        options.bevelType = element->GetBevelType();
+        options.bevelWidth = element->GetBevelWidth();
+        options.bevelColor = element->GetBevelColor();
+        options.bevelAlpha = element->GetBevelAlpha();
+        options.bevelColor2 = element->GetBevelColor2();
+        options.bevelAlpha2 = element->GetBevelAlpha2();
+
+        if (element->HasTransformMatrix())
+        {
+            options.hasTransformMatrix = true;
+            const float *m = element->GetTransformMatrix();
+            for (int i = 0; i < 6; ++i) options.transformMatrix[i] = m[i];
+        }
         options.path = element->GetImagePath();
         options.preserveAspectRatio = element->GetPreserveAspectRatio();
         options.imageAlpha = element->GetImageAlpha();
@@ -1206,7 +1198,48 @@ namespace PropertyParser
     {
         if (!element)
             return;
-        PreFillElementBaseOptions(options, element);
+        options.id = element->GetId();
+        options.x = element->GetX();
+        options.y = element->GetY();
+        options.width = element->IsWDefined() ? (element->GetWidth() - element->GetPaddingLeft() - element->GetPaddingRight()) : 0;
+        options.height = element->IsHDefined() ? (element->GetHeight() - element->GetPaddingTop() - element->GetPaddingBottom()) : 0;
+
+        options.show = element->IsVisible();
+        options.containerId = element->GetContainerId();
+        options.groupId = element->GetGroupId();
+        options.mouseEventCursor = element->GetMouseEventCursor();
+        options.mouseEventCursorName = element->GetMouseEventCursorName();
+        options.cursorsDir = element->GetCursorsDir();
+        options.rotate = element->GetRotate();
+        options.antialias = element->GetAntiAlias();
+        options.solidColorRadius = element->GetCornerRadius();
+
+        options.paddingLeft = element->GetPaddingLeft();
+        options.paddingTop = element->GetPaddingTop();
+        options.paddingRight = element->GetPaddingRight();
+        options.paddingBottom = element->GetPaddingBottom();
+
+        if (element->HasSolidColor())
+        {
+            options.hasSolidColor = true;
+            options.solidColor = element->GetSolidColor();
+            options.solidAlpha = element->GetSolidAlpha();
+            options.solidGradient = element->GetSolidGradient();
+        }
+
+        options.bevelType = element->GetBevelType();
+        options.bevelWidth = element->GetBevelWidth();
+        options.bevelColor = element->GetBevelColor();
+        options.bevelAlpha = element->GetBevelAlpha();
+        options.bevelColor2 = element->GetBevelColor2();
+        options.bevelAlpha2 = element->GetBevelAlpha2();
+
+        if (element->HasTransformMatrix())
+        {
+            options.hasTransformMatrix = true;
+            const float *m = element->GetTransformMatrix();
+            for (int i = 0; i < 6; ++i) options.transformMatrix[i] = m[i];
+        }
         options.text = element->GetText();
         options.fontFace = element->GetFontFace();
         options.fontSize = element->GetFontSize();
@@ -1229,7 +1262,48 @@ namespace PropertyParser
     {
         if (!element)
             return;
-        PreFillElementBaseOptions(options, element);
+        options.id = element->GetId();
+        options.x = element->GetX();
+        options.y = element->GetY();
+        options.width = element->IsWDefined() ? (element->GetWidth() - element->GetPaddingLeft() - element->GetPaddingRight()) : 0;
+        options.height = element->IsHDefined() ? (element->GetHeight() - element->GetPaddingTop() - element->GetPaddingBottom()) : 0;
+
+        options.show = element->IsVisible();
+        options.containerId = element->GetContainerId();
+        options.groupId = element->GetGroupId();
+        options.mouseEventCursor = element->GetMouseEventCursor();
+        options.mouseEventCursorName = element->GetMouseEventCursorName();
+        options.cursorsDir = element->GetCursorsDir();
+        options.rotate = element->GetRotate();
+        options.antialias = element->GetAntiAlias();
+        options.solidColorRadius = element->GetCornerRadius();
+
+        options.paddingLeft = element->GetPaddingLeft();
+        options.paddingTop = element->GetPaddingTop();
+        options.paddingRight = element->GetPaddingRight();
+        options.paddingBottom = element->GetPaddingBottom();
+
+        if (element->HasSolidColor())
+        {
+            options.hasSolidColor = true;
+            options.solidColor = element->GetSolidColor();
+            options.solidAlpha = element->GetSolidAlpha();
+            options.solidGradient = element->GetSolidGradient();
+        }
+
+        options.bevelType = element->GetBevelType();
+        options.bevelWidth = element->GetBevelWidth();
+        options.bevelColor = element->GetBevelColor();
+        options.bevelAlpha = element->GetBevelAlpha();
+        options.bevelColor2 = element->GetBevelColor2();
+        options.bevelAlpha2 = element->GetBevelAlpha2();
+
+        if (element->HasTransformMatrix())
+        {
+            options.hasTransformMatrix = true;
+            const float *m = element->GetTransformMatrix();
+            for (int i = 0; i < 6; ++i) options.transformMatrix[i] = m[i];
+        }
         options.value = element->GetValue();
         options.orientation = element->GetOrientation();
         options.barCornerRadius = element->GetBarCornerRadius();
@@ -1243,7 +1317,48 @@ namespace PropertyParser
     {
         if (!element)
             return;
-        PreFillElementBaseOptions(options, element);
+        options.id = element->GetId();
+        options.x = element->GetX();
+        options.y = element->GetY();
+        options.width = element->IsWDefined() ? (element->GetWidth() - element->GetPaddingLeft() - element->GetPaddingRight()) : 0;
+        options.height = element->IsHDefined() ? (element->GetHeight() - element->GetPaddingTop() - element->GetPaddingBottom()) : 0;
+
+        options.show = element->IsVisible();
+        options.containerId = element->GetContainerId();
+        options.groupId = element->GetGroupId();
+        options.mouseEventCursor = element->GetMouseEventCursor();
+        options.mouseEventCursorName = element->GetMouseEventCursorName();
+        options.cursorsDir = element->GetCursorsDir();
+        options.rotate = element->GetRotate();
+        options.antialias = element->GetAntiAlias();
+        options.solidColorRadius = element->GetCornerRadius();
+
+        options.paddingLeft = element->GetPaddingLeft();
+        options.paddingTop = element->GetPaddingTop();
+        options.paddingRight = element->GetPaddingRight();
+        options.paddingBottom = element->GetPaddingBottom();
+
+        if (element->HasSolidColor())
+        {
+            options.hasSolidColor = true;
+            options.solidColor = element->GetSolidColor();
+            options.solidAlpha = element->GetSolidAlpha();
+            options.solidGradient = element->GetSolidGradient();
+        }
+
+        options.bevelType = element->GetBevelType();
+        options.bevelWidth = element->GetBevelWidth();
+        options.bevelColor = element->GetBevelColor();
+        options.bevelAlpha = element->GetBevelAlpha();
+        options.bevelColor2 = element->GetBevelColor2();
+        options.bevelAlpha2 = element->GetBevelAlpha2();
+
+        if (element->HasTransformMatrix())
+        {
+            options.hasTransformMatrix = true;
+            const float *m = element->GetTransformMatrix();
+            for (int i = 0; i < 6; ++i) options.transformMatrix[i] = m[i];
+        }
         options.value = element->GetValue();
         options.radius = element->GetRadius();
         options.thickness = element->GetThickness();
@@ -1269,7 +1384,48 @@ namespace PropertyParser
     {
         if (!element)
             return;
-        PreFillElementBaseOptions(options, element);
+        options.id = element->GetId();
+        options.x = element->GetX();
+        options.y = element->GetY();
+        options.width = element->IsWDefined() ? (element->GetWidth() - element->GetPaddingLeft() - element->GetPaddingRight()) : 0;
+        options.height = element->IsHDefined() ? (element->GetHeight() - element->GetPaddingTop() - element->GetPaddingBottom()) : 0;
+
+        options.show = element->IsVisible();
+        options.containerId = element->GetContainerId();
+        options.groupId = element->GetGroupId();
+        options.mouseEventCursor = element->GetMouseEventCursor();
+        options.mouseEventCursorName = element->GetMouseEventCursorName();
+        options.cursorsDir = element->GetCursorsDir();
+        options.rotate = element->GetRotate();
+        options.antialias = element->GetAntiAlias();
+        options.solidColorRadius = element->GetCornerRadius();
+
+        options.paddingLeft = element->GetPaddingLeft();
+        options.paddingTop = element->GetPaddingTop();
+        options.paddingRight = element->GetPaddingRight();
+        options.paddingBottom = element->GetPaddingBottom();
+
+        if (element->HasSolidColor())
+        {
+            options.hasSolidColor = true;
+            options.solidColor = element->GetSolidColor();
+            options.solidAlpha = element->GetSolidAlpha();
+            options.solidGradient = element->GetSolidGradient();
+        }
+
+        options.bevelType = element->GetBevelType();
+        options.bevelWidth = element->GetBevelWidth();
+        options.bevelColor = element->GetBevelColor();
+        options.bevelAlpha = element->GetBevelAlpha();
+        options.bevelColor2 = element->GetBevelColor2();
+        options.bevelAlpha2 = element->GetBevelAlpha2();
+
+        if (element->HasTransformMatrix())
+        {
+            options.hasTransformMatrix = true;
+            const float *m = element->GetTransformMatrix();
+            for (int i = 0; i < 6; ++i) options.transformMatrix[i] = m[i];
+        }
         options.strokeWidth = element->GetStrokeWidth();
         options.strokeColor = element->GetStrokeColor();
         options.strokeAlpha = element->GetStrokeAlpha();
@@ -1466,3 +1622,5 @@ namespace novadesk::scripting::quickjs::parser
         height = parsed.height;
     }
 } // namespace novadesk::scripting::quickjs::parser
+
+

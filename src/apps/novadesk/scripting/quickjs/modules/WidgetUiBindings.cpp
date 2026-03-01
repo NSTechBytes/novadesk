@@ -292,36 +292,8 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
-        JSValue JsWidgetGetElementProperty(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        JSValue GetElementPropertyValue(JSContext *ctx, Element *element, const std::string &prop)
         {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_EXCEPTION;
-            if (argc < 2)
-                return ThrowTypeError(ctx, "getElementProperty", "expected (id, propertyName)");
-
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            const char *propUtf8 = JS_ToCString(ctx, argv[1]);
-            if (!idUtf8 || !propUtf8)
-            {
-                if (idUtf8)
-                    JS_FreeCString(ctx, idUtf8);
-                if (propUtf8)
-                    JS_FreeCString(ctx, propUtf8);
-                return JS_EXCEPTION;
-            }
-
-            const std::wstring id = Utils::ToWString(idUtf8);
-            const std::string prop = propUtf8;
-            JS_FreeCString(ctx, idUtf8);
-            JS_FreeCString(ctx, propUtf8);
-
-            Element *element = widget->FindElementById(id);
-            if (!element)
-            {
-                return JS_NULL;
-            }
-
             const GfxRect contentBounds = element->GetBounds();
             GfxRect outerBounds = element->GetBackgroundBounds();
             if (element->GetBevelType() != 0)
@@ -789,6 +761,79 @@ namespace novadesk::scripting::quickjs
             }
 
             return JS_UNDEFINED;
+        }
+
+        JSValue BuildElementPropertiesObject(JSContext *ctx, Element *element)
+        {
+            JSValue obj = JS_NewObject(ctx);
+            if (!element)
+                return obj;
+
+            const std::vector<const char *> keys = {
+                "id", "contentX", "contentY", "contentWidth", "contentHeight",
+                "x", "y", "width", "height", "show", "container", "group",
+                "mouseEventCursor", "mouseEventCursorName", "cursorsDir", "rotate", "antiAlias",
+                "backgroundColorRadius", "backgroundColor", "bevelType", "bevelWidth", "bevelColor", "bevelColor2",
+                "padding", "transformMatrix",
+                "text", "fontFace", "fontSize", "fontColor", "fontWeight", "italic", "underLine",
+                "strikeThrough", "letterSpacing", "fontPath", "textAlign", "clipString", "case", "fontShadow",
+                "path", "preserveAspectRatio", "grayscale", "tile", "imageAlpha", "imageTint",
+                "value", "barCornerRadius", "orientation", "barColor", "radius", "thickness", "startAngle",
+                "totalAngle", "clockwise", "endThickness", "ticks", "capType", "lineColor", "lineColorBg",
+                "shapeType", "strokeWidth", "strokeColor", "fillColor", "radiusX", "radiusY", "startX", "startY",
+                "endX", "endY", "curveType", "controlX", "controlY", "control2X", "control2Y", "endAngle",
+                "pathData", "strokeStartCap", "strokeEndCap", "strokeDashCap", "strokeLineJoin",
+                "strokeDashOffset", "strokeDashes", "isCombine", "combineBaseId", "combineConsumeAll", "combineOps"};
+
+            for (const char *key : keys)
+            {
+                JSValue v = GetElementPropertyValue(ctx, element, key);
+                if (!JS_IsUndefined(v))
+                {
+                    JS_SetPropertyStr(ctx, obj, key, v); // consumes v
+                }
+                else
+                {
+                    JS_FreeValue(ctx, v);
+                }
+            }
+            return obj;
+        }
+
+        JSValue JsWidgetGetElementProperty(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_EXCEPTION;
+            if (argc < 2)
+                return ThrowTypeError(ctx, "getElementProperty", "expected (id, propertyName)");
+
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            const char *propUtf8 = JS_ToCString(ctx, argv[1]);
+            if (!idUtf8 || !propUtf8)
+            {
+                if (idUtf8)
+                    JS_FreeCString(ctx, idUtf8);
+                if (propUtf8)
+                    JS_FreeCString(ctx, propUtf8);
+                return JS_EXCEPTION;
+            }
+
+            const std::wstring id = Utils::ToWString(idUtf8);
+            const std::string prop = propUtf8;
+            JS_FreeCString(ctx, idUtf8);
+            JS_FreeCString(ctx, propUtf8);
+
+            Element *element = widget->FindElementById(id);
+            if (!element)
+            {
+                return JS_NULL;
+            }
+
+            JSValue props = BuildElementPropertiesObject(ctx, element);
+            JSValue out = JS_GetPropertyStr(ctx, props, prop.c_str());
+            JS_FreeValue(ctx, props);
+            return out;
         }
 
         void JsWidgetFinalizer(JSRuntime *, JSValue)
