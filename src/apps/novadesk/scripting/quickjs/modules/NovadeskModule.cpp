@@ -633,6 +633,75 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
+        JSValue JsAppSaveLogToFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+            {
+                return JS_ThrowTypeError(ctx, "app.saveLogToFile(enable) requires boolean");
+            }
+            int b = JS_ToBool(ctx, argv[0]);
+            if (b < 0)
+            {
+                return JS_ThrowTypeError(ctx, "app.saveLogToFile(enable) expects boolean");
+            }
+
+            const bool enable = (b != 0);
+            Settings::SetGlobalBool("saveLogToFile", enable);
+            if (enable)
+            {
+                std::wstring logPath = PathUtils::GetAppDataPath() + L"logs.log";
+                Logging::SetFileLogging(logPath, false);
+            }
+            else
+            {
+                Logging::SetFileLogging(L"");
+            }
+            return JS_NewBool(ctx, 1);
+        }
+
+        JSValue JsAppDisableLogging(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+            {
+                return JS_ThrowTypeError(ctx, "app.disableLogging(disable) requires boolean");
+            }
+            int b = JS_ToBool(ctx, argv[0]);
+            if (b < 0)
+            {
+                return JS_ThrowTypeError(ctx, "app.disableLogging(disable) expects boolean");
+            }
+
+            const bool disable = (b != 0);
+            Settings::SetGlobalBool("disableLogging", disable);
+            Logging::SetConsoleLogging(!disable);
+            if (disable)
+            {
+                Logging::SetFileLogging(L"");
+            }
+            else if (Settings::GetGlobalBool("saveLogToFile", false))
+            {
+                std::wstring logPath = PathUtils::GetAppDataPath() + L"logs.log";
+                Logging::SetFileLogging(logPath, false);
+            }
+            return JS_NewBool(ctx, 1);
+        }
+
+        JSValue JsAppUseHardwareAcceleration(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+            {
+                return JS_ThrowTypeError(ctx, "app.useHardwareAcceleration(enable) requires boolean");
+            }
+            int b = JS_ToBool(ctx, argv[0]);
+            if (b < 0)
+            {
+                return JS_ThrowTypeError(ctx, "app.useHardwareAcceleration(enable) expects boolean");
+            }
+
+            Settings::SetGlobalBool("useHardwareAcceleration", (b != 0));
+            return JS_NewBool(ctx, 1);
+        }
+
         JSValue JsAppGetProductVersion(JSContext *ctx, JSValueConst, int, JSValueConst *)
         {
             return JS_NewString(ctx, Utils::ToString(GetVersionProperty(L"ProductVersion")).c_str());
@@ -881,7 +950,10 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, app, "reload", JS_NewCFunction(ctx, JsAppReload, "reload", 0));
             JS_SetPropertyStr(ctx, app, "refresh", JS_NewCFunction(ctx, JsAppRefresh, "refresh", 0));
             JS_SetPropertyStr(ctx, app, "exit", JS_NewCFunction(ctx, JsAppExit, "exit", 0));
+            JS_SetPropertyStr(ctx, app, "saveLogToFile", JS_NewCFunction(ctx, JsAppSaveLogToFile, "saveLogToFile", 1));
+            JS_SetPropertyStr(ctx, app, "disableLogging", JS_NewCFunction(ctx, JsAppDisableLogging, "disableLogging", 1));
             JS_SetPropertyStr(ctx, app, "hideTrayIcon", JS_NewCFunction(ctx, JsAppHideTrayIcon, "hideTrayIcon", 1));
+            JS_SetPropertyStr(ctx, app, "useHardwareAcceleration", JS_NewCFunction(ctx, JsAppUseHardwareAcceleration, "useHardwareAcceleration", 1));
             JS_SetPropertyStr(ctx, app, "getProductVersion", JS_NewCFunction(ctx, JsAppGetProductVersion, "getProductVersion", 0));
             JS_SetPropertyStr(ctx, app, "getFileVersion", JS_NewCFunction(ctx, JsAppGetFileVersion, "getFileVersion", 0));
             JS_SetPropertyStr(ctx, app, "getNovadeskVersion", JS_NewCFunction(ctx, JsAppGetNovadeskVersion, "getNovadeskVersion", 0));
