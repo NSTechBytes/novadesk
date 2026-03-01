@@ -24,6 +24,22 @@
 #include <roapi.h>
 #include <wininet.h>
 
+#ifndef __IAudioMeterInformation_INTERFACE_DEFINED__
+#define __IAudioMeterInformation_INTERFACE_DEFINED__
+MIDL_INTERFACE("C02216F6-8C67-4B5B-9D00-D008E73E0064")
+IAudioMeterInformation : public IUnknown
+{
+public:
+    virtual HRESULT STDMETHODCALLTYPE GetPeakValue(float *pfPeak) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetMeteringChannelCount(UINT *pnChannelCount) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetChannelsPeakValues(UINT32 u32ChannelCount, float *afPeakValues) = 0;
+    virtual HRESULT STDMETHODCALLTYPE QueryHardwareSupport(DWORD *pdwHardwareSupportMask) = 0;
+};
+#endif
+// MinGW may not provide __mingw_uuidof support for this interface.
+static const IID IID_IAudioMeterInformation_Local =
+    {0xC02216F6, 0x8C67, 0x4B5B, {0x9D, 0x00, 0xD0, 0x08, 0xE7, 0x3E, 0x00, 0x64}};
+
 #if ((__cplusplus >= 202002L) || defined(__cpp_impl_coroutine)) && __has_include(<winrt/base.h>) && __has_include(<winrt/Windows.Media.Control.h>) && __has_include(<winrt/Windows.Storage.Streams.h>)
 #define NOVADESK_HAS_WINRT_NOWPLAYING 1
 #include <winrt/base.h>
@@ -1363,6 +1379,7 @@ namespace novadesk::shared::system
                 IAudioSessionControl *control = nullptr;
                 IAudioSessionControl2 *control2 = nullptr;
                 ISimpleAudioVolume *simpleVol = nullptr;
+                IAudioMeterInformation *meter = nullptr;
 
                 if (FAILED(sessionEnum->GetSession(i, &control)) || !control)
                     continue;
@@ -1395,7 +1412,14 @@ namespace novadesk::shared::system
                 BOOL muted = FALSE;
                 simpleVol->GetMasterVolume(&volume);
                 simpleVol->GetMute(&muted);
-                peak = 0.0f;
+                if (SUCCEEDED(control2->QueryInterface(IID_IAudioMeterInformation_Local, (void **)&meter)) && meter)
+                {
+                    float meterPeak = 0.0f;
+                    if (SUCCEEDED(meter->GetPeakValue(&meterPeak)))
+                    {
+                        peak = meterPeak;
+                    }
+                }
 
                 LPWSTR displayName = nullptr;
                 std::wstring display;
@@ -1430,6 +1454,8 @@ namespace novadesk::shared::system
 
                 sessions.push_back(info);
 
+                if (meter)
+                    meter->Release();
                 simpleVol->Release();
                 control2->Release();
                 control->Release();
