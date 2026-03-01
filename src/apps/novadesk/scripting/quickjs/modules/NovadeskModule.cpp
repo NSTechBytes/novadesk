@@ -67,6 +67,8 @@ namespace novadesk::scripting::quickjs
             NovadeskAddonUnloadFn unloadFn = nullptr;
             std::vector<int> registeredFunctionIds;
             std::vector<void *> functionHandles;
+            JSContext *exportCtx = nullptr;
+            JSValue exportObject = JS_UNDEFINED;
         };
 
         std::map<std::wstring, AddonInfo> g_loadedAddons;
@@ -828,7 +830,8 @@ namespace novadesk::scripting::quickjs
             auto it = g_loadedAddons.find(addonPath);
             if (it != g_loadedAddons.end())
             {
-                return JS_NewInt32(ctx, it->second.id);
+                // Legacy behavior: loading an already loaded addon returns true.
+                return JS_NewBool(ctx, 1);
             }
 
             HMODULE module = LoadLibraryW(addonPath.c_str());
@@ -850,6 +853,7 @@ namespace novadesk::scripting::quickjs
             info.id = g_nextAddonId++;
             info.handle = module;
             info.unloadFn = reinterpret_cast<NovadeskAddonUnloadFn>(GetProcAddress(module, "NovadeskAddonUnload"));
+            info.exportCtx = ctx;
             auto [insIt, _ok] = g_loadedAddons.emplace(addonPath, std::move(info));
             AddonInfo &stored = insIt->second;
             g_addonPathById[stored.id] = addonPath;
@@ -857,7 +861,8 @@ namespace novadesk::scripting::quickjs
             AddonCallContext call{};
             call.ctx = ctx;
             call.addon = &stored;
-            call.stack.push_back(JS_NewObject(ctx));
+            JSValue rootExports = JS_NewObject(ctx);
+            call.stack.push_back(JS_DupValue(ctx, rootExports));
 
             initFn(reinterpret_cast<novadesk_context>(&call), JSEngine::GetMessageWindow(), &g_hostApi);
 
@@ -883,29 +888,43 @@ namespace novadesk::scripting::quickjs
                 return JS_ThrowInternalError(ctx, "%s", call.throwMessage.c_str());
             }
 
-            for (JSValue &v : call.stack)
-                JS_FreeValue(ctx, v);
+            stored.exportObject = JS_DupValue(ctx, rootExports);
 
-            return JS_NewInt32(ctx, stored.id);
+            // Legacy behavior: return the top value pushed by addon init.
+            // If addon did not push anything extra, this is the root exports object.
+            JSValue ret = call.stack.empty() ? JS_DupValue(ctx, rootExports) : JS_DupValue(ctx, call.stack.back());
+
+            for (size_t i = 0; i < call.stack.size(); ++i)
+            {
+                JS_FreeValue(ctx, call.stack[i]);
+            }
+            JS_FreeValue(ctx, rootExports);
+
+            return ret;
         }
 
         JSValue JsAddonUnload(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
             if (argc < 1)
             {
-                return JS_ThrowTypeError(ctx, "addon.unload(id) requires id");
+                return JS_ThrowTypeError(ctx, "addon.unload(path) requires path");
             }
-            int32_t addonId = 0;
-            if (JS_ToInt32(ctx, &addonId, argv[0]) != 0)
+            if (!JS_IsString(argv[0]))
             {
-                return JS_ThrowTypeError(ctx, "addon.unload(id) expects number");
+                return JS_ThrowTypeError(ctx, "addon.unload(path) expects string path");
             }
-            auto pit = g_addonPathById.find(static_cast<int>(addonId));
-            if (pit == g_addonPathById.end())
-            {
-                return JS_NewBool(ctx, 0);
-            }
-            auto it = g_loadedAddons.find(pit->second);
+
+            const char *pathC = JS_ToCString(ctx, argv[0]);
+            if (!pathC)
+                return JS_EXCEPTION;
+            std::wstring targetPath = Utils::ToWString(pathC);
+            JS_FreeCString(ctx, pathC);
+            if (PathUtils::IsPathRelative(targetPath))
+                targetPath = PathUtils::ResolvePath(targetPath, JSEngine::GetEntryScriptDir());
+            else
+                targetPath = PathUtils::NormalizePath(targetPath);
+
+            auto it = g_loadedAddons.find(targetPath);
             if (it == g_loadedAddons.end())
             {
                 return JS_NewBool(ctx, 0);
@@ -919,7 +938,7 @@ namespace novadesk::scripting::quickjs
                 }
                 catch (...)
                 {
-                    Logging::Log(LogLevel::Error, L"Crash in NovadeskAddonUnload for addon id %d", addonId);
+                    Logging::Log(LogLevel::Error, L"Crash in NovadeskAddonUnload");
                 }
             }
 
@@ -936,6 +955,11 @@ namespace novadesk::scripting::quickjs
                         JS_FreeValue(h->ctx, h->fn);
                     delete h;
                 }
+            }
+            if (!JS_IsUndefined(it->second.exportObject) && it->second.exportCtx)
+            {
+                JS_FreeValue(it->second.exportCtx, it->second.exportObject);
+                it->second.exportObject = JS_UNDEFINED;
             }
 
             g_addonPathById.erase(it->second.id);
