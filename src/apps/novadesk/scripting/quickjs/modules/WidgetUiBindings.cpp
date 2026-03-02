@@ -865,18 +865,20 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, global, "ipcRenderer", JS_DupValue(ctx, ipcObj));
             const std::string fileName = Utils::ToString(absPath);
             const std::string dirName = Utils::ToString(PathUtils::GetParentDir(absPath));
+            const std::string widgetDirName = Utils::ToString(PathUtils::GetWidgetsDir());
             JS_SetPropertyStr(ctx, global, "__filename", JS_NewString(ctx, fileName.c_str()));
             JS_SetPropertyStr(ctx, global, "__dirname", JS_NewString(ctx, dirName.c_str()));
+            JS_SetPropertyStr(ctx, global, "__widgetDir", JS_NewString(ctx, widgetDirName.c_str()));
             JS_FreeValue(ctx, global);
 
             const std::string scriptPrelude =
-                "(function(ui, ipcRenderer, __filename, __dirname){\n"
+                "(function(ui, ipcRenderer, __filename, __dirname, __widgetDir){\n"
                 "const setTimeout = undefined;\n"
                 "const setInterval = undefined;\n"
                 "const clearTimeout = undefined;\n"
                 "const clearInterval = undefined;\n";
             const std::string scriptSuffix =
-                "\n})(globalThis.ui, globalThis.ipcRenderer, globalThis.__filename, globalThis.__dirname);\n";
+                "\n})(globalThis.ui, globalThis.ipcRenderer, globalThis.__filename, globalThis.__dirname, globalThis.__widgetDir);\n";
             const std::string scriptSourceWithPrelude = scriptPrelude + scriptSource + scriptSuffix;
 
             JSValue evalResult = JS_Eval(ctx, scriptSourceWithPrelude.c_str(), scriptSourceWithPrelude.size(), fileName.c_str(), JS_EVAL_TYPE_GLOBAL);
@@ -894,6 +896,9 @@ namespace novadesk::scripting::quickjs
             JSAtom dirname2Atom = JS_NewAtom(ctx, "__dirname");
             JS_DeleteProperty(ctx, global2, dirname2Atom, 0);
             JS_FreeAtom(ctx, dirname2Atom);
+            JSAtom widgetDirAtom = JS_NewAtom(ctx, "__widgetDir");
+            JS_DeleteProperty(ctx, global2, widgetDirAtom, 0);
+            JS_FreeAtom(ctx, widgetDirAtom);
             JS_FreeValue(ctx, global2);
             JS_FreeValue(ctx, uiObj);
             JS_FreeValue(ctx, ipcObj);
