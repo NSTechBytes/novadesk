@@ -3,7 +3,6 @@
 
 // === SECTION 1: BASIC IMAGE LOADING ===
 // Test 1: Basic image with default settings
-ui.beginUpdate();
 ui.addImage({
     id: "basic-image",
     path: "../assets/pic.png",
@@ -488,5 +487,3 @@ ui.addText({
     fontSize: 14,
     fontColor: "rgb(255,255,255)"
 });
-
-ui.endUpdate();
