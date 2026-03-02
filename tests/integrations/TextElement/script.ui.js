@@ -1,6 +1,6 @@
 // TextElement Test Suite
 // Comprehensive test of all TextElement features and options
-
+ui.beginUpdate();
 // === SECTION 1: BASIC TEXT PROPERTIES ===
 // Test 1: Basic text with default settings
 ui.addText({
@@ -441,3 +441,6 @@ ui.addText({
     fontSize: 14,
     fontColor: "rgb(255,255,255)"
 });
+
+
+ui.endUpdate();

@@ -958,6 +958,24 @@ namespace novadesk::scripting::quickjs
 
         if (!options.id.empty())
         {
+            auto existingIt = std::find_if(
+                widgets.begin(),
+                widgets.end(),
+                [&](Widget *existing)
+                {
+                    return existing && existing->GetOptions().id == options.id;
+                });
+
+            if (existingIt != widgets.end())
+            {
+                Widget *existing = *existingIt;
+                widgets.erase(existingIt);
+                delete existing;
+            }
+        }
+
+        if (!options.id.empty())
+        {
             Settings::LoadWidget(options.id, options);
         }
 
