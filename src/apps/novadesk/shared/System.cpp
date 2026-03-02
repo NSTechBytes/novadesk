@@ -67,6 +67,9 @@ namespace novadesk::shared::system
 {
     using json = nlohmann::json;
 
+    // *********************************************
+    //  Hotkeys
+
     struct RegisteredHotkey
     {
         HotkeyBinding binding;
@@ -75,25 +78,37 @@ namespace novadesk::shared::system
         bool pressed = false;
     };
 
+    std::unordered_map<int, RegisteredHotkey> g_hotkeys;
+    int g_nextHotkeyId = 10000;
+    HHOOK g_keyboardHook = nullptr;
+    HWND g_hotkeyMessageWindow = nullptr;
+
+    // *********************************************
+    //  JSON
+
     struct Span
     {
         size_t start = 0;
         size_t end = 0;
     };
 
-    std::unordered_map<int, RegisteredHotkey> g_hotkeys;
-    int g_nextHotkeyId = 10000;
-    HHOOK g_keyboardHook = nullptr;
-    HWND g_hotkeyMessageWindow = nullptr;
+    // *********************************************
+    //  CPU Metrics
 
     ULONGLONG g_lastIdleTime = 0;
     ULONGLONG g_lastKernelTime = 0;
     ULONGLONG g_lastUserTime = 0;
     bool g_cpuInitialized = false;
 
+    // *********************************************
+    //  Network Metrics
+
     ULONGLONG g_lastTotalIn = 0;
     ULONGLONG g_lastTotalOut = 0;
     std::chrono::steady_clock::time_point g_lastNetworkSample = std::chrono::steady_clock::time_point::min();
+
+    // *********************************************
+    //  Power
 
     typedef struct _PROCESSOR_POWER_INFORMATION_LOCAL
     {
@@ -104,6 +119,9 @@ namespace novadesk::shared::system
         ULONG MaxIdleState;
         ULONG CurrentIdleState;
     } PROCESSOR_POWER_INFORMATION_LOCAL;
+
+    // *********************************************
+    //  COM Utilities
 
     struct ComInit
     {
