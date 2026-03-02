@@ -491,7 +491,7 @@ namespace PropertyParser
         return true;
     }
 
-    void ParseElementOptions(JSContext *ctx, JSValueConst obj, ElementOptions &options, const std::wstring &)
+    void ParseElementOptions(JSContext *ctx, JSValueConst obj, ElementOptions &options, const std::wstring &baseDir)
     {
         if (!JS_IsObject(obj))
             return;
@@ -572,7 +572,7 @@ namespace PropertyParser
         options.cursorsDir = GetStringProp(ctx, obj, "cursorsDir");
         if (!options.cursorsDir.empty())
         {
-            options.cursorsDir = PathUtils::ResolvePath(options.cursorsDir);
+            options.cursorsDir = PathUtils::ResolvePath(options.cursorsDir, baseDir);
         }
 
         if (GetFloatArrayProp(ctx, obj, "transformMatrix", options.transformMatrix, 6))
