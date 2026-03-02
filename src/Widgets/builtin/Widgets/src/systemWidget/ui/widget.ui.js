@@ -1,3 +1,5 @@
+ui.beginUpdate();
+
 // Background Shape
 ui.addShape({
     id: "backgroundShape",
@@ -112,5 +114,4 @@ ipcRenderer.on("system-stats", function (data) {
     ui.setElementProperties("memory-Bar", { "value": data.memory / 100 });
 })
 
-
-
+ui.endUpdate();

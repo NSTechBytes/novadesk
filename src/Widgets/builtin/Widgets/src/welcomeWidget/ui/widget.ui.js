@@ -1,3 +1,5 @@
+ui.beginUpdate();
+
 // Background Shape
 ui.addShape({
     id: "backgroundShape",
@@ -117,5 +119,4 @@ ui.addText({
     fontColor: "rgb(255,255,255)",
 })
 
-
-
+ui.endUpdate();

@@ -1,3 +1,5 @@
+ui.beginUpdate();
+
 // Background Shape
 ui.addShape({
     id: "backgroundShape",
@@ -131,4 +133,4 @@ ipcRenderer.on("networkStats", function(stats) {
     });
 });
 
-
+ui.endUpdate();

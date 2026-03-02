@@ -1,3 +1,5 @@
+ui.beginUpdate();
+
 ui.addShape({
     id: "backgroundShape",
     type: "rectangle",
@@ -57,5 +59,4 @@ ipcRenderer.on("dateUpdate", function (dateStr) {
     ui.setElementProperties("date_Text", { "text": dateStr });
 });
 
-
-
+ui.endUpdate();
