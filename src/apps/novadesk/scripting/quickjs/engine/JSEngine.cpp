@@ -1128,14 +1128,14 @@ namespace JSEngine
         }
 
         JSValue arg = JS_NewObject(g_context);
-        JS_SetPropertyStr(g_context, arg, "clientX", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "clientY", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "screenX", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "screenY", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "offsetX", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "offsetY", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "offsetXPercent", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "offsetYPercent", JS_NewInt32(g_context, 0));
+        JS_SetPropertyStr(g_context, arg, "__clientX", JS_NewInt32(g_context, 0));
+        JS_SetPropertyStr(g_context, arg, "__clientY", JS_NewInt32(g_context, 0));
+        JS_SetPropertyStr(g_context, arg, "__screenX", JS_NewInt32(g_context, 0));
+        JS_SetPropertyStr(g_context, arg, "__screenY", JS_NewInt32(g_context, 0));
+        JS_SetPropertyStr(g_context, arg, "__offsetX", JS_NewInt32(g_context, 0));
+        JS_SetPropertyStr(g_context, arg, "__offsetY", JS_NewInt32(g_context, 0));
+        JS_SetPropertyStr(g_context, arg, "__offsetXPercent", JS_NewInt32(g_context, 0));
+        JS_SetPropertyStr(g_context, arg, "__offsetYPercent", JS_NewInt32(g_context, 0));
         if (widget)
         {
             JS_SetPropertyStr(g_context, arg, "widgetId",
@@ -1145,14 +1145,14 @@ namespace JSEngine
         int argc = 1;
         if (data)
         {
-            JS_SetPropertyStr(g_context, arg, "clientX", JS_NewInt32(g_context, data->clientX));
-            JS_SetPropertyStr(g_context, arg, "clientY", JS_NewInt32(g_context, data->clientY));
-            JS_SetPropertyStr(g_context, arg, "screenX", JS_NewInt32(g_context, data->screenX));
-            JS_SetPropertyStr(g_context, arg, "screenY", JS_NewInt32(g_context, data->screenY));
-            JS_SetPropertyStr(g_context, arg, "offsetX", JS_NewInt32(g_context, data->offsetX));
-            JS_SetPropertyStr(g_context, arg, "offsetY", JS_NewInt32(g_context, data->offsetY));
-            JS_SetPropertyStr(g_context, arg, "offsetXPercent", JS_NewInt32(g_context, data->offsetXPercent));
-            JS_SetPropertyStr(g_context, arg, "offsetYPercent", JS_NewInt32(g_context, data->offsetYPercent));
+            JS_SetPropertyStr(g_context, arg, "__clientX", JS_NewInt32(g_context, data->clientX));
+            JS_SetPropertyStr(g_context, arg, "__clientY", JS_NewInt32(g_context, data->clientY));
+            JS_SetPropertyStr(g_context, arg, "__screenX", JS_NewInt32(g_context, data->screenX));
+            JS_SetPropertyStr(g_context, arg, "__screenY", JS_NewInt32(g_context, data->screenY));
+            JS_SetPropertyStr(g_context, arg, "__offsetX", JS_NewInt32(g_context, data->offsetX));
+            JS_SetPropertyStr(g_context, arg, "__offsetY", JS_NewInt32(g_context, data->offsetY));
+            JS_SetPropertyStr(g_context, arg, "__offsetXPercent", JS_NewInt32(g_context, data->offsetXPercent));
+            JS_SetPropertyStr(g_context, arg, "__offsetYPercent", JS_NewInt32(g_context, data->offsetYPercent));
         }
 
         JSValue argv[1] = {arg};
