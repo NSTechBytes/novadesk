@@ -1,7 +1,7 @@
 // Custom Font Path Test - Ubuntu Family
 // Loading fonts from: D:/Novadesk-Project/Ubuntu
 
-var fontDir = "../../../Ubuntu";
+var fontDir = "../../../../Ubuntu";
 
 var ubuntuWeights = [
     { weight: 300, name: "Light" },

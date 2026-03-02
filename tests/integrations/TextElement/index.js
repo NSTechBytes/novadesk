@@ -7,5 +7,5 @@ new widgetWindow({
   width: 1000,
   height: 1200,
   backgroundColor: "rgba(40, 40, 50, 0.95)",
-  script: "./script.ui.js"
+  script: "fontPath.ui.js"
 }).on("close", function () { app.exit(); });
