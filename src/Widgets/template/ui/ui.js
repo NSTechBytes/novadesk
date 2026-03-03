@@ -1,4 +1,4 @@
-win.addText({
+ui.addText({
     id:"hello_Text",
     x:100,
     y:100,

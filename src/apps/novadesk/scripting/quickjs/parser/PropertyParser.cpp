@@ -505,6 +505,7 @@ namespace PropertyParser
 
         std::wstring bg = GetStringProp(ctx, obj, "backgroundColor");
         ParseGradientOrColor(bg, options.solidColor, options.solidAlpha, options.solidGradient, options.hasSolidColor);
+        GetIntProp(ctx, obj, "backgroundColorRadius", options.solidColorRadius);
 
         std::wstring bevelType = GetStringProp(ctx, obj, "bevelType");
         if (bevelType == L"raised")
@@ -821,7 +822,7 @@ namespace PropertyParser
     {
         ParseElementOptions(ctx, obj, options, baseDir);
 
-        options.shapeType = GetStringProp(ctx, obj, "shapeType");
+        options.shapeType = GetStringProp(ctx, obj, "type");
         GetFloatProp(ctx, obj, "strokeWidth", options.strokeWidth);
 
         std::wstring stroke = GetStringProp(ctx, obj, "strokeColor");
