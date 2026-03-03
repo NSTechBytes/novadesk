@@ -959,7 +959,7 @@ namespace novadesk::scripting::quickjs
         }
 
         WidgetOptions options;
-        options.id = parsed.id.empty() ? L"widget" : parsed.id;
+        options.id = parsed.id;
 
         if (!options.id.empty())
         {

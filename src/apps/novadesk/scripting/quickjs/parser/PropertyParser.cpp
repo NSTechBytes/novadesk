@@ -505,11 +505,6 @@ namespace PropertyParser
 
         std::wstring bg = GetStringProp(ctx, obj, "backgroundColor");
         ParseGradientOrColor(bg, options.solidColor, options.solidAlpha, options.solidGradient, options.hasSolidColor);
-        if (!GetIntProp(ctx, obj, "backgroundColorRadius", options.solidColorRadius))
-        {
-            // Backward compatibility: many scripts use "radius" for element background corner radius.
-            GetIntProp(ctx, obj, "radius", options.solidColorRadius);
-        }
 
         std::wstring bevelType = GetStringProp(ctx, obj, "bevelType");
         if (bevelType == L"raised")
@@ -827,11 +822,6 @@ namespace PropertyParser
         ParseElementOptions(ctx, obj, options, baseDir);
 
         options.shapeType = GetStringProp(ctx, obj, "shapeType");
-        if (options.shapeType.empty())
-        {
-            // Backward compatibility with legacy scripts: "type" was used.
-            options.shapeType = GetStringProp(ctx, obj, "type");
-        }
         GetFloatProp(ctx, obj, "strokeWidth", options.strokeWidth);
 
         std::wstring stroke = GetStringProp(ctx, obj, "strokeColor");
