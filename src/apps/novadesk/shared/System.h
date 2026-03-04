@@ -19,9 +19,11 @@ namespace novadesk::shared::system
 
     struct DisplayMonitorInfo
     {
+        int id = 0;
         bool active = false;
         std::wstring deviceName;
         std::wstring monitorName;
+        DisplayRect work;
         DisplayRect screen;
     };
 

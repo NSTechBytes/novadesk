@@ -369,30 +369,50 @@ namespace novadesk::scripting::quickjs
         {
             const auto &mm = shared::system::GetDisplayMetrics();
             JSValue out = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, out, "virtualLeft", JS_NewInt32(ctx, mm.virtualLeft));
-            JS_SetPropertyStr(ctx, out, "virtualTop", JS_NewInt32(ctx, mm.virtualTop));
-            JS_SetPropertyStr(ctx, out, "virtualWidth", JS_NewInt32(ctx, mm.virtualWidth));
-            JS_SetPropertyStr(ctx, out, "virtualHeight", JS_NewInt32(ctx, mm.virtualHeight));
-            JS_SetPropertyStr(ctx, out, "primaryIndex", JS_NewInt32(ctx, mm.primaryIndex));
-            JS_SetPropertyStr(ctx, out, "count", JS_NewInt32(ctx, static_cast<int32_t>(mm.monitors.size())));
+
+            auto makeArea = [&](int left, int top, int right, int bottom) -> JSValue
+            {
+                JSValue area = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, area, "x", JS_NewInt32(ctx, left));
+                JS_SetPropertyStr(ctx, area, "y", JS_NewInt32(ctx, top));
+                JS_SetPropertyStr(ctx, area, "width", JS_NewInt32(ctx, right - left));
+                JS_SetPropertyStr(ctx, area, "height", JS_NewInt32(ctx, bottom - top));
+                return area;
+            };
+
+            JSValue virtualScreen = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, virtualScreen, "x", JS_NewInt32(ctx, mm.virtualLeft));
+            JS_SetPropertyStr(ctx, virtualScreen, "y", JS_NewInt32(ctx, mm.virtualTop));
+            JS_SetPropertyStr(ctx, virtualScreen, "width", JS_NewInt32(ctx, mm.virtualWidth));
+            JS_SetPropertyStr(ctx, virtualScreen, "height", JS_NewInt32(ctx, mm.virtualHeight));
+            JS_SetPropertyStr(ctx, out, "virtualScreen", virtualScreen);
 
             JSValue arr = JS_NewArray(ctx);
             uint32_t i = 0;
             for (const auto &m : mm.monitors)
             {
                 JSValue mo = JS_NewObject(ctx);
-                JS_SetPropertyStr(ctx, mo, "active", JS_NewBool(ctx, m.active ? 1 : 0));
-                JS_SetPropertyStr(ctx, mo, "deviceName", JS_NewString(ctx, Utils::ToString(m.deviceName).c_str()));
-                JS_SetPropertyStr(ctx, mo, "monitorName", JS_NewString(ctx, Utils::ToString(m.monitorName).c_str()));
-                JSValue screen = JS_NewObject(ctx);
-                JS_SetPropertyStr(ctx, screen, "left", JS_NewInt32(ctx, m.screen.left));
-                JS_SetPropertyStr(ctx, screen, "top", JS_NewInt32(ctx, m.screen.top));
-                JS_SetPropertyStr(ctx, screen, "right", JS_NewInt32(ctx, m.screen.right));
-                JS_SetPropertyStr(ctx, screen, "bottom", JS_NewInt32(ctx, m.screen.bottom));
-                JS_SetPropertyStr(ctx, mo, "screen", screen);
+                JS_SetPropertyStr(ctx, mo, "id", JS_NewInt32(ctx, m.id));
+                JS_SetPropertyStr(ctx, mo, "workArea", makeArea(m.work.left, m.work.top, m.work.right, m.work.bottom));
+                JS_SetPropertyStr(ctx, mo, "screenArea", makeArea(m.screen.left, m.screen.top, m.screen.right, m.screen.bottom));
                 JS_SetPropertyUint32(ctx, arr, i++, mo);
             }
             JS_SetPropertyStr(ctx, out, "monitors", arr);
+
+            JSValue primary = JS_NewObject(ctx);
+            if (mm.primaryIndex >= 0 && mm.primaryIndex < static_cast<int>(mm.monitors.size()))
+            {
+                const auto &pm = mm.monitors[mm.primaryIndex];
+                JS_SetPropertyStr(ctx, primary, "workArea", makeArea(pm.work.left, pm.work.top, pm.work.right, pm.work.bottom));
+                JS_SetPropertyStr(ctx, primary, "screenArea", makeArea(pm.screen.left, pm.screen.top, pm.screen.right, pm.screen.bottom));
+            }
+            else
+            {
+                JS_SetPropertyStr(ctx, primary, "workArea", makeArea(0, 0, 0, 0));
+                JS_SetPropertyStr(ctx, primary, "screenArea", makeArea(0, 0, 0, 0));
+            }
+            JS_SetPropertyStr(ctx, out, "primary", primary);
+
             return out;
         }
 

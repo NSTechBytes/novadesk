@@ -7,26 +7,30 @@ var start = Date.now();
 var metrics = system.displayMetrics.get();
 var elapsed = Date.now() - start;
 
-if (!metrics) {
-    console.error("[FAIL] displayMetrics.get() returned null");
-    app.exit();
-} else {
-    console.log("[PASS] displayMetrics.get() in " + elapsed + "ms");
-    console.log("[INFO] virtual=" + metrics.virtualWidth + "x" + metrics.virtualHeight + " at (" + metrics.virtualLeft + "," + metrics.virtualTop + ")");
-    console.log("[INFO] monitorCount=" + metrics.count + ", primaryIndex=" + metrics.primaryIndex);
+console.log("[INFO] displayMetrics.get() returned:", JSON.stringify(metrics, null, 2));
 
-    var monitors = metrics.monitors || [];
-    for (var i = 0; i < monitors.length; i++) {
-        var m = monitors[i];
-        var s = m.screen || {};
-        console.log(
-            "[MONITOR #" + i + "] active=" + m.active +
-            " deviceName=" + m.deviceName +
-            " monitorName=" + m.monitorName +
-            " screen=(" + s.left + "," + s.top + ")-(" + s.right + "," + s.bottom + ")"
-        );
-    }
+function isArea(a) {
+    return !!a &&
+        typeof a.x === "number" &&
+        typeof a.y === "number" &&
+        typeof a.width === "number" &&
+        typeof a.height === "number";
 }
 
+var hasPrimary = !!metrics && !!metrics.primary && isArea(metrics.primary.workArea) && isArea(metrics.primary.screenArea);
+var hasVirtual = !!metrics &&
+    !!metrics.virtualScreen &&
+    isArea(metrics.virtualScreen) &&
+    metrics.virtualScreen.width > 0 &&
+    metrics.virtualScreen.height > 0;
+var hasMonitorsArray = !!metrics && Array.isArray(metrics.monitors);
+var monitorsValid = hasMonitorsArray && metrics.monitors.length > 0 && metrics.monitors.every(function (m) {
+    return typeof m.id === "number" && isArea(m.workArea) && isArea(m.screenArea);
+});
+
+console.log("[PASS] displayMetrics.get() in " + elapsed + "ms");
+console.log("[CHECK] primary shape valid: " + hasPrimary);
+console.log("[CHECK] virtualScreen shape valid: " + hasVirtual);
+console.log("[CHECK] monitors shape valid: " + monitorsValid);
 console.log("=== DisplayMetrics Integration Complete ===");
 app.exit();

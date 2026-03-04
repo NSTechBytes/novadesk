@@ -50,7 +50,6 @@ static const IID IID_IAudioMeterInformation_Local =
 #include <winrt/Windows.Media.Control.h>
 #endif
 
-#include "../domain/DesktopManager.h"
 #include "PathUtils.h"
 #include "Utils.h"
 #include "Logging.h"
@@ -1360,29 +1359,78 @@ namespace novadesk::shared::system
     // Display Metrics
     // *****************************************************************************
 
+    namespace
+    {
+        struct DisplayEnumContext
+        {
+            DisplayMetrics *out = nullptr;
+        };
+
+        BOOL CALLBACK EnumDisplayMonitorsForMetrics(HMONITOR hMonitor, HDC, LPRECT lprcMonitor, LPARAM dwData)
+        {
+            auto *ctx = reinterpret_cast<DisplayEnumContext *>(dwData);
+            if (!ctx || !ctx->out || !lprcMonitor)
+                return TRUE;
+
+            DisplayMonitorInfo dm{};
+            dm.id = static_cast<int>(ctx->out->monitors.size()) + 1;
+            dm.active = true;
+            dm.screen.left = lprcMonitor->left;
+            dm.screen.top = lprcMonitor->top;
+            dm.screen.right = lprcMonitor->right;
+            dm.screen.bottom = lprcMonitor->bottom;
+
+            MONITORINFOEXW mi{};
+            mi.cbSize = sizeof(mi);
+            if (GetMonitorInfoW(hMonitor, &mi))
+            {
+                dm.work.left = mi.rcWork.left;
+                dm.work.top = mi.rcWork.top;
+                dm.work.right = mi.rcWork.right;
+                dm.work.bottom = mi.rcWork.bottom;
+                dm.deviceName = mi.szDevice;
+
+                DISPLAY_DEVICEW ddm{};
+                ddm.cb = sizeof(ddm);
+                DWORD monIdx = 0;
+                while (EnumDisplayDevicesW(mi.szDevice, monIdx++, &ddm, 0))
+                {
+                    if ((ddm.StateFlags & DISPLAY_DEVICE_ACTIVE) && (ddm.StateFlags & DISPLAY_DEVICE_ATTACHED))
+                    {
+                        dm.monitorName = ddm.DeviceString;
+                        break;
+                    }
+                    ddm.cb = sizeof(ddm);
+                }
+
+                if (mi.dwFlags & MONITORINFOF_PRIMARY)
+                {
+                    ctx->out->primaryIndex = static_cast<int>(ctx->out->monitors.size());
+                }
+            }
+            else
+            {
+                dm.work = dm.screen;
+            }
+
+            ctx->out->monitors.push_back(std::move(dm));
+            return TRUE;
+        }
+    } // namespace
+
     DisplayMetrics GetDisplayMetrics()
     {
-        const auto &src = ::System::GetMultiMonitorInfo();
         DisplayMetrics out;
-        out.virtualTop = src.vsT;
-        out.virtualLeft = src.vsL;
-        out.virtualHeight = src.vsH;
-        out.virtualWidth = src.vsW;
-        out.primaryIndex = src.primaryIndex;
+        out.virtualLeft = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        out.virtualTop = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        out.virtualWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        out.virtualHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+        out.primaryIndex = 0;
 
-        out.monitors.reserve(src.monitors.size());
-        for (const auto &m : src.monitors)
-        {
-            DisplayMonitorInfo dm;
-            dm.active = m.active;
-            dm.deviceName = m.deviceName;
-            dm.monitorName = m.monitorName;
-            dm.screen.left = m.screen.left;
-            dm.screen.top = m.screen.top;
-            dm.screen.right = m.screen.right;
-            dm.screen.bottom = m.screen.bottom;
-            out.monitors.push_back(dm);
-        }
+        DisplayEnumContext ctx{};
+        ctx.out = &out;
+        EnumDisplayMonitors(nullptr, nullptr, EnumDisplayMonitorsForMetrics, reinterpret_cast<LPARAM>(&ctx));
+
         return out;
     }
 

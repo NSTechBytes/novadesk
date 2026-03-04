@@ -93,7 +93,6 @@ public:
 	static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 private:
-	static BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData);
 	static HWND GetDefaultShellWindow();
 	static bool ShouldUseShellWindowAsDesktopIconsHost();
 	

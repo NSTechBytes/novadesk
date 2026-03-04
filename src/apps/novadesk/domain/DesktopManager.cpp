@@ -11,6 +11,7 @@
 
 #include "DesktopManager.h"
 #include "Widget.h"
+#include "../shared/System.h"
 #include <algorithm>
 
 extern std::vector<Widget *> widgets; // Defined in Novadesk.cpp
@@ -40,15 +41,34 @@ static Widget *FindWidget(HWND hWnd)
 
 void System::Initialize(HINSTANCE instance)
 {
-    // Initialize monitors
+    // Initialize monitors from shared system metrics to keep a single monitor source of truth.
     c_Monitors.monitors.clear();
-    c_Monitors.vsL = GetSystemMetrics(SM_XVIRTUALSCREEN);
-    c_Monitors.vsT = GetSystemMetrics(SM_YVIRTUALSCREEN);
-    c_Monitors.vsW = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-    c_Monitors.vsH = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-    c_Monitors.primaryIndex = 0;
+    const auto metrics = novadesk::shared::system::GetDisplayMetrics();
+    c_Monitors.vsL = metrics.virtualLeft;
+    c_Monitors.vsT = metrics.virtualTop;
+    c_Monitors.vsW = metrics.virtualWidth;
+    c_Monitors.vsH = metrics.virtualHeight;
+    c_Monitors.primaryIndex = metrics.primaryIndex;
+    c_Monitors.primary = c_Monitors.primaryIndex + 1; // Keep legacy 1-based primary field behavior.
 
-    EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, 0);
+    c_Monitors.monitors.reserve(metrics.monitors.size());
+    for (const auto &m : metrics.monitors)
+    {
+        MonitorInfo info{};
+        info.active = m.active;
+        info.handle = nullptr; // Handle is not provided by shared metrics.
+        info.work.left = m.work.left;
+        info.work.top = m.work.top;
+        info.work.right = m.work.right;
+        info.work.bottom = m.work.bottom;
+        info.screen.left = m.screen.left;
+        info.screen.top = m.screen.top;
+        info.screen.right = m.screen.right;
+        info.screen.bottom = m.screen.bottom;
+        info.deviceName = m.deviceName;
+        info.monitorName = m.monitorName;
+        c_Monitors.monitors.push_back(std::move(info));
+    }
 
     // Register a specialized class for system tracking
     WNDCLASSW wc = {0};
@@ -88,46 +108,6 @@ void System::Finalize()
         DestroyWindow(c_Window);
         c_Window = nullptr;
     }
-}
-
-/*
-** Callback for enumerating monitors.
-** Used to populate multi-monitor information.
-*/
-
-BOOL CALLBACK System::MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData)
-{
-    MonitorInfo info;
-    info.handle = hMonitor;
-    info.screen = *lprcMonitor;
-    info.active = true;
-
-    MONITORINFOEXW mi;
-    mi.cbSize = sizeof(mi);
-    if (GetMonitorInfoW(hMonitor, &mi))
-    {
-        info.work = mi.rcWork;
-        info.deviceName = mi.szDevice;
-
-        DISPLAY_DEVICEW ddm = {sizeof(DISPLAY_DEVICEW)};
-        DWORD dwMon = 0;
-        while (EnumDisplayDevicesW(info.deviceName.c_str(), dwMon++, &ddm, 0))
-        {
-            if (ddm.StateFlags & DISPLAY_DEVICE_ACTIVE && ddm.StateFlags & DISPLAY_DEVICE_ATTACHED)
-            {
-                info.monitorName = ddm.DeviceString;
-                break;
-            }
-        }
-
-        if (mi.dwFlags & MONITORINFOF_PRIMARY)
-        {
-            c_Monitors.primaryIndex = (int)c_Monitors.monitors.size();
-        }
-    }
-
-    c_Monitors.monitors.push_back(info);
-    return TRUE;
 }
 
 /*
