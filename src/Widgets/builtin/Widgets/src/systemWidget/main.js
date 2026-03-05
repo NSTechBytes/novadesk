@@ -52,7 +52,7 @@ function loadSystemWidget() {
 
 function registerIPC() {
     function systemInfo() {
-        var cpuUsage = system.cpu.usage();
+        var cpuUsage = Math.round(system.cpu.usage());
         var memoryUsage = system.memory.usagePercent();
         ipcMain.send('system-stats', {
             cpu: cpuUsage,
