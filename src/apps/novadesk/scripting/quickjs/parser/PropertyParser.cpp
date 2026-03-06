@@ -874,12 +874,14 @@ namespace PropertyParser
         GetFloatProp(ctx, obj, "strokeDashOffset", options.strokeDashOffset);
         GetFloatArrayProp(ctx, obj, "strokeDashes", options.strokeDashes, 1);
 
-        GetBoolProp(ctx, obj, "isCombine", options.isCombine);
-        options.combineBaseId = GetStringProp(ctx, obj, "combineBaseId");
-        GetBoolProp(ctx, obj, "combineConsumeAll", options.combineConsumeAll);
-        options.hasCombineConsumeAll = true;
+        // Combine shape options (legacy-only): type/base/ops/consume.
+        std::wstring lowerType = options.shapeType;
+        std::transform(lowerType.begin(), lowerType.end(), lowerType.begin(), ::towlower);
+        options.isCombine = (lowerType == L"combine");
+        options.combineBaseId = GetStringProp(ctx, obj, "base");
+        options.hasCombineConsumeAll = GetBoolProp(ctx, obj, "consume", options.combineConsumeAll);
 
-        JSValue ops = JS_GetPropertyStr(ctx, obj, "combineOps");
+        JSValue ops = JS_GetPropertyStr(ctx, obj, "ops");
         if (JS_IsArray(ops))
         {
             uint32_t len = 0;

@@ -1,11 +1,6 @@
 // Combine shapes demo
 
 try {
-    if (!win) {
-        throw new Error("combine.js: 'win' is not defined.");
-    }
-
-
 // Base shapes
 ui.addShape({
     id: "baseCircle",
@@ -98,7 +93,7 @@ ui.addImage({
     id: "visImage",
     x: 160, y: 220,
     width: 48, height: 48,
-    path: "assets/pic.png",
+    path: "../assets/pic.png",
     preserveAspectRatio: "preserve"
 });
 
