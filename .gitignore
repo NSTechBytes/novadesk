@@ -443,3 +443,5 @@ FodyWeavers.xsd
 *.msp
 
 dist
+installer
+installer/dist_output
