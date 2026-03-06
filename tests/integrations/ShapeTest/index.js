@@ -10,5 +10,5 @@ new widgetWindow({
   width: 700,
   height: 900,
   backgroundColor: "#ffffff",
-  script: "./script.ui.js"
+  script: "./basic.ui.js"
 }).on("close", function () { app.exit(); });
