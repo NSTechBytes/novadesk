@@ -2,10 +2,10 @@
 # Use: .\run.ps1 -Script "path/to/script.js"
 
 param(
-    [string]$Script = "$PSScriptRoot\Widgets\index.js"
+    [string]$Script = "$PSScriptRoot\src\Widgets\builtin\Widgets\index.js"
 )
 
-$exePath = "$PSScriptRoot\x64\Debug\Novadesk.exe"
+$exePath = "$PSScriptRoot\dist\novadesk.exe"
 
 if (-not (Test-Path $exePath)) {
     Write-Host "Error: Novadesk.exe not found at $exePath" -ForegroundColor Red

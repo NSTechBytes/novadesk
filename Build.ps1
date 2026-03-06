@@ -1,50 +1,211 @@
-# Novadesk Build Script
-# This script finds MSBuild and builds the project solution.
-
 param(
+    [string]$BuildDir = "build-mingw",
+    [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Debug",
-    [string]$Platform = "x64"
+    [string]$Platform = "x64",
+    [switch]$Reconfigure
 )
 
-$vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+$ErrorActionPreference = "Stop"
+$RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-if (-not (Test-Path $vswhere)) {
-    Write-Host "Error: vswhere.exe not found at $vswhere" -ForegroundColor Red
-    Write-Host "Visual Studio Installer is required for this script to work automatically." -ForegroundColor Yellow
-    exit 1
+function Resolve-CMake {
+    $cmd = Get-Command cmake -ErrorAction SilentlyContinue
+    if ($cmd) {
+        return $cmd.Source
+    }
+
+    $candidates = @(
+        "C:\Program Files\CMake\bin\cmake.exe",
+        "C:\Program Files (x86)\CMake\bin\cmake.exe",
+        "C:\msys64\mingw64\bin\cmake.exe",
+        "C:\msys64\ucrt64\bin\cmake.exe",
+        "C:\msys64\clang64\bin\cmake.exe"
+    )
+
+    foreach ($path in $candidates) {
+        if (Test-Path $path) {
+            return $path
+        }
+    }
+
+    throw "cmake.exe was not found in PATH or common install paths. Install CMake or add it to PATH."
 }
 
-Write-Host "====================================================" -ForegroundColor Cyan
-Write-Host " Novadesk Build System" -ForegroundColor Cyan
-Write-Host " Configuration: $Configuration" -ForegroundColor Gray
-Write-Host " Platform:      $Platform" -ForegroundColor Gray
-Write-Host "====================================================" -ForegroundColor Cyan
+function Resolve-MingwTool {
+    param(
+        [string]$ExeName
+    )
 
-# Find MSBuild using vswhere
-Write-Host "Locating MSBuild..." -ForegroundColor DarkGray
-$msbuildPath = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
+    $cmd = Get-Command $ExeName -ErrorAction SilentlyContinue
+    if ($cmd) {
+        return $cmd.Source
+    }
 
-if (-not $msbuildPath) {
-    Write-Host "Error: MSBuild.exe could not be located." -ForegroundColor Red
-    exit 1
+    $candidates = @(
+        "C:\msys64\mingw64\bin\$ExeName",
+        "C:\msys64\ucrt64\bin\$ExeName",
+        "C:\msys64\clang64\bin\$ExeName"
+    )
+
+    foreach ($path in $candidates) {
+        if (Test-Path $path) {
+            return $path
+        }
+    }
+
+    throw "$ExeName was not found in PATH or common MinGW locations."
 }
 
-Write-Host "Using: $msbuildPath" -ForegroundColor DarkGray
-Write-Host ""
+function Resolve-MSBuild {
+    $cmd = Get-Command msbuild -ErrorAction SilentlyContinue
+    if ($cmd) {
+        return $cmd.Source
+    }
 
-# Run MSBuild
-# Using /m for parallel build to speed up things
-& $msbuildPath "Novadesk.sln" /t:Build /p:Configuration=$Configuration /p:Platform=$Platform /m /v:minimal
+    $vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vswhere) {
+        $found = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
+        if ($found) {
+            return $found
+        }
+    }
 
-if ($LASTEXITCODE -eq 0) {
-    Write-Host ""
-    Write-Host "====================================================" -ForegroundColor Cyan
-    Write-Host " BUILD SUCCESSFUL" -ForegroundColor Green
-    Write-Host "====================================================" -ForegroundColor Cyan
-} else {
-    Write-Host ""
-    Write-Host "====================================================" -ForegroundColor Red
-    Write-Host " BUILD FAILED (Exit Code: $LASTEXITCODE)" -ForegroundColor Red
-    Write-Host "====================================================" -ForegroundColor Red
-    exit $LASTEXITCODE
+    throw "msbuild.exe was not found in PATH and could not be located with vswhere."
+}
+
+function Build-Solution {
+    param(
+        [string]$MSBuildPath,
+        [string]$SolutionPath,
+        [string]$Config,
+        [string]$Plat
+    )
+
+    if (-not (Test-Path $SolutionPath)) {
+        throw "Solution file not found: $SolutionPath"
+    }
+
+    Write-Host "Building $SolutionPath ($Config|$Plat) with MSBuild..." -ForegroundColor Cyan
+    & $MSBuildPath $SolutionPath /t:Build /m /nologo /p:Configuration=$Config /p:Platform=$Plat
+    if ($LASTEXITCODE -ne 0) {
+        throw "MSBuild failed for $SolutionPath ($Config|$Plat)"
+    }
+}
+
+function Assert-PathExists {
+    param(
+        [string]$PathValue,
+        [string]$Label
+    )
+
+    if (-not (Test-Path $PathValue)) {
+        throw "$Label not found: $PathValue"
+    }
+}
+
+function Copy-DirectoryContent {
+    param(
+        [string]$SourceDir,
+        [string]$DestinationDir
+    )
+
+    if (Test-Path $DestinationDir) {
+        Remove-Item -Recurse -Force $DestinationDir
+    }
+    New-Item -ItemType Directory -Path $DestinationDir -Force | Out-Null
+    Copy-Item -Path (Join-Path $SourceDir "*") -Destination $DestinationDir -Recurse -Force
+}
+
+function Get-CachedCMakeBuildType {
+    param(
+        [string]$CacheFilePath
+    )
+
+    if (-not (Test-Path $CacheFilePath)) {
+        return $null
+    }
+
+    $line = Select-String -Path $CacheFilePath -Pattern "^CMAKE_BUILD_TYPE:STRING=" | Select-Object -First 1
+    if (-not $line) {
+        return $null
+    }
+
+    return ($line.Line -replace "^CMAKE_BUILD_TYPE:STRING=", "").Trim()
+}
+
+try {
+    $cmake = Resolve-CMake
+    $msbuild = Resolve-MSBuild
+    $mingwMake = Resolve-MingwTool -ExeName "mingw32-make.exe"
+    $mingwCC = Resolve-MingwTool -ExeName "gcc.exe"
+    $mingwCXX = Resolve-MingwTool -ExeName "g++.exe"
+    $mingwBin = Split-Path -Parent $mingwCC
+
+    Set-Location $RepoRoot
+    $env:PATH = "$mingwBin;$env:PATH"
+
+    $installerSln = Join-Path $RepoRoot "src\apps\installer_stub\installer_stub.sln"
+    $nwmSln = Join-Path $RepoRoot "src\apps\nwm\nwm.sln"
+
+    Build-Solution -MSBuildPath $msbuild -SolutionPath $installerSln -Config $Configuration -Plat $Platform
+    Build-Solution -MSBuildPath $msbuild -SolutionPath $nwmSln -Config $Configuration -Plat $Platform
+
+    $cmakeBuildType = if ($Configuration -eq "Release") { "MinSizeRel" } else { "Debug" }
+    $cacheFile = Join-Path $BuildDir "CMakeCache.txt"
+    $cachedBuildType = Get-CachedCMakeBuildType -CacheFilePath $cacheFile
+    $needsConfigure = $Reconfigure -or -not (Test-Path $cacheFile) -or ($cachedBuildType -ne $cmakeBuildType)
+
+    if ($needsConfigure) {
+        Write-Host "Configuring MinGW build..." -ForegroundColor Cyan
+        & $cmake -S . -B $BuildDir -G "MinGW Makefiles" `
+            -DCMAKE_MAKE_PROGRAM="$mingwMake" `
+            -DCMAKE_C_COMPILER="$mingwCC" `
+            -DCMAKE_CXX_COMPILER="$mingwCXX" `
+            -DCMAKE_BUILD_TYPE="$cmakeBuildType"
+        if ($LASTEXITCODE -ne 0) {
+            throw "CMake configure failed."
+        }
+    } else {
+        Write-Host "Using existing CMake configuration in $BuildDir (CMAKE_BUILD_TYPE=$cachedBuildType)" -ForegroundColor DarkGray
+    }
+
+    Write-Host "Building MinGW target(s)..." -ForegroundColor Cyan
+    & $cmake --build $BuildDir -j
+    if ($LASTEXITCODE -ne 0) {
+        throw "CMake build failed."
+    }
+
+    $distDir = Join-Path $RepoRoot "dist"
+    $distNwmDir = Join-Path $distDir "nwm"
+    $distWidgetsDir = Join-Path $distDir "Widgets"
+    $distNwmTemplateDir = Join-Path $distNwmDir "template"
+
+    $novadeskExeSrc = Join-Path $RepoRoot "$BuildDir\novadesk.exe"
+    $widgetsSrc = Join-Path $RepoRoot "src\Widgets\builtin\Widgets"
+    $nwmExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\nwm\nwm.exe"
+    $nwmTemplateSrc = Join-Path $RepoRoot "src\Widgets\template"
+    $installerStubExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\installer_stub\installer_stub.exe"
+
+    Assert-PathExists -PathValue $novadeskExeSrc -Label "novadesk.exe"
+    Assert-PathExists -PathValue $widgetsSrc -Label "Widgets source"
+    Assert-PathExists -PathValue $nwmExeSrc -Label "nwm.exe"
+    Assert-PathExists -PathValue $nwmTemplateSrc -Label "nwm template source"
+    Assert-PathExists -PathValue $installerStubExeSrc -Label "installer_stub.exe"
+
+    New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $distNwmDir -Force | Out-Null
+
+    Write-Host "Copying build outputs to dist..." -ForegroundColor Cyan
+    Copy-Item -Path $novadeskExeSrc -Destination (Join-Path $distDir "novadesk.exe") -Force
+    Copy-DirectoryContent -SourceDir $widgetsSrc -DestinationDir $distWidgetsDir
+    Copy-Item -Path $nwmExeSrc -Destination (Join-Path $distNwmDir "nwm.exe") -Force
+    Copy-DirectoryContent -SourceDir $nwmTemplateSrc -DestinationDir $distNwmTemplateDir
+    Copy-Item -Path $installerStubExeSrc -Destination (Join-Path $distNwmDir "installer_stub.exe") -Force
+
+    Write-Host "Build completed successfully." -ForegroundColor Green
+}
+catch {
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    exit 1
 }

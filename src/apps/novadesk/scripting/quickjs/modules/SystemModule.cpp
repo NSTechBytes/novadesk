@@ -1,0 +1,1211 @@
+#include "SystemModule.h"
+
+#include <chrono>
+#include <cstring>
+#include <string>
+
+#include "../../shared/System.h"
+#include "../../shared/Utils.h"
+#include "../../shared/PathUtils.h"
+#include "../engine/JSEngine.h"
+
+namespace novadesk::scripting::quickjs
+{
+    namespace
+    {
+        shared::system::NetworkStats g_cachedNetworkStats{};
+        std::chrono::steady_clock::time_point g_cachedNetworkAt = std::chrono::steady_clock::time_point::min();
+
+        bool ReadNetworkCached(shared::system::NetworkStats &out)
+        {
+            const auto now = std::chrono::steady_clock::now();
+            constexpr auto kMinResample = std::chrono::milliseconds(400);
+
+            if (g_cachedNetworkAt == std::chrono::steady_clock::time_point::min() ||
+                (now - g_cachedNetworkAt) >= kMinResample)
+            {
+                if (!shared::system::GetNetworkStats(g_cachedNetworkStats))
+                {
+                    return false;
+                }
+                g_cachedNetworkAt = now;
+            }
+
+            out = g_cachedNetworkStats;
+            return true;
+        }
+
+        JSValue JsClipboardSetText(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "clipboard.setText(text) requires text");
+            const char *s = JS_ToCString(ctx, argv[0]);
+            if (!s)
+                return JS_EXCEPTION;
+            std::wstring text = Utils::ToWString(s);
+            JS_FreeCString(ctx, s);
+            return JS_NewBool(ctx, shared::system::ClipboardSetText(text) ? 1 : 0);
+        }
+
+        JSValue JsClipboardGetText(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            std::wstring text;
+            if (!shared::system::ClipboardGetText(text))
+            {
+                return JS_NewString(ctx, "");
+            }
+            return JS_NewString(ctx, Utils::ToString(text).c_str());
+        }
+
+        JSValue JsWallpaperSet(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "wallpaper.set(path[, style]) requires path");
+            const char *p = JS_ToCString(ctx, argv[0]);
+            if (!p)
+                return JS_EXCEPTION;
+            std::wstring path = Utils::ToWString(p);
+            JS_FreeCString(ctx, p);
+            std::wstring style = L"fill";
+            if (argc > 1)
+            {
+                const char *st = JS_ToCString(ctx, argv[1]);
+                if (st)
+                {
+                    style = Utils::ToWString(st);
+                    JS_FreeCString(ctx, st);
+                }
+            }
+            return JS_NewBool(ctx, shared::system::SetWallpaper(path, style) ? 1 : 0);
+        }
+
+        JSValue JsWallpaperGet(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            std::wstring p;
+            if (!shared::system::GetCurrentWallpaperPath(p))
+                return JS_NewString(ctx, "");
+            return JS_NewString(ctx, Utils::ToString(p).c_str());
+        }
+
+        JSValue JsPowerGetStatus(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::PowerStatus status;
+            if (!shared::system::GetPowerStatus(status))
+                return JS_NULL;
+            JSValue out = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, out, "acline", JS_NewInt32(ctx, status.acline));
+            JS_SetPropertyStr(ctx, out, "status", JS_NewInt32(ctx, status.status));
+            JS_SetPropertyStr(ctx, out, "status2", JS_NewInt32(ctx, status.status2));
+            JS_SetPropertyStr(ctx, out, "lifetime", JS_NewFloat64(ctx, status.lifetime));
+            JS_SetPropertyStr(ctx, out, "percent", JS_NewInt32(ctx, status.percent));
+            JS_SetPropertyStr(ctx, out, "mhz", JS_NewFloat64(ctx, status.mhz));
+            JS_SetPropertyStr(ctx, out, "hz", JS_NewFloat64(ctx, status.hz));
+            return out;
+        }
+
+        JSValue JsCpuUsage(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::CpuStats stats;
+            if (!shared::system::GetCpuStats(stats))
+            {
+                return JS_NewFloat64(ctx, 0.0);
+            }
+            return JS_NewFloat64(ctx, stats.usage);
+        }
+
+        JSValue JsMemoryTotalBytes(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::MemoryStats stats;
+            if (!shared::system::GetMemoryStats(stats))
+                return JS_NewFloat64(ctx, 0.0);
+            return JS_NewFloat64(ctx, stats.total);
+        }
+
+        JSValue JsMemoryAvailableBytes(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::MemoryStats stats;
+            if (!shared::system::GetMemoryStats(stats))
+                return JS_NewFloat64(ctx, 0.0);
+            return JS_NewFloat64(ctx, stats.available);
+        }
+
+        JSValue JsMemoryUsedBytes(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::MemoryStats stats;
+            if (!shared::system::GetMemoryStats(stats))
+                return JS_NewFloat64(ctx, 0.0);
+            return JS_NewFloat64(ctx, stats.used);
+        }
+
+        JSValue JsMemoryUsagePercent(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::MemoryStats stats;
+            if (!shared::system::GetMemoryStats(stats))
+                return JS_NewInt32(ctx, 0);
+            return JS_NewInt32(ctx, stats.percent);
+        }
+
+        JSValue JsNetworkRxSpeed(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::NetworkStats stats;
+            if (!ReadNetworkCached(stats))
+                return JS_NewFloat64(ctx, 0.0);
+            return JS_NewFloat64(ctx, stats.netIn);
+        }
+
+        JSValue JsNetworkTxSpeed(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::NetworkStats stats;
+            if (!ReadNetworkCached(stats))
+                return JS_NewFloat64(ctx, 0.0);
+            return JS_NewFloat64(ctx, stats.netOut);
+        }
+
+        JSValue JsNetworkBytesReceived(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::NetworkStats stats;
+            if (!ReadNetworkCached(stats))
+                return JS_NewFloat64(ctx, 0.0);
+            return JS_NewFloat64(ctx, stats.totalIn);
+        }
+
+        JSValue JsNetworkBytesSent(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::NetworkStats stats;
+            if (!ReadNetworkCached(stats))
+                return JS_NewFloat64(ctx, 0.0);
+            return JS_NewFloat64(ctx, stats.totalOut);
+        }
+
+        JSValue JsMouseClientX(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::MousePosition pos;
+            if (!shared::system::GetMousePosition(pos))
+            {
+                return JS_NewInt32(ctx, 0);
+            }
+            return JS_NewInt32(ctx, pos.x);
+        }
+
+        JSValue JsMouseClientY(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::MousePosition pos;
+            if (!shared::system::GetMousePosition(pos))
+            {
+                return JS_NewInt32(ctx, 0);
+            }
+            return JS_NewInt32(ctx, pos.y);
+        }
+
+        std::wstring ReadOptionalPathArg(JSContext *ctx, int argc, JSValueConst *argv)
+        {
+            if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
+            {
+                return L"";
+            }
+            const char *s = JS_ToCString(ctx, argv[0]);
+            if (!s)
+                return L"";
+            std::wstring out = Utils::ToWString(s);
+            JS_FreeCString(ctx, s);
+            return out;
+        }
+
+        JSValue JsDiskTotalBytes(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            shared::system::DiskStats stats;
+            if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv), stats))
+                return JS_NewFloat64(ctx, 0.0);
+            return JS_NewFloat64(ctx, stats.total);
+        }
+
+        JSValue JsDiskAvailableBytes(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            shared::system::DiskStats stats;
+            if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv), stats))
+                return JS_NewFloat64(ctx, 0.0);
+            return JS_NewFloat64(ctx, stats.available);
+        }
+
+        JSValue JsDiskUsedBytes(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            shared::system::DiskStats stats;
+            if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv), stats))
+                return JS_NewFloat64(ctx, 0.0);
+            return JS_NewFloat64(ctx, stats.used);
+        }
+
+        JSValue JsDiskUsagePercent(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            shared::system::DiskStats stats;
+            if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv), stats))
+                return JS_NewInt32(ctx, 0);
+            return JS_NewInt32(ctx, stats.percent);
+        }
+
+        JSValue JsAudioLevelStats(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            shared::system::AudioLevelConfig cfg;
+
+            if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]) && JS_IsObject(argv[0]))
+            {
+                JSValue v = JS_GetPropertyStr(ctx, argv[0], "port");
+                if (!JS_IsUndefined(v) && !JS_IsNull(v))
+                {
+                    const char *s = JS_ToCString(ctx, v);
+                    if (s)
+                    {
+                        cfg.port = s;
+                        JS_FreeCString(ctx, s);
+                    }
+                }
+                JS_FreeValue(ctx, v);
+
+                v = JS_GetPropertyStr(ctx, argv[0], "id");
+                if (!JS_IsUndefined(v) && !JS_IsNull(v))
+                {
+                    const char *s = JS_ToCString(ctx, v);
+                    if (s)
+                    {
+                        cfg.deviceId = Utils::ToWString(s);
+                        JS_FreeCString(ctx, s);
+                    }
+                }
+                JS_FreeValue(ctx, v);
+
+                auto readInt = [&](const char *key, int &dst)
+                {
+                    JSValue iv = JS_GetPropertyStr(ctx, argv[0], key);
+                    if (!JS_IsUndefined(iv) && !JS_IsNull(iv))
+                    {
+                        int32_t x = dst;
+                        if (JS_ToInt32(ctx, &x, iv) == 0)
+                            dst = static_cast<int>(x);
+                    }
+                    JS_FreeValue(ctx, iv);
+                };
+                auto readDouble = [&](const char *key, double &dst)
+                {
+                    JSValue dv = JS_GetPropertyStr(ctx, argv[0], key);
+                    if (!JS_IsUndefined(dv) && !JS_IsNull(dv))
+                    {
+                        double x = dst;
+                        if (JS_ToFloat64(ctx, &x, dv) == 0)
+                            dst = x;
+                    }
+                    JS_FreeValue(ctx, dv);
+                };
+
+                readInt("fftSize", cfg.fftSize);
+                readInt("fftOverlap", cfg.fftOverlap);
+                readInt("bands", cfg.bands);
+                readInt("rmsAttack", cfg.rmsAttack);
+                readInt("rmsDecay", cfg.rmsDecay);
+                readInt("peakAttack", cfg.peakAttack);
+                readInt("peakDecay", cfg.peakDecay);
+                readInt("fftAttack", cfg.fftAttack);
+                readInt("fftDecay", cfg.fftDecay);
+
+                readDouble("freqMin", cfg.freqMin);
+                readDouble("freqMax", cfg.freqMax);
+                readDouble("sensitivity", cfg.sensitivity);
+                readDouble("rmsGain", cfg.rmsGain);
+                readDouble("peakGain", cfg.peakGain);
+            }
+
+            shared::system::AudioLevelStats stats;
+            if (!shared::system::GetAudioLevelStats(stats, cfg))
+            {
+                return JS_NULL;
+            }
+
+            JSValue out = JS_NewObject(ctx);
+
+            JSValue rms = JS_NewArray(ctx);
+            JS_SetPropertyUint32(ctx, rms, 0, JS_NewFloat64(ctx, stats.rms[0]));
+            JS_SetPropertyUint32(ctx, rms, 1, JS_NewFloat64(ctx, stats.rms[1]));
+            JS_SetPropertyStr(ctx, out, "rms", rms);
+
+            JSValue peak = JS_NewArray(ctx);
+            JS_SetPropertyUint32(ctx, peak, 0, JS_NewFloat64(ctx, stats.peak[0]));
+            JS_SetPropertyUint32(ctx, peak, 1, JS_NewFloat64(ctx, stats.peak[1]));
+            JS_SetPropertyStr(ctx, out, "peak", peak);
+
+            JSValue bandsArr = JS_NewArray(ctx);
+            for (uint32_t i = 0; i < static_cast<uint32_t>(stats.bands.size()); ++i)
+            {
+                JS_SetPropertyUint32(ctx, bandsArr, i, JS_NewFloat64(ctx, stats.bands[i]));
+            }
+            JS_SetPropertyStr(ctx, out, "bands", bandsArr);
+
+            return out;
+        }
+
+        JSValue JsFileIconExtractIcon(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 2)
+                return JS_ThrowTypeError(ctx, "fileIcon.extractIcon(filePath, outIcoPath[, size])");
+            const char *p1 = JS_ToCString(ctx, argv[0]);
+            const char *p2 = JS_ToCString(ctx, argv[1]);
+            if (!p1 || !p2)
+            {
+                if (p1)
+                    JS_FreeCString(ctx, p1);
+                if (p2)
+                    JS_FreeCString(ctx, p2);
+                return JS_EXCEPTION;
+            }
+            std::wstring filePath = Utils::ToWString(p1);
+            std::wstring outPath = Utils::ToWString(p2);
+            JS_FreeCString(ctx, p1);
+            JS_FreeCString(ctx, p2);
+            int32_t size = 48;
+            if (argc > 2)
+                JS_ToInt32(ctx, &size, argv[2]);
+            return JS_NewBool(ctx, Utils::ExtractFileIconToIco(filePath, outPath, static_cast<int>(size)) ? 1 : 0);
+        }
+
+        JSValue JsDisplayMetricsGetMetrics(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            const auto &mm = shared::system::GetDisplayMetrics();
+            JSValue out = JS_NewObject(ctx);
+
+            auto makeArea = [&](int left, int top, int right, int bottom) -> JSValue
+            {
+                JSValue area = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, area, "x", JS_NewInt32(ctx, left));
+                JS_SetPropertyStr(ctx, area, "y", JS_NewInt32(ctx, top));
+                JS_SetPropertyStr(ctx, area, "width", JS_NewInt32(ctx, right - left));
+                JS_SetPropertyStr(ctx, area, "height", JS_NewInt32(ctx, bottom - top));
+                return area;
+            };
+
+            JSValue virtualScreen = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, virtualScreen, "x", JS_NewInt32(ctx, mm.virtualLeft));
+            JS_SetPropertyStr(ctx, virtualScreen, "y", JS_NewInt32(ctx, mm.virtualTop));
+            JS_SetPropertyStr(ctx, virtualScreen, "width", JS_NewInt32(ctx, mm.virtualWidth));
+            JS_SetPropertyStr(ctx, virtualScreen, "height", JS_NewInt32(ctx, mm.virtualHeight));
+            JS_SetPropertyStr(ctx, out, "virtualScreen", virtualScreen);
+
+            JSValue arr = JS_NewArray(ctx);
+            uint32_t i = 0;
+            for (const auto &m : mm.monitors)
+            {
+                JSValue mo = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, mo, "id", JS_NewInt32(ctx, m.id));
+                JS_SetPropertyStr(ctx, mo, "workArea", makeArea(m.work.left, m.work.top, m.work.right, m.work.bottom));
+                JS_SetPropertyStr(ctx, mo, "screenArea", makeArea(m.screen.left, m.screen.top, m.screen.right, m.screen.bottom));
+                JS_SetPropertyUint32(ctx, arr, i++, mo);
+            }
+            JS_SetPropertyStr(ctx, out, "monitors", arr);
+
+            JSValue primary = JS_NewObject(ctx);
+            if (mm.primaryIndex >= 0 && mm.primaryIndex < static_cast<int>(mm.monitors.size()))
+            {
+                const auto &pm = mm.monitors[mm.primaryIndex];
+                JS_SetPropertyStr(ctx, primary, "workArea", makeArea(pm.work.left, pm.work.top, pm.work.right, pm.work.bottom));
+                JS_SetPropertyStr(ctx, primary, "screenArea", makeArea(pm.screen.left, pm.screen.top, pm.screen.right, pm.screen.bottom));
+            }
+            else
+            {
+                JS_SetPropertyStr(ctx, primary, "workArea", makeArea(0, 0, 0, 0));
+                JS_SetPropertyStr(ctx, primary, "screenArea", makeArea(0, 0, 0, 0));
+            }
+            JS_SetPropertyStr(ctx, out, "primary", primary);
+
+            return out;
+        }
+
+        JSValue JsAudioSetVolume(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "audio.setVolume(value) requires value");
+            int32_t value = 0;
+            JS_ToInt32(ctx, &value, argv[0]);
+            return JS_NewBool(ctx, shared::system::AudioSetVolume(static_cast<int>(value)) ? 1 : 0);
+        }
+
+        JSValue JsAudioGetVolume(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewInt32(ctx, shared::system::AudioGetVolume());
+        }
+
+        JSValue JsAudioPlaySound(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "audio.playSound(path[, loop]) requires path");
+            const char *s = JS_ToCString(ctx, argv[0]);
+            if (!s)
+                return JS_EXCEPTION;
+            std::wstring path = Utils::ToWString(s);
+            JS_FreeCString(ctx, s);
+            int loop = 0;
+            if (argc > 1)
+            {
+                loop = JS_ToBool(ctx, argv[1]);
+            }
+            return JS_NewBool(ctx, shared::system::AudioPlaySound(path, loop != 0) ? 1 : 0);
+        }
+
+        JSValue JsAudioStopSound(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::AudioStopSound();
+            return JS_NewBool(ctx, 1);
+        }
+
+        JSValue JsBrightnessGetValue(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            int32_t display = 0;
+            if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]) && JS_IsObject(argv[0]))
+            {
+                JSValue dv = JS_GetPropertyStr(ctx, argv[0], "display");
+                if (!JS_IsUndefined(dv) && !JS_IsNull(dv))
+                {
+                    JS_ToInt32(ctx, &display, dv);
+                }
+                JS_FreeValue(ctx, dv);
+            }
+
+            shared::system::BrightnessInfo info;
+            shared::system::GetBrightness(info, static_cast<int>(display));
+            JSValue out = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, out, "supported", JS_NewBool(ctx, info.supported ? 1 : 0));
+            JS_SetPropertyStr(ctx, out, "current", JS_NewInt32(ctx, static_cast<int32_t>(info.current)));
+            JS_SetPropertyStr(ctx, out, "min", JS_NewInt32(ctx, static_cast<int32_t>(info.min)));
+            JS_SetPropertyStr(ctx, out, "max", JS_NewInt32(ctx, static_cast<int32_t>(info.max)));
+            JS_SetPropertyStr(ctx, out, "percent", JS_NewInt32(ctx, static_cast<int32_t>(info.percent)));
+            return out;
+        }
+
+        JSValue JsBrightnessSetValue(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            int32_t percent = 0;
+            int32_t display = 0;
+
+            if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
+            {
+                if (JS_IsObject(argv[0]))
+                {
+                    JSValue pv = JS_GetPropertyStr(ctx, argv[0], "percent");
+                    if (!JS_IsUndefined(pv) && !JS_IsNull(pv))
+                    {
+                        if (JS_ToInt32(ctx, &percent, pv) != 0)
+                        {
+                            JS_FreeValue(ctx, pv);
+                            return JS_ThrowTypeError(ctx, "brightness.setValue({ percent }) requires numeric percent");
+                        }
+                    }
+                    JS_FreeValue(ctx, pv);
+
+                    JSValue dv = JS_GetPropertyStr(ctx, argv[0], "display");
+                    if (!JS_IsUndefined(dv) && !JS_IsNull(dv))
+                    {
+                        JS_ToInt32(ctx, &display, dv);
+                    }
+                    JS_FreeValue(ctx, dv);
+                }
+                else
+                {
+                    if (JS_ToInt32(ctx, &percent, argv[0]) != 0)
+                    {
+                        return JS_ThrowTypeError(ctx, "brightness.setValue(value) requires numeric value");
+                    }
+                }
+            }
+            else
+            {
+                return JS_ThrowTypeError(ctx, "brightness.setValue({ percent[, display] }) requires percent");
+            }
+
+            const bool ok = shared::system::SetBrightnessPercent(static_cast<int>(percent), static_cast<int>(display));
+            return JS_NewBool(ctx, ok ? 1 : 0);
+        }
+
+        JSValue JsRegistryReadData(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 2)
+                return JS_ThrowTypeError(ctx, "registry.readData(path, valueName)");
+            const char *p = JS_ToCString(ctx, argv[0]);
+            const char *v = JS_ToCString(ctx, argv[1]);
+            if (!p || !v)
+            {
+                if (p)
+                    JS_FreeCString(ctx, p);
+                if (v)
+                    JS_FreeCString(ctx, v);
+                return JS_EXCEPTION;
+            }
+
+            std::wstring fullPath = Utils::ToWString(p);
+            std::wstring valueName = Utils::ToWString(v);
+            JS_FreeCString(ctx, p);
+            JS_FreeCString(ctx, v);
+
+            shared::system::RegistryValue out;
+            if (!shared::system::RegistryReadData(fullPath, valueName, out))
+            {
+                return JS_NULL;
+            }
+
+            if (out.type == shared::system::RegistryValueType::String)
+            {
+                return JS_NewString(ctx, Utils::ToString(out.stringValue).c_str());
+            }
+            if (out.type == shared::system::RegistryValueType::Number)
+            {
+                return JS_NewFloat64(ctx, out.numberValue);
+            }
+            return JS_NULL;
+        }
+
+        JSValue JsRegistryWriteData(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 3)
+                return JS_ThrowTypeError(ctx, "registry.writeData(path, valueName, value)");
+            const char *p = JS_ToCString(ctx, argv[0]);
+            const char *v = JS_ToCString(ctx, argv[1]);
+            if (!p || !v)
+            {
+                if (p)
+                    JS_FreeCString(ctx, p);
+                if (v)
+                    JS_FreeCString(ctx, v);
+                return JS_EXCEPTION;
+            }
+
+            std::wstring fullPath = Utils::ToWString(p);
+            std::wstring valueName = Utils::ToWString(v);
+            JS_FreeCString(ctx, p);
+            JS_FreeCString(ctx, v);
+
+            bool ok = false;
+            if (JS_IsString(argv[2]))
+            {
+                const char *s = JS_ToCString(ctx, argv[2]);
+                if (!s)
+                    return JS_EXCEPTION;
+                ok = shared::system::RegistryWriteString(fullPath, valueName, Utils::ToWString(s));
+                JS_FreeCString(ctx, s);
+            }
+            else
+            {
+                double n = 0;
+                if (JS_ToFloat64(ctx, &n, argv[2]) == 0)
+                {
+                    ok = shared::system::RegistryWriteNumber(fullPath, valueName, n);
+                }
+            }
+
+            return JS_NewBool(ctx, ok ? 1 : 0);
+        }
+
+        JSValue JsHotkeyRegisterHotkey(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 2)
+                return JS_ThrowTypeError(ctx, "hotkey.register(hotkey, handler)");
+            const char *hotkeyC = JS_ToCString(ctx, argv[0]);
+            if (!hotkeyC)
+                return JS_EXCEPTION;
+            std::wstring hotkey = Utils::ToWString(hotkeyC);
+            JS_FreeCString(ctx, hotkeyC);
+
+            int keyDownId = -1;
+            int keyUpId = -1;
+            if (JS_IsFunction(ctx, argv[1]))
+            {
+                keyDownId = JSEngine::RegisterEventCallback(ctx, argv[1]);
+            }
+            else if (JS_IsObject(argv[1]))
+            {
+                JSValue kd = JS_GetPropertyStr(ctx, argv[1], "onKeyDown");
+                if (JS_IsFunction(ctx, kd))
+                {
+                    keyDownId = JSEngine::RegisterEventCallback(ctx, kd);
+                }
+                JS_FreeValue(ctx, kd);
+                JSValue ku = JS_GetPropertyStr(ctx, argv[1], "onKeyUp");
+                if (JS_IsFunction(ctx, ku))
+                {
+                    keyUpId = JSEngine::RegisterEventCallback(ctx, ku);
+                }
+                JS_FreeValue(ctx, ku);
+            }
+            else
+            {
+                return JS_ThrowTypeError(ctx, "hotkey.register handler must be function or object");
+            }
+
+            int id = shared::system::RegisterHotkey(JSEngine::GetMessageWindow(), hotkey, keyDownId, keyUpId);
+            return JS_NewInt32(ctx, id);
+        }
+
+        JSValue JsHotkeyUnregisterHotkey(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "hotkey.unregister(id)");
+            int32_t id = 0;
+            if (JS_ToInt32(ctx, &id, argv[0]) != 0)
+            {
+                return JS_ThrowTypeError(ctx, "hotkey.unregister(id) expects number");
+            }
+            return JS_NewBool(ctx, shared::system::UnregisterHotkey(JSEngine::GetMessageWindow(), id) ? 1 : 0);
+        }
+
+        std::wstring ResolveModulePath(JSContext *ctx, JSValueConst v)
+        {
+            const char *s = JS_ToCString(ctx, v);
+            if (!s)
+                return L"";
+            std::wstring path = Utils::ToWString(s);
+            JS_FreeCString(ctx, s);
+            if (!PathUtils::IsPathRelative(path))
+                return PathUtils::NormalizePath(path);
+            return PathUtils::ResolvePath(path, JSEngine::GetEntryScriptDir());
+        }
+
+        JSValue JsAppVolumeListSessions(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            std::vector<shared::system::AppVolumeSessionInfo> sessions;
+            if (!shared::system::AppVolumeListSessions(sessions))
+            {
+                return JS_NewArray(ctx);
+            }
+
+            JSValue arr = JS_NewArray(ctx);
+            uint32_t i = 0;
+            for (const auto &s : sessions)
+            {
+                JSValue o = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, o, "pid", JS_NewInt32(ctx, static_cast<int32_t>(s.pid)));
+                JS_SetPropertyStr(ctx, o, "processName", JS_NewString(ctx, Utils::ToString(s.processName).c_str()));
+                JS_SetPropertyStr(ctx, o, "fileName", JS_NewString(ctx, Utils::ToString(s.fileName).c_str()));
+                JS_SetPropertyStr(ctx, o, "filePath", JS_NewString(ctx, Utils::ToString(s.filePath).c_str()));
+                JS_SetPropertyStr(ctx, o, "iconPath", JS_NewString(ctx, Utils::ToString(s.iconPath).c_str()));
+                JS_SetPropertyStr(ctx, o, "displayName", JS_NewString(ctx, Utils::ToString(s.displayName).c_str()));
+                JS_SetPropertyStr(ctx, o, "volume", JS_NewFloat64(ctx, s.volume));
+                JS_SetPropertyStr(ctx, o, "peak", JS_NewFloat64(ctx, s.peak));
+                JS_SetPropertyStr(ctx, o, "muted", JS_NewBool(ctx, s.muted ? 1 : 0));
+                JS_SetPropertyUint32(ctx, arr, i++, o);
+            }
+            return arr;
+        }
+
+        JSValue JsAppVolumeGetByPid(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "appVolume.getByPid(pid)");
+            int32_t pid = 0;
+            if (JS_ToInt32(ctx, &pid, argv[0]) != 0 || pid <= 0)
+                return JS_ThrowTypeError(ctx, "appVolume.getByPid expects pid > 0");
+            float volume = 0.0f;
+            bool muted = false;
+            float peak = 0.0f;
+            if (!shared::system::AppVolumeGetByPid(static_cast<uint32_t>(pid), volume, muted, peak))
+                return JS_NULL;
+            JSValue out = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, out, "volume", JS_NewFloat64(ctx, volume));
+            JS_SetPropertyStr(ctx, out, "muted", JS_NewBool(ctx, muted ? 1 : 0));
+            JS_SetPropertyStr(ctx, out, "peak", JS_NewFloat64(ctx, peak));
+            return out;
+        }
+
+        JSValue JsAppVolumeGetByProcessName(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "appVolume.getByProcessName(name)");
+            const char *n = JS_ToCString(ctx, argv[0]);
+            if (!n)
+                return JS_EXCEPTION;
+            std::wstring name = Utils::ToWString(n);
+            JS_FreeCString(ctx, n);
+            float volume = 0.0f;
+            bool muted = false;
+            float peak = 0.0f;
+            if (!shared::system::AppVolumeGetByProcessName(name, volume, muted, peak))
+                return JS_NULL;
+            JSValue out = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, out, "volume", JS_NewFloat64(ctx, volume));
+            JS_SetPropertyStr(ctx, out, "muted", JS_NewBool(ctx, muted ? 1 : 0));
+            JS_SetPropertyStr(ctx, out, "peak", JS_NewFloat64(ctx, peak));
+            return out;
+        }
+
+        JSValue JsAppVolumeSetVolumeByPid(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 2)
+                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByPid(pid, volume01)");
+            int32_t pid = 0;
+            double volume = 0.0;
+            if (JS_ToInt32(ctx, &pid, argv[0]) != 0 || pid <= 0)
+                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByPid expects pid > 0");
+            if (JS_ToFloat64(ctx, &volume, argv[1]) != 0)
+                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByPid expects volume");
+            return JS_NewBool(ctx, shared::system::AppVolumeSetVolumeByPid(static_cast<uint32_t>(pid), static_cast<float>(volume)) ? 1 : 0);
+        }
+
+        JSValue JsAppVolumeSetVolumeByProcessName(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 2)
+                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByProcessName(name, volume01)");
+            const char *n = JS_ToCString(ctx, argv[0]);
+            if (!n)
+                return JS_EXCEPTION;
+            std::wstring name = Utils::ToWString(n);
+            JS_FreeCString(ctx, n);
+            double volume = 0.0;
+            if (JS_ToFloat64(ctx, &volume, argv[1]) != 0)
+                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByProcessName expects volume");
+            return JS_NewBool(ctx, shared::system::AppVolumeSetVolumeByProcessName(name, static_cast<float>(volume)) ? 1 : 0);
+        }
+
+        JSValue JsAppVolumeSetMuteByPid(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 2)
+                return JS_ThrowTypeError(ctx, "appVolume.setMuteByPid(pid, mute)");
+            int32_t pid = 0;
+            if (JS_ToInt32(ctx, &pid, argv[0]) != 0 || pid <= 0)
+                return JS_ThrowTypeError(ctx, "appVolume.setMuteByPid expects pid > 0");
+            int mute = JS_ToBool(ctx, argv[1]);
+            return JS_NewBool(ctx, shared::system::AppVolumeSetMuteByPid(static_cast<uint32_t>(pid), mute != 0) ? 1 : 0);
+        }
+
+        JSValue JsAppVolumeSetMuteByProcessName(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 2)
+                return JS_ThrowTypeError(ctx, "appVolume.setMuteByProcessName(name, mute)");
+            const char *n = JS_ToCString(ctx, argv[0]);
+            if (!n)
+                return JS_EXCEPTION;
+            std::wstring name = Utils::ToWString(n);
+            JS_FreeCString(ctx, n);
+            int mute = JS_ToBool(ctx, argv[1]);
+            return JS_NewBool(ctx, shared::system::AppVolumeSetMuteByProcessName(name, mute != 0) ? 1 : 0);
+        }
+
+        JSValue JsNowPlayingStats(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::NowPlayingStats stats;
+            shared::system::GetNowPlayingStats(stats);
+            JSValue out = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, out, "available", JS_NewBool(ctx, stats.available ? 1 : 0));
+            JS_SetPropertyStr(ctx, out, "player", JS_NewString(ctx, Utils::ToString(stats.player).c_str()));
+            JS_SetPropertyStr(ctx, out, "artist", JS_NewString(ctx, Utils::ToString(stats.artist).c_str()));
+            JS_SetPropertyStr(ctx, out, "album", JS_NewString(ctx, Utils::ToString(stats.album).c_str()));
+            JS_SetPropertyStr(ctx, out, "title", JS_NewString(ctx, Utils::ToString(stats.title).c_str()));
+            JS_SetPropertyStr(ctx, out, "thumbnail", JS_NewString(ctx, Utils::ToString(stats.thumbnail).c_str()));
+            JS_SetPropertyStr(ctx, out, "duration", JS_NewInt32(ctx, stats.duration));
+            JS_SetPropertyStr(ctx, out, "position", JS_NewInt32(ctx, stats.position));
+            JS_SetPropertyStr(ctx, out, "progress", JS_NewInt32(ctx, stats.progress));
+            JS_SetPropertyStr(ctx, out, "state", JS_NewInt32(ctx, stats.state));
+            JS_SetPropertyStr(ctx, out, "status", JS_NewInt32(ctx, stats.status));
+            JS_SetPropertyStr(ctx, out, "shuffle", JS_NewBool(ctx, stats.shuffle ? 1 : 0));
+            JS_SetPropertyStr(ctx, out, "repeat", JS_NewBool(ctx, stats.repeat ? 1 : 0));
+            return out;
+        }
+
+        JSValue JsNowPlayingBackend(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewString(ctx, shared::system::NowPlayingBackend().c_str());
+        }
+
+        JSValue JsNowPlayingPlay(JSContext *ctx, JSValueConst, int, JSValueConst *) { return JS_NewBool(ctx, shared::system::NowPlayingPlay() ? 1 : 0); }
+        JSValue JsNowPlayingPause(JSContext *ctx, JSValueConst, int, JSValueConst *) { return JS_NewBool(ctx, shared::system::NowPlayingPause() ? 1 : 0); }
+        JSValue JsNowPlayingPlayPause(JSContext *ctx, JSValueConst, int, JSValueConst *) { return JS_NewBool(ctx, shared::system::NowPlayingPlayPause() ? 1 : 0); }
+        JSValue JsNowPlayingStop(JSContext *ctx, JSValueConst, int, JSValueConst *) { return JS_NewBool(ctx, shared::system::NowPlayingStop() ? 1 : 0); }
+        JSValue JsNowPlayingNext(JSContext *ctx, JSValueConst, int, JSValueConst *) { return JS_NewBool(ctx, shared::system::NowPlayingNext() ? 1 : 0); }
+        JSValue JsNowPlayingPrevious(JSContext *ctx, JSValueConst, int, JSValueConst *) { return JS_NewBool(ctx, shared::system::NowPlayingPrevious() ? 1 : 0); }
+
+        JSValue JsNowPlayingSetPosition(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "nowPlaying.setPosition(value[, isPercent])");
+            int32_t value = 0;
+            if (JS_ToInt32(ctx, &value, argv[0]) != 0)
+                return JS_ThrowTypeError(ctx, "nowPlaying.setPosition expects number");
+            int isPercent = 0;
+            if (argc > 1)
+                isPercent = JS_ToBool(ctx, argv[1]);
+            return JS_NewBool(ctx, shared::system::NowPlayingSetPosition(static_cast<int>(value), isPercent != 0) ? 1 : 0);
+        }
+
+        JSValue JsNowPlayingSetShuffle(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "nowPlaying.setShuffle(enabled)");
+            int enabled = JS_ToBool(ctx, argv[0]);
+            return JS_NewBool(ctx, shared::system::NowPlayingSetShuffle(enabled != 0) ? 1 : 0);
+        }
+
+        JSValue JsNowPlayingToggleShuffle(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewBool(ctx, shared::system::NowPlayingToggleShuffle() ? 1 : 0);
+        }
+
+        JSValue JsNowPlayingSetRepeat(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "nowPlaying.setRepeat(mode)");
+            int32_t mode = 0;
+            if (JS_ToInt32(ctx, &mode, argv[0]) != 0)
+                return JS_ThrowTypeError(ctx, "nowPlaying.setRepeat expects number");
+            return JS_NewBool(ctx, shared::system::NowPlayingSetRepeat(static_cast<int>(mode)) ? 1 : 0);
+        }
+
+        JSValue JsJsonParse(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "json.parse(text)");
+            const char *text = JS_ToCString(ctx, argv[0]);
+            if (!text)
+                return JS_EXCEPTION;
+            size_t len = std::strlen(text);
+            JSValue out = JS_ParseJSON(ctx, text, len, "<json.parse>");
+            JS_FreeCString(ctx, text);
+            return out;
+        }
+
+        JSValue JsJsonStringify(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "json.stringify(value[, space])");
+            JSValue space = JS_UNDEFINED;
+            if (argc > 1)
+                space = JS_DupValue(ctx, argv[1]);
+            JSValue s = JS_JSONStringify(ctx, argv[0], JS_UNDEFINED, space);
+            if (!JS_IsUndefined(space))
+                JS_FreeValue(ctx, space);
+            return s;
+        }
+
+        JSValue JsJsonRead(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "json.read(path)");
+            const std::wstring path = ResolveModulePath(ctx, argv[0]);
+            if (path.empty())
+                return JS_ThrowTypeError(ctx, "json.read invalid path");
+
+            std::string text;
+            if (!shared::system::JsonReadTextFile(path, text))
+            {
+                return JS_NULL;
+            }
+            if (text.find_first_not_of(" \t\r\n") == std::string::npos)
+            {
+                return JS_NewObject(ctx);
+            }
+            return JS_ParseJSON(ctx, text.c_str(), text.size(), Utils::ToString(path).c_str());
+        }
+
+        JSValue JsJsonWrite(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 2)
+                return JS_ThrowTypeError(ctx, "json.write(path, value[, merge])");
+            const std::wstring path = ResolveModulePath(ctx, argv[0]);
+            if (path.empty())
+                return JS_ThrowTypeError(ctx, "json.write invalid path");
+
+            int merge = 0;
+            if (argc > 2)
+                merge = JS_ToBool(ctx, argv[2]);
+
+            JSValue indent = JS_NewInt32(ctx, 4);
+            JSValue s = JS_JSONStringify(ctx, argv[1], JS_UNDEFINED, indent);
+            JS_FreeValue(ctx, indent);
+            if (JS_IsException(s))
+                return s;
+            const char *text = JS_ToCString(ctx, s);
+            if (!text)
+            {
+                JS_FreeValue(ctx, s);
+                return JS_EXCEPTION;
+            }
+
+            bool ok = false;
+            if (merge != 0)
+                ok = shared::system::JsonMergePatchFile(path, text);
+            else
+                ok = shared::system::JsonWriteTextFile(path, text);
+
+            JS_FreeCString(ctx, text);
+            JS_FreeValue(ctx, s);
+            return JS_NewBool(ctx, ok ? 1 : 0);
+        }
+
+        JSValue JsGetEnv(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
+            {
+                JSValue all = JS_NewObject(ctx);
+                const auto vars = shared::system::GetAllEnv();
+                for (const auto &kv : vars)
+                {
+                    const std::string key = Utils::ToString(kv.first);
+                    const std::string val = Utils::ToString(kv.second);
+                    JS_SetPropertyStr(ctx, all, key.c_str(), JS_NewString(ctx, val.c_str()));
+                }
+                return all;
+            }
+
+            const char *n = JS_ToCString(ctx, argv[0]);
+            if (!n)
+                return JS_EXCEPTION;
+            std::wstring name = Utils::ToWString(n);
+            JS_FreeCString(ctx, n);
+
+            std::wstring value = shared::system::GetEnv(name);
+            if (value.empty() && argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1]))
+            {
+                const char *d = JS_ToCString(ctx, argv[1]);
+                if (d)
+                {
+                    value = Utils::ToWString(d);
+                    JS_FreeCString(ctx, d);
+                }
+            }
+
+            return JS_NewString(ctx, Utils::ToString(value).c_str());
+        }
+
+        JSValue JsExecute(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "execute(target[, parameters, workingDir, show])");
+
+            const char *t = JS_ToCString(ctx, argv[0]);
+            if (!t)
+                return JS_EXCEPTION;
+            std::wstring target = Utils::ToWString(t);
+            JS_FreeCString(ctx, t);
+
+            std::wstring parameters;
+            std::wstring workingDir;
+            int32_t show = SW_SHOWNORMAL;
+
+            if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1]))
+            {
+                const char *p = JS_ToCString(ctx, argv[1]);
+                if (p)
+                {
+                    parameters = Utils::ToWString(p);
+                    JS_FreeCString(ctx, p);
+                }
+            }
+            if (argc > 2 && !JS_IsUndefined(argv[2]) && !JS_IsNull(argv[2]))
+            {
+                const char *w = JS_ToCString(ctx, argv[2]);
+                if (w)
+                {
+                    workingDir = Utils::ToWString(w);
+                    JS_FreeCString(ctx, w);
+                }
+            }
+            if (argc > 3 && !JS_IsUndefined(argv[3]) && !JS_IsNull(argv[3]))
+            {
+                JS_ToInt32(ctx, &show, argv[3]);
+            }
+
+            bool ok = shared::system::Execute(target, parameters, workingDir, static_cast<int>(show));
+            return JS_NewBool(ctx, ok ? 1 : 0);
+        }
+
+        JSValue JsWebFetch(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "webFetch(urlOrPath)");
+
+            const char *s = JS_ToCString(ctx, argv[0]);
+            if (!s)
+                return JS_EXCEPTION;
+            std::wstring pathOrUrl = Utils::ToWString(s);
+            JS_FreeCString(ctx, s);
+            if (pathOrUrl.empty())
+                return JS_ThrowTypeError(ctx, "webFetch invalid url/path");
+            if (PathUtils::IsPathRelative(pathOrUrl) &&
+                pathOrUrl.rfind(L"http://", 0) != 0 &&
+                pathOrUrl.rfind(L"https://", 0) != 0 &&
+                pathOrUrl.rfind(L"file://", 0) != 0)
+            {
+                pathOrUrl = PathUtils::ResolvePath(pathOrUrl, JSEngine::GetEntryScriptDir());
+            }
+
+            std::string data;
+            if (!shared::system::WebFetch(pathOrUrl, data))
+            {
+                return JS_NULL;
+            }
+            return JS_NewStringLen(ctx, data.data(), data.size());
+        }
+
+        int SystemModuleInit(JSContext *ctx, JSModuleDef *m)
+        {
+            JSValue clipboard = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, clipboard, "setText", JS_NewCFunction(ctx, JsClipboardSetText, "setText", 1));
+            JS_SetPropertyStr(ctx, clipboard, "getText", JS_NewCFunction(ctx, JsClipboardGetText, "getText", 0));
+            JS_SetModuleExport(ctx, m, "clipboard", clipboard);
+
+            JSValue wallpaper = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, wallpaper, "set", JS_NewCFunction(ctx, JsWallpaperSet, "set", 2));
+            JS_SetPropertyStr(ctx, wallpaper, "getCurrentPath", JS_NewCFunction(ctx, JsWallpaperGet, "getCurrentPath", 0));
+            JS_SetModuleExport(ctx, m, "wallpaper", wallpaper);
+
+            JSValue power = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, power, "getStatus", JS_NewCFunction(ctx, JsPowerGetStatus, "getStatus", 0));
+            JS_SetModuleExport(ctx, m, "power", power);
+
+            JSValue cpu = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, cpu, "usage", JS_NewCFunction(ctx, JsCpuUsage, "usage", 0));
+            JS_SetModuleExport(ctx, m, "cpu", cpu);
+
+            JSValue memory = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, memory, "totalBytes", JS_NewCFunction(ctx, JsMemoryTotalBytes, "totalBytes", 0));
+            JS_SetPropertyStr(ctx, memory, "availableBytes", JS_NewCFunction(ctx, JsMemoryAvailableBytes, "availableBytes", 0));
+            JS_SetPropertyStr(ctx, memory, "usedBytes", JS_NewCFunction(ctx, JsMemoryUsedBytes, "usedBytes", 0));
+            JS_SetPropertyStr(ctx, memory, "usagePercent", JS_NewCFunction(ctx, JsMemoryUsagePercent, "usagePercent", 0));
+            JS_SetModuleExport(ctx, m, "memory", memory);
+
+            JSValue network = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, network, "rxSpeed", JS_NewCFunction(ctx, JsNetworkRxSpeed, "rxSpeed", 0));
+            JS_SetPropertyStr(ctx, network, "txSpeed", JS_NewCFunction(ctx, JsNetworkTxSpeed, "txSpeed", 0));
+            JS_SetPropertyStr(ctx, network, "bytesReceived", JS_NewCFunction(ctx, JsNetworkBytesReceived, "bytesReceived", 0));
+            JS_SetPropertyStr(ctx, network, "bytesSent", JS_NewCFunction(ctx, JsNetworkBytesSent, "bytesSent", 0));
+            JS_SetModuleExport(ctx, m, "network", network);
+
+            JSValue mouse = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, mouse, "clientX", JS_NewCFunction(ctx, JsMouseClientX, "clientX", 0));
+            JS_SetPropertyStr(ctx, mouse, "clientY", JS_NewCFunction(ctx, JsMouseClientY, "clientY", 0));
+            JS_SetModuleExport(ctx, m, "mouse", mouse);
+
+            JSValue disk = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, disk, "totalBytes", JS_NewCFunction(ctx, JsDiskTotalBytes, "totalBytes", 1));
+            JS_SetPropertyStr(ctx, disk, "availableBytes", JS_NewCFunction(ctx, JsDiskAvailableBytes, "availableBytes", 1));
+            JS_SetPropertyStr(ctx, disk, "usedBytes", JS_NewCFunction(ctx, JsDiskUsedBytes, "usedBytes", 1));
+            JS_SetPropertyStr(ctx, disk, "usagePercent", JS_NewCFunction(ctx, JsDiskUsagePercent, "usagePercent", 1));
+            JS_SetModuleExport(ctx, m, "disk", disk);
+
+            JSValue audioLevel = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, audioLevel, "stats", JS_NewCFunction(ctx, JsAudioLevelStats, "stats", 1));
+            JS_SetModuleExport(ctx, m, "audioLevel", audioLevel);
+
+            JSValue audio = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, audio, "setVolume", JS_NewCFunction(ctx, JsAudioSetVolume, "setVolume", 1));
+            JS_SetPropertyStr(ctx, audio, "getVolume", JS_NewCFunction(ctx, JsAudioGetVolume, "getVolume", 0));
+            JS_SetPropertyStr(ctx, audio, "playSound", JS_NewCFunction(ctx, JsAudioPlaySound, "playSound", 2));
+            JS_SetPropertyStr(ctx, audio, "stopSound", JS_NewCFunction(ctx, JsAudioStopSound, "stopSound", 0));
+            JS_SetModuleExport(ctx, m, "audio", audio);
+
+            JSValue brightness = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, brightness, "getValue", JS_NewCFunction(ctx, JsBrightnessGetValue, "getValue", 1));
+            JS_SetPropertyStr(ctx, brightness, "setValue", JS_NewCFunction(ctx, JsBrightnessSetValue, "setValue", 1));
+            JS_SetModuleExport(ctx, m, "brightness", brightness);
+
+            JSValue fileIcon = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, fileIcon, "extractIcon", JS_NewCFunction(ctx, JsFileIconExtractIcon, "extractIcon", 3));
+            JS_SetPropertyStr(ctx, fileIcon, "extractFileIcon", JS_NewCFunction(ctx, JsFileIconExtractIcon, "extractFileIcon", 3));
+            JS_SetModuleExport(ctx, m, "fileIcon", fileIcon);
+
+            JSValue displayMetrics = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, displayMetrics, "getMetrics", JS_NewCFunction(ctx, JsDisplayMetricsGetMetrics, "getMetrics", 0));
+            JS_SetPropertyStr(ctx, displayMetrics, "get", JS_NewCFunction(ctx, JsDisplayMetricsGetMetrics, "get", 0));
+            JS_SetModuleExport(ctx, m, "displayMetrics", displayMetrics);
+
+            JSValue registry = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, registry, "readData", JS_NewCFunction(ctx, JsRegistryReadData, "readData", 2));
+            JS_SetPropertyStr(ctx, registry, "writeData", JS_NewCFunction(ctx, JsRegistryWriteData, "writeData", 3));
+            JS_SetModuleExport(ctx, m, "registry", registry);
+
+            JSValue hotkey = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, hotkey, "register", JS_NewCFunction(ctx, JsHotkeyRegisterHotkey, "register", 2));
+            JS_SetPropertyStr(ctx, hotkey, "unregister", JS_NewCFunction(ctx, JsHotkeyUnregisterHotkey, "unregister", 1));
+            JS_SetModuleExport(ctx, m, "hotkey", hotkey);
+
+            JSValue appVolume = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, appVolume, "listSessions", JS_NewCFunction(ctx, JsAppVolumeListSessions, "listSessions", 0));
+            JS_SetPropertyStr(ctx, appVolume, "getByPid", JS_NewCFunction(ctx, JsAppVolumeGetByPid, "getByPid", 1));
+            JS_SetPropertyStr(ctx, appVolume, "getByProcessName", JS_NewCFunction(ctx, JsAppVolumeGetByProcessName, "getByProcessName", 1));
+            JS_SetPropertyStr(ctx, appVolume, "setVolumeByPid", JS_NewCFunction(ctx, JsAppVolumeSetVolumeByPid, "setVolumeByPid", 2));
+            JS_SetPropertyStr(ctx, appVolume, "setVolumeByProcessName", JS_NewCFunction(ctx, JsAppVolumeSetVolumeByProcessName, "setVolumeByProcessName", 2));
+            JS_SetPropertyStr(ctx, appVolume, "setMuteByPid", JS_NewCFunction(ctx, JsAppVolumeSetMuteByPid, "setMuteByPid", 2));
+            JS_SetPropertyStr(ctx, appVolume, "setMuteByProcessName", JS_NewCFunction(ctx, JsAppVolumeSetMuteByProcessName, "setMuteByProcessName", 2));
+            JS_SetModuleExport(ctx, m, "appVolume", appVolume);
+
+            JSValue nowPlaying = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, nowPlaying, "stats", JS_NewCFunction(ctx, JsNowPlayingStats, "stats", 0));
+            JS_SetPropertyStr(ctx, nowPlaying, "backend", JS_NewCFunction(ctx, JsNowPlayingBackend, "backend", 0));
+            JS_SetPropertyStr(ctx, nowPlaying, "play", JS_NewCFunction(ctx, JsNowPlayingPlay, "play", 0));
+            JS_SetPropertyStr(ctx, nowPlaying, "pause", JS_NewCFunction(ctx, JsNowPlayingPause, "pause", 0));
+            JS_SetPropertyStr(ctx, nowPlaying, "playPause", JS_NewCFunction(ctx, JsNowPlayingPlayPause, "playPause", 0));
+            JS_SetPropertyStr(ctx, nowPlaying, "stop", JS_NewCFunction(ctx, JsNowPlayingStop, "stop", 0));
+            JS_SetPropertyStr(ctx, nowPlaying, "next", JS_NewCFunction(ctx, JsNowPlayingNext, "next", 0));
+            JS_SetPropertyStr(ctx, nowPlaying, "previous", JS_NewCFunction(ctx, JsNowPlayingPrevious, "previous", 0));
+            JS_SetPropertyStr(ctx, nowPlaying, "setPosition", JS_NewCFunction(ctx, JsNowPlayingSetPosition, "setPosition", 2));
+            JS_SetPropertyStr(ctx, nowPlaying, "setShuffle", JS_NewCFunction(ctx, JsNowPlayingSetShuffle, "setShuffle", 1));
+            JS_SetPropertyStr(ctx, nowPlaying, "toggleShuffle", JS_NewCFunction(ctx, JsNowPlayingToggleShuffle, "toggleShuffle", 0));
+            JS_SetPropertyStr(ctx, nowPlaying, "setRepeat", JS_NewCFunction(ctx, JsNowPlayingSetRepeat, "setRepeat", 1));
+            JS_SetModuleExport(ctx, m, "nowPlaying", nowPlaying);
+
+            JSValue json = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, json, "parse", JS_NewCFunction(ctx, JsJsonParse, "parse", 1));
+            JS_SetPropertyStr(ctx, json, "stringify", JS_NewCFunction(ctx, JsJsonStringify, "stringify", 2));
+            JS_SetPropertyStr(ctx, json, "read", JS_NewCFunction(ctx, JsJsonRead, "read", 1));
+            JS_SetPropertyStr(ctx, json, "write", JS_NewCFunction(ctx, JsJsonWrite, "write", 3));
+            JS_SetModuleExport(ctx, m, "json", json);
+
+            JS_SetModuleExport(ctx, m, "getEnv", JS_NewCFunction(ctx, JsGetEnv, "getEnv", 2));
+            JS_SetModuleExport(ctx, m, "execute", JS_NewCFunction(ctx, JsExecute, "execute", 4));
+            JS_SetModuleExport(ctx, m, "webFetch", JS_NewCFunction(ctx, JsWebFetch, "webFetch", 1));
+
+            return 0;
+        }
+    } // namespace
+
+    JSModuleDef *EnsureSystemModule(JSContext *ctx, const char *moduleName)
+    {
+        JSModuleDef *m = JS_NewCModule(ctx, moduleName, SystemModuleInit);
+        if (!m)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "clipboard") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "wallpaper") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "power") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "cpu") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "memory") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "network") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "mouse") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "disk") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "audioLevel") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "audio") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "brightness") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "fileIcon") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "displayMetrics") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "registry") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "hotkey") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "appVolume") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "nowPlaying") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "json") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "getEnv") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "execute") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "webFetch") < 0)
+            return nullptr;
+        return m;
+    }
+} // namespace novadesk::scripting::quickjs

@@ -3,7 +3,7 @@
 ;--------------------------------
 
 ; Define global version variable (Update this as needed)
-!define VERSION "0.5.0.0"
+!define VERSION "0.6.0.0"
 
 ; The name of the installer
 Name "Novadesk"
@@ -103,21 +103,21 @@ Section -CoreFiles SecCoreFiles
   nsExec::ExecToStack 'taskkill /F /IM "Novadesk.exe"'
   nsExec::ExecToStack 'taskkill /F /IM "nwm.exe"'
 
-  ; Add Novadesk files (x64 Release)
+  ; Add Novadesk files from dist
   SetOutPath "$INSTDIR"
-  File "..\x64\Release\Novadesk.exe"
-  ; Add installer stub (x64 Release)
+  File "..\dist\novadesk.exe"
+  ; Add installer stub from dist
   SetOutPath "$INSTDIR\nwm"
-  File "..\x64\Release\nwm\installer_stub.exe"
-  ; Copy Widgets folder
+  File "..\dist\nwm\installer_stub.exe"
+  ; Copy Widgets folder from dist
   SetOutPath "$INSTDIR"
-  File /r "..\x64\Release\Widgets"
+  File /r "..\dist\Widgets"
   
-  ; Add nwm files (x64 Release)
+  ; Add nwm files from dist
   SetOutPath "$INSTDIR\nwm"
-  File "..\x64\Release\nwm\nwm.exe"
-  ; Copy nwm templates if they exist in output
-  File /r "..\x64\Release\nwm\widget"
+  File "..\dist\nwm\nwm.exe"
+  ; Copy nwm template if it exists in dist
+  File /r "..\dist\nwm\template"
   SetOutPath "$INSTDIR"
 
   ${If} $InstallMode == "standard"

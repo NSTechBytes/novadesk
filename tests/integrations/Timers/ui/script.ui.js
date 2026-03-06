@@ -1,0 +1,34 @@
+console.log("Timers ui script loaded");
+// const id = setTimeout(() => {
+//     console.log("Fired after 3 seconds");
+// }, 3000);
+
+// // With extra arguments
+// setTimeout((greeting, name) => {
+//     console.log(greeting, name);
+// }, 1000, "Hello", "Novadesk");
+
+// let tick = 0;
+// const intervalId = setInterval(() => {
+//     tick += 1;
+//     console.log("tick", tick);
+//     if (tick >= 5) {
+//         clearInterval(intervalId);
+//         console.log("Interval stopped");
+//     }
+// }, 1000);
+
+// const timeoutId = setTimeout(() => {
+//     console.log("This will not run");
+// }, 5000);
+
+// clearTimeout(timeoutId);
+
+// const intervalId2 = setInterval(() => {
+//     console.log("Repeating");
+// }, 1000);
+
+// setTimeout(() => {
+//     clearInterval(intervalId2);
+//     console.log("Interval stopped after 5 seconds");
+// }, 5000);
