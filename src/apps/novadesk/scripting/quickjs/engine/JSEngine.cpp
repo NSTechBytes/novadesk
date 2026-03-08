@@ -717,8 +717,7 @@ namespace JSEngine
             std::string channel;
             if (GetChannelArg(ctx, argv[0], channel))
             {
-                // UI listeners historically expected callback(payload), not callback(event, payload).
-                DispatchChannelIpc(g_uiIpcChannelListeners, channel, "main", "ui", payload, true);
+                DispatchChannelIpc(g_uiIpcChannelListeners, channel, "main", "ui", payload);
             }
             return JS_UNDEFINED;
         }
