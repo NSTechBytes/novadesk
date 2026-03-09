@@ -16,6 +16,169 @@
 #include "Utils.h"
 #include "PropertyParser.h"
 
+namespace
+{
+    void ApplyTextAlignment(IDWriteTextFormat* textFormat, TextAlignment textAlign)
+    {
+        if (!textFormat) return;
+
+        switch (textAlign)
+        {
+        case TEXT_ALIGN_LEFT_TOP:
+        case TEXT_ALIGN_LEFT_CENTER:
+        case TEXT_ALIGN_LEFT_BOTTOM:
+            textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+            break;
+        case TEXT_ALIGN_CENTER_TOP:
+        case TEXT_ALIGN_CENTER_CENTER:
+        case TEXT_ALIGN_CENTER_BOTTOM:
+            textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+            break;
+        case TEXT_ALIGN_RIGHT_TOP:
+        case TEXT_ALIGN_RIGHT_CENTER:
+        case TEXT_ALIGN_RIGHT_BOTTOM:
+            textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+            break;
+        }
+
+        switch (textAlign)
+        {
+        case TEXT_ALIGN_LEFT_TOP:
+        case TEXT_ALIGN_CENTER_TOP:
+        case TEXT_ALIGN_RIGHT_TOP:
+            textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+            break;
+        case TEXT_ALIGN_LEFT_CENTER:
+        case TEXT_ALIGN_CENTER_CENTER:
+        case TEXT_ALIGN_RIGHT_CENTER:
+            textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+            break;
+        case TEXT_ALIGN_LEFT_BOTTOM:
+        case TEXT_ALIGN_CENTER_BOTTOM:
+        case TEXT_ALIGN_RIGHT_BOTTOM:
+            textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_FAR);
+            break;
+        }
+    }
+
+    void ApplyClipSettings(IDWriteTextFormat* textFormat, TextClipString clip, bool widthDefined)
+    {
+        if (!textFormat) return;
+
+        const bool allowWrap = (clip == TEXT_CLIP_WRAP) || (clip == TEXT_CLIP_NONE && widthDefined);
+        if (allowWrap)
+        {
+            textFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+            return;
+        }
+
+        textFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+
+        DWRITE_TRIMMING trimming = { DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0 };
+        Microsoft::WRL::ComPtr<IDWriteInlineObject> ellipsis;
+
+        if (clip == TEXT_CLIP_ELLIPSIS)
+        {
+            if (SUCCEEDED(Direct2D::GetWriteFactory()->CreateEllipsisTrimmingSign(textFormat, ellipsis.GetAddressOf())))
+            {
+                textFormat->SetTrimming(&trimming, ellipsis.Get());
+            }
+        }
+        else if (clip == TEXT_CLIP_ON)
+        {
+            textFormat->SetTrimming(&trimming, nullptr);
+        }
+    }
+
+    void ApplyInlineTextStyles(IDWriteTextLayout* layout, const std::vector<TextSegment>& segments, const std::wstring& processedText,
+        float letterSpacing, bool underline, bool strikeThrough)
+    {
+        if (!layout) return;
+
+        for (const auto& segment : segments)
+        {
+            DWRITE_TEXT_RANGE range = { segment.startPos, segment.length };
+            if (segment.style.fontWeight.has_value()) layout->SetFontWeight((DWRITE_FONT_WEIGHT)segment.style.fontWeight.value(), range);
+            if (segment.style.italic.has_value()) layout->SetFontStyle(segment.style.italic.value() ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, range);
+            if (segment.style.underline.has_value()) layout->SetUnderline(segment.style.underline.value(), range);
+            if (segment.style.strikethrough.has_value()) layout->SetStrikethrough(segment.style.strikethrough.value(), range);
+            if (segment.style.fontSize.has_value()) layout->SetFontSize((float)segment.style.fontSize.value(), range);
+            if (segment.style.fontFace.has_value()) layout->SetFontFamilyName(segment.style.fontFace.value().c_str(), range);
+        }
+
+        if (letterSpacing != 0.0f)
+        {
+            Microsoft::WRL::ComPtr<IDWriteTextLayout1> layout1;
+            if (SUCCEEDED(layout->QueryInterface(IID_PPV_ARGS(&layout1))))
+            {
+                DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
+                layout1->SetCharacterSpacing(letterSpacing, 0.0f, 0.0f, range);
+            }
+        }
+
+        if (underline)
+        {
+            DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
+            layout->SetUnderline(TRUE, range);
+        }
+
+        if (strikeThrough)
+        {
+            DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
+            layout->SetStrikethrough(TRUE, range);
+        }
+    }
+
+    bool HitTestRenderedTextAlpha(IDWriteTextLayout* layout, float relX, float relY, float layoutW, float layoutH, bool antiAlias)
+    {
+        if (!layout) return false;
+        if (relX < 0.0f || relY < 0.0f) return false;
+
+        const UINT bitmapW = (UINT)(std::max)(1.0f, std::ceil(layoutW));
+        const UINT bitmapH = (UINT)(std::max)(1.0f, std::ceil(layoutH));
+        if ((UINT)relX >= bitmapW || (UINT)relY >= bitmapH) return false;
+
+        IWICImagingFactory* wicFactory = Direct2D::GetWICFactory();
+        ID2D1Factory1* d2dFactory = Direct2D::GetFactory();
+        if (!wicFactory || !d2dFactory) return false;
+
+        Microsoft::WRL::ComPtr<IWICBitmap> wicBitmap;
+        HRESULT hr = wicFactory->CreateBitmap(bitmapW, bitmapH, GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad, wicBitmap.GetAddressOf());
+        if (FAILED(hr)) return false;
+
+        D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+            D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+            D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+            96.0f,
+            96.0f
+        );
+
+        Microsoft::WRL::ComPtr<ID2D1RenderTarget> renderTarget;
+        hr = d2dFactory->CreateWicBitmapRenderTarget(wicBitmap.Get(), props, renderTarget.GetAddressOf());
+        if (FAILED(hr)) return false;
+
+        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush;
+        hr = renderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), brush.GetAddressOf());
+        if (FAILED(hr)) return false;
+
+        renderTarget->BeginDraw();
+        renderTarget->Clear(D2D1::ColorF(0, 0.0f));
+        renderTarget->SetTextAntialiasMode(antiAlias ? D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE : D2D1_TEXT_ANTIALIAS_MODE_ALIASED);
+        renderTarget->DrawTextLayout(D2D1::Point2F(0.0f, 0.0f), layout, brush.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+        hr = renderTarget->EndDraw();
+        if (FAILED(hr)) return false;
+
+        const INT pixelX = (INT)relX;
+        const INT pixelY = (INT)relY;
+        WICRect rect = { pixelX, pixelY, 1, 1 };
+        BYTE pixel[4] = {};
+        hr = wicBitmap->CopyPixels(&rect, 4, 4, pixel);
+        if (FAILED(hr)) return false;
+
+        return pixel[3] > (antiAlias ? 8 : 0);
+    }
+}
+
 TextElement::TextElement(const std::wstring& id, int x, int y, int w, int h,
      const std::wstring& text, const std::wstring& fontFace,
      int fontSize, COLORREF fontColor, BYTE alpha,
@@ -84,69 +247,8 @@ void TextElement::Render(ID2D1DeviceContext* context)
         return;
     }
 
-    // Set alignment
-    switch (m_TextAlign)
-    {
-    case TEXT_ALIGN_LEFT_TOP:
-    case TEXT_ALIGN_LEFT_CENTER:
-    case TEXT_ALIGN_LEFT_BOTTOM:
-        pTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-        break;
-    case TEXT_ALIGN_CENTER_TOP:
-    case TEXT_ALIGN_CENTER_CENTER:
-    case TEXT_ALIGN_CENTER_BOTTOM:
-        pTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-        break;
-    case TEXT_ALIGN_RIGHT_TOP:
-    case TEXT_ALIGN_RIGHT_CENTER:
-    case TEXT_ALIGN_RIGHT_BOTTOM:
-        pTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
-        break;
-    }
-
-    switch (m_TextAlign)
-    {
-    case TEXT_ALIGN_LEFT_TOP:
-    case TEXT_ALIGN_CENTER_TOP:
-    case TEXT_ALIGN_RIGHT_TOP:
-        pTextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
-        break;
-    case TEXT_ALIGN_LEFT_CENTER:
-    case TEXT_ALIGN_CENTER_CENTER:
-    case TEXT_ALIGN_RIGHT_CENTER:
-        pTextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-        break;
-    case TEXT_ALIGN_LEFT_BOTTOM:
-    case TEXT_ALIGN_CENTER_BOTTOM:
-    case TEXT_ALIGN_RIGHT_BOTTOM:
-        pTextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_FAR);
-        break;
-    }
-
-    // Compatibility: when width is not explicitly set, default to single-line text.
-    bool allowWrap = (m_ClipString == TEXT_CLIP_WRAP) || (m_ClipString == TEXT_CLIP_NONE && m_WDefined);
-    
-    if (allowWrap)
-    {
-        pTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
-    }
-    else
-    {
-        pTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
-        
-        DWRITE_TRIMMING trimming = { DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0 };
-        Microsoft::WRL::ComPtr<IDWriteInlineObject> pEllipsis;
-        
-        if (m_ClipString == TEXT_CLIP_ELLIPSIS)
-        {
-            Direct2D::GetWriteFactory()->CreateEllipsisTrimmingSign(pTextFormat.Get(), pEllipsis.GetAddressOf());
-            pTextFormat->SetTrimming(&trimming, pEllipsis.Get());
-        }
-        else if (m_ClipString == TEXT_CLIP_ON)
-        {
-            pTextFormat->SetTrimming(&trimming, nullptr);
-        }
-    }
+    ApplyTextAlignment(pTextFormat.Get(), m_TextAlign);
+    ApplyClipSettings(pTextFormat.Get(), m_ClipString, m_WDefined);
 
     GfxRect bounds = GetBounds();
     float layoutX = (float)bounds.X + m_PaddingLeft;
@@ -183,27 +285,9 @@ void TextElement::Render(ID2D1DeviceContext* context)
     );
 
     if (SUCCEEDED(hr)) {
+        ApplyInlineTextStyles(pLayout.Get(), m_Segments, processedText, m_LetterSpacing, m_UnderLine, m_StrikeThrough);
         for (const auto& segment : m_Segments) {
             DWRITE_TEXT_RANGE range = { segment.startPos, segment.length };
-            
-            if (segment.style.fontWeight.has_value()) {
-                pLayout->SetFontWeight((DWRITE_FONT_WEIGHT)segment.style.fontWeight.value(), range);
-            }
-            if (segment.style.italic.has_value()) {
-                pLayout->SetFontStyle(segment.style.italic.value() ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, range);
-            }
-            if (segment.style.underline.has_value()) {
-                pLayout->SetUnderline(segment.style.underline.value(), range);
-            }
-            if (segment.style.strikethrough.has_value()) {
-                pLayout->SetStrikethrough(segment.style.strikethrough.value(), range);
-            }
-            if (segment.style.fontSize.has_value()) {
-                pLayout->SetFontSize((float)segment.style.fontSize.value(), range);
-            }
-            if (segment.style.fontFace.has_value()) {
-                pLayout->SetFontFamilyName(segment.style.fontFace.value().c_str(), range);
-            }
             if (segment.style.gradient.has_value() && segment.style.gradient->type != GRADIENT_NONE) {
                 Microsoft::WRL::ComPtr<ID2D1Brush> pSegmentGradientBrush;
                 if (Direct2D::CreateGradientBrush(context, layoutRect, segment.style.gradient.value(), &pSegmentGradientBrush)) {
@@ -218,24 +302,6 @@ void TextElement::Render(ID2D1DeviceContext* context)
                 }
             }
         }
-
-        if (m_LetterSpacing != 0.0f) {
-                Microsoft::WRL::ComPtr<IDWriteTextLayout1> pLayout1;
-                if (SUCCEEDED(pLayout.As(&pLayout1))) {
-                    DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
-                    pLayout1->SetCharacterSpacing(m_LetterSpacing, 0.0f, 0.0f, range);
-                }
-            }
-
-            if (m_UnderLine) {
-                DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
-                pLayout->SetUnderline(TRUE, range);
-            }
-
-            if (m_StrikeThrough) {
-                DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
-                pLayout->SetStrikethrough(TRUE, range);
-            }
 
             if (!m_Shadows.empty())
             {
@@ -337,7 +403,6 @@ int TextElement::GetAutoWidth()
     );
     if (FAILED(hr)) return 0;
 
-    // For AutoWidth, we never wrap
     pTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
 
     std::wstring processedText = GetProcessedText();
@@ -348,33 +413,7 @@ int TextElement::GetAutoWidth()
     );
     if (FAILED(hr)) return 0;
 
-    for (const auto& segment : m_Segments) {
-        DWRITE_TEXT_RANGE range = { segment.startPos, segment.length };
-        if (segment.style.fontWeight.has_value()) pLayout->SetFontWeight((DWRITE_FONT_WEIGHT)segment.style.fontWeight.value(), range);
-        if (segment.style.italic.has_value()) pLayout->SetFontStyle(segment.style.italic.value() ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, range);
-        if (segment.style.underline.has_value()) pLayout->SetUnderline(segment.style.underline.value(), range);
-        if (segment.style.strikethrough.has_value()) pLayout->SetStrikethrough(segment.style.strikethrough.value(), range);
-        if (segment.style.fontSize.has_value()) pLayout->SetFontSize((float)segment.style.fontSize.value(), range);
-        if (segment.style.fontFace.has_value()) pLayout->SetFontFamilyName(segment.style.fontFace.value().c_str(), range);
-    }
-
-    if (m_LetterSpacing != 0.0f) {
-        Microsoft::WRL::ComPtr<IDWriteTextLayout1> pLayout1;
-        if (SUCCEEDED(pLayout.As(&pLayout1))) {
-            DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
-            pLayout1->SetCharacterSpacing(m_LetterSpacing, 0.0f, 0.0f, range);
-        }
-    }
-
-    if (m_UnderLine) {
-        DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
-        pLayout->SetUnderline(TRUE, range);
-    }
-
-    if (m_StrikeThrough) {
-        DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
-        pLayout->SetStrikethrough(TRUE, range);
-    }
+    ApplyInlineTextStyles(pLayout.Get(), m_Segments, processedText, m_LetterSpacing, m_UnderLine, m_StrikeThrough);
 
     DWRITE_TEXT_METRICS metrics;
     pLayout->GetMetrics(&metrics);
@@ -448,33 +487,7 @@ int TextElement::GetAutoHeight()
     );
     if (FAILED(hr)) return 0;
 
-    for (const auto& segment : m_Segments) {
-        DWRITE_TEXT_RANGE range = { segment.startPos, segment.length };
-        if (segment.style.fontWeight.has_value()) pLayout->SetFontWeight((DWRITE_FONT_WEIGHT)segment.style.fontWeight.value(), range);
-        if (segment.style.italic.has_value()) pLayout->SetFontStyle(segment.style.italic.value() ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, range);
-        if (segment.style.underline.has_value()) pLayout->SetUnderline(segment.style.underline.value(), range);
-        if (segment.style.strikethrough.has_value()) pLayout->SetStrikethrough(segment.style.strikethrough.value(), range);
-        if (segment.style.fontSize.has_value()) pLayout->SetFontSize((float)segment.style.fontSize.value(), range);
-        if (segment.style.fontFace.has_value()) pLayout->SetFontFamilyName(segment.style.fontFace.value().c_str(), range);
-    }
-
-    if (m_LetterSpacing != 0.0f) {
-        Microsoft::WRL::ComPtr<IDWriteTextLayout1> pLayout1;
-        if (SUCCEEDED(pLayout.As(&pLayout1))) {
-            DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
-            pLayout1->SetCharacterSpacing(m_LetterSpacing, 0.0f, 0.0f, range);
-        }
-    }
-
-    if (m_UnderLine) {
-        DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
-        pLayout->SetUnderline(TRUE, range);
-    }
-
-    if (m_StrikeThrough) {
-        DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
-        pLayout->SetStrikethrough(TRUE, range);
-    }
+    ApplyInlineTextStyles(pLayout.Get(), m_Segments, processedText, m_LetterSpacing, m_UnderLine, m_StrikeThrough);
 
     DWRITE_TEXT_METRICS metrics;
     pLayout->GetMetrics(&metrics);
@@ -555,10 +568,11 @@ bool TextElement::HitTest(int x, int y)
     if (layoutW < 0) layoutW = 1;
     if (layoutH < 0) layoutH = 1;
 
-    bool allowWrap = (m_ClipString == TEXT_CLIP_WRAP) || (m_ClipString == TEXT_CLIP_NONE && m_WDefined);
-    pTextFormat->SetWordWrapping(allowWrap ? DWRITE_WORD_WRAPPING_WRAP : DWRITE_WORD_WRAPPING_NO_WRAP);
+    ApplyTextAlignment(pTextFormat.Get(), m_TextAlign);
+    ApplyClipSettings(pTextFormat.Get(), m_ClipString, m_WDefined);
 
     std::wstring processedText = GetProcessedText();
+    if (processedText.empty()) return false;
     Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
     hr = Direct2D::GetWriteFactory()->CreateTextLayout(
         processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
@@ -566,44 +580,19 @@ bool TextElement::HitTest(int x, int y)
     );
     if (FAILED(hr)) return false;
 
-    for (const auto& segment : m_Segments) {
-        DWRITE_TEXT_RANGE range = { segment.startPos, segment.length };
-        if (segment.style.fontWeight.has_value()) pLayout->SetFontWeight((DWRITE_FONT_WEIGHT)segment.style.fontWeight.value(), range);
-        if (segment.style.italic.has_value()) pLayout->SetFontStyle(segment.style.italic.value() ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, range);
-        if (segment.style.underline.has_value()) pLayout->SetUnderline(segment.style.underline.value(), range);
-        if (segment.style.strikethrough.has_value()) pLayout->SetStrikethrough(segment.style.strikethrough.value(), range);
-        if (segment.style.fontSize.has_value()) pLayout->SetFontSize((float)segment.style.fontSize.value(), range);
-        if (segment.style.fontFace.has_value()) pLayout->SetFontFamilyName(segment.style.fontFace.value().c_str(), range);
-    }
-
-    if (m_LetterSpacing != 0.0f) {
-        Microsoft::WRL::ComPtr<IDWriteTextLayout1> pLayout1;
-        if (SUCCEEDED(pLayout.As(&pLayout1))) {
-            DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
-            pLayout1->SetCharacterSpacing(m_LetterSpacing, 0.0f, 0.0f, range);
-        }
-    }
-
-    if (m_UnderLine) {
-        DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
-        pLayout->SetUnderline(TRUE, range);
-    }
-
-    if (m_StrikeThrough) {
-        DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
-        pLayout->SetStrikethrough(TRUE, range);
-    }
+    ApplyInlineTextStyles(pLayout.Get(), m_Segments, processedText, m_LetterSpacing, m_UnderLine, m_StrikeThrough);
 
     // Get point relative to layout area
     float relX = (float)x - (bounds.X + m_PaddingLeft);
     float relY = (float)y - (bounds.Y + m_PaddingTop);
 
-    BOOL isTrailingHit;
-    BOOL isInside;
-    DWRITE_HIT_TEST_METRICS hitMetrics;
+    BOOL isTrailingHit = FALSE;
+    BOOL isInside = FALSE;
+    DWRITE_HIT_TEST_METRICS hitMetrics = {};
     pLayout->HitTestPoint(relX, relY, &isTrailingHit, &isInside, &hitMetrics);
+    if (!isInside) return false;
 
-    return isInside;
+    return HitTestRenderedTextAlpha(pLayout.Get(), relX, relY, layoutW, layoutH, m_AntiAlias);
 }
 
 std::wstring TextElement::GetProcessedText() const
