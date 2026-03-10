@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 OfficialNovadesk 
+/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -18,9 +18,10 @@
 
 namespace
 {
-    void ApplyTextAlignment(IDWriteTextFormat* textFormat, TextAlignment textAlign)
+    void ApplyTextAlignment(IDWriteTextFormat *textFormat, TextAlignment textAlign)
     {
-        if (!textFormat) return;
+        if (!textFormat)
+            return;
 
         switch (textAlign)
         {
@@ -61,9 +62,10 @@ namespace
         }
     }
 
-    void ApplyClipSettings(IDWriteTextFormat* textFormat, TextClipString clip, bool widthDefined)
+    void ApplyClipSettings(IDWriteTextFormat *textFormat, TextClipString clip, bool widthDefined)
     {
-        if (!textFormat) return;
+        if (!textFormat)
+            return;
 
         const bool allowWrap = (clip == TEXT_CLIP_WRAP) || (clip == TEXT_CLIP_NONE && widthDefined);
         if (allowWrap)
@@ -74,7 +76,7 @@ namespace
 
         textFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
 
-        DWRITE_TRIMMING trimming = { DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0 };
+        DWRITE_TRIMMING trimming = {DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
         Microsoft::WRL::ComPtr<IDWriteInlineObject> ellipsis;
 
         if (clip == TEXT_CLIP_ELLIPSIS)
@@ -90,20 +92,27 @@ namespace
         }
     }
 
-    void ApplyInlineTextStyles(IDWriteTextLayout* layout, const std::vector<TextSegment>& segments, const std::wstring& processedText,
-        float letterSpacing, bool underline, bool strikeThrough)
+    void ApplyInlineTextStyles(IDWriteTextLayout *layout, const std::vector<TextSegment> &segments, const std::wstring &processedText,
+                               float letterSpacing, bool underline, bool strikeThrough)
     {
-        if (!layout) return;
+        if (!layout)
+            return;
 
-        for (const auto& segment : segments)
+        for (const auto &segment : segments)
         {
-            DWRITE_TEXT_RANGE range = { segment.startPos, segment.length };
-            if (segment.style.fontWeight.has_value()) layout->SetFontWeight((DWRITE_FONT_WEIGHT)segment.style.fontWeight.value(), range);
-            if (segment.style.italic.has_value()) layout->SetFontStyle(segment.style.italic.value() ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, range);
-            if (segment.style.underline.has_value()) layout->SetUnderline(segment.style.underline.value(), range);
-            if (segment.style.strikethrough.has_value()) layout->SetStrikethrough(segment.style.strikethrough.value(), range);
-            if (segment.style.fontSize.has_value()) layout->SetFontSize((float)segment.style.fontSize.value(), range);
-            if (segment.style.fontFace.has_value()) layout->SetFontFamilyName(segment.style.fontFace.value().c_str(), range);
+            DWRITE_TEXT_RANGE range = {segment.startPos, segment.length};
+            if (segment.style.fontWeight.has_value())
+                layout->SetFontWeight((DWRITE_FONT_WEIGHT)segment.style.fontWeight.value(), range);
+            if (segment.style.italic.has_value())
+                layout->SetFontStyle(segment.style.italic.value() ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, range);
+            if (segment.style.underline.has_value())
+                layout->SetUnderline(segment.style.underline.value(), range);
+            if (segment.style.strikethrough.has_value())
+                layout->SetStrikethrough(segment.style.strikethrough.value(), range);
+            if (segment.style.fontSize.has_value())
+                layout->SetFontSize((float)segment.style.fontSize.value(), range);
+            if (segment.style.fontFace.has_value())
+                layout->SetFontFamilyName(segment.style.fontFace.value().c_str(), range);
         }
 
         if (letterSpacing != 0.0f)
@@ -111,79 +120,87 @@ namespace
             Microsoft::WRL::ComPtr<IDWriteTextLayout1> layout1;
             if (SUCCEEDED(layout->QueryInterface(IID_PPV_ARGS(&layout1))))
             {
-                DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
+                DWRITE_TEXT_RANGE range = {0, (UINT32)processedText.length()};
                 layout1->SetCharacterSpacing(letterSpacing, 0.0f, 0.0f, range);
             }
         }
 
         if (underline)
         {
-            DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
+            DWRITE_TEXT_RANGE range = {0, (UINT32)processedText.length()};
             layout->SetUnderline(TRUE, range);
         }
 
         if (strikeThrough)
         {
-            DWRITE_TEXT_RANGE range = { 0, (UINT32)processedText.length() };
+            DWRITE_TEXT_RANGE range = {0, (UINT32)processedText.length()};
             layout->SetStrikethrough(TRUE, range);
         }
     }
 
-    bool HitTestRenderedTextAlpha(IDWriteTextLayout* layout, float relX, float relY, float layoutW, float layoutH, bool antiAlias)
+    bool HitTestRenderedTextAlpha(IDWriteTextLayout *layout, float relX, float relY, float layoutW, float layoutH, bool antiAlias)
     {
-        if (!layout) return false;
-        if (relX < 0.0f || relY < 0.0f) return false;
+        if (!layout)
+            return false;
+        if (relX < 0.0f || relY < 0.0f)
+            return false;
 
         const UINT bitmapW = (UINT)(std::max)(1.0f, std::ceil(layoutW));
         const UINT bitmapH = (UINT)(std::max)(1.0f, std::ceil(layoutH));
-        if ((UINT)relX >= bitmapW || (UINT)relY >= bitmapH) return false;
+        if ((UINT)relX >= bitmapW || (UINT)relY >= bitmapH)
+            return false;
 
-        IWICImagingFactory* wicFactory = Direct2D::GetWICFactory();
-        ID2D1Factory1* d2dFactory = Direct2D::GetFactory();
-        if (!wicFactory || !d2dFactory) return false;
+        IWICImagingFactory *wicFactory = Direct2D::GetWICFactory();
+        ID2D1Factory1 *d2dFactory = Direct2D::GetFactory();
+        if (!wicFactory || !d2dFactory)
+            return false;
 
         Microsoft::WRL::ComPtr<IWICBitmap> wicBitmap;
         HRESULT hr = wicFactory->CreateBitmap(bitmapW, bitmapH, GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad, wicBitmap.GetAddressOf());
-        if (FAILED(hr)) return false;
+        if (FAILED(hr))
+            return false;
 
         D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
             D2D1_RENDER_TARGET_TYPE_SOFTWARE,
             D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
             96.0f,
-            96.0f
-        );
+            96.0f);
 
         Microsoft::WRL::ComPtr<ID2D1RenderTarget> renderTarget;
         hr = d2dFactory->CreateWicBitmapRenderTarget(wicBitmap.Get(), props, renderTarget.GetAddressOf());
-        if (FAILED(hr)) return false;
+        if (FAILED(hr))
+            return false;
 
         Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush;
         hr = renderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), brush.GetAddressOf());
-        if (FAILED(hr)) return false;
+        if (FAILED(hr))
+            return false;
 
         renderTarget->BeginDraw();
         renderTarget->Clear(D2D1::ColorF(0, 0.0f));
         renderTarget->SetTextAntialiasMode(antiAlias ? D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE : D2D1_TEXT_ANTIALIAS_MODE_ALIASED);
         renderTarget->DrawTextLayout(D2D1::Point2F(0.0f, 0.0f), layout, brush.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
         hr = renderTarget->EndDraw();
-        if (FAILED(hr)) return false;
+        if (FAILED(hr))
+            return false;
 
         const INT pixelX = (INT)relX;
         const INT pixelY = (INT)relY;
-        WICRect rect = { pixelX, pixelY, 1, 1 };
+        WICRect rect = {pixelX, pixelY, 1, 1};
         BYTE pixel[4] = {};
         hr = wicBitmap->CopyPixels(&rect, 4, 4, pixel);
-        if (FAILED(hr)) return false;
+        if (FAILED(hr))
+            return false;
 
         return pixel[3] > (antiAlias ? 8 : 0);
     }
 }
 
-TextElement::TextElement(const std::wstring& id, int x, int y, int w, int h,
-     const std::wstring& text, const std::wstring& fontFace,
-     int fontSize, COLORREF fontColor, BYTE alpha,
-     int fontWeight, bool italic, TextAlignment textAlign,
-     TextClipString clip, const std::wstring& fontPath)
+TextElement::TextElement(const std::wstring &id, int x, int y, int w, int h,
+                         const std::wstring &text, const std::wstring &fontFace,
+                         int fontSize, COLORREF fontColor, BYTE alpha,
+                         int fontWeight, bool italic, TextAlignment textAlign,
+                         TextClipString clip, const std::wstring &fontPath)
     : Element(ELEMENT_TEXT, id, x, y, w, h),
       m_Text(text), m_FontFace(fontFace), m_FontSize(fontSize),
       m_FontColor(fontColor), m_Alpha(alpha), m_FontWeight(fontWeight), m_Italic(italic),
@@ -192,7 +209,7 @@ TextElement::TextElement(const std::wstring& id, int x, int y, int w, int h,
     ParseInlineStyles();
 }
 
-void TextElement::Render(ID2D1DeviceContext* context)
+void TextElement::Render(ID2D1DeviceContext *context)
 {
     D2D1_MATRIX_3X2_F originalTransform;
     ApplyRenderTransform(context, originalTransform);
@@ -209,20 +226,27 @@ void TextElement::Render(ID2D1DeviceContext* context)
 
     // Create text format
     std::wstring fontFace = m_FontFace.empty() ? L"Arial" : m_FontFace;
-    
+
     Microsoft::WRL::ComPtr<IDWriteFontCollection> pCollection;
-    if (!m_FontPath.empty()) {
+    if (!m_FontPath.empty())
+    {
         pCollection = FontManager::GetFontCollection(m_FontPath);
-        if (pCollection) {
+        if (pCollection)
+        {
             UINT32 index;
             BOOL exists;
-            if (FAILED(pCollection->FindFamilyName(fontFace.c_str(), &index, &exists)) || !exists) {
+            if (FAILED(pCollection->FindFamilyName(fontFace.c_str(), &index, &exists)) || !exists)
+            {
                 Logging::Log(LogLevel::Warn, L"TextElement(%s): Font family '%s' not found in custom collection, falling back to system fonts.", m_Id.c_str(), fontFace.c_str());
                 pCollection = nullptr;
-            } else {
+            }
+            else
+            {
                 Logging::Log(LogLevel::Debug, L"TextElement(%s): Using custom font collection from '%s' (Family found)", m_Id.c_str(), m_FontPath.c_str());
             }
-        } else {
+        }
+        else
+        {
             Logging::Log(LogLevel::Warn, L"TextElement(%s): Failed to load custom collection, falling back to system fonts.", m_Id.c_str());
         }
     }
@@ -236,13 +260,12 @@ void TextElement::Render(ID2D1DeviceContext* context)
         DWRITE_FONT_STRETCH_NORMAL,
         (float)m_FontSize,
         L"", // locale
-        pTextFormat.GetAddressOf()
-    );
+        pTextFormat.GetAddressOf());
 
     if (FAILED(hr))
     {
-        Logging::Log(LogLevel::Error, L"TextElement(%s): Failed to create text format (Font: '%s', Path: '%s') (0x%08X)", 
-            m_Id.c_str(), fontFace.c_str(), m_FontPath.c_str(), hr);
+        Logging::Log(LogLevel::Error, L"TextElement(%s): Failed to create text format (Font: '%s', Path: '%s') (0x%08X)",
+                     m_Id.c_str(), fontFace.c_str(), m_FontPath.c_str(), hr);
         RestoreRenderTransform(context, originalTransform);
         return;
     }
@@ -255,10 +278,12 @@ void TextElement::Render(ID2D1DeviceContext* context)
     float layoutY = (float)bounds.Y + m_PaddingTop;
     float layoutW = (float)bounds.Width - m_PaddingLeft - m_PaddingRight;
     float layoutH = (float)bounds.Height - m_PaddingTop - m_PaddingBottom;
-    
-    if (layoutW < 0) layoutW = 0;
-    if (layoutH < 0) layoutH = 0;
-    
+
+    if (layoutW < 0)
+        layoutW = 0;
+    if (layoutH < 0)
+        layoutH = 0;
+
     D2D1_RECT_F layoutRect = D2D1::RectF(layoutX, layoutY, layoutX + layoutW, layoutY + layoutH);
 
     // Create brush
@@ -269,39 +294,43 @@ void TextElement::Render(ID2D1DeviceContext* context)
         &m_FontGradient,
         m_FontColor,
         m_Alpha / 255.0f,
-        pBrush.GetAddressOf()
-    );
+        pBrush.GetAddressOf());
 
     if (pBrush)
     {
         context->SetTextAntialiasMode(m_AntiAlias ? D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE : D2D1_TEXT_ANTIALIAS_MODE_ALIASED);
 
-    // Always create a text layout for rendering if we have letter spacing or shadows
-    std::wstring processedText = GetProcessedText();
-    Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
-    hr = Direct2D::GetWriteFactory()->CreateTextLayout(
-        processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
-        layoutW, layoutH, pLayout.GetAddressOf()
-    );
+        // Always create a text layout for rendering if we have letter spacing or shadows
+        std::wstring processedText = GetProcessedText();
+        Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
+        hr = Direct2D::GetWriteFactory()->CreateTextLayout(
+            processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
+            layoutW, layoutH, pLayout.GetAddressOf());
 
-    if (SUCCEEDED(hr)) {
-        ApplyInlineTextStyles(pLayout.Get(), m_Segments, processedText, m_LetterSpacing, m_UnderLine, m_StrikeThrough);
-        for (const auto& segment : m_Segments) {
-            DWRITE_TEXT_RANGE range = { segment.startPos, segment.length };
-            if (segment.style.gradient.has_value() && segment.style.gradient->type != GRADIENT_NONE) {
-                Microsoft::WRL::ComPtr<ID2D1Brush> pSegmentGradientBrush;
-                if (Direct2D::CreateGradientBrush(context, layoutRect, segment.style.gradient.value(), &pSegmentGradientBrush)) {
-                    pLayout->SetDrawingEffect(pSegmentGradientBrush.Get(), range);
+        if (SUCCEEDED(hr))
+        {
+            ApplyInlineTextStyles(pLayout.Get(), m_Segments, processedText, m_LetterSpacing, m_UnderLine, m_StrikeThrough);
+            for (const auto &segment : m_Segments)
+            {
+                DWRITE_TEXT_RANGE range = {segment.startPos, segment.length};
+                if (segment.style.gradient.has_value() && segment.style.gradient->type != GRADIENT_NONE)
+                {
+                    Microsoft::WRL::ComPtr<ID2D1Brush> pSegmentGradientBrush;
+                    if (Direct2D::CreateGradientBrush(context, layoutRect, segment.style.gradient.value(), &pSegmentGradientBrush))
+                    {
+                        pLayout->SetDrawingEffect(pSegmentGradientBrush.Get(), range);
+                    }
+                }
+                else if (segment.style.color.has_value())
+                {
+                    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pSegmentBrush;
+                    BYTE a = segment.style.alpha.value_or(255);
+                    if (Direct2D::CreateSolidBrush(context, segment.style.color.value(), a / 255.0f, &pSegmentBrush))
+                    {
+                        pLayout->SetDrawingEffect(pSegmentBrush.Get(), range);
+                    }
                 }
             }
-            else if (segment.style.color.has_value()) {
-                Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pSegmentBrush;
-                BYTE a = segment.style.alpha.value_or(255);
-                if (Direct2D::CreateSolidBrush(context, segment.style.color.value(), a / 255.0f, &pSegmentBrush)) {
-                    pLayout->SetDrawingEffect(pSegmentBrush.Get(), range);
-                }
-            }
-        }
 
             if (!m_Shadows.empty())
             {
@@ -311,7 +340,7 @@ void TextElement::Render(ID2D1DeviceContext* context)
                 {
                     Microsoft::WRL::ComPtr<ID2D1Device> pDevice;
                     context->GetDevice(&pDevice);
-                    
+
                     if (pDevice)
                     {
                         Microsoft::WRL::ComPtr<ID2D1DeviceContext> pRecordingContext;
@@ -326,7 +355,7 @@ void TextElement::Render(ID2D1DeviceContext* context)
                         }
                     }
 
-                    for (const auto& shadow : m_Shadows)
+                    for (const auto &shadow : m_Shadows)
                     {
                         if (shadow.blur <= 0.01f)
                         {
@@ -346,7 +375,7 @@ void TextElement::Render(ID2D1DeviceContext* context)
                             {
                                 pShadowEffect->SetInput(0, pCommandList.Get());
                                 pShadowEffect->SetValue(D2D1_SHADOW_PROP_BLUR_STANDARD_DEVIATION, shadow.blur / 2.0f);
-                                
+
                                 pColorMatrixEffect->SetInputEffect(0, pShadowEffect.Get());
                                 D2D1_COLOR_F c = Direct2D::ColorToD2D(shadow.color, shadow.alpha / 255.0f);
                                 D2D1_MATRIX_5X4_F matrix = D2D1::Matrix5x4F(
@@ -354,8 +383,7 @@ void TextElement::Render(ID2D1DeviceContext* context)
                                     0, 0, 0, 0,
                                     0, 0, 0, 0,
                                     c.r * c.a, c.g * c.a, c.b * c.a, c.a,
-                                    0, 0, 0, 0
-                                );
+                                    0, 0, 0, 0);
                                 pColorMatrixEffect->SetValue(D2D1_COLORMATRIX_PROP_COLOR_MATRIX, matrix);
 
                                 D2D1_POINT_2F offset = D2D1::Point2F(layoutRect.left + shadow.offsetX, layoutRect.top + shadow.offsetY);
@@ -370,24 +398,28 @@ void TextElement::Render(ID2D1DeviceContext* context)
             context->DrawTextLayout(D2D1::Point2F(layoutX, layoutY), pLayout.Get(), pBrush.Get());
         }
     }
-    
+
     // Restore transform
     RestoreRenderTransform(context, originalTransform);
 }
 
 int TextElement::GetAutoWidth()
 {
-    if (m_Text.empty()) return 0;
+    if (m_Text.empty())
+        return 0;
 
     std::wstring fontFace = m_FontFace.empty() ? L"Arial" : m_FontFace;
 
     Microsoft::WRL::ComPtr<IDWriteFontCollection> pCollection;
-    if (!m_FontPath.empty()) {
+    if (!m_FontPath.empty())
+    {
         pCollection = FontManager::GetFontCollection(m_FontPath);
-        if (pCollection) {
+        if (pCollection)
+        {
             UINT32 index;
             BOOL exists;
-            if (FAILED(pCollection->FindFamilyName(fontFace.c_str(), &index, &exists)) || !exists) {
+            if (FAILED(pCollection->FindFamilyName(fontFace.c_str(), &index, &exists)) || !exists)
+            {
                 pCollection = nullptr;
             }
         }
@@ -399,9 +431,9 @@ int TextElement::GetAutoWidth()
         (DWRITE_FONT_WEIGHT)m_FontWeight,
         m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL, (float)m_FontSize, L"",
-        pTextFormat.GetAddressOf()
-    );
-    if (FAILED(hr)) return 0;
+        pTextFormat.GetAddressOf());
+    if (FAILED(hr))
+        return 0;
 
     pTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
 
@@ -409,9 +441,9 @@ int TextElement::GetAutoWidth()
     Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
     hr = Direct2D::GetWriteFactory()->CreateTextLayout(
         processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
-        10000.0f, 10000.0f, pLayout.GetAddressOf()
-    );
-    if (FAILED(hr)) return 0;
+        10000.0f, 10000.0f, pLayout.GetAddressOf());
+    if (FAILED(hr))
+        return 0;
 
     ApplyInlineTextStyles(pLayout.Get(), m_Segments, processedText, m_LetterSpacing, m_UnderLine, m_StrikeThrough);
 
@@ -419,10 +451,11 @@ int TextElement::GetAutoWidth()
     pLayout->GetMetrics(&metrics);
 
     int contentW = (int)ceil(metrics.widthIncludingTrailingWhitespace);
-    
+
     if (!m_WDefined && (m_ClipString == TEXT_CLIP_ON || m_ClipString == TEXT_CLIP_ELLIPSIS) && m_Width > 0)
     {
-        if (contentW > m_Width) return m_Width;
+        if (contentW > m_Width)
+            return m_Width;
     }
     return contentW;
 }
@@ -430,17 +463,21 @@ int TextElement::GetAutoWidth()
 int TextElement::GetAutoHeight()
 {
     std::wstring processedText = GetProcessedText();
-    if (processedText.empty()) return 0;
+    if (processedText.empty())
+        return 0;
 
     std::wstring fontFace = m_FontFace.empty() ? L"Arial" : m_FontFace;
 
     Microsoft::WRL::ComPtr<IDWriteFontCollection> pCollection;
-    if (!m_FontPath.empty()) {
+    if (!m_FontPath.empty())
+    {
         pCollection = FontManager::GetFontCollection(m_FontPath);
-        if (pCollection) {
+        if (pCollection)
+        {
             UINT32 index;
             BOOL exists;
-            if (FAILED(pCollection->FindFamilyName(fontFace.c_str(), &index, &exists)) || !exists) {
+            if (FAILED(pCollection->FindFamilyName(fontFace.c_str(), &index, &exists)) || !exists)
+            {
                 pCollection = nullptr;
             }
         }
@@ -452,9 +489,9 @@ int TextElement::GetAutoHeight()
         (DWRITE_FONT_WEIGHT)m_FontWeight,
         m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL, (float)m_FontSize, L"",
-        pTextFormat.GetAddressOf()
-    );
-    if (FAILED(hr)) return 0;
+        pTextFormat.GetAddressOf());
+    if (FAILED(hr))
+        return 0;
 
     float maxWidth = 10000.0f;
     // Keep auto-size text single-line unless wrap is explicitly requested.
@@ -483,9 +520,9 @@ int TextElement::GetAutoHeight()
     Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
     hr = Direct2D::GetWriteFactory()->CreateTextLayout(
         processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
-        maxWidth, 10000.0f, pLayout.GetAddressOf()
-    );
-    if (FAILED(hr)) return 0;
+        maxWidth, 10000.0f, pLayout.GetAddressOf());
+    if (FAILED(hr))
+        return 0;
 
     ApplyInlineTextStyles(pLayout.Get(), m_Segments, processedText, m_LetterSpacing, m_UnderLine, m_StrikeThrough);
 
@@ -493,36 +530,42 @@ int TextElement::GetAutoHeight()
     pLayout->GetMetrics(&metrics);
 
     int contentH = (int)ceil(metrics.height);
-    
-    // Logging::Log(LogLevel::Debug, L"TextElement(%s): GetAutoHeight = %d (Font: %s, Size: %d, Wrap: %s, MaxWidth: %.0f)", 
+
+    // Logging::Log(LogLevel::Debug, L"TextElement(%s): GetAutoHeight = %d (Font: %s, Size: %d, Wrap: %s, MaxWidth: %.0f)",
     //     m_Id.c_str(), contentH, fontFace.c_str(), m_FontSize, wrap ? L"YES" : L"NO", maxWidth);
 
     if (!m_HDefined && (m_ClipString == TEXT_CLIP_ON || m_ClipString == TEXT_CLIP_ELLIPSIS) && m_Height > 0)
     {
-        if (contentH > m_Height) return m_Height;
+        if (contentH > m_Height)
+            return m_Height;
     }
     return contentH;
 }
 
-GfxRect TextElement::GetBounds() {
+GfxRect TextElement::GetBounds()
+{
     int w = GetWidth();
     int h = GetHeight();
     int x = m_X;
     int y = m_Y;
 
     // Horizontal Alignment Offset
-    if (m_TextAlign == TEXT_ALIGN_CENTER_TOP || m_TextAlign == TEXT_ALIGN_CENTER_CENTER || m_TextAlign == TEXT_ALIGN_CENTER_BOTTOM) {
+    if (m_TextAlign == TEXT_ALIGN_CENTER_TOP || m_TextAlign == TEXT_ALIGN_CENTER_CENTER || m_TextAlign == TEXT_ALIGN_CENTER_BOTTOM)
+    {
         x -= w / 2;
     }
-    else if (m_TextAlign == TEXT_ALIGN_RIGHT_TOP || m_TextAlign == TEXT_ALIGN_RIGHT_CENTER || m_TextAlign == TEXT_ALIGN_RIGHT_BOTTOM) {
+    else if (m_TextAlign == TEXT_ALIGN_RIGHT_TOP || m_TextAlign == TEXT_ALIGN_RIGHT_CENTER || m_TextAlign == TEXT_ALIGN_RIGHT_BOTTOM)
+    {
         x -= w;
     }
 
     // Vertical Alignment Offset
-    if (m_TextAlign == TEXT_ALIGN_LEFT_CENTER || m_TextAlign == TEXT_ALIGN_CENTER_CENTER || m_TextAlign == TEXT_ALIGN_RIGHT_CENTER) {
+    if (m_TextAlign == TEXT_ALIGN_LEFT_CENTER || m_TextAlign == TEXT_ALIGN_CENTER_CENTER || m_TextAlign == TEXT_ALIGN_RIGHT_CENTER)
+    {
         y -= h / 2;
     }
-    else if (m_TextAlign == TEXT_ALIGN_LEFT_BOTTOM || m_TextAlign == TEXT_ALIGN_CENTER_BOTTOM || m_TextAlign == TEXT_ALIGN_RIGHT_BOTTOM) {
+    else if (m_TextAlign == TEXT_ALIGN_LEFT_BOTTOM || m_TextAlign == TEXT_ALIGN_CENTER_BOTTOM || m_TextAlign == TEXT_ALIGN_RIGHT_BOTTOM)
+    {
         y -= h;
     }
 
@@ -532,21 +575,26 @@ GfxRect TextElement::GetBounds() {
 bool TextElement::HitTest(int x, int y)
 {
     // Bounding box check first (Element's bounds)
-    if (!Element::HitTest(x, y)) return false;
+    if (!Element::HitTest(x, y))
+        return false;
 
     // If we have a background or gradient, the entire element is clickable
-    if ((m_HasSolidColor && m_SolidAlpha > 0) || (m_SolidGradient.type != GRADIENT_NONE)) return true;
+    if ((m_HasSolidColor && m_SolidAlpha > 0) || (m_SolidGradient.type != GRADIENT_NONE))
+        return true;
 
     // Use DirectWrite for precise hit testing
     std::wstring fontFace = m_FontFace.empty() ? L"Arial" : m_FontFace;
 
     Microsoft::WRL::ComPtr<IDWriteFontCollection> pCollection;
-    if (!m_FontPath.empty()) {
+    if (!m_FontPath.empty())
+    {
         pCollection = FontManager::GetFontCollection(m_FontPath);
-        if (pCollection) {
+        if (pCollection)
+        {
             UINT32 index;
             BOOL exists;
-            if (FAILED(pCollection->FindFamilyName(fontFace.c_str(), &index, &exists)) || !exists) {
+            if (FAILED(pCollection->FindFamilyName(fontFace.c_str(), &index, &exists)) || !exists)
+            {
                 pCollection = nullptr;
             }
         }
@@ -558,27 +606,30 @@ bool TextElement::HitTest(int x, int y)
         (DWRITE_FONT_WEIGHT)m_FontWeight,
         m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL, (float)m_FontSize, L"",
-        pTextFormat.GetAddressOf()
-    );
-    if (FAILED(hr)) return false;
+        pTextFormat.GetAddressOf());
+    if (FAILED(hr))
+        return false;
 
     GfxRect bounds = GetBounds();
     float layoutW = (float)bounds.Width - m_PaddingLeft - m_PaddingRight;
     float layoutH = (float)bounds.Height - m_PaddingTop - m_PaddingBottom;
-    if (layoutW < 0) layoutW = 1;
-    if (layoutH < 0) layoutH = 1;
+    if (layoutW < 0)
+        layoutW = 1;
+    if (layoutH < 0)
+        layoutH = 1;
 
     ApplyTextAlignment(pTextFormat.Get(), m_TextAlign);
     ApplyClipSettings(pTextFormat.Get(), m_ClipString, m_WDefined);
 
     std::wstring processedText = GetProcessedText();
-    if (processedText.empty()) return false;
+    if (processedText.empty())
+        return false;
     Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
     hr = Direct2D::GetWriteFactory()->CreateTextLayout(
         processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
-        layoutW, layoutH, pLayout.GetAddressOf()
-    );
-    if (FAILED(hr)) return false;
+        layoutW, layoutH, pLayout.GetAddressOf());
+    if (FAILED(hr))
+        return false;
 
     ApplyInlineTextStyles(pLayout.Get(), m_Segments, processedText, m_LetterSpacing, m_UnderLine, m_StrikeThrough);
 
@@ -590,42 +641,58 @@ bool TextElement::HitTest(int x, int y)
     BOOL isInside = FALSE;
     DWRITE_HIT_TEST_METRICS hitMetrics = {};
     pLayout->HitTestPoint(relX, relY, &isTrailingHit, &isInside, &hitMetrics);
-    if (!isInside) return false;
+    if (!isInside)
+        return false;
 
     return HitTestRenderedTextAlpha(pLayout.Get(), relX, relY, layoutW, layoutH, m_AntiAlias);
 }
 
 std::wstring TextElement::GetProcessedText() const
 {
-    if (m_TextCase == TEXT_CASE_NORMAL) return m_CleanText;
+    if (m_TextCase == TEXT_CASE_NORMAL)
+        return m_CleanText;
 
     std::wstring processed = m_CleanText;
-    if (m_TextCase == TEXT_CASE_UPPER) {
+    if (m_TextCase == TEXT_CASE_UPPER)
+    {
         std::transform(processed.begin(), processed.end(), processed.begin(), ::towupper);
     }
-    else if (m_TextCase == TEXT_CASE_LOWER) {
+    else if (m_TextCase == TEXT_CASE_LOWER)
+    {
         std::transform(processed.begin(), processed.end(), processed.begin(), ::towlower);
     }
-    else if (m_TextCase == TEXT_CASE_CAPITALIZE) {
+    else if (m_TextCase == TEXT_CASE_CAPITALIZE)
+    {
         bool nextUpper = true;
-        for (size_t i = 0; i < processed.length(); ++i) {
-            if (iswspace(processed[i])) {
+        for (size_t i = 0; i < processed.length(); ++i)
+        {
+            if (iswspace(processed[i]))
+            {
                 nextUpper = true;
-            } else if (nextUpper) {
+            }
+            else if (nextUpper)
+            {
                 processed[i] = towupper(processed[i]);
                 nextUpper = false;
-            } else {
+            }
+            else
+            {
                 processed[i] = towlower(processed[i]);
             }
         }
     }
-    else if (m_TextCase == TEXT_CASE_SENTENCE) {
+    else if (m_TextCase == TEXT_CASE_SENTENCE)
+    {
         bool nextUpper = true;
-        for (size_t i = 0; i < processed.length(); ++i) {
-            if (nextUpper && !iswspace(processed[i])) {
+        for (size_t i = 0; i < processed.length(); ++i)
+        {
+            if (nextUpper && !iswspace(processed[i]))
+            {
                 processed[i] = towupper(processed[i]);
                 nextUpper = false;
-            } else {
+            }
+            else
+            {
                 processed[i] = towlower(processed[i]);
             }
         }
@@ -638,7 +705,7 @@ void TextElement::ParseInlineStyles()
 {
     m_CleanText.clear();
     m_Segments.clear();
-    
+
     std::vector<TextSegmentStyle> styleStack;
     TextSegmentStyle currentStyle;
     bool forceNextUpper = false;
@@ -652,7 +719,8 @@ void TextElement::ParseInlineStyles()
             {
                 std::wstring tag = m_Text.substr(i + 1, endTag - i - 1);
                 bool isClosing = (!tag.empty() && tag[0] == L'/');
-                if (isClosing) tag = tag.substr(1);
+                if (isClosing)
+                    tag = tag.substr(1);
 
                 if (isClosing)
                 {
@@ -666,15 +734,19 @@ void TextElement::ParseInlineStyles()
                 else
                 {
                     styleStack.push_back(currentStyle);
-                    
-                    if (tag == L"b") currentStyle.fontWeight = 700;
-                    else if (tag == L"i") currentStyle.italic = true;
-                    else if (tag == L"u") currentStyle.underline = true;
-                    else if (tag == L"s") currentStyle.strikethrough = true;
+
+                    if (tag == L"b")
+                        currentStyle.fontWeight = 700;
+                    else if (tag == L"i")
+                        currentStyle.italic = true;
+                    else if (tag == L"u")
+                        currentStyle.underline = true;
+                    else if (tag == L"s")
+                        currentStyle.strikethrough = true;
                     else if (tag.find(L"color=") == 0)
                     {
                         std::wstring colorStr = tag.substr(6);
-                        
+
                         GradientInfo gi;
                         if (PropertyParser::ParseGradientString(colorStr, gi))
                         {
@@ -695,7 +767,13 @@ void TextElement::ParseInlineStyles()
                     }
                     else if (tag.find(L"size=") == 0)
                     {
-                        try { currentStyle.fontSize = std::stoi(tag.substr(5)); } catch(...) {}
+                        try
+                        {
+                            currentStyle.fontSize = std::stoi(tag.substr(5));
+                        }
+                        catch (...)
+                        {
+                        }
                     }
                     else if (tag.find(L"font=") == 0)
                     {
@@ -704,13 +782,19 @@ void TextElement::ParseInlineStyles()
                     else if (tag.find(L"case=") == 0)
                     {
                         std::wstring c = tag.substr(5);
-                        if (c == L"upper") currentStyle.textCase = TEXT_CASE_UPPER;
-                        else if (c == L"lower") currentStyle.textCase = TEXT_CASE_LOWER;
-                        else if (c == L"capitalize") currentStyle.textCase = TEXT_CASE_CAPITALIZE;
-                        else if (c == L"sentence") currentStyle.textCase = TEXT_CASE_SENTENCE;
-                        else if (c == L"normal") currentStyle.textCase = TEXT_CASE_NORMAL;
-                        
-                        if (currentStyle.textCase == TEXT_CASE_SENTENCE) forceNextUpper = true;
+                        if (c == L"upper")
+                            currentStyle.textCase = TEXT_CASE_UPPER;
+                        else if (c == L"lower")
+                            currentStyle.textCase = TEXT_CASE_LOWER;
+                        else if (c == L"capitalize")
+                            currentStyle.textCase = TEXT_CASE_CAPITALIZE;
+                        else if (c == L"sentence")
+                            currentStyle.textCase = TEXT_CASE_SENTENCE;
+                        else if (c == L"normal")
+                            currentStyle.textCase = TEXT_CASE_NORMAL;
+
+                        if (currentStyle.textCase == TEXT_CASE_SENTENCE)
+                            forceNextUpper = true;
                     }
                 }
 
@@ -721,38 +805,57 @@ void TextElement::ParseInlineStyles()
 
         wchar_t c = m_Text[i];
         TextCase activeCase = currentStyle.textCase.value_or(TEXT_CASE_NORMAL);
-        if (activeCase == TEXT_CASE_UPPER) c = towupper(c);
-        else if (activeCase == TEXT_CASE_LOWER) c = towlower(c);
-        else if (activeCase == TEXT_CASE_CAPITALIZE) {
+        if (activeCase == TEXT_CASE_UPPER)
+            c = towupper(c);
+        else if (activeCase == TEXT_CASE_LOWER)
+            c = towlower(c);
+        else if (activeCase == TEXT_CASE_CAPITALIZE)
+        {
             bool isStart = m_CleanText.empty() || iswspace(m_CleanText.back());
-            if (isStart) c = towupper(c);
-            else c = towlower(c);
+            if (isStart)
+                c = towupper(c);
+            else
+                c = towlower(c);
         }
-        else if (activeCase == TEXT_CASE_SENTENCE) {
+        else if (activeCase == TEXT_CASE_SENTENCE)
+        {
             bool isStart = m_CleanText.empty() || forceNextUpper;
-            if (!isStart) {
+            if (!isStart)
+            {
                 size_t j = m_CleanText.length();
                 isStart = true;
-                while (j > 0) {
+                while (j > 0)
+                {
                     wchar_t prev = m_CleanText[j - 1];
-                    if (iswalpha(prev)) { isStart = false; break; }
-                    if (prev == L'.' || prev == L'!' || prev == L'?') { isStart = true; break; }
+                    if (iswalpha(prev))
+                    {
+                        isStart = false;
+                        break;
+                    }
+                    if (prev == L'.' || prev == L'!' || prev == L'?')
+                    {
+                        isStart = true;
+                        break;
+                    }
                     j--;
                 }
             }
-            if (iswalpha(c)) {
-                if (isStart) c = towupper(c);
-                else c = towlower(c);
+            if (iswalpha(c))
+            {
+                if (isStart)
+                    c = towupper(c);
+                else
+                    c = towlower(c);
                 forceNextUpper = false;
             }
         }
 
         m_CleanText += c;
-        
+
         UINT32 currentPos = (UINT32)m_CleanText.length() - 1;
         if (!m_Segments.empty() && m_Segments.back().startPos + m_Segments.back().length == currentPos)
         {
-            const auto& lastStyle = m_Segments.back().style;
+            const auto &lastStyle = m_Segments.back().style;
             bool same = (lastStyle.fontWeight == currentStyle.fontWeight &&
                          lastStyle.italic == currentStyle.italic &&
                          lastStyle.underline == currentStyle.underline &&
@@ -764,7 +867,7 @@ void TextElement::ParseInlineStyles()
                          lastStyle.textCase == currentStyle.textCase &&
                          lastStyle.gradient.has_value() == currentStyle.gradient.has_value() && // Simple check for gradient equality (can be improved)
                          (!lastStyle.gradient.has_value() || (lastStyle.gradient->type == currentStyle.gradient->type && lastStyle.gradient->angle == currentStyle.gradient->angle && lastStyle.gradient->stops.size() == currentStyle.gradient->stops.size())));
-            
+
             if (same)
             {
                 m_Segments.back().length++;
