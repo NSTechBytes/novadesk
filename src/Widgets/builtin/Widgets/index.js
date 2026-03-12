@@ -3,11 +3,11 @@ import * as utils from "./src/common/utils.js";
 import * as system_Widget from "./src/systemWidget/main.js";
 import * as network_Widget from "./src/networkWidget/main.js";
 import * as welcome_Widget from "./src/welcomeWidget/main.js";
-import { app, Tray } from "novadesk";
+import { app, tray } from "novadesk";
 import * as system from "system";
 
 var isFirstRun = !!app.isFirstRun();
-const tray = new Tray();
+const tray = new tray();
 
 // First run: force-show all default widgets and persist enabled state.
 if (isFirstRun) {

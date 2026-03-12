@@ -1,6 +1,6 @@
-import { Tray, app } from "novadesk";
+import { tray, app } from "novadesk";
 
-const tray = new Tray();
+const tray = new tray();
 tray.setToolTip("Novadesk Tray Test");
 tray.setImage("../assets/icon.ico")
 function logEvent(name, event) {

@@ -875,7 +875,7 @@ namespace novadesk::scripting::quickjs
             {
                 if (!JS_IsString(argv[0]))
                 {
-                    return JS_ThrowTypeError(ctx, "new Tray(image) expects image path or null");
+                    return JS_ThrowTypeError(ctx, "new tray(image) expects image path or null");
                 }
                 const char *pathC = JS_ToCString(ctx, argv[0]);
                 if (!pathC)
@@ -1106,8 +1106,8 @@ namespace novadesk::scripting::quickjs
             JS_SetModuleExport(ctx, m, "widgetWindow", ctor);
             JS_FreeValue(ctx, proto);
             InitAppExport(ctx, m);
-            JSValue trayCtor = JS_NewCFunction2(ctx, JsTrayCtor, "Tray", 1, JS_CFUNC_constructor, 0);
-            JS_SetModuleExport(ctx, m, "Tray", trayCtor);
+            JSValue trayCtor = JS_NewCFunction2(ctx, JsTrayCtor, "tray", 1, JS_CFUNC_constructor, 0);
+            JS_SetModuleExport(ctx, m, "tray", trayCtor);
             return 0;
         }
     } // namespace
@@ -1133,7 +1133,7 @@ namespace novadesk::scripting::quickjs
         {
             return nullptr;
         }
-        if (JS_AddModuleExport(ctx, m, "Tray") < 0)
+        if (JS_AddModuleExport(ctx, m, "tray") < 0)
         {
             return nullptr;
         }
