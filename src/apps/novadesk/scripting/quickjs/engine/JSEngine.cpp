@@ -28,6 +28,7 @@ namespace JSEngine
         std::unordered_map<Widget *, std::unordered_map<std::string, std::vector<int>>> g_widgetEventListeners;
         std::unordered_map<std::wstring, std::unordered_map<int, JSValue>> g_widgetContextMenuCallbacks;
         std::unordered_map<int, JSValue> g_trayCommandCallbacks;
+        std::unordered_map<std::string, std::vector<JSValue>> g_trayEventCallbacks;
         struct TimerEntry
         {
             JSValue callback = JS_UNDEFINED;
@@ -540,6 +541,20 @@ namespace JSEngine
             g_trayCommandCallbacks.clear();
         }
 
+        void ClearAllTrayEventCallbacks()
+        {
+            if (!g_context)
+                return;
+            for (auto &kv : g_trayEventCallbacks)
+            {
+                for (JSValue &cb : kv.second)
+                {
+                    JS_FreeValue(g_context, cb);
+                }
+            }
+            g_trayEventCallbacks.clear();
+        }
+
         void ClearAllTimers()
         {
             if (g_messageWindow)
@@ -900,6 +915,7 @@ namespace JSEngine
         ClearWidgetEventListeners();
         ClearAllWidgetContextMenuCallbacks();
         ClearAllTrayCommandCallbacks();
+        ClearAllTrayEventCallbacks();
         ClearAllTimers();
         novadesk::shared::system::ClearHotkeys(g_messageWindow);
 
@@ -1067,6 +1083,27 @@ namespace JSEngine
         else
         {
             JS_FreeValue(g_context, ret);
+        }
+    }
+
+    void DispatchTrayEvent(const std::string &eventName)
+    {
+        if (!g_context)
+            return;
+        auto it = g_trayEventCallbacks.find(eventName);
+        if (it == g_trayEventCallbacks.end())
+            return;
+        for (JSValue &cb : it->second)
+        {
+            JSValue ret = JS_Call(g_context, cb, JS_UNDEFINED, 0, nullptr);
+            if (JS_IsException(ret))
+            {
+                LogQuickJsException(g_context);
+            }
+            else
+            {
+                JS_FreeValue(g_context, ret);
+            }
         }
     }
 
@@ -1253,6 +1290,21 @@ namespace JSEngine
     void ClearTrayCommandCallbacks()
     {
         ClearAllTrayCommandCallbacks();
+    }
+
+    bool RegisterTrayEventCallback(JSContext *ctx, const std::string &eventName, JSValueConst fn)
+    {
+        if (!ctx || ctx != g_context || eventName.empty() || !JS_IsFunction(ctx, fn))
+        {
+            return false;
+        }
+        g_trayEventCallbacks[eventName].push_back(JS_DupValue(ctx, fn));
+        return true;
+    }
+
+    void ClearTrayEventCallbacks()
+    {
+        ClearAllTrayEventCallbacks();
     }
 
     bool ExecuteWidgetScript(Widget *widget)

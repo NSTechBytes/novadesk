@@ -87,11 +87,7 @@ void Settings::ApplyGlobalSettings()
         }
     }
 
-    if (Settings::GetGlobalBool("hideTrayIcon", false)) {
-        ::HideTrayIconDynamic();
-    } else {
-        ::ShowTrayIconDynamic();
-    }
+    // Tray icon is lazily created by the Tray API; no global toggle.
 }
 
 std::wstring Settings::GetLogPath()

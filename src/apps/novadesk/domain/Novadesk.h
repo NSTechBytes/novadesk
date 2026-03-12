@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 OfficialNovadesk 
+/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -8,14 +8,8 @@
 #pragma once
 
 #include "../Resource.h"
-
-// Tray icon control functions
-void ShowTrayIconDynamic();
-void HideTrayIconDynamic();
-
 #include "../../shared/MenuItem.h"
 
-void SetTrayMenu(const std::vector<MenuItem>& menu);
-void ClearTrayMenu();
-void SetShowDefaultTrayItems(bool show);
-
+void TraySetImage(const std::wstring &path);
+void TraySetToolTip(const std::wstring &toolTip);
+void TraySetContextMenu(const std::vector<MenuItem> &menu);

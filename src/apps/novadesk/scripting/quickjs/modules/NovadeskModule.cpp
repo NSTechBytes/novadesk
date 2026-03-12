@@ -2,6 +2,7 @@
 
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <string>
 #include <vector>
 #include <windows.h>
@@ -672,23 +673,6 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
-        JSValue JsAppHideTrayIcon(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            bool hide = true;
-            if (argc > 0)
-            {
-                int b = JS_ToBool(ctx, argv[0]);
-                if (b >= 0)
-                    hide = (b != 0);
-            }
-            Settings::SetGlobalBool("hideTrayIcon", hide);
-            if (hide)
-                ::HideTrayIconDynamic();
-            else
-                ::ShowTrayIconDynamic();
-            return JS_UNDEFINED;
-        }
-
         JSValue JsAppSaveLogToFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
             if (argc < 1)
@@ -798,41 +782,118 @@ namespace novadesk::scripting::quickjs
             return JS_NewBool(ctx, Settings::IsFirstRun() ? 1 : 0);
         }
 
-        JSValue JsAppSetTrayMenu(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        static bool IsTrayEventName(const std::string &name)
+        {
+            static const std::unordered_set<std::string> kNames = {
+                "click",
+                "right-click",
+            };
+            return kNames.find(name) != kNames.end();
+        }
+
+        JSValue JsTrayOn(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsFunction(ctx, argv[1]))
+            {
+                return JS_ThrowTypeError(ctx, "tray.on(event, handler) requires event string and function");
+            }
+            const char *nameC = JS_ToCString(ctx, argv[0]);
+            if (!nameC)
+            {
+                return JS_EXCEPTION;
+            }
+            std::string name = nameC;
+            JS_FreeCString(ctx, nameC);
+            if (!IsTrayEventName(name))
+            {
+                return JS_ThrowTypeError(ctx, "tray.on: unknown event");
+            }
+            JSEngine::RegisterTrayEventCallback(ctx, name, argv[1]);
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsTrayDestroy(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            (void)ctx;
+            JSEngine::ClearTrayEventCallbacks();
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsTraySetImage(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1 || !JS_IsString(argv[0]))
+            {
+                return JS_ThrowTypeError(ctx, "tray.setImage(path) requires image path");
+            }
+            const char *pathC = JS_ToCString(ctx, argv[0]);
+            if (!pathC)
+            {
+                return JS_EXCEPTION;
+            }
+            std::wstring path = Utils::ToWString(pathC);
+            JS_FreeCString(ctx, pathC);
+            TraySetImage(path);
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsTraySetToolTip(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1 || !JS_IsString(argv[0]))
+            {
+                return JS_ThrowTypeError(ctx, "tray.setToolTip(text) requires text");
+            }
+            const char *textC = JS_ToCString(ctx, argv[0]);
+            if (!textC)
+            {
+                return JS_EXCEPTION;
+            }
+            std::wstring text = Utils::ToWString(textC);
+            JS_FreeCString(ctx, textC);
+            TraySetToolTip(text);
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsTraySetContextMenu(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
             if (argc < 1 || !JS_IsArray(argv[0]))
             {
-                return JS_ThrowTypeError(ctx, "app.setTrayMenu: expected items array");
+                return JS_ThrowTypeError(ctx, "tray.setContextMenu: expected items array");
             }
             JSEngine::ClearTrayCommandCallbacks();
             std::vector<MenuItem> menu;
             if (!ParseTrayMenuItems(ctx, argv[0], menu))
             {
-                return JS_ThrowTypeError(ctx, "app.setTrayMenu: invalid items");
+                return JS_ThrowTypeError(ctx, "tray.setContextMenu: invalid items");
             }
-            SetTrayMenu(menu);
+            TraySetContextMenu(menu);
             return JS_UNDEFINED;
         }
 
-        JSValue JsAppClearTrayMenu(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        JSValue JsTrayCtor(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
-            (void)ctx;
-            JSEngine::ClearTrayCommandCallbacks();
-            ClearTrayMenu();
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsAppShowDefaultTrayItems(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            bool show = true;
-            if (argc > 0)
+            if (argc > 0 && !JS_IsNull(argv[0]) && !JS_IsUndefined(argv[0]))
             {
-                int b = JS_ToBool(ctx, argv[0]);
-                if (b >= 0)
-                    show = (b != 0);
+                if (!JS_IsString(argv[0]))
+                {
+                    return JS_ThrowTypeError(ctx, "new Tray(image) expects image path or null");
+                }
+                const char *pathC = JS_ToCString(ctx, argv[0]);
+                if (!pathC)
+                {
+                    return JS_EXCEPTION;
+                }
+                std::wstring path = Utils::ToWString(pathC);
+                JS_FreeCString(ctx, pathC);
+                TraySetImage(path);
             }
-            SetShowDefaultTrayItems(show);
-            return JS_UNDEFINED;
+
+            JSValue tray = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, tray, "setImage", JS_NewCFunction(ctx, JsTraySetImage, "setImage", 1));
+            JS_SetPropertyStr(ctx, tray, "setToolTip", JS_NewCFunction(ctx, JsTraySetToolTip, "setToolTip", 1));
+            JS_SetPropertyStr(ctx, tray, "setContextMenu", JS_NewCFunction(ctx, JsTraySetContextMenu, "setContextMenu", 1));
+            JS_SetPropertyStr(ctx, tray, "on", JS_NewCFunction(ctx, JsTrayOn, "on", 2));
+            JS_SetPropertyStr(ctx, tray, "destroy", JS_NewCFunction(ctx, JsTrayDestroy, "destroy", 0));
+            return tray;
         }
 
         JSValue JsAppEnableDebugging(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
@@ -1016,7 +1077,6 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, app, "exit", JS_NewCFunction(ctx, JsAppExit, "exit", 0));
             JS_SetPropertyStr(ctx, app, "saveLogToFile", JS_NewCFunction(ctx, JsAppSaveLogToFile, "saveLogToFile", 1));
             JS_SetPropertyStr(ctx, app, "disableLogging", JS_NewCFunction(ctx, JsAppDisableLogging, "disableLogging", 1));
-            JS_SetPropertyStr(ctx, app, "hideTrayIcon", JS_NewCFunction(ctx, JsAppHideTrayIcon, "hideTrayIcon", 1));
             JS_SetPropertyStr(ctx, app, "useHardwareAcceleration", JS_NewCFunction(ctx, JsAppUseHardwareAcceleration, "useHardwareAcceleration", 1));
             JS_SetPropertyStr(ctx, app, "getProductVersion", JS_NewCFunction(ctx, JsAppGetProductVersion, "getProductVersion", 0));
             JS_SetPropertyStr(ctx, app, "getFileVersion", JS_NewCFunction(ctx, JsAppGetFileVersion, "getFileVersion", 0));
@@ -1026,9 +1086,6 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, app, "getLogPath", JS_NewCFunction(ctx, JsAppGetLogPath, "getLogPath", 0));
             JS_SetPropertyStr(ctx, app, "isPortable", JS_NewCFunction(ctx, JsAppIsPortable, "isPortable", 0));
             JS_SetPropertyStr(ctx, app, "isFirstRun", JS_NewCFunction(ctx, JsAppIsFirstRun, "isFirstRun", 0));
-            JS_SetPropertyStr(ctx, app, "setTrayMenu", JS_NewCFunction(ctx, JsAppSetTrayMenu, "setTrayMenu", 1));
-            JS_SetPropertyStr(ctx, app, "clearTrayMenu", JS_NewCFunction(ctx, JsAppClearTrayMenu, "clearTrayMenu", 0));
-            JS_SetPropertyStr(ctx, app, "showDefaultTrayItems", JS_NewCFunction(ctx, JsAppShowDefaultTrayItems, "showDefaultTrayItems", 1));
             JS_SetPropertyStr(ctx, app, "enableDebugging", JS_NewCFunction(ctx, JsAppEnableDebugging, "enableDebugging", 1));
             JS_SetModuleExport(ctx, m, "app", app);
 
@@ -1049,6 +1106,8 @@ namespace novadesk::scripting::quickjs
             JS_SetModuleExport(ctx, m, "widgetWindow", ctor);
             JS_FreeValue(ctx, proto);
             InitAppExport(ctx, m);
+            JSValue trayCtor = JS_NewCFunction2(ctx, JsTrayCtor, "Tray", 1, JS_CFUNC_constructor, 0);
+            JS_SetModuleExport(ctx, m, "Tray", trayCtor);
             return 0;
         }
     } // namespace
@@ -1071,6 +1130,10 @@ namespace novadesk::scripting::quickjs
             return nullptr;
         }
         if (JS_AddModuleExport(ctx, m, "app") < 0)
+        {
+            return nullptr;
+        }
+        if (JS_AddModuleExport(ctx, m, "Tray") < 0)
         {
             return nullptr;
         }
