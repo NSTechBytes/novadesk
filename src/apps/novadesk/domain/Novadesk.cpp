@@ -24,6 +24,7 @@
 #include "FontManager.h"
 #include "../shared/Logging.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
+#include "../scripting/quickjs/modules/NovadeskModule.h"
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -44,7 +45,30 @@ struct TrayState
     std::wstring toolTip;
     std::vector<MenuItem> menu;
 };
+
 TrayState g_trayState;
+
+static BOOL WINAPI NovadeskConsoleCtrlHandler(DWORD ctrlType)
+{
+    switch (ctrlType)
+    {
+    case CTRL_C_EVENT:
+    case CTRL_BREAK_EVENT:
+    case CTRL_CLOSE_EVENT:
+    case CTRL_SHUTDOWN_EVENT:
+        if (g_trayState.hWnd)
+        {
+            PostMessage(g_trayState.hWnd, WM_CLOSE, 0, 0);
+        }
+        else
+        {
+            PostQuitMessage(0);
+        }
+        return TRUE;
+    default:
+        return FALSE;
+    }
+}
 
 // Forward declarations of functions included in this code module:
 void InitTrayIcon(HWND hWnd);
@@ -176,6 +200,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     wcscpy_s(szTitle, MAX_LOADSTRING, appTitle.c_str());
     hInst = hInstance;
 
+    // Ensure Ctrl+C / console close shuts down the app and unloads addons.
+    SetConsoleCtrlHandler(NovadeskConsoleCtrlHandler, TRUE);
+
     // Create a hidden message-only window for tray icon
     WNDCLASSEXW wcex = {};
     wcex.cbSize = sizeof(WNDCLASSEX);
@@ -226,6 +253,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
         break;
         case WM_DESTROY:
+            novadesk::scripting::quickjs::UnloadAllAddons();
             RemoveTrayIcon();
             PostQuitMessage(0);
             break;

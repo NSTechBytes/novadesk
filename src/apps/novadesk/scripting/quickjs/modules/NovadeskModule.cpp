@@ -538,6 +538,20 @@ namespace novadesk::scripting::quickjs
             return true;
         }
 
+        void UnloadAllAddonsInternal()
+        {
+            std::vector<int> addonIds;
+            addonIds.reserve(g_addonPathById.size());
+            for (const auto &kv : g_addonPathById)
+            {
+                addonIds.push_back(kv.first);
+            }
+            for (int id : addonIds)
+            {
+                UnloadAddonById(id);
+            }
+        }
+
         std::wstring GetVersionProperty(const std::wstring &propertyName)
         {
             std::wstring exePath = PathUtils::GetExePath();
@@ -1142,5 +1156,10 @@ namespace novadesk::scripting::quickjs
             return nullptr;
         }
         return m;
+    }
+
+    void UnloadAllAddons()
+    {
+        UnloadAllAddonsInternal();
     }
 } // namespace novadesk::scripting::quickjs
