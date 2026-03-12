@@ -112,23 +112,6 @@ namespace novadesk::shared::system
         bool muted = false;
     };
 
-    struct NowPlayingStats
-    {
-        bool available = false;
-        std::wstring player;
-        std::wstring artist;
-        std::wstring album;
-        std::wstring title;
-        std::wstring thumbnail;
-        int duration = 0;
-        int position = 0;
-        int progress = 0;
-        int state = 0;  // 0 stopped/unknown, 1 playing, 2 paused
-        int status = 0; // 0 closed, 1 opened
-        bool shuffle = false;
-        bool repeat = false;
-    };
-
     struct AudioLevelConfig
     {
         std::string port = "output"; // "output" or "input"
@@ -201,18 +184,6 @@ namespace novadesk::shared::system
     bool AppVolumeSetVolumeByProcessName(const std::wstring &processName, float volume01);
     bool AppVolumeSetMuteByPid(uint32_t pid, bool mute);
     bool AppVolumeSetMuteByProcessName(const std::wstring &processName, bool mute);
-    bool GetNowPlayingStats(NowPlayingStats &outStats);
-    bool NowPlayingPlay();
-    bool NowPlayingPause();
-    bool NowPlayingPlayPause();
-    bool NowPlayingStop();
-    bool NowPlayingNext();
-    bool NowPlayingPrevious();
-    bool NowPlayingSetPosition(int value, bool isPercent);
-    bool NowPlayingSetShuffle(bool enabled);
-    bool NowPlayingToggleShuffle();
-    bool NowPlayingSetRepeat(int mode);
-    std::string NowPlayingBackend();
     bool JsonReadTextFile(const std::wstring &path, std::string &outText);
     bool JsonWriteTextFile(const std::wstring &path, const std::string &text);
     bool JsonMergePatchFile(const std::wstring &path, const std::string &patchText);

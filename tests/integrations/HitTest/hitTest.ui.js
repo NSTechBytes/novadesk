@@ -28,7 +28,7 @@ ui.addShape({
 
 ui.addImage({
     id: "O_Image",
-    path: "D:\\Novadesk-Project\\novadesk\\dist\\NowPlaying\\cover.jpg",
+    path: "../assets/O.png",
     width: 100,
     height: 100,
     preserveAspectRatio: "preserve",
@@ -44,7 +44,7 @@ ui.addImage({
     preserveAspectRatio: "crop",
 })
 ui.setElementProperties("O_Image2", {
-    path:"D:\\Novadesk-Project\\novadesk\\dist\\NowPlaying\\cover.jpg",
+    path: "../assets/O.png",
 });
 
 ui.addText({
