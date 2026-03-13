@@ -435,58 +435,6 @@ namespace novadesk::scripting::quickjs
             return JS_NewBool(ctx, ok ? 1 : 0);
         }
 
-        JSValue JsHotkeyRegisterHotkey(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-                return JS_ThrowTypeError(ctx, "hotkey.register(hotkey, handler)");
-            const char *hotkeyC = JS_ToCString(ctx, argv[0]);
-            if (!hotkeyC)
-                return JS_EXCEPTION;
-            std::wstring hotkey = Utils::ToWString(hotkeyC);
-            JS_FreeCString(ctx, hotkeyC);
-
-            int keyDownId = -1;
-            int keyUpId = -1;
-            if (JS_IsFunction(ctx, argv[1]))
-            {
-                keyDownId = JSEngine::RegisterEventCallback(ctx, argv[1]);
-            }
-            else if (JS_IsObject(argv[1]))
-            {
-                JSValue kd = JS_GetPropertyStr(ctx, argv[1], "onKeyDown");
-                if (JS_IsFunction(ctx, kd))
-                {
-                    keyDownId = JSEngine::RegisterEventCallback(ctx, kd);
-                }
-                JS_FreeValue(ctx, kd);
-                JSValue ku = JS_GetPropertyStr(ctx, argv[1], "onKeyUp");
-                if (JS_IsFunction(ctx, ku))
-                {
-                    keyUpId = JSEngine::RegisterEventCallback(ctx, ku);
-                }
-                JS_FreeValue(ctx, ku);
-            }
-            else
-            {
-                return JS_ThrowTypeError(ctx, "hotkey.register handler must be function or object");
-            }
-
-            int id = shared::system::RegisterHotkey(JSEngine::GetMessageWindow(), hotkey, keyDownId, keyUpId);
-            return JS_NewInt32(ctx, id);
-        }
-
-        JSValue JsHotkeyUnregisterHotkey(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "hotkey.unregister(id)");
-            int32_t id = 0;
-            if (JS_ToInt32(ctx, &id, argv[0]) != 0)
-            {
-                return JS_ThrowTypeError(ctx, "hotkey.unregister(id) expects number");
-            }
-            return JS_NewBool(ctx, shared::system::UnregisterHotkey(JSEngine::GetMessageWindow(), id) ? 1 : 0);
-        }
-
         std::wstring ResolveModulePath(JSContext *ctx, JSValueConst v)
         {
             const char *s = JS_ToCString(ctx, v);
@@ -872,11 +820,6 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, registry, "writeData", JS_NewCFunction(ctx, JsRegistryWriteData, "writeData", 3));
             JS_SetModuleExport(ctx, m, "registry", registry);
 
-            JSValue hotkey = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, hotkey, "register", JS_NewCFunction(ctx, JsHotkeyRegisterHotkey, "register", 2));
-            JS_SetPropertyStr(ctx, hotkey, "unregister", JS_NewCFunction(ctx, JsHotkeyUnregisterHotkey, "unregister", 1));
-            JS_SetModuleExport(ctx, m, "hotkey", hotkey);
-
             JSValue appVolume = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, appVolume, "listSessions", JS_NewCFunction(ctx, JsAppVolumeListSessions, "listSessions", 0));
             JS_SetPropertyStr(ctx, appVolume, "getByPid", JS_NewCFunction(ctx, JsAppVolumeGetByPid, "getByPid", 1));
@@ -930,8 +873,6 @@ namespace novadesk::scripting::quickjs
         if (JS_AddModuleExport(ctx, m, "displayMetrics") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "registry") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "hotkey") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "appVolume") < 0)
             return nullptr;

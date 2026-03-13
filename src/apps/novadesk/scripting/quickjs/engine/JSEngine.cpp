@@ -917,7 +917,6 @@ namespace JSEngine
         ClearAllTrayCommandCallbacks();
         ClearAllTrayEventCallbacks();
         ClearAllTimers();
-        novadesk::shared::system::ClearHotkeys(g_messageWindow);
 
         const std::string script = FileUtils::ReadFileContent(finalScriptPath);
         if (script.empty())
@@ -1040,22 +1039,6 @@ namespace JSEngine
             if (fn)
             {
                 fn(reinterpret_cast<void *>(lParam));
-            }
-        }
-        if (message == WM_HOTKEY)
-        {
-            novadesk::shared::system::HotkeyBinding binding{};
-            if (novadesk::shared::system::ResolveHotkeyMessage(static_cast<int>(wParam), binding) && binding.onKeyDownCallbackId > 0)
-            {
-                CallEventCallback(binding.onKeyDownCallbackId, nullptr, nullptr);
-            }
-        }
-        if (message == novadesk::shared::system::WM_NOVADESK_HOTKEY_UP)
-        {
-            novadesk::shared::system::HotkeyBinding binding{};
-            if (novadesk::shared::system::ResolveHotkeyMessage(static_cast<int>(wParam), binding) && binding.onKeyUpCallbackId > 0)
-            {
-                CallEventCallback(binding.onKeyUpCallbackId, nullptr, nullptr);
             }
         }
     }

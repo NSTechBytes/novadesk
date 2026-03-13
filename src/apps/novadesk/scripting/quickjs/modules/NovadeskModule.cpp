@@ -54,6 +54,7 @@ namespace novadesk::scripting::quickjs
             void (*ThrowError)(novadesk_context ctx, const char *message);
             void *(*JsGetFunctionPtr)(novadesk_context ctx, int index);
             void (*JsCallFunction)(novadesk_context ctx, void *funcPtr, int nargs);
+            void (*JsCallFunctionNoArgs)(novadesk_context ctx, void *funcPtr);
         };
 
         using NovadeskAddonInitFn = void (*)(novadesk_context ctx, HWND hMsgWnd, const NovadeskHostAPI *host);
@@ -479,6 +480,24 @@ namespace novadesk::scripting::quickjs
             call->stack.push_back(ret);
         }
 
+        static void host_JsCallFunctionNoArgs(novadesk_context, void *funcPtr)
+        {
+            auto *handle = reinterpret_cast<JsFunctionHandle *>(funcPtr);
+            if (!handle || !JS_IsFunction(handle->ctx, handle->fn))
+                return;
+
+            JSValue ret = JS_Call(handle->ctx, handle->fn, JS_UNDEFINED, 0, nullptr);
+            if (!JS_IsException(ret))
+            {
+                JS_FreeValue(handle->ctx, ret);
+            }
+            else
+            {
+                JSValue exc = JS_GetException(handle->ctx);
+                JS_FreeValue(handle->ctx, exc);
+            }
+        }
+
         const NovadeskHostAPI g_hostApi = {
             host_RegisterString,
             host_RegisterNumber,
@@ -508,7 +527,8 @@ namespace novadesk::scripting::quickjs
             host_PopN,
             host_ThrowError,
             host_JsGetFunctionPtr,
-            host_JsCallFunction};
+            host_JsCallFunction,
+            host_JsCallFunctionNoArgs};
 
         bool UnloadAddonById(int addonId)
         {
