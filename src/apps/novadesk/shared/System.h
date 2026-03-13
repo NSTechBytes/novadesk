@@ -83,15 +83,6 @@ namespace novadesk::shared::system
         int percent = 0;
     };
 
-    struct BrightnessInfo
-    {
-        uint32_t min = 0;
-        uint32_t max = 100;
-        uint32_t current = 0;
-        int percent = 0;
-        bool supported = false;
-    };
-
     struct AppVolumeSessionInfo
     {
         uint32_t pid = 0;
@@ -137,8 +128,6 @@ namespace novadesk::shared::system
     bool GetNetworkStats(NetworkStats &outStats);
     bool GetMousePosition(MousePosition &outPos);
     bool GetDiskStats(const std::wstring &path, DiskStats &outStats);
-    bool GetBrightness(BrightnessInfo &outInfo, int displayIndex = 0);
-    bool SetBrightnessPercent(int percent, int displayIndex = 0);
     DisplayMetrics GetDisplayMetrics();
 
     bool AudioSetVolume(int volumePercent);

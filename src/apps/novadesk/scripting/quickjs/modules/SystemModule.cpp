@@ -356,73 +356,6 @@ namespace novadesk::scripting::quickjs
             return JS_NewBool(ctx, 1);
         }
 
-        JSValue JsBrightnessGetValue(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            int32_t display = 0;
-            if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]) && JS_IsObject(argv[0]))
-            {
-                JSValue dv = JS_GetPropertyStr(ctx, argv[0], "display");
-                if (!JS_IsUndefined(dv) && !JS_IsNull(dv))
-                {
-                    JS_ToInt32(ctx, &display, dv);
-                }
-                JS_FreeValue(ctx, dv);
-            }
-
-            shared::system::BrightnessInfo info;
-            shared::system::GetBrightness(info, static_cast<int>(display));
-            JSValue out = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, out, "supported", JS_NewBool(ctx, info.supported ? 1 : 0));
-            JS_SetPropertyStr(ctx, out, "current", JS_NewInt32(ctx, static_cast<int32_t>(info.current)));
-            JS_SetPropertyStr(ctx, out, "min", JS_NewInt32(ctx, static_cast<int32_t>(info.min)));
-            JS_SetPropertyStr(ctx, out, "max", JS_NewInt32(ctx, static_cast<int32_t>(info.max)));
-            JS_SetPropertyStr(ctx, out, "percent", JS_NewInt32(ctx, static_cast<int32_t>(info.percent)));
-            return out;
-        }
-
-        JSValue JsBrightnessSetValue(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            int32_t percent = 0;
-            int32_t display = 0;
-
-            if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
-            {
-                if (JS_IsObject(argv[0]))
-                {
-                    JSValue pv = JS_GetPropertyStr(ctx, argv[0], "percent");
-                    if (!JS_IsUndefined(pv) && !JS_IsNull(pv))
-                    {
-                        if (JS_ToInt32(ctx, &percent, pv) != 0)
-                        {
-                            JS_FreeValue(ctx, pv);
-                            return JS_ThrowTypeError(ctx, "brightness.setValue({ percent }) requires numeric percent");
-                        }
-                    }
-                    JS_FreeValue(ctx, pv);
-
-                    JSValue dv = JS_GetPropertyStr(ctx, argv[0], "display");
-                    if (!JS_IsUndefined(dv) && !JS_IsNull(dv))
-                    {
-                        JS_ToInt32(ctx, &display, dv);
-                    }
-                    JS_FreeValue(ctx, dv);
-                }
-                else
-                {
-                    if (JS_ToInt32(ctx, &percent, argv[0]) != 0)
-                    {
-                        return JS_ThrowTypeError(ctx, "brightness.setValue(value) requires numeric value");
-                    }
-                }
-            }
-            else
-            {
-                return JS_ThrowTypeError(ctx, "brightness.setValue({ percent[, display] }) requires percent");
-            }
-
-            const bool ok = shared::system::SetBrightnessPercent(static_cast<int>(percent), static_cast<int>(display));
-            return JS_NewBool(ctx, ok ? 1 : 0);
-        }
 
         JSValue JsRegistryReadData(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
@@ -924,11 +857,6 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, audio, "stopSound", JS_NewCFunction(ctx, JsAudioStopSound, "stopSound", 0));
             JS_SetModuleExport(ctx, m, "audio", audio);
 
-            JSValue brightness = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, brightness, "getValue", JS_NewCFunction(ctx, JsBrightnessGetValue, "getValue", 1));
-            JS_SetPropertyStr(ctx, brightness, "setValue", JS_NewCFunction(ctx, JsBrightnessSetValue, "setValue", 1));
-            JS_SetModuleExport(ctx, m, "brightness", brightness);
-
             JSValue fileIcon = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, fileIcon, "extractIcon", JS_NewCFunction(ctx, JsFileIconExtractIcon, "extractIcon", 3));
             JS_SetPropertyStr(ctx, fileIcon, "extractFileIcon", JS_NewCFunction(ctx, JsFileIconExtractIcon, "extractFileIcon", 3));
@@ -996,8 +924,6 @@ namespace novadesk::scripting::quickjs
         if (JS_AddModuleExport(ctx, m, "disk") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "audio") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "brightness") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "fileIcon") < 0)
             return nullptr;
