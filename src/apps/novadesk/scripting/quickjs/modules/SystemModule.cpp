@@ -177,26 +177,6 @@ namespace novadesk::scripting::quickjs
             return JS_NewFloat64(ctx, stats.totalOut);
         }
 
-        JSValue JsMouseClientX(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::MousePosition pos;
-            if (!shared::system::GetMousePosition(pos))
-            {
-                return JS_NewInt32(ctx, 0);
-            }
-            return JS_NewInt32(ctx, pos.x);
-        }
-
-        JSValue JsMouseClientY(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::MousePosition pos;
-            if (!shared::system::GetMousePosition(pos))
-            {
-                return JS_NewInt32(ctx, 0);
-            }
-            return JS_NewInt32(ctx, pos.y);
-        }
-
         std::wstring ReadOptionalPathArg(JSContext *ctx, int argc, JSValueConst *argv)
         {
             if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
@@ -447,125 +427,6 @@ namespace novadesk::scripting::quickjs
             return PathUtils::ResolvePath(path, JSEngine::GetEntryScriptDir());
         }
 
-        JSValue JsAppVolumeListSessions(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            std::vector<shared::system::AppVolumeSessionInfo> sessions;
-            if (!shared::system::AppVolumeListSessions(sessions))
-            {
-                return JS_NewArray(ctx);
-            }
-
-            JSValue arr = JS_NewArray(ctx);
-            uint32_t i = 0;
-            for (const auto &s : sessions)
-            {
-                JSValue o = JS_NewObject(ctx);
-                JS_SetPropertyStr(ctx, o, "pid", JS_NewInt32(ctx, static_cast<int32_t>(s.pid)));
-                JS_SetPropertyStr(ctx, o, "processName", JS_NewString(ctx, Utils::ToString(s.processName).c_str()));
-                JS_SetPropertyStr(ctx, o, "fileName", JS_NewString(ctx, Utils::ToString(s.fileName).c_str()));
-                JS_SetPropertyStr(ctx, o, "filePath", JS_NewString(ctx, Utils::ToString(s.filePath).c_str()));
-                JS_SetPropertyStr(ctx, o, "iconPath", JS_NewString(ctx, Utils::ToString(s.iconPath).c_str()));
-                JS_SetPropertyStr(ctx, o, "displayName", JS_NewString(ctx, Utils::ToString(s.displayName).c_str()));
-                JS_SetPropertyStr(ctx, o, "volume", JS_NewFloat64(ctx, s.volume));
-                JS_SetPropertyStr(ctx, o, "peak", JS_NewFloat64(ctx, s.peak));
-                JS_SetPropertyStr(ctx, o, "muted", JS_NewBool(ctx, s.muted ? 1 : 0));
-                JS_SetPropertyUint32(ctx, arr, i++, o);
-            }
-            return arr;
-        }
-
-        JSValue JsAppVolumeGetByPid(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "appVolume.getByPid(pid)");
-            int32_t pid = 0;
-            if (JS_ToInt32(ctx, &pid, argv[0]) != 0 || pid <= 0)
-                return JS_ThrowTypeError(ctx, "appVolume.getByPid expects pid > 0");
-            float volume = 0.0f;
-            bool muted = false;
-            float peak = 0.0f;
-            if (!shared::system::AppVolumeGetByPid(static_cast<uint32_t>(pid), volume, muted, peak))
-                return JS_NULL;
-            JSValue out = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, out, "volume", JS_NewFloat64(ctx, volume));
-            JS_SetPropertyStr(ctx, out, "muted", JS_NewBool(ctx, muted ? 1 : 0));
-            JS_SetPropertyStr(ctx, out, "peak", JS_NewFloat64(ctx, peak));
-            return out;
-        }
-
-        JSValue JsAppVolumeGetByProcessName(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "appVolume.getByProcessName(name)");
-            const char *n = JS_ToCString(ctx, argv[0]);
-            if (!n)
-                return JS_EXCEPTION;
-            std::wstring name = Utils::ToWString(n);
-            JS_FreeCString(ctx, n);
-            float volume = 0.0f;
-            bool muted = false;
-            float peak = 0.0f;
-            if (!shared::system::AppVolumeGetByProcessName(name, volume, muted, peak))
-                return JS_NULL;
-            JSValue out = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, out, "volume", JS_NewFloat64(ctx, volume));
-            JS_SetPropertyStr(ctx, out, "muted", JS_NewBool(ctx, muted ? 1 : 0));
-            JS_SetPropertyStr(ctx, out, "peak", JS_NewFloat64(ctx, peak));
-            return out;
-        }
-
-        JSValue JsAppVolumeSetVolumeByPid(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByPid(pid, volume01)");
-            int32_t pid = 0;
-            double volume = 0.0;
-            if (JS_ToInt32(ctx, &pid, argv[0]) != 0 || pid <= 0)
-                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByPid expects pid > 0");
-            if (JS_ToFloat64(ctx, &volume, argv[1]) != 0)
-                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByPid expects volume");
-            return JS_NewBool(ctx, shared::system::AppVolumeSetVolumeByPid(static_cast<uint32_t>(pid), static_cast<float>(volume)) ? 1 : 0);
-        }
-
-        JSValue JsAppVolumeSetVolumeByProcessName(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByProcessName(name, volume01)");
-            const char *n = JS_ToCString(ctx, argv[0]);
-            if (!n)
-                return JS_EXCEPTION;
-            std::wstring name = Utils::ToWString(n);
-            JS_FreeCString(ctx, n);
-            double volume = 0.0;
-            if (JS_ToFloat64(ctx, &volume, argv[1]) != 0)
-                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByProcessName expects volume");
-            return JS_NewBool(ctx, shared::system::AppVolumeSetVolumeByProcessName(name, static_cast<float>(volume)) ? 1 : 0);
-        }
-
-        JSValue JsAppVolumeSetMuteByPid(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-                return JS_ThrowTypeError(ctx, "appVolume.setMuteByPid(pid, mute)");
-            int32_t pid = 0;
-            if (JS_ToInt32(ctx, &pid, argv[0]) != 0 || pid <= 0)
-                return JS_ThrowTypeError(ctx, "appVolume.setMuteByPid expects pid > 0");
-            int mute = JS_ToBool(ctx, argv[1]);
-            return JS_NewBool(ctx, shared::system::AppVolumeSetMuteByPid(static_cast<uint32_t>(pid), mute != 0) ? 1 : 0);
-        }
-
-        JSValue JsAppVolumeSetMuteByProcessName(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-                return JS_ThrowTypeError(ctx, "appVolume.setMuteByProcessName(name, mute)");
-            const char *n = JS_ToCString(ctx, argv[0]);
-            if (!n)
-                return JS_EXCEPTION;
-            std::wstring name = Utils::ToWString(n);
-            JS_FreeCString(ctx, n);
-            int mute = JS_ToBool(ctx, argv[1]);
-            return JS_NewBool(ctx, shared::system::AppVolumeSetMuteByProcessName(name, mute != 0) ? 1 : 0);
-        }
-
         JSValue JsJsonParse(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
             if (argc < 1)
@@ -786,11 +647,6 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, network, "bytesSent", JS_NewCFunction(ctx, JsNetworkBytesSent, "bytesSent", 0));
             JS_SetModuleExport(ctx, m, "network", network);
 
-            JSValue mouse = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, mouse, "clientX", JS_NewCFunction(ctx, JsMouseClientX, "clientX", 0));
-            JS_SetPropertyStr(ctx, mouse, "clientY", JS_NewCFunction(ctx, JsMouseClientY, "clientY", 0));
-            JS_SetModuleExport(ctx, m, "mouse", mouse);
-
             JSValue disk = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, disk, "totalBytes", JS_NewCFunction(ctx, JsDiskTotalBytes, "totalBytes", 1));
             JS_SetPropertyStr(ctx, disk, "availableBytes", JS_NewCFunction(ctx, JsDiskAvailableBytes, "availableBytes", 1));
@@ -819,16 +675,6 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, registry, "readData", JS_NewCFunction(ctx, JsRegistryReadData, "readData", 2));
             JS_SetPropertyStr(ctx, registry, "writeData", JS_NewCFunction(ctx, JsRegistryWriteData, "writeData", 3));
             JS_SetModuleExport(ctx, m, "registry", registry);
-
-            JSValue appVolume = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, appVolume, "listSessions", JS_NewCFunction(ctx, JsAppVolumeListSessions, "listSessions", 0));
-            JS_SetPropertyStr(ctx, appVolume, "getByPid", JS_NewCFunction(ctx, JsAppVolumeGetByPid, "getByPid", 1));
-            JS_SetPropertyStr(ctx, appVolume, "getByProcessName", JS_NewCFunction(ctx, JsAppVolumeGetByProcessName, "getByProcessName", 1));
-            JS_SetPropertyStr(ctx, appVolume, "setVolumeByPid", JS_NewCFunction(ctx, JsAppVolumeSetVolumeByPid, "setVolumeByPid", 2));
-            JS_SetPropertyStr(ctx, appVolume, "setVolumeByProcessName", JS_NewCFunction(ctx, JsAppVolumeSetVolumeByProcessName, "setVolumeByProcessName", 2));
-            JS_SetPropertyStr(ctx, appVolume, "setMuteByPid", JS_NewCFunction(ctx, JsAppVolumeSetMuteByPid, "setMuteByPid", 2));
-            JS_SetPropertyStr(ctx, appVolume, "setMuteByProcessName", JS_NewCFunction(ctx, JsAppVolumeSetMuteByProcessName, "setMuteByProcessName", 2));
-            JS_SetModuleExport(ctx, m, "appVolume", appVolume);
 
             JSValue json = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, json, "parse", JS_NewCFunction(ctx, JsJsonParse, "parse", 1));
@@ -862,8 +708,6 @@ namespace novadesk::scripting::quickjs
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "network") < 0)
             return nullptr;
-        if (JS_AddModuleExport(ctx, m, "mouse") < 0)
-            return nullptr;
         if (JS_AddModuleExport(ctx, m, "disk") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "audio") < 0)
@@ -873,8 +717,6 @@ namespace novadesk::scripting::quickjs
         if (JS_AddModuleExport(ctx, m, "displayMetrics") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "registry") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "appVolume") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "json") < 0)
             return nullptr;

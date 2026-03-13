@@ -38,6 +38,7 @@ namespace novadesk::scripting::quickjs
             void (*PushBool)(novadesk_context ctx, int value);
             void (*PushNull)(novadesk_context ctx);
             void (*PushObject)(novadesk_context ctx);
+            void (*PushArray)(novadesk_context ctx);
             double (*GetNumber)(novadesk_context ctx, int index);
             const char *(*GetString)(novadesk_context ctx, int index);
             int (*GetBool)(novadesk_context ctx, int index);
@@ -55,6 +56,7 @@ namespace novadesk::scripting::quickjs
             void *(*JsGetFunctionPtr)(novadesk_context ctx, int index);
             void (*JsCallFunction)(novadesk_context ctx, void *funcPtr, int nargs);
             void (*JsCallFunctionNoArgs)(novadesk_context ctx, void *funcPtr);
+            void (*ArrayPushObject)(novadesk_context ctx);
         };
 
         using NovadeskAddonInitFn = void (*)(novadesk_context ctx, HWND hMsgWnd, const NovadeskHostAPI *host);
@@ -297,6 +299,14 @@ namespace novadesk::scripting::quickjs
             call->stack.push_back(JS_NewObject(call->ctx));
         }
 
+        static void host_PushArray(novadesk_context c)
+        {
+            auto *call = reinterpret_cast<AddonCallContext *>(c);
+            if (!call)
+                return;
+            call->stack.push_back(JS_NewArray(call->ctx));
+        }
+
         static double host_GetNumber(novadesk_context c, int index)
         {
             auto *call = reinterpret_cast<AddonCallContext *>(c);
@@ -498,6 +508,25 @@ namespace novadesk::scripting::quickjs
             }
         }
 
+        static void host_ArrayPushObject(novadesk_context c)
+        {
+            auto *call = reinterpret_cast<AddonCallContext *>(c);
+            if (!call || call->stack.empty())
+                return;
+            JSValue *arr = &call->stack.back();
+            if (!JS_IsArray(*arr))
+                return;
+
+            uint32_t len = 0;
+            JSValue lenV = JS_GetPropertyStr(call->ctx, *arr, "length");
+            JS_ToUint32(call->ctx, &len, lenV);
+            JS_FreeValue(call->ctx, lenV);
+
+            JSValue obj = JS_NewObject(call->ctx);
+            JS_SetPropertyUint32(call->ctx, *arr, len, JS_DupValue(call->ctx, obj));
+            call->stack.push_back(obj);
+        }
+
         const NovadeskHostAPI g_hostApi = {
             host_RegisterString,
             host_RegisterNumber,
@@ -512,6 +541,7 @@ namespace novadesk::scripting::quickjs
             host_PushBool,
             host_PushNull,
             host_PushObject,
+            host_PushArray,
             host_GetNumber,
             host_GetString,
             host_GetBool,
@@ -528,7 +558,8 @@ namespace novadesk::scripting::quickjs
             host_ThrowError,
             host_JsGetFunctionPtr,
             host_JsCallFunction,
-            host_JsCallFunctionNoArgs};
+            host_JsCallFunctionNoArgs,
+            host_ArrayPushObject};
 
         bool UnloadAddonById(int addonId)
         {

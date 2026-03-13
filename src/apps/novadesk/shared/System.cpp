@@ -108,416 +108,43 @@ namespace novadesk::shared::system
     };
 
     // *****************************************************************************
-    // App Volume
+    // Audio
     // *****************************************************************************
-    IAudioEndpointVolume *GetVolumeInterface()
+
+    static IAudioEndpointVolume *GetVolumeInterface()
     {
-        IMMDeviceEnumerator *enumerator = nullptr;
+        ComInit com;
+        if (!com.Ok())
+            return nullptr;
+
+        IMMDeviceEnumerator *deviceEnum = nullptr;
         IMMDevice *device = nullptr;
         IAudioEndpointVolume *volume = nullptr;
 
-        HRESULT hr = CoCreateInstance(
-            __uuidof(MMDeviceEnumerator),
-            nullptr,
-            CLSCTX_ALL,
-            __uuidof(IMMDeviceEnumerator),
-            reinterpret_cast<void **>(&enumerator));
-        if (FAILED(hr) || !enumerator)
-        {
+        HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                      __uuidof(IMMDeviceEnumerator), (void **)&deviceEnum);
+        if (FAILED(hr) || !deviceEnum)
             return nullptr;
+
+        hr = deviceEnum->GetDefaultAudioEndpoint(eRender, eMultimedia, &device);
+        if (SUCCEEDED(hr) && device)
+        {
+            hr = device->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, nullptr, (void **)&volume);
         }
 
-        hr = enumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, &device);
-        enumerator->Release();
-        if (FAILED(hr) || !device)
-        {
-            return nullptr;
-        }
+        if (device)
+            device->Release();
+        if (deviceEnum)
+            deviceEnum->Release();
 
-        hr = device->Activate(
-            __uuidof(IAudioEndpointVolume),
-            CLSCTX_ALL,
-            nullptr,
-            reinterpret_cast<void **>(&volume));
-        device->Release();
         if (FAILED(hr))
         {
+            if (volume)
+                volume->Release();
             return nullptr;
         }
-
         return volume;
     }
-
-    std::wstring ToLowerCopy(const std::wstring &s)
-    {
-        std::wstring out = s;
-        std::transform(out.begin(), out.end(), out.begin(), ::towlower);
-        return out;
-    }
-
-    std::wstring FileNameFromPath(const std::wstring &path)
-    {
-        size_t pos = path.find_last_of(L"\\/");
-        return (pos == std::wstring::npos) ? path : path.substr(pos + 1);
-    }
-
-    std::wstring GetProcessPathByPid(DWORD pid)
-    {
-        std::wstring result;
-        HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-        if (!process)
-            return result;
-        wchar_t buf[MAX_PATH] = {};
-        DWORD size = MAX_PATH;
-        if (QueryFullProcessImageNameW(process, 0, buf, &size))
-        {
-            result = buf;
-        }
-        CloseHandle(process);
-        return result;
-    }
-
-    bool EnsureAppIconDir(std::wstring &outDir)
-    {
-        std::wstring baseDir = PathUtils::GetAppDataPath();
-        if (baseDir.empty())
-            return false;
-        outDir = baseDir + L"AppIcons\\";
-        CreateDirectoryW(baseDir.c_str(), nullptr);
-        CreateDirectoryW(outDir.c_str(), nullptr);
-        return true;
-    }
-
-    bool SetForMatchingSessions(DWORD pid, const std::wstring &processName, bool byPid, float *setVolume, bool *setMute)
-    {
-        ComInit com;
-        if (!com.Ok())
-            return false;
-
-        IMMDeviceEnumerator *deviceEnum = nullptr;
-        IMMDevice *device = nullptr;
-        IAudioSessionManager2 *manager2 = nullptr;
-        IAudioSessionEnumerator *sessionEnum = nullptr;
-        bool anySet = false;
-        std::wstring target = byPid ? L"" : ToLowerCopy(processName);
-
-        do
-        {
-            HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void **)&deviceEnum);
-            if (FAILED(hr) || !deviceEnum)
-                break;
-            hr = deviceEnum->GetDefaultAudioEndpoint(eRender, eMultimedia, &device);
-            if (FAILED(hr) || !device)
-                break;
-            hr = device->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, nullptr, (void **)&manager2);
-            if (FAILED(hr) || !manager2)
-                break;
-            hr = manager2->GetSessionEnumerator(&sessionEnum);
-            if (FAILED(hr) || !sessionEnum)
-                break;
-
-            int count = 0;
-            hr = sessionEnum->GetCount(&count);
-            if (FAILED(hr))
-                break;
-
-            for (int i = 0; i < count; ++i)
-            {
-                IAudioSessionControl *control = nullptr;
-                IAudioSessionControl2 *control2 = nullptr;
-                ISimpleAudioVolume *simpleVol = nullptr;
-
-                if (FAILED(sessionEnum->GetSession(i, &control)) || !control)
-                    continue;
-                if (FAILED(control->QueryInterface(__uuidof(IAudioSessionControl2), (void **)&control2)) || !control2)
-                {
-                    control->Release();
-                    continue;
-                }
-                if (FAILED(control->QueryInterface(__uuidof(ISimpleAudioVolume), (void **)&simpleVol)) || !simpleVol)
-                {
-                    control2->Release();
-                    control->Release();
-                    continue;
-                }
-
-                DWORD curPid = 0;
-                control2->GetProcessId(&curPid);
-                bool match = false;
-                if (byPid)
-                {
-                    match = (curPid == pid);
-                }
-                else
-                {
-                    std::wstring curName = ToLowerCopy(FileNameFromPath(GetProcessPathByPid(curPid)));
-                    match = (curName == target);
-                }
-
-                if (match)
-                {
-                    if (setVolume)
-                        simpleVol->SetMasterVolume(*setVolume, nullptr);
-                    if (setMute)
-                        simpleVol->SetMute(*setMute ? TRUE : FALSE, nullptr);
-                    anySet = true;
-                }
-
-                simpleVol->Release();
-                control2->Release();
-                control->Release();
-            }
-        } while (false);
-
-        if (sessionEnum)
-            sessionEnum->Release();
-        if (manager2)
-            manager2->Release();
-        if (device)
-            device->Release();
-        if (deviceEnum)
-            deviceEnum->Release();
-        return anySet;
-    }
-
-    float Clamp01(float v)
-    {
-        if (v < 0.0f)
-            return 0.0f;
-        if (v > 1.0f)
-            return 1.0f;
-        return v;
-    }
-
-    bool AppVolumeListSessions(std::vector<AppVolumeSessionInfo> &sessions)
-    {
-        sessions.clear();
-        ComInit com;
-        if (!com.Ok())
-            return false;
-
-        IMMDeviceEnumerator *deviceEnum = nullptr;
-        IMMDevice *device = nullptr;
-        IAudioSessionManager2 *manager2 = nullptr;
-        IAudioSessionEnumerator *sessionEnum = nullptr;
-        bool success = false;
-
-        do
-        {
-            HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void **)&deviceEnum);
-            if (FAILED(hr) || !deviceEnum)
-                break;
-
-            hr = deviceEnum->GetDefaultAudioEndpoint(eRender, eMultimedia, &device);
-            if (FAILED(hr) || !device)
-                break;
-
-            hr = device->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, nullptr, (void **)&manager2);
-            if (FAILED(hr) || !manager2)
-                break;
-
-            hr = manager2->GetSessionEnumerator(&sessionEnum);
-            if (FAILED(hr) || !sessionEnum)
-                break;
-
-            int count = 0;
-            hr = sessionEnum->GetCount(&count);
-            if (FAILED(hr))
-                break;
-
-            for (int i = 0; i < count; ++i)
-            {
-                IAudioSessionControl *control = nullptr;
-                IAudioSessionControl2 *control2 = nullptr;
-                ISimpleAudioVolume *simpleVol = nullptr;
-                IAudioMeterInformation *meter = nullptr;
-
-                if (FAILED(sessionEnum->GetSession(i, &control)) || !control)
-                    continue;
-                if (FAILED(control->QueryInterface(__uuidof(IAudioSessionControl2), (void **)&control2)) || !control2)
-                {
-                    control->Release();
-                    continue;
-                }
-                if (FAILED(control->QueryInterface(__uuidof(ISimpleAudioVolume), (void **)&simpleVol)) || !simpleVol)
-                {
-                    control2->Release();
-                    control->Release();
-                    continue;
-                }
-
-                AudioSessionState state{};
-                if (FAILED(control->GetState(&state)) || state != AudioSessionStateActive)
-                {
-                    simpleVol->Release();
-                    control2->Release();
-                    control->Release();
-                    continue;
-                }
-
-                DWORD pid = 0;
-                control2->GetProcessId(&pid);
-
-                float volume = 0.0f;
-                float peak = 0.0f;
-                BOOL muted = FALSE;
-                simpleVol->GetMasterVolume(&volume);
-                simpleVol->GetMute(&muted);
-                if (SUCCEEDED(control2->QueryInterface(IID_IAudioMeterInformation_Local, (void **)&meter)) && meter)
-                {
-                    float meterPeak = 0.0f;
-                    if (SUCCEEDED(meter->GetPeakValue(&meterPeak)))
-                    {
-                        peak = meterPeak;
-                    }
-                }
-
-                LPWSTR displayName = nullptr;
-                std::wstring display;
-                if (SUCCEEDED(control->GetDisplayName(&displayName)) && displayName)
-                {
-                    display = displayName;
-                    CoTaskMemFree(displayName);
-                }
-
-                AppVolumeSessionInfo info;
-                info.pid = static_cast<uint32_t>(pid);
-                info.filePath = GetProcessPathByPid(pid);
-                info.fileName = FileNameFromPath(info.filePath);
-                info.processName = info.fileName;
-                info.displayName = display;
-                info.volume = volume;
-                info.peak = peak;
-                info.muted = muted != FALSE;
-
-                if (!info.filePath.empty())
-                {
-                    std::wstring iconDir;
-                    if (EnsureAppIconDir(iconDir))
-                    {
-                        info.iconPath = iconDir + L"pid_" + std::to_wstring(pid) + L"_48.ico";
-                        if (!Utils::ExtractFileIconToIco(info.filePath, info.iconPath, 48))
-                        {
-                            info.iconPath.clear();
-                        }
-                    }
-                }
-
-                sessions.push_back(info);
-
-                if (meter)
-                    meter->Release();
-                simpleVol->Release();
-                control2->Release();
-                control->Release();
-            }
-
-            success = true;
-        } while (false);
-
-        if (sessionEnum)
-            sessionEnum->Release();
-        if (manager2)
-            manager2->Release();
-        if (device)
-            device->Release();
-        if (deviceEnum)
-            deviceEnum->Release();
-        return success;
-    }
-
-    bool AppVolumeGetByPid(uint32_t pid, float &outVolume, bool &outMuted, float &outPeak)
-    {
-        std::vector<AppVolumeSessionInfo> sessions;
-        if (!AppVolumeListSessions(sessions))
-            return false;
-
-        double sum = 0.0;
-        int count = 0;
-        bool mutedAny = false;
-        double peakMax = 0.0;
-        for (const auto &s : sessions)
-        {
-            if (s.pid == pid)
-            {
-                sum += s.volume;
-                mutedAny = mutedAny || s.muted;
-                if (s.peak > peakMax)
-                    peakMax = s.peak;
-                ++count;
-            }
-        }
-        if (count == 0)
-            return false;
-
-        outVolume = static_cast<float>(sum / static_cast<double>(count));
-        outMuted = mutedAny;
-        outPeak = static_cast<float>(peakMax);
-        return true;
-    }
-
-    bool AppVolumeGetByProcessName(const std::wstring &processName, float &outVolume, bool &outMuted, float &outPeak)
-    {
-        std::vector<AppVolumeSessionInfo> sessions;
-        if (!AppVolumeListSessions(sessions))
-            return false;
-
-        std::wstring target = ToLowerCopy(processName);
-        double sum = 0.0;
-        int count = 0;
-        bool mutedAny = false;
-        double peakMax = 0.0;
-        for (const auto &s : sessions)
-        {
-            if (ToLowerCopy(s.processName) == target)
-            {
-                sum += s.volume;
-                mutedAny = mutedAny || s.muted;
-                if (s.peak > peakMax)
-                    peakMax = s.peak;
-                ++count;
-            }
-        }
-        if (count == 0)
-            return false;
-
-        outVolume = static_cast<float>(sum / static_cast<double>(count));
-        outMuted = mutedAny;
-        outPeak = static_cast<float>(peakMax);
-        return true;
-    }
-
-    bool AppVolumeSetVolumeByPid(uint32_t pid, float volume01)
-    {
-        if (volume01 < 0.0f)
-            volume01 = 0.0f;
-        if (volume01 > 1.0f)
-            volume01 = 1.0f;
-        return SetForMatchingSessions(static_cast<DWORD>(pid), L"", true, &volume01, nullptr);
-    }
-
-    bool AppVolumeSetVolumeByProcessName(const std::wstring &processName, float volume01)
-    {
-        if (volume01 < 0.0f)
-            volume01 = 0.0f;
-        if (volume01 > 1.0f)
-            volume01 = 1.0f;
-        return SetForMatchingSessions(0, processName, false, &volume01, nullptr);
-    }
-
-    bool AppVolumeSetMuteByPid(uint32_t pid, bool mute)
-    {
-        return SetForMatchingSessions(static_cast<DWORD>(pid), L"", true, nullptr, &mute);
-    }
-
-    bool AppVolumeSetMuteByProcessName(const std::wstring &processName, bool mute)
-    {
-        return SetForMatchingSessions(0, processName, false, nullptr, &mute);
-    }
-
-    // *****************************************************************************
-    // Audio
-    // *****************************************************************************
 
     bool AudioSetVolume(int volumePercent)
     {
@@ -1335,22 +962,6 @@ namespace novadesk::shared::system
         outStats.available = static_cast<double>(mem.ullAvailPhys);
         outStats.used = static_cast<double>(mem.ullTotalPhys - mem.ullAvailPhys);
         outStats.percent = static_cast<int>(mem.dwMemoryLoad);
-        return true;
-    }
-
-    // *****************************************************************************
-    // Mouse Metrics
-    // *****************************************************************************
-
-    bool GetMousePosition(MousePosition &outPos)
-    {
-        POINT p{};
-        if (!GetCursorPos(&p))
-        {
-            return false;
-        }
-        outPos.x = static_cast<int>(p.x);
-        outPos.y = static_cast<int>(p.y);
         return true;
     }
 

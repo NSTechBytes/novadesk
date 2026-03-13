@@ -67,11 +67,6 @@ namespace novadesk::shared::system
         double totalOut = 0.0;
     };
 
-    struct MousePosition
-    {
-        int x = 0;
-        int y = 0;
-    };
 
     struct DiskStats
     {
@@ -79,19 +74,6 @@ namespace novadesk::shared::system
         double available = 0.0;
         double used = 0.0;
         int percent = 0;
-    };
-
-    struct AppVolumeSessionInfo
-    {
-        uint32_t pid = 0;
-        std::wstring processName;
-        std::wstring fileName;
-        std::wstring filePath;
-        std::wstring iconPath;
-        std::wstring displayName;
-        float volume = 0.0f; // 0..1
-        float peak = 0.0f;   // 0..1
-        bool muted = false;
     };
 
     enum class RegistryValueType
@@ -118,7 +100,6 @@ namespace novadesk::shared::system
     bool GetCpuStats(CpuStats &outStats);
     bool GetMemoryStats(MemoryStats &outStats);
     bool GetNetworkStats(NetworkStats &outStats);
-    bool GetMousePosition(MousePosition &outPos);
     bool GetDiskStats(const std::wstring &path, DiskStats &outStats);
     DisplayMetrics GetDisplayMetrics();
 
@@ -126,13 +107,6 @@ namespace novadesk::shared::system
     int AudioGetVolume();
     bool AudioPlaySound(const std::wstring &path, bool loop);
     void AudioStopSound();
-    bool AppVolumeListSessions(std::vector<AppVolumeSessionInfo> &sessions);
-    bool AppVolumeGetByPid(uint32_t pid, float &outVolume, bool &outMuted, float &outPeak);
-    bool AppVolumeGetByProcessName(const std::wstring &processName, float &outVolume, bool &outMuted, float &outPeak);
-    bool AppVolumeSetVolumeByPid(uint32_t pid, float volume01);
-    bool AppVolumeSetVolumeByProcessName(const std::wstring &processName, float volume01);
-    bool AppVolumeSetMuteByPid(uint32_t pid, bool mute);
-    bool AppVolumeSetMuteByProcessName(const std::wstring &processName, bool mute);
     bool JsonReadTextFile(const std::wstring &path, std::string &outText);
     bool JsonWriteTextFile(const std::wstring &path, const std::string &text);
     bool JsonMergePatchFile(const std::wstring &path, const std::string &patchText);
