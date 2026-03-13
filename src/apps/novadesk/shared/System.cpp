@@ -17,13 +17,9 @@
 #include <mmsystem.h>
 #include <endpointvolume.h>
 #include <audiopolicy.h>
-#include <audioclient.h>
 #include <powrprof.h>
 #include <iphlpapi.h>
-#include <functiondiscoverykeys.h>
-#include <roapi.h>
 #include <wininet.h>
-#include <winioctl.h>
 
 #ifndef __IAudioMeterInformation_INTERFACE_DEFINED__
 #define __IAudioMeterInformation_INTERFACE_DEFINED__

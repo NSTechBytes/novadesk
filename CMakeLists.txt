@@ -54,7 +54,6 @@ target_link_libraries(novadesk PRIVATE
     iphlpapi
     wininet
     version
-    runtimeobject
 )
 
 if(MINGW)
