@@ -92,13 +92,6 @@ namespace novadesk::shared::system
         bool supported = false;
     };
 
-    struct AudioLevelStats
-    {
-        float rms[2] = {0.0f, 0.0f};
-        float peak[2] = {0.0f, 0.0f};
-        std::vector<float> bands;
-    };
-
     struct AppVolumeSessionInfo
     {
         uint32_t pid = 0;
@@ -110,30 +103,6 @@ namespace novadesk::shared::system
         float volume = 0.0f; // 0..1
         float peak = 0.0f;   // 0..1
         bool muted = false;
-    };
-
-    struct AudioLevelConfig
-    {
-        std::string port = "output"; // "output" or "input"
-        std::wstring deviceId;
-
-        int fftSize = 1024;
-        int fftOverlap = 512;
-        int bands = 10;
-
-        double freqMin = 20.0;
-        double freqMax = 20000.0;
-        double sensitivity = 35.0;
-
-        int rmsAttack = 300;
-        int rmsDecay = 300;
-        int peakAttack = 50;
-        int peakDecay = 2500;
-        int fftAttack = 300;
-        int fftDecay = 300;
-
-        double rmsGain = 1.0;
-        double peakGain = 1.0;
     };
 
     enum class RegistryValueType
@@ -170,7 +139,6 @@ namespace novadesk::shared::system
     bool GetDiskStats(const std::wstring &path, DiskStats &outStats);
     bool GetBrightness(BrightnessInfo &outInfo, int displayIndex = 0);
     bool SetBrightnessPercent(int percent, int displayIndex = 0);
-    bool GetAudioLevelStats(AudioLevelStats &outStats, const AudioLevelConfig &config);
     DisplayMetrics GetDisplayMetrics();
 
     bool AudioSetVolume(int volumePercent);

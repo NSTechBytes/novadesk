@@ -13,7 +13,6 @@ endif()
 set(APP_SRC_DIR "${CMAKE_SOURCE_DIR}/src/apps/novadesk")
 set(THIRD_PARTY_DIR "${CMAKE_SOURCE_DIR}/src/third_party")
 set(QUICKJS_DIR "${THIRD_PARTY_DIR}/quick-js")
-set(KISSFFT_DIR "${THIRD_PARTY_DIR}/kiss_fft130")
 
 file(GLOB_RECURSE NOVADESK_APP_SOURCES CONFIGURE_DEPENDS
     "${APP_SRC_DIR}/*.cpp"
@@ -26,8 +25,6 @@ add_executable(novadesk WIN32
     "${QUICKJS_DIR}/libregexp.c"
     "${QUICKJS_DIR}/libunicode.c"
     "${QUICKJS_DIR}/dtoa.c"
-    "${KISSFFT_DIR}/kiss_fft.c"
-    "${KISSFFT_DIR}/kiss_fftr.c"
 )
 
 target_compile_definitions(novadesk PRIVATE UNICODE _UNICODE)

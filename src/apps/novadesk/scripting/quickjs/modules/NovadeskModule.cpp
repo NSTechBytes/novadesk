@@ -47,6 +47,7 @@ namespace novadesk::scripting::quickjs
             int (*IsObject)(novadesk_context ctx, int index);
             int (*IsFunction)(novadesk_context ctx, int index);
             int (*IsNull)(novadesk_context ctx, int index);
+            int (*GetProperty)(novadesk_context ctx, int objIndex, const char *name);
             int (*GetTop)(novadesk_context ctx);
             void (*Pop)(novadesk_context ctx);
             void (*PopN)(novadesk_context ctx, int n);
@@ -371,6 +372,27 @@ namespace novadesk::scripting::quickjs
             return v && (JS_IsNull(*v) || JS_IsUndefined(*v));
         }
 
+        static int host_GetProperty(novadesk_context c, int objIndex, const char *name)
+        {
+            auto *call = reinterpret_cast<AddonCallContext *>(c);
+            if (!call || !name)
+                return 0;
+            JSValue *obj = ResolveByIndex(call, objIndex);
+            if (!obj || !JS_IsObject(*obj))
+                return 0;
+
+            JSValue value = JS_GetPropertyStr(call->ctx, *obj, name);
+            if (JS_IsException(value))
+            {
+                call->hasThrow = true;
+                call->throwMessage = "GetProperty failed";
+                return 0;
+            }
+
+            call->stack.push_back(value);
+            return JS_IsUndefined(value) ? 0 : 1;
+        }
+
         static int host_GetTop(novadesk_context c)
         {
             auto *call = reinterpret_cast<AddonCallContext *>(c);
@@ -480,6 +502,7 @@ namespace novadesk::scripting::quickjs
             host_IsObject,
             host_IsFunction,
             host_IsNull,
+            host_GetProperty,
             host_GetTop,
             host_Pop,
             host_PopN,
