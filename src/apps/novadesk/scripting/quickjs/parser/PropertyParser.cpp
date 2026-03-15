@@ -653,7 +653,22 @@ namespace PropertyParser
     {
         ParseElementOptions(ctx, obj, options, baseDir);
 
-        options.text = GetStringProp(ctx, obj, "text");
+        {
+            JSValue textProp = JS_GetPropertyStr(ctx, obj, "text");
+            if (!JS_IsException(textProp) && !JS_IsUndefined(textProp) && !JS_IsNull(textProp))
+            {
+                if (JS_IsString(textProp))
+                {
+                    const char *s = JS_ToCString(ctx, textProp);
+                    if (s)
+                    {
+                        options.text = Utils::ToWString(s);
+                        JS_FreeCString(ctx, s);
+                    }
+                }
+            }
+            JS_FreeValue(ctx, textProp);
+        }
         std::wstring fontFace = GetStringProp(ctx, obj, "fontFace");
         if (!fontFace.empty())
             options.fontFace = fontFace;
