@@ -465,10 +465,10 @@ namespace novadesk::scripting::quickjs
                     }
                     return JS_NewString(ctx, alStr);
                 }
-                if (prop == "clipString")
+                if (prop == "textClip")
                 {
                     const char *clipStr = "none";
-                    switch (t->GetClipString())
+                    switch (t->GettextClip())
                     {
                     case TEXT_CLIP_ON:
                         clipStr = "clip";

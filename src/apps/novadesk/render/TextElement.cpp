@@ -62,7 +62,7 @@ namespace
         }
     }
 
-    void ApplyClipSettings(IDWriteTextFormat *textFormat, TextClipString clip, bool widthDefined)
+    void ApplyClipSettings(IDWriteTextFormat *textFormat, TextClip clip, bool widthDefined)
     {
         if (!textFormat)
             return;
@@ -200,11 +200,11 @@ TextElement::TextElement(const std::wstring &id, int x, int y, int w, int h,
                          const std::wstring &text, const std::wstring &fontFace,
                          int fontSize, COLORREF fontColor, BYTE alpha,
                          int fontWeight, bool italic, TextAlignment textAlign,
-                         TextClipString clip, const std::wstring &fontPath)
+                         TextClip clip, const std::wstring &fontPath)
     : Element(ELEMENT_TEXT, id, x, y, w, h),
       m_Text(text), m_FontFace(fontFace), m_FontSize(fontSize),
       m_FontColor(fontColor), m_Alpha(alpha), m_FontWeight(fontWeight), m_Italic(italic),
-      m_TextAlign(textAlign), m_ClipString(clip), m_FontPath(fontPath)
+      m_TextAlign(textAlign), m_textClip(clip), m_FontPath(fontPath)
 {
     ParseInlineStyles();
 }
@@ -271,7 +271,7 @@ void TextElement::Render(ID2D1DeviceContext *context)
     }
 
     ApplyTextAlignment(pTextFormat.Get(), m_TextAlign);
-    ApplyClipSettings(pTextFormat.Get(), m_ClipString, m_WDefined);
+    ApplyClipSettings(pTextFormat.Get(), m_textClip, m_WDefined);
 
     GfxRect bounds = GetBounds();
     float layoutX = (float)bounds.X + m_PaddingLeft;
@@ -452,7 +452,7 @@ int TextElement::GetAutoWidth()
 
     int contentW = (int)ceil(metrics.widthIncludingTrailingWhitespace);
 
-    if (!m_WDefined && (m_ClipString == TEXT_CLIP_ON || m_ClipString == TEXT_CLIP_ELLIPSIS) && m_Width > 0)
+    if (!m_WDefined && (m_textClip == TEXT_CLIP_ON || m_textClip == TEXT_CLIP_ELLIPSIS) && m_Width > 0)
     {
         if (contentW > m_Width)
             return m_Width;
@@ -495,7 +495,7 @@ int TextElement::GetAutoHeight()
 
     float maxWidth = 10000.0f;
     // Keep auto-size text single-line unless wrap is explicitly requested.
-    bool wrap = (m_ClipString == TEXT_CLIP_WRAP) || (m_ClipString == TEXT_CLIP_NONE && m_WDefined);
+    bool wrap = (m_textClip == TEXT_CLIP_WRAP) || (m_textClip == TEXT_CLIP_NONE && m_WDefined);
 
     if (wrap)
     {
@@ -534,7 +534,7 @@ int TextElement::GetAutoHeight()
     // Logging::Log(LogLevel::Debug, L"TextElement(%s): GetAutoHeight = %d (Font: %s, Size: %d, Wrap: %s, MaxWidth: %.0f)",
     //     m_Id.c_str(), contentH, fontFace.c_str(), m_FontSize, wrap ? L"YES" : L"NO", maxWidth);
 
-    if (!m_HDefined && (m_ClipString == TEXT_CLIP_ON || m_ClipString == TEXT_CLIP_ELLIPSIS) && m_Height > 0)
+    if (!m_HDefined && (m_textClip == TEXT_CLIP_ON || m_textClip == TEXT_CLIP_ELLIPSIS) && m_Height > 0)
     {
         if (contentH > m_Height)
             return m_Height;
@@ -619,7 +619,7 @@ bool TextElement::HitTest(int x, int y)
         layoutH = 1;
 
     ApplyTextAlignment(pTextFormat.Get(), m_TextAlign);
-    ApplyClipSettings(pTextFormat.Get(), m_ClipString, m_WDefined);
+    ApplyClipSettings(pTextFormat.Get(), m_textClip, m_WDefined);
 
     std::wstring processedText = GetProcessedText();
     if (processedText.empty())

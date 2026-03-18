@@ -137,7 +137,7 @@ namespace PropertyParser
         int fontWeight = 400;
         bool italic = false;
         TextAlignment textAlign = TEXT_ALIGN_LEFT_TOP;
-        TextClipString clip = TEXT_CLIP_NONE;
+        TextClip clip = TEXT_CLIP_NONE;
         std::wstring fontPath;
         std::vector<TextShadow> shadows;
         GradientInfo fontGradient;

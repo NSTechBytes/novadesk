@@ -64,7 +64,7 @@ ui.addText({
     fontSize: 14,
     fontColor: "#FFFFFF",
     width: 360,
-    clipString: "wrap"
+    textClip: "wrap"
 });
 
 ui.addText({

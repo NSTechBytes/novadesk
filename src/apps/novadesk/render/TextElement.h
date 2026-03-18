@@ -49,7 +49,7 @@ enum TextAlignment
     TEXT_ALIGN_RIGHT_BOTTOM
 };
 
-enum TextClipString
+enum TextClip
 {
     TEXT_CLIP_NONE = 0,
     TEXT_CLIP_ON = 1,
@@ -64,7 +64,7 @@ public:
                 const std::wstring &text, const std::wstring &fontFace,
                 int fontSize, COLORREF fontColor, BYTE alpha,
                 int fontWeight, bool italic, TextAlignment textAlign,
-                TextClipString clip = TEXT_CLIP_NONE, const std::wstring &fontPath = L"");
+                TextClip clip = TEXT_CLIP_NONE, const std::wstring &fontPath = L"");
 
     virtual ~TextElement() {}
 
@@ -102,7 +102,7 @@ public:
         ParseInlineStyles();
     }
     void SetTextAlign(TextAlignment align) { m_TextAlign = align; }
-    void SetClip(TextClipString clip) { m_ClipString = clip; }
+    void SetClip(TextClip clip) { m_textClip = clip; }
     void SetFontPath(const std::wstring &path) { m_FontPath = path; }
     void SetShadows(const std::vector<TextShadow> &shadows) { m_Shadows = shadows; }
     void SetFontGradient(const GradientInfo &gradient) { m_FontGradient = gradient; }
@@ -120,7 +120,7 @@ public:
     int GetFontWeight() const { return m_FontWeight; }
     bool IsItalic() const { return m_Italic; }
     TextAlignment GetTextAlign() const { return m_TextAlign; }
-    TextClipString GetClipString() const { return m_ClipString; }
+    TextClip GettextClip() const { return m_textClip; }
     const std::wstring &GetFontPath() const { return m_FontPath; }
     const std::vector<TextShadow> &GetShadows() const { return m_Shadows; }
     const GradientInfo &GetFontGradient() const { return m_FontGradient; }
@@ -148,7 +148,7 @@ private:
     int m_FontWeight;
     bool m_Italic;
     TextAlignment m_TextAlign;
-    TextClipString m_ClipString;
+    TextClip m_textClip;
     std::wstring m_FontPath;
     std::vector<TextShadow> m_Shadows;
     GradientInfo m_FontGradient;
