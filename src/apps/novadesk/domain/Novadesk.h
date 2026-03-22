@@ -10,6 +10,8 @@
 #include "../Resource.h"
 #include "../../shared/MenuItem.h"
 
-void TraySetImage(const std::wstring &path);
-void TraySetToolTip(const std::wstring &toolTip);
-void TraySetContextMenu(const std::vector<MenuItem> &menu);
+int TrayCreate(const std::wstring &path);
+void TrayDestroy(int trayId);
+void TraySetImage(int trayId, const std::wstring &path);
+void TraySetToolTip(int trayId, const std::wstring &toolTip);
+void TraySetContextMenu(int trayId, const std::vector<MenuItem> &menu);

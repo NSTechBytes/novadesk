@@ -27,8 +27,13 @@ namespace JSEngine
         std::vector<JSValue> g_eventCallbacks;
         std::unordered_map<Widget *, std::unordered_map<std::string, std::vector<int>>> g_widgetEventListeners;
         std::unordered_map<std::wstring, std::unordered_map<int, JSValue>> g_widgetContextMenuCallbacks;
-        std::unordered_map<int, JSValue> g_trayCommandCallbacks;
-        std::unordered_map<std::string, std::vector<JSValue>> g_trayEventCallbacks;
+        struct TrayCommandCallback
+        {
+            int trayId = 0;
+            JSValue callback = JS_UNDEFINED;
+        };
+        std::unordered_map<int, TrayCommandCallback> g_trayCommandCallbacks;
+        std::unordered_map<int, std::unordered_map<std::string, std::vector<JSValue>>> g_trayEventCallbacks;
         struct TimerEntry
         {
             JSValue callback = JS_UNDEFINED;
@@ -530,26 +535,29 @@ namespace JSEngine
             g_widgetContextMenuCallbacks.clear();
         }
 
-        void ClearAllTrayCommandCallbacks()
+        void ClearAllTrayCommandCallbacksInternal()
         {
             if (!g_context)
                 return;
             for (auto &kv : g_trayCommandCallbacks)
             {
-                JS_FreeValue(g_context, kv.second);
+                JS_FreeValue(g_context, kv.second.callback);
             }
             g_trayCommandCallbacks.clear();
         }
 
-        void ClearAllTrayEventCallbacks()
+        void ClearAllTrayEventCallbacksInternal()
         {
             if (!g_context)
                 return;
             for (auto &kv : g_trayEventCallbacks)
             {
-                for (JSValue &cb : kv.second)
+                for (auto &ekv : kv.second)
                 {
-                    JS_FreeValue(g_context, cb);
+                    for (JSValue &cb : ekv.second)
+                    {
+                        JS_FreeValue(g_context, cb);
+                    }
                 }
             }
             g_trayEventCallbacks.clear();
@@ -884,6 +892,16 @@ namespace JSEngine
         }
     } // namespace
 
+    void ClearAllTrayCommandCallbacks()
+    {
+        ClearAllTrayCommandCallbacksInternal();
+    }
+
+    void ClearAllTrayEventCallbacks()
+    {
+        ClearAllTrayEventCallbacksInternal();
+    }
+
     void InitializeJavaScriptAPI(duk_context *ctx)
     {
         (void)ctx;
@@ -1058,7 +1076,7 @@ namespace JSEngine
         auto it = g_trayCommandCallbacks.find(commandId);
         if (it == g_trayCommandCallbacks.end())
             return;
-        JSValue ret = JS_Call(g_context, it->second, JS_UNDEFINED, 0, nullptr);
+        JSValue ret = JS_Call(g_context, it->second.callback, JS_UNDEFINED, 0, nullptr);
         if (JS_IsException(ret))
         {
             LogQuickJsException(g_context);
@@ -1069,14 +1087,17 @@ namespace JSEngine
         }
     }
 
-    void DispatchTrayEvent(const std::string &eventName)
+    void DispatchTrayEvent(int trayId, const std::string &eventName)
     {
         if (!g_context)
             return;
-        auto it = g_trayEventCallbacks.find(eventName);
+        auto it = g_trayEventCallbacks.find(trayId);
         if (it == g_trayEventCallbacks.end())
             return;
-        for (JSValue &cb : it->second)
+        auto evIt = it->second.find(eventName);
+        if (evIt == it->second.end())
+            return;
+        for (JSValue &cb : evIt->second)
         {
             JSValue ret = JS_Call(g_context, cb, JS_UNDEFINED, 0, nullptr);
             if (JS_IsException(ret))
@@ -1255,7 +1276,7 @@ namespace JSEngine
         g_widgetContextMenuCallbacks.erase(it);
     }
 
-    bool RegisterTrayCommandCallback(JSContext *ctx, int commandId, JSValueConst fn)
+    bool RegisterTrayCommandCallback(JSContext *ctx, int trayId, int commandId, JSValueConst fn)
     {
         if (!ctx || ctx != g_context || commandId <= 0 || !JS_IsFunction(ctx, fn))
         {
@@ -1264,30 +1285,59 @@ namespace JSEngine
         auto it = g_trayCommandCallbacks.find(commandId);
         if (it != g_trayCommandCallbacks.end())
         {
-            JS_FreeValue(ctx, it->second);
+            JS_FreeValue(ctx, it->second.callback);
         }
-        g_trayCommandCallbacks[commandId] = JS_DupValue(ctx, fn);
+        TrayCommandCallback entry{};
+        entry.trayId = trayId;
+        entry.callback = JS_DupValue(ctx, fn);
+        g_trayCommandCallbacks[commandId] = entry;
         return true;
     }
 
-    void ClearTrayCommandCallbacks()
+    void ClearTrayCommandCallbacks(int trayId)
     {
-        ClearAllTrayCommandCallbacks();
+        if (!g_context)
+            return;
+        std::vector<int> toErase;
+        for (auto &kv : g_trayCommandCallbacks)
+        {
+            if (kv.second.trayId == trayId)
+            {
+                JS_FreeValue(g_context, kv.second.callback);
+                toErase.push_back(kv.first);
+            }
+        }
+        for (int id : toErase)
+        {
+            g_trayCommandCallbacks.erase(id);
+        }
     }
 
-    bool RegisterTrayEventCallback(JSContext *ctx, const std::string &eventName, JSValueConst fn)
+    bool RegisterTrayEventCallback(JSContext *ctx, int trayId, const std::string &eventName, JSValueConst fn)
     {
         if (!ctx || ctx != g_context || eventName.empty() || !JS_IsFunction(ctx, fn))
         {
             return false;
         }
-        g_trayEventCallbacks[eventName].push_back(JS_DupValue(ctx, fn));
+        g_trayEventCallbacks[trayId][eventName].push_back(JS_DupValue(ctx, fn));
         return true;
     }
 
-    void ClearTrayEventCallbacks()
+    void ClearTrayEventCallbacks(int trayId)
     {
-        ClearAllTrayEventCallbacks();
+        if (!g_context)
+            return;
+        auto it = g_trayEventCallbacks.find(trayId);
+        if (it == g_trayEventCallbacks.end())
+            return;
+        for (auto &kv : it->second)
+        {
+            for (JSValue &cb : kv.second)
+            {
+                JS_FreeValue(g_context, cb);
+            }
+        }
+        g_trayEventCallbacks.erase(it);
     }
 
     bool ExecuteWidgetScript(Widget *widget)

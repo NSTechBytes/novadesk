@@ -665,7 +665,7 @@ namespace novadesk::scripting::quickjs
             return L"";
         }
 
-        bool ParseTrayMenuItems(JSContext *ctx, JSValueConst arr, std::vector<MenuItem> &out)
+        bool ParseTrayMenuItems(JSContext *ctx, int trayId, JSValueConst arr, std::vector<MenuItem> &out)
         {
             if (!JS_IsArray(arr))
                 return false;
@@ -719,14 +719,14 @@ namespace novadesk::scripting::quickjs
                     if (JS_IsFunction(ctx, actionV))
                     {
                         item.id = 2000 + g_nextTrayCommandId++;
-                        JSEngine::RegisterTrayCommandCallback(ctx, item.id, actionV);
+                        JSEngine::RegisterTrayCommandCallback(ctx, trayId, item.id, actionV);
                     }
                     JS_FreeValue(ctx, actionV);
 
                     JSValue childV = JS_GetPropertyStr(ctx, itemV, "items");
                     if (JS_IsArray(childV))
                     {
-                        ParseTrayMenuItems(ctx, childV, item.children);
+                        ParseTrayMenuItems(ctx, trayId, childV, item.children);
                     }
                     JS_FreeValue(ctx, childV);
                 }
@@ -879,11 +879,37 @@ namespace novadesk::scripting::quickjs
             return kNames.find(name) != kNames.end();
         }
 
-        JSValue JsTrayOn(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        static const char *kTrayIdKey = "__trayId";
+
+        bool GetTrayId(JSContext *ctx, JSValueConst thisVal, int &outId)
+        {
+            if (!JS_IsObject(thisVal))
+                return false;
+            JSValue idV = JS_GetPropertyStr(ctx, thisVal, kTrayIdKey);
+            if (JS_IsUndefined(idV) || JS_IsNull(idV))
+            {
+                JS_FreeValue(ctx, idV);
+                return false;
+            }
+            int32_t id = 0;
+            const bool ok = (JS_ToInt32(ctx, &id, idV) == 0);
+            JS_FreeValue(ctx, idV);
+            if (!ok || id <= 0)
+                return false;
+            outId = id;
+            return true;
+        }
+
+        JSValue JsTrayOn(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsFunction(ctx, argv[1]))
             {
                 return JS_ThrowTypeError(ctx, "tray.on(event, handler) requires event string and function");
+            }
+            int trayId = 0;
+            if (!GetTrayId(ctx, thisVal, trayId))
+            {
+                return JS_ThrowTypeError(ctx, "tray.on called on invalid tray instance");
             }
             const char *nameC = JS_ToCString(ctx, argv[0]);
             if (!nameC)
@@ -896,22 +922,34 @@ namespace novadesk::scripting::quickjs
             {
                 return JS_ThrowTypeError(ctx, "tray.on: unknown event");
             }
-            JSEngine::RegisterTrayEventCallback(ctx, name, argv[1]);
+            JSEngine::RegisterTrayEventCallback(ctx, trayId, name, argv[1]);
             return JS_UNDEFINED;
         }
 
-        JSValue JsTrayDestroy(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        JSValue JsTrayDestroy(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
         {
             (void)ctx;
-            JSEngine::ClearTrayEventCallbacks();
+            int trayId = 0;
+            if (!GetTrayId(ctx, thisVal, trayId))
+            {
+                return JS_ThrowTypeError(ctx, "tray.destroy called on invalid tray instance");
+            }
+            TrayDestroy(trayId);
+            JSEngine::ClearTrayEventCallbacks(trayId);
+            JSEngine::ClearTrayCommandCallbacks(trayId);
             return JS_UNDEFINED;
         }
 
-        JSValue JsTraySetImage(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        JSValue JsTraySetImage(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             if (argc < 1 || !JS_IsString(argv[0]))
             {
                 return JS_ThrowTypeError(ctx, "tray.setImage(path) requires image path");
+            }
+            int trayId = 0;
+            if (!GetTrayId(ctx, thisVal, trayId))
+            {
+                return JS_ThrowTypeError(ctx, "tray.setImage called on invalid tray instance");
             }
             const char *pathC = JS_ToCString(ctx, argv[0]);
             if (!pathC)
@@ -920,15 +958,20 @@ namespace novadesk::scripting::quickjs
             }
             std::wstring path = Utils::ToWString(pathC);
             JS_FreeCString(ctx, pathC);
-            TraySetImage(path);
+            TraySetImage(trayId, path);
             return JS_UNDEFINED;
         }
 
-        JSValue JsTraySetToolTip(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        JSValue JsTraySetToolTip(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             if (argc < 1 || !JS_IsString(argv[0]))
             {
                 return JS_ThrowTypeError(ctx, "tray.setToolTip(text) requires text");
+            }
+            int trayId = 0;
+            if (!GetTrayId(ctx, thisVal, trayId))
+            {
+                return JS_ThrowTypeError(ctx, "tray.setToolTip called on invalid tray instance");
             }
             const char *textC = JS_ToCString(ctx, argv[0]);
             if (!textC)
@@ -937,28 +980,34 @@ namespace novadesk::scripting::quickjs
             }
             std::wstring text = Utils::ToWString(textC);
             JS_FreeCString(ctx, textC);
-            TraySetToolTip(text);
+            TraySetToolTip(trayId, text);
             return JS_UNDEFINED;
         }
 
-        JSValue JsTraySetContextMenu(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        JSValue JsTraySetContextMenu(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             if (argc < 1 || !JS_IsArray(argv[0]))
             {
                 return JS_ThrowTypeError(ctx, "tray.setContextMenu: expected items array");
             }
-            JSEngine::ClearTrayCommandCallbacks();
+            int trayId = 0;
+            if (!GetTrayId(ctx, thisVal, trayId))
+            {
+                return JS_ThrowTypeError(ctx, "tray.setContextMenu called on invalid tray instance");
+            }
+            JSEngine::ClearTrayCommandCallbacks(trayId);
             std::vector<MenuItem> menu;
-            if (!ParseTrayMenuItems(ctx, argv[0], menu))
+            if (!ParseTrayMenuItems(ctx, trayId, argv[0], menu))
             {
                 return JS_ThrowTypeError(ctx, "tray.setContextMenu: invalid items");
             }
-            TraySetContextMenu(menu);
+            TraySetContextMenu(trayId, menu);
             return JS_UNDEFINED;
         }
 
         JSValue JsTrayCtor(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
+            std::wstring imagePath;
             if (argc > 0 && !JS_IsNull(argv[0]) && !JS_IsUndefined(argv[0]))
             {
                 if (!JS_IsString(argv[0]))
@@ -970,12 +1019,13 @@ namespace novadesk::scripting::quickjs
                 {
                     return JS_EXCEPTION;
                 }
-                std::wstring path = Utils::ToWString(pathC);
+                imagePath = Utils::ToWString(pathC);
                 JS_FreeCString(ctx, pathC);
-                TraySetImage(path);
             }
 
+            const int trayId = TrayCreate(imagePath);
             JSValue tray = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, tray, kTrayIdKey, JS_NewInt32(ctx, trayId));
             JS_SetPropertyStr(ctx, tray, "setImage", JS_NewCFunction(ctx, JsTraySetImage, "setImage", 1));
             JS_SetPropertyStr(ctx, tray, "setToolTip", JS_NewCFunction(ctx, JsTraySetToolTip, "setToolTip", 1));
             JS_SetPropertyStr(ctx, tray, "setContextMenu", JS_NewCFunction(ctx, JsTraySetContextMenu, "setContextMenu", 1));

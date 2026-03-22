@@ -1,8 +1,13 @@
 import { tray, app } from "novadesk";
 
-const tray = new tray();
-tray.setToolTip("Novadesk Tray Test");
-tray.setImage("../assets/icon.ico")
+// Create primary tray icon
+const mainTray = new tray("../assets/icon.ico");
+mainTray.setToolTip("Novadesk Tray Test");
+
+// Create secondary tray icon
+const secondaryTray = new tray("../assets/icon.ico");
+secondaryTray.setToolTip("Novadesk Secondary Icon");
+
 function logEvent(name, event) {
     if (event) {
         console.log("[TrayTest] " + name + " " + JSON.stringify(event));
@@ -11,13 +16,35 @@ function logEvent(name, event) {
     console.log("[TrayTest] " + name);
 }
 
-tray.on("click", (event) => logEvent("click", event));
-tray.on("right-click", (event) => logEvent("right-click", event));
-tray.setContextMenu([
+// Primary tray event handlers
+mainTray.on("click", (event) => logEvent("Main Click", event));
+mainTray.on("right-click", (event) => logEvent("Main Right-Click", event));
+mainTray.setContextMenu([
     {
-        text: "Exit",
+        text: "Exit Main",
         action: function () {
-            tray.destroy();
+            mainTray.destroy();
+            secondaryTray.destroy();
+            app.exit();
+        }
+    }
+]);
+
+// Secondary tray event handlers
+secondaryTray.on("click", (event) => logEvent("Secondary Click", event));
+secondaryTray.on("right-click", (event) => logEvent("Secondary Right-Click", event));
+secondaryTray.setContextMenu([
+    {
+        text: "Close Secondary",
+        action: function () {
+            secondaryTray.destroy();
+        }
+    },
+    {
+        text: "Exit App",
+        action: function () {
+            mainTray.destroy();
+            secondaryTray.destroy();
             app.exit();
         }
     }

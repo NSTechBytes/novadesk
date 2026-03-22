@@ -12,6 +12,7 @@
 #include "Settings.h"
 #include "Resource.h"
 #include <vector>
+#include <unordered_map>
 #include <shellapi.h>
 #include <fcntl.h>
 #include <io.h>
@@ -35,7 +36,6 @@ HINSTANCE hInst;               // current instance
 WCHAR szTitle[MAX_LOADSTRING]; // The title bar text
 duk_context *ctx = nullptr;
 std::vector<Widget *> widgets;
-NOTIFYICONDATAW nid = {};
 struct TrayState
 {
     bool initialized = false;
@@ -44,9 +44,12 @@ struct TrayState
     HICON icon = nullptr;
     std::wstring toolTip;
     std::vector<MenuItem> menu;
+    NOTIFYICONDATAW nid = {};
 };
 
-TrayState g_trayState;
+std::unordered_map<int, TrayState> g_trayStates;
+int g_nextTrayId = 1;
+HWND g_trayMessageWindow = nullptr;
 
 static BOOL WINAPI NovadeskConsoleCtrlHandler(DWORD ctrlType)
 {
@@ -56,9 +59,9 @@ static BOOL WINAPI NovadeskConsoleCtrlHandler(DWORD ctrlType)
     case CTRL_BREAK_EVENT:
     case CTRL_CLOSE_EVENT:
     case CTRL_SHUTDOWN_EVENT:
-        if (g_trayState.hWnd)
+        if (g_trayMessageWindow)
         {
-            PostMessage(g_trayState.hWnd, WM_CLOSE, 0, 0);
+            PostMessage(g_trayMessageWindow, WM_CLOSE, 0, 0);
         }
         else
         {
@@ -71,10 +74,12 @@ static BOOL WINAPI NovadeskConsoleCtrlHandler(DWORD ctrlType)
 }
 
 // Forward declarations of functions included in this code module:
-void InitTrayIcon(HWND hWnd);
-void RemoveTrayIcon();
-static void DispatchTrayMouseEvent(const char *name);
-static void ShowTrayMenuInternal(const std::vector<MenuItem> *menu, const POINT *position);
+void InitTrayIcon(int trayId);
+void RemoveTrayIcon(int trayId);
+void RemoveAllTrayIcons();
+static TrayState *GetTrayState(int trayId);
+static void DispatchTrayMouseEvent(int trayId, const char *name);
+static void ShowTrayMenuInternal(int trayId, const std::vector<MenuItem> *menu, const POINT *position);
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                       _In_opt_ HINSTANCE hPrevInstance,
@@ -217,17 +222,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             JSEngine::OnTimer(wParam);
             break;
         case WM_TRAYICON:
+        {
+            const int trayId = static_cast<int>(wParam);
             switch (lParam)
             {
             case WM_LBUTTONUP:
-                DispatchTrayMouseEvent("click");
+                DispatchTrayMouseEvent(trayId, "click");
                 break;
             case WM_RBUTTONUP:
-                DispatchTrayMouseEvent("right-click");
-                if (!g_trayState.menu.empty())
-                {
-                    ShowTrayMenuInternal(nullptr, nullptr);
-                }
+                DispatchTrayMouseEvent(trayId, "right-click");
+                ShowTrayMenuInternal(trayId, nullptr, nullptr);
                 break;
             case WM_MOUSEMOVE:
                 break;
@@ -235,6 +239,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 break;
             }
             break;
+        }
         case WM_COMMAND:
         {
             int wmId = LOWORD(wParam);
@@ -254,7 +259,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         break;
         case WM_DESTROY:
             novadesk::scripting::quickjs::UnloadAllAddons();
-            RemoveTrayIcon();
+            RemoveAllTrayIcons();
             PostQuitMessage(0);
             break;
         default:
@@ -278,7 +283,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // Initialize JS message routing; tray icon is lazy-initialized on first use.
     JSEngine::SetMessageWindow(hWnd);
-    g_trayState.hWnd = hWnd;
+    g_trayMessageWindow = hWnd;
 
     // Scripting runtime context is handled by the migrated QuickJS path.
     ctx = nullptr;
@@ -345,51 +350,116 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR, int nC
     return wWinMain(hInstance, hPrevInstance, nullptr, nCmdShow);
 }
 
-void InitTrayIcon(HWND hWnd)
+static TrayState *GetTrayState(int trayId)
 {
-    g_trayState.hWnd = hWnd;
-    if (g_trayState.initialized)
+    auto it = g_trayStates.find(trayId);
+    if (it == g_trayStates.end())
+        return nullptr;
+    return &it->second;
+}
+
+int TrayCreate(const std::wstring &path)
+{
+    const int trayId = g_nextTrayId++;
+    TrayState state{};
+    state.hWnd = g_trayMessageWindow;
+    state.toolTip = szTitle;
+    g_trayStates.emplace(trayId, std::move(state));
+
+    if (!path.empty())
+    {
+        TraySetImage(trayId, path);
+    }
+    else
+    {
+        InitTrayIcon(trayId);
+    }
+
+    return trayId;
+}
+
+void TrayDestroy(int trayId)
+{
+    RemoveTrayIcon(trayId);
+}
+
+void InitTrayIcon(int trayId)
+{
+    TrayState *state = GetTrayState(trayId);
+    if (!state)
+        return;
+
+    state->hWnd = g_trayMessageWindow;
+    if (state->initialized)
     {
         return;
     }
-    if (!g_trayState.icon)
+    if (!state->icon)
     {
-        g_trayState.icon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_NOVADESK));
-        g_trayState.iconOwned = false;
+        state->icon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_NOVADESK));
+        state->iconOwned = false;
     }
 
-    nid = {};
-    nid.cbSize = sizeof(NOTIFYICONDATA);
-    nid.hWnd = hWnd;
-    nid.uID = 1;
-    nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
-    nid.uCallbackMessage = WM_TRAYICON;
-    nid.hIcon = g_trayState.icon;
-    wcscpy_s(nid.szTip, _countof(nid.szTip), szTitle);
+    state->nid = {};
+    state->nid.cbSize = sizeof(NOTIFYICONDATAW);
+    state->nid.hWnd = state->hWnd;
+    state->nid.uID = static_cast<UINT>(trayId);
+    state->nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+    state->nid.uCallbackMessage = WM_TRAYICON;
+    state->nid.hIcon = state->icon;
+    const std::wstring tip = state->toolTip.empty() ? std::wstring(szTitle) : state->toolTip;
+    wcsncpy_s(state->nid.szTip, _countof(state->nid.szTip), tip.c_str(), _TRUNCATE);
 
-    g_trayState.initialized = true;
+    state->initialized = true;
     if (Settings::GetGlobalBool("hideTrayIcon", false))
     {
         Logging::Log(LogLevel::Info, L"Tray icon hidden by settings");
         return;
     }
 
-    Shell_NotifyIconW(NIM_ADD, &nid);
-    Logging::Log(LogLevel::Info, L"Tray icon initialized");
+    Shell_NotifyIconW(NIM_ADD, &state->nid);
+    Logging::Log(LogLevel::Info, L"Tray icon initialized (id=%d)", trayId);
 }
 
-void RemoveTrayIcon()
+void RemoveTrayIcon(int trayId)
 {
-    Shell_NotifyIconW(NIM_DELETE, &nid);
-    Logging::Log(LogLevel::Info, L"Tray icon removed");
-}
+    TrayState *state = GetTrayState(trayId);
+    if (!state)
+        return;
 
-void TraySetImage(const std::wstring &path)
-{
-    if (!g_trayState.initialized)
+    if (state->initialized)
     {
-        InitTrayIcon(g_trayState.hWnd);
+        Shell_NotifyIconW(NIM_DELETE, &state->nid);
     }
+    if (state->iconOwned && state->icon)
+    {
+        DestroyIcon(state->icon);
+    }
+    g_trayStates.erase(trayId);
+    Logging::Log(LogLevel::Info, L"Tray icon removed (id=%d)", trayId);
+}
+
+void RemoveAllTrayIcons()
+{
+    std::vector<int> ids;
+    ids.reserve(g_trayStates.size());
+    for (auto &kv : g_trayStates)
+        ids.push_back(kv.first);
+    for (int id : ids)
+        RemoveTrayIcon(id);
+}
+
+void TraySetImage(int trayId, const std::wstring &path)
+{
+    TrayState *state = GetTrayState(trayId);
+    if (!state)
+        return;
+
+    if (!state->initialized)
+    {
+        InitTrayIcon(trayId);
+    }
+
     HICON newIcon = nullptr;
     bool owned = false;
     if (!path.empty())
@@ -408,44 +478,51 @@ void TraySetImage(const std::wstring &path)
         owned = false;
     }
 
-    if (g_trayState.iconOwned && g_trayState.icon)
+    if (state->iconOwned && state->icon)
     {
-        DestroyIcon(g_trayState.icon);
+        DestroyIcon(state->icon);
     }
-    g_trayState.icon = newIcon;
-    g_trayState.iconOwned = owned;
-    nid.hIcon = newIcon;
-    nid.uFlags = NIF_ICON;
-    Shell_NotifyIconW(NIM_MODIFY, &nid);
+    state->icon = newIcon;
+    state->iconOwned = owned;
+    state->nid.hIcon = newIcon;
+    state->nid.uFlags = NIF_ICON;
+    Shell_NotifyIconW(NIM_MODIFY, &state->nid);
 }
 
-void TraySetToolTip(const std::wstring &toolTip)
+void TraySetToolTip(int trayId, const std::wstring &toolTip)
 {
-    if (!g_trayState.initialized)
-    {
-        InitTrayIcon(g_trayState.hWnd);
-    }
-    g_trayState.toolTip = toolTip;
-    nid.cbSize = sizeof(NOTIFYICONDATA);
-    nid.uFlags = NIF_TIP;
-    wcsncpy_s(nid.szTip, _countof(nid.szTip), toolTip.c_str(), _TRUNCATE);
-    Shell_NotifyIconW(NIM_MODIFY, &nid);
-}
-
-void TraySetContextMenu(const std::vector<MenuItem> &menu)
-{
-    if (!g_trayState.initialized)
-    {
-        InitTrayIcon(g_trayState.hWnd);
-    }
-    g_trayState.menu = menu;
-}
-
-static void ShowTrayMenuInternal(const std::vector<MenuItem> *menu, const POINT *position)
-{
-    if (!g_trayState.hWnd)
+    TrayState *state = GetTrayState(trayId);
+    if (!state)
         return;
-    const std::vector<MenuItem> &useMenu = menu ? *menu : g_trayState.menu;
+    if (!state->initialized)
+    {
+        InitTrayIcon(trayId);
+    }
+    state->toolTip = toolTip;
+    state->nid.cbSize = sizeof(NOTIFYICONDATAW);
+    state->nid.uFlags = NIF_TIP;
+    wcsncpy_s(state->nid.szTip, _countof(state->nid.szTip), toolTip.c_str(), _TRUNCATE);
+    Shell_NotifyIconW(NIM_MODIFY, &state->nid);
+}
+
+void TraySetContextMenu(int trayId, const std::vector<MenuItem> &menu)
+{
+    TrayState *state = GetTrayState(trayId);
+    if (!state)
+        return;
+    if (!state->initialized)
+    {
+        InitTrayIcon(trayId);
+    }
+    state->menu = menu;
+}
+
+static void ShowTrayMenuInternal(int trayId, const std::vector<MenuItem> *menu, const POINT *position)
+{
+    TrayState *state = GetTrayState(trayId);
+    if (!state || !state->hWnd)
+        return;
+    const std::vector<MenuItem> &useMenu = menu ? *menu : state->menu;
     if (useMenu.empty())
         return;
 
@@ -461,13 +538,13 @@ static void ShowTrayMenuInternal(const std::vector<MenuItem> *menu, const POINT 
 
     HMENU hMenu = CreatePopupMenu();
     MenuUtils::BuildMenu(hMenu, useMenu);
-    SetForegroundWindow(g_trayState.hWnd);
-    TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, g_trayState.hWnd, nullptr);
+    SetForegroundWindow(state->hWnd);
+    TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, state->hWnd, nullptr);
     DestroyMenu(hMenu);
 }
 
-static void DispatchTrayMouseEvent(const char *name)
+static void DispatchTrayMouseEvent(int trayId, const char *name)
 {
     (void)name;
-    JSEngine::DispatchTrayEvent(name);
+    JSEngine::DispatchTrayEvent(trayId, name);
 }
