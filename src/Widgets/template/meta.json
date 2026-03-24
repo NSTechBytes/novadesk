@@ -1,5 +1,6 @@
 {
   "name": "{NAME}",
+  "main": "index.js",
   "version": "1.0.0.0",
   "author": "Your Name",
   "description": "Widget Description",

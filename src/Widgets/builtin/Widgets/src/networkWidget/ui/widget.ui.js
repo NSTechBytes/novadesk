@@ -107,7 +107,7 @@ ui.addBar({
 });
 
 // ipcRenderer listener for network stats
-ipcRenderer.on("networkStats", function(stats) {
+ipcRenderer.on("networkStats", function(event, stats) {
     // Update download text with dynamic units
     ui.setElementProperties("download_Text", { 
         "text": stats.downloadRate + " " + stats.downloadUnit 

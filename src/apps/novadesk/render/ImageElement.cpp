@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 OfficialNovadesk 
+/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -10,8 +10,8 @@
 #include <d2d1effects.h>
 #include "../shared/Logging.h"
 
-ImageElement::ImageElement(const std::wstring& id, int x, int y, int w, int h,
-             const std::wstring& path)
+ImageElement::ImageElement(const std::wstring &id, int x, int y, int w, int h,
+                           const std::wstring &path)
     : Element(ELEMENT_IMAGE, id, x, y, w, h),
       m_ImagePath(path)
 {
@@ -21,14 +21,104 @@ ImageElement::~ImageElement()
 {
 }
 
-void ImageElement::EnsureBitmap(ID2D1DeviceContext* context)
+bool ImageElement::ComputeImageLayout(float imageWidth, float imageHeight, ImageLayout &layout)
 {
-    if (m_pLastTarget != (ID2D1RenderTarget*)context)
+    const int w = GetWidth();
+    const int h = GetHeight();
+    layout.contentX = m_X + m_PaddingLeft;
+    layout.contentY = m_Y + m_PaddingTop;
+    layout.contentW = w - m_PaddingLeft - m_PaddingRight;
+    layout.contentH = h - m_PaddingTop - m_PaddingBottom;
+
+    if (layout.contentW <= 0 || layout.contentH <= 0 || imageWidth <= 0.0f || imageHeight <= 0.0f)
+    {
+        return false;
+    }
+
+    layout.finalRect = D2D1::RectF(
+        (float)layout.contentX,
+        (float)layout.contentY,
+        (float)(layout.contentX + layout.contentW),
+        (float)(layout.contentY + layout.contentH));
+    layout.srcRect = D2D1::RectF(0.0f, 0.0f, imageWidth, imageHeight);
+
+    if (m_PreserveAspectRatio == IMAGE_ASPECT_PRESERVE)
+    {
+        const float scaleX = (float)layout.contentW / imageWidth;
+        const float scaleY = (float)layout.contentH / imageHeight;
+        const float scale = (std::min)(scaleX, scaleY);
+        const float finalW = imageWidth * scale;
+        const float finalH = imageHeight * scale;
+
+        layout.finalRect.left = layout.contentX + (layout.contentW - finalW) / 2.0f;
+        layout.finalRect.top = layout.contentY + (layout.contentH - finalH) / 2.0f;
+        layout.finalRect.right = layout.finalRect.left + finalW;
+        layout.finalRect.bottom = layout.finalRect.top + finalH;
+    }
+    else if (m_PreserveAspectRatio == IMAGE_ASPECT_CROP)
+    {
+        const float scaleX = (float)layout.contentW / imageWidth;
+        const float scaleY = (float)layout.contentH / imageHeight;
+        const float scale = (std::max)(scaleX, scaleY);
+        const float srcW = layout.contentW / scale;
+        const float srcH = layout.contentH / scale;
+
+        layout.srcRect.left = (imageWidth - srcW) / 2.0f;
+        layout.srcRect.top = (imageHeight - srcH) / 2.0f;
+        layout.srcRect.right = layout.srcRect.left + srcW;
+        layout.srcRect.bottom = layout.srcRect.top + srcH;
+    }
+
+    return true;
+}
+
+bool ImageElement::MapPointToImagePixel(float targetX, float targetY, UINT imageWidth, UINT imageHeight, float &pixelX, float &pixelY)
+{
+    ImageLayout layout;
+    if (!ComputeImageLayout((float)imageWidth, (float)imageHeight, layout))
+    {
+        return false;
+    }
+
+    if (m_PreserveAspectRatio == IMAGE_ASPECT_PRESERVE)
+    {
+        if (targetX < layout.finalRect.left || targetX >= layout.finalRect.right ||
+            targetY < layout.finalRect.top || targetY >= layout.finalRect.bottom)
+        {
+            return false;
+        }
+    }
+    else
+    {
+        if (targetX < layout.contentX || targetX >= layout.contentX + layout.contentW ||
+            targetY < layout.contentY || targetY >= layout.contentY + layout.contentH)
+        {
+            return false;
+        }
+    }
+
+    const float srcW = layout.srcRect.right - layout.srcRect.left;
+    const float srcH = layout.srcRect.bottom - layout.srcRect.top;
+    const float finalW = layout.finalRect.right - layout.finalRect.left;
+    const float finalH = layout.finalRect.bottom - layout.finalRect.top;
+    if (srcW <= 0.0f || srcH <= 0.0f || finalW <= 0.0f || finalH <= 0.0f)
+    {
+        return false;
+    }
+
+    pixelX = layout.srcRect.left + ((targetX - layout.finalRect.left) / finalW) * srcW;
+    pixelY = layout.srcRect.top + ((targetY - layout.finalRect.top) / finalH) * srcH;
+    return pixelX >= 0.0f && pixelX < imageWidth && pixelY >= 0.0f && pixelY < imageHeight;
+}
+
+void ImageElement::EnsureBitmap(ID2D1DeviceContext *context)
+{
+    if (m_pLastTarget != (ID2D1RenderTarget *)context)
     {
         m_D2DBitmap.Reset();
-        // WIC bitmap is CPU side, doesn't strictly need reset on target change, 
+        // WIC bitmap is CPU side, doesn't strictly need reset on target change,
         // but we'll re-verify it if we are reloading anyway.
-        m_pLastTarget = (ID2D1RenderTarget*)context;
+        m_pLastTarget = (ID2D1RenderTarget *)context;
     }
 
     if (!m_D2DBitmap)
@@ -41,7 +131,7 @@ void ImageElement::EnsureBitmap(ID2D1DeviceContext* context)
     }
 }
 
-void ImageElement::UpdateImage(const std::wstring& path)
+void ImageElement::UpdateImage(const std::wstring &path)
 {
     m_ImagePath = path;
     m_D2DBitmap.Reset();
@@ -53,11 +143,12 @@ void ImageElement::UpdateImage(const std::wstring& path)
     }
 }
 
-void ImageElement::Render(ID2D1DeviceContext* context)
+void ImageElement::Render(ID2D1DeviceContext *context)
 {
     int w = GetWidth();
     int h = GetHeight();
-    if (w <= 0 || h <= 0) return;
+    if (w <= 0 || h <= 0)
+        return;
 
     D2D1_MATRIX_3X2_F originalTransform;
     ApplyRenderTransform(context, originalTransform);
@@ -72,53 +163,15 @@ void ImageElement::Render(ID2D1DeviceContext* context)
         RestoreRenderTransform(context, originalTransform);
         return;
     }
-    
+
     D2D1_SIZE_F imgSize = m_D2DBitmap->GetSize();
-    
-    int contentX = m_X + m_PaddingLeft;
-    int contentY = m_Y + m_PaddingTop;
-    int contentW = w - m_PaddingLeft - m_PaddingRight;
-    int contentH = h - m_PaddingTop - m_PaddingBottom;
-    
-    if (contentW <= 0 || contentH <= 0)
+    ImageLayout layout;
+    if (!ComputeImageLayout(imgSize.width, imgSize.height, layout))
     {
         RestoreRenderTransform(context, originalTransform);
         return;
     }
-    
-    D2D1_RECT_F finalRect = D2D1::RectF((float)contentX, (float)contentY, (float)(contentX + contentW), (float)(contentY + contentH));
-    D2D1_RECT_F srcRect = D2D1::RectF(0, 0, imgSize.width, imgSize.height);
-    
-    if (m_PreserveAspectRatio == IMAGE_ASPECT_PRESERVE) // Fit
-    {
-        float scaleX = (float)contentW / imgSize.width;
-        float scaleY = (float)contentH / imgSize.height;
-        float scale = (std::min)(scaleX, scaleY);
-        
-        float finalW = imgSize.width * scale;
-        float finalH = imgSize.height * scale;
-        finalRect.left = contentX + (contentW - finalW) / 2.0f;
-        finalRect.top = contentY + (contentH - finalH) / 2.0f;
-        finalRect.right = finalRect.left + finalW;
-        finalRect.bottom = finalRect.top + finalH;
-    }
-    else if (m_PreserveAspectRatio == IMAGE_ASPECT_CROP) // Fill
-    {
-        float scaleX = (float)contentW / imgSize.width;
-        float scaleY = (float)contentH / imgSize.height;
-        float scale = (std::max)(scaleX, scaleY);
-        
-        float finalW = imgSize.width * scale;
-        float finalH = imgSize.height * scale;
-        
-        float srcW = contentW / scale;
-        float srcH = contentH / scale;
-        srcRect.left = (imgSize.width - srcW) / 2.0f;
-        srcRect.top = (imgSize.height - srcH) / 2.0f;
-        srcRect.right = srcRect.left + srcW;
-        srcRect.bottom = srcRect.top + srcH;
-    }
-    
+
     // Rotation already applied above
 
     float opacity = m_ImageAlpha / 255.0f;
@@ -128,8 +181,8 @@ void ImageElement::Render(ID2D1DeviceContext* context)
 
     if (m_Grayscale || m_HasImageTint || m_HasColorMatrix || m_ImageAlpha < 255)
     {
-        Microsoft::WRL::ComPtr<ID2D1Image> pCurrentInput = (ID2D1Image*)m_D2DBitmap.Get();
-        
+        Microsoft::WRL::ComPtr<ID2D1Image> pCurrentInput = (ID2D1Image *)m_D2DBitmap.Get();
+
         // Stage 1: Greyscale
         if (m_Grayscale)
         {
@@ -140,9 +193,8 @@ void ImageElement::Render(ID2D1DeviceContext* context)
                     0.299f, 0.299f, 0.299f, 0.0f,
                     0.587f, 0.587f, 0.587f, 0.0f,
                     0.114f, 0.114f, 0.114f, 0.0f,
-                    0.0f,   0.0f,   0.0f,   1.0f,
-                    0.0f,   0.0f,   0.0f,   0.0f
-                );
+                    0.0f, 0.0f, 0.0f, 1.0f,
+                    0.0f, 0.0f, 0.0f, 0.0f);
                 pGreyscaleEffect->SetInput(0, pCurrentInput.Get());
                 pGreyscaleEffect->SetValue(D2D1_COLORMATRIX_PROP_COLOR_MATRIX, matrix);
                 pGreyscaleEffect->GetOutput(&pCurrentInput);
@@ -161,8 +213,7 @@ void ImageElement::Render(ID2D1DeviceContext* context)
                     0.0f, 1.0f, 0.0f, 0.0f,
                     0.0f, 0.0f, 1.0f, 0.0f,
                     0.0f, 0.0f, 0.0f, 1.0f,
-                    0.0f, 0.0f, 0.0f, 0.0f
-                );
+                    0.0f, 0.0f, 0.0f, 0.0f);
 
                 if (m_HasColorMatrix)
                 {
@@ -177,7 +228,7 @@ void ImageElement::Render(ID2D1DeviceContext* context)
                         matrix.m[2][2] = GetBValue(m_ImageTint) / 255.0f;
                         matrix.m[3][3] = m_ImageTintAlpha / 255.0f;
                     }
-                    
+
                     // Multiply by ImageAlpha for Tint or Identity
                     matrix.m[3][3] *= (m_ImageAlpha / 255.0f);
                 }
@@ -195,170 +246,134 @@ void ImageElement::Render(ID2D1DeviceContext* context)
     {
         Microsoft::WRL::ComPtr<ID2D1ImageBrush> pBrush;
         D2D1_IMAGE_BRUSH_PROPERTIES brushProps = D2D1::ImageBrushProperties(
-            srcRect,
+            layout.srcRect,
             D2D1_EXTEND_MODE_WRAP,
             D2D1_EXTEND_MODE_WRAP,
-            D2D1_INTERPOLATION_MODE_LINEAR
-        );
+            D2D1_INTERPOLATION_MODE_LINEAR);
         context->CreateImageBrush(pFinalImage.Get(), brushProps, pBrush.GetAddressOf());
         if (pBrush)
         {
-            pBrush->SetTransform(D2D1::Matrix3x2F::Translation(finalRect.left - srcRect.left, finalRect.top - srcRect.top));
+            pBrush->SetTransform(D2D1::Matrix3x2F::Translation(layout.finalRect.left - layout.srcRect.left, layout.finalRect.top - layout.srcRect.top));
             pBrush->SetOpacity(opacity);
-            context->FillRectangle(finalRect, pBrush.Get());
+            context->FillRectangle(layout.finalRect, pBrush.Get());
         }
     }
     else
     {
-        if (pFinalImage.Get() == (ID2D1Image*)m_D2DBitmap.Get())
+        if (pFinalImage.Get() == (ID2D1Image *)m_D2DBitmap.Get())
         {
-            context->DrawBitmap(m_D2DBitmap.Get(), &finalRect, opacity, interp, &srcRect);
+            context->DrawBitmap(m_D2DBitmap.Get(), &layout.finalRect, opacity, interp, &layout.srcRect);
         }
         else
         {
             // For effects, we use DrawImage. Offset by finalRect top-left and scale.
-            D2D1_POINT_2F targetOffset = D2D1::Point2F(finalRect.left, finalRect.top);
-            
             // DrawImage doesn't take a destination rect directly, it draws at offset.
             // We need to apply scaling to the transform if finalRect size != srcRect size.
-            float scaleX = (finalRect.right - finalRect.left) / (srcRect.right - srcRect.left);
-            float scaleY = (finalRect.bottom - finalRect.top) / (srcRect.bottom - srcRect.top);
-            
+            float scaleX = (layout.finalRect.right - layout.finalRect.left) / (layout.srcRect.right - layout.srcRect.left);
+            float scaleY = (layout.finalRect.bottom - layout.finalRect.top) / (layout.srcRect.bottom - layout.srcRect.top);
+
             D2D1_MATRIX_3X2_F effectTransform;
             context->GetTransform(&effectTransform);
-            
+
             // Adjust transform for scale and source rect offset
             context->SetTransform(
-                D2D1::Matrix3x2F::Translation(-srcRect.left, -srcRect.top) *
+                D2D1::Matrix3x2F::Translation(-layout.srcRect.left, -layout.srcRect.top) *
                 D2D1::Matrix3x2F::Scale(scaleX, scaleY) *
-                D2D1::Matrix3x2F::Translation(finalRect.left, finalRect.top) *
-                effectTransform
-            );
+                D2D1::Matrix3x2F::Translation(layout.finalRect.left, layout.finalRect.top) *
+                effectTransform);
 
             context->DrawImage(pFinalImage.Get(), nullptr, nullptr, m_AntiAlias ? D2D1_INTERPOLATION_MODE_LINEAR : D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR);
             context->SetTransform(effectTransform);
         }
     }
-    
+
     RestoreRenderTransform(context, originalTransform);
 }
 
 int ImageElement::GetAutoWidth()
 {
-    if (m_pWICBitmap) {
+    if (m_pWICBitmap)
+    {
         UINT w = 0, h = 0;
         m_pWICBitmap->GetSize(&w, &h);
         return (int)w + m_PaddingLeft + m_PaddingRight;
     }
-    if (!m_D2DBitmap) return 0;
+    if (!m_D2DBitmap)
+        return 0;
     return (int)m_D2DBitmap->GetSize().width + m_PaddingLeft + m_PaddingRight;
 }
 
 int ImageElement::GetAutoHeight()
 {
-    if (m_pWICBitmap) {
+    if (m_pWICBitmap)
+    {
         UINT w = 0, h = 0;
         m_pWICBitmap->GetSize(&w, &h);
         return (int)h + m_PaddingTop + m_PaddingBottom;
     }
-    if (!m_D2DBitmap) return 0;
+    if (!m_D2DBitmap)
+        return 0;
     return (int)m_D2DBitmap->GetSize().height + m_PaddingTop + m_PaddingBottom;
 }
 
 bool ImageElement::HitTest(int x, int y)
 {
     // Bounding box and transform check
-    if (!Element::HitTest(x, y)) return false;
-    
+    if (!Element::HitTest(x, y))
+        return false;
+
     // Map the point to image local space
     float targetX = (float)x;
     float targetY = (float)y;
 
-    if (m_HasTransformMatrix || m_Rotate != 0.0f) {
+    if (m_HasTransformMatrix || m_Rotate != 0.0f)
+    {
         GfxRect bounds = GetBounds();
         float centerX = bounds.X + bounds.Width / 2.0f;
         float centerY = bounds.Y + bounds.Height / 2.0f;
-        
+
         D2D1::Matrix3x2F matrix;
-        if (m_HasTransformMatrix) {
+        if (m_HasTransformMatrix)
+        {
             matrix = D2D1::Matrix3x2F(
                 m_TransformMatrix[0], m_TransformMatrix[1],
                 m_TransformMatrix[2], m_TransformMatrix[3],
-                m_TransformMatrix[4], m_TransformMatrix[5]
-            );
-        } else {
+                m_TransformMatrix[4], m_TransformMatrix[5]);
+        }
+        else
+        {
             matrix = D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY));
         }
 
-        if (matrix.Invert()) {
+        if (matrix.Invert())
+        {
             D2D1_POINT_2F transformed = matrix.TransformPoint(D2D1::Point2F((float)x, (float)y));
             targetX = transformed.x;
             targetY = transformed.y;
         }
     }
 
-    if (m_HasSolidColor && m_SolidAlpha > 0) return true;
-    if (!m_pWICBitmap) return false;
-
-    // Map the transformed (local-space) coordinates to image pixels
-    int contentX = m_X + m_PaddingLeft;
-    int contentY = m_Y + m_PaddingTop;
-    int contentW = GetWidth() - m_PaddingLeft - m_PaddingRight;
-    int contentH = GetHeight() - m_PaddingTop - m_PaddingBottom;
-
-    if (contentW <= 0 || contentH <= 0) return false;
-
-    float relX = targetX - contentX;
-    float relY = targetY - contentY;
+    if (m_HasSolidColor && m_SolidAlpha > 0)
+        return true;
+    if (!m_pWICBitmap)
+        return false;
 
     UINT imgW, imgH;
     m_pWICBitmap->GetSize(&imgW, &imgH);
-    if (imgW == 0 || imgH == 0) return false;
+    if (imgW == 0 || imgH == 0)
+        return false;
 
-    float targetPixelX = 0, targetPixelY = 0;
-
-    if (m_PreserveAspectRatio == IMAGE_ASPECT_STRETCH)
-    {
-        targetPixelX = (relX / (float)contentW) * imgW;
-        targetPixelY = (relY / (float)contentH) * imgH;
-    }
-    else if (m_PreserveAspectRatio == IMAGE_ASPECT_PRESERVE) // Fit
-    {
-        float scaleX = (float)contentW / imgW;
-        float scaleY = (float)contentH / imgH;
-        float scale = (std::min)(scaleX, scaleY);
-
-        float finalW = imgW * scale;
-        float finalH = imgH * scale;
-        float offsetX = (contentW - finalW) / 2.0f;
-        float offsetY = (contentH - finalH) / 2.0f;
-
-        targetPixelX = ((relX - offsetX) / finalW) * imgW;
-        targetPixelY = ((relY - offsetY) / finalH) * imgH;
-    }
-    else if (m_PreserveAspectRatio == IMAGE_ASPECT_CROP) // Fill
-    {
-        float scaleX = (float)contentW / imgW;
-        float scaleY = (float)contentH / imgH;
-        float scale = (std::max)(scaleX, scaleY);
-
-        float srcW = contentW / scale;
-        float srcH = contentH / scale;
-        float srcX = (imgW - srcW) / 2.0f;
-        float srcY = (imgH - srcH) / 2.0f;
-
-        targetPixelX = srcX + (relX / (float)contentW) * srcW;
-        targetPixelY = srcY + (relY / (float)contentH) * srcH;
-    }
-
-    if (targetPixelX < 0 || targetPixelX >= imgW || targetPixelY < 0 || targetPixelY >= imgH)
+    float targetPixelX = 0.0f;
+    float targetPixelY = 0.0f;
+    if (!MapPointToImagePixel(targetX, targetY, imgW, imgH, targetPixelX, targetPixelY))
         return false;
 
     // Get pixel alpha
-    WICRect rect = { (INT)targetPixelX, (INT)targetPixelY, 1, 1 };
+    WICRect rect = {(INT)targetPixelX, (INT)targetPixelY, 1, 1};
     BYTE pixel[4]; // BGRA
     HRESULT hr = m_pWICBitmap->CopyPixels(&rect, 4, 4, pixel);
-    if (FAILED(hr)) return false;
+    if (FAILED(hr))
+        return false;
 
     return pixel[3] > 0; // Alpha channel
 }

@@ -186,7 +186,7 @@ ui.addText({
     width: 200,
     fontSize: 14,
     fontColor: "rgb(255,255,255)",
-    clipString: "none"
+    textClip: "none"
 });
 
 // Test 13: Clip at boundaries
@@ -198,7 +198,7 @@ ui.addText({
     width: 200,
     fontSize: 14,
     fontColor: "rgb(255,255,255)",
-    clipString: "clip"
+    textClip: "clip"
 });
 
 // Test 14: Ellipsis clipping
@@ -210,7 +210,7 @@ ui.addText({
     width: 200,
     fontSize: 14,
     fontColor: "rgb(255,255,255)",
-    clipString: "ellipsis"
+    textClip: "ellipsis"
 });
 
 // Test 15: Wrap explicitly
@@ -222,7 +222,7 @@ ui.addText({
     width: 200,
     fontSize: 14,
     fontColor: "rgb(255,255,255)",
-    clipString: "wrap"
+    textClip: "wrap"
 });
 
 // === SECTION 4: BACKGROUND AND PADDING ===

@@ -49,11 +49,11 @@ function loadWelcomeWidget() {
 }
 
 // ipcMain listeners for button clicks
-ipcMain.on("openWebsite", function () {
+ipcMain.on("openWebsite", function (event, payload) {
     system.execute("https://novadesk.pages.dev/");
 });
 
-ipcMain.on("openDocs", function () {
+ipcMain.on("openDocs", function (event, payload) {
     system.execute("https://novadesk-docs.pages.dev/");
 });
 

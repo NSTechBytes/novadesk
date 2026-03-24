@@ -177,26 +177,6 @@ namespace novadesk::scripting::quickjs
             return JS_NewFloat64(ctx, stats.totalOut);
         }
 
-        JSValue JsMouseClientX(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::MousePosition pos;
-            if (!shared::system::GetMousePosition(pos))
-            {
-                return JS_NewInt32(ctx, 0);
-            }
-            return JS_NewInt32(ctx, pos.x);
-        }
-
-        JSValue JsMouseClientY(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::MousePosition pos;
-            if (!shared::system::GetMousePosition(pos))
-            {
-                return JS_NewInt32(ctx, 0);
-            }
-            return JS_NewInt32(ctx, pos.y);
-        }
-
         std::wstring ReadOptionalPathArg(JSContext *ctx, int argc, JSValueConst *argv)
         {
             if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
@@ -243,103 +223,6 @@ namespace novadesk::scripting::quickjs
             return JS_NewInt32(ctx, stats.percent);
         }
 
-        JSValue JsAudioLevelStats(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            shared::system::AudioLevelConfig cfg;
-
-            if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]) && JS_IsObject(argv[0]))
-            {
-                JSValue v = JS_GetPropertyStr(ctx, argv[0], "port");
-                if (!JS_IsUndefined(v) && !JS_IsNull(v))
-                {
-                    const char *s = JS_ToCString(ctx, v);
-                    if (s)
-                    {
-                        cfg.port = s;
-                        JS_FreeCString(ctx, s);
-                    }
-                }
-                JS_FreeValue(ctx, v);
-
-                v = JS_GetPropertyStr(ctx, argv[0], "id");
-                if (!JS_IsUndefined(v) && !JS_IsNull(v))
-                {
-                    const char *s = JS_ToCString(ctx, v);
-                    if (s)
-                    {
-                        cfg.deviceId = Utils::ToWString(s);
-                        JS_FreeCString(ctx, s);
-                    }
-                }
-                JS_FreeValue(ctx, v);
-
-                auto readInt = [&](const char *key, int &dst)
-                {
-                    JSValue iv = JS_GetPropertyStr(ctx, argv[0], key);
-                    if (!JS_IsUndefined(iv) && !JS_IsNull(iv))
-                    {
-                        int32_t x = dst;
-                        if (JS_ToInt32(ctx, &x, iv) == 0)
-                            dst = static_cast<int>(x);
-                    }
-                    JS_FreeValue(ctx, iv);
-                };
-                auto readDouble = [&](const char *key, double &dst)
-                {
-                    JSValue dv = JS_GetPropertyStr(ctx, argv[0], key);
-                    if (!JS_IsUndefined(dv) && !JS_IsNull(dv))
-                    {
-                        double x = dst;
-                        if (JS_ToFloat64(ctx, &x, dv) == 0)
-                            dst = x;
-                    }
-                    JS_FreeValue(ctx, dv);
-                };
-
-                readInt("fftSize", cfg.fftSize);
-                readInt("fftOverlap", cfg.fftOverlap);
-                readInt("bands", cfg.bands);
-                readInt("rmsAttack", cfg.rmsAttack);
-                readInt("rmsDecay", cfg.rmsDecay);
-                readInt("peakAttack", cfg.peakAttack);
-                readInt("peakDecay", cfg.peakDecay);
-                readInt("fftAttack", cfg.fftAttack);
-                readInt("fftDecay", cfg.fftDecay);
-
-                readDouble("freqMin", cfg.freqMin);
-                readDouble("freqMax", cfg.freqMax);
-                readDouble("sensitivity", cfg.sensitivity);
-                readDouble("rmsGain", cfg.rmsGain);
-                readDouble("peakGain", cfg.peakGain);
-            }
-
-            shared::system::AudioLevelStats stats;
-            if (!shared::system::GetAudioLevelStats(stats, cfg))
-            {
-                return JS_NULL;
-            }
-
-            JSValue out = JS_NewObject(ctx);
-
-            JSValue rms = JS_NewArray(ctx);
-            JS_SetPropertyUint32(ctx, rms, 0, JS_NewFloat64(ctx, stats.rms[0]));
-            JS_SetPropertyUint32(ctx, rms, 1, JS_NewFloat64(ctx, stats.rms[1]));
-            JS_SetPropertyStr(ctx, out, "rms", rms);
-
-            JSValue peak = JS_NewArray(ctx);
-            JS_SetPropertyUint32(ctx, peak, 0, JS_NewFloat64(ctx, stats.peak[0]));
-            JS_SetPropertyUint32(ctx, peak, 1, JS_NewFloat64(ctx, stats.peak[1]));
-            JS_SetPropertyStr(ctx, out, "peak", peak);
-
-            JSValue bandsArr = JS_NewArray(ctx);
-            for (uint32_t i = 0; i < static_cast<uint32_t>(stats.bands.size()); ++i)
-            {
-                JS_SetPropertyUint32(ctx, bandsArr, i, JS_NewFloat64(ctx, stats.bands[i]));
-            }
-            JS_SetPropertyStr(ctx, out, "bands", bandsArr);
-
-            return out;
-        }
 
         JSValue JsFileIconExtractIcon(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
@@ -453,73 +336,6 @@ namespace novadesk::scripting::quickjs
             return JS_NewBool(ctx, 1);
         }
 
-        JSValue JsBrightnessGetValue(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            int32_t display = 0;
-            if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]) && JS_IsObject(argv[0]))
-            {
-                JSValue dv = JS_GetPropertyStr(ctx, argv[0], "display");
-                if (!JS_IsUndefined(dv) && !JS_IsNull(dv))
-                {
-                    JS_ToInt32(ctx, &display, dv);
-                }
-                JS_FreeValue(ctx, dv);
-            }
-
-            shared::system::BrightnessInfo info;
-            shared::system::GetBrightness(info, static_cast<int>(display));
-            JSValue out = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, out, "supported", JS_NewBool(ctx, info.supported ? 1 : 0));
-            JS_SetPropertyStr(ctx, out, "current", JS_NewInt32(ctx, static_cast<int32_t>(info.current)));
-            JS_SetPropertyStr(ctx, out, "min", JS_NewInt32(ctx, static_cast<int32_t>(info.min)));
-            JS_SetPropertyStr(ctx, out, "max", JS_NewInt32(ctx, static_cast<int32_t>(info.max)));
-            JS_SetPropertyStr(ctx, out, "percent", JS_NewInt32(ctx, static_cast<int32_t>(info.percent)));
-            return out;
-        }
-
-        JSValue JsBrightnessSetValue(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            int32_t percent = 0;
-            int32_t display = 0;
-
-            if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
-            {
-                if (JS_IsObject(argv[0]))
-                {
-                    JSValue pv = JS_GetPropertyStr(ctx, argv[0], "percent");
-                    if (!JS_IsUndefined(pv) && !JS_IsNull(pv))
-                    {
-                        if (JS_ToInt32(ctx, &percent, pv) != 0)
-                        {
-                            JS_FreeValue(ctx, pv);
-                            return JS_ThrowTypeError(ctx, "brightness.setValue({ percent }) requires numeric percent");
-                        }
-                    }
-                    JS_FreeValue(ctx, pv);
-
-                    JSValue dv = JS_GetPropertyStr(ctx, argv[0], "display");
-                    if (!JS_IsUndefined(dv) && !JS_IsNull(dv))
-                    {
-                        JS_ToInt32(ctx, &display, dv);
-                    }
-                    JS_FreeValue(ctx, dv);
-                }
-                else
-                {
-                    if (JS_ToInt32(ctx, &percent, argv[0]) != 0)
-                    {
-                        return JS_ThrowTypeError(ctx, "brightness.setValue(value) requires numeric value");
-                    }
-                }
-            }
-            else
-            {
-                return JS_ThrowTypeError(ctx, "brightness.setValue({ percent[, display] }) requires percent");
-            }
-
-            const bool ok = shared::system::SetBrightnessPercent(static_cast<int>(percent), static_cast<int>(display));
-            return JS_NewBool(ctx, ok ? 1 : 0);
-        }
 
         JSValue JsRegistryReadData(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
@@ -599,58 +415,6 @@ namespace novadesk::scripting::quickjs
             return JS_NewBool(ctx, ok ? 1 : 0);
         }
 
-        JSValue JsHotkeyRegisterHotkey(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-                return JS_ThrowTypeError(ctx, "hotkey.register(hotkey, handler)");
-            const char *hotkeyC = JS_ToCString(ctx, argv[0]);
-            if (!hotkeyC)
-                return JS_EXCEPTION;
-            std::wstring hotkey = Utils::ToWString(hotkeyC);
-            JS_FreeCString(ctx, hotkeyC);
-
-            int keyDownId = -1;
-            int keyUpId = -1;
-            if (JS_IsFunction(ctx, argv[1]))
-            {
-                keyDownId = JSEngine::RegisterEventCallback(ctx, argv[1]);
-            }
-            else if (JS_IsObject(argv[1]))
-            {
-                JSValue kd = JS_GetPropertyStr(ctx, argv[1], "onKeyDown");
-                if (JS_IsFunction(ctx, kd))
-                {
-                    keyDownId = JSEngine::RegisterEventCallback(ctx, kd);
-                }
-                JS_FreeValue(ctx, kd);
-                JSValue ku = JS_GetPropertyStr(ctx, argv[1], "onKeyUp");
-                if (JS_IsFunction(ctx, ku))
-                {
-                    keyUpId = JSEngine::RegisterEventCallback(ctx, ku);
-                }
-                JS_FreeValue(ctx, ku);
-            }
-            else
-            {
-                return JS_ThrowTypeError(ctx, "hotkey.register handler must be function or object");
-            }
-
-            int id = shared::system::RegisterHotkey(JSEngine::GetMessageWindow(), hotkey, keyDownId, keyUpId);
-            return JS_NewInt32(ctx, id);
-        }
-
-        JSValue JsHotkeyUnregisterHotkey(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "hotkey.unregister(id)");
-            int32_t id = 0;
-            if (JS_ToInt32(ctx, &id, argv[0]) != 0)
-            {
-                return JS_ThrowTypeError(ctx, "hotkey.unregister(id) expects number");
-            }
-            return JS_NewBool(ctx, shared::system::UnregisterHotkey(JSEngine::GetMessageWindow(), id) ? 1 : 0);
-        }
-
         std::wstring ResolveModulePath(JSContext *ctx, JSValueConst v)
         {
             const char *s = JS_ToCString(ctx, v);
@@ -661,194 +425,6 @@ namespace novadesk::scripting::quickjs
             if (!PathUtils::IsPathRelative(path))
                 return PathUtils::NormalizePath(path);
             return PathUtils::ResolvePath(path, JSEngine::GetEntryScriptDir());
-        }
-
-        JSValue JsAppVolumeListSessions(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            std::vector<shared::system::AppVolumeSessionInfo> sessions;
-            if (!shared::system::AppVolumeListSessions(sessions))
-            {
-                return JS_NewArray(ctx);
-            }
-
-            JSValue arr = JS_NewArray(ctx);
-            uint32_t i = 0;
-            for (const auto &s : sessions)
-            {
-                JSValue o = JS_NewObject(ctx);
-                JS_SetPropertyStr(ctx, o, "pid", JS_NewInt32(ctx, static_cast<int32_t>(s.pid)));
-                JS_SetPropertyStr(ctx, o, "processName", JS_NewString(ctx, Utils::ToString(s.processName).c_str()));
-                JS_SetPropertyStr(ctx, o, "fileName", JS_NewString(ctx, Utils::ToString(s.fileName).c_str()));
-                JS_SetPropertyStr(ctx, o, "filePath", JS_NewString(ctx, Utils::ToString(s.filePath).c_str()));
-                JS_SetPropertyStr(ctx, o, "iconPath", JS_NewString(ctx, Utils::ToString(s.iconPath).c_str()));
-                JS_SetPropertyStr(ctx, o, "displayName", JS_NewString(ctx, Utils::ToString(s.displayName).c_str()));
-                JS_SetPropertyStr(ctx, o, "volume", JS_NewFloat64(ctx, s.volume));
-                JS_SetPropertyStr(ctx, o, "peak", JS_NewFloat64(ctx, s.peak));
-                JS_SetPropertyStr(ctx, o, "muted", JS_NewBool(ctx, s.muted ? 1 : 0));
-                JS_SetPropertyUint32(ctx, arr, i++, o);
-            }
-            return arr;
-        }
-
-        JSValue JsAppVolumeGetByPid(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "appVolume.getByPid(pid)");
-            int32_t pid = 0;
-            if (JS_ToInt32(ctx, &pid, argv[0]) != 0 || pid <= 0)
-                return JS_ThrowTypeError(ctx, "appVolume.getByPid expects pid > 0");
-            float volume = 0.0f;
-            bool muted = false;
-            float peak = 0.0f;
-            if (!shared::system::AppVolumeGetByPid(static_cast<uint32_t>(pid), volume, muted, peak))
-                return JS_NULL;
-            JSValue out = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, out, "volume", JS_NewFloat64(ctx, volume));
-            JS_SetPropertyStr(ctx, out, "muted", JS_NewBool(ctx, muted ? 1 : 0));
-            JS_SetPropertyStr(ctx, out, "peak", JS_NewFloat64(ctx, peak));
-            return out;
-        }
-
-        JSValue JsAppVolumeGetByProcessName(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "appVolume.getByProcessName(name)");
-            const char *n = JS_ToCString(ctx, argv[0]);
-            if (!n)
-                return JS_EXCEPTION;
-            std::wstring name = Utils::ToWString(n);
-            JS_FreeCString(ctx, n);
-            float volume = 0.0f;
-            bool muted = false;
-            float peak = 0.0f;
-            if (!shared::system::AppVolumeGetByProcessName(name, volume, muted, peak))
-                return JS_NULL;
-            JSValue out = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, out, "volume", JS_NewFloat64(ctx, volume));
-            JS_SetPropertyStr(ctx, out, "muted", JS_NewBool(ctx, muted ? 1 : 0));
-            JS_SetPropertyStr(ctx, out, "peak", JS_NewFloat64(ctx, peak));
-            return out;
-        }
-
-        JSValue JsAppVolumeSetVolumeByPid(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByPid(pid, volume01)");
-            int32_t pid = 0;
-            double volume = 0.0;
-            if (JS_ToInt32(ctx, &pid, argv[0]) != 0 || pid <= 0)
-                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByPid expects pid > 0");
-            if (JS_ToFloat64(ctx, &volume, argv[1]) != 0)
-                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByPid expects volume");
-            return JS_NewBool(ctx, shared::system::AppVolumeSetVolumeByPid(static_cast<uint32_t>(pid), static_cast<float>(volume)) ? 1 : 0);
-        }
-
-        JSValue JsAppVolumeSetVolumeByProcessName(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByProcessName(name, volume01)");
-            const char *n = JS_ToCString(ctx, argv[0]);
-            if (!n)
-                return JS_EXCEPTION;
-            std::wstring name = Utils::ToWString(n);
-            JS_FreeCString(ctx, n);
-            double volume = 0.0;
-            if (JS_ToFloat64(ctx, &volume, argv[1]) != 0)
-                return JS_ThrowTypeError(ctx, "appVolume.setVolumeByProcessName expects volume");
-            return JS_NewBool(ctx, shared::system::AppVolumeSetVolumeByProcessName(name, static_cast<float>(volume)) ? 1 : 0);
-        }
-
-        JSValue JsAppVolumeSetMuteByPid(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-                return JS_ThrowTypeError(ctx, "appVolume.setMuteByPid(pid, mute)");
-            int32_t pid = 0;
-            if (JS_ToInt32(ctx, &pid, argv[0]) != 0 || pid <= 0)
-                return JS_ThrowTypeError(ctx, "appVolume.setMuteByPid expects pid > 0");
-            int mute = JS_ToBool(ctx, argv[1]);
-            return JS_NewBool(ctx, shared::system::AppVolumeSetMuteByPid(static_cast<uint32_t>(pid), mute != 0) ? 1 : 0);
-        }
-
-        JSValue JsAppVolumeSetMuteByProcessName(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-                return JS_ThrowTypeError(ctx, "appVolume.setMuteByProcessName(name, mute)");
-            const char *n = JS_ToCString(ctx, argv[0]);
-            if (!n)
-                return JS_EXCEPTION;
-            std::wstring name = Utils::ToWString(n);
-            JS_FreeCString(ctx, n);
-            int mute = JS_ToBool(ctx, argv[1]);
-            return JS_NewBool(ctx, shared::system::AppVolumeSetMuteByProcessName(name, mute != 0) ? 1 : 0);
-        }
-
-        JSValue JsNowPlayingStats(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::NowPlayingStats stats;
-            shared::system::GetNowPlayingStats(stats);
-            JSValue out = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, out, "available", JS_NewBool(ctx, stats.available ? 1 : 0));
-            JS_SetPropertyStr(ctx, out, "player", JS_NewString(ctx, Utils::ToString(stats.player).c_str()));
-            JS_SetPropertyStr(ctx, out, "artist", JS_NewString(ctx, Utils::ToString(stats.artist).c_str()));
-            JS_SetPropertyStr(ctx, out, "album", JS_NewString(ctx, Utils::ToString(stats.album).c_str()));
-            JS_SetPropertyStr(ctx, out, "title", JS_NewString(ctx, Utils::ToString(stats.title).c_str()));
-            JS_SetPropertyStr(ctx, out, "thumbnail", JS_NewString(ctx, Utils::ToString(stats.thumbnail).c_str()));
-            JS_SetPropertyStr(ctx, out, "duration", JS_NewInt32(ctx, stats.duration));
-            JS_SetPropertyStr(ctx, out, "position", JS_NewInt32(ctx, stats.position));
-            JS_SetPropertyStr(ctx, out, "progress", JS_NewInt32(ctx, stats.progress));
-            JS_SetPropertyStr(ctx, out, "state", JS_NewInt32(ctx, stats.state));
-            JS_SetPropertyStr(ctx, out, "status", JS_NewInt32(ctx, stats.status));
-            JS_SetPropertyStr(ctx, out, "shuffle", JS_NewBool(ctx, stats.shuffle ? 1 : 0));
-            JS_SetPropertyStr(ctx, out, "repeat", JS_NewBool(ctx, stats.repeat ? 1 : 0));
-            return out;
-        }
-
-        JSValue JsNowPlayingBackend(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewString(ctx, shared::system::NowPlayingBackend().c_str());
-        }
-
-        JSValue JsNowPlayingPlay(JSContext *ctx, JSValueConst, int, JSValueConst *) { return JS_NewBool(ctx, shared::system::NowPlayingPlay() ? 1 : 0); }
-        JSValue JsNowPlayingPause(JSContext *ctx, JSValueConst, int, JSValueConst *) { return JS_NewBool(ctx, shared::system::NowPlayingPause() ? 1 : 0); }
-        JSValue JsNowPlayingPlayPause(JSContext *ctx, JSValueConst, int, JSValueConst *) { return JS_NewBool(ctx, shared::system::NowPlayingPlayPause() ? 1 : 0); }
-        JSValue JsNowPlayingStop(JSContext *ctx, JSValueConst, int, JSValueConst *) { return JS_NewBool(ctx, shared::system::NowPlayingStop() ? 1 : 0); }
-        JSValue JsNowPlayingNext(JSContext *ctx, JSValueConst, int, JSValueConst *) { return JS_NewBool(ctx, shared::system::NowPlayingNext() ? 1 : 0); }
-        JSValue JsNowPlayingPrevious(JSContext *ctx, JSValueConst, int, JSValueConst *) { return JS_NewBool(ctx, shared::system::NowPlayingPrevious() ? 1 : 0); }
-
-        JSValue JsNowPlayingSetPosition(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "nowPlaying.setPosition(value[, isPercent])");
-            int32_t value = 0;
-            if (JS_ToInt32(ctx, &value, argv[0]) != 0)
-                return JS_ThrowTypeError(ctx, "nowPlaying.setPosition expects number");
-            int isPercent = 0;
-            if (argc > 1)
-                isPercent = JS_ToBool(ctx, argv[1]);
-            return JS_NewBool(ctx, shared::system::NowPlayingSetPosition(static_cast<int>(value), isPercent != 0) ? 1 : 0);
-        }
-
-        JSValue JsNowPlayingSetShuffle(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "nowPlaying.setShuffle(enabled)");
-            int enabled = JS_ToBool(ctx, argv[0]);
-            return JS_NewBool(ctx, shared::system::NowPlayingSetShuffle(enabled != 0) ? 1 : 0);
-        }
-
-        JSValue JsNowPlayingToggleShuffle(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewBool(ctx, shared::system::NowPlayingToggleShuffle() ? 1 : 0);
-        }
-
-        JSValue JsNowPlayingSetRepeat(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "nowPlaying.setRepeat(mode)");
-            int32_t mode = 0;
-            if (JS_ToInt32(ctx, &mode, argv[0]) != 0)
-                return JS_ThrowTypeError(ctx, "nowPlaying.setRepeat expects number");
-            return JS_NewBool(ctx, shared::system::NowPlayingSetRepeat(static_cast<int>(mode)) ? 1 : 0);
         }
 
         JSValue JsJsonParse(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
@@ -1071,11 +647,6 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, network, "bytesSent", JS_NewCFunction(ctx, JsNetworkBytesSent, "bytesSent", 0));
             JS_SetModuleExport(ctx, m, "network", network);
 
-            JSValue mouse = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, mouse, "clientX", JS_NewCFunction(ctx, JsMouseClientX, "clientX", 0));
-            JS_SetPropertyStr(ctx, mouse, "clientY", JS_NewCFunction(ctx, JsMouseClientY, "clientY", 0));
-            JS_SetModuleExport(ctx, m, "mouse", mouse);
-
             JSValue disk = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, disk, "totalBytes", JS_NewCFunction(ctx, JsDiskTotalBytes, "totalBytes", 1));
             JS_SetPropertyStr(ctx, disk, "availableBytes", JS_NewCFunction(ctx, JsDiskAvailableBytes, "availableBytes", 1));
@@ -1083,21 +654,12 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, disk, "usagePercent", JS_NewCFunction(ctx, JsDiskUsagePercent, "usagePercent", 1));
             JS_SetModuleExport(ctx, m, "disk", disk);
 
-            JSValue audioLevel = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, audioLevel, "stats", JS_NewCFunction(ctx, JsAudioLevelStats, "stats", 1));
-            JS_SetModuleExport(ctx, m, "audioLevel", audioLevel);
-
             JSValue audio = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, audio, "setVolume", JS_NewCFunction(ctx, JsAudioSetVolume, "setVolume", 1));
             JS_SetPropertyStr(ctx, audio, "getVolume", JS_NewCFunction(ctx, JsAudioGetVolume, "getVolume", 0));
             JS_SetPropertyStr(ctx, audio, "playSound", JS_NewCFunction(ctx, JsAudioPlaySound, "playSound", 2));
             JS_SetPropertyStr(ctx, audio, "stopSound", JS_NewCFunction(ctx, JsAudioStopSound, "stopSound", 0));
             JS_SetModuleExport(ctx, m, "audio", audio);
-
-            JSValue brightness = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, brightness, "getValue", JS_NewCFunction(ctx, JsBrightnessGetValue, "getValue", 1));
-            JS_SetPropertyStr(ctx, brightness, "setValue", JS_NewCFunction(ctx, JsBrightnessSetValue, "setValue", 1));
-            JS_SetModuleExport(ctx, m, "brightness", brightness);
 
             JSValue fileIcon = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, fileIcon, "extractIcon", JS_NewCFunction(ctx, JsFileIconExtractIcon, "extractIcon", 3));
@@ -1113,36 +675,6 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, registry, "readData", JS_NewCFunction(ctx, JsRegistryReadData, "readData", 2));
             JS_SetPropertyStr(ctx, registry, "writeData", JS_NewCFunction(ctx, JsRegistryWriteData, "writeData", 3));
             JS_SetModuleExport(ctx, m, "registry", registry);
-
-            JSValue hotkey = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, hotkey, "register", JS_NewCFunction(ctx, JsHotkeyRegisterHotkey, "register", 2));
-            JS_SetPropertyStr(ctx, hotkey, "unregister", JS_NewCFunction(ctx, JsHotkeyUnregisterHotkey, "unregister", 1));
-            JS_SetModuleExport(ctx, m, "hotkey", hotkey);
-
-            JSValue appVolume = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, appVolume, "listSessions", JS_NewCFunction(ctx, JsAppVolumeListSessions, "listSessions", 0));
-            JS_SetPropertyStr(ctx, appVolume, "getByPid", JS_NewCFunction(ctx, JsAppVolumeGetByPid, "getByPid", 1));
-            JS_SetPropertyStr(ctx, appVolume, "getByProcessName", JS_NewCFunction(ctx, JsAppVolumeGetByProcessName, "getByProcessName", 1));
-            JS_SetPropertyStr(ctx, appVolume, "setVolumeByPid", JS_NewCFunction(ctx, JsAppVolumeSetVolumeByPid, "setVolumeByPid", 2));
-            JS_SetPropertyStr(ctx, appVolume, "setVolumeByProcessName", JS_NewCFunction(ctx, JsAppVolumeSetVolumeByProcessName, "setVolumeByProcessName", 2));
-            JS_SetPropertyStr(ctx, appVolume, "setMuteByPid", JS_NewCFunction(ctx, JsAppVolumeSetMuteByPid, "setMuteByPid", 2));
-            JS_SetPropertyStr(ctx, appVolume, "setMuteByProcessName", JS_NewCFunction(ctx, JsAppVolumeSetMuteByProcessName, "setMuteByProcessName", 2));
-            JS_SetModuleExport(ctx, m, "appVolume", appVolume);
-
-            JSValue nowPlaying = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, nowPlaying, "stats", JS_NewCFunction(ctx, JsNowPlayingStats, "stats", 0));
-            JS_SetPropertyStr(ctx, nowPlaying, "backend", JS_NewCFunction(ctx, JsNowPlayingBackend, "backend", 0));
-            JS_SetPropertyStr(ctx, nowPlaying, "play", JS_NewCFunction(ctx, JsNowPlayingPlay, "play", 0));
-            JS_SetPropertyStr(ctx, nowPlaying, "pause", JS_NewCFunction(ctx, JsNowPlayingPause, "pause", 0));
-            JS_SetPropertyStr(ctx, nowPlaying, "playPause", JS_NewCFunction(ctx, JsNowPlayingPlayPause, "playPause", 0));
-            JS_SetPropertyStr(ctx, nowPlaying, "stop", JS_NewCFunction(ctx, JsNowPlayingStop, "stop", 0));
-            JS_SetPropertyStr(ctx, nowPlaying, "next", JS_NewCFunction(ctx, JsNowPlayingNext, "next", 0));
-            JS_SetPropertyStr(ctx, nowPlaying, "previous", JS_NewCFunction(ctx, JsNowPlayingPrevious, "previous", 0));
-            JS_SetPropertyStr(ctx, nowPlaying, "setPosition", JS_NewCFunction(ctx, JsNowPlayingSetPosition, "setPosition", 2));
-            JS_SetPropertyStr(ctx, nowPlaying, "setShuffle", JS_NewCFunction(ctx, JsNowPlayingSetShuffle, "setShuffle", 1));
-            JS_SetPropertyStr(ctx, nowPlaying, "toggleShuffle", JS_NewCFunction(ctx, JsNowPlayingToggleShuffle, "toggleShuffle", 0));
-            JS_SetPropertyStr(ctx, nowPlaying, "setRepeat", JS_NewCFunction(ctx, JsNowPlayingSetRepeat, "setRepeat", 1));
-            JS_SetModuleExport(ctx, m, "nowPlaying", nowPlaying);
 
             JSValue json = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, json, "parse", JS_NewCFunction(ctx, JsJsonParse, "parse", 1));
@@ -1176,27 +708,15 @@ namespace novadesk::scripting::quickjs
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "network") < 0)
             return nullptr;
-        if (JS_AddModuleExport(ctx, m, "mouse") < 0)
-            return nullptr;
         if (JS_AddModuleExport(ctx, m, "disk") < 0)
             return nullptr;
-        if (JS_AddModuleExport(ctx, m, "audioLevel") < 0)
-            return nullptr;
         if (JS_AddModuleExport(ctx, m, "audio") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "brightness") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "fileIcon") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "displayMetrics") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "registry") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "hotkey") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "appVolume") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "nowPlaying") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "json") < 0)
             return nullptr;

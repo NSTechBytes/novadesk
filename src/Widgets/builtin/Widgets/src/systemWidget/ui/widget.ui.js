@@ -106,7 +106,7 @@ ui.addBar({
     barCornerRadius: 4
 });
 
-ipcRenderer.on("system-stats", function (data) {
+ipcRenderer.on("system-stats", function (event, data) {
     ui.setElementProperties("cpu_Text", { "text": data.cpu + "%" });
     ui.setElementProperties("cpu-Bar", { "value": data.cpu / 100 });
     

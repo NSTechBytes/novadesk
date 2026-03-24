@@ -2,6 +2,7 @@
 
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <string>
 #include <vector>
 #include <windows.h>
@@ -37,6 +38,7 @@ namespace novadesk::scripting::quickjs
             void (*PushBool)(novadesk_context ctx, int value);
             void (*PushNull)(novadesk_context ctx);
             void (*PushObject)(novadesk_context ctx);
+            void (*PushArray)(novadesk_context ctx);
             double (*GetNumber)(novadesk_context ctx, int index);
             const char *(*GetString)(novadesk_context ctx, int index);
             int (*GetBool)(novadesk_context ctx, int index);
@@ -46,12 +48,15 @@ namespace novadesk::scripting::quickjs
             int (*IsObject)(novadesk_context ctx, int index);
             int (*IsFunction)(novadesk_context ctx, int index);
             int (*IsNull)(novadesk_context ctx, int index);
+            int (*GetProperty)(novadesk_context ctx, int objIndex, const char *name);
             int (*GetTop)(novadesk_context ctx);
             void (*Pop)(novadesk_context ctx);
             void (*PopN)(novadesk_context ctx, int n);
             void (*ThrowError)(novadesk_context ctx, const char *message);
             void *(*JsGetFunctionPtr)(novadesk_context ctx, int index);
             void (*JsCallFunction)(novadesk_context ctx, void *funcPtr, int nargs);
+            void (*JsCallFunctionNoArgs)(novadesk_context ctx, void *funcPtr);
+            void (*ArrayPushObject)(novadesk_context ctx);
         };
 
         using NovadeskAddonInitFn = void (*)(novadesk_context ctx, HWND hMsgWnd, const NovadeskHostAPI *host);
@@ -294,6 +299,14 @@ namespace novadesk::scripting::quickjs
             call->stack.push_back(JS_NewObject(call->ctx));
         }
 
+        static void host_PushArray(novadesk_context c)
+        {
+            auto *call = reinterpret_cast<AddonCallContext *>(c);
+            if (!call)
+                return;
+            call->stack.push_back(JS_NewArray(call->ctx));
+        }
+
         static double host_GetNumber(novadesk_context c, int index)
         {
             auto *call = reinterpret_cast<AddonCallContext *>(c);
@@ -368,6 +381,27 @@ namespace novadesk::scripting::quickjs
             auto *call = reinterpret_cast<AddonCallContext *>(c);
             JSValue *v = ResolveByIndex(call, index);
             return v && (JS_IsNull(*v) || JS_IsUndefined(*v));
+        }
+
+        static int host_GetProperty(novadesk_context c, int objIndex, const char *name)
+        {
+            auto *call = reinterpret_cast<AddonCallContext *>(c);
+            if (!call || !name)
+                return 0;
+            JSValue *obj = ResolveByIndex(call, objIndex);
+            if (!obj || !JS_IsObject(*obj))
+                return 0;
+
+            JSValue value = JS_GetPropertyStr(call->ctx, *obj, name);
+            if (JS_IsException(value))
+            {
+                call->hasThrow = true;
+                call->throwMessage = "GetProperty failed";
+                return 0;
+            }
+
+            call->stack.push_back(value);
+            return JS_IsUndefined(value) ? 0 : 1;
         }
 
         static int host_GetTop(novadesk_context c)
@@ -456,6 +490,43 @@ namespace novadesk::scripting::quickjs
             call->stack.push_back(ret);
         }
 
+        static void host_JsCallFunctionNoArgs(novadesk_context, void *funcPtr)
+        {
+            auto *handle = reinterpret_cast<JsFunctionHandle *>(funcPtr);
+            if (!handle || !JS_IsFunction(handle->ctx, handle->fn))
+                return;
+
+            JSValue ret = JS_Call(handle->ctx, handle->fn, JS_UNDEFINED, 0, nullptr);
+            if (!JS_IsException(ret))
+            {
+                JS_FreeValue(handle->ctx, ret);
+            }
+            else
+            {
+                JSValue exc = JS_GetException(handle->ctx);
+                JS_FreeValue(handle->ctx, exc);
+            }
+        }
+
+        static void host_ArrayPushObject(novadesk_context c)
+        {
+            auto *call = reinterpret_cast<AddonCallContext *>(c);
+            if (!call || call->stack.empty())
+                return;
+            JSValue *arr = &call->stack.back();
+            if (!JS_IsArray(*arr))
+                return;
+
+            uint32_t len = 0;
+            JSValue lenV = JS_GetPropertyStr(call->ctx, *arr, "length");
+            JS_ToUint32(call->ctx, &len, lenV);
+            JS_FreeValue(call->ctx, lenV);
+
+            JSValue obj = JS_NewObject(call->ctx);
+            JS_SetPropertyUint32(call->ctx, *arr, len, JS_DupValue(call->ctx, obj));
+            call->stack.push_back(obj);
+        }
+
         const NovadeskHostAPI g_hostApi = {
             host_RegisterString,
             host_RegisterNumber,
@@ -470,6 +541,7 @@ namespace novadesk::scripting::quickjs
             host_PushBool,
             host_PushNull,
             host_PushObject,
+            host_PushArray,
             host_GetNumber,
             host_GetString,
             host_GetBool,
@@ -479,12 +551,15 @@ namespace novadesk::scripting::quickjs
             host_IsObject,
             host_IsFunction,
             host_IsNull,
+            host_GetProperty,
             host_GetTop,
             host_Pop,
             host_PopN,
             host_ThrowError,
             host_JsGetFunctionPtr,
-            host_JsCallFunction};
+            host_JsCallFunction,
+            host_JsCallFunctionNoArgs,
+            host_ArrayPushObject};
 
         bool UnloadAddonById(int addonId)
         {
@@ -537,6 +612,20 @@ namespace novadesk::scripting::quickjs
             return true;
         }
 
+        void UnloadAllAddonsInternal()
+        {
+            std::vector<int> addonIds;
+            addonIds.reserve(g_addonPathById.size());
+            for (const auto &kv : g_addonPathById)
+            {
+                addonIds.push_back(kv.first);
+            }
+            for (int id : addonIds)
+            {
+                UnloadAddonById(id);
+            }
+        }
+
         std::wstring GetVersionProperty(const std::wstring &propertyName)
         {
             std::wstring exePath = PathUtils::GetExePath();
@@ -576,7 +665,7 @@ namespace novadesk::scripting::quickjs
             return L"";
         }
 
-        bool ParseTrayMenuItems(JSContext *ctx, JSValueConst arr, std::vector<MenuItem> &out)
+        bool ParseTrayMenuItems(JSContext *ctx, int trayId, JSValueConst arr, std::vector<MenuItem> &out)
         {
             if (!JS_IsArray(arr))
                 return false;
@@ -630,14 +719,14 @@ namespace novadesk::scripting::quickjs
                     if (JS_IsFunction(ctx, actionV))
                     {
                         item.id = 2000 + g_nextTrayCommandId++;
-                        JSEngine::RegisterTrayCommandCallback(ctx, item.id, actionV);
+                        JSEngine::RegisterTrayCommandCallback(ctx, trayId, item.id, actionV);
                     }
                     JS_FreeValue(ctx, actionV);
 
                     JSValue childV = JS_GetPropertyStr(ctx, itemV, "items");
                     if (JS_IsArray(childV))
                     {
-                        ParseTrayMenuItems(ctx, childV, item.children);
+                        ParseTrayMenuItems(ctx, trayId, childV, item.children);
                     }
                     JS_FreeValue(ctx, childV);
                 }
@@ -669,23 +758,6 @@ namespace novadesk::scripting::quickjs
         {
             (void)ctx;
             PostQuitMessage(0);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsAppHideTrayIcon(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            bool hide = true;
-            if (argc > 0)
-            {
-                int b = JS_ToBool(ctx, argv[0]);
-                if (b >= 0)
-                    hide = (b != 0);
-            }
-            Settings::SetGlobalBool("hideTrayIcon", hide);
-            if (hide)
-                ::HideTrayIconDynamic();
-            else
-                ::ShowTrayIconDynamic();
             return JS_UNDEFINED;
         }
 
@@ -798,41 +870,168 @@ namespace novadesk::scripting::quickjs
             return JS_NewBool(ctx, Settings::IsFirstRun() ? 1 : 0);
         }
 
-        JSValue JsAppSetTrayMenu(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        static bool IsTrayEventName(const std::string &name)
+        {
+            static const std::unordered_set<std::string> kNames = {
+                "click",
+                "right-click",
+            };
+            return kNames.find(name) != kNames.end();
+        }
+
+        static const char *kTrayIdKey = "__trayId";
+
+        bool GetTrayId(JSContext *ctx, JSValueConst thisVal, int &outId)
+        {
+            if (!JS_IsObject(thisVal))
+                return false;
+            JSValue idV = JS_GetPropertyStr(ctx, thisVal, kTrayIdKey);
+            if (JS_IsUndefined(idV) || JS_IsNull(idV))
+            {
+                JS_FreeValue(ctx, idV);
+                return false;
+            }
+            int32_t id = 0;
+            const bool ok = (JS_ToInt32(ctx, &id, idV) == 0);
+            JS_FreeValue(ctx, idV);
+            if (!ok || id <= 0)
+                return false;
+            outId = id;
+            return true;
+        }
+
+        JSValue JsTrayOn(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsFunction(ctx, argv[1]))
+            {
+                return JS_ThrowTypeError(ctx, "tray.on(event, handler) requires event string and function");
+            }
+            int trayId = 0;
+            if (!GetTrayId(ctx, thisVal, trayId))
+            {
+                return JS_ThrowTypeError(ctx, "tray.on called on invalid tray instance");
+            }
+            const char *nameC = JS_ToCString(ctx, argv[0]);
+            if (!nameC)
+            {
+                return JS_EXCEPTION;
+            }
+            std::string name = nameC;
+            JS_FreeCString(ctx, nameC);
+            if (!IsTrayEventName(name))
+            {
+                return JS_ThrowTypeError(ctx, "tray.on: unknown event");
+            }
+            JSEngine::RegisterTrayEventCallback(ctx, trayId, name, argv[1]);
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsTrayDestroy(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            (void)ctx;
+            int trayId = 0;
+            if (!GetTrayId(ctx, thisVal, trayId))
+            {
+                return JS_ThrowTypeError(ctx, "tray.destroy called on invalid tray instance");
+            }
+            TrayDestroy(trayId);
+            JSEngine::ClearTrayEventCallbacks(trayId);
+            JSEngine::ClearTrayCommandCallbacks(trayId);
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsTraySetImage(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            if (argc < 1 || !JS_IsString(argv[0]))
+            {
+                return JS_ThrowTypeError(ctx, "tray.setImage(path) requires image path");
+            }
+            int trayId = 0;
+            if (!GetTrayId(ctx, thisVal, trayId))
+            {
+                return JS_ThrowTypeError(ctx, "tray.setImage called on invalid tray instance");
+            }
+            const char *pathC = JS_ToCString(ctx, argv[0]);
+            if (!pathC)
+            {
+                return JS_EXCEPTION;
+            }
+            std::wstring path = Utils::ToWString(pathC);
+            JS_FreeCString(ctx, pathC);
+            TraySetImage(trayId, path);
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsTraySetToolTip(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            if (argc < 1 || !JS_IsString(argv[0]))
+            {
+                return JS_ThrowTypeError(ctx, "tray.setToolTip(text) requires text");
+            }
+            int trayId = 0;
+            if (!GetTrayId(ctx, thisVal, trayId))
+            {
+                return JS_ThrowTypeError(ctx, "tray.setToolTip called on invalid tray instance");
+            }
+            const char *textC = JS_ToCString(ctx, argv[0]);
+            if (!textC)
+            {
+                return JS_EXCEPTION;
+            }
+            std::wstring text = Utils::ToWString(textC);
+            JS_FreeCString(ctx, textC);
+            TraySetToolTip(trayId, text);
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsTraySetContextMenu(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             if (argc < 1 || !JS_IsArray(argv[0]))
             {
-                return JS_ThrowTypeError(ctx, "app.setTrayMenu: expected items array");
+                return JS_ThrowTypeError(ctx, "tray.setContextMenu: expected items array");
             }
-            JSEngine::ClearTrayCommandCallbacks();
+            int trayId = 0;
+            if (!GetTrayId(ctx, thisVal, trayId))
+            {
+                return JS_ThrowTypeError(ctx, "tray.setContextMenu called on invalid tray instance");
+            }
+            JSEngine::ClearTrayCommandCallbacks(trayId);
             std::vector<MenuItem> menu;
-            if (!ParseTrayMenuItems(ctx, argv[0], menu))
+            if (!ParseTrayMenuItems(ctx, trayId, argv[0], menu))
             {
-                return JS_ThrowTypeError(ctx, "app.setTrayMenu: invalid items");
+                return JS_ThrowTypeError(ctx, "tray.setContextMenu: invalid items");
             }
-            SetTrayMenu(menu);
+            TraySetContextMenu(trayId, menu);
             return JS_UNDEFINED;
         }
 
-        JSValue JsAppClearTrayMenu(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        JSValue JsTrayCtor(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
-            (void)ctx;
-            JSEngine::ClearTrayCommandCallbacks();
-            ClearTrayMenu();
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsAppShowDefaultTrayItems(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            bool show = true;
-            if (argc > 0)
+            std::wstring imagePath;
+            if (argc > 0 && !JS_IsNull(argv[0]) && !JS_IsUndefined(argv[0]))
             {
-                int b = JS_ToBool(ctx, argv[0]);
-                if (b >= 0)
-                    show = (b != 0);
+                if (!JS_IsString(argv[0]))
+                {
+                    return JS_ThrowTypeError(ctx, "new tray(image) expects image path or null");
+                }
+                const char *pathC = JS_ToCString(ctx, argv[0]);
+                if (!pathC)
+                {
+                    return JS_EXCEPTION;
+                }
+                imagePath = Utils::ToWString(pathC);
+                JS_FreeCString(ctx, pathC);
             }
-            SetShowDefaultTrayItems(show);
-            return JS_UNDEFINED;
+
+            const int trayId = TrayCreate(imagePath);
+            JSValue tray = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, tray, kTrayIdKey, JS_NewInt32(ctx, trayId));
+            JS_SetPropertyStr(ctx, tray, "setImage", JS_NewCFunction(ctx, JsTraySetImage, "setImage", 1));
+            JS_SetPropertyStr(ctx, tray, "setToolTip", JS_NewCFunction(ctx, JsTraySetToolTip, "setToolTip", 1));
+            JS_SetPropertyStr(ctx, tray, "setContextMenu", JS_NewCFunction(ctx, JsTraySetContextMenu, "setContextMenu", 1));
+            JS_SetPropertyStr(ctx, tray, "on", JS_NewCFunction(ctx, JsTrayOn, "on", 2));
+            JS_SetPropertyStr(ctx, tray, "destroy", JS_NewCFunction(ctx, JsTrayDestroy, "destroy", 0));
+            return tray;
         }
 
         JSValue JsAppEnableDebugging(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
@@ -1016,7 +1215,6 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, app, "exit", JS_NewCFunction(ctx, JsAppExit, "exit", 0));
             JS_SetPropertyStr(ctx, app, "saveLogToFile", JS_NewCFunction(ctx, JsAppSaveLogToFile, "saveLogToFile", 1));
             JS_SetPropertyStr(ctx, app, "disableLogging", JS_NewCFunction(ctx, JsAppDisableLogging, "disableLogging", 1));
-            JS_SetPropertyStr(ctx, app, "hideTrayIcon", JS_NewCFunction(ctx, JsAppHideTrayIcon, "hideTrayIcon", 1));
             JS_SetPropertyStr(ctx, app, "useHardwareAcceleration", JS_NewCFunction(ctx, JsAppUseHardwareAcceleration, "useHardwareAcceleration", 1));
             JS_SetPropertyStr(ctx, app, "getProductVersion", JS_NewCFunction(ctx, JsAppGetProductVersion, "getProductVersion", 0));
             JS_SetPropertyStr(ctx, app, "getFileVersion", JS_NewCFunction(ctx, JsAppGetFileVersion, "getFileVersion", 0));
@@ -1026,9 +1224,6 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, app, "getLogPath", JS_NewCFunction(ctx, JsAppGetLogPath, "getLogPath", 0));
             JS_SetPropertyStr(ctx, app, "isPortable", JS_NewCFunction(ctx, JsAppIsPortable, "isPortable", 0));
             JS_SetPropertyStr(ctx, app, "isFirstRun", JS_NewCFunction(ctx, JsAppIsFirstRun, "isFirstRun", 0));
-            JS_SetPropertyStr(ctx, app, "setTrayMenu", JS_NewCFunction(ctx, JsAppSetTrayMenu, "setTrayMenu", 1));
-            JS_SetPropertyStr(ctx, app, "clearTrayMenu", JS_NewCFunction(ctx, JsAppClearTrayMenu, "clearTrayMenu", 0));
-            JS_SetPropertyStr(ctx, app, "showDefaultTrayItems", JS_NewCFunction(ctx, JsAppShowDefaultTrayItems, "showDefaultTrayItems", 1));
             JS_SetPropertyStr(ctx, app, "enableDebugging", JS_NewCFunction(ctx, JsAppEnableDebugging, "enableDebugging", 1));
             JS_SetModuleExport(ctx, m, "app", app);
 
@@ -1049,6 +1244,8 @@ namespace novadesk::scripting::quickjs
             JS_SetModuleExport(ctx, m, "widgetWindow", ctor);
             JS_FreeValue(ctx, proto);
             InitAppExport(ctx, m);
+            JSValue trayCtor = JS_NewCFunction2(ctx, JsTrayCtor, "tray", 1, JS_CFUNC_constructor, 0);
+            JS_SetModuleExport(ctx, m, "tray", trayCtor);
             return 0;
         }
     } // namespace
@@ -1074,10 +1271,19 @@ namespace novadesk::scripting::quickjs
         {
             return nullptr;
         }
+        if (JS_AddModuleExport(ctx, m, "tray") < 0)
+        {
+            return nullptr;
+        }
         if (JS_AddModuleExport(ctx, m, "addon") < 0)
         {
             return nullptr;
         }
         return m;
+    }
+
+    void UnloadAllAddons()
+    {
+        UnloadAllAddonsInternal();
     }
 } // namespace novadesk::scripting::quickjs

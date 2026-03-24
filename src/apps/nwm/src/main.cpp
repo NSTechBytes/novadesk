@@ -42,6 +42,11 @@ struct SetupOptions {
     bool launchAfterInstall = false;
 };
 
+struct WidgetMeta {
+    nlohmann::json json = nlohmann::json::object();
+    std::string main = "index.js";
+};
+
 #pragma pack(push, 1)
 struct InstallerFooter {
     char magic[8];
@@ -72,6 +77,31 @@ bool ExecuteCommand(const std::string& command) {
         return exitCode == 0;
     }
     return false;
+}
+
+bool LoadWidgetMeta(const fs::path& widgetPath, WidgetMeta& outMeta) {
+    fs::path metaPath = widgetPath / "meta.json";
+    if (!fs::exists(metaPath)) {
+        std::cerr << "Error: meta.json not found in current directory." << std::endl;
+        return false;
+    }
+
+    std::ifstream metaFile(metaPath);
+    std::stringstream metaBuffer;
+    metaBuffer << metaFile.rdbuf();
+
+    outMeta.json = nlohmann::json::parse(metaBuffer.str(), nullptr, false);
+    if (outMeta.json.is_discarded()) {
+        std::cerr << "Error: meta.json is not valid JSON." << std::endl;
+        return false;
+    }
+
+    outMeta.main = outMeta.json.value("main", outMeta.main);
+    if (outMeta.main.empty()) {
+        outMeta.main = "index.js";
+    }
+
+    return true;
 }
 
 void PrintUsage() {
@@ -695,8 +725,14 @@ bool InitWidget(const std::string& name) {
 
 bool RunWidget() {
     fs::path widgetPath = fs::current_path();
-    if (!fs::exists(widgetPath / "index.js")) {
-        std::cerr << "Error: Could not find index.js in current directory." << std::endl;
+    WidgetMeta meta;
+    if (!LoadWidgetMeta(widgetPath, meta)) {
+        return false;
+    }
+
+    fs::path scriptPath = widgetPath / fs::path(meta.main);
+    if (!fs::exists(scriptPath)) {
+        std::cerr << "Error: Could not find main script '" << meta.main << "' in current directory." << std::endl;
         return false;
     }
 
@@ -712,7 +748,6 @@ bool RunWidget() {
         return false;
     }
 
-    fs::path scriptPath = widgetPath / "index.js";
     std::string command = "\"" + novadeskExe.string() + "\" \"" + scriptPath.string() + "\"";
     std::cout << "Running: " << command << std::endl;
 
@@ -732,21 +767,11 @@ bool RunWidget() {
 
 bool BuildWidget() {
     fs::path widgetPath = fs::current_path();
-    fs::path metaPath = widgetPath / "meta.json";
-    if (!fs::exists(metaPath)) {
-        std::cerr << "Error: meta.json not found in current directory." << std::endl;
+    WidgetMeta widgetMeta;
+    if (!LoadWidgetMeta(widgetPath, widgetMeta)) {
         return false;
     }
-
-    std::ifstream metaFile(metaPath);
-    std::stringstream metaBuffer;
-    metaBuffer << metaFile.rdbuf();
-
-    nlohmann::json meta = nlohmann::json::parse(metaBuffer.str(), nullptr, false);
-    if (meta.is_discarded()) {
-        std::cerr << "Error: meta.json is not valid JSON." << std::endl;
-        return false;
-    }
+    nlohmann::json meta = widgetMeta.json;
 
     std::string widgetRealName = meta.value("name", "");
     std::string version = meta.value("version", "");

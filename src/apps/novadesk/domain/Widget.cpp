@@ -2210,6 +2210,10 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     if (message == WM_MOUSEMOVE)
     {
         Element *hoverElement = actionElement ? actionElement : (mouseActionElement ? mouseActionElement : hitElement);
+        if (m_MouseOverElement && m_MouseOverElement->IsVisible() && m_MouseOverElement->HasMouseAction() && m_MouseOverElement->HitTest(x, y))
+        {
+            hoverElement = m_MouseOverElement;
+        }
         Element *nextToolTipElement = toolTipElement ? toolTipElement : hoverElement;
 
         if (hoverElement != m_MouseOverElement)

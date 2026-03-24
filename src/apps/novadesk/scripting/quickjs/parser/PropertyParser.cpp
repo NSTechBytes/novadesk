@@ -653,7 +653,22 @@ namespace PropertyParser
     {
         ParseElementOptions(ctx, obj, options, baseDir);
 
-        options.text = GetStringProp(ctx, obj, "text");
+        {
+            JSValue textProp = JS_GetPropertyStr(ctx, obj, "text");
+            if (!JS_IsException(textProp) && !JS_IsUndefined(textProp) && !JS_IsNull(textProp))
+            {
+                if (JS_IsString(textProp))
+                {
+                    const char *s = JS_ToCString(ctx, textProp);
+                    if (s)
+                    {
+                        options.text = Utils::ToWString(s);
+                        JS_FreeCString(ctx, s);
+                    }
+                }
+            }
+            JS_FreeValue(ctx, textProp);
+        }
         std::wstring fontFace = GetStringProp(ctx, obj, "fontFace");
         if (!fontFace.empty())
             options.fontFace = fontFace;
@@ -748,7 +763,7 @@ namespace PropertyParser
         else if (align == L"rightbottom")
             options.textAlign = TEXT_ALIGN_RIGHT_BOTTOM;
 
-        std::wstring clip = GetStringProp(ctx, obj, "clipString");
+        std::wstring clip = GetStringProp(ctx, obj, "textClip");
         if (clip == L"none")
             options.clip = TEXT_CLIP_NONE;
         else if (clip == L"on" || clip == L"clip")
@@ -1241,7 +1256,7 @@ namespace PropertyParser
         options.fontWeight = element->GetFontWeight();
         options.italic = element->IsItalic();
         options.textAlign = element->GetTextAlign();
-        options.clip = element->GetClipString();
+        options.clip = element->GettextClip();
         options.fontPath = element->GetFontPath();
         options.shadows = element->GetShadows();
         options.fontGradient = element->GetFontGradient();

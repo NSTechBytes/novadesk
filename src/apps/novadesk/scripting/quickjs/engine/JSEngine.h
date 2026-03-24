@@ -35,6 +35,7 @@ namespace JSEngine
     HWND GetMessageWindow();
 
     void OnTrayCommand(int commandId);
+    void DispatchTrayEvent(int trayId, const std::string &eventName);
     void OnWidgetContextCommand(const std::wstring &widgetId, int commandId);
 
     void TriggerWidgetEvent(Widget *widget, const char *eventName, const MouseEventData *data = nullptr);
@@ -43,8 +44,12 @@ namespace JSEngine
     bool RegisterWidgetEventListener(JSContext *ctx, Widget *widget, const std::string &eventName, JSValueConst fn);
     bool RegisterWidgetContextMenuCallback(JSContext *ctx, const std::wstring &widgetId, int commandId, JSValueConst fn);
     void ClearWidgetContextMenuCallbacks(const std::wstring &widgetId);
-    bool RegisterTrayCommandCallback(JSContext *ctx, int commandId, JSValueConst fn);
-    void ClearTrayCommandCallbacks();
+    bool RegisterTrayCommandCallback(JSContext *ctx, int trayId, int commandId, JSValueConst fn);
+    void ClearTrayCommandCallbacks(int trayId);
+    void ClearAllTrayCommandCallbacks();
+    bool RegisterTrayEventCallback(JSContext *ctx, int trayId, const std::string &eventName, JSValueConst fn);
+    void ClearTrayEventCallbacks(int trayId);
+    void ClearAllTrayEventCallbacks();
     bool ExecuteWidgetScript(Widget *widget);
     JSValue CreateUiIpcObject(JSContext *ctx);
 
