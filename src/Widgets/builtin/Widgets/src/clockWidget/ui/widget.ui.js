@@ -47,15 +47,15 @@ ui.addText({
 })
 
 
-ipcRenderer.on("timeUpdate", function (timeStr) {
+ipcRenderer.on("timeUpdate", function (event, timeStr) {
     ui.setElementProperties("time_Text", { "text": timeStr });
 });
 
-ipcRenderer.on("dayUpdate", function (dayStr) {
+ipcRenderer.on("dayUpdate", function (event, dayStr) {
     ui.setElementProperties("day_Text", { "text": dayStr });
 });
 
-ipcRenderer.on("dateUpdate", function (dateStr) {
+ipcRenderer.on("dateUpdate", function (event, dateStr) {
     ui.setElementProperties("date_Text", { "text": dateStr });
 });
 
