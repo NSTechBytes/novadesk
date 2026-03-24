@@ -24,6 +24,7 @@ namespace JSEngine
         JSRuntime *g_runtime = nullptr;
         JSContext *g_context = nullptr;
         std::wstring g_lastScriptPath;
+        std::vector<std::wstring> g_loadedScriptPaths;
         std::vector<JSValue> g_eventCallbacks;
         std::unordered_map<Widget *, std::unordered_map<std::string, std::vector<int>>> g_widgetEventListeners;
         std::unordered_map<std::wstring, std::unordered_map<int, JSValue>> g_widgetContextMenuCallbacks;
@@ -910,14 +911,34 @@ namespace JSEngine
 
     bool LoadAndExecuteScript(duk_context *ctx, const std::wstring &scriptPath)
     {
+        std::vector<std::wstring> list;
+        list.push_back(scriptPath);
+        return LoadAndExecuteScripts(ctx, list);
+    }
+
+    bool LoadAndExecuteScripts(duk_context *ctx, const std::vector<std::wstring> &scriptPaths)
+    {
         (void)ctx;
         if (!EnsureRuntime())
         {
             return false;
         }
 
-        const std::wstring finalScriptPath = ResolveEntryScript(scriptPath);
-        g_lastScriptPath = finalScriptPath;
+        std::vector<std::wstring> resolved;
+        if (scriptPaths.empty())
+        {
+            resolved.push_back(ResolveEntryScript(L""));
+        }
+        else
+        {
+            for (const auto &p : scriptPaths)
+            {
+                resolved.push_back(ResolveEntryScript(p));
+            }
+        }
+
+        g_loadedScriptPaths = resolved;
+        g_lastScriptPath = resolved.empty() ? L"" : resolved.front();
 
         for (size_t i = 1; i < g_eventCallbacks.size(); ++i)
         {
@@ -932,62 +953,66 @@ namespace JSEngine
         ClearHandlerMap(g_mainIpcHandlers);
         ClearWidgetEventListeners();
         ClearAllWidgetContextMenuCallbacks();
-        ClearAllTrayCommandCallbacks();
-        ClearAllTrayEventCallbacks();
+        ClearAllTrayCommandCallbacksInternal();
+        ClearAllTrayEventCallbacksInternal();
         ClearAllTimers();
 
-        const std::string script = FileUtils::ReadFileContent(finalScriptPath);
-        if (script.empty())
-        {
-            Logging::Log(LogLevel::Error, L"Failed to load script: %s", finalScriptPath.c_str());
-            return false;
-        }
-
-        const std::string fileName = Utils::ToString(finalScriptPath);
-        const std::wstring scriptDir = PathUtils::GetParentDir(finalScriptPath);
-        const std::string dirName = Utils::ToString(scriptDir);
         const std::string widgetDirName = Utils::ToString(PathUtils::GetWidgetsDir());
-        JSValue global = JS_GetGlobalObject(g_context);
-        JSValue mainIpc = CreateMainIpcObject(g_context);
-        JS_SetPropertyStr(g_context, global, "ipcMain", JS_DupValue(g_context, mainIpc));
-        JS_SetPropertyStr(g_context, global, "__filename", JS_NewString(g_context, fileName.c_str()));
-        JS_SetPropertyStr(g_context, global, "__dirname", JS_NewString(g_context, dirName.c_str()));
-        JS_SetPropertyStr(g_context, global, "__widgetDir", JS_NewString(g_context, widgetDirName.c_str()));
-        JS_FreeValue(g_context, mainIpc);
-        JS_FreeValue(g_context, global);
 
-        const std::string modulePrelude =
-            "const ipcMain = globalThis.ipcMain;\n"
-            "const __filename = globalThis.__filename;\n"
-            "const __dirname = globalThis.__dirname;\n"
-            "const __widgetDir = globalThis.__widgetDir;\n"
-            "const path = globalThis.path;\n";
-        const std::string moduleSource = modulePrelude + script;
-
-        JSValue result = JS_Eval(
-            g_context,
-            moduleSource.c_str(),
-            moduleSource.size(),
-            fileName.c_str(),
-            JS_EVAL_TYPE_MODULE);
-
-        if (JS_IsException(result))
+        for (const auto &finalScriptPath : resolved)
         {
-            LogQuickJsException(g_context);
-            JS_FreeValue(g_context, result);
-            return false;
-        }
-        JS_FreeValue(g_context, result);
-
-        JSContext *ctx1 = nullptr;
-        int err = 0;
-        while (JS_IsJobPending(g_runtime))
-        {
-            err = JS_ExecutePendingJob(g_runtime, &ctx1);
-            if (err < 0)
+            const std::string script = FileUtils::ReadFileContent(finalScriptPath);
+            if (script.empty())
             {
-                LogQuickJsException(ctx1 ? ctx1 : g_context);
+                Logging::Log(LogLevel::Error, L"Failed to load script: %s", finalScriptPath.c_str());
                 return false;
+            }
+
+            const std::string fileName = Utils::ToString(finalScriptPath);
+            const std::wstring scriptDir = PathUtils::GetParentDir(finalScriptPath);
+            const std::string dirName = Utils::ToString(scriptDir);
+            JSValue global = JS_GetGlobalObject(g_context);
+            JSValue mainIpc = CreateMainIpcObject(g_context);
+            JS_SetPropertyStr(g_context, global, "ipcMain", JS_DupValue(g_context, mainIpc));
+            JS_SetPropertyStr(g_context, global, "__filename", JS_NewString(g_context, fileName.c_str()));
+            JS_SetPropertyStr(g_context, global, "__dirname", JS_NewString(g_context, dirName.c_str()));
+            JS_SetPropertyStr(g_context, global, "__widgetDir", JS_NewString(g_context, widgetDirName.c_str()));
+            JS_FreeValue(g_context, mainIpc);
+            JS_FreeValue(g_context, global);
+
+            const std::string modulePrelude =
+                "const ipcMain = globalThis.ipcMain;\n"
+                "const __filename = globalThis.__filename;\n"
+                "const __dirname = globalThis.__dirname;\n"
+                "const __widgetDir = globalThis.__widgetDir;\n"
+                "const path = globalThis.path;\n";
+            const std::string moduleSource = modulePrelude + script;
+
+            JSValue result = JS_Eval(
+                g_context,
+                moduleSource.c_str(),
+                moduleSource.size(),
+                fileName.c_str(),
+                JS_EVAL_TYPE_MODULE);
+
+            if (JS_IsException(result))
+            {
+                LogQuickJsException(g_context);
+                JS_FreeValue(g_context, result);
+                return false;
+            }
+            JS_FreeValue(g_context, result);
+
+            JSContext *ctx1 = nullptr;
+            int err = 0;
+            while (JS_IsJobPending(g_runtime))
+            {
+                err = JS_ExecutePendingJob(g_runtime, &ctx1);
+                if (err < 0)
+                {
+                    LogQuickJsException(ctx1 ? ctx1 : g_context);
+                    return false;
+                }
             }
         }
 
@@ -1005,7 +1030,65 @@ namespace JSEngine
 
     void Reload()
     {
-        LoadAndExecuteScript(nullptr, g_lastScriptPath);
+        if (!g_loadedScriptPaths.empty())
+        {
+            LoadAndExecuteScripts(nullptr, g_loadedScriptPaths);
+        }
+        else
+        {
+            LoadAndExecuteScript(nullptr, g_lastScriptPath);
+        }
+    }
+
+    bool AddScript(const std::wstring &scriptPath)
+    {
+        const std::wstring resolved = ResolveEntryScript(scriptPath);
+        for (const auto &p : g_loadedScriptPaths)
+        {
+            if (p == resolved)
+                return true;
+        }
+        std::vector<std::wstring> next = g_loadedScriptPaths;
+        next.push_back(resolved);
+        return LoadAndExecuteScripts(nullptr, next);
+    }
+
+    bool RemoveScript(const std::wstring &scriptPath)
+    {
+        const std::wstring resolved = ResolveEntryScript(scriptPath);
+        std::vector<std::wstring> next;
+        for (const auto &p : g_loadedScriptPaths)
+        {
+            if (p != resolved)
+            {
+                next.push_back(p);
+            }
+        }
+        if (next.size() == g_loadedScriptPaths.size())
+            return false;
+        return LoadAndExecuteScripts(nullptr, next);
+    }
+
+    bool RefreshScript(const std::wstring &scriptPath)
+    {
+        const std::wstring resolved = ResolveEntryScript(scriptPath);
+        bool found = false;
+        for (const auto &p : g_loadedScriptPaths)
+        {
+            if (p == resolved)
+            {
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            return false;
+        return LoadAndExecuteScripts(nullptr, g_loadedScriptPaths);
+    }
+
+    std::vector<std::wstring> GetLoadedScripts()
+    {
+        return g_loadedScriptPaths;
     }
 
     void OnTimer(UINT_PTR id)

@@ -26,6 +26,9 @@
 #include "../shared/Logging.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "../scripting/quickjs/modules/NovadeskModule.h"
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -80,6 +83,43 @@ void RemoveAllTrayIcons();
 static TrayState *GetTrayState(int trayId);
 static void DispatchTrayMouseEvent(int trayId, const char *name);
 static void ShowTrayMenuInternal(int trayId, const std::vector<MenuItem> *menu, const POINT *position);
+
+static bool SendIpcCommand(HWND hWnd, const std::wstring &command, const std::wstring &path)
+{
+    if (!hWnd || command.empty() || path.empty())
+        return false;
+    std::wstring resolved = path;
+    if (PathUtils::IsPathRelative(resolved))
+    {
+        std::error_code ec;
+        const std::filesystem::path cwd = std::filesystem::current_path(ec);
+        if (!ec)
+        {
+            resolved = PathUtils::ResolvePath(resolved, cwd.wstring());
+        }
+    }
+    else
+    {
+        resolved = PathUtils::NormalizePath(resolved);
+    }
+
+    const std::wstring payload = command + L"|" + resolved;
+    COPYDATASTRUCT cds{};
+    cds.cbData = static_cast<DWORD>((payload.size() + 1) * sizeof(wchar_t));
+    cds.lpData = const_cast<wchar_t *>(payload.c_str());
+    return SendMessage(hWnd, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&cds)) != 0;
+}
+
+static std::wstring CreateTempListPath()
+{
+    wchar_t tempPath[MAX_PATH + 1] = {};
+    if (!GetTempPathW(MAX_PATH, tempPath))
+        return L"";
+    wchar_t filePath[MAX_PATH + 1] = {};
+    if (!GetTempFileNameW(tempPath, L"nds", 0, filePath))
+        return L"";
+    return std::wstring(filePath);
+}
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                       _In_opt_ HINSTANCE hPrevInstance,
@@ -149,11 +189,41 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         if (argv && argc > 1)
         {
             std::wstring cmd;
+            std::vector<std::wstring> loadPaths;
+            std::wstring refreshPath;
+            std::wstring unloadPath;
+            bool listScripts = false;
             for (int i = 1; i < argc; ++i)
             {
                 if (!cmd.empty())
                     cmd += L" ";
                 cmd += argv[i];
+
+                const std::wstring arg = argv[i];
+                if (arg == L"--list-scripts")
+                {
+                    listScripts = true;
+                    continue;
+                }
+                if (arg == L"--refresh" && i + 1 < argc)
+                {
+                    refreshPath = argv[++i];
+                    continue;
+                }
+                if (arg == L"--unload" && i + 1 < argc)
+                {
+                    unloadPath = argv[++i];
+                    continue;
+                }
+                if (arg == L"--load" && i + 1 < argc)
+                {
+                    loadPaths.push_back(argv[++i]);
+                    continue;
+                }
+                if (!arg.empty() && arg[0] != L'-')
+                {
+                    loadPaths.push_back(arg);
+                }
             }
             HWND hExisting = FindWindowW(className.c_str(), NULL);
 
@@ -165,6 +235,42 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 {
                     SendMessage(hExisting, WM_COMMAND, ID_TRAY_EXIT, 0);
                     handledCommand = true;
+                }
+                if (listScripts)
+                {
+                    const std::wstring tempList = CreateTempListPath();
+                    if (!tempList.empty())
+                    {
+                        handledCommand = SendIpcCommand(hExisting, L"list", tempList) || handledCommand;
+                        std::wifstream in(tempList.c_str());
+                        if (in.is_open())
+                        {
+                            std::wstring line;
+                            while (std::getline(in, line))
+                            {
+                                if (!line.empty())
+                                    std::wcout << line << std::endl;
+                            }
+                            in.close();
+                        }
+                        DeleteFileW(tempList.c_str());
+                    }
+                    else
+                    {
+                        handledCommand = SendIpcCommand(hExisting, L"list", L"") || handledCommand;
+                    }
+                }
+                if (!refreshPath.empty())
+                {
+                    handledCommand = SendIpcCommand(hExisting, L"refresh", refreshPath) || handledCommand;
+                }
+                if (!unloadPath.empty())
+                {
+                    handledCommand = SendIpcCommand(hExisting, L"unload", unloadPath) || handledCommand;
+                }
+                for (const auto &p : loadPaths)
+                {
+                    handledCommand = SendIpcCommand(hExisting, L"load", p) || handledCommand;
                 }
             }
         }
@@ -257,6 +363,57 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             }
         }
         break;
+        case WM_COPYDATA:
+        {
+            const COPYDATASTRUCT *cds = reinterpret_cast<const COPYDATASTRUCT *>(lParam);
+            if (!cds || !cds->lpData || cds->cbData < sizeof(wchar_t))
+            {
+                return FALSE;
+            }
+            const wchar_t *data = reinterpret_cast<const wchar_t *>(cds->lpData);
+            std::wstring payload(data, cds->cbData / sizeof(wchar_t));
+            if (!payload.empty() && payload.back() == L'\0')
+            {
+                payload.pop_back();
+            }
+
+            const size_t sep = payload.find(L'|');
+            if (sep == std::wstring::npos)
+            {
+                return FALSE;
+            }
+            const std::wstring command = payload.substr(0, sep);
+            const std::wstring path = payload.substr(sep + 1);
+            if (command == L"refresh")
+            {
+                JSEngine::RefreshScript(path);
+            }
+            else if (command == L"unload")
+            {
+                JSEngine::RemoveScript(path);
+            }
+            else if (command == L"load")
+            {
+                JSEngine::AddScript(path);
+            }
+            else if (command == L"list")
+            {
+                const std::vector<std::wstring> scripts = JSEngine::GetLoadedScripts();
+                if (!path.empty())
+                {
+                    std::wofstream out(path.c_str(), std::ios::trunc);
+                    if (out.is_open())
+                    {
+                        for (const auto &s : scripts)
+                        {
+                            out << s << L"\n";
+                        }
+                        out.close();
+                    }
+                }
+            }
+            return TRUE;
+        }
         case WM_DESTROY:
             novadesk::scripting::quickjs::UnloadAllAddons();
             RemoveAllTrayIcons();
@@ -293,24 +450,51 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // Parse command line for custom script path using argv semantics.
     // argv[0] is the executable path; the first user arg is argv[1].
-    std::wstring scriptPath;
+    std::vector<std::wstring> scriptPaths;
     int argc = 0;
     LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (argv)
     {
         if (argc > 1)
         {
-            scriptPath = argv[1];
-            if (!scriptPath.empty())
+            for (int i = 1; i < argc; ++i)
             {
-                Logging::Log(LogLevel::Info, L"Using custom script: %s", scriptPath.c_str());
+                const std::wstring arg = argv[i];
+                if (arg == L"--refresh" || arg == L"--unload")
+                {
+                    if (i + 1 < argc)
+                        ++i;
+                    continue;
+                }
+                if (arg == L"--load")
+                {
+                    if (i + 1 < argc)
+                    {
+                        scriptPaths.push_back(argv[++i]);
+                    }
+                    continue;
+                }
+                if (!arg.empty() && arg[0] == L'-')
+                    continue;
+                scriptPaths.push_back(arg);
             }
         }
         LocalFree(argv);
     }
+    if (!scriptPaths.empty())
+    {
+        std::wstring joined;
+        for (size_t i = 0; i < scriptPaths.size(); ++i)
+        {
+            if (i > 0)
+                joined += L", ";
+            joined += scriptPaths[i];
+        }
+        Logging::Log(LogLevel::Info, L"Using custom scripts: %s", joined.c_str());
+    }
 
     // Load and execute script (with optional custom path)
-    if (!JSEngine::LoadAndExecuteScript(ctx, scriptPath.empty() ? L"" : scriptPath))
+    if (!JSEngine::LoadAndExecuteScripts(ctx, scriptPaths))
     {
         Logging::Log(LogLevel::Error, L"Script execution failed. See QuickJS exception logs above.");
     }
