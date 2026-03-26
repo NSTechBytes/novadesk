@@ -89,6 +89,7 @@ static int g_activeTab = 0;
 static std::unordered_map<std::wstring, std::wstring> g_savedLoadedScripts;
 static bool g_manageAutoCheckForUpdates = false;
 static std::wstring g_lastNotifiedUpdateVersion;
+static bool g_isCheckingForUpdates = false;
 static ULONG_PTR g_gdiplusToken = 0;
 static HBITMAP g_aboutLogoBitmap = nullptr;
 static HFONT g_aboutTitleFont = nullptr;
@@ -1426,6 +1427,44 @@ static void CheckForUpdates(bool silent)
     }
 }
 
+struct UpdateCheckParams
+{
+    bool silent;
+};
+
+static DWORD WINAPI CheckForUpdatesThreadProc(LPVOID lpParam)
+{
+    UpdateCheckParams *params = static_cast<UpdateCheckParams *>(lpParam);
+    if (!params) return 0;
+    
+    bool silent = params->silent;
+    delete params;
+
+    CheckForUpdates(silent);
+
+    g_isCheckingForUpdates = false;
+    return 0;
+}
+
+static void StartAsyncUpdateCheck(bool silent)
+{
+    if (g_isCheckingForUpdates)
+        return;
+
+    g_isCheckingForUpdates = true;
+    UpdateCheckParams *params = new UpdateCheckParams{silent};
+    HANDLE hThread = CreateThread(nullptr, 0, CheckForUpdatesThreadProc, params, 0, nullptr);
+    if (hThread)
+    {
+        CloseHandle(hThread);
+    }
+    else
+    {
+        delete params;
+        g_isCheckingForUpdates = false;
+    }
+}
+
 static void OnSettingsControlClicked(int controlId)
 {
     const HWND ctrl = reinterpret_cast<HWND>(GetDlgItem(g_mainWindow, controlId));
@@ -1910,7 +1949,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         ConfigureAutoUpdateTimer(hWnd);
         if (g_manageAutoCheckForUpdates)
         {
-            CheckForUpdates(true);
+            StartAsyncUpdateCheck(true);
         }
         RefreshListView();
         ApplyTabState();
@@ -1983,7 +2022,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             }
             break;
         case kControlIdCheckUpdates:
-            CheckForUpdates(false);
+            StartAsyncUpdateCheck(false);
             break;
         case kControlIdAboutDonate:
             OpenUrl(L"https://www.patreon.com/cw/officialnovadesk");
