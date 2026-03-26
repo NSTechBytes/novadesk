@@ -79,6 +79,7 @@ namespace JSEngine
         std::unordered_map<Widget *, std::wstring> g_widgetOwners;
         std::unordered_map<int, std::wstring> g_trayOwners;
         std::unordered_set<std::wstring> g_staleScripts;
+        std::unordered_map<std::wstring, int> g_scriptEvalRevisions;
 
         void DestroyAllWidgets()
         {
@@ -291,6 +292,8 @@ namespace JSEngine
             }
 
             const std::string fileName = Utils::ToString(finalScriptPath);
+            const int revision = ++g_scriptEvalRevisions[finalScriptPath];
+            const std::string evalModuleName = fileName + "#rev=" + std::to_string(revision);
             const std::wstring scriptDir = PathUtils::GetParentDir(finalScriptPath);
             const std::string dirName = Utils::ToString(scriptDir);
             g_currentScriptDir = scriptDir;
@@ -317,7 +320,7 @@ namespace JSEngine
                 g_context,
                 moduleSource.c_str(),
                 moduleSource.size(),
-                fileName.c_str(),
+                evalModuleName.c_str(),
                 JS_EVAL_TYPE_MODULE);
 
             if (JS_IsException(result))
@@ -1403,6 +1406,7 @@ namespace JSEngine
         ClearIpcHandlersForScript(g_mainIpcHandlers, resolved);
         g_loadedScriptPaths = next;
         g_staleScripts.insert(resolved);
+        g_scriptEvalRevisions.erase(resolved);
         return true;
     }
 
@@ -1420,10 +1424,17 @@ namespace JSEngine
         }
         if (!found)
             return false;
-        // Refresh should re-run module top-level side effects for this script.
-        // Because QuickJS module instances are cached per runtime, do a full reload.
-        g_staleScripts.insert(resolved);
-        return LoadAndExecuteScripts(nullptr, g_loadedScriptPaths);
+        DestroyWidgetsForScript(resolved);
+        ClearTraysForScript(resolved);
+        ClearTimersForScript(resolved);
+        ClearIpcListenersForScript(g_mainIpcListeners, resolved);
+        ClearIpcListenersForScript(g_uiIpcListeners, resolved);
+        ClearIpcChannelListenersForScript(g_mainIpcChannelListeners, resolved);
+        ClearIpcChannelListenersForScript(g_uiIpcChannelListeners, resolved);
+        ClearIpcHandlersForScript(g_mainIpcHandlers, resolved);
+        if (!EnsureRuntime())
+            return false;
+        return ExecuteScriptFile(resolved);
     }
 
     std::vector<std::wstring> GetLoadedScripts()
