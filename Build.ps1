@@ -181,10 +181,12 @@ try {
     $distDir = Join-Path $RepoRoot "dist"
     $distNwmDir = Join-Path $distDir "nwm"
     $distWidgetsDir = Join-Path $distDir "Widgets"
+    $distImagesDir = Join-Path $distDir "images"
     $distNwmTemplateDir = Join-Path $distNwmDir "template"
 
     $novadeskExeSrc = Join-Path $RepoRoot "$BuildDir\novadesk.exe"
     $widgetsSrc = Join-Path $RepoRoot "src\Widgets\builtin\Widgets"
+    $imagesSrc = Join-Path $RepoRoot "src\apps\assets\images"
     $nwmExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\nwm\nwm.exe"
     $nwmTemplateSrc = Join-Path $RepoRoot "src\Widgets\template"
     $installerStubExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\installer_stub\installer_stub.exe"
@@ -192,6 +194,7 @@ try {
 
     Assert-PathExists -PathValue $novadeskExeSrc -Label "novadesk.exe"
     Assert-PathExists -PathValue $widgetsSrc -Label "Widgets source"
+    Assert-PathExists -PathValue $imagesSrc -Label "images source"
     Assert-PathExists -PathValue $nwmExeSrc -Label "nwm.exe"
     Assert-PathExists -PathValue $nwmTemplateSrc -Label "nwm template source"
     Assert-PathExists -PathValue $installerStubExeSrc -Label "installer_stub.exe"
@@ -204,6 +207,7 @@ try {
     Copy-Item -Path $novadeskExeSrc -Destination (Join-Path $distDir "novadesk.exe") -Force
     Copy-Item -Path $manageExeSrc -Destination (Join-Path $distDir "manage_novadesk.exe") -Force
     Copy-DirectoryContent -SourceDir $widgetsSrc -DestinationDir $distWidgetsDir
+    Copy-DirectoryContent -SourceDir $imagesSrc -DestinationDir $distImagesDir
     Copy-Item -Path $nwmExeSrc -Destination (Join-Path $distNwmDir "nwm.exe") -Force
     Copy-DirectoryContent -SourceDir $nwmTemplateSrc -DestinationDir $distNwmTemplateDir
     Copy-Item -Path $installerStubExeSrc -Destination (Join-Path $distNwmDir "installer_stub.exe") -Force

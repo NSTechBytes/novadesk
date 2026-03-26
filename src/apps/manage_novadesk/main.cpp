@@ -8,6 +8,8 @@
 #include <windows.h>
 #include <commctrl.h>
 #include <shlobj.h>
+#include <shellapi.h>
+#include <gdiplus.h>
 #include <string>
 #include <vector>
 #include <unordered_set>
@@ -22,6 +24,7 @@
 #include "resource.h"
 
 #pragma comment(lib, "comctl32.lib")
+#pragma comment(lib, "gdiplus.lib")
 
 
 struct WidgetEntry
@@ -50,6 +53,21 @@ static HWND g_btnRefresh = nullptr;
 static HWND g_btnRefreshAll = nullptr;
 static HWND g_tab = nullptr;
 static HWND g_logsList = nullptr;
+static HWND g_settingsPanel = nullptr;
+static HWND g_aboutLogo = nullptr;
+static HWND g_aboutAppName = nullptr;
+static HWND g_aboutVersion = nullptr;
+static HWND g_aboutCopyright = nullptr;
+static HWND g_aboutDivider = nullptr;
+static HWND g_aboutHomeLabel = nullptr;
+static HWND g_aboutHomeLink = nullptr;
+static HWND g_aboutDocsLabel = nullptr;
+static HWND g_aboutDocsLink = nullptr;
+static HWND g_aboutSupportGroup = nullptr;
+static HWND g_aboutSupportTitle = nullptr;
+static HWND g_aboutSupportText = nullptr;
+static HWND g_aboutDonateButton = nullptr;
+static HWND g_aboutBottomNote = nullptr;
 static HICON g_windowIconLarge = nullptr;
 static HICON g_windowIconSmall = nullptr;
 static HWND g_mainWindow = nullptr;
@@ -59,6 +77,11 @@ static HANDLE g_novadeskLogThread = nullptr;
 static std::wstring g_pendingLogLine;
 static int g_activeTab = 0;
 static std::unordered_map<std::wstring, std::wstring> g_savedLoadedScripts;
+static ULONG_PTR g_gdiplusToken = 0;
+static HBITMAP g_aboutLogoBitmap = nullptr;
+static HFONT g_aboutTitleFont = nullptr;
+static HFONT g_aboutSectionFont = nullptr;
+static HFONT g_aboutBodyFont = nullptr;
 
 static const int kControlIdRefreshList = 101;
 static const int kControlIdLoad = 102;
@@ -66,11 +89,106 @@ static const int kControlIdUnload = 103;
 static const int kControlIdRefresh = 104;
 static const int kControlIdRefreshAll = 105;
 static const int kControlIdTabs = 106;
+static const int kControlIdAboutHome = 201;
+static const int kControlIdAboutDocs = 202;
+static const int kControlIdAboutDonate = 203;
 static const UINT kLogAppendMessage = WM_APP + 20;
 static const UINT_PTR kLogsRefreshTimerId = 1;
 static const int kMaxLogRows = 2000;
 static void ExecuteNovadeskCommand(const std::wstring &cmd, const std::wstring &path);
 static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd);
+static std::wstring GetAboutLogoPath();
+
+static void InitGdiPlus()
+{
+    if (g_gdiplusToken != 0)
+    {
+        return;
+    }
+
+    Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+    Gdiplus::GdiplusStartup(&g_gdiplusToken, &gdiplusStartupInput, nullptr);
+}
+
+static void ShutdownGdiPlus()
+{
+    if (g_gdiplusToken != 0)
+    {
+        Gdiplus::GdiplusShutdown(g_gdiplusToken);
+        g_gdiplusToken = 0;
+    }
+}
+
+static HBITMAP LoadScaledBitmapFromPng(const std::wstring &path, int maxWidth, int maxHeight)
+{
+    if (path.empty() || maxWidth <= 0 || maxHeight <= 0)
+    {
+        return nullptr;
+    }
+
+    Gdiplus::Bitmap source(path.c_str());
+    if (source.GetLastStatus() != Gdiplus::Ok)
+    {
+        return nullptr;
+    }
+
+    const UINT srcW = source.GetWidth();
+    const UINT srcH = source.GetHeight();
+    if (srcW == 0 || srcH == 0)
+    {
+        return nullptr;
+    }
+
+    const double scaleW = static_cast<double>(maxWidth) / static_cast<double>(srcW);
+    const double scaleH = static_cast<double>(maxHeight) / static_cast<double>(srcH);
+    const double scale = (scaleW < scaleH) ? scaleW : scaleH;
+    int dstW = static_cast<int>(srcW * scale);
+    int dstH = static_cast<int>(srcH * scale);
+    if (dstW < 1)
+        dstW = 1;
+    if (dstH < 1)
+        dstH = 1;
+
+    Gdiplus::Bitmap canvas(dstW, dstH, PixelFormat32bppPARGB);
+    Gdiplus::Graphics graphics(&canvas);
+    graphics.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+    graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
+    graphics.DrawImage(&source, Gdiplus::Rect(0, 0, dstW, dstH));
+
+    HBITMAP outBitmap = nullptr;
+    if (canvas.GetHBITMAP(Gdiplus::Color::Transparent, &outBitmap) != Gdiplus::Ok)
+    {
+        return nullptr;
+    }
+    return outBitmap;
+}
+
+static void UpdateAboutLogo()
+{
+    if (!g_aboutLogo)
+    {
+        return;
+    }
+
+    if (g_aboutLogoBitmap)
+    {
+        DeleteObject(g_aboutLogoBitmap);
+        g_aboutLogoBitmap = nullptr;
+    }
+
+    g_aboutLogoBitmap = LoadScaledBitmapFromPng(GetAboutLogoPath(), 92, 92);
+    SendMessageW(g_aboutLogo, STM_SETIMAGE, IMAGE_BITMAP, reinterpret_cast<LPARAM>(g_aboutLogoBitmap));
+}
+
+static void OpenUrl(const wchar_t *url)
+{
+    if (!url || !url[0])
+    {
+        return;
+    }
+    ShellExecuteW(nullptr, L"open", url, nullptr, nullptr, SW_SHOWNORMAL);
+}
 
 static std::wstring GetExeDir()
 {
@@ -85,6 +203,11 @@ static std::wstring JoinPath(const std::wstring &a, const std::wstring &b)
     std::filesystem::path p(a);
     p /= b;
     return p.wstring();
+}
+
+static std::wstring GetAboutLogoPath()
+{
+    return JoinPath(GetExeDir(), L"images\\Novadesk.png");
 }
 
 static void LoadWindowIcons(HINSTANCE hInstance)
@@ -849,17 +972,105 @@ static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd)
     }
 }
 
+static void LayoutTabPages(const RECT &pageRect)
+{
+    const int pageWidth = pageRect.right - pageRect.left;
+    const int pageHeight = pageRect.bottom - pageRect.top;
+
+    if (g_list)
+    {
+        MoveWindow(g_list, pageRect.left, pageRect.top, pageWidth, pageHeight, TRUE);
+    }
+    if (g_logsList)
+    {
+        MoveWindow(g_logsList, pageRect.left, pageRect.top, pageWidth, pageHeight, TRUE);
+    }
+    if (g_settingsPanel)
+    {
+        MoveWindow(g_settingsPanel, pageRect.left, pageRect.top, pageWidth, pageHeight, TRUE);
+    }
+
+    const int margin = 14;
+    const int logoTop = pageRect.top + margin;
+    const int logoColLeft = pageRect.left + margin;
+    const int logoColWidth = 150;
+    const int logoSize = 92;
+    const int logoLeft = logoColLeft + (logoColWidth - logoSize) / 2;
+    const int infoLeft = logoColLeft + logoColWidth + 10;
+    const int infoWidth = pageRect.right - infoLeft - margin;
+
+    if (g_aboutLogo)
+        MoveWindow(g_aboutLogo, logoLeft, logoTop, logoSize, logoSize, TRUE);
+    if (g_aboutAppName)
+        MoveWindow(g_aboutAppName, infoLeft, logoTop, infoWidth, 34, TRUE);
+    if (g_aboutVersion)
+        MoveWindow(g_aboutVersion, infoLeft, logoTop + 36, infoWidth, 24, TRUE);
+    if (g_aboutCopyright)
+        MoveWindow(g_aboutCopyright, infoLeft, logoTop + 62, infoWidth, 24, TRUE);
+    if (g_aboutDivider)
+        MoveWindow(g_aboutDivider, infoLeft, logoTop + 88, infoWidth, 2, TRUE);
+    if (g_aboutHomeLabel)
+        MoveWindow(g_aboutHomeLabel, infoLeft, logoTop + 102, 64, 24, TRUE);
+    if (g_aboutHomeLink)
+        MoveWindow(g_aboutHomeLink, infoLeft + 66, logoTop + 102, infoWidth - 66, 24, TRUE);
+    if (g_aboutDocsLabel)
+        MoveWindow(g_aboutDocsLabel, infoLeft, logoTop + 128, 64, 24, TRUE);
+    if (g_aboutDocsLink)
+        MoveWindow(g_aboutDocsLink, infoLeft + 66, logoTop + 128, infoWidth - 66, 24, TRUE);
+
+    const int supportTop = logoTop + 162;
+    const int supportHeight = 126;
+    const int supportLeft = pageRect.left + margin;
+    const int supportWidth = pageWidth - (margin * 2);
+    const int supportButtonWidth = 230;
+    const int supportButtonHeight = 34;
+    const int supportContentLeft = supportLeft + 16;
+    const int supportButtonLeft = supportLeft + supportWidth - supportButtonWidth - 16;
+    const int supportTextWidth = supportButtonLeft - supportContentLeft - 16;
+    if (g_aboutSupportGroup)
+        MoveWindow(g_aboutSupportGroup, supportLeft, supportTop, supportWidth, supportHeight, TRUE);
+    if (g_aboutSupportTitle)
+        MoveWindow(g_aboutSupportTitle, supportContentLeft, supportTop + 20, supportTextWidth, 28, TRUE);
+    if (g_aboutSupportText)
+        MoveWindow(g_aboutSupportText, supportContentLeft, supportTop + 52, supportTextWidth, 62, TRUE);
+    if (g_aboutDonateButton)
+        MoveWindow(g_aboutDonateButton, supportButtonLeft, supportTop + 48, supportButtonWidth, supportButtonHeight, TRUE);
+
+    if (g_aboutBottomNote)
+        MoveWindow(g_aboutBottomNote, pageRect.left + 150, supportTop + supportHeight + 8, pageWidth - 300, 24, TRUE);
+}
+
 static void ApplyTabState()
 {
     const bool widgetsTab = (g_activeTab == 0);
+    const bool logsTab = (g_activeTab == 1);
+    const bool settingsTab = (g_activeTab == 2);
+    const bool aboutTab = (g_activeTab == 3);
+
     ShowWindow(g_list, widgetsTab ? SW_SHOW : SW_HIDE);
-    ShowWindow(g_logsList, widgetsTab ? SW_HIDE : SW_SHOW);
+    ShowWindow(g_logsList, logsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_settingsPanel, settingsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutLogo, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutAppName, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutVersion, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutCopyright, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutDivider, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutHomeLabel, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutHomeLink, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutDocsLabel, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutDocsLink, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutSupportGroup, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutSupportTitle, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutSupportText, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutDonateButton, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutBottomNote, aboutTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnRefreshList, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnLoad, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnUnload, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefresh, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefreshAll, widgetsTab ? SW_SHOW : SW_HIDE);
 
-    if (!widgetsTab)
+    if (logsTab)
     {
         RefreshLogsView();
     }
@@ -936,10 +1147,20 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         AddTrayIcon(hWnd);
         LoadManageSettings();
         ApplySavedLoadedScripts();
+        InitGdiPlus();
 
         g_buttonFont = CreateFontW(-12, 0, 0, 0, FW_LIGHT, FALSE, FALSE, FALSE,
                                    DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                    CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+        g_aboutTitleFont = CreateFontW(-28, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                                       DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                       CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Tahoma");
+        g_aboutSectionFont = CreateFontW(-16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                                         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                         CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Tahoma");
+        g_aboutBodyFont = CreateFontW(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                                      DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                      CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Tahoma");
 
         g_tab = CreateWindowExW(0, WC_TABCONTROLW, L"",
                                 WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
@@ -951,6 +1172,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         TabCtrl_InsertItem(g_tab, 0, &tabItem);
         tabItem.pszText = const_cast<wchar_t *>(L"Logs");
         TabCtrl_InsertItem(g_tab, 1, &tabItem);
+        tabItem.pszText = const_cast<wchar_t *>(L"Settings");
+        TabCtrl_InsertItem(g_tab, 2, &tabItem);
+        tabItem.pszText = const_cast<wchar_t *>(L"About");
+        TabCtrl_InsertItem(g_tab, 3, &tabItem);
 
         RECT tabRectOnParent{};
         GetWindowRect(g_tab, &tabRectOnParent);
@@ -968,6 +1193,68 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                                      WS_CHILD | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS,
                                      pageRect.left, pageRect.top, pageRect.right - pageRect.left, pageRect.bottom - pageRect.top,
                                      hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_settingsPanel = CreateWindowExW(0, L"STATIC", L"",
+                                          WS_CHILD,
+                                          pageRect.left, pageRect.top, pageRect.right - pageRect.left, pageRect.bottom - pageRect.top,
+                                          hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_aboutLogo = CreateWindowExW(0, L"STATIC", L"",
+                                      WS_CHILD | SS_BITMAP | SS_CENTERIMAGE,
+                                      pageRect.left, pageRect.top, 90, 90,
+                                      hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_aboutAppName = CreateWindowExW(0, L"STATIC", L"Novadesk",
+                                         WS_CHILD | SS_LEFT,
+                                         pageRect.left + 120, pageRect.top, pageRect.right - pageRect.left - 140, 32,
+                                         hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_aboutVersion = CreateWindowExW(0, L"STATIC", L"Version 0.7.0.0 (Beta)",
+                                         WS_CHILD | SS_LEFT,
+                                         pageRect.left + 120, pageRect.top + 34, pageRect.right - pageRect.left - 140, 22,
+                                         hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_aboutCopyright = CreateWindowExW(0, L"STATIC", L"(c) 2026 OfficialNovadesk. All rights reserved.",
+                                           WS_CHILD | SS_LEFT,
+                                           pageRect.left + 120, pageRect.top + 58, pageRect.right - pageRect.left - 140, 22,
+                                           hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_aboutDivider = CreateWindowExW(0, L"STATIC", L"",
+                                         WS_CHILD | SS_ETCHEDHORZ,
+                                         pageRect.left + 120, pageRect.top + 84, pageRect.right - pageRect.left - 140, 2,
+                                         hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_aboutHomeLabel = CreateWindowExW(0, L"STATIC", L"Home:",
+                                           WS_CHILD | SS_LEFT,
+                                           pageRect.left + 120, pageRect.top + 94, 60, 22,
+                                           hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_aboutHomeLink = CreateWindowExW(0, WC_LINK, L"<a href=\"https://novadesk.pages.dev/\">https://novadesk.pages.dev/</a>",
+                                          WS_CHILD | WS_TABSTOP,
+                                          pageRect.left + 178, pageRect.top + 94, pageRect.right - pageRect.left - 200, 22,
+                                          hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAboutHome)), GetModuleHandleW(nullptr), nullptr);
+        g_aboutDocsLabel = CreateWindowExW(0, L"STATIC", L"Docs:",
+                                           WS_CHILD | SS_LEFT,
+                                           pageRect.left + 120, pageRect.top + 118, 60, 22,
+                                           hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_aboutDocsLink = CreateWindowExW(0, WC_LINK, L"<a href=\"https://novadesk-docs.pages.dev/\">https://novadesk-docs.pages.dev/</a>",
+                                          WS_CHILD | WS_TABSTOP,
+                                          pageRect.left + 178, pageRect.top + 118, pageRect.right - pageRect.left - 200, 22,
+                                          hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAboutDocs)), GetModuleHandleW(nullptr), nullptr);
+        g_aboutSupportGroup = CreateWindowExW(0, L"BUTTON", L"Support Section",
+                                              WS_CHILD | BS_GROUPBOX,
+                                              pageRect.left + 8, pageRect.top + 146, pageRect.right - pageRect.left - 16, 104,
+                                              hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_aboutSupportTitle = CreateWindowExW(0, L"STATIC", L"Support && Contribution",
+                                              WS_CHILD | SS_LEFT,
+                                              pageRect.left + 22, pageRect.top + 168, pageRect.right - pageRect.left - 210, 26,
+                                              hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_aboutSupportText = CreateWindowExW(0, L"STATIC",
+                                             L"We appreciate your support. If you find Novadesk helpful,\r\n"
+                                             L"consider contributing to its ongoing development.",
+                                             WS_CHILD | SS_LEFT,
+                                             pageRect.left + 22, pageRect.top + 194, pageRect.right - pageRect.left - 220, 44,
+                                             hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_aboutDonateButton = CreateWindowExW(0, L"BUTTON", L"Support Project via Donation",
+                                              WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON,
+                                              pageRect.right - 190, pageRect.top + 188, 176, 32,
+                                              hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAboutDonate)), GetModuleHandleW(nullptr), nullptr);
+        g_aboutBottomNote = CreateWindowExW(0, L"STATIC", L"Development depends on user support.",
+                                            WS_CHILD | SS_CENTER,
+                                            pageRect.left + 120, pageRect.top + 262, pageRect.right - pageRect.left - 240, 24,
+                                            hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
 
         ListView_SetExtendedListViewStyle(g_list, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
 
@@ -1001,6 +1288,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         lcol.pszText = const_cast<wchar_t *>(L"Message");
         lcol.cx = 600;
         ListView_InsertColumn(g_logsList, 3, &lcol);
+        UpdateAboutLogo();
 
         g_btnRefreshList = CreateWindowW(L"BUTTON", L"Refresh List", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                                          10, rc.bottom - 40, 110, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefreshList)), GetModuleHandleW(nullptr), nullptr);
@@ -1022,8 +1310,22 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             SendMessageW(g_btnRefresh, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnRefreshAll, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_logsList, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+            SendMessageW(g_settingsPanel, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+            SendMessageW(g_aboutAppName, WM_SETFONT, (WPARAM)g_aboutTitleFont, TRUE);
+            SendMessageW(g_aboutVersion, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+            SendMessageW(g_aboutCopyright, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+            SendMessageW(g_aboutHomeLabel, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+            SendMessageW(g_aboutHomeLink, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+            SendMessageW(g_aboutDocsLabel, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+            SendMessageW(g_aboutDocsLink, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+            SendMessageW(g_aboutSupportGroup, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+            SendMessageW(g_aboutSupportTitle, WM_SETFONT, (WPARAM)g_aboutSectionFont, TRUE);
+            SendMessageW(g_aboutSupportText, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+            SendMessageW(g_aboutDonateButton, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+            SendMessageW(g_aboutBottomNote, WM_SETFONT, (WPARAM)g_aboutSectionFont, TRUE);
         }
 
+        LayoutTabPages(pageRect);
         RefreshListView();
         ApplyTabState();
         SetTimer(hWnd, kLogsRefreshTimerId, 700, nullptr);
@@ -1053,14 +1355,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             GetClientRect(g_tab, &pageRect);
             TabCtrl_AdjustRect(g_tab, FALSE, &pageRect);
             OffsetRect(&pageRect, tabRectOnParent.left, tabRectOnParent.top);
-            if (g_list)
-            {
-                MoveWindow(g_list, pageRect.left, pageRect.top, pageRect.right - pageRect.left, pageRect.bottom - pageRect.top, TRUE);
-            }
-            if (g_logsList)
-            {
-                MoveWindow(g_logsList, pageRect.left, pageRect.top, pageRect.right - pageRect.left, pageRect.bottom - pageRect.top, TRUE);
-            }
+            LayoutTabPages(pageRect);
         }
         if (g_btnRefreshList)
         {
@@ -1090,6 +1385,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         case kControlIdRefreshAll:
             OnRefreshAll();
             break;
+        case kControlIdAboutDonate:
+            OpenUrl(L"https://novadesk.pages.dev/");
+            break;
         case kTrayMenuCloseId:
             DestroyWindow(hWnd);
             break;
@@ -1108,6 +1406,15 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         {
             g_activeTab = TabCtrl_GetCurSel(g_tab);
             ApplyTabState();
+        }
+        else if (hdr && (hdr->hwndFrom == g_aboutHomeLink || hdr->hwndFrom == g_aboutDocsLink) &&
+                 (hdr->code == NM_CLICK || hdr->code == NM_RETURN))
+        {
+            auto *link = reinterpret_cast<PNMLINK>(lParam);
+            if (link)
+            {
+                OpenUrl(link->item.szUrl);
+            }
         }
         break;
     }
@@ -1162,6 +1469,27 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             DeleteObject(g_buttonFont);
             g_buttonFont = nullptr;
         }
+        if (g_aboutTitleFont)
+        {
+            DeleteObject(g_aboutTitleFont);
+            g_aboutTitleFont = nullptr;
+        }
+        if (g_aboutSectionFont)
+        {
+            DeleteObject(g_aboutSectionFont);
+            g_aboutSectionFont = nullptr;
+        }
+        if (g_aboutBodyFont)
+        {
+            DeleteObject(g_aboutBodyFont);
+            g_aboutBodyFont = nullptr;
+        }
+        if (g_aboutLogoBitmap)
+        {
+            DeleteObject(g_aboutLogoBitmap);
+            g_aboutLogoBitmap = nullptr;
+        }
+        ShutdownGdiPlus();
         if (g_trayMenu)
         {
             DestroyMenu(g_trayMenu);
@@ -1184,7 +1512,7 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
 {
     INITCOMMONCONTROLSEX icc{};
     icc.dwSize = sizeof(icc);
-    icc.dwICC = ICC_LISTVIEW_CLASSES | ICC_TAB_CLASSES;
+    icc.dwICC = ICC_LISTVIEW_CLASSES | ICC_TAB_CLASSES | ICC_LINK_CLASS;
     InitCommonControlsEx(&icc);
 
     const wchar_t *className = L"NovadeskManagerWindow";
