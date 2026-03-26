@@ -9,6 +9,7 @@
 #include <commctrl.h>
 #include <shlobj.h>
 #include <shellapi.h>
+#include <wininet.h>
 #include <gdiplus.h>
 #include <string>
 #include <vector>
@@ -25,6 +26,7 @@
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdiplus.lib")
+#pragma comment(lib, "wininet.lib")
 
 
 struct WidgetEntry
@@ -54,6 +56,14 @@ static HWND g_btnRefreshAll = nullptr;
 static HWND g_tab = nullptr;
 static HWND g_logsList = nullptr;
 static HWND g_settingsPanel = nullptr;
+static HWND g_settingsTitle = nullptr;
+static HWND g_chkRunOnStartup = nullptr;
+static HWND g_btnCheckUpdates = nullptr;
+static HWND g_chkAutoUpdate = nullptr;
+static HWND g_chkEnableLogging = nullptr;
+static HWND g_chkEnableDebugging = nullptr;
+static HWND g_chkSaveLogToFile = nullptr;
+static HWND g_chkUseHardwareAcceleration = nullptr;
 static HWND g_aboutLogo = nullptr;
 static HWND g_aboutAppName = nullptr;
 static HWND g_aboutVersion = nullptr;
@@ -77,6 +87,8 @@ static HANDLE g_novadeskLogThread = nullptr;
 static std::wstring g_pendingLogLine;
 static int g_activeTab = 0;
 static std::unordered_map<std::wstring, std::wstring> g_savedLoadedScripts;
+static bool g_manageAutoCheckForUpdates = false;
+static std::wstring g_lastNotifiedUpdateVersion;
 static ULONG_PTR g_gdiplusToken = 0;
 static HBITMAP g_aboutLogoBitmap = nullptr;
 static HFONT g_aboutTitleFont = nullptr;
@@ -89,15 +101,26 @@ static const int kControlIdUnload = 103;
 static const int kControlIdRefresh = 104;
 static const int kControlIdRefreshAll = 105;
 static const int kControlIdTabs = 106;
+static const int kControlIdRunOnStartup = 301;
+static const int kControlIdCheckUpdates = 302;
+static const int kControlIdAutoCheckUpdates = 303;
+static const int kControlIdEnableLogging = 304;
+static const int kControlIdEnableDebugging = 305;
+static const int kControlIdSaveLogToFile = 306;
+static const int kControlIdUseHardwareAcceleration = 307;
 static const int kControlIdAboutHome = 201;
 static const int kControlIdAboutDocs = 202;
 static const int kControlIdAboutDonate = 203;
 static const UINT kLogAppendMessage = WM_APP + 20;
 static const UINT_PTR kLogsRefreshTimerId = 1;
+static const UINT_PTR kAutoUpdateTimerId = 2;
+static const UINT kAutoUpdateIntervalMs = 60 * 1000; // 1 minute
 static const int kMaxLogRows = 2000;
+static const wchar_t *kCurrentVersion = L"0.6.0.0";
 static void ExecuteNovadeskCommand(const std::wstring &cmd, const std::wstring &path);
 static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd);
 static std::wstring GetAboutLogoPath();
+static void ConfigureAutoUpdateTimer(HWND hWnd);
 
 static void InitGdiPlus()
 {
@@ -367,6 +390,13 @@ static std::wstring GetNovadeskExePath()
     return JoinPath(GetExeDir(), L"Novadesk.exe");
 }
 
+static std::wstring GetManageExePath()
+{
+    wchar_t buf[MAX_PATH + 1] = {};
+    GetModuleFileNameW(nullptr, buf, MAX_PATH);
+    return std::wstring(buf);
+}
+
 static std::wstring GetManageSettingsPath()
 {
     const std::wstring exePath = JoinPath(GetExeDir(), L"manage_window_settings.json");
@@ -392,6 +422,336 @@ static std::wstring GetManageSettingsPath()
     return exePath;
 }
 
+static std::wstring GetNovadeskAppDataDir()
+{
+    PWSTR roaming = nullptr;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &roaming)) && roaming)
+    {
+        const std::wstring appDataDir = std::wstring(roaming) + L"\\Novadesk";
+        CoTaskMemFree(roaming);
+        return appDataDir;
+    }
+    return L"";
+}
+
+static std::wstring GetNovadeskSettingsPath()
+{
+    const std::wstring exePath = JoinPath(GetExeDir(), L"settings.json");
+    std::error_code ec;
+    if (std::filesystem::exists(std::filesystem::path(exePath), ec) && !ec)
+    {
+        return exePath;
+    }
+
+    const std::wstring appDataDir = GetNovadeskAppDataDir();
+    if (!appDataDir.empty())
+    {
+        const std::wstring appDataPath = JoinPath(appDataDir, L"settings.json");
+        if (std::filesystem::exists(std::filesystem::path(appDataPath), ec) && !ec)
+        {
+            return appDataPath;
+        }
+        return appDataPath;
+    }
+
+    return exePath;
+}
+
+static bool LoadNovadeskSettings(nlohmann::json &doc, std::wstring &pathUsed)
+{
+    pathUsed = GetNovadeskSettingsPath();
+    std::ifstream in(std::filesystem::path(pathUsed), std::ios::binary);
+    if (!in.is_open())
+    {
+        doc = nlohmann::json::object();
+        return false;
+    }
+
+    try
+    {
+        in >> doc;
+        if (!doc.is_object())
+        {
+            doc = nlohmann::json::object();
+        }
+        return true;
+    }
+    catch (...)
+    {
+        doc = nlohmann::json::object();
+        return false;
+    }
+}
+
+static bool SaveNovadeskSettings(const nlohmann::json &doc, const std::wstring &path)
+{
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+    std::ofstream out(std::filesystem::path(path), std::ios::binary | std::ios::trunc);
+    if (!out.is_open())
+    {
+        return false;
+    }
+    out << doc.dump(4);
+    return true;
+}
+
+static bool GetNovadeskSettingBool(const std::string &key, bool defaultValue)
+{
+    nlohmann::json doc;
+    std::wstring path;
+    LoadNovadeskSettings(doc, path);
+    if (doc.contains(key) && doc[key].is_boolean())
+    {
+        return doc[key].get<bool>();
+    }
+    return defaultValue;
+}
+
+static bool SetNovadeskSettingBool(const std::string &key, bool value)
+{
+    nlohmann::json doc;
+    std::wstring path;
+    LoadNovadeskSettings(doc, path);
+    doc[key] = value;
+    return SaveNovadeskSettings(doc, path);
+}
+
+static bool IsRunOnStartupEnabled()
+{
+    HKEY hKey = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+    {
+        return false;
+    }
+
+    wchar_t value[2048] = {};
+    DWORD valueSize = sizeof(value);
+    DWORD type = 0;
+    const LONG rc = RegQueryValueExW(hKey, L"Novadesk", nullptr, &type, reinterpret_cast<LPBYTE>(value), &valueSize);
+    RegCloseKey(hKey);
+
+    if (rc != ERROR_SUCCESS || type != REG_SZ)
+    {
+        return false;
+    }
+
+    const std::wstring expectedExe = GetManageExePath();
+    std::wstring configured = value;
+    configured.erase(std::remove(configured.begin(), configured.end(), L'"'), configured.end());
+    return _wcsicmp(configured.c_str(), expectedExe.c_str()) == 0;
+}
+
+static bool SetRunOnStartupEnabled(bool enabled)
+{
+    HKEY hKey = nullptr;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, nullptr, 0, KEY_SET_VALUE, nullptr, &hKey, nullptr) != ERROR_SUCCESS)
+    {
+        return false;
+    }
+
+    bool ok = true;
+    if (enabled)
+    {
+        const std::wstring value = L"\"" + GetManageExePath() + L"\"";
+        const LONG rc = RegSetValueExW(hKey, L"Novadesk", 0, REG_SZ,
+                                       reinterpret_cast<const BYTE *>(value.c_str()),
+                                       static_cast<DWORD>((value.size() + 1) * sizeof(wchar_t)));
+        ok = (rc == ERROR_SUCCESS);
+    }
+    else
+    {
+        const LONG rc = RegDeleteValueW(hKey, L"Novadesk");
+        ok = (rc == ERROR_SUCCESS || rc == ERROR_FILE_NOT_FOUND);
+    }
+
+    RegCloseKey(hKey);
+    return ok;
+}
+
+static std::wstring HttpGetText(const std::wstring &url)
+{
+    HINTERNET hInternet = InternetOpenW(L"ManageNovadesk/1.0", INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, 0);
+    if (!hInternet)
+    {
+        return L"";
+    }
+
+    HINTERNET hUrl = InternetOpenUrlW(hInternet, url.c_str(), nullptr, 0,
+                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_SECURE, 0);
+    if (!hUrl)
+    {
+        InternetCloseHandle(hInternet);
+        return L"";
+    }
+
+    std::string bytes;
+    char buffer[4096];
+    DWORD read = 0;
+    while (InternetReadFile(hUrl, buffer, static_cast<DWORD>(sizeof(buffer)), &read) && read > 0)
+    {
+        bytes.append(buffer, buffer + read);
+    }
+
+    InternetCloseHandle(hUrl);
+    InternetCloseHandle(hInternet);
+    return BytesToWide(bytes);
+}
+
+static std::vector<int> ParseVersion(const std::wstring &value)
+{
+    std::wstring s = value;
+    if (!s.empty() && (s[0] == L'v' || s[0] == L'V'))
+    {
+        s.erase(s.begin());
+    }
+    for (wchar_t &ch : s)
+    {
+        if (!(ch >= L'0' && ch <= L'9') && ch != L'.')
+        {
+            ch = L'.';
+        }
+    }
+
+    std::vector<int> parts;
+    std::wstringstream ss(s);
+    std::wstring token;
+    while (std::getline(ss, token, L'.'))
+    {
+        if (token.empty())
+            continue;
+        try
+        {
+            parts.push_back(std::stoi(token));
+        }
+        catch (...)
+        {
+            parts.push_back(0);
+        }
+    }
+    return parts;
+}
+
+static bool IsVersionNewer(const std::wstring &candidate, const std::wstring &current)
+{
+    std::vector<int> a = ParseVersion(candidate);
+    std::vector<int> b = ParseVersion(current);
+    const size_t n = (a.size() > b.size()) ? a.size() : b.size();
+    a.resize(n, 0);
+    b.resize(n, 0);
+    for (size_t i = 0; i < n; ++i)
+    {
+        if (a[i] > b[i])
+            return true;
+        if (a[i] < b[i])
+            return false;
+    }
+    return false;
+}
+
+static bool GetLatestGithubRelease(std::wstring &tag, std::wstring &assetUrl, std::wstring &assetName)
+{
+    tag.clear();
+    assetUrl.clear();
+    assetName.clear();
+
+    const std::wstring jsonText = HttpGetText(L"https://api.github.com/repos/Official-Novadesk/novadesk/releases/latest");
+    if (jsonText.empty())
+    {
+        return false;
+    }
+    try
+    {
+        nlohmann::json doc = nlohmann::json::parse(WideToUtf8(jsonText));
+        if (doc.contains("tag_name") && doc["tag_name"].is_string())
+        {
+            tag = Utf8ToWide(doc["tag_name"].get<std::string>());
+        }
+        if (doc.contains("assets") && doc["assets"].is_array())
+        {
+            for (const auto &asset : doc["assets"])
+            {
+                if (!asset.is_object())
+                    continue;
+                if (!asset.contains("name") || !asset.contains("browser_download_url"))
+                    continue;
+                if (!asset["name"].is_string() || !asset["browser_download_url"].is_string())
+                    continue;
+
+                const std::wstring name = Utf8ToWide(asset["name"].get<std::string>());
+                const std::wstring url = Utf8ToWide(asset["browser_download_url"].get<std::string>());
+                std::wstring lowerName = name;
+                std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::towlower);
+                if (lowerName.find(L".exe") != std::wstring::npos || lowerName.find(L".msi") != std::wstring::npos)
+                {
+                    assetName = name;
+                    assetUrl = url;
+                    break;
+                }
+            }
+            if (assetUrl.empty())
+            {
+                for (const auto &asset : doc["assets"])
+                {
+                    if (!asset.is_object())
+                        continue;
+                    if (!asset.contains("name") || !asset.contains("browser_download_url"))
+                        continue;
+                    if (!asset["name"].is_string() || !asset["browser_download_url"].is_string())
+                        continue;
+                    assetName = Utf8ToWide(asset["name"].get<std::string>());
+                    assetUrl = Utf8ToWide(asset["browser_download_url"].get<std::string>());
+                    break;
+                }
+            }
+        }
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return !tag.empty();
+}
+
+static bool DownloadFileToPath(const std::wstring &url, const std::wstring &destinationPath)
+{
+    HINTERNET hInternet = InternetOpenW(L"ManageNovadesk/1.0", INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, 0);
+    if (!hInternet)
+        return false;
+
+    HINTERNET hUrl = InternetOpenUrlW(hInternet, url.c_str(), nullptr, 0,
+                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_SECURE, 0);
+    if (!hUrl)
+    {
+        InternetCloseHandle(hInternet);
+        return false;
+    }
+
+    std::ofstream out(std::filesystem::path(destinationPath), std::ios::binary | std::ios::trunc);
+    if (!out.is_open())
+    {
+        InternetCloseHandle(hUrl);
+        InternetCloseHandle(hInternet);
+        return false;
+    }
+
+    char buffer[8192];
+    DWORD read = 0;
+    while (InternetReadFile(hUrl, buffer, static_cast<DWORD>(sizeof(buffer)), &read) && read > 0)
+    {
+        out.write(buffer, read);
+    }
+    out.close();
+    InternetCloseHandle(hUrl);
+    InternetCloseHandle(hInternet);
+    return std::filesystem::exists(std::filesystem::path(destinationPath));
+}
+
+static void SetSettingsStatusText(const std::wstring &text)
+{
+    UNREFERENCED_PARAMETER(text);
+}
+
 static void SaveManageSettings()
 {
     const std::wstring path = GetManageSettingsPath();
@@ -404,6 +764,7 @@ static void SaveManageSettings()
     std::sort(paths.begin(), paths.end());
 
     nlohmann::json doc = nlohmann::json::object();
+    doc["autoCheckForUpdates"] = g_manageAutoCheckForUpdates;
     doc["loadedScripts"] = nlohmann::json::array();
     for (const auto &p : paths)
     {
@@ -436,6 +797,7 @@ static void RememberLoadedScriptState(const std::wstring &scriptPath, bool loade
 static void LoadManageSettings()
 {
     g_savedLoadedScripts.clear();
+    g_manageAutoCheckForUpdates = false;
     const std::wstring path = GetManageSettingsPath();
     std::ifstream in(std::filesystem::path(path), std::ios::binary);
     if (!in.is_open())
@@ -453,7 +815,17 @@ static void LoadManageSettings()
         return;
     }
 
-    if (!doc.is_object() || !doc.contains("loadedScripts") || !doc["loadedScripts"].is_array())
+    if (!doc.is_object())
+    {
+        return;
+    }
+
+    if (doc.contains("autoCheckForUpdates") && doc["autoCheckForUpdates"].is_boolean())
+    {
+        g_manageAutoCheckForUpdates = doc["autoCheckForUpdates"].get<bool>();
+    }
+
+    if (!doc.contains("loadedScripts") || !doc["loadedScripts"].is_array())
     {
         return;
     }
@@ -972,6 +1344,144 @@ static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd)
     }
 }
 
+static void RefreshSettingsControls()
+{
+    if (!g_chkRunOnStartup)
+        return;
+
+    SendMessageW(g_chkRunOnStartup, BM_SETCHECK, IsRunOnStartupEnabled() ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessageW(g_chkAutoUpdate, BM_SETCHECK, g_manageAutoCheckForUpdates ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessageW(g_chkEnableLogging, BM_SETCHECK, GetNovadeskSettingBool("disableLogging", false) ? BST_UNCHECKED : BST_CHECKED, 0);
+    SendMessageW(g_chkEnableDebugging, BM_SETCHECK, GetNovadeskSettingBool("enableDebugging", false) ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessageW(g_chkSaveLogToFile, BM_SETCHECK, GetNovadeskSettingBool("saveLogToFile", false) ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessageW(g_chkUseHardwareAcceleration, BM_SETCHECK, GetNovadeskSettingBool("useHardwareAcceleration", false) ? BST_CHECKED : BST_UNCHECKED, 0);
+}
+
+static void CheckForUpdates(bool silent)
+{
+    SetSettingsStatusText(L"Checking for updates...");
+    std::wstring latest;
+    std::wstring assetUrl;
+    std::wstring assetName;
+    if (!GetLatestGithubRelease(latest, assetUrl, assetName))
+    {
+        SetSettingsStatusText(L"Update check failed.");
+        if (!silent)
+        {
+            MessageBoxW(g_mainWindow, L"Unable to check latest version from GitHub.", L"Novadesk Update", MB_OK | MB_ICONWARNING);
+        }
+        return;
+    }
+
+    if (IsVersionNewer(latest, kCurrentVersion))
+    {
+        const std::wstring msg = L"New version available: " + latest + L" (current: " + std::wstring(kCurrentVersion) + L")";
+        SetSettingsStatusText(msg);
+        const bool shouldShowDialog = !silent || (g_manageAutoCheckForUpdates && latest != g_lastNotifiedUpdateVersion);
+        if (shouldShowDialog)
+        {
+            const int rc = MessageBoxW(g_mainWindow,
+                                       (msg + L"\n\nDownload latest release to temp and run setup now?").c_str(),
+                                       L"Novadesk Update",
+                                       MB_YESNO | MB_ICONINFORMATION);
+            g_lastNotifiedUpdateVersion = latest;
+            if (rc == IDYES)
+            {
+                if (assetUrl.empty())
+                {
+                    MessageBoxW(g_mainWindow, L"No downloadable asset found for the latest release.", L"Novadesk Update", MB_OK | MB_ICONWARNING);
+                    return;
+                }
+
+                wchar_t tempPath[MAX_PATH + 1] = {};
+                if (!GetTempPathW(MAX_PATH, tempPath))
+                {
+                    MessageBoxW(g_mainWindow, L"Could not access temp folder.", L"Novadesk Update", MB_OK | MB_ICONWARNING);
+                    return;
+                }
+
+                std::wstring fileName = assetName.empty() ? L"novadesk_latest_setup.exe" : assetName;
+                std::wstring destination = JoinPath(tempPath, fileName);
+                SetSettingsStatusText(L"Downloading update...");
+                if (!DownloadFileToPath(assetUrl, destination))
+                {
+                    SetSettingsStatusText(L"Download failed.");
+                    MessageBoxW(g_mainWindow, L"Failed to download latest release.", L"Novadesk Update", MB_OK | MB_ICONWARNING);
+                    return;
+                }
+
+                SetSettingsStatusText(L"Launching setup...");
+                ShellExecuteW(nullptr, L"open", destination.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            }
+        }
+    }
+    else
+    {
+        const std::wstring msg = L"You are up to date (" + std::wstring(kCurrentVersion) + L").";
+        SetSettingsStatusText(msg);
+        if (!silent)
+        {
+            MessageBoxW(g_mainWindow, msg.c_str(), L"Novadesk Update", MB_OK | MB_ICONINFORMATION);
+        }
+    }
+}
+
+static void OnSettingsControlClicked(int controlId)
+{
+    const HWND ctrl = reinterpret_cast<HWND>(GetDlgItem(g_mainWindow, controlId));
+    const bool checked = (SendMessageW(ctrl, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    switch (controlId)
+    {
+    case kControlIdRunOnStartup:
+        if (!SetRunOnStartupEnabled(checked))
+        {
+            MessageBoxW(g_mainWindow, L"Failed to update startup entry.", L"Manage Novadesk", MB_OK | MB_ICONWARNING);
+        }
+        break;
+    case kControlIdAutoCheckUpdates:
+        g_manageAutoCheckForUpdates = checked;
+        SaveManageSettings();
+        ConfigureAutoUpdateTimer(g_mainWindow);
+        if (checked)
+        {
+            CheckForUpdates(true);
+        }
+        break;
+    case kControlIdEnableLogging:
+        SetNovadeskSettingBool("disableLogging", !checked);
+        ExecuteNovadeskCommandNoPath(checked ? L"--enable-logging" : L"--disable-logging");
+        break;
+    case kControlIdEnableDebugging:
+        SetNovadeskSettingBool("enableDebugging", checked);
+        ExecuteNovadeskCommandNoPath(checked ? L"--enable-debugging" : L"--disable-debugging");
+        break;
+    case kControlIdSaveLogToFile:
+        SetNovadeskSettingBool("saveLogToFile", checked);
+        ExecuteNovadeskCommandNoPath(checked ? L"--enable-save-log-to-file" : L"--disable-save-log-to-file");
+        break;
+    case kControlIdUseHardwareAcceleration:
+        SetNovadeskSettingBool("useHardwareAcceleration", checked);
+        ExecuteNovadeskCommandNoPath(checked ? L"--enable-hardware-acceleration" : L"--disable-hardware-acceleration");
+        break;
+    default:
+        break;
+    }
+
+    RefreshSettingsControls();
+}
+
+static void ConfigureAutoUpdateTimer(HWND hWnd)
+{
+    if (!hWnd)
+        return;
+
+    KillTimer(hWnd, kAutoUpdateTimerId);
+    if (g_manageAutoCheckForUpdates)
+    {
+        SetTimer(hWnd, kAutoUpdateTimerId, kAutoUpdateIntervalMs, nullptr);
+    }
+}
+
 static void LayoutTabPages(const RECT &pageRect)
 {
     const int pageWidth = pageRect.right - pageRect.left;
@@ -989,6 +1499,24 @@ static void LayoutTabPages(const RECT &pageRect)
     {
         MoveWindow(g_settingsPanel, pageRect.left, pageRect.top, pageWidth, pageHeight, TRUE);
     }
+    const int settingsLeft = pageRect.left + 16;
+    const int settingsWidth = pageWidth - 32;
+    if (g_settingsTitle)
+        MoveWindow(g_settingsTitle, settingsLeft, pageRect.top + 12, settingsWidth, 24, TRUE);
+    if (g_chkRunOnStartup)
+        MoveWindow(g_chkRunOnStartup, settingsLeft, pageRect.top + 46, settingsWidth, 24, TRUE);
+    if (g_btnCheckUpdates)
+        MoveWindow(g_btnCheckUpdates, settingsLeft, pageRect.top + 78, 170, 28, TRUE);
+    if (g_chkAutoUpdate)
+        MoveWindow(g_chkAutoUpdate, settingsLeft + 186, pageRect.top + 80, settingsWidth - 186, 24, TRUE);
+    if (g_chkEnableLogging)
+        MoveWindow(g_chkEnableLogging, settingsLeft, pageRect.top + 118, settingsWidth, 24, TRUE);
+    if (g_chkEnableDebugging)
+        MoveWindow(g_chkEnableDebugging, settingsLeft, pageRect.top + 148, settingsWidth, 24, TRUE);
+    if (g_chkSaveLogToFile)
+        MoveWindow(g_chkSaveLogToFile, settingsLeft, pageRect.top + 178, settingsWidth, 24, TRUE);
+    if (g_chkUseHardwareAcceleration)
+        MoveWindow(g_chkUseHardwareAcceleration, settingsLeft, pageRect.top + 208, settingsWidth, 24, TRUE);
 
     const int margin = 14;
     const int logoTop = pageRect.top + margin;
@@ -1050,6 +1578,14 @@ static void ApplyTabState()
     ShowWindow(g_list, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_logsList, logsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_settingsPanel, settingsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_settingsTitle, settingsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_chkRunOnStartup, settingsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnCheckUpdates, settingsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_chkAutoUpdate, settingsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_chkEnableLogging, settingsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_chkEnableDebugging, settingsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_chkSaveLogToFile, settingsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_chkUseHardwareAcceleration, settingsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_aboutLogo, aboutTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_aboutAppName, aboutTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_aboutVersion, aboutTab ? SW_SHOW : SW_HIDE);
@@ -1073,6 +1609,10 @@ static void ApplyTabState()
     if (logsTab)
     {
         RefreshLogsView();
+    }
+    if (settingsTab)
+    {
+        RefreshSettingsControls();
     }
     UpdateButtonState();
 }
@@ -1197,6 +1737,38 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                                           WS_CHILD,
                                           pageRect.left, pageRect.top, pageRect.right - pageRect.left, pageRect.bottom - pageRect.top,
                                           hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_settingsTitle = CreateWindowExW(0, L"STATIC", L"Manage Settings",
+                                          WS_CHILD | SS_LEFT,
+                                          pageRect.left + 16, pageRect.top + 12, pageRect.right - pageRect.left - 32, 24,
+                                          hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_chkRunOnStartup = CreateWindowExW(0, L"BUTTON", L"Run On Startup",
+                                            WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                            pageRect.left + 16, pageRect.top + 46, 240, 24,
+                                            hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRunOnStartup)), GetModuleHandleW(nullptr), nullptr);
+        g_btnCheckUpdates = CreateWindowExW(0, L"BUTTON", L"Check for Update",
+                                            WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON,
+                                            pageRect.left + 16, pageRect.top + 78, 160, 28,
+                                            hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdCheckUpdates)), GetModuleHandleW(nullptr), nullptr);
+        g_chkAutoUpdate = CreateWindowExW(0, L"BUTTON", L"Automatically Check For the Update",
+                                          WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                          pageRect.left + 190, pageRect.top + 80, 300, 24,
+                                          hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAutoCheckUpdates)), GetModuleHandleW(nullptr), nullptr);
+        g_chkEnableLogging = CreateWindowExW(0, L"BUTTON", L"Enable Logging",
+                                             WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                             pageRect.left + 16, pageRect.top + 118, 220, 24,
+                                             hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdEnableLogging)), GetModuleHandleW(nullptr), nullptr);
+        g_chkEnableDebugging = CreateWindowExW(0, L"BUTTON", L"Enable Debugging",
+                                               WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                               pageRect.left + 16, pageRect.top + 148, 220, 24,
+                                               hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdEnableDebugging)), GetModuleHandleW(nullptr), nullptr);
+        g_chkSaveLogToFile = CreateWindowExW(0, L"BUTTON", L"Enable Save Log to File",
+                                             WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                             pageRect.left + 16, pageRect.top + 178, 260, 24,
+                                             hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdSaveLogToFile)), GetModuleHandleW(nullptr), nullptr);
+        g_chkUseHardwareAcceleration = CreateWindowExW(0, L"BUTTON", L"Enable Use Hardware Acceleration",
+                                                       WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                                       pageRect.left + 16, pageRect.top + 208, 300, 24,
+                                                       hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdUseHardwareAcceleration)), GetModuleHandleW(nullptr), nullptr);
         g_aboutLogo = CreateWindowExW(0, L"STATIC", L"",
                                       WS_CHILD | SS_BITMAP | SS_CENTERIMAGE,
                                       pageRect.left, pageRect.top, 90, 90,
@@ -1311,6 +1883,14 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             SendMessageW(g_btnRefreshAll, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_logsList, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_settingsPanel, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+            SendMessageW(g_settingsTitle, WM_SETFONT, (WPARAM)g_aboutSectionFont, TRUE);
+            SendMessageW(g_chkRunOnStartup, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+            SendMessageW(g_btnCheckUpdates, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+            SendMessageW(g_chkAutoUpdate, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+            SendMessageW(g_chkEnableLogging, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+            SendMessageW(g_chkEnableDebugging, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+            SendMessageW(g_chkSaveLogToFile, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+            SendMessageW(g_chkUseHardwareAcceleration, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_aboutAppName, WM_SETFONT, (WPARAM)g_aboutTitleFont, TRUE);
             SendMessageW(g_aboutVersion, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
             SendMessageW(g_aboutCopyright, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
@@ -1326,6 +1906,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         }
 
         LayoutTabPages(pageRect);
+        RefreshSettingsControls();
+        ConfigureAutoUpdateTimer(hWnd);
+        if (g_manageAutoCheckForUpdates)
+        {
+            CheckForUpdates(true);
+        }
         RefreshListView();
         ApplyTabState();
         SetTimer(hWnd, kLogsRefreshTimerId, 700, nullptr);
@@ -1385,8 +1971,22 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         case kControlIdRefreshAll:
             OnRefreshAll();
             break;
+        case kControlIdRunOnStartup:
+        case kControlIdAutoCheckUpdates:
+        case kControlIdEnableLogging:
+        case kControlIdEnableDebugging:
+        case kControlIdSaveLogToFile:
+        case kControlIdUseHardwareAcceleration:
+            if (HIWORD(wParam) == BN_CLICKED)
+            {
+                OnSettingsControlClicked(LOWORD(wParam));
+            }
+            break;
+        case kControlIdCheckUpdates:
+            CheckForUpdates(false);
+            break;
         case kControlIdAboutDonate:
-            OpenUrl(L"https://novadesk.pages.dev/");
+            OpenUrl(L"https://www.patreon.com/cw/officialnovadesk");
             break;
         case kTrayMenuCloseId:
             DestroyWindow(hWnd);
@@ -1423,6 +2023,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         {
             RefreshLogsView();
         }
+        else if (wParam == kAutoUpdateTimerId && g_manageAutoCheckForUpdates)
+        {
+            CheckForUpdates(true);
+        }
         return 0;
     case kLogAppendMessage:
     {
@@ -1454,6 +2058,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     case WM_DESTROY:
         g_mainWindow = nullptr;
         KillTimer(hWnd, kLogsRefreshTimerId);
+        KillTimer(hWnd, kAutoUpdateTimerId);
         if (g_windowIconLarge)
         {
             DestroyIcon(g_windowIconLarge);
@@ -1554,7 +2159,7 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
     if (!hWnd)
         return 0;
 
-    ShowWindow(hWnd, nCmdShow);
+    ShowWindow(hWnd, SW_HIDE);
     UpdateWindow(hWnd);
 
     MSG msg{};
