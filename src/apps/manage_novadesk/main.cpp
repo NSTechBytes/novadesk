@@ -11,11 +11,13 @@
 #include <string>
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
 #include <filesystem>
 #include <algorithm>
 #include <sstream>
 #include <fstream>
 #include <iterator>
+#include "../../third_party/json/json.hpp"
 
 #include "resource.h"
 
@@ -55,6 +57,7 @@ static HANDLE g_novadeskLogWrite = nullptr;
 static HANDLE g_novadeskLogThread = nullptr;
 static std::wstring g_pendingLogLine;
 static int g_activeTab = 0;
+static std::unordered_map<std::wstring, std::wstring> g_savedLoadedScripts;
 
 static const int kControlIdRefreshList = 101;
 static const int kControlIdLoad = 102;
@@ -64,6 +67,7 @@ static const int kControlIdTabs = 105;
 static const UINT kLogAppendMessage = WM_APP + 20;
 static const UINT_PTR kLogsRefreshTimerId = 1;
 static const int kMaxLogRows = 2000;
+static void ExecuteNovadeskCommand(const std::wstring &cmd, const std::wstring &path);
 
 static std::wstring GetExeDir()
 {
@@ -145,6 +149,30 @@ static std::wstring BytesToWide(const std::string &bytes)
     return convert(CP_ACP);
 }
 
+static std::string WideToUtf8(const std::wstring &wide)
+{
+    if (wide.empty())
+        return std::string();
+    int needed = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()), nullptr, 0, nullptr, nullptr);
+    if (needed <= 0)
+        return std::string();
+    std::string out(needed, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()), out.data(), needed, nullptr, nullptr);
+    return out;
+}
+
+static std::wstring Utf8ToWide(const std::string &utf8)
+{
+    if (utf8.empty())
+        return std::wstring();
+    int needed = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()), nullptr, 0);
+    if (needed <= 0)
+        return std::wstring();
+    std::wstring out(needed, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()), out.data(), needed);
+    return out;
+}
+
 static DWORD WINAPI NovadeskLogReaderThreadProc(LPVOID)
 {
     HANDLE readPipe = g_novadeskLogRead;
@@ -211,6 +239,118 @@ static std::wstring GetWidgetsRoot()
 static std::wstring GetNovadeskExePath()
 {
     return JoinPath(GetExeDir(), L"Novadesk.exe");
+}
+
+static std::wstring GetManageSettingsPath()
+{
+    const std::wstring exePath = JoinPath(GetExeDir(), L"manage_window_settings.json");
+    std::error_code ec;
+    if (std::filesystem::exists(std::filesystem::path(exePath), ec) && !ec)
+    {
+        return exePath;
+    }
+
+    PWSTR roaming = nullptr;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &roaming)) && roaming)
+    {
+        const std::wstring appDataDir = std::wstring(roaming) + L"\\Novadesk";
+        CoTaskMemFree(roaming);
+        std::filesystem::create_directories(std::filesystem::path(appDataDir), ec);
+        if (!ec)
+        {
+            return JoinPath(appDataDir, L"manage_window_settings.json");
+        }
+    }
+
+    // Fallback: keep using EXE directory path if AppData path is unavailable.
+    return exePath;
+}
+
+static void SaveManageSettings()
+{
+    const std::wstring path = GetManageSettingsPath();
+    std::vector<std::wstring> paths;
+    paths.reserve(g_savedLoadedScripts.size());
+    for (const auto &kv : g_savedLoadedScripts)
+    {
+        paths.push_back(kv.second);
+    }
+    std::sort(paths.begin(), paths.end());
+
+    nlohmann::json doc = nlohmann::json::object();
+    doc["loadedScripts"] = nlohmann::json::array();
+    for (const auto &p : paths)
+    {
+        doc["loadedScripts"].push_back(WideToUtf8(p));
+    }
+
+    std::ofstream out(std::filesystem::path(path), std::ios::binary | std::ios::trunc);
+    if (!out.is_open())
+    {
+        LogLine(L"[Manage] Failed to write settings file: " + path);
+        return;
+    }
+    out << doc.dump(2);
+}
+
+static void RememberLoadedScriptState(const std::wstring &scriptPath, bool loaded)
+{
+    const std::wstring norm = NormalizePathLower(scriptPath);
+    if (loaded)
+    {
+        g_savedLoadedScripts[norm] = scriptPath;
+    }
+    else
+    {
+        g_savedLoadedScripts.erase(norm);
+    }
+    SaveManageSettings();
+}
+
+static void LoadManageSettings()
+{
+    g_savedLoadedScripts.clear();
+    const std::wstring path = GetManageSettingsPath();
+    std::ifstream in(std::filesystem::path(path), std::ios::binary);
+    if (!in.is_open())
+    {
+        return;
+    }
+
+    nlohmann::json doc;
+    try
+    {
+        in >> doc;
+    }
+    catch (...)
+    {
+        return;
+    }
+
+    if (!doc.is_object() || !doc.contains("loadedScripts") || !doc["loadedScripts"].is_array())
+    {
+        return;
+    }
+
+    for (const auto &v : doc["loadedScripts"])
+    {
+        if (!v.is_string())
+            continue;
+        std::wstring pathValue = Utf8ToWide(v.get<std::string>());
+        if (pathValue.empty())
+        {
+            continue;
+        }
+        g_savedLoadedScripts[NormalizePathLower(pathValue)] = pathValue;
+    }
+}
+
+static void ApplySavedLoadedScripts()
+{
+    for (const auto &kv : g_savedLoadedScripts)
+    {
+        ExecuteNovadeskCommand(L"--load", kv.second);
+    }
 }
 
 static std::wstring CreateTempListPath()
@@ -706,6 +846,7 @@ static void OnLoadSelected()
     }
     LogLine(L"[Manage] Load: " + g_widgets[idx].scriptPath);
     ExecuteNovadeskCommand(L"--load", g_widgets[idx].scriptPath);
+    RememberLoadedScriptState(g_widgets[idx].scriptPath, true);
     RefreshListView();
     UpdateButtonState();
 }
@@ -720,6 +861,7 @@ static void OnUnloadSelected()
     }
     LogLine(L"[Manage] Unload: " + g_widgets[idx].scriptPath);
     ExecuteNovadeskCommand(L"--unload", g_widgets[idx].scriptPath);
+    RememberLoadedScriptState(g_widgets[idx].scriptPath, false);
     RefreshListView();
     UpdateButtonState();
 }
@@ -754,6 +896,8 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
         StartNovadesk();
         AddTrayIcon(hWnd);
+        LoadManageSettings();
+        ApplySavedLoadedScripts();
 
         g_buttonFont = CreateFontW(-12, 0, 0, 0, FW_LIGHT, FALSE, FALSE, FALSE,
                                    DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
