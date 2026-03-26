@@ -1177,7 +1177,13 @@ namespace JSEngine
         {
             if (scriptPath.empty())
             {
-                return PathUtils::ResolvePath(L"index.js", PathUtils::GetWidgetsDir());
+                const std::wstring defaultEntry = PathUtils::ResolvePath(L"index.js", PathUtils::GetWidgetsDir());
+                std::error_code ec;
+                if (!std::filesystem::exists(std::filesystem::path(defaultEntry), ec))
+                {
+                    return L"";
+                }
+                return defaultEntry;
             }
 
             // Respect explicit custom script paths first.
@@ -1229,6 +1235,7 @@ namespace JSEngine
     bool LoadAndExecuteScripts(duk_context *ctx, const std::vector<std::wstring> &scriptPaths)
     {
         (void)ctx;
+        const bool isDefaultLoad = scriptPaths.empty();
         if (!g_staleScripts.empty())
         {
             DestroyAllWidgets();
@@ -1245,7 +1252,11 @@ namespace JSEngine
         std::vector<std::wstring> resolved;
         if (scriptPaths.empty())
         {
-            resolved.push_back(ResolveEntryScript(L""));
+            const std::wstring defaultEntry = ResolveEntryScript(L"");
+            if (!defaultEntry.empty())
+            {
+                resolved.push_back(defaultEntry);
+            }
         }
         else
         {
@@ -1305,6 +1316,11 @@ namespace JSEngine
         g_staleScripts.clear();
         if (loadedPaths.empty())
         {
+            if (isDefaultLoad)
+            {
+                Logging::Log(LogLevel::Info, L"No default Widgets\\index.js found. Starting without scripts.");
+                return true;
+            }
             Logging::Log(LogLevel::Error, L"No scripts loaded successfully.");
             return false;
         }
