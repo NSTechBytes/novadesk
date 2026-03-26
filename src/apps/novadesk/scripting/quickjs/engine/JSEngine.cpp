@@ -1248,6 +1248,7 @@ namespace JSEngine
         }
 
         DestroyAllWidgets();
+        DestroyAllTrays();
 
         std::vector<std::wstring> resolved;
         if (scriptPaths.empty())

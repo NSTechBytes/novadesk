@@ -86,10 +86,10 @@ static void ShowTrayMenuInternal(int trayId, const std::vector<MenuItem> *menu, 
 
 static bool SendIpcCommand(HWND hWnd, const std::wstring &command, const std::wstring &path)
 {
-    if (!hWnd || command.empty() || path.empty())
+    if (!hWnd || command.empty())
         return false;
     std::wstring resolved = path;
-    if (PathUtils::IsPathRelative(resolved))
+    if (!resolved.empty() && PathUtils::IsPathRelative(resolved))
     {
         std::error_code ec;
         const std::filesystem::path cwd = std::filesystem::current_path(ec);
@@ -98,7 +98,7 @@ static bool SendIpcCommand(HWND hWnd, const std::wstring &command, const std::ws
             resolved = PathUtils::ResolvePath(resolved, cwd.wstring());
         }
     }
-    else
+    else if (!resolved.empty())
     {
         resolved = PathUtils::NormalizePath(resolved);
     }
@@ -192,6 +192,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             std::vector<std::wstring> loadPaths;
             std::wstring refreshPath;
             std::wstring unloadPath;
+            bool refreshAll = false;
             bool listScripts = false;
             std::wstring listScriptsFile;
             for (int i = 1; i < argc; ++i)
@@ -215,6 +216,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 if (arg == L"--refresh" && i + 1 < argc)
                 {
                     refreshPath = argv[++i];
+                    continue;
+                }
+                if (arg == L"--refresh-all")
+                {
+                    refreshAll = true;
                     continue;
                 }
                 if (arg == L"--unload" && i + 1 < argc)
@@ -277,6 +283,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 if (!refreshPath.empty())
                 {
                     handledCommand = SendIpcCommand(hExisting, L"refresh", refreshPath) || handledCommand;
+                }
+                if (refreshAll)
+                {
+                    handledCommand = SendIpcCommand(hExisting, L"refresh-all", L"") || handledCommand;
                 }
                 if (!unloadPath.empty())
                 {
@@ -402,6 +412,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             {
                 JSEngine::RefreshScript(path);
             }
+            else if (command == L"refresh-all")
+            {
+                JSEngine::Reload();
+            }
             else if (command == L"unload")
             {
                 JSEngine::RemoveScript(path);
@@ -478,6 +492,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 {
                     if (i + 1 < argc)
                         ++i;
+                    continue;
+                }
+                if (arg == L"--refresh-all")
+                {
                     continue;
                 }
                 if (arg == L"--load")

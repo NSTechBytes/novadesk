@@ -47,6 +47,7 @@ static HWND g_btnRefreshList = nullptr;
 static HWND g_btnLoad = nullptr;
 static HWND g_btnUnload = nullptr;
 static HWND g_btnRefresh = nullptr;
+static HWND g_btnRefreshAll = nullptr;
 static HWND g_tab = nullptr;
 static HWND g_logsList = nullptr;
 static HICON g_windowIconLarge = nullptr;
@@ -63,11 +64,13 @@ static const int kControlIdRefreshList = 101;
 static const int kControlIdLoad = 102;
 static const int kControlIdUnload = 103;
 static const int kControlIdRefresh = 104;
-static const int kControlIdTabs = 105;
+static const int kControlIdRefreshAll = 105;
+static const int kControlIdTabs = 106;
 static const UINT kLogAppendMessage = WM_APP + 20;
 static const UINT_PTR kLogsRefreshTimerId = 1;
 static const int kMaxLogRows = 2000;
 static void ExecuteNovadeskCommand(const std::wstring &cmd, const std::wstring &path);
+static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd);
 
 static std::wstring GetExeDir()
 {
@@ -791,8 +794,11 @@ static void UpdateButtonState()
         EnableWindow(g_btnLoad, FALSE);
         EnableWindow(g_btnUnload, FALSE);
         EnableWindow(g_btnRefresh, FALSE);
+        EnableWindow(g_btnRefreshAll, FALSE);
         return;
     }
+
+    EnableWindow(g_btnRefreshAll, TRUE);
 
     const int idx = GetSelectedIndex();
     if (idx < 0 || idx >= static_cast<int>(g_widgets.size()))
@@ -820,6 +826,29 @@ static void RefreshLogsView()
     }
 }
 
+static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd)
+{
+    const std::wstring exe = GetNovadeskExePath();
+
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+
+    std::wstring cmdLine = L"\"" + exe + L"\" " + cmd;
+    LogLine(L"[Manage] Exec: " + cmdLine);
+    if (CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
+    {
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+        LogLine(L"[Manage] Exec OK.");
+    }
+    else
+    {
+        DWORD err = GetLastError();
+        LogLine(L"[Manage] Exec failed (" + std::to_wstring(err) + L"): " + Win32ErrorToString(err));
+    }
+}
+
 static void ApplyTabState()
 {
     const bool widgetsTab = (g_activeTab == 0);
@@ -828,6 +857,7 @@ static void ApplyTabState()
     ShowWindow(g_btnLoad, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnUnload, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefresh, widgetsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnRefreshAll, widgetsTab ? SW_SHOW : SW_HIDE);
 
     if (!widgetsTab)
     {
@@ -876,6 +906,14 @@ static void OnRefreshSelected()
     }
     LogLine(L"[Manage] Refresh: " + g_widgets[idx].scriptPath);
     ExecuteNovadeskCommand(L"--refresh", g_widgets[idx].scriptPath);
+    RefreshListView();
+    UpdateButtonState();
+}
+
+static void OnRefreshAll()
+{
+    LogLine(L"[Manage] Refresh All");
+    ExecuteNovadeskCommandNoPath(L"--refresh-all");
     RefreshListView();
     UpdateButtonState();
 }
@@ -972,6 +1010,8 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                                     220, rc.bottom - 40, 80, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdUnload)), GetModuleHandleW(nullptr), nullptr);
         g_btnRefresh = CreateWindowW(L"BUTTON", L"Refresh", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                                      310, rc.bottom - 40, 80, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefresh)), GetModuleHandleW(nullptr), nullptr);
+        g_btnRefreshAll = CreateWindowW(L"BUTTON", L"Refresh All", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                        400, rc.bottom - 40, 100, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefreshAll)), GetModuleHandleW(nullptr), nullptr);
 
         if (g_buttonFont)
         {
@@ -980,6 +1020,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             SendMessageW(g_btnLoad, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnUnload, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnRefresh, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+            SendMessageW(g_btnRefreshAll, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_logsList, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         }
 
@@ -1027,6 +1068,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             MoveWindow(g_btnLoad, 130, rc.bottom - 40, 80, 28, TRUE);
             MoveWindow(g_btnUnload, 220, rc.bottom - 40, 80, 28, TRUE);
             MoveWindow(g_btnRefresh, 310, rc.bottom - 40, 80, 28, TRUE);
+            MoveWindow(g_btnRefreshAll, 400, rc.bottom - 40, 100, 28, TRUE);
         }
         return 0;
     }
@@ -1044,6 +1086,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             break;
         case kControlIdRefresh:
             OnRefreshSelected();
+            break;
+        case kControlIdRefreshAll:
+            OnRefreshAll();
             break;
         case kTrayMenuCloseId:
             DestroyWindow(hWnd);
