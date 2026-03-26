@@ -937,6 +937,7 @@ namespace novadesk::scripting::quickjs
             TrayDestroy(trayId);
             JSEngine::ClearTrayEventCallbacks(trayId);
             JSEngine::ClearTrayCommandCallbacks(trayId);
+            JSEngine::UnregisterTrayOwner(trayId);
             return JS_UNDEFINED;
         }
 
@@ -1031,6 +1032,7 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, tray, "setContextMenu", JS_NewCFunction(ctx, JsTraySetContextMenu, "setContextMenu", 1));
             JS_SetPropertyStr(ctx, tray, "on", JS_NewCFunction(ctx, JsTrayOn, "on", 2));
             JS_SetPropertyStr(ctx, tray, "destroy", JS_NewCFunction(ctx, JsTrayDestroy, "destroy", 0));
+            JSEngine::RegisterTrayOwner(trayId, JSEngine::GetCurrentScriptPath());
             return tray;
         }
 

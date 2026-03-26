@@ -193,6 +193,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             std::wstring refreshPath;
             std::wstring unloadPath;
             bool listScripts = false;
+            std::wstring listScriptsFile;
             for (int i = 1; i < argc; ++i)
             {
                 if (!cmd.empty())
@@ -203,6 +204,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 if (arg == L"--list-scripts")
                 {
                     listScripts = true;
+                    continue;
+                }
+                if (arg == L"--list-scripts-file" && i + 1 < argc)
+                {
+                    listScripts = true;
+                    listScriptsFile = argv[++i];
                     continue;
                 }
                 if (arg == L"--refresh" && i + 1 < argc)
@@ -238,22 +245,29 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 }
                 if (listScripts)
                 {
-                    const std::wstring tempList = CreateTempListPath();
+                    std::wstring tempList = listScriptsFile;
+                    if (tempList.empty())
+                    {
+                        tempList = CreateTempListPath();
+                    }
                     if (!tempList.empty())
                     {
                         handledCommand = SendIpcCommand(hExisting, L"list", tempList) || handledCommand;
-                        std::wifstream in(tempList.c_str());
-                        if (in.is_open())
+                        if (listScriptsFile.empty())
                         {
-                            std::wstring line;
-                            while (std::getline(in, line))
+                            std::wifstream in(tempList.c_str());
+                            if (in.is_open())
                             {
-                                if (!line.empty())
-                                    std::wcout << line << std::endl;
+                                std::wstring line;
+                                while (std::getline(in, line))
+                                {
+                                    if (!line.empty())
+                                        std::wcout << line << std::endl;
+                                }
+                                in.close();
                             }
-                            in.close();
+                            DeleteFileW(tempList.c_str());
                         }
-                        DeleteFileW(tempList.c_str());
                     }
                     else
                     {

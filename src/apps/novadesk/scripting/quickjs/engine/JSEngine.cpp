@@ -4,8 +4,10 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <filesystem>
+#include <algorithm>
 
 #include "../../domain/Widget.h"
 #include "../../shared/FileUtils.h"
@@ -13,6 +15,7 @@
 #include "../../shared/PathUtils.h"
 #include "../../shared/System.h"
 #include "../../shared/Utils.h"
+#include "../../domain/Novadesk.h"
 #include "../modules/ModuleSystem.h"
 #include "../modules/WidgetUiBindings.h"
 
@@ -20,10 +23,24 @@ namespace JSEngine
 {
     namespace
     {
+        struct IpcListener;
+        struct IpcHandler;
+        void LogQuickJsException(JSContext *ctx);
+        JSValue CreateMainIpcObject(JSContext *ctx);
+        void ClearWidgetEventListeners();
+        void ClearAllWidgetContextMenuCallbacks();
+        void ClearAllTrayCommandCallbacksInternal();
+        void ClearAllTrayEventCallbacksInternal();
+        void ClearAllTimers();
+        void ClearCallbacks(std::vector<IpcListener> &list);
+        void ClearChannelMap(std::unordered_map<std::string, std::vector<IpcListener>> &map);
+        void ClearHandlerMap(std::unordered_map<std::string, IpcHandler> &map);
         HWND g_messageWindow = nullptr;
         JSRuntime *g_runtime = nullptr;
         JSContext *g_context = nullptr;
         std::wstring g_lastScriptPath;
+        std::wstring g_currentScriptDir;
+        std::wstring g_currentScriptPath;
         std::vector<std::wstring> g_loadedScriptPaths;
         std::vector<JSValue> g_eventCallbacks;
         std::unordered_map<Widget *, std::unordered_map<std::string, std::vector<int>>> g_widgetEventListeners;
@@ -35,19 +52,302 @@ namespace JSEngine
         };
         std::unordered_map<int, TrayCommandCallback> g_trayCommandCallbacks;
         std::unordered_map<int, std::unordered_map<std::string, std::vector<JSValue>>> g_trayEventCallbacks;
+        struct IpcListener
+        {
+            JSValue callback = JS_UNDEFINED;
+            std::wstring owner;
+        };
+        struct IpcHandler
+        {
+            JSValue callback = JS_UNDEFINED;
+            std::wstring owner;
+        };
         struct TimerEntry
         {
             JSValue callback = JS_UNDEFINED;
             std::vector<JSValue> args;
             bool repeat = false;
+            std::wstring owner;
         };
         std::unordered_map<UINT_PTR, TimerEntry> g_timers;
         UINT_PTR g_nextTimerId = 50000;
-        std::vector<JSValue> g_mainIpcListeners;
-        std::vector<JSValue> g_uiIpcListeners;
-        std::unordered_map<std::string, std::vector<JSValue>> g_mainIpcChannelListeners;
-        std::unordered_map<std::string, std::vector<JSValue>> g_uiIpcChannelListeners;
-        std::unordered_map<std::string, JSValue> g_mainIpcHandlers;
+        std::vector<IpcListener> g_mainIpcListeners;
+        std::vector<IpcListener> g_uiIpcListeners;
+        std::unordered_map<std::string, std::vector<IpcListener>> g_mainIpcChannelListeners;
+        std::unordered_map<std::string, std::vector<IpcListener>> g_uiIpcChannelListeners;
+        std::unordered_map<std::string, IpcHandler> g_mainIpcHandlers;
+        std::unordered_map<Widget *, std::wstring> g_widgetOwners;
+        std::unordered_map<int, std::wstring> g_trayOwners;
+        std::unordered_set<std::wstring> g_staleScripts;
+
+        void DestroyAllWidgets()
+        {
+            std::vector<Widget *> copy = Widget::GetAllWidgets();
+            Widget::ClearAllWidgets();
+            for (auto w : copy)
+            {
+                delete w;
+            }
+            g_widgetOwners.clear();
+            g_staleScripts.clear();
+        }
+
+        void DestroyAllTrays()
+        {
+            std::vector<int> ids;
+            ids.reserve(g_trayOwners.size());
+            for (auto &kv : g_trayOwners)
+            {
+                ids.push_back(kv.first);
+            }
+            for (int trayId : ids)
+            {
+                TrayDestroy(trayId);
+                ClearTrayEventCallbacks(trayId);
+                ClearTrayCommandCallbacks(trayId);
+            }
+            g_trayOwners.clear();
+        }
+
+        void ResetRuntime()
+        {
+            ClearAllTimers();
+            for (size_t i = 1; i < g_eventCallbacks.size(); ++i)
+            {
+                JS_FreeValue(g_context, g_eventCallbacks[i]);
+            }
+            g_eventCallbacks.clear();
+            g_eventCallbacks.push_back(JS_UNDEFINED);
+            ClearWidgetEventListeners();
+            ClearAllWidgetContextMenuCallbacks();
+            ClearAllTrayCommandCallbacksInternal();
+            ClearAllTrayEventCallbacksInternal();
+            ClearCallbacks(g_mainIpcListeners);
+            ClearCallbacks(g_uiIpcListeners);
+            ClearChannelMap(g_mainIpcChannelListeners);
+            ClearChannelMap(g_uiIpcChannelListeners);
+            ClearHandlerMap(g_mainIpcHandlers);
+            g_widgetOwners.clear();
+            g_trayOwners.clear();
+
+            if (g_context)
+            {
+                JS_FreeContext(g_context);
+                g_context = nullptr;
+            }
+            if (g_runtime)
+            {
+                JS_FreeRuntime(g_runtime);
+                g_runtime = nullptr;
+            }
+        }
+
+        void DestroyWidgetsForScript(const std::wstring &scriptPath)
+        {
+            std::vector<Widget *> toDelete;
+            auto &all = Widget::GetAllWidgets();
+            for (auto *w : all)
+            {
+                auto it = g_widgetOwners.find(w);
+                if (it != g_widgetOwners.end() && it->second == scriptPath)
+                {
+                    toDelete.push_back(w);
+                }
+            }
+            if (!toDelete.empty())
+            {
+                auto &allWidgets = Widget::GetAllWidgets();
+                std::unordered_set<Widget *> toDeleteSet;
+                toDeleteSet.reserve(toDelete.size());
+                for (auto *w : toDelete)
+                    toDeleteSet.insert(w);
+                allWidgets.erase(std::remove_if(allWidgets.begin(), allWidgets.end(),
+                                                [&](Widget *w)
+                                                { return toDeleteSet.find(w) != toDeleteSet.end(); }),
+                                 allWidgets.end());
+                for (auto *w : toDelete)
+                {
+                    g_widgetOwners.erase(w);
+                    delete w;
+                }
+            }
+        }
+
+        void ClearTimersForScript(const std::wstring &scriptPath)
+        {
+            if (!g_messageWindow)
+                return;
+            for (auto it = g_timers.begin(); it != g_timers.end();)
+            {
+                if (it->second.owner == scriptPath)
+                {
+                    KillTimer(g_messageWindow, it->first);
+                    JS_FreeValue(g_context, it->second.callback);
+                    for (JSValue &a : it->second.args)
+                    {
+                        JS_FreeValue(g_context, a);
+                    }
+                    it = g_timers.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+        }
+
+        void ClearIpcListenersForScript(std::vector<IpcListener> &list, const std::wstring &scriptPath)
+        {
+            for (auto it = list.begin(); it != list.end();)
+            {
+                if (it->owner == scriptPath)
+                {
+                    JS_FreeValue(g_context, it->callback);
+                    it = list.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+        }
+
+        void ClearIpcChannelListenersForScript(std::unordered_map<std::string, std::vector<IpcListener>> &map, const std::wstring &scriptPath)
+        {
+            for (auto mit = map.begin(); mit != map.end();)
+            {
+                auto &vec = mit->second;
+                for (auto it = vec.begin(); it != vec.end();)
+                {
+                    if (it->owner == scriptPath)
+                    {
+                        JS_FreeValue(g_context, it->callback);
+                        it = vec.erase(it);
+                    }
+                    else
+                    {
+                        ++it;
+                    }
+                }
+                if (vec.empty())
+                {
+                    mit = map.erase(mit);
+                }
+                else
+                {
+                    ++mit;
+                }
+            }
+        }
+
+        void ClearIpcHandlersForScript(std::unordered_map<std::string, IpcHandler> &map, const std::wstring &scriptPath)
+        {
+            for (auto it = map.begin(); it != map.end();)
+            {
+                if (it->second.owner == scriptPath)
+                {
+                    JS_FreeValue(g_context, it->second.callback);
+                    it = map.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+        }
+
+        void ClearTraysForScript(const std::wstring &scriptPath)
+        {
+            std::vector<int> toRemove;
+            for (auto &kv : g_trayOwners)
+            {
+                if (kv.second == scriptPath)
+                {
+                    toRemove.push_back(kv.first);
+                }
+            }
+            for (int trayId : toRemove)
+            {
+                TrayDestroy(trayId);
+                ClearTrayEventCallbacks(trayId);
+                ClearTrayCommandCallbacks(trayId);
+                g_trayOwners.erase(trayId);
+            }
+        }
+
+        bool ExecuteScriptFile(const std::wstring &finalScriptPath)
+        {
+            const std::string script = FileUtils::ReadFileContent(finalScriptPath);
+            if (script.empty())
+            {
+                Logging::Log(LogLevel::Error, L"Failed to load script: %s", finalScriptPath.c_str());
+                return false;
+            }
+
+            if (!g_context)
+            {
+                Logging::Log(LogLevel::Error, L"QuickJS context not initialized");
+                return false;
+            }
+
+            const std::string fileName = Utils::ToString(finalScriptPath);
+            const std::wstring scriptDir = PathUtils::GetParentDir(finalScriptPath);
+            const std::string dirName = Utils::ToString(scriptDir);
+            g_currentScriptDir = scriptDir;
+            g_currentScriptPath = finalScriptPath;
+
+            JSValue global = JS_GetGlobalObject(g_context);
+            JSValue mainIpc = CreateMainIpcObject(g_context);
+            JS_SetPropertyStr(g_context, global, "ipcMain", JS_DupValue(g_context, mainIpc));
+            JS_SetPropertyStr(g_context, global, "__filename", JS_NewString(g_context, fileName.c_str()));
+            JS_SetPropertyStr(g_context, global, "__dirname", JS_NewString(g_context, dirName.c_str()));
+            JS_SetPropertyStr(g_context, global, "__widgetDir", JS_NewString(g_context, Utils::ToString(PathUtils::GetWidgetsDir()).c_str()));
+            JS_FreeValue(g_context, mainIpc);
+            JS_FreeValue(g_context, global);
+
+            const std::string modulePrelude =
+                "const ipcMain = globalThis.ipcMain;\n"
+                "const __filename = globalThis.__filename;\n"
+                "const __dirname = globalThis.__dirname;\n"
+                "const __widgetDir = globalThis.__widgetDir;\n"
+                "const path = globalThis.path;\n";
+            const std::string moduleSource = modulePrelude + script;
+
+            JSValue result = JS_Eval(
+                g_context,
+                moduleSource.c_str(),
+                moduleSource.size(),
+                fileName.c_str(),
+                JS_EVAL_TYPE_MODULE);
+
+            if (JS_IsException(result))
+            {
+                LogQuickJsException(g_context);
+                JS_FreeValue(g_context, result);
+                g_currentScriptDir.clear();
+                g_currentScriptPath.clear();
+                return false;
+            }
+            JS_FreeValue(g_context, result);
+
+            JSContext *ctx1 = nullptr;
+            int err = 0;
+            while (JS_IsJobPending(g_runtime))
+            {
+                err = JS_ExecutePendingJob(g_runtime, &ctx1);
+                if (err < 0)
+                {
+                    LogQuickJsException(ctx1 ? ctx1 : g_context);
+                    g_currentScriptDir.clear();
+                    g_currentScriptPath.clear();
+                    return false;
+                }
+            }
+
+            g_currentScriptDir.clear();
+            g_currentScriptPath.clear();
+            return true;
+        }
 
         enum class ConsoleLevel
         {
@@ -129,6 +429,7 @@ namespace JSEngine
             TimerEntry entry{};
             entry.callback = JS_DupValue(ctx, argv[0]);
             entry.repeat = (magic != 0);
+            entry.owner = g_currentScriptPath;
             for (int i = 2; i < argc; ++i)
             {
                 entry.args.push_back(JS_DupValue(ctx, argv[i]));
@@ -487,32 +788,32 @@ namespace JSEngine
             LogQuickJsValue(ctx, reason, L"QuickJS unhandled promise rejection");
         }
 
-        void ClearCallbacks(std::vector<JSValue> &list)
+        void ClearCallbacks(std::vector<IpcListener> &list)
         {
-            for (JSValue &v : list)
+            for (auto &v : list)
             {
-                JS_FreeValue(g_context, v);
+                JS_FreeValue(g_context, v.callback);
             }
             list.clear();
         }
 
-        void ClearChannelMap(std::unordered_map<std::string, std::vector<JSValue>> &map)
+        void ClearChannelMap(std::unordered_map<std::string, std::vector<IpcListener>> &map)
         {
             for (auto &kv : map)
             {
-                for (JSValue &v : kv.second)
+                for (auto &v : kv.second)
                 {
-                    JS_FreeValue(g_context, v);
+                    JS_FreeValue(g_context, v.callback);
                 }
             }
             map.clear();
         }
 
-        void ClearHandlerMap(std::unordered_map<std::string, JSValue> &map)
+        void ClearHandlerMap(std::unordered_map<std::string, IpcHandler> &map)
         {
             for (auto &kv : map)
             {
-                JS_FreeValue(g_context, kv.second);
+                JS_FreeValue(g_context, kv.second.callback);
             }
             map.clear();
         }
@@ -608,9 +909,12 @@ namespace JSEngine
             return true;
         }
 
-        void RegisterChannelListener(std::unordered_map<std::string, std::vector<JSValue>> &map, JSContext *ctx, const std::string &channel, JSValueConst fn)
+        void RegisterChannelListener(std::unordered_map<std::string, std::vector<IpcListener>> &map, JSContext *ctx, const std::string &channel, JSValueConst fn)
         {
-            map[channel].push_back(JS_DupValue(ctx, fn));
+            IpcListener entry{};
+            entry.callback = JS_DupValue(ctx, fn);
+            entry.owner = g_currentScriptPath;
+            map[channel].push_back(std::move(entry));
         }
 
         JSValue BuildIpcMessage(JSContext *ctx, JSValueConst typeVal, JSValueConst payloadVal, const char *from, const char *to, const char *channel)
@@ -634,12 +938,12 @@ namespace JSEngine
             return msg;
         }
 
-        void DispatchIpc(std::vector<JSValue> &listeners, JSValueConst message)
+        void DispatchIpc(std::vector<IpcListener> &listeners, JSValueConst message)
         {
-            for (JSValue &cb : listeners)
+            for (auto &cb : listeners)
             {
                 JSValue argv[1] = {JS_DupValue(g_context, message)};
-                JSValue ret = JS_Call(g_context, cb, JS_UNDEFINED, 1, argv);
+                JSValue ret = JS_Call(g_context, cb.callback, JS_UNDEFINED, 1, argv);
                 JS_FreeValue(g_context, argv[0]);
                 if (JS_IsException(ret))
                 {
@@ -652,7 +956,7 @@ namespace JSEngine
             }
         }
 
-        void DispatchChannelIpc(std::unordered_map<std::string, std::vector<JSValue>> &listeners, const std::string &channel, const char *from, const char *to, JSValueConst payload, bool payloadFirst = false)
+        void DispatchChannelIpc(std::unordered_map<std::string, std::vector<IpcListener>> &listeners, const std::string &channel, const char *from, const char *to, JSValueConst payload, bool payloadFirst = false)
         {
             auto it = listeners.find(channel);
             if (it == listeners.end())
@@ -662,7 +966,7 @@ namespace JSEngine
             JSValue eventObj = BuildIpcMessage(g_context, channelVal, payload, from, to, channel.c_str());
             JS_FreeValue(g_context, channelVal);
 
-            for (JSValue &cb : it->second)
+            for (auto &cb : it->second)
             {
                 JSValue argv[2] = {JS_UNDEFINED, JS_UNDEFINED};
                 if (payloadFirst)
@@ -677,7 +981,7 @@ namespace JSEngine
                     argv[0] = JS_DupValue(g_context, eventObj);
                     argv[1] = JS_DupValue(g_context, payload);
                 }
-                JSValue ret = JS_Call(g_context, cb, JS_UNDEFINED, 2, argv);
+                JSValue ret = JS_Call(g_context, cb.callback, JS_UNDEFINED, 2, argv);
                 JS_FreeValue(g_context, argv[0]);
                 JS_FreeValue(g_context, argv[1]);
                 if (JS_IsException(ret))
@@ -722,9 +1026,12 @@ namespace JSEngine
             auto it = g_mainIpcHandlers.find(channel);
             if (it != g_mainIpcHandlers.end())
             {
-                JS_FreeValue(ctx, it->second);
+                JS_FreeValue(ctx, it->second.callback);
             }
-            g_mainIpcHandlers[channel] = JS_DupValue(ctx, argv[1]);
+            IpcHandler handler{};
+            handler.callback = JS_DupValue(ctx, argv[1]);
+            handler.owner = g_currentScriptPath;
+            g_mainIpcHandlers[channel] = std::move(handler);
             return JS_UNDEFINED;
         }
 
@@ -802,7 +1109,7 @@ namespace JSEngine
             JS_FreeValue(ctx, channelVal);
 
             JSValue callArgs[2] = {eventObj, JS_DupValue(ctx, payload)};
-            JSValue ret = JS_Call(ctx, it->second, JS_UNDEFINED, 2, callArgs);
+            JSValue ret = JS_Call(ctx, it->second.callback, JS_UNDEFINED, 2, callArgs);
             JS_FreeValue(ctx, callArgs[0]);
             JS_FreeValue(ctx, callArgs[1]);
             return ret;
@@ -855,11 +1162,11 @@ namespace JSEngine
             RegisterConsoleBindings(g_context);
             g_eventCallbacks.clear();
             g_eventCallbacks.push_back(JS_UNDEFINED); // callback id 0 is invalid
-            g_mainIpcListeners.clear();
-            g_uiIpcListeners.clear();
-            g_mainIpcChannelListeners.clear();
-            g_uiIpcChannelListeners.clear();
-            g_mainIpcHandlers.clear();
+            ClearCallbacks(g_mainIpcListeners);
+            ClearCallbacks(g_uiIpcListeners);
+            ClearChannelMap(g_mainIpcChannelListeners);
+            ClearChannelMap(g_uiIpcChannelListeners);
+            ClearHandlerMap(g_mainIpcHandlers);
             return true;
         }
 
@@ -919,10 +1226,18 @@ namespace JSEngine
     bool LoadAndExecuteScripts(duk_context *ctx, const std::vector<std::wstring> &scriptPaths)
     {
         (void)ctx;
+        if (!g_staleScripts.empty())
+        {
+            DestroyAllWidgets();
+            DestroyAllTrays();
+            ResetRuntime();
+        }
         if (!EnsureRuntime())
         {
             return false;
         }
+
+        DestroyAllWidgets();
 
         std::vector<std::wstring> resolved;
         if (scriptPaths.empty())
@@ -937,8 +1252,20 @@ namespace JSEngine
             }
         }
 
-        g_loadedScriptPaths = resolved;
-        g_lastScriptPath = resolved.empty() ? L"" : resolved.front();
+        if (resolved.empty())
+        {
+            Logging::Log(LogLevel::Warn, L"No scripts to load.");
+        }
+        else
+        {
+            Logging::Log(LogLevel::Info, L"Loading %zu script(s).", resolved.size());
+            for (const auto &p : resolved)
+            {
+                Logging::Log(LogLevel::Info, L"Script: %s", p.c_str());
+            }
+        }
+
+        std::vector<std::wstring> loadedPaths;
 
         for (size_t i = 1; i < g_eventCallbacks.size(); ++i)
         {
@@ -961,61 +1288,23 @@ namespace JSEngine
 
         for (const auto &finalScriptPath : resolved)
         {
-            const std::string script = FileUtils::ReadFileContent(finalScriptPath);
-            if (script.empty())
+            Logging::Log(LogLevel::Info, L"Executing script: %s", finalScriptPath.c_str());
+            if (!ExecuteScriptFile(finalScriptPath))
             {
-                Logging::Log(LogLevel::Error, L"Failed to load script: %s", finalScriptPath.c_str());
-                return false;
+                continue;
             }
-
-            const std::string fileName = Utils::ToString(finalScriptPath);
-            const std::wstring scriptDir = PathUtils::GetParentDir(finalScriptPath);
-            const std::string dirName = Utils::ToString(scriptDir);
-            JSValue global = JS_GetGlobalObject(g_context);
-            JSValue mainIpc = CreateMainIpcObject(g_context);
-            JS_SetPropertyStr(g_context, global, "ipcMain", JS_DupValue(g_context, mainIpc));
-            JS_SetPropertyStr(g_context, global, "__filename", JS_NewString(g_context, fileName.c_str()));
-            JS_SetPropertyStr(g_context, global, "__dirname", JS_NewString(g_context, dirName.c_str()));
-            JS_SetPropertyStr(g_context, global, "__widgetDir", JS_NewString(g_context, widgetDirName.c_str()));
-            JS_FreeValue(g_context, mainIpc);
-            JS_FreeValue(g_context, global);
-
-            const std::string modulePrelude =
-                "const ipcMain = globalThis.ipcMain;\n"
-                "const __filename = globalThis.__filename;\n"
-                "const __dirname = globalThis.__dirname;\n"
-                "const __widgetDir = globalThis.__widgetDir;\n"
-                "const path = globalThis.path;\n";
-            const std::string moduleSource = modulePrelude + script;
-
-            JSValue result = JS_Eval(
-                g_context,
-                moduleSource.c_str(),
-                moduleSource.size(),
-                fileName.c_str(),
-                JS_EVAL_TYPE_MODULE);
-
-            if (JS_IsException(result))
-            {
-                LogQuickJsException(g_context);
-                JS_FreeValue(g_context, result);
-                return false;
-            }
-            JS_FreeValue(g_context, result);
-
-            JSContext *ctx1 = nullptr;
-            int err = 0;
-            while (JS_IsJobPending(g_runtime))
-            {
-                err = JS_ExecutePendingJob(g_runtime, &ctx1);
-                if (err < 0)
-                {
-                    LogQuickJsException(ctx1 ? ctx1 : g_context);
-                    return false;
-                }
-            }
+            Logging::Log(LogLevel::Info, L"Script loaded: %s", finalScriptPath.c_str());
+            loadedPaths.push_back(finalScriptPath);
         }
 
+        g_loadedScriptPaths = loadedPaths;
+        g_lastScriptPath = loadedPaths.empty() ? L"" : loadedPaths.front();
+        g_staleScripts.clear();
+        if (loadedPaths.empty())
+        {
+            Logging::Log(LogLevel::Error, L"No scripts loaded successfully.");
+            return false;
+        }
         return true;
     }
 
@@ -1026,6 +1315,35 @@ namespace JSEngine
             return PathUtils::GetWidgetsDir();
         }
         return PathUtils::GetParentDir(g_lastScriptPath);
+    }
+
+    std::wstring GetCurrentScriptDir()
+    {
+        return g_currentScriptDir;
+    }
+
+    std::wstring GetCurrentScriptPath()
+    {
+        return g_currentScriptPath;
+    }
+
+    void RegisterWidgetOwner(Widget *widget, const std::wstring &scriptPath)
+    {
+        if (!widget)
+            return;
+        g_widgetOwners[widget] = scriptPath;
+    }
+
+    void RegisterTrayOwner(int trayId, const std::wstring &scriptPath)
+    {
+        if (trayId <= 0)
+            return;
+        g_trayOwners[trayId] = scriptPath;
+    }
+
+    void UnregisterTrayOwner(int trayId)
+    {
+        g_trayOwners.erase(trayId);
     }
 
     void Reload()
@@ -1048,9 +1366,18 @@ namespace JSEngine
             if (p == resolved)
                 return true;
         }
-        std::vector<std::wstring> next = g_loadedScriptPaths;
-        next.push_back(resolved);
-        return LoadAndExecuteScripts(nullptr, next);
+        if (g_staleScripts.find(resolved) != g_staleScripts.end())
+        {
+            std::vector<std::wstring> next = g_loadedScriptPaths;
+            next.push_back(resolved);
+            return LoadAndExecuteScripts(nullptr, next);
+        }
+        if (!EnsureRuntime())
+            return false;
+        if (!ExecuteScriptFile(resolved))
+            return false;
+        g_loadedScriptPaths.push_back(resolved);
+        return true;
     }
 
     bool RemoveScript(const std::wstring &scriptPath)
@@ -1066,7 +1393,17 @@ namespace JSEngine
         }
         if (next.size() == g_loadedScriptPaths.size())
             return false;
-        return LoadAndExecuteScripts(nullptr, next);
+        DestroyWidgetsForScript(resolved);
+        ClearTraysForScript(resolved);
+        ClearTimersForScript(resolved);
+        ClearIpcListenersForScript(g_mainIpcListeners, resolved);
+        ClearIpcListenersForScript(g_uiIpcListeners, resolved);
+        ClearIpcChannelListenersForScript(g_mainIpcChannelListeners, resolved);
+        ClearIpcChannelListenersForScript(g_uiIpcChannelListeners, resolved);
+        ClearIpcHandlersForScript(g_mainIpcHandlers, resolved);
+        g_loadedScriptPaths = next;
+        g_staleScripts.insert(resolved);
+        return true;
     }
 
     bool RefreshScript(const std::wstring &scriptPath)
@@ -1083,6 +1420,9 @@ namespace JSEngine
         }
         if (!found)
             return false;
+        // Refresh should re-run module top-level side effects for this script.
+        // Because QuickJS module instances are cached per runtime, do a full reload.
+        g_staleScripts.insert(resolved);
         return LoadAndExecuteScripts(nullptr, g_loadedScriptPaths);
     }
 

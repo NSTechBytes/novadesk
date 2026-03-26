@@ -29,6 +29,11 @@ namespace JSEngine
     bool LoadAndExecuteScript(duk_context *ctx, const std::wstring &scriptPath = L"");
     bool LoadAndExecuteScripts(duk_context *ctx, const std::vector<std::wstring> &scriptPaths);
     std::wstring GetEntryScriptDir();
+    std::wstring GetCurrentScriptDir();
+    std::wstring GetCurrentScriptPath();
+    void RegisterWidgetOwner(Widget *widget, const std::wstring &scriptPath);
+    void RegisterTrayOwner(int trayId, const std::wstring &scriptPath);
+    void UnregisterTrayOwner(int trayId);
     void Reload();
     bool AddScript(const std::wstring &scriptPath);
     bool RemoveScript(const std::wstring &scriptPath);

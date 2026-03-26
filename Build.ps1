@@ -147,9 +147,11 @@ try {
 
     $installerSln = Join-Path $RepoRoot "src\apps\installer_stub\installer_stub.sln"
     $nwmSln = Join-Path $RepoRoot "src\apps\nwm\nwm.sln"
+    $manageSln = Join-Path $RepoRoot "src\apps\manage_novadesk\manage_novadesk.sln"
 
     Build-Solution -MSBuildPath $msbuild -SolutionPath $installerSln -Config $Configuration -Plat $Platform
     Build-Solution -MSBuildPath $msbuild -SolutionPath $nwmSln -Config $Configuration -Plat $Platform
+    Build-Solution -MSBuildPath $msbuild -SolutionPath $manageSln -Config $Configuration -Plat $Platform
 
     $cmakeBuildType = if ($Configuration -eq "Release") { "MinSizeRel" } else { "Debug" }
     $cacheFile = Join-Path $BuildDir "CMakeCache.txt"
@@ -186,18 +188,21 @@ try {
     $nwmExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\nwm\nwm.exe"
     $nwmTemplateSrc = Join-Path $RepoRoot "src\Widgets\template"
     $installerStubExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\installer_stub\installer_stub.exe"
+    $manageExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\manage_novadesk\manage_novadesk.exe"
 
     Assert-PathExists -PathValue $novadeskExeSrc -Label "novadesk.exe"
     Assert-PathExists -PathValue $widgetsSrc -Label "Widgets source"
     Assert-PathExists -PathValue $nwmExeSrc -Label "nwm.exe"
     Assert-PathExists -PathValue $nwmTemplateSrc -Label "nwm template source"
     Assert-PathExists -PathValue $installerStubExeSrc -Label "installer_stub.exe"
+    Assert-PathExists -PathValue $manageExeSrc -Label "manage_novadesk.exe"
 
     New-Item -ItemType Directory -Path $distDir -Force | Out-Null
     New-Item -ItemType Directory -Path $distNwmDir -Force | Out-Null
 
     Write-Host "Copying build outputs to dist..." -ForegroundColor Cyan
     Copy-Item -Path $novadeskExeSrc -Destination (Join-Path $distDir "novadesk.exe") -Force
+    Copy-Item -Path $manageExeSrc -Destination (Join-Path $distDir "manage_novadesk.exe") -Force
     Copy-DirectoryContent -SourceDir $widgetsSrc -DestinationDir $distWidgetsDir
     Copy-Item -Path $nwmExeSrc -Destination (Join-Path $distNwmDir "nwm.exe") -Force
     Copy-DirectoryContent -SourceDir $nwmTemplateSrc -DestinationDir $distNwmTemplateDir
