@@ -44,6 +44,8 @@ static HWND g_btnRefreshList = nullptr;
 static HWND g_btnLoad = nullptr;
 static HWND g_btnUnload = nullptr;
 static HWND g_btnRefresh = nullptr;
+static HICON g_windowIconLarge = nullptr;
+static HICON g_windowIconSmall = nullptr;
 
 static std::wstring GetExeDir()
 {
@@ -58,6 +60,22 @@ static std::wstring JoinPath(const std::wstring &a, const std::wstring &b)
     std::filesystem::path p(a);
     p /= b;
     return p.wstring();
+}
+
+static void LoadWindowIcons(HINSTANCE hInstance)
+{
+    if (!g_windowIconLarge)
+    {
+        g_windowIconLarge = static_cast<HICON>(
+            LoadImageW(hInstance, MAKEINTRESOURCEW(IDI_MANAGE_NOVADESK), IMAGE_ICON,
+                       GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0));
+    }
+    if (!g_windowIconSmall)
+    {
+        g_windowIconSmall = static_cast<HICON>(
+            LoadImageW(hInstance, MAKEINTRESOURCEW(IDI_MANAGE_NOVADESK), IMAGE_ICON,
+                       GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0));
+    }
 }
 
 static void LogLine(const std::wstring &line)
@@ -466,6 +484,8 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     case WM_CREATE:
     {
         LogLine(L"[Manage] Window created.");
+        SendMessageW(hWnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(g_windowIconLarge));
+        SendMessageW(hWnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(g_windowIconSmall));
         RECT rc{};
         GetClientRect(hWnd, &rc);
 
@@ -574,6 +594,16 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         }
         return 0;
     case WM_DESTROY:
+        if (g_windowIconLarge)
+        {
+            DestroyIcon(g_windowIconLarge);
+            g_windowIconLarge = nullptr;
+        }
+        if (g_windowIconSmall)
+        {
+            DestroyIcon(g_windowIconSmall);
+            g_windowIconSmall = nullptr;
+        }
         if (g_buttonFont)
         {
             DeleteObject(g_buttonFont);
@@ -605,10 +635,13 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
     InitCommonControlsEx(&icc);
 
     const wchar_t *className = L"NovadeskManagerWindow";
+    LoadWindowIcons(hInstance);
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof(wc);
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hInstance;
+    wc.hIcon = g_windowIconLarge;
+    wc.hIconSm = g_windowIconSmall;
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.lpszClassName = className;
