@@ -1516,6 +1516,19 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
     InitCommonControlsEx(&icc);
 
     const wchar_t *className = L"NovadeskManagerWindow";
+    HANDLE instanceMutex = CreateMutexW(nullptr, FALSE, L"Global\\NovadeskManageWindowSingleton");
+    if (instanceMutex && GetLastError() == ERROR_ALREADY_EXISTS)
+    {
+        HWND existing = FindWindowW(className, nullptr);
+        if (existing)
+        {
+            ShowWindow(existing, SW_SHOW);
+            SetForegroundWindow(existing);
+        }
+        CloseHandle(instanceMutex);
+        return 0;
+    }
+
     LoadWindowIcons(hInstance);
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof(wc);
@@ -1549,6 +1562,10 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
     {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
+    }
+    if (instanceMutex)
+    {
+        CloseHandle(instanceMutex);
     }
     return (int)msg.wParam;
 }

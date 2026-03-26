@@ -29,6 +29,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -195,6 +196,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             bool refreshAll = false;
             bool listScripts = false;
             std::wstring listScriptsFile;
+            std::optional<bool> setHardwareAcceleration;
+            std::optional<bool> setDebugging;
+            std::optional<bool> setLogging;
+            std::optional<bool> setSaveLogToFile;
             for (int i = 1; i < argc; ++i)
             {
                 if (!cmd.empty())
@@ -231,6 +236,46 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 if (arg == L"--load" && i + 1 < argc)
                 {
                     loadPaths.push_back(argv[++i]);
+                    continue;
+                }
+                if (arg == L"--enable-hardware-acceleration")
+                {
+                    setHardwareAcceleration = true;
+                    continue;
+                }
+                if (arg == L"--disable-hardware-acceleration")
+                {
+                    setHardwareAcceleration = false;
+                    continue;
+                }
+                if (arg == L"--enable-debugging")
+                {
+                    setDebugging = true;
+                    continue;
+                }
+                if (arg == L"--disable-debugging")
+                {
+                    setDebugging = false;
+                    continue;
+                }
+                if (arg == L"--enable-logging")
+                {
+                    setLogging = true;
+                    continue;
+                }
+                if (arg == L"--disable-logging")
+                {
+                    setLogging = false;
+                    continue;
+                }
+                if (arg == L"--enable-save-log-to-file")
+                {
+                    setSaveLogToFile = true;
+                    continue;
+                }
+                if (arg == L"--disable-save-log-to-file")
+                {
+                    setSaveLogToFile = false;
                     continue;
                 }
                 if (!arg.empty() && arg[0] != L'-')
@@ -295,6 +340,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 for (const auto &p : loadPaths)
                 {
                     handledCommand = SendIpcCommand(hExisting, L"load", p) || handledCommand;
+                }
+                if (setHardwareAcceleration.has_value())
+                {
+                    handledCommand = SendIpcCommand(hExisting, *setHardwareAcceleration ? L"set-hardware-acceleration-on" : L"set-hardware-acceleration-off", L"") || handledCommand;
+                }
+                if (setDebugging.has_value())
+                {
+                    handledCommand = SendIpcCommand(hExisting, *setDebugging ? L"set-debugging-on" : L"set-debugging-off", L"") || handledCommand;
+                }
+                if (setLogging.has_value())
+                {
+                    handledCommand = SendIpcCommand(hExisting, *setLogging ? L"set-logging-on" : L"set-logging-off", L"") || handledCommand;
+                }
+                if (setSaveLogToFile.has_value())
+                {
+                    handledCommand = SendIpcCommand(hExisting, *setSaveLogToFile ? L"set-save-log-to-file-on" : L"set-save-log-to-file-off", L"") || handledCommand;
                 }
             }
         }
@@ -440,6 +501,46 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     }
                 }
             }
+            else if (command == L"set-hardware-acceleration-on")
+            {
+                Settings::SetGlobalBool("useHardwareAcceleration", true);
+                JSEngine::Reload();
+            }
+            else if (command == L"set-hardware-acceleration-off")
+            {
+                Settings::SetGlobalBool("useHardwareAcceleration", false);
+                JSEngine::Reload();
+            }
+            else if (command == L"set-debugging-on")
+            {
+                Settings::SetGlobalBool("enableDebugging", true);
+                Settings::ApplyGlobalSettings();
+            }
+            else if (command == L"set-debugging-off")
+            {
+                Settings::SetGlobalBool("enableDebugging", false);
+                Settings::ApplyGlobalSettings();
+            }
+            else if (command == L"set-logging-on")
+            {
+                Settings::SetGlobalBool("disableLogging", false);
+                Settings::ApplyGlobalSettings();
+            }
+            else if (command == L"set-logging-off")
+            {
+                Settings::SetGlobalBool("disableLogging", true);
+                Settings::ApplyGlobalSettings();
+            }
+            else if (command == L"set-save-log-to-file-on")
+            {
+                Settings::SetGlobalBool("saveLogToFile", true);
+                Settings::ApplyGlobalSettings();
+            }
+            else if (command == L"set-save-log-to-file-off")
+            {
+                Settings::SetGlobalBool("saveLogToFile", false);
+                Settings::ApplyGlobalSettings();
+            }
             return TRUE;
         }
         case WM_DESTROY:
@@ -479,6 +580,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // Parse command line for custom script path using argv semantics.
     // argv[0] is the executable path; the first user arg is argv[1].
     std::vector<std::wstring> scriptPaths;
+    std::optional<bool> setHardwareAcceleration;
+    std::optional<bool> setDebugging;
+    std::optional<bool> setLogging;
+    std::optional<bool> setSaveLogToFile;
     int argc = 0;
     LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (argv)
@@ -506,12 +611,78 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     }
                     continue;
                 }
+                if (arg == L"--enable-hardware-acceleration")
+                {
+                    setHardwareAcceleration = true;
+                    continue;
+                }
+                if (arg == L"--disable-hardware-acceleration")
+                {
+                    setHardwareAcceleration = false;
+                    continue;
+                }
+                if (arg == L"--enable-debugging")
+                {
+                    setDebugging = true;
+                    continue;
+                }
+                if (arg == L"--disable-debugging")
+                {
+                    setDebugging = false;
+                    continue;
+                }
+                if (arg == L"--enable-logging")
+                {
+                    setLogging = true;
+                    continue;
+                }
+                if (arg == L"--disable-logging")
+                {
+                    setLogging = false;
+                    continue;
+                }
+                if (arg == L"--enable-save-log-to-file")
+                {
+                    setSaveLogToFile = true;
+                    continue;
+                }
+                if (arg == L"--disable-save-log-to-file")
+                {
+                    setSaveLogToFile = false;
+                    continue;
+                }
                 if (!arg.empty() && arg[0] == L'-')
                     continue;
                 scriptPaths.push_back(arg);
             }
         }
         LocalFree(argv);
+    }
+
+    bool appliedCliSettings = false;
+    if (setHardwareAcceleration.has_value())
+    {
+        Settings::SetGlobalBool("useHardwareAcceleration", *setHardwareAcceleration);
+        appliedCliSettings = true;
+    }
+    if (setDebugging.has_value())
+    {
+        Settings::SetGlobalBool("enableDebugging", *setDebugging);
+        appliedCliSettings = true;
+    }
+    if (setLogging.has_value())
+    {
+        Settings::SetGlobalBool("disableLogging", !*setLogging);
+        appliedCliSettings = true;
+    }
+    if (setSaveLogToFile.has_value())
+    {
+        Settings::SetGlobalBool("saveLogToFile", *setSaveLogToFile);
+        appliedCliSettings = true;
+    }
+    if (appliedCliSettings)
+    {
+        Settings::ApplyGlobalSettings();
     }
     if (!scriptPaths.empty())
     {
