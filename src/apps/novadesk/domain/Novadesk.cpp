@@ -266,10 +266,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     {
         // Another instance is running, check arguments for commands
         bool handledCommand = false;
+        bool onlyInternalLockArg = false;
         int argc = 0;
         LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
         if (argv && argc > 1)
         {
+            onlyInternalLockArg = true;
             std::wstring cmd;
             std::vector<std::wstring> loadPaths;
             std::wstring refreshPath;
@@ -288,6 +290,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 cmd += argv[i];
 
                 const std::wstring arg = argv[i];
+                if (arg != L"--request-single-instance-lock")
+                {
+                    onlyInternalLockArg = false;
+                }
                 if (arg == L"--list-scripts")
                 {
                     listScripts = true;
@@ -449,7 +455,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             LocalFree(argv);
         }
 
-        if (!handledCommand)
+        if (!handledCommand && !onlyInternalLockArg)
         {
             std::wstring message = appTitle + L" is already running.";
             MessageBoxW(nullptr, message.c_str(), appTitle.c_str(), MB_OK | MB_ICONINFORMATION);

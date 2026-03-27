@@ -7,7 +7,6 @@
 
 #include <windows.h>
 #include <commctrl.h>
-#include <tlhelp32.h>
 #include <shlobj.h>
 #include <shellapi.h>
 #include <wininet.h>
@@ -121,7 +120,7 @@ static const UINT_PTR kAutoUpdateTimerId = 2;
 static const UINT_PTR kStartupSyncTimerId = 3;
 static const UINT kAutoUpdateIntervalMs = 60 * 1000; // 1 minute
 static const int kMaxLogRows = 2000;
-static const wchar_t *kCurrentVersion = L"0.6.0.0";
+static const wchar_t *kCurrentVersion = L"0.7.0.0";
 static const wchar_t *kSingleInstanceLockArg = L"--request-single-instance-lock";
 static void ExecuteNovadeskCommand(const std::wstring &cmd, const std::wstring &path);
 static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd);
@@ -250,35 +249,6 @@ static std::wstring EnsureSingleInstanceArg(const std::wstring &args)
         return std::wstring(kSingleInstanceLockArg);
     }
     return args + L" " + kSingleInstanceLockArg;
-}
-
-static bool IsNovadeskProcessRunning()
-{
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snapshot == INVALID_HANDLE_VALUE)
-    {
-        return false;
-    }
-
-    PROCESSENTRY32W pe{};
-    pe.dwSize = sizeof(pe);
-    if (!Process32FirstW(snapshot, &pe))
-    {
-        CloseHandle(snapshot);
-        return false;
-    }
-
-    do
-    {
-        if (_wcsicmp(pe.szExeFile, L"Novadesk.exe") == 0)
-        {
-            CloseHandle(snapshot);
-            return true;
-        }
-    } while (Process32NextW(snapshot, &pe));
-
-    CloseHandle(snapshot);
-    return false;
 }
 
 static void LoadWindowIcons(HINSTANCE hInstance)
@@ -926,12 +896,6 @@ static void StartNovadesk()
 {
     if (g_novadeskRunning)
         return;
-
-    if (IsNovadeskProcessRunning())
-    {
-        LogLine(L"[Manage] Novadesk is already running. Skip launching another instance.");
-        return;
-    }
 
     const std::wstring exe = GetNovadeskExePath();
     SECURITY_ATTRIBUTES sa{};
