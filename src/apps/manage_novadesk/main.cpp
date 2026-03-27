@@ -118,6 +118,7 @@ static const UINT kLogAppendMessage = WM_APP + 20;
 static const UINT_PTR kLogsRefreshTimerId = 1;
 static const UINT_PTR kAutoUpdateTimerId = 2;
 static const UINT_PTR kStartupSyncTimerId = 3;
+static const UINT kStartupSyncDelayMs = 120;
 static const UINT kAutoUpdateIntervalMs = 60 * 1000; // 1 minute
 static const int kMaxLogRows = 2000;
 static const wchar_t *kCurrentVersion = L"0.7.0.0";
@@ -1994,8 +1995,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         {
             StartAsyncUpdateCheck(true);
         }
+        RefreshListView();
         ApplyTabState();
-        SetTimer(hWnd, kStartupSyncTimerId, 1200, nullptr);
+        SetTimer(hWnd, kStartupSyncTimerId, kStartupSyncDelayMs, nullptr);
         SetTimer(hWnd, kLogsRefreshTimerId, 700, nullptr);
         UpdateButtonState();
         return 0;

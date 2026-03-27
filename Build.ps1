@@ -148,10 +148,12 @@ try {
     $installerSln = Join-Path $RepoRoot "src\apps\installer_stub\installer_stub.sln"
     $nwmSln = Join-Path $RepoRoot "src\apps\nwm\nwm.sln"
     $manageSln = Join-Path $RepoRoot "src\apps\manage_novadesk\manage_novadesk.sln"
+    $addonsSln = Join-Path $RepoRoot "src\addons\addons.sln"
 
     Build-Solution -MSBuildPath $msbuild -SolutionPath $installerSln -Config $Configuration -Plat $Platform
     Build-Solution -MSBuildPath $msbuild -SolutionPath $nwmSln -Config $Configuration -Plat $Platform
     Build-Solution -MSBuildPath $msbuild -SolutionPath $manageSln -Config $Configuration -Plat $Platform
+    Build-Solution -MSBuildPath $msbuild -SolutionPath $addonsSln -Config $Configuration -Plat $Platform
 
     $cmakeBuildType = if ($Configuration -eq "Release") { "MinSizeRel" } else { "Debug" }
     $cacheFile = Join-Path $BuildDir "CMakeCache.txt"
@@ -182,6 +184,7 @@ try {
     $distNwmDir = Join-Path $distDir "nwm"
     $distWidgetsDir = Join-Path $distDir "Widgets"
     $distImagesDir = Join-Path $distDir "images"
+    $distAddonsDir = Join-Path $distDir "addons"
     $distNwmTemplateDir = Join-Path $distNwmDir "template"
 
     $novadeskExeSrc = Join-Path $RepoRoot "$BuildDir\novadesk.exe"
@@ -191,6 +194,8 @@ try {
     $nwmTemplateSrc = Join-Path $RepoRoot "src\Widgets\template"
     $installerStubExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\installer_stub\installer_stub.exe"
     $manageExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\manage_novadesk\manage_novadesk.exe"
+    $addonsBuildRoot = Join-Path $RepoRoot "src\addons\dist\$Platform\$Configuration"
+    $addonProjectNames = @("AppVolume", "AudioLevel", "Brightness", "Hotkey", "NowPlaying")
 
     Assert-PathExists -PathValue $novadeskExeSrc -Label "novadesk.exe"
     Assert-PathExists -PathValue $widgetsSrc -Label "Widgets source"
@@ -199,6 +204,7 @@ try {
     Assert-PathExists -PathValue $nwmTemplateSrc -Label "nwm template source"
     Assert-PathExists -PathValue $installerStubExeSrc -Label "installer_stub.exe"
     Assert-PathExists -PathValue $manageExeSrc -Label "manage_novadesk.exe"
+    Assert-PathExists -PathValue $addonsBuildRoot -Label "addons build root"
 
     New-Item -ItemType Directory -Path $distDir -Force | Out-Null
     New-Item -ItemType Directory -Path $distNwmDir -Force | Out-Null
@@ -211,6 +217,26 @@ try {
     Copy-Item -Path $nwmExeSrc -Destination (Join-Path $distNwmDir "nwm.exe") -Force
     Copy-DirectoryContent -SourceDir $nwmTemplateSrc -DestinationDir $distNwmTemplateDir
     Copy-Item -Path $installerStubExeSrc -Destination (Join-Path $distNwmDir "installer_stub.exe") -Force
+
+    if (Test-Path $distAddonsDir) {
+        Remove-Item -Recurse -Force $distAddonsDir
+    }
+    New-Item -ItemType Directory -Path $distAddonsDir -Force | Out-Null
+
+    foreach ($addonName in $addonProjectNames) {
+        $addonOutDir = Join-Path $addonsBuildRoot $addonName
+        Assert-PathExists -PathValue $addonOutDir -Label "addon output directory for $addonName"
+
+        $addonDll = Join-Path $addonOutDir "$addonName.dll"
+        if (-not (Test-Path $addonDll)) {
+            $fallbackDll = Get-ChildItem -Path $addonOutDir -Filter *.dll -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($fallbackDll) {
+                $addonDll = $fallbackDll.FullName
+            }
+        }
+        Assert-PathExists -PathValue $addonDll -Label "addon dll for $addonName"
+        Copy-Item -Path $addonDll -Destination (Join-Path $distAddonsDir ([System.IO.Path]::GetFileName($addonDll))) -Force
+    }
 
     Write-Host "Build completed successfully." -ForegroundColor Green
 }
