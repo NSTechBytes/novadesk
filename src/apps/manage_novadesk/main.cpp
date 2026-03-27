@@ -56,6 +56,7 @@ static HWND g_btnRefreshAll = nullptr;
 static HWND g_tab = nullptr;
 static HWND g_logsList = nullptr;
 static HWND g_settingsPanel = nullptr;
+static HWND g_aboutPanel = nullptr;
 static HWND g_settingsTitle = nullptr;
 static HWND g_chkRunOnStartup = nullptr;
 static HWND g_btnCheckUpdates = nullptr;
@@ -1538,6 +1539,10 @@ static void LayoutTabPages(const RECT &pageRect)
     {
         MoveWindow(g_settingsPanel, pageRect.left, pageRect.top, pageWidth, pageHeight, TRUE);
     }
+    if (g_aboutPanel)
+    {
+        MoveWindow(g_aboutPanel, pageRect.left, pageRect.top, pageWidth, pageHeight, TRUE);
+    }
     const int settingsLeft = pageRect.left + 16;
     const int settingsWidth = pageWidth - 32;
     if (g_settingsTitle)
@@ -1617,6 +1622,7 @@ static void ApplyTabState()
     ShowWindow(g_list, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_logsList, logsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_settingsPanel, settingsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_aboutPanel, aboutTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_settingsTitle, settingsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_chkRunOnStartup, settingsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnCheckUpdates, settingsTab ? SW_SHOW : SW_HIDE);
@@ -1776,6 +1782,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                                           WS_CHILD,
                                           pageRect.left, pageRect.top, pageRect.right - pageRect.left, pageRect.bottom - pageRect.top,
                                           hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_aboutPanel = CreateWindowExW(0, L"STATIC", L"",
+                                       WS_CHILD,
+                                       pageRect.left, pageRect.top, pageRect.right - pageRect.left, pageRect.bottom - pageRect.top,
+                                       hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
         g_settingsTitle = CreateWindowExW(0, L"STATIC", L"Manage Settings",
                                           WS_CHILD | SS_LEFT,
                                           pageRect.left + 16, pageRect.top + 12, pageRect.right - pageRect.left - 32, 24,
