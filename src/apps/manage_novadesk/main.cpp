@@ -90,6 +90,7 @@ static int g_activeTab = 0;
 static std::unordered_map<std::wstring, std::wstring> g_savedLoadedScripts;
 static bool g_manageAutoCheckForUpdates = false;
 static std::wstring g_lastNotifiedUpdateVersion;
+static bool g_updateDialogOpen = false;
 static bool g_isCheckingForUpdates = false;
 static ULONG_PTR g_gdiplusToken = 0;
 static HBITMAP g_aboutLogoBitmap = nullptr;
@@ -754,6 +755,18 @@ static void SetSettingsStatusText(const std::wstring &text)
     UNREFERENCED_PARAMETER(text);
 }
 
+static int ShowManageMessageBox(const std::wstring &message, const std::wstring &title, UINT type)
+{
+    HWND owner = nullptr;
+    if (g_mainWindow && IsWindow(g_mainWindow) && IsWindowVisible(g_mainWindow))
+    {
+        owner = g_mainWindow;
+    }
+
+    const UINT flags = type | MB_SETFOREGROUND | MB_TOPMOST | (owner ? 0 : MB_TASKMODAL);
+    return MessageBoxW(owner, message.c_str(), title.c_str(), flags);
+}
+
 static void SaveManageSettings()
 {
     const std::wstring path = GetManageSettingsPath();
@@ -1361,6 +1374,11 @@ static void RefreshSettingsControls()
 
 static void CheckForUpdates(bool silent)
 {
+    if (g_updateDialogOpen)
+    {
+        return;
+    }
+
     SetSettingsStatusText(L"Checking for updates...");
     std::wstring latest;
     std::wstring assetUrl;
@@ -1370,7 +1388,7 @@ static void CheckForUpdates(bool silent)
         SetSettingsStatusText(L"Update check failed.");
         if (!silent)
         {
-            MessageBoxW(g_mainWindow, L"Unable to check latest version from GitHub.", L"Novadesk Update", MB_OK | MB_ICONWARNING);
+            ShowManageMessageBox(L"Unable to check latest version from GitHub.", L"Novadesk Update", MB_OK | MB_ICONWARNING);
         }
         return;
     }
@@ -1382,23 +1400,24 @@ static void CheckForUpdates(bool silent)
         const bool shouldShowDialog = !silent || (g_manageAutoCheckForUpdates && latest != g_lastNotifiedUpdateVersion);
         if (shouldShowDialog)
         {
-            const int rc = MessageBoxW(g_mainWindow,
-                                       (msg + L"\n\nDownload latest release to temp and run setup now?").c_str(),
-                                       L"Novadesk Update",
-                                       MB_YESNO | MB_ICONINFORMATION);
+            g_updateDialogOpen = true;
+            const int rc = ShowManageMessageBox(msg + L"\n\nDownload latest release to temp and run setup now?",
+                                                L"Novadesk Update",
+                                                MB_YESNO | MB_ICONINFORMATION);
+            g_updateDialogOpen = false;
             g_lastNotifiedUpdateVersion = latest;
             if (rc == IDYES)
             {
                 if (assetUrl.empty())
                 {
-                    MessageBoxW(g_mainWindow, L"No downloadable asset found for the latest release.", L"Novadesk Update", MB_OK | MB_ICONWARNING);
+                    ShowManageMessageBox(L"No downloadable asset found for the latest release.", L"Novadesk Update", MB_OK | MB_ICONWARNING);
                     return;
                 }
 
                 wchar_t tempPath[MAX_PATH + 1] = {};
                 if (!GetTempPathW(MAX_PATH, tempPath))
                 {
-                    MessageBoxW(g_mainWindow, L"Could not access temp folder.", L"Novadesk Update", MB_OK | MB_ICONWARNING);
+                    ShowManageMessageBox(L"Could not access temp folder.", L"Novadesk Update", MB_OK | MB_ICONWARNING);
                     return;
                 }
 
@@ -1408,7 +1427,7 @@ static void CheckForUpdates(bool silent)
                 if (!DownloadFileToPath(assetUrl, destination))
                 {
                     SetSettingsStatusText(L"Download failed.");
-                    MessageBoxW(g_mainWindow, L"Failed to download latest release.", L"Novadesk Update", MB_OK | MB_ICONWARNING);
+                    ShowManageMessageBox(L"Failed to download latest release.", L"Novadesk Update", MB_OK | MB_ICONWARNING);
                     return;
                 }
 
@@ -1423,7 +1442,7 @@ static void CheckForUpdates(bool silent)
         SetSettingsStatusText(msg);
         if (!silent)
         {
-            MessageBoxW(g_mainWindow, msg.c_str(), L"Novadesk Update", MB_OK | MB_ICONINFORMATION);
+            ShowManageMessageBox(msg, L"Novadesk Update", MB_OK | MB_ICONINFORMATION);
         }
     }
 }
