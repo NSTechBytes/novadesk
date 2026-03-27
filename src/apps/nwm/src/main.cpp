@@ -748,7 +748,7 @@ bool RunWidget() {
         return false;
     }
 
-    std::string command = "\"" + novadeskExe.string() + "\" \"" + scriptPath.string() + "\"";
+    std::string command = "\"" + novadeskExe.string() + "\" --new-instance \"" + scriptPath.string() + "\"";
     std::cout << "Running: " << command << std::endl;
 
     STARTUPINFOA si = { sizeof(si) };

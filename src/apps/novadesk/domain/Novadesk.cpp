@@ -54,6 +54,8 @@ struct TrayState
 std::unordered_map<int, TrayState> g_trayStates;
 int g_nextTrayId = 1;
 HWND g_trayMessageWindow = nullptr;
+static HANDLE g_singleInstanceMutex = nullptr;
+static std::wstring g_singleInstanceMutexName;
 
 static BOOL WINAPI NovadeskConsoleCtrlHandler(DWORD ctrlType)
 {
@@ -109,6 +111,52 @@ static bool SendIpcCommand(HWND hWnd, const std::wstring &command, const std::ws
     cds.cbData = static_cast<DWORD>((payload.size() + 1) * sizeof(wchar_t));
     cds.lpData = const_cast<wchar_t *>(payload.c_str());
     return SendMessage(hWnd, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&cds)) != 0;
+}
+
+static std::wstring BuildSingleInstanceMutexName()
+{
+    std::wstring appTitle = PathUtils::GetProductName();
+    return L"Global\\NovadeskMutex_" + appTitle;
+}
+
+bool RequestSingleInstanceLock()
+{
+    if (g_singleInstanceMutex)
+    {
+        return true;
+    }
+
+    g_singleInstanceMutexName = BuildSingleInstanceMutexName();
+
+    SECURITY_DESCRIPTOR sd;
+    InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION);
+    SetSecurityDescriptorDacl(&sd, TRUE, NULL, FALSE);
+    SECURITY_ATTRIBUTES sa = {sizeof(sa), &sd, FALSE};
+
+    HANDLE hMutex = CreateMutexW(&sa, TRUE, g_singleInstanceMutexName.c_str());
+    if (!hMutex)
+    {
+        return false;
+    }
+
+    DWORD err = GetLastError();
+    if (err == ERROR_ALREADY_EXISTS || err == ERROR_ACCESS_DENIED)
+    {
+        CloseHandle(hMutex);
+        return false;
+    }
+
+    g_singleInstanceMutex = hMutex;
+    return true;
+}
+
+void ReleaseSingleInstanceLock()
+{
+    if (g_singleInstanceMutex)
+    {
+        CloseHandle(g_singleInstanceMutex);
+        g_singleInstanceMutex = nullptr;
+    }
 }
 
 static std::wstring CreateTempListPath()
@@ -168,20 +216,53 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(nCmdShow);
 
     std::wstring appTitle = PathUtils::GetProductName();
-    std::wstring mutexName = L"Global\\NovadeskMutex_" + appTitle;
+    std::wstring mutexName = BuildSingleInstanceMutexName();
     std::wstring className = L"NovadeskTrayClass_" + appTitle;
+    bool requestSingleInstanceLock = false;
+    bool forceNewInstance = false;
+    {
+        int argc = 0;
+        LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+        if (argv)
+        {
+            for (int i = 1; i < argc; ++i)
+            {
+                const std::wstring arg = argv[i];
+                if (arg == L"--request-single-instance-lock")
+                {
+                    requestSingleInstanceLock = true;
+                    continue;
+                }
+                if (arg == L"--new-instance")
+                {
+                    forceNewInstance = true;
+                }
+            }
+            LocalFree(argv);
+        }
+    }
 
-    // Single instance enforcement
-    // We use a NULL DACL to allow both Admin and User instances to share the same Mutex
-    SECURITY_DESCRIPTOR sd;
-    InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION);
-    SetSecurityDescriptorDacl(&sd, TRUE, NULL, FALSE);
-    SECURITY_ATTRIBUTES sa = {sizeof(sa), &sd, FALSE};
+    bool lockAlreadyHeld = false;
+    if (!forceNewInstance)
+    {
+        HANDLE hExistingMutex = OpenMutexW(SYNCHRONIZE, FALSE, mutexName.c_str());
+        if (hExistingMutex)
+        {
+            lockAlreadyHeld = true;
+            CloseHandle(hExistingMutex);
+        }
+        else if (requestSingleInstanceLock && !RequestSingleInstanceLock())
+        {
+            HANDLE hRaceMutex = OpenMutexW(SYNCHRONIZE, FALSE, mutexName.c_str());
+            if (hRaceMutex)
+            {
+                lockAlreadyHeld = true;
+                CloseHandle(hRaceMutex);
+            }
+        }
+    }
 
-    HANDLE hMutex = CreateMutexW(&sa, TRUE, mutexName.c_str());
-    DWORD dwError = GetLastError();
-
-    if (dwError == ERROR_ALREADY_EXISTS || dwError == ERROR_ACCESS_DENIED)
+    if (lockAlreadyHeld)
     {
         // Another instance is running, check arguments for commands
         bool handledCommand = false;
@@ -210,6 +291,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 if (arg == L"--list-scripts")
                 {
                     listScripts = true;
+                    continue;
+                }
+                if (arg == L"--new-instance")
+                {
                     continue;
                 }
                 if (arg == L"--list-scripts-file" && i + 1 < argc)
@@ -370,8 +455,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             MessageBoxW(nullptr, message.c_str(), appTitle.c_str(), MB_OK | MB_ICONINFORMATION);
         }
 
-        if (hMutex)
-            CloseHandle(hMutex);
         return 0;
     }
 
@@ -599,6 +682,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                         ++i;
                     continue;
                 }
+                if (arg == L"--new-instance")
+                {
+                    continue;
+                }
                 if (arg == L"--refresh-all")
                 {
                     continue;
@@ -724,9 +811,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     FontManager::Cleanup();
     Direct2D::Cleanup();
 
-    // Close mutex
-    if (hMutex)
-        CloseHandle(hMutex);
+    ReleaseSingleInstanceLock();
 
     return (int)msg.wParam;
 }

@@ -761,6 +761,17 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
+        JSValue JsAppRequestSingleInstanceLock(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewBool(ctx, RequestSingleInstanceLock() ? 1 : 0);
+        }
+
+        JSValue JsAppReleaseSingleInstanceLock(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            ReleaseSingleInstanceLock();
+            return JS_NewBool(ctx, 1);
+        }
+
         JSValue JsAppSaveLogToFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
             if (argc < 1)
@@ -1215,6 +1226,8 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, app, "reload", JS_NewCFunction(ctx, JsAppReload, "reload", 0));
             JS_SetPropertyStr(ctx, app, "refresh", JS_NewCFunction(ctx, JsAppRefresh, "refresh", 0));
             JS_SetPropertyStr(ctx, app, "exit", JS_NewCFunction(ctx, JsAppExit, "exit", 0));
+            JS_SetPropertyStr(ctx, app, "requestSingleInstanceLock", JS_NewCFunction(ctx, JsAppRequestSingleInstanceLock, "requestSingleInstanceLock", 0));
+            JS_SetPropertyStr(ctx, app, "releaseSingleInstanceLock", JS_NewCFunction(ctx, JsAppReleaseSingleInstanceLock, "releaseSingleInstanceLock", 0));
             JS_SetPropertyStr(ctx, app, "saveLogToFile", JS_NewCFunction(ctx, JsAppSaveLogToFile, "saveLogToFile", 1));
             JS_SetPropertyStr(ctx, app, "disableLogging", JS_NewCFunction(ctx, JsAppDisableLogging, "disableLogging", 1));
             JS_SetPropertyStr(ctx, app, "useHardwareAcceleration", JS_NewCFunction(ctx, JsAppUseHardwareAcceleration, "useHardwareAcceleration", 1));

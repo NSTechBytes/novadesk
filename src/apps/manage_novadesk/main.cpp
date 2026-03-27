@@ -7,6 +7,7 @@
 
 #include <windows.h>
 #include <commctrl.h>
+#include <tlhelp32.h>
 #include <shlobj.h>
 #include <shellapi.h>
 #include <wininet.h>
@@ -117,9 +118,11 @@ static const int kControlIdAboutDonate = 203;
 static const UINT kLogAppendMessage = WM_APP + 20;
 static const UINT_PTR kLogsRefreshTimerId = 1;
 static const UINT_PTR kAutoUpdateTimerId = 2;
+static const UINT_PTR kStartupSyncTimerId = 3;
 static const UINT kAutoUpdateIntervalMs = 60 * 1000; // 1 minute
 static const int kMaxLogRows = 2000;
 static const wchar_t *kCurrentVersion = L"0.6.0.0";
+static const wchar_t *kSingleInstanceLockArg = L"--request-single-instance-lock";
 static void ExecuteNovadeskCommand(const std::wstring &cmd, const std::wstring &path);
 static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd);
 static std::wstring GetAboutLogoPath();
@@ -234,6 +237,48 @@ static std::wstring JoinPath(const std::wstring &a, const std::wstring &b)
 static std::wstring GetAboutLogoPath()
 {
     return JoinPath(GetExeDir(), L"images\\Novadesk.png");
+}
+
+static std::wstring EnsureSingleInstanceArg(const std::wstring &args)
+{
+    if (args.find(kSingleInstanceLockArg) != std::wstring::npos)
+    {
+        return args;
+    }
+    if (args.empty())
+    {
+        return std::wstring(kSingleInstanceLockArg);
+    }
+    return args + L" " + kSingleInstanceLockArg;
+}
+
+static bool IsNovadeskProcessRunning()
+{
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE)
+    {
+        return false;
+    }
+
+    PROCESSENTRY32W pe{};
+    pe.dwSize = sizeof(pe);
+    if (!Process32FirstW(snapshot, &pe))
+    {
+        CloseHandle(snapshot);
+        return false;
+    }
+
+    do
+    {
+        if (_wcsicmp(pe.szExeFile, L"Novadesk.exe") == 0)
+        {
+            CloseHandle(snapshot);
+            return true;
+        }
+    } while (Process32NextW(snapshot, &pe));
+
+    CloseHandle(snapshot);
+    return false;
 }
 
 static void LoadWindowIcons(HINSTANCE hInstance)
@@ -882,6 +927,12 @@ static void StartNovadesk()
     if (g_novadeskRunning)
         return;
 
+    if (IsNovadeskProcessRunning())
+    {
+        LogLine(L"[Manage] Novadesk is already running. Skip launching another instance.");
+        return;
+    }
+
     const std::wstring exe = GetNovadeskExePath();
     SECURITY_ATTRIBUTES sa{};
     sa.nLength = sizeof(sa);
@@ -908,7 +959,7 @@ static void StartNovadesk()
         si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
     }
     PROCESS_INFORMATION pi{};
-    std::wstring cmdLine = L"\"" + exe + L"\"";
+    std::wstring cmdLine = L"\"" + exe + L"\" " + EnsureSingleInstanceArg(L"");
 
     if (CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
     {
@@ -990,7 +1041,7 @@ static void ShowTrayMenu(HWND hWnd)
 
 static std::wstring RunProcessCaptureStdout(const std::wstring &exePath, const std::wstring &args)
 {
-    std::wstring cmd = L"\"" + exePath + L"\" " + args;
+    std::wstring cmd = L"\"" + exePath + L"\" " + EnsureSingleInstanceArg(args);
     LogLine(L"[Manage] Run capture: " + cmd);
 
     SECURITY_ATTRIBUTES sa{};
@@ -1048,7 +1099,7 @@ static bool RunProcessWait(const std::wstring &exePath, const std::wstring &args
     STARTUPINFOW si{};
     si.cb = sizeof(si);
     PROCESS_INFORMATION pi{};
-    std::wstring cmdLine = L"\"" + exePath + L"\" " + args;
+    std::wstring cmdLine = L"\"" + exePath + L"\" " + EnsureSingleInstanceArg(args);
     LogLine(L"[Manage] Run wait: " + cmdLine);
     if (!CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
     {
@@ -1247,7 +1298,7 @@ static std::vector<WidgetEntry> LoadWidgets()
 static void ExecuteNovadeskCommand(const std::wstring &cmd, const std::wstring &path)
 {
     const std::wstring exe = GetNovadeskExePath();
-    std::wstring args = cmd + L" \"" + path + L"\"";
+    std::wstring args = EnsureSingleInstanceArg(cmd + L" \"" + path + L"\"");
 
     STARTUPINFOW si{};
     si.cb = sizeof(si);
@@ -1344,7 +1395,7 @@ static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd)
     si.cb = sizeof(si);
     PROCESS_INFORMATION pi{};
 
-    std::wstring cmdLine = L"\"" + exe + L"\" " + cmd;
+    std::wstring cmdLine = L"\"" + exe + L"\" " + EnsureSingleInstanceArg(cmd);
     LogLine(L"[Manage] Exec: " + cmdLine);
     if (CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
     {
@@ -1747,10 +1798,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         RECT rc{};
         GetClientRect(hWnd, &rc);
 
+        LoadManageSettings();
         StartNovadesk();
         AddTrayIcon(hWnd);
-        LoadManageSettings();
-        ApplySavedLoadedScripts();
         InitGdiPlus();
 
         g_buttonFont = CreateFontW(-12, 0, 0, 0, FW_LIGHT, FALSE, FALSE, FALSE,
@@ -1980,8 +2030,8 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         {
             StartAsyncUpdateCheck(true);
         }
-        RefreshListView();
         ApplyTabState();
+        SetTimer(hWnd, kStartupSyncTimerId, 1200, nullptr);
         SetTimer(hWnd, kLogsRefreshTimerId, 700, nullptr);
         UpdateButtonState();
         return 0;
@@ -2095,6 +2145,13 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         {
             CheckForUpdates(true);
         }
+        else if (wParam == kStartupSyncTimerId)
+        {
+            KillTimer(hWnd, kStartupSyncTimerId);
+            ApplySavedLoadedScripts();
+            RefreshListView();
+            UpdateButtonState();
+        }
         return 0;
     case kLogAppendMessage:
     {
@@ -2127,6 +2184,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         g_mainWindow = nullptr;
         KillTimer(hWnd, kLogsRefreshTimerId);
         KillTimer(hWnd, kAutoUpdateTimerId);
+        KillTimer(hWnd, kStartupSyncTimerId);
         if (g_windowIconLarge)
         {
             DestroyIcon(g_windowIconLarge);
