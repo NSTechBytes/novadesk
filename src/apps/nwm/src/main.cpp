@@ -44,7 +44,6 @@ struct SetupOptions {
 
 struct WidgetMeta {
     nlohmann::json json = nlohmann::json::object();
-    std::string main = "index.js";
 };
 
 #pragma pack(push, 1)
@@ -94,11 +93,6 @@ bool LoadWidgetMeta(const fs::path& widgetPath, WidgetMeta& outMeta) {
     if (outMeta.json.is_discarded()) {
         std::cerr << "Error: meta.json is not valid JSON." << std::endl;
         return false;
-    }
-
-    outMeta.main = outMeta.json.value("main", outMeta.main);
-    if (outMeta.main.empty()) {
-        outMeta.main = "index.js";
     }
 
     return true;
@@ -725,14 +719,9 @@ bool InitWidget(const std::string& name) {
 
 bool RunWidget() {
     fs::path widgetPath = fs::current_path();
-    WidgetMeta meta;
-    if (!LoadWidgetMeta(widgetPath, meta)) {
-        return false;
-    }
-
-    fs::path scriptPath = widgetPath / fs::path(meta.main);
+    fs::path scriptPath = widgetPath / "index.js";
     if (!fs::exists(scriptPath)) {
-        std::cerr << "Error: Could not find main script '" << meta.main << "' in current directory." << std::endl;
+        std::cerr << "Error: Could not find 'index.js' in current directory." << std::endl;
         return false;
     }
 
