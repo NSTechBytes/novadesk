@@ -123,6 +123,10 @@ static const UINT kAutoUpdateIntervalMs = 60 * 1000; // 1 minute
 static const int kMaxLogRows = 2000;
 static const wchar_t *kCurrentVersion = L"0.7.0.0";
 static const wchar_t *kSingleInstanceLockArg = L"--request-single-instance-lock";
+static const wchar_t *kManageWindowClassName = L"NovadeskManagerWindow";
+static const wchar_t *kManageCloseMessageName = L"Novadesk.Manage.RequestClose";
+static UINT g_manageCloseMessage = 0;
+static int ShowManageMessageBox(const std::wstring &message, const std::wstring &title, UINT type);
 static void ExecuteNovadeskCommand(const std::wstring &cmd, const std::wstring &path);
 static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd);
 static std::wstring GetAboutLogoPath();
@@ -250,6 +254,73 @@ static std::wstring EnsureSingleInstanceArg(const std::wstring &args)
         return std::wstring(kSingleInstanceLockArg);
     }
     return args + L" " + kSingleInstanceLockArg;
+}
+
+static bool LaunchRestartNovadesk()
+{
+    const std::wstring restartExe = JoinPath(GetExeDir(), L"restart_novadesk.exe");
+    DWORD attrs = GetFileAttributesW(restartExe.c_str());
+    if (attrs == INVALID_FILE_ATTRIBUTES || (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0)
+    {
+        ShowManageMessageBox(L"restart_novadesk.exe not found in the app folder.", L"Manage Novadesk", MB_OK | MB_ICONWARNING);
+        return false;
+    }
+
+    std::wstring cmdLine = L"\"" + restartExe + L"\"";
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+
+    if (!CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, FALSE, 0, nullptr, GetExeDir().c_str(), &si, &pi))
+    {
+        ShowManageMessageBox(L"Failed to launch restart_novadesk.exe.", L"Manage Novadesk", MB_OK | MB_ICONWARNING);
+        return false;
+    }
+
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return true;
+}
+
+static void PromptRestartForHardwareAcceleration()
+{
+    const int kRestartNowButtonId = 1001;
+    const TASKDIALOG_BUTTON buttons[] = {
+        {kRestartNowButtonId, L"Restart Now"},
+        {IDCANCEL, L"Later"},
+    };
+
+    TASKDIALOGCONFIG config{};
+    config.cbSize = sizeof(config);
+    config.hwndParent = g_mainWindow;
+    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION;
+    config.dwCommonButtons = 0;
+    config.pszWindowTitle = L"Manage Novadesk";
+    config.pszMainInstruction = L"Novadesk needs restart for this change.";
+    config.pszContent = L"Hardware acceleration changes apply after restarting Novadesk.";
+    config.cButtons = ARRAYSIZE(buttons);
+    config.pButtons = buttons;
+    config.nDefaultButton = kRestartNowButtonId;
+
+    int selectedButton = IDCANCEL;
+    HRESULT hr = TaskDialogIndirect(&config, &selectedButton, nullptr, nullptr);
+    if (SUCCEEDED(hr))
+    {
+        if (selectedButton == kRestartNowButtonId)
+        {
+            LaunchRestartNovadesk();
+        }
+        return;
+    }
+
+    const int fallback = ShowManageMessageBox(
+        L"Novadesk needs restart for this change.\n\nRestart now?",
+        L"Manage Novadesk",
+        MB_YESNO | MB_ICONINFORMATION);
+    if (fallback == IDYES)
+    {
+        LaunchRestartNovadesk();
+    }
 }
 
 static void LoadWindowIcons(HINSTANCE hInstance)
@@ -1535,9 +1606,16 @@ static void OnSettingsControlClicked(int controlId)
         ExecuteNovadeskCommandNoPath(checked ? L"--enable-save-log-to-file" : L"--disable-save-log-to-file");
         break;
     case kControlIdUseHardwareAcceleration:
+    {
+        const bool previous = GetNovadeskSettingBool("useHardwareAcceleration", false);
         SetNovadeskSettingBool("useHardwareAcceleration", checked);
         ExecuteNovadeskCommandNoPath(checked ? L"--enable-hardware-acceleration" : L"--disable-hardware-acceleration");
+        if (previous != checked)
+        {
+            PromptRestartForHardwareAcceleration();
+        }
         break;
+    }
     default:
         break;
     }
@@ -1751,6 +1829,12 @@ static void OnRefreshAll()
 
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+    if (g_manageCloseMessage != 0 && message == g_manageCloseMessage)
+    {
+        DestroyWindow(hWnd);
+        return 0;
+    }
+
     switch (message)
     {
     case WM_CREATE:
@@ -2212,7 +2296,8 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
     icc.dwICC = ICC_LISTVIEW_CLASSES | ICC_TAB_CLASSES | ICC_LINK_CLASS;
     InitCommonControlsEx(&icc);
 
-    const wchar_t *className = L"NovadeskManagerWindow";
+    const wchar_t *className = kManageWindowClassName;
+    g_manageCloseMessage = RegisterWindowMessageW(kManageCloseMessageName);
     HANDLE instanceMutex = CreateMutexW(nullptr, FALSE, L"Global\\NovadeskManageWindowSingleton");
     if (instanceMutex && GetLastError() == ERROR_ALREADY_EXISTS)
     {
