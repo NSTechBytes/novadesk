@@ -456,13 +456,45 @@ static void StopNovadeskLogCapture()
     }
 }
 
-static std::wstring GetWidgetsRoot()
+static bool IsPortableMode()
 {
     const std::wstring exeDir = GetExeDir();
-    const std::wstring portableFlag = JoinPath(exeDir, L"manage_window_settings.json");
-    if (std::filesystem::exists(portableFlag))
+    const std::wstring settingsPath = JoinPath(exeDir, L"manage_window_settings.json");
+    std::error_code ec;
+    if (!std::filesystem::exists(settingsPath, ec) || ec)
     {
-        return JoinPath(exeDir, L"Widgets");
+        return false;
+    }
+
+    std::ifstream in(std::filesystem::path(settingsPath), std::ios::binary);
+    if (!in.is_open())
+    {
+        return true;
+    }
+
+    nlohmann::json doc;
+    try
+    {
+        in >> doc;
+    }
+    catch (...)
+    {
+        return true;
+    }
+
+    if (doc.is_object() && doc.contains("isPortable") && doc["isPortable"].is_boolean())
+    {
+        return doc["isPortable"].get<bool>();
+    }
+
+    return true;
+}
+
+static std::wstring GetWidgetsRoot()
+{
+    if (IsPortableMode())
+    {
+        return JoinPath(GetExeDir(), L"Widgets");
     }
 
     PWSTR docs = nullptr;
