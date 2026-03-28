@@ -186,7 +186,7 @@ try {
     $distNwmDir = Join-Path $distDir "nwm"
     $distWidgetsDir = Join-Path $distDir "Widgets"
     $distImagesDir = Join-Path $distDir "images"
-    $distAddonsDir = Join-Path $distDir "addons"
+    $distAddonsDir = Join-Path $distDir "Addons"
     $distNwmTemplateDir = Join-Path $distNwmDir "template"
 
     $novadeskExeSrc = Join-Path $RepoRoot "$BuildDir\novadesk.exe"

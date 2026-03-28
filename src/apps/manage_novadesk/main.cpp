@@ -20,6 +20,7 @@
 #include <sstream>
 #include <fstream>
 #include <iterator>
+#include <cwctype>
 #include "../../third_party/json/json.hpp"
 
 #include "resource.h"
@@ -27,6 +28,7 @@
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "wininet.lib")
+#pragma comment(lib, "version.lib")
 
 
 struct WidgetEntry
@@ -34,6 +36,14 @@ struct WidgetEntry
     std::wstring name;
     std::wstring scriptPath;
     bool loaded = false;
+};
+
+struct AddonEntry
+{
+    std::wstring name;
+    std::wstring author;
+    std::wstring version;
+    std::wstring copyright;
 };
 
 static HWND g_list = nullptr;
@@ -53,8 +63,10 @@ static HWND g_btnLoad = nullptr;
 static HWND g_btnUnload = nullptr;
 static HWND g_btnRefresh = nullptr;
 static HWND g_btnRefreshAll = nullptr;
+static HWND g_btnClose = nullptr;
 static HWND g_tab = nullptr;
 static HWND g_logsList = nullptr;
+static HWND g_addonsList = nullptr;
 static HWND g_settingsPanel = nullptr;
 static HWND g_aboutPanel = nullptr;
 static HWND g_settingsTitle = nullptr;
@@ -92,6 +104,7 @@ static bool g_manageAutoCheckForUpdates = false;
 static std::wstring g_lastNotifiedUpdateVersion;
 static bool g_updateDialogOpen = false;
 static bool g_isCheckingForUpdates = false;
+static bool g_forceExitOnClose = false;
 static ULONG_PTR g_gdiplusToken = 0;
 static HBITMAP g_aboutLogoBitmap = nullptr;
 static HFONT g_aboutTitleFont = nullptr;
@@ -103,6 +116,7 @@ static const int kControlIdLoad = 102;
 static const int kControlIdUnload = 103;
 static const int kControlIdRefresh = 104;
 static const int kControlIdRefreshAll = 105;
+static const int kControlIdClose = 107;
 static const int kControlIdTabs = 106;
 static const int kControlIdRunOnStartup = 301;
 static const int kControlIdCheckUpdates = 302;
@@ -131,6 +145,7 @@ static void ExecuteNovadeskCommand(const std::wstring &cmd, const std::wstring &
 static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd);
 static std::wstring GetAboutLogoPath();
 static void ConfigureAutoUpdateTimer(HWND hWnd);
+static void RequestAppExit(HWND hWnd);
 
 static void InitGdiPlus()
 {
@@ -456,6 +471,12 @@ static void StopNovadeskLogCapture()
     }
 }
 
+static void RequestAppExit(HWND hWnd)
+{
+    g_forceExitOnClose = true;
+    PostMessageW(hWnd, WM_CLOSE, 0, 0);
+}
+
 static bool IsPortableMode()
 {
     const std::wstring exeDir = GetExeDir();
@@ -505,6 +526,164 @@ static std::wstring GetWidgetsRoot()
         CoTaskMemFree(docs);
     }
     return out;
+}
+
+static std::wstring GetAddonsRoot()
+{
+    if (IsPortableMode())
+    {
+        return JoinPath(GetExeDir(), L"Addons");
+    }
+
+    PWSTR docs = nullptr;
+    std::wstring out;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docs)) && docs)
+    {
+        out = std::wstring(docs) + L"\\Novadesk\\Addons";
+        CoTaskMemFree(docs);
+    }
+    return out;
+}
+
+static std::wstring GetAddonVersionField(const std::wstring &dllPath, const wchar_t *fieldName)
+{
+    if (!fieldName || !fieldName[0])
+    {
+        return L"";
+    }
+
+    DWORD handle = 0;
+    const DWORD infoSize = GetFileVersionInfoSizeW(dllPath.c_str(), &handle);
+    if (infoSize == 0)
+    {
+        return L"";
+    }
+
+    std::vector<BYTE> buffer(infoSize);
+    if (!GetFileVersionInfoW(dllPath.c_str(), 0, infoSize, buffer.data()))
+    {
+        return L"";
+    }
+
+    struct LangCodePage
+    {
+        WORD language;
+        WORD codePage;
+    };
+
+    LangCodePage *translation = nullptr;
+    UINT translationLen = 0;
+    if (!VerQueryValueW(buffer.data(), L"\\VarFileInfo\\Translation", reinterpret_cast<LPVOID *>(&translation), &translationLen) ||
+        !translation || translationLen < sizeof(LangCodePage))
+    {
+        return L"";
+    }
+
+    wchar_t queryPath[256] = {};
+    swprintf_s(
+        queryPath,
+        L"\\StringFileInfo\\%04x%04x\\%s",
+        translation[0].language,
+        translation[0].codePage,
+        fieldName);
+
+    LPWSTR value = nullptr;
+    UINT valueLen = 0;
+    if (!VerQueryValueW(buffer.data(), queryPath, reinterpret_cast<LPVOID *>(&value), &valueLen) || !value || valueLen == 0)
+    {
+        return L"";
+    }
+
+    return std::wstring(value);
+}
+
+static std::vector<AddonEntry> LoadAddons()
+{
+    std::vector<AddonEntry> addons;
+    const std::wstring root = GetAddonsRoot();
+    if (root.empty())
+    {
+        return addons;
+    }
+
+    std::error_code ec;
+    if (!std::filesystem::exists(root, ec) || ec)
+    {
+        return addons;
+    }
+
+    for (const auto &entry : std::filesystem::directory_iterator(root, ec))
+    {
+        if (ec)
+        {
+            break;
+        }
+        if (!entry.is_regular_file())
+        {
+            continue;
+        }
+
+        std::wstring ext = entry.path().extension().wstring();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::towlower);
+        if (ext != L".dll")
+        {
+            continue;
+        }
+
+        const std::wstring dllPath = entry.path().wstring();
+        const std::wstring fileStem = entry.path().stem().wstring();
+        AddonEntry addon{};
+        addon.name = GetAddonVersionField(dllPath, L"FileDescription");
+        if (addon.name.empty())
+        {
+            addon.name = fileStem;
+        }
+        addon.author = GetAddonVersionField(dllPath, L"CompanyName");
+        if (addon.author.empty())
+        {
+            addon.author = L"-";
+        }
+        addon.version = GetAddonVersionField(dllPath, L"FileVersion");
+        if (addon.version.empty())
+        {
+            addon.version = L"-";
+        }
+        addon.copyright = GetAddonVersionField(dllPath, L"LegalCopyright");
+        if (addon.copyright.empty())
+        {
+            addon.copyright = L"-";
+        }
+
+        addons.push_back(std::move(addon));
+    }
+
+    std::sort(addons.begin(), addons.end(), [](const AddonEntry &a, const AddonEntry &b) {
+        return _wcsicmp(a.name.c_str(), b.name.c_str()) < 0;
+    });
+    return addons;
+}
+
+static void RefreshAddonsView()
+{
+    if (!g_addonsList)
+    {
+        return;
+    }
+
+    ListView_DeleteAllItems(g_addonsList);
+    const auto addons = LoadAddons();
+    for (int i = 0; i < static_cast<int>(addons.size()); ++i)
+    {
+        const auto &addon = addons[static_cast<size_t>(i)];
+        LVITEMW item{};
+        item.mask = LVIF_TEXT;
+        item.iItem = i;
+        item.pszText = const_cast<wchar_t *>(addon.name.c_str());
+        const int row = ListView_InsertItem(g_addonsList, &item);
+        ListView_SetItemText(g_addonsList, row, 1, const_cast<wchar_t *>(addon.author.c_str()));
+        ListView_SetItemText(g_addonsList, row, 2, const_cast<wchar_t *>(addon.version.c_str()));
+        ListView_SetItemText(g_addonsList, row, 3, const_cast<wchar_t *>(addon.copyright.c_str()));
+    }
 }
 
 static std::wstring GetNovadeskExePath()
@@ -1680,6 +1859,10 @@ static void LayoutTabPages(const RECT &pageRect)
     {
         MoveWindow(g_logsList, pageRect.left, pageRect.top, pageWidth, pageHeight, TRUE);
     }
+    if (g_addonsList)
+    {
+        MoveWindow(g_addonsList, pageRect.left, pageRect.top, pageWidth, pageHeight, TRUE);
+    }
     if (g_settingsPanel)
     {
         MoveWindow(g_settingsPanel, pageRect.left, pageRect.top, pageWidth, pageHeight, TRUE);
@@ -1761,11 +1944,13 @@ static void ApplyTabState()
 {
     const bool widgetsTab = (g_activeTab == 0);
     const bool logsTab = (g_activeTab == 1);
-    const bool settingsTab = (g_activeTab == 2);
-    const bool aboutTab = (g_activeTab == 3);
+    const bool addonsTab = (g_activeTab == 2);
+    const bool settingsTab = (g_activeTab == 3);
+    const bool aboutTab = (g_activeTab == 4);
 
     ShowWindow(g_list, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_logsList, logsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_addonsList, addonsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_settingsPanel, settingsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_aboutPanel, aboutTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_settingsTitle, settingsTab ? SW_SHOW : SW_HIDE);
@@ -1795,10 +1980,15 @@ static void ApplyTabState()
     ShowWindow(g_btnUnload, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefresh, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefreshAll, widgetsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnClose, SW_SHOW);
 
     if (logsTab)
     {
         RefreshLogsView();
+    }
+    if (addonsTab)
+    {
+        RefreshAddonsView();
     }
     if (settingsTab)
     {
@@ -1863,7 +2053,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 {
     if (g_manageCloseMessage != 0 && message == g_manageCloseMessage)
     {
-        DestroyWindow(hWnd);
+        RequestAppExit(hWnd);
         return 0;
     }
 
@@ -1907,10 +2097,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         TabCtrl_InsertItem(g_tab, 0, &tabItem);
         tabItem.pszText = const_cast<wchar_t *>(L"Logs");
         TabCtrl_InsertItem(g_tab, 1, &tabItem);
-        tabItem.pszText = const_cast<wchar_t *>(L"Settings");
+        tabItem.pszText = const_cast<wchar_t *>(L"Addons");
         TabCtrl_InsertItem(g_tab, 2, &tabItem);
-        tabItem.pszText = const_cast<wchar_t *>(L"About");
+        tabItem.pszText = const_cast<wchar_t *>(L"Settings");
         TabCtrl_InsertItem(g_tab, 3, &tabItem);
+        tabItem.pszText = const_cast<wchar_t *>(L"About");
+        TabCtrl_InsertItem(g_tab, 4, &tabItem);
 
         RECT tabRectOnParent{};
         GetWindowRect(g_tab, &tabRectOnParent);
@@ -1928,6 +2120,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                                      WS_CHILD | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS,
                                      pageRect.left, pageRect.top, pageRect.right - pageRect.left, pageRect.bottom - pageRect.top,
                                      hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        g_addonsList = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
+                                       WS_CHILD | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS,
+                                       pageRect.left, pageRect.top, pageRect.right - pageRect.left, pageRect.bottom - pageRect.top,
+                                       hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
         g_settingsPanel = CreateWindowExW(0, L"STATIC", L"",
                                           WS_CHILD,
                                           pageRect.left, pageRect.top, pageRect.right - pageRect.left, pageRect.bottom - pageRect.top,
@@ -2059,6 +2255,22 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         lcol.pszText = const_cast<wchar_t *>(L"Message");
         lcol.cx = 600;
         ListView_InsertColumn(g_logsList, 3, &lcol);
+
+        ListView_SetExtendedListViewStyle(g_addonsList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
+        LVCOLUMNW acol{};
+        acol.mask = LVCF_TEXT | LVCF_WIDTH;
+        acol.pszText = const_cast<wchar_t *>(L"Addon Name");
+        acol.cx = 190;
+        ListView_InsertColumn(g_addonsList, 0, &acol);
+        acol.pszText = const_cast<wchar_t *>(L"Author");
+        acol.cx = 180;
+        ListView_InsertColumn(g_addonsList, 1, &acol);
+        acol.pszText = const_cast<wchar_t *>(L"Version");
+        acol.cx = 120;
+        ListView_InsertColumn(g_addonsList, 2, &acol);
+        acol.pszText = const_cast<wchar_t *>(L"Copyright");
+        acol.cx = 420;
+        ListView_InsertColumn(g_addonsList, 3, &acol);
         UpdateAboutLogo();
 
         g_btnRefreshList = CreateWindowW(L"BUTTON", L"Refresh List", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
@@ -2071,6 +2283,8 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                                      310, rc.bottom - 40, 80, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefresh)), GetModuleHandleW(nullptr), nullptr);
         g_btnRefreshAll = CreateWindowW(L"BUTTON", L"Refresh All", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                                         400, rc.bottom - 40, 100, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefreshAll)), GetModuleHandleW(nullptr), nullptr);
+        g_btnClose = CreateWindowW(L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                   rc.right - 90, rc.bottom - 40, 80, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdClose)), GetModuleHandleW(nullptr), nullptr);
 
         if (g_buttonFont)
         {
@@ -2080,7 +2294,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             SendMessageW(g_btnUnload, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnRefresh, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnRefreshAll, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+            SendMessageW(g_btnClose, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_logsList, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+            SendMessageW(g_addonsList, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_settingsPanel, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_settingsTitle, WM_SETFONT, (WPARAM)g_aboutSectionFont, TRUE);
             SendMessageW(g_chkRunOnStartup, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
@@ -2112,6 +2328,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             StartAsyncUpdateCheck(true);
         }
         RefreshListView();
+        RefreshAddonsView();
         ApplyTabState();
         SetTimer(hWnd, kStartupSyncTimerId, kStartupSyncDelayMs, nullptr);
         SetTimer(hWnd, kLogsRefreshTimerId, 700, nullptr);
@@ -2150,6 +2367,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             MoveWindow(g_btnUnload, 220, rc.bottom - 40, 80, 28, TRUE);
             MoveWindow(g_btnRefresh, 310, rc.bottom - 40, 80, 28, TRUE);
             MoveWindow(g_btnRefreshAll, 400, rc.bottom - 40, 100, 28, TRUE);
+            MoveWindow(g_btnClose, rc.right - 90, rc.bottom - 40, 80, 28, TRUE);
         }
         return 0;
     }
@@ -2171,6 +2389,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         case kControlIdRefreshAll:
             OnRefreshAll();
             break;
+        case kControlIdClose:
+            ShowWindow(hWnd, SW_HIDE);
+            break;
         case kControlIdRunOnStartup:
         case kControlIdAutoCheckUpdates:
         case kControlIdEnableLogging:
@@ -2189,7 +2410,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             OpenUrl(L"https://www.patreon.com/cw/officialnovadesk");
             break;
         case kTrayMenuCloseId:
-            DestroyWindow(hWnd);
+            RequestAppExit(hWnd);
             break;
         default:
             break;
@@ -2249,7 +2470,14 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         return 0;
     }
     case WM_CLOSE:
-        ShowWindow(hWnd, SW_HIDE);
+        if (g_forceExitOnClose)
+        {
+            DestroyWindow(hWnd);
+        }
+        else
+        {
+            ShowWindow(hWnd, SW_HIDE);
+        }
         return 0;
     case WM_APP + 1:
         if (lParam == WM_LBUTTONUP || lParam == WM_LBUTTONDBLCLK)
