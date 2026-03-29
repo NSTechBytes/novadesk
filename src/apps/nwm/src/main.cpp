@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstring>
 #include <chrono>
+#include <unordered_map>
 #include <unordered_set>
 #include <windows.h>
 #include <winreg.h>
@@ -33,6 +34,19 @@ using ATL::CComPtr;
 const std::string NOVADESK_EXE = "Novadesk.exe";
 const std::string WIDGETS_DIR = "Widgets";
 const std::string INSTALLER_MAGIC = "NWSFX1";
+const std::string NDPKG_FOOTER_MAGIC = "NDPKG1";
+const std::unordered_set<std::string> DEFAULT_ADDONS = {
+    "appvolume",
+    "appvolume.dll",
+    "audiolevel",
+    "audiolevel.dll",
+    "brightness",
+    "brightness.dll",
+    "hotkey",
+    "hotkey.dll",
+    "nowplaying",
+    "nowplaying.dll"
+};
 
 struct SetupOptions {
     bool createDesktopShortcut = true;
@@ -56,9 +70,16 @@ struct InstallerFooter {
     uint64_t payloadSize;
     uint64_t manifestSize;
 };
+
+struct NdpkgFooter {
+    char magic[8];
+    uint32_t version;
+    uint32_t reserved;
+};
 #pragma pack(pop)
 
 static_assert(sizeof(InstallerFooter) == 24, "InstallerFooter size mismatch");
+static_assert(sizeof(NdpkgFooter) == 16, "NdpkgFooter size mismatch");
 
 // Helper to get executable directory
 fs::path GetExeDir() {
@@ -126,6 +147,17 @@ std::string ToLower(std::string value) {
         return static_cast<char>(std::tolower(c));
     });
     return value;
+}
+
+bool IsDefaultAddonName(const std::string& addonName) {
+    std::string lowered = ToLower(addonName);
+    if (DEFAULT_ADDONS.find(lowered) != DEFAULT_ADDONS.end()) {
+        return true;
+    }
+    if (lowered.size() > 4 && lowered.substr(lowered.size() - 4) == ".dll") {
+        lowered = lowered.substr(0, lowered.size() - 4);
+    }
+    return DEFAULT_ADDONS.find(lowered) != DEFAULT_ADDONS.end();
 }
 
 std::string GetProductVersion() {
@@ -677,7 +709,8 @@ fs::path ResolveAddonsSourcePath(const fs::path& novadeskExePath) {
 
 bool CopyAddonsToStaging(const fs::path& addonsSourceDir,
                          const fs::path& stagingDir,
-                         const std::vector<std::string>& requestedAddons) {
+                         const std::vector<std::string>& requestedAddons,
+                         std::vector<std::string>* outIncludedAddons = nullptr) {
     if (requestedAddons.empty()) {
         std::cout << "No addons requested in meta.json; skipping addon copy." << std::endl;
         return true;
@@ -734,6 +767,9 @@ bool CopyAddonsToStaging(const fs::path& addonsSourceDir,
         }
         fs::copy_file(sourceDll, targetAddonsDir / sourceDll.filename(), fs::copy_options::overwrite_existing);
         copiedNames.insert(canonicalName);
+        if (outIncludedAddons) {
+            outIncludedAddons->push_back(sourceDll.filename().string());
+        }
         ++copiedCount;
     }
 
@@ -796,9 +832,31 @@ bool AddFileToZip(zipFile zf, const fs::path& filePath, const std::string& zipEn
     return true;
 }
 
+bool AddDirectoryEntryToZip(zipFile zf, const std::string& zipDirPath) {
+    zip_fileinfo zi = {};
+    if (zipOpenNewFileInZip64(zf,
+                              zipDirPath.c_str(),
+                              &zi,
+                              nullptr, 0,
+                              nullptr, 0,
+                              nullptr,
+                              0,
+                              0,
+                              0) != ZIP_OK) {
+        std::cerr << "Error: Failed to add zip directory entry: " << zipDirPath << std::endl;
+        return false;
+    }
+    if (zipCloseFileInZip(zf) != ZIP_OK) {
+        std::cerr << "Error: Failed closing zip directory entry: " << zipDirPath << std::endl;
+        return false;
+    }
+    return true;
+}
+
 bool CreateZipFromDirectory(const fs::path& sourceDir,
                             const fs::path& zipPath,
-                            const std::unordered_set<std::string>& excludedTopLevelNames = {}) {
+                            const std::unordered_set<std::string>& excludedTopLevelNames = {},
+                            const std::vector<std::string>& requiredDirectories = {}) {
     zipFile zf = zipOpen64(zipPath.string().c_str(), APPEND_STATUS_CREATE);
     if (!zf) {
         std::cerr << "Error: Failed to create zip: " << zipPath << std::endl;
@@ -806,6 +864,18 @@ bool CreateZipFromDirectory(const fs::path& sourceDir,
     }
 
     bool ok = true;
+    for (const auto& dir : requiredDirectories) {
+        if (!AddDirectoryEntryToZip(zf, dir)) {
+            ok = false;
+            break;
+        }
+    }
+
+    if (!ok) {
+        zipClose(zf, nullptr);
+        return false;
+    }
+
     for (const auto& entry : fs::recursive_directory_iterator(sourceDir)) {
         if (!entry.is_regular_file()) continue;
         fs::path relPath = fs::relative(entry.path(), sourceDir);
@@ -825,6 +895,38 @@ bool CreateZipFromDirectory(const fs::path& sourceDir,
         return false;
     }
     return ok;
+}
+
+bool AppendNdpkgFooter(const fs::path& ndpkgPath) {
+    std::ofstream out(ndpkgPath, std::ios::binary | std::ios::app);
+    if (!out) {
+        std::cerr << "Error: Failed to append ndpkg footer to " << ndpkgPath << std::endl;
+        return false;
+    }
+
+    NdpkgFooter footer{};
+    std::memset(&footer, 0, sizeof(footer));
+    std::memcpy(footer.magic, NDPKG_FOOTER_MAGIC.c_str(), NDPKG_FOOTER_MAGIC.size());
+    footer.version = 1;
+    footer.reserved = 0;
+    out.write(reinterpret_cast<const char*>(&footer), sizeof(footer));
+    return static_cast<bool>(out);
+}
+
+void CopyWidgetFilesForPackaging(const fs::path& widgetPath, const fs::path& targetDir, const std::string& widgetRealName) {
+    fs::create_directories(targetDir);
+    for (const auto& entry : fs::directory_iterator(widgetPath)) {
+        const auto& path = entry.path();
+        std::string filename = path.filename().string();
+
+        if (filename == "dist") continue;
+
+        if (fs::is_directory(path)) {
+            fs::copy(path, targetDir / filename, fs::copy_options::recursive);
+        } else if (filename != (widgetRealName + ".exe")) {
+            fs::copy_file(path, targetDir / filename, fs::copy_options::overwrite_existing);
+        }
+    }
 }
 
 bool InitWidget(const std::string& name) {
@@ -969,6 +1071,12 @@ bool BuildWidget() {
             }
         }
     }
+    std::vector<std::string> ndpkgAddons;
+    for (const auto& addon : requestedAddons) {
+        if (!IsDefaultAddonName(addon)) {
+            ndpkgAddons.push_back(addon);
+        }
+    }
     auto setupJson = meta.value("setup", nlohmann::json::object());
     SetupOptions setupOptions;
     setupOptions.createDesktopShortcut = setupJson.value("createDesktopShortcut", setupOptions.createDesktopShortcut);
@@ -1016,6 +1124,13 @@ bool BuildWidget() {
             }
         } stageCleanup{stagingDir};
 
+        fs::path ndpkgStageDir = fs::temp_directory_path() / ("nwm_ndpkg_stage_" + std::to_string(now));
+        if (fs::exists(ndpkgStageDir)) {
+            fs::remove_all(ndpkgStageDir);
+        }
+        fs::create_directories(ndpkgStageDir);
+        StageCleanup ndpkgStageCleanup{ndpkgStageDir};
+
         fs::path exeDir = GetExeDir();
         fs::path srcExe = exeDir.parent_path() / NOVADESK_EXE;
         if (!fs::exists(srcExe)) {
@@ -1030,21 +1145,16 @@ bool BuildWidget() {
             return false;
         }
 
-        fs::path widgetsSubDir = stagingDir / "Widgets";
-        fs::create_directories(widgetsSubDir);
-
-        for (const auto& entry : fs::directory_iterator(widgetPath)) {
-            const auto& path = entry.path();
-            std::string filename = path.filename().string();
-
-            if (filename == "dist") continue;
-
-            if (fs::is_directory(path)) {
-                fs::copy(path, widgetsSubDir / filename, fs::copy_options::recursive);
-            } else if (filename != (widgetRealName + ".exe")) {
-                fs::copy_file(path, widgetsSubDir / filename, fs::copy_options::overwrite_existing);
-            }
+        std::vector<std::string> ndpkgIncludedAddons;
+        if (!CopyAddonsToStaging(addonsSourceDir, ndpkgStageDir, ndpkgAddons, &ndpkgIncludedAddons)) {
+            return false;
         }
+
+        fs::path widgetsSubDir = stagingDir / "Widgets";
+        CopyWidgetFilesForPackaging(widgetPath, widgetsSubDir, widgetRealName);
+
+        fs::path ndpkgWidgetsDir = ndpkgStageDir / "Widgets" / widgetRealName;
+        CopyWidgetFilesForPackaging(widgetPath, ndpkgWidgetsDir, widgetRealName);
 
         std::cout << "Applying metadata via internal rescle..." << std::endl;
         rescle::ResourceUpdater updater;
@@ -1119,8 +1229,40 @@ bool BuildWidget() {
         }
         fs::copy_file(setupExePath, setupOut, fs::copy_options::overwrite_existing);
 
+        nlohmann::json ndpkgMeta = nlohmann::json::object();
+        ndpkgMeta["name"] = widgetRealName;
+        ndpkgMeta["version"] = version;
+        ndpkgMeta["author"] = author;
+        ndpkgMeta["addons"] = nlohmann::json::array();
+        for (const auto& addonFile : ndpkgIncludedAddons) {
+            ndpkgMeta["addons"].push_back(addonFile);
+        }
+        {
+            std::ofstream ndpkgMetaOut(ndpkgStageDir / "ndpkg.json", std::ios::binary | std::ios::trunc);
+            if (!ndpkgMetaOut) {
+                std::cerr << "Error: Failed to write ndpkg.json" << std::endl;
+                return false;
+            }
+            ndpkgMetaOut << ndpkgMeta.dump(2);
+        }
+
+        const std::string ndpkgName = SanitizeFileNameComponent(widgetRealName) + "_" + SanitizeFileNameComponent(version) + ".ndpkg";
+        const fs::path ndpkgOut = distDir / ndpkgName;
+        if (fs::exists(ndpkgOut)) {
+            fs::remove(ndpkgOut);
+        }
+        if (!CreateZipFromDirectory(ndpkgStageDir, ndpkgOut, {}, {"Widgets/", "Addons/"})) {
+            std::cerr << "Error: Failed to create ndpkg payload." << std::endl;
+            return false;
+        }
+        if (!AppendNdpkgFooter(ndpkgOut)) {
+            std::cerr << "Error: Failed to append ndpkg footer." << std::endl;
+            return false;
+        }
+
         std::cout << "Successfully built widget package: " << zipOut << std::endl;
         std::cout << "Setup file created: " << setupOut << std::endl;
+        std::cout << "NDPKG created: " << ndpkgOut << std::endl;
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Build Error: " << e.what() << std::endl;
