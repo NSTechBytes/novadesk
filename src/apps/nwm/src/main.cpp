@@ -1213,7 +1213,7 @@ bool BuildWidget() {
             return false;
         }
 
-        const std::string zipName = SanitizeFileNameComponent(widgetRealName) + "_" + SanitizeFileNameComponent(version) + ".zip";
+        const std::string zipName = SanitizeFileNameComponent(widgetRealName) + "_v" + SanitizeFileNameComponent(version) + ".zip";
         const fs::path zipOut = distDir / zipName;
         if (fs::exists(zipOut)) {
             fs::remove(zipOut);
@@ -1246,7 +1246,7 @@ bool BuildWidget() {
             ndpkgMetaOut << ndpkgMeta.dump(2);
         }
 
-        const std::string ndpkgName = SanitizeFileNameComponent(widgetRealName) + "_" + SanitizeFileNameComponent(version) + ".ndpkg";
+        const std::string ndpkgName = SanitizeFileNameComponent(widgetRealName) + "_v" + SanitizeFileNameComponent(version) + ".ndpkg";
         const fs::path ndpkgOut = distDir / ndpkgName;
         if (fs::exists(ndpkgOut)) {
             fs::remove(ndpkgOut);
