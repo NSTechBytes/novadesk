@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <chrono>
@@ -118,6 +119,13 @@ std::string ToString(const std::wstring& wstr) {
     std::string strTo(size_needed, 0);
     WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
     return strTo;
+}
+
+std::string ToLower(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return value;
 }
 
 std::string GetProductVersion() {
@@ -645,6 +653,94 @@ bool ParseVersion(const std::string& version, unsigned short& v1, unsigned short
     return parts.size() > 0;
 }
 
+bool IsPortableNovadeskInstall(const fs::path& novadeskExePath) {
+    const fs::path settingsPath = novadeskExePath.parent_path() / "settings.json";
+    return fs::exists(settingsPath);
+}
+
+fs::path GetDocumentsAddonsPath() {
+    PWSTR docs = nullptr;
+    fs::path out;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docs)) && docs) {
+        out = fs::path(docs) / "Novadesk" / "Addons";
+        CoTaskMemFree(docs);
+    }
+    return out;
+}
+
+fs::path ResolveAddonsSourcePath(const fs::path& novadeskExePath) {
+    if (IsPortableNovadeskInstall(novadeskExePath)) {
+        return novadeskExePath.parent_path() / "Addons";
+    }
+    return GetDocumentsAddonsPath();
+}
+
+bool CopyAddonsToStaging(const fs::path& addonsSourceDir,
+                         const fs::path& stagingDir,
+                         const std::vector<std::string>& requestedAddons) {
+    if (requestedAddons.empty()) {
+        std::cout << "No addons requested in meta.json; skipping addon copy." << std::endl;
+        return true;
+    }
+
+    if (addonsSourceDir.empty() || !fs::exists(addonsSourceDir) || !fs::is_directory(addonsSourceDir)) {
+        std::cerr << "Warning: Addons directory not found: " << addonsSourceDir << std::endl;
+        return false;
+    }
+
+    fs::path targetAddonsDir = stagingDir / "Addons";
+    fs::create_directories(targetAddonsDir);
+
+    std::unordered_map<std::string, fs::path> dllByName;
+    std::unordered_map<std::string, fs::path> dllByStem;
+
+    for (const auto& entry : fs::directory_iterator(addonsSourceDir)) {
+        if (!entry.is_regular_file()) continue;
+        const fs::path filePath = entry.path();
+        if (ToLower(filePath.extension().string()) != ".dll") continue;
+
+        dllByName[ToLower(filePath.filename().string())] = filePath;
+        dllByStem[ToLower(filePath.stem().string())] = filePath;
+    }
+
+    std::unordered_set<std::string> copiedNames;
+    size_t copiedCount = 0;
+    for (const auto& addonName : requestedAddons) {
+        std::string nameLower = ToLower(addonName);
+        std::string stemLower = nameLower;
+        if (nameLower.size() > 4 && nameLower.substr(nameLower.size() - 4) == ".dll") {
+            stemLower = nameLower.substr(0, nameLower.size() - 4);
+        }
+
+        fs::path sourceDll;
+        auto byNameIt = dllByName.find(nameLower);
+        if (byNameIt != dllByName.end()) {
+            sourceDll = byNameIt->second;
+        } else {
+            auto byStemIt = dllByStem.find(stemLower);
+            if (byStemIt != dllByStem.end()) {
+                sourceDll = byStemIt->second;
+            }
+        }
+
+        if (sourceDll.empty()) {
+            std::cerr << "Error: Requested addon not found: " << addonName << std::endl;
+            return false;
+        }
+
+        const std::string canonicalName = ToLower(sourceDll.filename().string());
+        if (copiedNames.find(canonicalName) != copiedNames.end()) {
+            continue;
+        }
+        fs::copy_file(sourceDll, targetAddonsDir / sourceDll.filename(), fs::copy_options::overwrite_existing);
+        copiedNames.insert(canonicalName);
+        ++copiedCount;
+    }
+
+    std::cout << "Copied " << copiedCount << " requested addon DLL(s) from " << addonsSourceDir << std::endl;
+    return true;
+}
+
 std::string SanitizeFileNameComponent(const std::string& value) {
     if (value.empty()) return "Unknown";
     std::string out = value;
@@ -856,6 +952,23 @@ bool BuildWidget() {
     std::string icon = meta.value("icon", "");
     std::string author = meta.value("author", "");
     std::string description = meta.value("description", "");
+    std::vector<std::string> requestedAddons;
+    if (meta.contains("addons")) {
+        if (!meta["addons"].is_array()) {
+            std::cerr << "Error: 'addons' must be an array in meta.json" << std::endl;
+            return false;
+        }
+        for (const auto& addon : meta["addons"]) {
+            if (!addon.is_string()) {
+                std::cerr << "Error: all entries in 'addons' must be strings" << std::endl;
+                return false;
+            }
+            const std::string addonValue = addon.get<std::string>();
+            if (!addonValue.empty()) {
+                requestedAddons.push_back(addonValue);
+            }
+        }
+    }
     auto setupJson = meta.value("setup", nlohmann::json::object());
     SetupOptions setupOptions;
     setupOptions.createDesktopShortcut = setupJson.value("createDesktopShortcut", setupOptions.createDesktopShortcut);
@@ -911,6 +1024,11 @@ bool BuildWidget() {
 
         fs::path destExe = stagingDir / (widgetRealName + ".exe");
         fs::copy_file(srcExe, destExe, fs::copy_options::overwrite_existing);
+
+        const fs::path addonsSourceDir = ResolveAddonsSourcePath(srcExe);
+        if (!CopyAddonsToStaging(addonsSourceDir, stagingDir, requestedAddons)) {
+            return false;
+        }
 
         fs::path widgetsSubDir = stagingDir / "Widgets";
         fs::create_directories(widgetsSubDir);
