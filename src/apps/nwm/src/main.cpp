@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <chrono>
+#include <unordered_set>
 #include <windows.h>
 #include <winreg.h>
 #include <shlobj.h>
@@ -15,6 +17,7 @@
 #include <atlbase.h>
 #include <atlcomcli.h>
 #include "rescle.h"
+#include "../../../third_party/zlib/minizip/zip.h"
 #include "../../../third_party/json/json.hpp"
 
 #pragma comment(lib, "version.lib")
@@ -642,6 +645,92 @@ bool ParseVersion(const std::string& version, unsigned short& v1, unsigned short
     return parts.size() > 0;
 }
 
+std::string SanitizeFileNameComponent(const std::string& value) {
+    if (value.empty()) return "Unknown";
+    std::string out = value;
+    for (char& ch : out) {
+        if (ch == '<' || ch == '>' || ch == ':' || ch == '"' || ch == '/' || ch == '\\' || ch == '|' || ch == '?' || ch == '*') {
+            ch = '_';
+        }
+    }
+    while (!out.empty() && (out.back() == ' ' || out.back() == '.')) {
+        out.pop_back();
+    }
+    if (out.empty()) return "Unknown";
+    return out;
+}
+
+bool AddFileToZip(zipFile zf, const fs::path& filePath, const std::string& zipEntryPath) {
+    std::ifstream in(filePath, std::ios::binary);
+    if (!in) {
+        std::cerr << "Error: Failed to read file for zip: " << filePath << std::endl;
+        return false;
+    }
+
+    zip_fileinfo zi = {};
+    if (zipOpenNewFileInZip64(zf,
+                              zipEntryPath.c_str(),
+                              &zi,
+                              nullptr, 0,
+                              nullptr, 0,
+                              nullptr,
+                              Z_DEFLATED,
+                              Z_BEST_COMPRESSION,
+                              1) != ZIP_OK) {
+        std::cerr << "Error: Failed to add zip entry: " << zipEntryPath << std::endl;
+        return false;
+    }
+
+    std::vector<char> buffer(1024 * 1024);
+    while (in) {
+        in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        const std::streamsize got = in.gcount();
+        if (got <= 0) break;
+        if (zipWriteInFileInZip(zf, buffer.data(), static_cast<unsigned int>(got)) < 0) {
+            zipCloseFileInZip(zf);
+            std::cerr << "Error: Failed writing zip entry: " << zipEntryPath << std::endl;
+            return false;
+        }
+    }
+
+    if (zipCloseFileInZip(zf) != ZIP_OK) {
+        std::cerr << "Error: Failed closing zip entry: " << zipEntryPath << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool CreateZipFromDirectory(const fs::path& sourceDir,
+                            const fs::path& zipPath,
+                            const std::unordered_set<std::string>& excludedTopLevelNames = {}) {
+    zipFile zf = zipOpen64(zipPath.string().c_str(), APPEND_STATUS_CREATE);
+    if (!zf) {
+        std::cerr << "Error: Failed to create zip: " << zipPath << std::endl;
+        return false;
+    }
+
+    bool ok = true;
+    for (const auto& entry : fs::recursive_directory_iterator(sourceDir)) {
+        if (!entry.is_regular_file()) continue;
+        fs::path relPath = fs::relative(entry.path(), sourceDir);
+        std::string rel = relPath.generic_string();
+        const std::string topLevel = relPath.begin() != relPath.end() ? relPath.begin()->string() : std::string();
+        if (!topLevel.empty() && excludedTopLevelNames.find(topLevel) != excludedTopLevelNames.end()) {
+            continue;
+        }
+        if (!AddFileToZip(zf, entry.path(), rel)) {
+            ok = false;
+            break;
+        }
+    }
+
+    if (zipClose(zf, nullptr) != ZIP_OK) {
+        std::cerr << "Error: Failed to finalize zip: " << zipPath << std::endl;
+        return false;
+    }
+    return ok;
+}
+
 bool InitWidget(const std::string& name) {
     if (name.empty()) {
         std::cerr << "Error: Widget name required for init" << std::endl;
@@ -767,7 +856,6 @@ bool BuildWidget() {
     std::string icon = meta.value("icon", "");
     std::string author = meta.value("author", "");
     std::string description = meta.value("description", "");
-
     auto setupJson = meta.value("setup", nlohmann::json::object());
     SetupOptions setupOptions;
     setupOptions.createDesktopShortcut = setupJson.value("createDesktopShortcut", setupOptions.createDesktopShortcut);
@@ -798,16 +886,33 @@ bool BuildWidget() {
         if (fs::exists(distDir)) fs::remove_all(distDir);
         fs::create_directories(distDir);
 
+        const auto now = std::chrono::system_clock::now().time_since_epoch().count();
+        fs::path stagingDir = fs::temp_directory_path() / ("nwm_build_stage_" + std::to_string(now));
+        if (fs::exists(stagingDir)) {
+            fs::remove_all(stagingDir);
+        }
+        fs::create_directories(stagingDir);
+
+        struct StageCleanup {
+            fs::path path;
+            ~StageCleanup() {
+                if (path.empty()) return;
+                try {
+                    if (fs::exists(path)) fs::remove_all(path);
+                } catch (...) {}
+            }
+        } stageCleanup{stagingDir};
+
         fs::path exeDir = GetExeDir();
         fs::path srcExe = exeDir.parent_path() / NOVADESK_EXE;
         if (!fs::exists(srcExe)) {
             srcExe = exeDir.parent_path().parent_path() / NOVADESK_EXE;
         }
 
-        fs::path destExe = distDir / (widgetRealName + ".exe");
+        fs::path destExe = stagingDir / (widgetRealName + ".exe");
         fs::copy_file(srcExe, destExe, fs::copy_options::overwrite_existing);
 
-        fs::path widgetsSubDir = distDir / "Widgets";
+        fs::path widgetsSubDir = stagingDir / "Widgets";
         fs::create_directories(widgetsSubDir);
 
         for (const auto& entry : fs::directory_iterator(widgetPath)) {
@@ -854,8 +959,6 @@ bool BuildWidget() {
             return false;
         }
 
-        std::cout << "Successfully built widget in " << distDir << std::endl;
-
         fs::path stubExe = exeDir / "installer_stub.exe";
         if (!fs::exists(stubExe)) {
             fs::path fallbackStub = exeDir.parent_path() / "installer_stub.exe";
@@ -867,11 +970,39 @@ bool BuildWidget() {
             }
         }
 
-        if (!BuildInstallerSfx(distDir, widgetPath, stubExe, widgetRealName, version, author, description, setupOptions)) {
+        if (!BuildInstallerSfx(stagingDir, widgetPath, stubExe, widgetRealName, version, author, description, setupOptions)) {
             std::cerr << "Error: Failed to build installer." << std::endl;
             return false;
         }
 
+        std::string setupExeName = setupOptions.setupName;
+        if (setupExeName.size() < 4 || setupExeName.substr(setupExeName.size() - 4) != ".exe") {
+            setupExeName += ".exe";
+        }
+        fs::path setupExePath = stagingDir / setupExeName;
+        if (!fs::exists(setupExePath)) {
+            std::cerr << "Error: Expected setup file not found: " << setupExePath << std::endl;
+            return false;
+        }
+
+        const std::string zipName = SanitizeFileNameComponent(widgetRealName) + "_" + SanitizeFileNameComponent(version) + ".zip";
+        const fs::path zipOut = distDir / zipName;
+        if (fs::exists(zipOut)) {
+            fs::remove(zipOut);
+        }
+        if (!CreateZipFromDirectory(stagingDir, zipOut, { setupExeName })) {
+            std::cerr << "Error: Failed to create zip package." << std::endl;
+            return false;
+        }
+
+        const fs::path setupOut = distDir / setupExeName;
+        if (fs::exists(setupOut)) {
+            fs::remove(setupOut);
+        }
+        fs::copy_file(setupExePath, setupOut, fs::copy_options::overwrite_existing);
+
+        std::cout << "Successfully built widget package: " << zipOut << std::endl;
+        std::cout << "Setup file created: " << setupOut << std::endl;
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Build Error: " << e.what() << std::endl;
