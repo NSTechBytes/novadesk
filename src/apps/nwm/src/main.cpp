@@ -1054,6 +1054,10 @@ bool BuildWidget() {
     std::string icon = meta.value("icon", "");
     std::string author = meta.value("author", "");
     std::string description = meta.value("description", "");
+    std::string previewPath;
+    if (meta.contains("preview") && meta["preview"].is_string()) {
+        previewPath = meta["preview"].get<std::string>();
+    }
     std::vector<std::string> requestedAddons;
     if (meta.contains("addons")) {
         if (!meta["addons"].is_array()) {
@@ -1155,6 +1159,17 @@ bool BuildWidget() {
 
         fs::path ndpkgWidgetsDir = ndpkgStageDir / "Widgets" / widgetRealName;
         CopyWidgetFilesForPackaging(widgetPath, ndpkgWidgetsDir, widgetRealName);
+
+        if (!previewPath.empty()) {
+            fs::path previewSource = widgetPath / previewPath;
+            if (!fs::exists(previewSource) || !fs::is_regular_file(previewSource)) {
+                std::cerr << "Error: Preview image file not found: " << previewSource << std::endl;
+                return false;
+            }
+            fs::path previewTargetName = "preview";
+            previewTargetName += previewSource.extension();
+            fs::copy_file(previewSource, ndpkgStageDir / previewTargetName, fs::copy_options::overwrite_existing);
+        }
 
         std::cout << "Applying metadata via internal rescle..." << std::endl;
         rescle::ResourceUpdater updater;

@@ -149,12 +149,14 @@ try {
     $nwmSln = Join-Path $RepoRoot "src\apps\nwm\nwm.sln"
     $manageSln = Join-Path $RepoRoot "src\apps\manage_novadesk\manage_novadesk.sln"
     $restartSln = Join-Path $RepoRoot "src\apps\restart_novadesk\restart_novadesk.sln"
+    $ndpkgInstallerSln = Join-Path $RepoRoot "src\apps\ndpkg_installer\ndpkg_installer.sln"
     $addonsSln = Join-Path $RepoRoot "src\addons\addons.sln"
 
     Build-Solution -MSBuildPath $msbuild -SolutionPath $installerSln -Config $Configuration -Plat $Platform
     Build-Solution -MSBuildPath $msbuild -SolutionPath $nwmSln -Config $Configuration -Plat $Platform
     Build-Solution -MSBuildPath $msbuild -SolutionPath $manageSln -Config $Configuration -Plat $Platform
     Build-Solution -MSBuildPath $msbuild -SolutionPath $restartSln -Config $Configuration -Plat $Platform
+    Build-Solution -MSBuildPath $msbuild -SolutionPath $ndpkgInstallerSln -Config $Configuration -Plat $Platform
     Build-Solution -MSBuildPath $msbuild -SolutionPath $addonsSln -Config $Configuration -Plat $Platform
 
     $cmakeBuildType = if ($Configuration -eq "Release") { "MinSizeRel" } else { "Debug" }
@@ -197,6 +199,7 @@ try {
     $installerStubExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\installer_stub\installer_stub.exe"
     $manageExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\manage_novadesk\manage_novadesk.exe"
     $restartExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\restart_novadesk\restart_novadesk.exe"
+    $ndpkgInstallerExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\ndpkg_installer\ndpkg_installer.exe"
     $addonsBuildRoot = Join-Path $RepoRoot "src\addons\dist\$Platform\$Configuration"
     $addonProjectNames = @("AppVolume", "AudioLevel", "Brightness", "Hotkey", "NowPlaying")
 
@@ -208,6 +211,7 @@ try {
     Assert-PathExists -PathValue $installerStubExeSrc -Label "installer_stub.exe"
     Assert-PathExists -PathValue $manageExeSrc -Label "manage_novadesk.exe"
     Assert-PathExists -PathValue $restartExeSrc -Label "restart_novadesk.exe"
+    Assert-PathExists -PathValue $ndpkgInstallerExeSrc -Label "ndpkg_installer.exe"
     Assert-PathExists -PathValue $addonsBuildRoot -Label "addons build root"
 
     New-Item -ItemType Directory -Path $distDir -Force | Out-Null
@@ -217,6 +221,7 @@ try {
     Copy-Item -Path $novadeskExeSrc -Destination (Join-Path $distDir "novadesk.exe") -Force
     Copy-Item -Path $manageExeSrc -Destination (Join-Path $distDir "manage_novadesk.exe") -Force
     Copy-Item -Path $restartExeSrc -Destination (Join-Path $distDir "restart_novadesk.exe") -Force
+    Copy-Item -Path $ndpkgInstallerExeSrc -Destination (Join-Path $distDir "ndpkg_installer.exe") -Force
     Copy-DirectoryContent -SourceDir $widgetsSrc -DestinationDir $distWidgetsDir
     Copy-DirectoryContent -SourceDir $imagesSrc -DestinationDir $distImagesDir
     Copy-Item -Path $nwmExeSrc -Destination (Join-Path $distNwmDir "nwm.exe") -Force
