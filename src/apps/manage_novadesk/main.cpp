@@ -53,7 +53,14 @@ static const int kWindowWidth = 720;
 static const int kWindowHeight = 480;
 static const UINT kTrayMessage = WM_APP + 1;
 static const UINT kTrayMenuCommand = WM_APP + 2;
-static const int kTrayMenuCloseId = 100;
+static const int kTrayMenuExitId = 500;
+static const int kTrayMenuShowHideId = 501;
+static const int kTrayMenuHomeWebsiteId = 510;
+static const int kTrayMenuHomeDonateId = 511;
+static const int kTrayMenuDocsMainId = 520;
+static const int kTrayMenuDocsApiId = 521;
+static const int kTrayMenuSettingsOpenId = 530;
+static const int kTrayMenuSettingsCheckUpdatesId = 531;
 static NOTIFYICONDATAW g_tray{};
 static PROCESS_INFORMATION g_novadeskProcess{};
 static bool g_novadeskRunning = false;
@@ -1273,12 +1280,31 @@ static void EnsureTrayMenu()
     if (g_trayMenu)
         return;
     g_trayMenu = CreatePopupMenu();
-    AppendMenuW(g_trayMenu, MF_STRING, kTrayMenuCloseId, L"Close");
+    HMENU homeMenu = CreatePopupMenu();
+    AppendMenuW(homeMenu, MF_STRING, kTrayMenuHomeWebsiteId, L"Official Website");
+    AppendMenuW(homeMenu, MF_STRING, kTrayMenuHomeDonateId, L"Donate");
+
+    HMENU docsMenu = CreatePopupMenu();
+    AppendMenuW(docsMenu, MF_STRING, kTrayMenuDocsMainId, L"Documentation");
+    AppendMenuW(docsMenu, MF_STRING, kTrayMenuDocsApiId, L"API Reference");
+
+    HMENU settingsMenu = CreatePopupMenu();
+    AppendMenuW(settingsMenu, MF_STRING, kTrayMenuSettingsOpenId, L"Open Settings");
+    AppendMenuW(settingsMenu, MF_STRING, kTrayMenuSettingsCheckUpdatesId, L"Check for Updates");
+
+    AppendMenuW(g_trayMenu, MF_STRING, kTrayMenuShowHideId, L"Show");
+    AppendMenuW(g_trayMenu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(g_trayMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(homeMenu), L"Home");
+    AppendMenuW(g_trayMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(docsMenu), L"Docs");
+    AppendMenuW(g_trayMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(settingsMenu), L"Settings");
+    AppendMenuW(g_trayMenu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(g_trayMenu, MF_STRING, kTrayMenuExitId, L"Exit");
 }
 
 static void ShowTrayMenu(HWND hWnd)
 {
     EnsureTrayMenu();
+    ModifyMenuW(g_trayMenu, kTrayMenuShowHideId, MF_BYCOMMAND | MF_STRING, kTrayMenuShowHideId, IsWindowVisible(hWnd) ? L"Hide" : L"Show");
     POINT pt{};
     GetCursorPos(&pt);
     SetForegroundWindow(hWnd);
@@ -2409,7 +2435,51 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         case kControlIdAboutDonate:
             OpenUrl(L"https://www.patreon.com/cw/officialnovadesk");
             break;
-        case kTrayMenuCloseId:
+        case kTrayMenuShowHideId:
+            if (IsWindowVisible(hWnd))
+            {
+                ShowWindow(hWnd, SW_HIDE);
+            }
+            else
+            {
+                ShowWindow(hWnd, SW_SHOW);
+                SetForegroundWindow(hWnd);
+            }
+            break;
+        case kTrayMenuHomeWebsiteId:
+            OpenUrl(L"https://novadesk.pages.dev/");
+            break;
+        case kTrayMenuHomeDonateId:
+            OpenUrl(L"https://www.patreon.com/cw/officialnovadesk");
+            break;
+        case kTrayMenuDocsMainId:
+            OpenUrl(L"https://novadesk-docs.pages.dev/");
+            break;
+        case kTrayMenuDocsApiId:
+            OpenUrl(L"https://novadesk-docs.pages.dev/api/logging.html");
+            break;
+        case kTrayMenuSettingsOpenId:
+            if (g_tab)
+            {
+                g_activeTab = 3;
+                TabCtrl_SetCurSel(g_tab, g_activeTab);
+                ApplyTabState();
+            }
+            ShowWindow(hWnd, SW_SHOW);
+            SetForegroundWindow(hWnd);
+            break;
+        case kTrayMenuSettingsCheckUpdatesId:
+            ShowWindow(hWnd, SW_SHOW);
+            SetForegroundWindow(hWnd);
+            g_activeTab = 3;
+            if (g_tab)
+            {
+                TabCtrl_SetCurSel(g_tab, g_activeTab);
+                ApplyTabState();
+            }
+            StartAsyncUpdateCheck(false);
+            break;
+        case kTrayMenuExitId:
             RequestAppExit(hWnd);
             break;
         default:
