@@ -363,10 +363,6 @@ static void LoadWindowIcons(HINSTANCE hInstance)
 
 static void LogLine(const std::wstring &line)
 {
-    const std::wstring logPath = JoinPath(GetExeDir(), L"manage_novadesk.log");
-    std::wofstream out(logPath, std::ios::app);
-    if (out)
-        out << line << L"\n";
     OutputDebugStringW((line + L"\n").c_str());
 }
 
