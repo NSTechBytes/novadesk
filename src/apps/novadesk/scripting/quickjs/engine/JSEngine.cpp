@@ -305,6 +305,7 @@ namespace JSEngine
             JS_SetPropertyStr(g_context, global, "__filename", JS_NewString(g_context, fileName.c_str()));
             JS_SetPropertyStr(g_context, global, "__dirname", JS_NewString(g_context, dirName.c_str()));
             JS_SetPropertyStr(g_context, global, "__widgetDir", JS_NewString(g_context, Utils::ToString(PathUtils::GetWidgetsDir()).c_str()));
+            JS_SetPropertyStr(g_context, global, "__addonsPath", JS_NewString(g_context, Utils::ToString(PathUtils::GetAddonsDir()).c_str()));
             JS_FreeValue(g_context, mainIpc);
             JS_FreeValue(g_context, global);
 
@@ -313,6 +314,7 @@ namespace JSEngine
                 "const __filename = globalThis.__filename;\n"
                 "const __dirname = globalThis.__dirname;\n"
                 "const __widgetDir = globalThis.__widgetDir;\n"
+                "const __addonsPath = globalThis.__addonsPath;\n"
                 "const path = globalThis.path;\n";
             const std::string moduleSource = modulePrelude + script;
 

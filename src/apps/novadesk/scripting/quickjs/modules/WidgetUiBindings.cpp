@@ -808,7 +808,9 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("addBar", 1, JsWidgetAddBar),
             JS_CFUNC_DEF("addRoundLine", 1, JsWidgetAddRoundLine),
             JS_CFUNC_DEF("addShape", 1, JsWidgetAddShape),
+            JS_CFUNC_DEF("setElementProperty", 2, JsWidgetSetElementProperties),
             JS_CFUNC_DEF("setElementProperties", 2, JsWidgetSetElementProperties),
+            JS_CFUNC_DEF("setElementPropertyByGroup", 2, JsWidgetSetElementPropertiesByGroup),
             JS_CFUNC_DEF("setElementPropertiesByGroup", 2, JsWidgetSetElementPropertiesByGroup),
             JS_CFUNC_DEF("getElementProperty", 2, JsWidgetGetElementProperty),
             JS_CFUNC_DEF("removeElements", 1, JsWidgetRemoveElements),
@@ -881,9 +883,11 @@ namespace novadesk::scripting::quickjs
             const std::string fileName = Utils::ToString(absPath);
             const std::string dirName = Utils::ToString(PathUtils::GetParentDir(absPath));
             const std::string widgetDirName = Utils::ToString(PathUtils::GetWidgetsDir());
+            const std::string addonsPathName = Utils::ToString(PathUtils::GetAddonsDir());
             JS_SetPropertyStr(ctx, global, "__filename", JS_NewString(ctx, fileName.c_str()));
             JS_SetPropertyStr(ctx, global, "__dirname", JS_NewString(ctx, dirName.c_str()));
             JS_SetPropertyStr(ctx, global, "__widgetDir", JS_NewString(ctx, widgetDirName.c_str()));
+            JS_SetPropertyStr(ctx, global, "__addonsPath", JS_NewString(ctx, addonsPathName.c_str()));
             JS_FreeValue(ctx, global);
 
             const std::string scriptPrelude =
@@ -914,6 +918,9 @@ namespace novadesk::scripting::quickjs
             JSAtom widgetDirAtom = JS_NewAtom(ctx, "__widgetDir");
             JS_DeleteProperty(ctx, global2, widgetDirAtom, 0);
             JS_FreeAtom(ctx, widgetDirAtom);
+            JSAtom addonsPathAtom = JS_NewAtom(ctx, "__addonsPath");
+            JS_DeleteProperty(ctx, global2, addonsPathAtom, 0);
+            JS_FreeAtom(ctx, addonsPathAtom);
             JS_FreeValue(ctx, global2);
             JS_FreeValue(ctx, uiObj);
             JS_FreeValue(ctx, ipcObj);
