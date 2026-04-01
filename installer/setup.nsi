@@ -139,7 +139,7 @@ Section -CoreFiles SecCoreFiles
     CreateDirectory "$APPDATA\Novadesk"
     StrCpy $ScriptsRoot "$DocsRoot\Widgets\Fental\index.js"
     ${StrRep} $1 $ScriptsRoot "\" "\\"
-    FileOpen $0 "$APPDATA\Novadesk\manage_window_settings.json" "w"
+    FileOpen $0 "$APPDATA\Novadesk\manage_novadesk_settings.json" "w"
     FileWrite $0 "{$\r$\n"
     FileWrite $0 "  $\"loadedScripts$\": [$\r$\n"
     FileWrite $0 "    $\"$1$\"$\r$\n"
@@ -200,10 +200,10 @@ Section -CoreFiles SecCoreFiles
     File /r "..\dist\Widgets"
     File /r "..\dist\Addons"
 
-    ; Create manage_window_settings.json in installation root
+    ; Create manage_novadesk_settings.json in installation root
     StrCpy $ScriptsRoot "$INSTDIR\Widgets\Fental\index.js"
     ${StrRep} $1 $ScriptsRoot "\" "\\"
-    FileOpen $0 "$INSTDIR\manage_window_settings.json" "w"
+    FileOpen $0 "$INSTDIR\manage_novadesk_settings.json" "w"
     FileWrite $0 "{$\r$\n"
     FileWrite $0 "  $\"loadedScripts$\": [$\r$\n"
     FileWrite $0 "    $\"$1$\"$\r$\n"
@@ -330,7 +330,7 @@ Section "Uninstall"
   Delete "$INSTDIR\settings.json"
   Delete "$INSTDIR\logs.log"
   Delete "$INSTDIR\config.json"
-  Delete "$INSTDIR\manage_window_settings.json"
+  Delete "$INSTDIR\manage_novadesk_settings.json"
   
   ; Remove nwm directory
   RMDir /r "$INSTDIR\nwm"

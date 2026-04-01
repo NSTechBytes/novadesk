@@ -35,7 +35,7 @@ using json = nlohmann::json;
 namespace {
 
 constexpr wchar_t kWindowClassName[] = L"NovadeskNdpkgInstaller";
-constexpr wchar_t kWindowTitle[] = L"Widgets Installer";
+constexpr wchar_t kWindowTitle[] = L"ndpkg Installer";
 constexpr wchar_t kManageWindowClassName[] = L"NovadeskManagerWindow";
 constexpr wchar_t kManageCloseMessageName[] = L"Novadesk.Manage.RequestClose";
 constexpr char kNdpkgMagic[] = "NDPKG1";

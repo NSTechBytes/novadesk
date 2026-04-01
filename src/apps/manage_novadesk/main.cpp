@@ -483,7 +483,7 @@ static void RequestAppExit(HWND hWnd)
 static bool IsPortableMode()
 {
     const std::wstring exeDir = GetExeDir();
-    const std::wstring settingsPath = JoinPath(exeDir, L"manage_window_settings.json");
+    const std::wstring settingsPath = JoinPath(exeDir, L"manage_novadesk_settings.json");
     std::error_code ec;
     if (!std::filesystem::exists(settingsPath, ec) || ec)
     {
@@ -703,7 +703,7 @@ static std::wstring GetManageExePath()
 
 static std::wstring GetManageSettingsPath()
 {
-    const std::wstring exePath = JoinPath(GetExeDir(), L"manage_window_settings.json");
+    const std::wstring exePath = JoinPath(GetExeDir(), L"manage_novadesk_settings.json");
     std::error_code ec;
     if (std::filesystem::exists(std::filesystem::path(exePath), ec) && !ec)
     {
@@ -718,7 +718,7 @@ static std::wstring GetManageSettingsPath()
         std::filesystem::create_directories(std::filesystem::path(appDataDir), ec);
         if (!ec)
         {
-            return JoinPath(appDataDir, L"manage_window_settings.json");
+            return JoinPath(appDataDir, L"manage_novadesk_settings.json");
         }
     }
 
@@ -2178,11 +2178,11 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                                                WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
                                                pageRect.left + 16, pageRect.top + 148, 220, 24,
                                                hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdEnableDebugging)), GetModuleHandleW(nullptr), nullptr);
-        g_chkSaveLogToFile = CreateWindowExW(0, L"BUTTON", L"Enable Save Log to File",
+        g_chkSaveLogToFile = CreateWindowExW(0, L"BUTTON", L"Save Logs to File",
                                              WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
                                              pageRect.left + 16, pageRect.top + 178, 260, 24,
                                              hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdSaveLogToFile)), GetModuleHandleW(nullptr), nullptr);
-        g_chkUseHardwareAcceleration = CreateWindowExW(0, L"BUTTON", L"Enable Use Hardware Acceleration",
+        g_chkUseHardwareAcceleration = CreateWindowExW(0, L"BUTTON", L"Use Hardware Acceleration",
                                                        WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
                                                        pageRect.left + 16, pageRect.top + 208, 300, 24,
                                                        hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdUseHardwareAcceleration)), GetModuleHandleW(nullptr), nullptr);
@@ -2653,7 +2653,7 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
     RECT wr{0, 0, kWindowWidth, kWindowHeight};
     AdjustWindowRectEx(&wr, style, FALSE, 0);
 
-    HWND hWnd = CreateWindowExW(0, className, L"Manage Novadesk Widgets",
+    HWND hWnd = CreateWindowExW(0, className, L"Manage Novadesk",
                                 style,
                                 CW_USEDEFAULT, CW_USEDEFAULT,
                                 wr.right - wr.left, wr.bottom - wr.top,
