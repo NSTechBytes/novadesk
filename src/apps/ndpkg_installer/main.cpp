@@ -1096,15 +1096,22 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
         }
     }
 
+    constexpr int kWindowWidth = 708;
+    constexpr int kWindowHeight = 452;
+    RECT workArea{};
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0);
+    const int windowX = workArea.left + ((workArea.right - workArea.left) - kWindowWidth) / 2;
+    const int windowY = workArea.top + ((workArea.bottom - workArea.top) - kWindowHeight) / 2;
+
     HWND hwnd = CreateWindowExW(
         0,
         kWindowClassName,
         kWindowTitle,
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        708,
-        452,
+        windowX,
+        windowY,
+        kWindowWidth,
+        kWindowHeight,
         nullptr,
         nullptr,
         hInstance,

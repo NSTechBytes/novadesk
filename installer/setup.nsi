@@ -287,7 +287,6 @@ Section "Uninstall"
   
   ; Kill process if running
   nsExec::ExecToStack 'taskkill /F /T /IM "novadesk.exe"'
-  nsExec::ExecToStack 'taskkill /F /T /IM "Novadesk.exe"'
   nsExec::ExecToStack 'taskkill /F /T /IM "manage_novadesk.exe"'
   nsExec::ExecToStack 'taskkill /F /T /IM "restart_novadesk.exe"'
   nsExec::ExecToStack 'taskkill /F /T /IM "ndpkg_installer.exe"'
