@@ -72,6 +72,7 @@ Page custom InstallModePageCreate InstallModePageLeave
 !insertmacro MUI_PAGE_FINISH
 
 !insertmacro MUI_UNPAGE_CONFIRM
+UninstPage custom un.CompleteRemovePageCreate un.CompleteRemovePageLeave
 !insertmacro MUI_UNPAGE_INSTFILES
 
 !insertmacro MUI_LANGUAGE "English"
@@ -84,6 +85,8 @@ Var RadioStandard
 Var RadioPortable
 Var DocsRoot
 Var ScriptsRoot
+Var RemoveCompletely
+Var UnRemoveCheckbox
 
 ;--------------------------------
 ; Sections
@@ -250,6 +253,26 @@ Function InstallModePageLeave
   ${EndIf}
 FunctionEnd
 
+Function un.CompleteRemovePageCreate
+  nsDialogs::Create 1018
+  Pop $0
+  ${If} $0 == error
+    Abort
+  ${EndIf}
+
+  ${NSD_CreateLabel} 0 0 100% 24u "Uninstall Options"
+  Pop $0
+  ${NSD_CreateCheckbox} 0 28u 100% 14u "Completely Remove Novadesk (remove Documents\Novadesk and AppData\Novadesk)"
+  Pop $UnRemoveCheckbox
+  ${NSD_Uncheck} $UnRemoveCheckbox
+  StrCpy $RemoveCompletely ${BST_UNCHECKED}
+  nsDialogs::Show
+FunctionEnd
+
+Function un.CompleteRemovePageLeave
+  ${NSD_GetState} $UnRemoveCheckbox $RemoveCompletely
+FunctionEnd
+
 Function DirectoryPageLeave
   ${If} $InstallMode == "portable"
     StrCpy $0 "0"
@@ -301,7 +324,7 @@ Section "Uninstall"
   Pop $0
   DetailPrint "Remove nwm from PATH returned=|$0|"
   
-  ; Remove registry keys
+  ; Always remove registry entries
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Novadesk"
   DeleteRegKey HKLM "Software\Novadesk"
   DeleteRegKey HKLM "Software\Classes\Novadesk.ndpkg"
@@ -320,10 +343,13 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\Widgets"
   RMDir /r "$INSTDIR\Addons"
   
-  ; Remove AppData (Settings, Logs, Config)
-  RMDir /r "$APPDATA\Novadesk"
-  RMDir /r "$DOCUMENTS\Novadesk\Widgets"
-  RMDir /r "$DOCUMENTS\Novadesk\Addons"
+  ${If} $RemoveCompletely == ${BST_CHECKED}
+    ; Completely remove user data only when explicitly requested
+    RMDir /r "$APPDATA\Novadesk"
+    RMDir /r "$DOCUMENTS\Novadesk"
+  ${Else}
+    DetailPrint "Keeping user data folders (Documents\Novadesk and AppData\Novadesk)."
+  ${EndIf}
 
   ; Remove files from root directory if in portable mode
   Delete "$INSTDIR\settings.json"
