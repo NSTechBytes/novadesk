@@ -911,6 +911,24 @@ namespace novadesk::scripting::quickjs
             return true;
         }
 
+        std::wstring ResolveTrayImagePath(const std::wstring &inputPath)
+        {
+            if (inputPath.empty())
+                return inputPath;
+
+            if (PathUtils::IsPathRelative(inputPath))
+            {
+                std::wstring baseDir = PathUtils::GetParentDir(JSEngine::GetCurrentScriptPath());
+                if (baseDir.empty())
+                    baseDir = JSEngine::GetEntryScriptDir();
+                if (baseDir.empty())
+                    baseDir = PathUtils::GetWidgetsDir();
+                return PathUtils::ResolvePath(inputPath, baseDir);
+            }
+
+            return PathUtils::NormalizePath(inputPath);
+        }
+
         JSValue JsTrayOn(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsFunction(ctx, argv[1]))
@@ -970,7 +988,7 @@ namespace novadesk::scripting::quickjs
             }
             std::wstring path = Utils::ToWString(pathC);
             JS_FreeCString(ctx, pathC);
-            TraySetImage(trayId, path);
+            TraySetImage(trayId, ResolveTrayImagePath(path));
             return JS_UNDEFINED;
         }
 
@@ -1033,6 +1051,7 @@ namespace novadesk::scripting::quickjs
                 }
                 imagePath = Utils::ToWString(pathC);
                 JS_FreeCString(ctx, pathC);
+                imagePath = ResolveTrayImagePath(imagePath);
             }
 
             const int trayId = TrayCreate(imagePath);

@@ -7,7 +7,7 @@ import { app, tray } from "novadesk";
 import * as system from "system";
 
 var isFirstRun = !!app.isFirstRun();
-const tray = new tray();
+const tray = new tray("src/assets/tray.ico");
 
 // First run: force-show all default widgets and persist enabled state.
 if (isFirstRun) {
@@ -47,105 +47,71 @@ if (isFirstRun) {
 function setupTrayMenu() {
     tray.setContextMenu([
         {
-            text: "Website",
+            text: "Clock Widget",
+            checked: !!utils.getJsonValue('clock_Widget_Active'),
             action: function () {
-                system.execute("https://novadesk.pages.dev/");
-            }
-        },
-        {
-            text: "Docs",
-            action: function () {
-                system.execute("https://novadesk-docs.pages.dev/");
-            }
-        },
-        { type: "separator" },
-        {
-            text: "Widgets",
-            items: [
-                {
-                    text: "Clock Widget",
-                    checked: !!utils.getJsonValue('clock_Widget_Active'),
-                    action: function () {
-                        var isActive = !!utils.getJsonValue('clock_Widget_Active');
-                        if (isActive) {
-                            // Unload widget
-                            if (typeof clock_Widget.unloadClockWidget === 'function') {
-                                clock_Widget.unloadClockWidget();
-                            }
-                            utils.setJsonValue('clock_Widget_Active', false);
-                        } else {
-                            // Load widget
-                            clock_Widget.loadClockWidget();
-                            utils.setJsonValue('clock_Widget_Active', true);
-                        }
-                        // Refresh tray menu to update checkmark
-                        setupTrayMenu();
+                var isActive = !!utils.getJsonValue('clock_Widget_Active');
+                if (isActive) {
+                    if (typeof clock_Widget.unloadClockWidget === 'function') {
+                        clock_Widget.unloadClockWidget();
                     }
-                },
-                {
-                    text: "System Widget",
-                    checked: !!utils.getJsonValue('system_Widget_Active'),
-                    action: function () {
-                        var isActive = !!utils.getJsonValue('system_Widget_Active');
-                        if (isActive) {
-                            // Unload widget
-                            if (typeof system_Widget.unloadSystemWidget === 'function') {
-                                system_Widget.unloadSystemWidget();
-                            }
-                            utils.setJsonValue('system_Widget_Active', false);
-                        } else {
-                            // Load widget
-                            system_Widget.loadSystemWidget();
-                            utils.setJsonValue('system_Widget_Active', true);
-                        }
-                        setupTrayMenu();
-                    }
-                },
-                {
-                    text: "Network Widget",
-                    checked: !!utils.getJsonValue('network_Widget_Active'),
-                    action: function () {
-                        var isActive = !!utils.getJsonValue('network_Widget_Active');
-                        if (isActive) {
-                            // Unload widget
-                            if (typeof network_Widget.unloadNetworkWidget === 'function') {
-                                network_Widget.unloadNetworkWidget();
-                            }
-                            utils.setJsonValue('network_Widget_Active', false);
-                        } else {
-                            // Load widget
-                            network_Widget.loadNetworkWidget();
-                            utils.setJsonValue('network_Widget_Active', true);
-                        }
-                        setupTrayMenu();
-                    }
-                },
-                {
-                    text: "Welcome Widget",
-                    checked: !!utils.getJsonValue('welcome_Widget_Active'),
-                    action: function () {
-                        var isActive = !!utils.getJsonValue('welcome_Widget_Active');
-                        if (isActive) {
-                            // Unload widget
-                            if (typeof welcome_Widget.unloadWelcomeWidget === 'function') {
-                                welcome_Widget.unloadWelcomeWidget();
-                            }
-                            utils.setJsonValue('welcome_Widget_Active', false);
-                        } else {
-                            // Load widget
-                            welcome_Widget.loadWelcomeWidget();
-                            utils.setJsonValue('welcome_Widget_Active', true);
-                        }
-                        setupTrayMenu();
-                    }
+                    utils.setJsonValue('clock_Widget_Active', false);
+                } else {
+                    clock_Widget.loadClockWidget();
+                    utils.setJsonValue('clock_Widget_Active', true);
                 }
-            ]
+                setupTrayMenu();
+            }
         },
-        { type: "separator" },
         {
-            text: "Exit",
+            text: "System Widget",
+            checked: !!utils.getJsonValue('system_Widget_Active'),
             action: function () {
-                app.exit();
+                var isActive = !!utils.getJsonValue('system_Widget_Active');
+                if (isActive) {
+                    if (typeof system_Widget.unloadSystemWidget === 'function') {
+                        system_Widget.unloadSystemWidget();
+                    }
+                    utils.setJsonValue('system_Widget_Active', false);
+                } else {
+                    system_Widget.loadSystemWidget();
+                    utils.setJsonValue('system_Widget_Active', true);
+                }
+                setupTrayMenu();
+            }
+        },
+        {
+            text: "Network Widget",
+            checked: !!utils.getJsonValue('network_Widget_Active'),
+            action: function () {
+                var isActive = !!utils.getJsonValue('network_Widget_Active');
+                if (isActive) {
+                    if (typeof network_Widget.unloadNetworkWidget === 'function') {
+                        network_Widget.unloadNetworkWidget();
+                    }
+                    utils.setJsonValue('network_Widget_Active', false);
+                } else {
+                    network_Widget.loadNetworkWidget();
+                    utils.setJsonValue('network_Widget_Active', true);
+                }
+                setupTrayMenu();
+            }
+        },
+        {
+            text: "Welcome Widget",
+            checked: !!utils.getJsonValue('welcome_Widget_Active'),
+            action: function () {
+                var isActive = !!utils.getJsonValue('welcome_Widget_Active');
+                if (isActive) {
+                    if (typeof welcome_Widget.unloadWelcomeWidget === 'function') {
+                        welcome_Widget.unloadWelcomeWidget();
+                    }
+                    utils.setJsonValue('welcome_Widget_Active', false);
+                } else {
+                    welcome_Widget.loadWelcomeWidget();
+                    utils.setJsonValue('welcome_Widget_Active', true);
+                }
+                setupTrayMenu();
             }
         }
     ]);
