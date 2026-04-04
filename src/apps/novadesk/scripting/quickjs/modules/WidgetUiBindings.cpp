@@ -837,9 +837,10 @@ namespace novadesk::scripting::quickjs
             }
 
             std::wstring absPath;
+            std::wstring baseDir;
             if (PathUtils::IsPathRelative(scriptPath))
             {
-                const std::wstring baseDir = GetWidgetScriptBaseDir(widget);
+                baseDir = GetWidgetScriptBaseDir(widget);
                 absPath = PathUtils::ResolvePath(
                     scriptPath,
                     baseDir.empty() ? PathUtils::GetWidgetsDir() : baseDir);
@@ -851,7 +852,6 @@ namespace novadesk::scripting::quickjs
             const std::string scriptSource = FileUtils::ReadFileContent(absPath);
             if (scriptSource.empty())
             {
-                Logging::Log(LogLevel::Error, L"[novadesk] widget ui script not found: %s", absPath.c_str());
                 return false;
             }
 

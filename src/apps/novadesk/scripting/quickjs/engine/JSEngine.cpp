@@ -81,6 +81,67 @@ namespace JSEngine
         std::unordered_set<std::wstring> g_staleScripts;
         std::unordered_map<std::wstring, int> g_scriptEvalRevisions;
 
+        class ScriptExecutionScope
+        {
+        public:
+            explicit ScriptExecutionScope(const std::wstring &ownerScriptPath)
+                : m_PreviousScriptPath(g_currentScriptPath), m_PreviousScriptDir(g_currentScriptDir)
+            {
+                if (!ownerScriptPath.empty())
+                {
+                    g_currentScriptPath = ownerScriptPath;
+                    g_currentScriptDir = PathUtils::GetParentDir(ownerScriptPath);
+                }
+            }
+
+            ~ScriptExecutionScope()
+            {
+                g_currentScriptPath = m_PreviousScriptPath;
+                g_currentScriptDir = m_PreviousScriptDir;
+            }
+
+        private:
+            std::wstring m_PreviousScriptPath;
+            std::wstring m_PreviousScriptDir;
+        };
+
+        std::wstring GetWidgetOwnerScriptPath(Widget *widget)
+        {
+            if (!widget)
+            {
+                return L"";
+            }
+
+            auto it = g_widgetOwners.find(widget);
+            if (it == g_widgetOwners.end())
+            {
+                return L"";
+            }
+            return it->second;
+        }
+
+        std::wstring GetWidgetOwnerScriptPathById(const std::wstring &widgetId)
+        {
+            if (widgetId.empty())
+            {
+                return L"";
+            }
+
+            for (const auto &entry : g_widgetOwners)
+            {
+                Widget *widget = entry.first;
+                if (!widget)
+                {
+                    continue;
+                }
+                if (widget->GetOptions().id == widgetId)
+                {
+                    return entry.second;
+                }
+            }
+            return L"";
+        }
+
         void DestroyAllWidgets()
         {
             std::vector<Widget *> copy = Widget::GetAllWidgets();
@@ -1470,6 +1531,7 @@ namespace JSEngine
         if (it->second.repeat)
         {
             TimerEntry &entry = it->second;
+            ScriptExecutionScope scope(entry.owner);
             JSValue ret = JS_Call(g_context, entry.callback, JS_UNDEFINED, static_cast<int>(entry.args.size()), entry.args.data());
             if (JS_IsException(ret))
             {
@@ -1487,6 +1549,7 @@ namespace JSEngine
             KillTimer(g_messageWindow, id);
         g_timers.erase(it);
 
+        ScriptExecutionScope scope(entry.owner);
         JSValue ret = JS_Call(g_context, entry.callback, JS_UNDEFINED, static_cast<int>(entry.args.size()), entry.args.data());
         if (JS_IsException(ret))
         {
@@ -1529,6 +1592,19 @@ namespace JSEngine
         auto it = g_trayCommandCallbacks.find(commandId);
         if (it == g_trayCommandCallbacks.end())
             return;
+        std::wstring ownerScriptPath;
+        auto ownerIt = g_trayOwners.find(it->second.trayId);
+        if (ownerIt != g_trayOwners.end())
+        {
+            ownerScriptPath = ownerIt->second;
+        }
+        Logging::Log(
+            LogLevel::Info,
+            L"[novadesk] executing tray command callback id=%d tray=%d owner='%s'",
+            commandId,
+            it->second.trayId,
+            ownerScriptPath.c_str());
+        ScriptExecutionScope scope(ownerScriptPath);
         JSValue ret = JS_Call(g_context, it->second.callback, JS_UNDEFINED, 0, nullptr);
         if (JS_IsException(ret))
         {
@@ -1550,6 +1626,13 @@ namespace JSEngine
         auto evIt = it->second.find(eventName);
         if (evIt == it->second.end())
             return;
+        std::wstring ownerScriptPath;
+        auto ownerIt = g_trayOwners.find(trayId);
+        if (ownerIt != g_trayOwners.end())
+        {
+            ownerScriptPath = ownerIt->second;
+        }
+        ScriptExecutionScope scope(ownerScriptPath);
         for (JSValue &cb : evIt->second)
         {
             JSValue ret = JS_Call(g_context, cb, JS_UNDEFINED, 0, nullptr);
@@ -1573,6 +1656,8 @@ namespace JSEngine
         if (cit == wit->second.end())
             return;
 
+        const std::wstring ownerScriptPath = GetWidgetOwnerScriptPathById(widgetId);
+        ScriptExecutionScope scope(ownerScriptPath);
         JSValue ret = JS_Call(g_context, cit->second, JS_UNDEFINED, 0, nullptr);
         if (JS_IsException(ret))
         {
@@ -1652,6 +1737,8 @@ namespace JSEngine
         }
 
         JSValue argv[1] = {arg};
+        const std::wstring ownerScriptPath = GetWidgetOwnerScriptPath(widget);
+        ScriptExecutionScope scope(ownerScriptPath);
         JSValue ret = JS_Call(g_context, callback, JS_UNDEFINED, argc, argv);
         JS_FreeValue(g_context, arg);
         if (JS_IsException(ret))
