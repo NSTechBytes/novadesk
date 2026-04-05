@@ -153,8 +153,8 @@ static const wchar_t *kManageWindowClassName = L"NovadeskManagerWindow";
 static const wchar_t *kManageCloseMessageName = L"Novadesk.Manage.RequestClose";
 static UINT g_manageCloseMessage = 0;
 static int ShowManageMessageBox(const std::wstring &message, const std::wstring &title, UINT type);
-static void ExecuteNovadeskCommand(const std::wstring &cmd, const std::wstring &path);
-static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd);
+static bool ExecuteNovadeskCommand(const std::wstring &cmd, const std::wstring &path);
+static bool ExecuteNovadeskCommandNoPath(const std::wstring &cmd);
 static std::wstring GetAboutLogoPath();
 static void ConfigureAutoUpdateTimer(HWND hWnd);
 static void RequestAppExit(HWND hWnd);
@@ -1722,28 +1722,13 @@ static std::vector<WidgetEntry> LoadWidgets()
     return list;
 }
 
-static void ExecuteNovadeskCommand(const std::wstring &cmd, const std::wstring &path)
+static bool ExecuteNovadeskCommand(const std::wstring &cmd, const std::wstring &path)
 {
     const std::wstring exe = GetNovadeskExePath();
-    std::wstring args = EnsureSingleInstanceArg(cmd + L" \"" + path + L"\"");
-
-    STARTUPINFOW si{};
-    si.cb = sizeof(si);
-    PROCESS_INFORMATION pi{};
-
-    std::wstring cmdLine = L"\"" + exe + L"\" " + args;
-    LogLine(L"[Manage] Exec: " + cmdLine);
-    if (CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
-    {
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        LogLine(L"[Manage] Exec OK.");
-    }
-    else
-    {
-        DWORD err = GetLastError();
-        LogLine(L"[Manage] Exec failed (" + std::to_wstring(err) + L"): " + Win32ErrorToString(err));
-    }
+    const std::wstring args = cmd + L" \"" + path + L"\"";
+    const bool ok = RunProcessWait(exe, args);
+    LogLine(ok ? L"[Manage] Exec OK." : L"[Manage] Exec failed.");
+    return ok;
 }
 
 static void RefreshListView()
@@ -1818,27 +1803,12 @@ static void OnClearLogs()
     g_pendingLogLine.clear();
 }
 
-static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd)
+static bool ExecuteNovadeskCommandNoPath(const std::wstring &cmd)
 {
     const std::wstring exe = GetNovadeskExePath();
-
-    STARTUPINFOW si{};
-    si.cb = sizeof(si);
-    PROCESS_INFORMATION pi{};
-
-    std::wstring cmdLine = L"\"" + exe + L"\" " + EnsureSingleInstanceArg(cmd);
-    LogLine(L"[Manage] Exec: " + cmdLine);
-    if (CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
-    {
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        LogLine(L"[Manage] Exec OK.");
-    }
-    else
-    {
-        DWORD err = GetLastError();
-        LogLine(L"[Manage] Exec failed (" + std::to_wstring(err) + L"): " + Win32ErrorToString(err));
-    }
+    const bool ok = RunProcessWait(exe, cmd);
+    LogLine(ok ? L"[Manage] Exec OK." : L"[Manage] Exec failed.");
+    return ok;
 }
 
 static void RefreshSettingsControls()
@@ -2191,17 +2161,25 @@ static void OnToggleLoadSelected()
     }
 
     const bool isLoaded = g_widgets[idx].loaded;
+    bool ok = false;
     if (isLoaded)
     {
         LogLine(L"[Manage] Unload: " + g_widgets[idx].scriptPath);
-        ExecuteNovadeskCommand(L"--unload", g_widgets[idx].scriptPath);
+        ok = ExecuteNovadeskCommand(L"--unload", g_widgets[idx].scriptPath);
     }
     else
     {
         LogLine(L"[Manage] Load: " + g_widgets[idx].scriptPath);
-        ExecuteNovadeskCommand(L"--load", g_widgets[idx].scriptPath);
+        ok = ExecuteNovadeskCommand(L"--load", g_widgets[idx].scriptPath);
     }
-    RememberLoadedScriptState(g_widgets[idx].scriptPath, !isLoaded);
+    if (ok)
+    {
+        RememberLoadedScriptState(g_widgets[idx].scriptPath, !isLoaded);
+    }
+    else
+    {
+        ShowManageMessageBox(L"Failed to send command to Novadesk.", L"Manage Novadesk", MB_OK | MB_ICONWARNING);
+    }
     RefreshListView();
     UpdateButtonState();
 }
