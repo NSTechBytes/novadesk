@@ -67,7 +67,6 @@ static bool g_novadeskRunning = false;
 static HMENU g_trayMenu = nullptr;
 static HWND g_btnRefreshList = nullptr;
 static HWND g_btnLoad = nullptr;
-static HWND g_btnUnload = nullptr;
 static HWND g_btnRefresh = nullptr;
 static HWND g_btnRefreshAll = nullptr;
 static HWND g_btnClose = nullptr;
@@ -120,7 +119,6 @@ static HFONT g_aboutBodyFont = nullptr;
 
 static const int kControlIdRefreshList = 101;
 static const int kControlIdLoad = 102;
-static const int kControlIdUnload = 103;
 static const int kControlIdRefresh = 104;
 static const int kControlIdRefreshAll = 105;
 static const int kControlIdClose = 107;
@@ -1385,6 +1383,7 @@ static bool RunProcessWait(const std::wstring &exePath, const std::wstring &args
 static void UpdateButtonState();
 static void RefreshLogsView();
 static void ApplyTabState();
+static void OnToggleLoadSelected();
 
 static void AppendLogRow(const std::wstring &time, const std::wstring &source, const std::wstring &level, const std::wstring &message)
 {
@@ -1622,9 +1621,9 @@ static void UpdateButtonState()
     if (g_activeTab != 0)
     {
         EnableWindow(g_btnLoad, FALSE);
-        EnableWindow(g_btnUnload, FALSE);
         EnableWindow(g_btnRefresh, FALSE);
         EnableWindow(g_btnRefreshAll, FALSE);
+        SetWindowTextW(g_btnLoad, L"Load");
         return;
     }
 
@@ -1634,14 +1633,14 @@ static void UpdateButtonState()
     if (idx < 0 || idx >= static_cast<int>(g_widgets.size()))
     {
         EnableWindow(g_btnLoad, FALSE);
-        EnableWindow(g_btnUnload, FALSE);
         EnableWindow(g_btnRefresh, FALSE);
+        SetWindowTextW(g_btnLoad, L"Load");
         return;
     }
 
     const bool isLoaded = g_widgets[idx].loaded;
-    EnableWindow(g_btnLoad, isLoaded ? FALSE : TRUE);
-    EnableWindow(g_btnUnload, isLoaded ? TRUE : FALSE);
+    SetWindowTextW(g_btnLoad, isLoaded ? L"Unload" : L"Load");
+    EnableWindow(g_btnLoad, TRUE);
     EnableWindow(g_btnRefresh, isLoaded ? TRUE : FALSE);
 }
 
@@ -1999,7 +1998,6 @@ static void ApplyTabState()
     ShowWindow(g_aboutBottomNote, aboutTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefreshList, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnLoad, widgetsTab ? SW_SHOW : SW_HIDE);
-    ShowWindow(g_btnUnload, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefresh, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefreshAll, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnClose, SW_SHOW);
@@ -2019,32 +2017,27 @@ static void ApplyTabState()
     UpdateButtonState();
 }
 
-static void OnLoadSelected()
+static void OnToggleLoadSelected()
 {
     int idx = GetSelectedIndex();
     if (idx < 0 || idx >= static_cast<int>(g_widgets.size()))
     {
-        LogLine(L"[Manage] Load ignored: no selection.");
+        LogLine(L"[Manage] Toggle load ignored: no selection.");
         return;
     }
-    LogLine(L"[Manage] Load: " + g_widgets[idx].scriptPath);
-    ExecuteNovadeskCommand(L"--load", g_widgets[idx].scriptPath);
-    RememberLoadedScriptState(g_widgets[idx].scriptPath, true);
-    RefreshListView();
-    UpdateButtonState();
-}
 
-static void OnUnloadSelected()
-{
-    int idx = GetSelectedIndex();
-    if (idx < 0 || idx >= static_cast<int>(g_widgets.size()))
+    const bool isLoaded = g_widgets[idx].loaded;
+    if (isLoaded)
     {
-        LogLine(L"[Manage] Unload ignored: no selection.");
-        return;
+        LogLine(L"[Manage] Unload: " + g_widgets[idx].scriptPath);
+        ExecuteNovadeskCommand(L"--unload", g_widgets[idx].scriptPath);
     }
-    LogLine(L"[Manage] Unload: " + g_widgets[idx].scriptPath);
-    ExecuteNovadeskCommand(L"--unload", g_widgets[idx].scriptPath);
-    RememberLoadedScriptState(g_widgets[idx].scriptPath, false);
+    else
+    {
+        LogLine(L"[Manage] Load: " + g_widgets[idx].scriptPath);
+        ExecuteNovadeskCommand(L"--load", g_widgets[idx].scriptPath);
+    }
+    RememberLoadedScriptState(g_widgets[idx].scriptPath, !isLoaded);
     RefreshListView();
     UpdateButtonState();
 }
@@ -2299,12 +2292,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                                          10, rc.bottom - 40, 110, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefreshList)), GetModuleHandleW(nullptr), nullptr);
         g_btnLoad = CreateWindowW(L"BUTTON", L"Load", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                                   130, rc.bottom - 40, 80, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdLoad)), GetModuleHandleW(nullptr), nullptr);
-        g_btnUnload = CreateWindowW(L"BUTTON", L"Unload", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                    220, rc.bottom - 40, 80, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdUnload)), GetModuleHandleW(nullptr), nullptr);
         g_btnRefresh = CreateWindowW(L"BUTTON", L"Refresh", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                     310, rc.bottom - 40, 80, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefresh)), GetModuleHandleW(nullptr), nullptr);
+                                     220, rc.bottom - 40, 80, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefresh)), GetModuleHandleW(nullptr), nullptr);
         g_btnRefreshAll = CreateWindowW(L"BUTTON", L"Refresh All", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                        400, rc.bottom - 40, 100, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefreshAll)), GetModuleHandleW(nullptr), nullptr);
+                                        310, rc.bottom - 40, 100, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefreshAll)), GetModuleHandleW(nullptr), nullptr);
         g_btnClose = CreateWindowW(L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                                    rc.right - 90, rc.bottom - 40, 80, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdClose)), GetModuleHandleW(nullptr), nullptr);
 
@@ -2313,7 +2304,6 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             SendMessageW(g_tab, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnRefreshList, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnLoad, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-            SendMessageW(g_btnUnload, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnRefresh, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnRefreshAll, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnClose, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
@@ -2386,9 +2376,8 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         {
             MoveWindow(g_btnRefreshList, 10, rc.bottom - 40, 110, 28, TRUE);
             MoveWindow(g_btnLoad, 130, rc.bottom - 40, 80, 28, TRUE);
-            MoveWindow(g_btnUnload, 220, rc.bottom - 40, 80, 28, TRUE);
-            MoveWindow(g_btnRefresh, 310, rc.bottom - 40, 80, 28, TRUE);
-            MoveWindow(g_btnRefreshAll, 400, rc.bottom - 40, 100, 28, TRUE);
+            MoveWindow(g_btnRefresh, 220, rc.bottom - 40, 80, 28, TRUE);
+            MoveWindow(g_btnRefreshAll, 310, rc.bottom - 40, 100, 28, TRUE);
             MoveWindow(g_btnClose, rc.right - 90, rc.bottom - 40, 80, 28, TRUE);
         }
         return 0;
@@ -2400,10 +2389,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             RefreshListView();
             break;
         case kControlIdLoad:
-            OnLoadSelected();
-            break;
-        case kControlIdUnload:
-            OnUnloadSelected();
+            OnToggleLoadSelected();
             break;
         case kControlIdRefresh:
             OnRefreshSelected();
