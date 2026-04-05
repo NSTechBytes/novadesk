@@ -68,6 +68,7 @@ static PROCESS_INFORMATION g_novadeskProcess{};
 static bool g_novadeskRunning = false;
 static HMENU g_trayMenu = nullptr;
 static HWND g_btnRefreshList = nullptr;
+static HWND g_btnClearLogs = nullptr;
 static HWND g_btnLoad = nullptr;
 static HWND g_btnRefresh = nullptr;
 static HWND g_btnRefreshAll = nullptr;
@@ -121,6 +122,7 @@ static HFONT g_aboutSectionFont = nullptr;
 static HFONT g_aboutBodyFont = nullptr;
 
 static const int kControlIdRefreshList = 101;
+static const int kControlIdClearLogs = 108;
 static const int kControlIdLoad = 102;
 static const int kControlIdRefresh = 104;
 static const int kControlIdRefreshAll = 105;
@@ -1389,6 +1391,7 @@ static void UpdateButtonState();
 static void RefreshLogsView();
 static void ApplyTabState();
 static void OnToggleLoadSelected();
+static void OnClearLogs();
 static std::wstring GetListViewText(HWND list, int row, int subItem);
 static bool CopyTextToClipboard(HWND owner, const std::wstring &text);
 static void ShowLogsContextMenu(HWND hWnd, int x, int y);
@@ -1542,14 +1545,14 @@ static void AppendLogRow(const std::wstring &time, const std::wstring &source, c
     if (!g_logsList)
         return;
 
-    const int last = ListView_GetItemCount(g_logsList) - 1;
-    if (last >= 0)
+    const int first = ListView_GetItemCount(g_logsList) > 0 ? 0 : -1;
+    if (first >= 0)
     {
-        const std::wstring lastTime = GetListViewText(g_logsList, last, 0);
-        const std::wstring lastSource = GetListViewText(g_logsList, last, 1);
-        const std::wstring lastLevel = GetListViewText(g_logsList, last, 2);
-        const std::wstring lastMessage = GetListViewText(g_logsList, last, 3);
-        if (time == lastTime && source == lastSource && level == lastLevel && message == lastMessage)
+        const std::wstring firstTime = GetListViewText(g_logsList, first, 0);
+        const std::wstring firstSource = GetListViewText(g_logsList, first, 1);
+        const std::wstring firstLevel = GetListViewText(g_logsList, first, 2);
+        const std::wstring firstMessage = GetListViewText(g_logsList, first, 3);
+        if (time == firstTime && source == firstSource && level == firstLevel && message == firstMessage)
         {
             return;
         }
@@ -1557,7 +1560,7 @@ static void AppendLogRow(const std::wstring &time, const std::wstring &source, c
 
     LVITEMW item{};
     item.mask = LVIF_TEXT;
-    item.iItem = ListView_GetItemCount(g_logsList);
+    item.iItem = 0;
     item.pszText = const_cast<wchar_t *>(time.c_str());
     int row = ListView_InsertItem(g_logsList, &item);
     ListView_SetItemText(g_logsList, row, 1, const_cast<wchar_t *>(source.c_str()));
@@ -1567,13 +1570,20 @@ static void AppendLogRow(const std::wstring &time, const std::wstring &source, c
 
     while (ListView_GetItemCount(g_logsList) > kMaxLogRows)
     {
-        ListView_DeleteItem(g_logsList, 0);
+        const int last = ListView_GetItemCount(g_logsList) - 1;
+        if (last >= 0)
+        {
+            ListView_DeleteItem(g_logsList, last);
+        }
+        else
+        {
+            break;
+        }
     }
 
-    const int count = ListView_GetItemCount(g_logsList);
-    if (count > 0)
+    if (ListView_GetItemCount(g_logsList) > 0)
     {
-        ListView_EnsureVisible(g_logsList, count - 1, FALSE);
+        ListView_EnsureVisible(g_logsList, 0, FALSE);
     }
 }
 
@@ -1797,11 +1807,15 @@ static void RefreshLogsView()
 {
     if (!g_logsList)
         return;
+}
 
-    if (ListView_GetItemCount(g_logsList) == 0)
-    {
-        AppendLogRow(L"", L"Manage", L"INFO", L"Waiting for live output from novadesk.exe...");
-    }
+static void OnClearLogs()
+{
+    if (!g_logsList)
+        return;
+
+    ListView_DeleteAllItems(g_logsList);
+    g_pendingLogLine.clear();
 }
 
 static void ExecuteNovadeskCommandNoPath(const std::wstring &cmd)
@@ -2146,6 +2160,7 @@ static void ApplyTabState()
     ShowWindow(g_aboutDonateButton, aboutTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_aboutBottomNote, aboutTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefreshList, widgetsTab ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnClearLogs, logsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnLoad, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefresh, widgetsTab ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefreshAll, widgetsTab ? SW_SHOW : SW_HIDE);
@@ -2439,6 +2454,8 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
         g_btnRefreshList = CreateWindowW(L"BUTTON", L"Refresh List", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                                          10, rc.bottom - 40, 110, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefreshList)), GetModuleHandleW(nullptr), nullptr);
+        g_btnClearLogs = CreateWindowW(L"BUTTON", L"Clear Logs", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                       10, rc.bottom - 40, 110, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdClearLogs)), GetModuleHandleW(nullptr), nullptr);
         g_btnLoad = CreateWindowW(L"BUTTON", L"Load", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                                   130, rc.bottom - 40, 80, 28, hWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdLoad)), GetModuleHandleW(nullptr), nullptr);
         g_btnRefresh = CreateWindowW(L"BUTTON", L"Refresh", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
@@ -2452,6 +2469,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         {
             SendMessageW(g_tab, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnRefreshList, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+            SendMessageW(g_btnClearLogs, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnLoad, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnRefresh, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
             SendMessageW(g_btnRefreshAll, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
@@ -2524,6 +2542,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         if (g_btnRefreshList)
         {
             MoveWindow(g_btnRefreshList, 10, rc.bottom - 40, 110, 28, TRUE);
+            MoveWindow(g_btnClearLogs, 10, rc.bottom - 40, 110, 28, TRUE);
             MoveWindow(g_btnLoad, 130, rc.bottom - 40, 80, 28, TRUE);
             MoveWindow(g_btnRefresh, 220, rc.bottom - 40, 80, 28, TRUE);
             MoveWindow(g_btnRefreshAll, 310, rc.bottom - 40, 100, 28, TRUE);
@@ -2536,6 +2555,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         {
         case kControlIdRefreshList:
             RefreshListView();
+            break;
+        case kControlIdClearLogs:
+            OnClearLogs();
             break;
         case kControlIdLoad:
             OnToggleLoadSelected();
