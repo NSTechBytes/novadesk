@@ -7,6 +7,7 @@
 
 #include <windows.h>
 #include <commctrl.h>
+#include <windowsx.h>
 #include <shlobj.h>
 #include <shellapi.h>
 #include <wininet.h>
@@ -17,6 +18,7 @@
 #include <unordered_map>
 #include <filesystem>
 #include <algorithm>
+#include <cstring>
 #include <sstream>
 #include <fstream>
 #include <iterator>
@@ -105,6 +107,7 @@ static HANDLE g_novadeskLogWrite = nullptr;
 static HANDLE g_novadeskLogThread = nullptr;
 static std::wstring g_pendingLogLine;
 static int g_activeTab = 0;
+static int g_logsMessageColumnWidth = 600;
 static std::unordered_map<std::wstring, std::wstring> g_savedLoadedScripts;
 static bool g_manageAutoCheckForUpdates = false;
 static std::wstring g_lastNotifiedUpdateVersion;
@@ -133,6 +136,8 @@ static const int kControlIdUseHardwareAcceleration = 307;
 static const int kControlIdAboutHome = 201;
 static const int kControlIdAboutDocs = 202;
 static const int kControlIdAboutDonate = 203;
+static const int kLogMenuCopyMessage = 401;
+static const int kLogMenuCopyFullLog = 402;
 static const UINT kLogAppendMessage = WM_APP + 20;
 static const UINT_PTR kLogsRefreshTimerId = 1;
 static const UINT_PTR kAutoUpdateTimerId = 2;
@@ -1384,6 +1389,153 @@ static void UpdateButtonState();
 static void RefreshLogsView();
 static void ApplyTabState();
 static void OnToggleLoadSelected();
+static std::wstring GetListViewText(HWND list, int row, int subItem);
+static bool CopyTextToClipboard(HWND owner, const std::wstring &text);
+static void ShowLogsContextMenu(HWND hWnd, int x, int y);
+static void AutoExpandLogsMessageColumn(const std::wstring &message);
+
+static std::wstring GetListViewText(HWND list, int row, int subItem)
+{
+    if (!list || row < 0 || subItem < 0)
+        return L"";
+
+    int capacity = 256;
+    for (int attempt = 0; attempt < 6; ++attempt)
+    {
+        std::vector<wchar_t> buf(static_cast<size_t>(capacity), L'\0');
+        LVITEMW item{};
+        item.iSubItem = subItem;
+        item.pszText = buf.data();
+        item.cchTextMax = capacity;
+        const int copied = static_cast<int>(SendMessageW(list, LVM_GETITEMTEXTW, static_cast<WPARAM>(row), reinterpret_cast<LPARAM>(&item)));
+        if (copied < capacity - 1)
+        {
+            return std::wstring(buf.data(), static_cast<size_t>(copied));
+        }
+        capacity *= 2;
+    }
+    return L"";
+}
+
+static bool CopyTextToClipboard(HWND owner, const std::wstring &text)
+{
+    if (text.empty())
+        return false;
+
+    if (!OpenClipboard(owner))
+        return false;
+
+    EmptyClipboard();
+    const size_t bytes = (text.size() + 1) * sizeof(wchar_t);
+    HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, bytes);
+    if (!mem)
+    {
+        CloseClipboard();
+        return false;
+    }
+
+    void *dst = GlobalLock(mem);
+    if (!dst)
+    {
+        GlobalFree(mem);
+        CloseClipboard();
+        return false;
+    }
+
+    memcpy(dst, text.c_str(), bytes);
+    GlobalUnlock(mem);
+
+    if (!SetClipboardData(CF_UNICODETEXT, mem))
+    {
+        GlobalFree(mem);
+        CloseClipboard();
+        return false;
+    }
+
+    CloseClipboard();
+    return true;
+}
+
+static void AutoExpandLogsMessageColumn(const std::wstring &message)
+{
+    if (!g_logsList || message.empty())
+        return;
+
+    const int textWidth = ListView_GetStringWidth(g_logsList, message.c_str());
+    if (textWidth <= 0)
+        return;
+
+    const int desiredWidth = textWidth + 24;
+    if (desiredWidth > g_logsMessageColumnWidth)
+    {
+        g_logsMessageColumnWidth = desiredWidth;
+        ListView_SetColumnWidth(g_logsList, 3, g_logsMessageColumnWidth);
+    }
+}
+
+static void ShowLogsContextMenu(HWND hWnd, int x, int y)
+{
+    if (!g_logsList)
+        return;
+
+    POINT pt{x, y};
+    if (pt.x == -1 && pt.y == -1)
+    {
+        const int selected = ListView_GetNextItem(g_logsList, -1, LVNI_SELECTED);
+        if (selected < 0)
+            return;
+        RECT rc{};
+        if (!ListView_GetItemRect(g_logsList, selected, &rc, LVIR_BOUNDS))
+            return;
+        POINT localPt{rc.left + 6, rc.top + 6};
+        ClientToScreen(g_logsList, &localPt);
+        pt = localPt;
+    }
+    else
+    {
+        POINT clientPt = pt;
+        ScreenToClient(g_logsList, &clientPt);
+        LVHITTESTINFO hit{};
+        hit.pt = clientPt;
+        const int hitIndex = ListView_SubItemHitTest(g_logsList, &hit);
+        if (hitIndex >= 0)
+        {
+            ListView_SetItemState(g_logsList, -1, 0, LVIS_SELECTED);
+            ListView_SetItemState(g_logsList, hitIndex, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+        }
+    }
+
+    const int row = ListView_GetNextItem(g_logsList, -1, LVNI_SELECTED);
+    if (row < 0)
+        return;
+
+    const std::wstring time = GetListViewText(g_logsList, row, 0);
+    const std::wstring source = GetListViewText(g_logsList, row, 1);
+    const std::wstring level = GetListViewText(g_logsList, row, 2);
+    const std::wstring message = GetListViewText(g_logsList, row, 3);
+    const std::wstring full = L"[" + time + L"] [" + source + L"] [" + level + L"] " + message;
+
+    HMENU menu = CreatePopupMenu();
+    if (!menu)
+        return;
+
+    AppendMenuW(menu, MF_STRING, kLogMenuCopyMessage, L"Copy Message");
+    AppendMenuW(menu, MF_STRING, kLogMenuCopyFullLog, L"Copy Full Log");
+    SetForegroundWindow(hWnd);
+    const UINT cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, hWnd, nullptr);
+    DestroyMenu(menu);
+    // Ensure the popup menu is dismissed reliably after TrackPopupMenu.
+    PostMessageW(hWnd, WM_NULL, 0, 0);
+
+    if (cmd == kLogMenuCopyMessage)
+    {
+        CopyTextToClipboard(hWnd, message);
+    }
+    else if (cmd == kLogMenuCopyFullLog)
+    {
+        CopyTextToClipboard(hWnd, full);
+    }
+}
 
 static void AppendLogRow(const std::wstring &time, const std::wstring &source, const std::wstring &level, const std::wstring &message)
 {
@@ -1393,15 +1545,11 @@ static void AppendLogRow(const std::wstring &time, const std::wstring &source, c
     const int last = ListView_GetItemCount(g_logsList) - 1;
     if (last >= 0)
     {
-        wchar_t tbuf[256] = {};
-        wchar_t sbuf[256] = {};
-        wchar_t lbuf[128] = {};
-        wchar_t mbuf[2048] = {};
-        ListView_GetItemText(g_logsList, last, 0, tbuf, static_cast<int>(std::size(tbuf)));
-        ListView_GetItemText(g_logsList, last, 1, sbuf, static_cast<int>(std::size(sbuf)));
-        ListView_GetItemText(g_logsList, last, 2, lbuf, static_cast<int>(std::size(lbuf)));
-        ListView_GetItemText(g_logsList, last, 3, mbuf, static_cast<int>(std::size(mbuf)));
-        if (time == tbuf && source == sbuf && level == lbuf && message == mbuf)
+        const std::wstring lastTime = GetListViewText(g_logsList, last, 0);
+        const std::wstring lastSource = GetListViewText(g_logsList, last, 1);
+        const std::wstring lastLevel = GetListViewText(g_logsList, last, 2);
+        const std::wstring lastMessage = GetListViewText(g_logsList, last, 3);
+        if (time == lastTime && source == lastSource && level == lastLevel && message == lastMessage)
         {
             return;
         }
@@ -1415,6 +1563,7 @@ static void AppendLogRow(const std::wstring &time, const std::wstring &source, c
     ListView_SetItemText(g_logsList, row, 1, const_cast<wchar_t *>(source.c_str()));
     ListView_SetItemText(g_logsList, row, 2, const_cast<wchar_t *>(level.c_str()));
     ListView_SetItemText(g_logsList, row, 3, const_cast<wchar_t *>(message.c_str()));
+    AutoExpandLogsMessageColumn(message);
 
     while (ListView_GetItemCount(g_logsList) > kMaxLogRows)
     {
@@ -2132,7 +2281,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                                  pageRect.left, pageRect.top, pageRect.right - pageRect.left, pageRect.bottom - pageRect.top,
                                  hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
         g_logsList = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
-                                     WS_CHILD | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS,
+                                     WS_CHILD | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_HSCROLL,
                                      pageRect.left, pageRect.top, pageRect.right - pageRect.left, pageRect.bottom - pageRect.top,
                                      hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
         g_addonsList = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
@@ -2268,7 +2417,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         lcol.cx = 80;
         ListView_InsertColumn(g_logsList, 2, &lcol);
         lcol.pszText = const_cast<wchar_t *>(L"Message");
-        lcol.cx = 600;
+        lcol.cx = g_logsMessageColumnWidth;
         ListView_InsertColumn(g_logsList, 3, &lcol);
 
         ListView_SetExtendedListViewStyle(g_addonsList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
@@ -2491,6 +2640,13 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         }
         break;
     }
+    case WM_CONTEXTMENU:
+        if (reinterpret_cast<HWND>(wParam) == g_logsList)
+        {
+            ShowLogsContextMenu(hWnd, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+            return 0;
+        }
+        break;
     case WM_TIMER:
         if (wParam == kLogsRefreshTimerId && g_activeTab == 1)
         {
