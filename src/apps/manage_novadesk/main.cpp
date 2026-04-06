@@ -2794,11 +2794,18 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
     const DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
     RECT wr{0, 0, kWindowWidth, kWindowHeight};
     AdjustWindowRectEx(&wr, style, FALSE, 0);
+    const int windowWidth = wr.right - wr.left;
+    const int windowHeight = wr.bottom - wr.top;
+
+    RECT workArea{};
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0);
+    const int x = workArea.left + ((workArea.right - workArea.left) - windowWidth) / 2;
+    const int y = workArea.top + ((workArea.bottom - workArea.top) - windowHeight) / 2;
 
     HWND hWnd = CreateWindowExW(0, className, L"Manage Novadesk",
                                 style,
-                                CW_USEDEFAULT, CW_USEDEFAULT,
-                                wr.right - wr.left, wr.bottom - wr.top,
+                                x, y,
+                                windowWidth, windowHeight,
                                 nullptr, nullptr, hInstance, nullptr);
 
     if (!hWnd)
