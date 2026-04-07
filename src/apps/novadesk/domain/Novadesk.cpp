@@ -593,12 +593,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             else if (command == L"set-hardware-acceleration-on")
             {
                 Settings::SetGlobalBool("useHardwareAcceleration", true);
-                JSEngine::Reload();
             }
             else if (command == L"set-hardware-acceleration-off")
             {
                 Settings::SetGlobalBool("useHardwareAcceleration", false);
-                JSEngine::Reload();
             }
             else if (command == L"set-debugging-on")
             {

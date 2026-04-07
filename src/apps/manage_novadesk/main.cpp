@@ -1974,7 +1974,6 @@ static void OnSettingsControlClicked(int controlId)
     {
         const bool previous = GetNovadeskSettingBool("useHardwareAcceleration", false);
         SetNovadeskSettingBool("useHardwareAcceleration", checked);
-        ExecuteNovadeskCommandNoPath(checked ? L"--enable-hardware-acceleration" : L"--disable-hardware-acceleration");
         if (previous != checked)
         {
             PromptRestartForHardwareAcceleration();
