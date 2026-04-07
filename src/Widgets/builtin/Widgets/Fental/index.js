@@ -3,11 +3,11 @@ import * as utils from "./src/common/utils.js";
 import * as system_Widget from "./src/systemWidget/main.js";
 import * as network_Widget from "./src/networkWidget/main.js";
 import * as welcome_Widget from "./src/welcomeWidget/main.js";
-import { app, tray } from "novadesk";
+import { app, tray as Tray } from "novadesk";
 import * as system from "system";
 
 var isFirstRun = !!app.isFirstRun();
-const tray = new tray("src/assets/tray.ico");
+const trayIcon = new Tray("src/assets/tray.ico");
 
 // First run: force-show all default widgets and persist enabled state.
 if (isFirstRun) {
@@ -45,7 +45,7 @@ if (isFirstRun) {
 
 // Set up tray menu
 function setupTrayMenu() {
-    tray.setContextMenu([
+    trayIcon.setContextMenu([
         {
             text: "Clock Widget",
             checked: !!utils.getJsonValue('clock_Widget_Active'),
