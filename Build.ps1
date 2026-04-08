@@ -145,28 +145,18 @@ try {
     Set-Location $RepoRoot
     $env:PATH = "$mingwBin;$env:PATH"
 
-    $installerSln = Join-Path $RepoRoot "src\apps\installer_stub\installer_stub.sln"
-    $nwmSln = Join-Path $RepoRoot "src\apps\nwm\nwm.sln"
-    $manageSln = Join-Path $RepoRoot "src\apps\manage_novadesk\manage_novadesk.sln"
-    $restartSln = Join-Path $RepoRoot "src\apps\restart_novadesk\restart_novadesk.sln"
-    $ndpkgInstallerSln = Join-Path $RepoRoot "src\apps\ndpkg_installer\ndpkg_installer.sln"
-    $addonsSln = Join-Path $RepoRoot "src\addons\addons.sln"
-
-    Build-Solution -MSBuildPath $msbuild -SolutionPath $installerSln -Config $Configuration -Plat $Platform
-    Build-Solution -MSBuildPath $msbuild -SolutionPath $nwmSln -Config $Configuration -Plat $Platform
-    Build-Solution -MSBuildPath $msbuild -SolutionPath $manageSln -Config $Configuration -Plat $Platform
-    Build-Solution -MSBuildPath $msbuild -SolutionPath $restartSln -Config $Configuration -Plat $Platform
-    Build-Solution -MSBuildPath $msbuild -SolutionPath $ndpkgInstallerSln -Config $Configuration -Plat $Platform
-    Build-Solution -MSBuildPath $msbuild -SolutionPath $addonsSln -Config $Configuration -Plat $Platform
+    $unifiedSolution = Join-Path $RepoRoot "Novadesk-Project.sln"
+    Build-Solution -MSBuildPath $msbuild -SolutionPath $unifiedSolution -Config $Configuration -Plat $Platform
 
     $cmakeBuildType = if ($Configuration -eq "Release") { "MinSizeRel" } else { "Debug" }
-    $cacheFile = Join-Path $BuildDir "CMakeCache.txt"
+    $effectiveBuildDir = Join-Path $BuildDir $cmakeBuildType
+    $cacheFile = Join-Path $effectiveBuildDir "CMakeCache.txt"
     $cachedBuildType = Get-CachedCMakeBuildType -CacheFilePath $cacheFile
     $needsConfigure = $Reconfigure -or -not (Test-Path $cacheFile) -or ($cachedBuildType -ne $cmakeBuildType)
 
     if ($needsConfigure) {
-        Write-Host "Configuring MinGW build..." -ForegroundColor Cyan
-        & $cmake -S . -B $BuildDir -G "MinGW Makefiles" `
+        Write-Host "Configuring MinGW build in $effectiveBuildDir..." -ForegroundColor Cyan
+        & $cmake -S . -B $effectiveBuildDir -G "MinGW Makefiles" `
             -DCMAKE_MAKE_PROGRAM="$mingwMake" `
             -DCMAKE_C_COMPILER="$mingwCC" `
             -DCMAKE_CXX_COMPILER="$mingwCXX" `
@@ -175,11 +165,11 @@ try {
             throw "CMake configure failed."
         }
     } else {
-        Write-Host "Using existing CMake configuration in $BuildDir (CMAKE_BUILD_TYPE=$cachedBuildType)" -ForegroundColor DarkGray
+        Write-Host "Using existing CMake configuration in $effectiveBuildDir (CMAKE_BUILD_TYPE=$cachedBuildType)" -ForegroundColor DarkGray
     }
 
-    Write-Host "Building MinGW target(s)..." -ForegroundColor Cyan
-    & $cmake --build $BuildDir -j
+    Write-Host "Building MinGW target(s) from $effectiveBuildDir..." -ForegroundColor Cyan
+    & $cmake --build $effectiveBuildDir -j
     if ($LASTEXITCODE -ne 0) {
         throw "CMake build failed."
     }
@@ -191,7 +181,7 @@ try {
     $distAddonsDir = Join-Path $distDir "Addons"
     $distNwmTemplateDir = Join-Path $distNwmDir "template"
 
-    $novadeskExeSrc = Join-Path $RepoRoot "$BuildDir\novadesk.exe"
+    $novadeskExeSrc = Join-Path $RepoRoot "$effectiveBuildDir\novadesk.exe"
     $widgetsSrc = Join-Path $RepoRoot "src\Widgets\builtin\Widgets"
     $imagesSrc = Join-Path $RepoRoot "src\apps\assets\images"
     $nwmExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\nwm\nwm.exe"
@@ -201,7 +191,7 @@ try {
     $restartExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\restart_novadesk\restart_novadesk.exe"
     $ndpkgInstallerExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\ndpkg_installer\ndpkg_installer.exe"
     $addonsBuildRoot = Join-Path $RepoRoot "src\addons\dist\$Platform\$Configuration"
-    $addonProjectNames = @("AppVolume", "AudioLevel", "Brightness", "Hotkey", "NowPlaying")
+    $addonProjectNames = @("AppVolume", "AudioLevel", "Brightness", "Hotkey", "NowPlaying", "InputBox")
 
     Assert-PathExists -PathValue $novadeskExeSrc -Label "novadesk.exe"
     Assert-PathExists -PathValue $widgetsSrc -Label "Widgets source"
