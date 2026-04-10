@@ -72,6 +72,7 @@ public:
 
     void SetTile(bool tile) { m_Tile = tile; }
     void SetImageFlip(ImageFlipMode flip) { m_ImageFlip = flip; }
+    void SetUseExifOrientation(bool enabled);
 
     const std::wstring &GetImagePath() const { return m_ImagePath; }
     ImageAspectRatio GetPreserveAspectRatio() const { return m_PreserveAspectRatio; }
@@ -82,6 +83,7 @@ public:
     bool IsGrayscale() const { return m_Grayscale; }
     bool IsTile() const { return m_Tile; }
     ImageFlipMode GetImageFlip() const { return m_ImageFlip; }
+    bool GetUseExifOrientation() const { return m_UseExifOrientation; }
     bool HasColorMatrix() const { return m_HasColorMatrix; }
     const float *GetColorMatrix() const { return (const float *)m_ColorMatrix; }
 
@@ -109,6 +111,7 @@ private:
     float m_ColorMatrix[20]; // D2D ColorMatrix effect uses 5x4
     bool m_Tile = false;
     ImageFlipMode m_ImageFlip = IMAGE_FLIP_NONE;
+    bool m_UseExifOrientation = false;
 
     // Cache management
     ID2D1RenderTarget *m_pLastTarget = nullptr;

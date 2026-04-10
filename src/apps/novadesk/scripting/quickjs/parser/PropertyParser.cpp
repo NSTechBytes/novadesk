@@ -639,6 +639,7 @@ namespace PropertyParser
 
         GetBoolProp(ctx, obj, "grayscale", options.grayscale);
         GetBoolProp(ctx, obj, "tile", options.tile);
+        GetBoolProp(ctx, obj, "useExifOrientation", options.useExifOrientation);
         int alpha = 255;
         if (GetIntProp(ctx, obj, "imageAlpha", alpha))
             options.imageAlpha = static_cast<BYTE>(alpha);
@@ -1176,6 +1177,7 @@ namespace PropertyParser
             element->UpdateImage(options.path);
         element->SetPreserveAspectRatio(options.preserveAspectRatio);
         element->SetImageFlip(options.imageFlip);
+        element->SetUseExifOrientation(options.useExifOrientation);
         element->SetGrayscale(options.grayscale);
         element->SetTile(options.tile);
         element->SetImageAlpha(options.imageAlpha);
@@ -1361,6 +1363,7 @@ namespace PropertyParser
         options.path = element->GetImagePath();
         options.preserveAspectRatio = element->GetPreserveAspectRatio();
         options.imageFlip = element->GetImageFlip();
+        options.useExifOrientation = element->GetUseExifOrientation();
         options.imageAlpha = element->GetImageAlpha();
         options.grayscale = element->IsGrayscale();
         options.tile = element->IsTile();

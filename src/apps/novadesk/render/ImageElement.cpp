@@ -21,6 +21,16 @@ ImageElement::~ImageElement()
 {
 }
 
+void ImageElement::SetUseExifOrientation(bool enabled)
+{
+    if (m_UseExifOrientation == enabled)
+        return;
+
+    m_UseExifOrientation = enabled;
+    m_D2DBitmap.Reset();
+    m_pWICBitmap.Reset();
+}
+
 bool ImageElement::ComputeImageLayout(float imageWidth, float imageHeight, ImageLayout &layout)
 {
     const int w = GetWidth();
@@ -141,7 +151,7 @@ void ImageElement::EnsureBitmap(ID2D1DeviceContext *context)
 
     if (!m_D2DBitmap)
     {
-        const bool ok = Direct2D::LoadBitmapFromFile(context, m_ImagePath, m_D2DBitmap.ReleaseAndGetAddressOf(), m_pWICBitmap.ReleaseAndGetAddressOf());
+        const bool ok = Direct2D::LoadBitmapFromFile(context, m_ImagePath, m_D2DBitmap.ReleaseAndGetAddressOf(), m_pWICBitmap.ReleaseAndGetAddressOf(), m_UseExifOrientation);
         if (!ok)
         {
             Logging::Log(LogLevel::Error, L"[novadesk] failed to load image bitmap: %s", m_ImagePath.c_str());
@@ -154,7 +164,7 @@ void ImageElement::UpdateImage(const std::wstring &path)
     m_ImagePath = path;
     m_D2DBitmap.Reset();
     m_pWICBitmap.Reset();
-    const bool ok = Direct2D::LoadWICBitmapFromFile(m_ImagePath, m_pWICBitmap.ReleaseAndGetAddressOf());
+    const bool ok = Direct2D::LoadWICBitmapFromFile(m_ImagePath, m_pWICBitmap.ReleaseAndGetAddressOf(), m_UseExifOrientation);
     if (!ok)
     {
         Logging::Log(LogLevel::Error, L"[novadesk] failed to preload WIC image: %s", m_ImagePath.c_str());

@@ -590,6 +590,8 @@ namespace novadesk::scripting::quickjs
                     return JS_NewBool(ctx, img->IsGrayscale() ? 1 : 0);
                 if (prop == "tile")
                     return JS_NewBool(ctx, img->IsTile() ? 1 : 0);
+                if (prop == "useExifOrientation")
+                    return JS_NewBool(ctx, img->GetUseExifOrientation() ? 1 : 0);
                 if (prop == "imageAlpha")
                     return JS_NewInt32(ctx, static_cast<int>(img->GetImageAlpha()));
                 if (prop == "imageTint" && img->HasImageTint())
