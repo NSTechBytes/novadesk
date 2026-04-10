@@ -489,4 +489,77 @@ ui.addText({
     fontColor: "rgb(255,255,255)"
 });
 
+// Test 25: ImageFlip modes
+ui.addImage({
+    id: "flip-horizontal",
+    path: "../assets/pic.png",
+    x: 150,
+    y: 920,
+    width: 100,
+    height: 100,
+    imageFlip: "horizontal"
+});
+ui.addText({
+    id: "label-flip-horizontal",
+    text: "ImageFlip:\nhorizontal",
+    x: 155,
+    y: 1030,
+    fontSize: 14,
+    fontColor: "rgb(255,255,255)"
+});
+
+ui.addImage({
+    id: "flip-vertical",
+    path: "../assets/pic.png",
+    x: 280,
+    y: 920,
+    width: 100,
+    height: 100,
+    imageFlip: "vertical"
+});
+ui.addText({
+    id: "label-flip-vertical",
+    text: "ImageFlip:\nvertical",
+    x: 285,
+    y: 1030,
+    fontSize: 14,
+    fontColor: "rgb(255,255,255)"
+});
+
+ui.addImage({
+    id: "flip-both",
+    path: "../assets/pic.png",
+    x: 410,
+    y: 920,
+    width: 100,
+    height: 100,
+    imageFlip: "both"
+});
+ui.addText({
+    id: "label-flip-both",
+    text: "ImageFlip:\nboth",
+    x: 415,
+    y: 1030,
+    fontSize: 14,
+    fontColor: "rgb(255,255,255)"
+});
+
+ui.addImage({
+    id: "flip-none",
+    path: "../assets/pic.png",
+    x: 540,
+    y: 920,
+    width: 100,
+    height: 100,
+    imageFlip: "none"
+});
+ui.addText({
+    id: "label-flip-none",
+    text: "ImageFlip:\nnone",
+    x: 545,
+    y: 1030,
+    fontSize: 14,
+    fontColor: "rgb(255,255,255)"
+});
+
 ui.endUpdate();

@@ -626,6 +626,17 @@ namespace PropertyParser
         else if (aspect == L"stretch")
             options.preserveAspectRatio = IMAGE_ASPECT_STRETCH;
 
+        std::wstring imageFlip = GetStringProp(ctx, obj, "imageFlip");
+        std::transform(imageFlip.begin(), imageFlip.end(), imageFlip.begin(), ::towlower);
+        if (imageFlip == L"horizontal")
+            options.imageFlip = IMAGE_FLIP_HORIZONTAL;
+        else if (imageFlip == L"vertical")
+            options.imageFlip = IMAGE_FLIP_VERTICAL;
+        else if (imageFlip == L"both")
+            options.imageFlip = IMAGE_FLIP_BOTH;
+        else if (imageFlip == L"none")
+            options.imageFlip = IMAGE_FLIP_NONE;
+
         GetBoolProp(ctx, obj, "grayscale", options.grayscale);
         GetBoolProp(ctx, obj, "tile", options.tile);
         int alpha = 255;
@@ -1164,6 +1175,7 @@ namespace PropertyParser
         if (!options.path.empty())
             element->UpdateImage(options.path);
         element->SetPreserveAspectRatio(options.preserveAspectRatio);
+        element->SetImageFlip(options.imageFlip);
         element->SetGrayscale(options.grayscale);
         element->SetTile(options.tile);
         element->SetImageAlpha(options.imageAlpha);
@@ -1348,6 +1360,7 @@ namespace PropertyParser
         }
         options.path = element->GetImagePath();
         options.preserveAspectRatio = element->GetPreserveAspectRatio();
+        options.imageFlip = element->GetImageFlip();
         options.imageAlpha = element->GetImageAlpha();
         options.grayscale = element->IsGrayscale();
         options.tile = element->IsTile();

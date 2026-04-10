@@ -567,6 +567,25 @@ namespace novadesk::scripting::quickjs
                     }
                     return JS_NewString(ctx, aspect);
                 }
+                if (prop == "imageFlip")
+                {
+                    const char *flip = "none";
+                    switch (img->GetImageFlip())
+                    {
+                    case IMAGE_FLIP_HORIZONTAL:
+                        flip = "horizontal";
+                        break;
+                    case IMAGE_FLIP_VERTICAL:
+                        flip = "vertical";
+                        break;
+                    case IMAGE_FLIP_BOTH:
+                        flip = "both";
+                        break;
+                    default:
+                        break;
+                    }
+                    return JS_NewString(ctx, flip);
+                }
                 if (prop == "grayscale")
                     return JS_NewBool(ctx, img->IsGrayscale() ? 1 : 0);
                 if (prop == "tile")

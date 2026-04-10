@@ -19,6 +19,14 @@ enum ImageAspectRatio
     IMAGE_ASPECT_CROP      // 2
 };
 
+enum ImageFlipMode
+{
+    IMAGE_FLIP_NONE = 0,
+    IMAGE_FLIP_HORIZONTAL,
+    IMAGE_FLIP_VERTICAL,
+    IMAGE_FLIP_BOTH
+};
+
 class ImageElement : public Element
 {
 public:
@@ -63,6 +71,7 @@ public:
     }
 
     void SetTile(bool tile) { m_Tile = tile; }
+    void SetImageFlip(ImageFlipMode flip) { m_ImageFlip = flip; }
 
     const std::wstring &GetImagePath() const { return m_ImagePath; }
     ImageAspectRatio GetPreserveAspectRatio() const { return m_PreserveAspectRatio; }
@@ -72,6 +81,7 @@ public:
     BYTE GetImageAlpha() const { return m_ImageAlpha; }
     bool IsGrayscale() const { return m_Grayscale; }
     bool IsTile() const { return m_Tile; }
+    ImageFlipMode GetImageFlip() const { return m_ImageFlip; }
     bool HasColorMatrix() const { return m_HasColorMatrix; }
     const float *GetColorMatrix() const { return (const float *)m_ColorMatrix; }
 
@@ -98,6 +108,7 @@ private:
     bool m_HasColorMatrix = false;
     float m_ColorMatrix[20]; // D2D ColorMatrix effect uses 5x4
     bool m_Tile = false;
+    ImageFlipMode m_ImageFlip = IMAGE_FLIP_NONE;
 
     // Cache management
     ID2D1RenderTarget *m_pLastTarget = nullptr;

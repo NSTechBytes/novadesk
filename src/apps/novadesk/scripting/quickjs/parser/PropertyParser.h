@@ -117,6 +117,7 @@ namespace PropertyParser
     {
         std::wstring path;
         ImageAspectRatio preserveAspectRatio = IMAGE_ASPECT_STRETCH;
+        ImageFlipMode imageFlip = IMAGE_FLIP_NONE;
         BYTE imageAlpha = 255;
         bool grayscale = false;
         bool tile = false;

@@ -108,6 +108,24 @@ bool ImageElement::MapPointToImagePixel(float targetX, float targetY, UINT image
 
     pixelX = layout.srcRect.left + ((targetX - layout.finalRect.left) / finalW) * srcW;
     pixelY = layout.srcRect.top + ((targetY - layout.finalRect.top) / finalH) * srcH;
+
+    // Match render-time flip so alpha hit testing uses the visible image pixel.
+    switch (m_ImageFlip)
+    {
+    case IMAGE_FLIP_HORIZONTAL:
+        pixelX = layout.srcRect.right - (pixelX - layout.srcRect.left) - 0.001f;
+        break;
+    case IMAGE_FLIP_VERTICAL:
+        pixelY = layout.srcRect.bottom - (pixelY - layout.srcRect.top) - 0.001f;
+        break;
+    case IMAGE_FLIP_BOTH:
+        pixelX = layout.srcRect.right - (pixelX - layout.srcRect.left) - 0.001f;
+        pixelY = layout.srcRect.bottom - (pixelY - layout.srcRect.top) - 0.001f;
+        break;
+    default:
+        break;
+    }
+
     return pixelX >= 0.0f && pixelX < imageWidth && pixelY >= 0.0f && pixelY < imageHeight;
 }
 
@@ -170,6 +188,29 @@ void ImageElement::Render(ID2D1DeviceContext *context)
     {
         RestoreRenderTransform(context, originalTransform);
         return;
+    }
+
+    D2D1_MATRIX_3X2_F imageBaseTransform;
+    bool hasImageFlipTransform = false;
+    if (m_ImageFlip != IMAGE_FLIP_NONE)
+    {
+        float scaleX = 1.0f;
+        float scaleY = 1.0f;
+        if (m_ImageFlip == IMAGE_FLIP_HORIZONTAL || m_ImageFlip == IMAGE_FLIP_BOTH)
+            scaleX = -1.0f;
+        if (m_ImageFlip == IMAGE_FLIP_VERTICAL || m_ImageFlip == IMAGE_FLIP_BOTH)
+            scaleY = -1.0f;
+
+        const float centerX = (layout.finalRect.left + layout.finalRect.right) * 0.5f;
+        const float centerY = (layout.finalRect.top + layout.finalRect.bottom) * 0.5f;
+        const D2D1_MATRIX_3X2_F flipTransform =
+            D2D1::Matrix3x2F::Translation(-centerX, -centerY) *
+            D2D1::Matrix3x2F::Scale(scaleX, scaleY) *
+            D2D1::Matrix3x2F::Translation(centerX, centerY);
+
+        context->GetTransform(&imageBaseTransform);
+        context->SetTransform(flipTransform * imageBaseTransform);
+        hasImageFlipTransform = true;
     }
 
     // Rotation already applied above
@@ -285,6 +326,11 @@ void ImageElement::Render(ID2D1DeviceContext *context)
             context->DrawImage(pFinalImage.Get(), nullptr, nullptr, m_AntiAlias ? D2D1_INTERPOLATION_MODE_LINEAR : D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR);
             context->SetTransform(effectTransform);
         }
+    }
+
+    if (hasImageFlipTransform)
+    {
+        context->SetTransform(imageBaseTransform);
     }
 
     RestoreRenderTransform(context, originalTransform);
