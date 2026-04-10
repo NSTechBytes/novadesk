@@ -637,6 +637,29 @@ namespace PropertyParser
         else if (imageFlip == L"none")
             options.imageFlip = IMAGE_FLIP_NONE;
 
+        std::vector<float> imageCrop;
+        if (GetFloatArrayProp(ctx, obj, "imageCrop", imageCrop, 4))
+        {
+            if (imageCrop.size() >= 4)
+            {
+                options.hasImageCrop = true;
+                options.imageCropX = imageCrop[0];
+                options.imageCropY = imageCrop[1];
+                options.imageCropW = imageCrop[2];
+                options.imageCropH = imageCrop[3];
+                options.imageCropOrigin = IMAGE_CROP_ORIGIN_TOP_LEFT;
+                if (imageCrop.size() >= 5)
+                {
+                    int origin = (int)imageCrop[4];
+                    if (origin < (int)IMAGE_CROP_ORIGIN_TOP_LEFT)
+                        origin = (int)IMAGE_CROP_ORIGIN_TOP_LEFT;
+                    if (origin > (int)IMAGE_CROP_ORIGIN_CENTER)
+                        origin = (int)IMAGE_CROP_ORIGIN_CENTER;
+                    options.imageCropOrigin = (ImageCropOrigin)origin;
+                }
+            }
+        }
+
         GetBoolProp(ctx, obj, "grayscale", options.grayscale);
         GetBoolProp(ctx, obj, "tile", options.tile);
         GetBoolProp(ctx, obj, "useExifOrientation", options.useExifOrientation);
@@ -1177,6 +1200,8 @@ namespace PropertyParser
             element->UpdateImage(options.path);
         element->SetPreserveAspectRatio(options.preserveAspectRatio);
         element->SetImageFlip(options.imageFlip);
+        if (options.hasImageCrop)
+            element->SetImageCrop(options.imageCropX, options.imageCropY, options.imageCropW, options.imageCropH, options.imageCropOrigin);
         element->SetUseExifOrientation(options.useExifOrientation);
         element->SetGrayscale(options.grayscale);
         element->SetTile(options.tile);
@@ -1363,6 +1388,15 @@ namespace PropertyParser
         options.path = element->GetImagePath();
         options.preserveAspectRatio = element->GetPreserveAspectRatio();
         options.imageFlip = element->GetImageFlip();
+        options.hasImageCrop = element->HasImageCrop();
+        if (options.hasImageCrop)
+        {
+            options.imageCropX = element->GetImageCropX();
+            options.imageCropY = element->GetImageCropY();
+            options.imageCropW = element->GetImageCropW();
+            options.imageCropH = element->GetImageCropH();
+            options.imageCropOrigin = element->GetImageCropOrigin();
+        }
         options.useExifOrientation = element->GetUseExifOrientation();
         options.imageAlpha = element->GetImageAlpha();
         options.grayscale = element->IsGrayscale();

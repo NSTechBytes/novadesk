@@ -27,6 +27,15 @@ enum ImageFlipMode
     IMAGE_FLIP_BOTH
 };
 
+enum ImageCropOrigin
+{
+    IMAGE_CROP_ORIGIN_TOP_LEFT = 0,
+    IMAGE_CROP_ORIGIN_TOP_RIGHT = 1,
+    IMAGE_CROP_ORIGIN_BOTTOM_RIGHT = 2,
+    IMAGE_CROP_ORIGIN_BOTTOM_LEFT = 3,
+    IMAGE_CROP_ORIGIN_CENTER = 4
+};
+
 class ImageElement : public Element
 {
 public:
@@ -73,6 +82,8 @@ public:
     void SetTile(bool tile) { m_Tile = tile; }
     void SetImageFlip(ImageFlipMode flip) { m_ImageFlip = flip; }
     void SetUseExifOrientation(bool enabled);
+    void SetImageCrop(float x, float y, float w, float h, ImageCropOrigin origin);
+    void ClearImageCrop() { m_HasImageCrop = false; }
 
     const std::wstring &GetImagePath() const { return m_ImagePath; }
     ImageAspectRatio GetPreserveAspectRatio() const { return m_PreserveAspectRatio; }
@@ -84,6 +95,12 @@ public:
     bool IsTile() const { return m_Tile; }
     ImageFlipMode GetImageFlip() const { return m_ImageFlip; }
     bool GetUseExifOrientation() const { return m_UseExifOrientation; }
+    bool HasImageCrop() const { return m_HasImageCrop; }
+    float GetImageCropX() const { return m_ImageCropX; }
+    float GetImageCropY() const { return m_ImageCropY; }
+    float GetImageCropW() const { return m_ImageCropW; }
+    float GetImageCropH() const { return m_ImageCropH; }
+    ImageCropOrigin GetImageCropOrigin() const { return m_ImageCropOrigin; }
     bool HasColorMatrix() const { return m_HasColorMatrix; }
     const float *GetColorMatrix() const { return (const float *)m_ColorMatrix; }
 
@@ -112,11 +129,18 @@ private:
     bool m_Tile = false;
     ImageFlipMode m_ImageFlip = IMAGE_FLIP_NONE;
     bool m_UseExifOrientation = false;
+    bool m_HasImageCrop = false;
+    float m_ImageCropX = 0.0f;
+    float m_ImageCropY = 0.0f;
+    float m_ImageCropW = 0.0f;
+    float m_ImageCropH = 0.0f;
+    ImageCropOrigin m_ImageCropOrigin = IMAGE_CROP_ORIGIN_TOP_LEFT;
 
     // Cache management
     ID2D1RenderTarget *m_pLastTarget = nullptr;
 
     void EnsureBitmap(ID2D1DeviceContext *context);
+    bool ResolveImageCropRect(float imageWidth, float imageHeight, D2D1_RECT_F &rect) const;
     bool ComputeImageLayout(float imageWidth, float imageHeight, ImageLayout &layout);
     bool MapPointToImagePixel(float targetX, float targetY, UINT imageWidth, UINT imageHeight, float &pixelX, float &pixelY);
 };

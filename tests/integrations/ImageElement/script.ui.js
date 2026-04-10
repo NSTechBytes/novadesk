@@ -1,3 +1,4 @@
+ui.beginUpdate();
 // ImageElement Test Suite
 // Comprehensive test of all ImageElement features and options
 
@@ -560,3 +561,42 @@ ui.addText({
     fontSize: 14,
     fontColor: "rgb(255,255,255)"
 });
+
+// Test 26: EXIF orientation toggle
+ui.addImage({
+    id: "exif-orientation",
+    path: "../assets/pic.png",
+    x: 670,
+    y: 920,
+    width: 100,
+    height: 100,
+    useExifOrientation: true
+});
+ui.addText({
+    id: "label-exif-orientation",
+    text: "useExifOrientation:\ntrue",
+    x: 675,
+    y: 1030,
+    fontSize: 14,
+    fontColor: "rgb(255,255,255)"
+});
+
+// Test 27: ImageCrop [X, Y, W, H, Origin]
+// Origin: 0=TL, 1=TR, 2=BR, 3=BL, 4=CENTER
+ui.addImage({
+    id: "crop-center-auto-size",
+    path: "../assets/pic.png",
+    x: 790,
+    y: 920,
+    imageCrop: [-50,-30,100,60,5]
+});
+ui.addText({
+    id: "label-crop-center-auto-size",
+    text: "ImageCrop:\n[-30,-20,60,40,4]",
+    x: 770,
+    y: 975,
+    fontSize: 12,
+    fontColor: "rgb(255,255,255)"
+});
+
+ui.endUpdate();

@@ -586,6 +586,20 @@ namespace novadesk::scripting::quickjs
                     }
                     return JS_NewString(ctx, flip);
                 }
+                if (prop == "imageCrop")
+                {
+                    if (!img->HasImageCrop())
+                    {
+                        return JS_UNDEFINED;
+                    }
+                    JSValue arr = JS_NewArray(ctx);
+                    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat64(ctx, img->GetImageCropX()));
+                    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat64(ctx, img->GetImageCropY()));
+                    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat64(ctx, img->GetImageCropW()));
+                    JS_SetPropertyUint32(ctx, arr, 3, JS_NewFloat64(ctx, img->GetImageCropH()));
+                    JS_SetPropertyUint32(ctx, arr, 4, JS_NewInt32(ctx, (int)img->GetImageCropOrigin()));
+                    return arr;
+                }
                 if (prop == "grayscale")
                     return JS_NewBool(ctx, img->IsGrayscale() ? 1 : 0);
                 if (prop == "tile")

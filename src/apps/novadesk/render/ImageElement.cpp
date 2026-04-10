@@ -8,6 +8,7 @@
 #include "ImageElement.h"
 #include "Direct2DHelper.h"
 #include <d2d1effects.h>
+#include <algorithm>
 #include "../shared/Logging.h"
 
 ImageElement::ImageElement(const std::wstring &id, int x, int y, int w, int h,
@@ -31,6 +32,71 @@ void ImageElement::SetUseExifOrientation(bool enabled)
     m_pWICBitmap.Reset();
 }
 
+void ImageElement::SetImageCrop(float x, float y, float w, float h, ImageCropOrigin origin)
+{
+    if (w <= 0.0f || h <= 0.0f)
+    {
+        m_HasImageCrop = false;
+        return;
+    }
+
+    m_HasImageCrop = true;
+    m_ImageCropX = x;
+    m_ImageCropY = y;
+    m_ImageCropW = w;
+    m_ImageCropH = h;
+    m_ImageCropOrigin = origin;
+}
+
+bool ImageElement::ResolveImageCropRect(float imageWidth, float imageHeight, D2D1_RECT_F &rect) const
+{
+    if (!m_HasImageCrop || imageWidth <= 0.0f || imageHeight <= 0.0f || m_ImageCropW <= 0.0f || m_ImageCropH <= 0.0f)
+    {
+        return false;
+    }
+
+    float startX = m_ImageCropX;
+    float startY = m_ImageCropY;
+
+    switch (m_ImageCropOrigin)
+    {
+    case IMAGE_CROP_ORIGIN_TOP_RIGHT:
+        startX = imageWidth + m_ImageCropX;
+        break;
+    case IMAGE_CROP_ORIGIN_BOTTOM_RIGHT:
+        startX = imageWidth + m_ImageCropX;
+        startY = imageHeight + m_ImageCropY;
+        break;
+    case IMAGE_CROP_ORIGIN_BOTTOM_LEFT:
+        startY = imageHeight + m_ImageCropY;
+        break;
+    case IMAGE_CROP_ORIGIN_CENTER:
+        startX = (imageWidth * 0.5f) + m_ImageCropX;
+        startY = (imageHeight * 0.5f) + m_ImageCropY;
+        break;
+    default:
+        break;
+    }
+
+    float left = startX;
+    float top = startY;
+    float right = startX + m_ImageCropW;
+    float bottom = startY + m_ImageCropH;
+
+    left = (std::max)(0.0f, left);
+    top = (std::max)(0.0f, top);
+    right = (std::min)(imageWidth, right);
+    bottom = (std::min)(imageHeight, bottom);
+
+    if (right <= left || bottom <= top)
+    {
+        return false;
+    }
+
+    rect = D2D1::RectF(left, top, right, bottom);
+    return true;
+}
+
 bool ImageElement::ComputeImageLayout(float imageWidth, float imageHeight, ImageLayout &layout)
 {
     const int w = GetWidth();
@@ -51,14 +117,26 @@ bool ImageElement::ComputeImageLayout(float imageWidth, float imageHeight, Image
         (float)(layout.contentX + layout.contentW),
         (float)(layout.contentY + layout.contentH));
     layout.srcRect = D2D1::RectF(0.0f, 0.0f, imageWidth, imageHeight);
+    D2D1_RECT_F cropRect;
+    if (ResolveImageCropRect(imageWidth, imageHeight, cropRect))
+    {
+        layout.srcRect = cropRect;
+    }
+
+    const float srcWidth = layout.srcRect.right - layout.srcRect.left;
+    const float srcHeight = layout.srcRect.bottom - layout.srcRect.top;
+    if (srcWidth <= 0.0f || srcHeight <= 0.0f)
+    {
+        return false;
+    }
 
     if (m_PreserveAspectRatio == IMAGE_ASPECT_PRESERVE)
     {
-        const float scaleX = (float)layout.contentW / imageWidth;
-        const float scaleY = (float)layout.contentH / imageHeight;
+        const float scaleX = (float)layout.contentW / srcWidth;
+        const float scaleY = (float)layout.contentH / srcHeight;
         const float scale = (std::min)(scaleX, scaleY);
-        const float finalW = imageWidth * scale;
-        const float finalH = imageHeight * scale;
+        const float finalW = srcWidth * scale;
+        const float finalH = srcHeight * scale;
 
         layout.finalRect.left = layout.contentX + (layout.contentW - finalW) / 2.0f;
         layout.finalRect.top = layout.contentY + (layout.contentH - finalH) / 2.0f;
@@ -67,16 +145,16 @@ bool ImageElement::ComputeImageLayout(float imageWidth, float imageHeight, Image
     }
     else if (m_PreserveAspectRatio == IMAGE_ASPECT_CROP)
     {
-        const float scaleX = (float)layout.contentW / imageWidth;
-        const float scaleY = (float)layout.contentH / imageHeight;
+        const float scaleX = (float)layout.contentW / srcWidth;
+        const float scaleY = (float)layout.contentH / srcHeight;
         const float scale = (std::max)(scaleX, scaleY);
-        const float srcW = layout.contentW / scale;
-        const float srcH = layout.contentH / scale;
+        const float visibleW = layout.contentW / scale;
+        const float visibleH = layout.contentH / scale;
 
-        layout.srcRect.left = (imageWidth - srcW) / 2.0f;
-        layout.srcRect.top = (imageHeight - srcH) / 2.0f;
-        layout.srcRect.right = layout.srcRect.left + srcW;
-        layout.srcRect.bottom = layout.srcRect.top + srcH;
+        layout.srcRect.left += (srcWidth - visibleW) / 2.0f;
+        layout.srcRect.top += (srcHeight - visibleH) / 2.0f;
+        layout.srcRect.right = layout.srcRect.left + visibleW;
+        layout.srcRect.bottom = layout.srcRect.top + visibleH;
     }
 
     return true;
@@ -352,11 +430,24 @@ int ImageElement::GetAutoWidth()
     {
         UINT w = 0, h = 0;
         m_pWICBitmap->GetSize(&w, &h);
-        return (int)w + m_PaddingLeft + m_PaddingRight;
+        float autoW = (float)w;
+        D2D1_RECT_F cropRect;
+        if (ResolveImageCropRect((float)w, (float)h, cropRect))
+        {
+            autoW = cropRect.right - cropRect.left;
+        }
+        return (int)autoW + m_PaddingLeft + m_PaddingRight;
     }
     if (!m_D2DBitmap)
         return 0;
-    return (int)m_D2DBitmap->GetSize().width + m_PaddingLeft + m_PaddingRight;
+    D2D1_SIZE_F size = m_D2DBitmap->GetSize();
+    float autoW = size.width;
+    D2D1_RECT_F cropRect;
+    if (ResolveImageCropRect(size.width, size.height, cropRect))
+    {
+        autoW = cropRect.right - cropRect.left;
+    }
+    return (int)autoW + m_PaddingLeft + m_PaddingRight;
 }
 
 int ImageElement::GetAutoHeight()
@@ -365,11 +456,24 @@ int ImageElement::GetAutoHeight()
     {
         UINT w = 0, h = 0;
         m_pWICBitmap->GetSize(&w, &h);
-        return (int)h + m_PaddingTop + m_PaddingBottom;
+        float autoH = (float)h;
+        D2D1_RECT_F cropRect;
+        if (ResolveImageCropRect((float)w, (float)h, cropRect))
+        {
+            autoH = cropRect.bottom - cropRect.top;
+        }
+        return (int)autoH + m_PaddingTop + m_PaddingBottom;
     }
     if (!m_D2DBitmap)
         return 0;
-    return (int)m_D2DBitmap->GetSize().height + m_PaddingTop + m_PaddingBottom;
+    D2D1_SIZE_F size = m_D2DBitmap->GetSize();
+    float autoH = size.height;
+    D2D1_RECT_F cropRect;
+    if (ResolveImageCropRect(size.width, size.height, cropRect))
+    {
+        autoH = cropRect.bottom - cropRect.top;
+    }
+    return (int)autoH + m_PaddingTop + m_PaddingBottom;
 }
 
 bool ImageElement::HitTest(int x, int y)

@@ -118,6 +118,12 @@ namespace PropertyParser
         std::wstring path;
         ImageAspectRatio preserveAspectRatio = IMAGE_ASPECT_STRETCH;
         ImageFlipMode imageFlip = IMAGE_FLIP_NONE;
+        bool hasImageCrop = false;
+        float imageCropX = 0.0f;
+        float imageCropY = 0.0f;
+        float imageCropW = 0.0f;
+        float imageCropH = 0.0f;
+        ImageCropOrigin imageCropOrigin = IMAGE_CROP_ORIGIN_TOP_LEFT;
         bool useExifOrientation = false;
         BYTE imageAlpha = 255;
         bool grayscale = false;

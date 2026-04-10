@@ -7,4 +7,4 @@ new widgetWindow({
   height: 1100,
   backgroundColor: "rgba(40, 40, 50, 0.95)",
   script: "./script.ui.js"
-}).on("close", function () { app.exit(); });
+});
