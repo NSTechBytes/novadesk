@@ -19,6 +19,7 @@
 #include "ImageElement.h"
 #include "TextElement.h"
 #include "BarElement.h"
+#include "LineElement.h"
 #include "RoundLineElement.h"
 #include "RectangleShape.h"
 #include "EllipseShape.h"
@@ -1081,6 +1082,31 @@ void Widget::AddBar(const PropertyParser::BarOptions &options)
 }
 
 /*
+** Add a line graph content item to the widget.
+*/
+void Widget::AddLine(const PropertyParser::LineOptions &options)
+{
+    if (options.id.empty())
+    {
+        Logging::Log(LogLevel::Error, L"AddLine failed: Element ID cannot be empty.");
+        return;
+    }
+
+    if (FindElementById(options.id))
+    {
+        RemoveElements(options.id);
+    }
+
+    LineElement *element = new LineElement(options.id, options.x, options.y, options.width, options.height);
+    PropertyParser::ApplyLineOptions(element, options);
+
+    m_Elements.push_back(element);
+    UpdateContainerForElement(element, options.containerId);
+
+    Redraw();
+}
+
+/*
 ** Add a round line content item to the widget.
 */
 void Widget::AddRoundLine(const PropertyParser::RoundLineOptions &options)
@@ -1642,6 +1668,14 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, duk_context *ctx)
         PropertyParser::PreFillBarOptions(options, static_cast<BarElement *>(element));
         PropertyParser::ParseBarOptions(ctx, options);
         PropertyParser::ApplyBarOptions(static_cast<BarElement *>(element), options);
+        UpdateContainerForElement(element, options.containerId);
+    }
+    else if (element->GetType() == ELEMENT_LINE)
+    {
+        PropertyParser::LineOptions options;
+        PropertyParser::PreFillLineOptions(options, static_cast<LineElement *>(element));
+        PropertyParser::ParseLineOptions(ctx, options);
+        PropertyParser::ApplyLineOptions(static_cast<LineElement *>(element), options);
         UpdateContainerForElement(element, options.containerId);
     }
     else if (element->GetType() == ELEMENT_ROUNDLINE)

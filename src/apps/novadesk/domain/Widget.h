@@ -19,6 +19,7 @@
 #include "../render/TextElement.h"
 #include "../render/ImageElement.h"
 #include "../render/BarElement.h"
+#include "../render/LineElement.h"
 #include "../render/Tooltip.h"
 #include "../render/CursorManager.h"
 
@@ -31,6 +32,7 @@ namespace PropertyParser {
     struct ImageOptions;
     struct TextOptions;
     struct BarOptions;
+    struct LineOptions;
     struct RoundLineOptions;
     struct ShapeOptions;
 }
@@ -93,6 +95,7 @@ public:
     void AddImage(const PropertyParser::ImageOptions& options);
     void AddText(const PropertyParser::TextOptions& options);
     void AddBar(const PropertyParser::BarOptions& options);
+    void AddLine(const PropertyParser::LineOptions& options);
     void AddRoundLine(const PropertyParser::RoundLineOptions& options);
     void AddShape(const PropertyParser::ShapeOptions& options);
 

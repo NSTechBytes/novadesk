@@ -11,6 +11,7 @@
 #include "../../../render/BarElement.h"
 #include "../../../render/Element.h"
 #include "../../../render/ImageElement.h"
+#include "../../../render/LineElement.h"
 #include "../../../render/RoundLineElement.h"
 #include "../../../render/ShapeElement.h"
 #include "../../../render/TextElement.h"
@@ -22,6 +23,7 @@ class Element;
 class ImageElement;
 class TextElement;
 class BarElement;
+class LineElement;
 class RoundLineElement;
 class ShapeElement;
 
@@ -181,6 +183,26 @@ namespace PropertyParser
         GradientInfo lineGradientBg;
     };
 
+    struct LineOptions : public ElementOptions
+    {
+        int lineCount = 1;
+        std::vector<std::vector<float>> dataSets;
+        std::vector<COLORREF> lineColors;
+        std::vector<BYTE> lineAlphas;
+        std::vector<float> scaleValues;
+        float lineWidth = 1.0f;
+        bool horizontalLines = false;
+        COLORREF horizontalLineColor = RGB(0, 0, 0);
+        BYTE horizontalLineAlpha = 255;
+        bool graphStartLeft = false;               // false = right
+        bool graphHorizontalOrientation = false;   // false = vertical
+        bool flip = false;
+        D2D1_STROKE_TRANSFORM_TYPE transformStroke = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
+        bool autoScale = false;
+        float scaleMin = 0.0f;
+        float scaleMax = 100.0f;
+    };
+
     struct ShapeCombineOp
     {
         std::wstring id;
@@ -231,6 +253,7 @@ namespace PropertyParser
     void ParseImageOptions(JSContext *ctx, JSValueConst obj, ImageOptions &options, const std::wstring &baseDir = L"");
     void ParseTextOptions(JSContext *ctx, JSValueConst obj, TextOptions &options, const std::wstring &baseDir = L"");
     void ParseBarOptions(JSContext *ctx, JSValueConst obj, BarOptions &options, const std::wstring &baseDir = L"");
+    void ParseLineOptions(JSContext *ctx, JSValueConst obj, LineOptions &options, const std::wstring &baseDir = L"");
     void ParseRoundLineOptions(JSContext *ctx, JSValueConst obj, RoundLineOptions &options, const std::wstring &baseDir = L"");
     void ParseShapeOptions(JSContext *ctx, JSValueConst obj, ShapeOptions &options, const std::wstring &baseDir = L"");
 
@@ -238,12 +261,14 @@ namespace PropertyParser
     void ApplyImageOptions(ImageElement *element, const ImageOptions &options);
     void ApplyTextOptions(TextElement *element, const TextOptions &options);
     void ApplyBarOptions(BarElement *element, const BarOptions &options);
+    void ApplyLineOptions(LineElement *element, const LineOptions &options);
     void ApplyRoundLineOptions(RoundLineElement *element, const RoundLineOptions &options);
     void ApplyShapeOptions(ShapeElement *element, const ShapeOptions &options);
 
     void PreFillImageOptions(ImageOptions &options, ImageElement *element);
     void PreFillTextOptions(TextOptions &options, TextElement *element);
     void PreFillBarOptions(BarOptions &options, BarElement *element);
+    void PreFillLineOptions(LineOptions &options, LineElement *element);
     void PreFillRoundLineOptions(RoundLineOptions &options, RoundLineElement *element);
     void PreFillShapeOptions(ShapeOptions &options, ShapeElement *element);
 
@@ -251,6 +276,7 @@ namespace PropertyParser
     void ParseImageOptions(duk_context *ctx, ImageOptions &options);
     void ParseTextOptions(duk_context *ctx, TextOptions &options);
     void ParseBarOptions(duk_context *ctx, BarOptions &options);
+    void ParseLineOptions(duk_context *ctx, LineOptions &options);
     void ParseRoundLineOptions(duk_context *ctx, RoundLineOptions &options);
     void ParseShapeOptions(duk_context *ctx, ShapeOptions &options);
 } // namespace PropertyParser

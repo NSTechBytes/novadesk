@@ -1,6 +1,7 @@
 #include "PropertyParser.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cwctype>
 #include <filesystem>
 
@@ -790,6 +791,142 @@ namespace PropertyParser
         ParseGradientOrColor(bc, options.barColor, options.barAlpha, options.barGradient, options.hasBarColor);
     }
 
+    void ParseLineOptions(JSContext *ctx, JSValueConst obj, LineOptions &options, const std::wstring &baseDir)
+    {
+        ParseElementOptions(ctx, obj, options, baseDir);
+
+        GetIntProp(ctx, obj, "lineCount", options.lineCount);
+        if (options.lineCount < 1)
+        {
+            options.lineCount = 1;
+        }
+
+        GetFloatProp(ctx, obj, "lineWidth", options.lineWidth);
+        if (options.lineWidth < 1.0f)
+        {
+            options.lineWidth = 1.0f;
+        }
+
+        GetBoolProp(ctx, obj, "horizontalLines", options.horizontalLines);
+        std::wstring horizontalLineColor = GetStringProp(ctx, obj, "horizontalLineColor");
+        if (!horizontalLineColor.empty())
+        {
+            ColorUtil::ParseRGBA(horizontalLineColor, options.horizontalLineColor, options.horizontalLineAlpha);
+        }
+
+        std::wstring graphStart = GetStringProp(ctx, obj, "graphStart");
+        std::transform(graphStart.begin(), graphStart.end(), graphStart.begin(), ::towlower);
+        if (graphStart == L"left")
+        {
+            options.graphStartLeft = true;
+        }
+        else if (graphStart == L"right")
+        {
+            options.graphStartLeft = false;
+        }
+
+        std::wstring graphOrientation = GetStringProp(ctx, obj, "graphOrientation");
+        std::transform(graphOrientation.begin(), graphOrientation.end(), graphOrientation.begin(), ::towlower);
+        if (graphOrientation == L"horizontal")
+        {
+            options.graphHorizontalOrientation = true;
+        }
+        else if (graphOrientation == L"vertical")
+        {
+            options.graphHorizontalOrientation = false;
+        }
+
+        GetBoolProp(ctx, obj, "flip", options.flip);
+
+        std::wstring transformStroke = GetStringProp(ctx, obj, "transformStroke");
+        std::transform(transformStroke.begin(), transformStroke.end(), transformStroke.begin(), ::towlower);
+        if (transformStroke == L"fixed")
+        {
+            options.transformStroke = D2D1_STROKE_TRANSFORM_TYPE_FIXED;
+        }
+        else if (transformStroke == L"normal")
+        {
+            options.transformStroke = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
+        }
+
+        GetBoolProp(ctx, obj, "autoRange", options.autoScale);
+        GetFloatProp(ctx, obj, "rangeMin", options.scaleMin);
+        GetFloatProp(ctx, obj, "rangeMax", options.scaleMax);
+        if (options.scaleMax < options.scaleMin)
+        {
+            std::swap(options.scaleMin, options.scaleMax);
+        }
+        if (fabsf(options.scaleMax - options.scaleMin) < 0.000001f)
+        {
+            options.scaleMax = options.scaleMin + 1.0f;
+        }
+
+        const size_t desiredLineCount = (size_t)options.lineCount;
+
+        if (options.dataSets.size() != desiredLineCount)
+        {
+            options.dataSets.resize(desiredLineCount);
+        }
+
+        if (options.lineColors.size() < desiredLineCount)
+        {
+            options.lineColors.resize(desiredLineCount, RGB(255, 255, 255));
+        }
+        else if (options.lineColors.size() > desiredLineCount)
+        {
+            options.lineColors.resize(desiredLineCount);
+        }
+
+        if (options.lineAlphas.size() < desiredLineCount)
+        {
+            options.lineAlphas.resize(desiredLineCount, 255);
+        }
+        else if (options.lineAlphas.size() > desiredLineCount)
+        {
+            options.lineAlphas.resize(desiredLineCount);
+        }
+
+        if (options.scaleValues.size() < desiredLineCount)
+        {
+            options.scaleValues.resize(desiredLineCount, 1.0f);
+        }
+        else if (options.scaleValues.size() > desiredLineCount)
+        {
+            options.scaleValues.resize(desiredLineCount);
+        }
+
+        for (int i = 0; i < options.lineCount; ++i)
+        {
+            std::wstring dataKey = (i == 0) ? L"data" : (L"data" + std::to_wstring(i + 1));
+            std::vector<float> data;
+            std::string dataKeyUtf8 = Utils::ToString(dataKey);
+            if (GetFloatArrayProp(ctx, obj, dataKeyUtf8.c_str(), data, 1))
+            {
+                options.dataSets[(size_t)i] = std::move(data);
+            }
+
+            std::wstring colorKey = (i == 0) ? L"lineColor" : (L"lineColor" + std::to_wstring(i + 1));
+            std::string colorKeyUtf8 = Utils::ToString(colorKey);
+            std::wstring colorValue = GetStringProp(ctx, obj, colorKeyUtf8.c_str());
+            if (!colorValue.empty())
+            {
+                ColorUtil::ParseRGBA(colorValue, options.lineColors[(size_t)i], options.lineAlphas[(size_t)i]);
+            }
+
+            std::wstring scaleKey = (i == 0) ? L"lineScale" : (L"lineScale" + std::to_wstring(i + 1));
+            std::string scaleKeyUtf8 = Utils::ToString(scaleKey);
+            float scaleValue = 1.0f;
+            if (GetFloatProp(ctx, obj, scaleKeyUtf8.c_str(), scaleValue))
+            {
+                if (!std::isfinite(scaleValue))
+                {
+                    scaleValue = 1.0f;
+                }
+                options.scaleValues[(size_t)i] = scaleValue;
+            }
+        }
+    }
+
     void ParseRoundLineOptions(JSContext *ctx, JSValueConst obj, RoundLineOptions &options, const std::wstring &baseDir)
     {
         ParseElementOptions(ctx, obj, options, baseDir);
@@ -1072,6 +1209,26 @@ namespace PropertyParser
             element->SetBarColor(options.barColor, options.barAlpha);
     }
 
+    void ApplyLineOptions(LineElement *element, const LineOptions &options)
+    {
+        if (!element)
+            return;
+        ApplyElementOptions(element, options);
+        element->SetLineCount(options.lineCount);
+        element->SetDataSets(options.dataSets);
+        element->SetLineColors(options.lineColors, options.lineAlphas);
+        element->SetScaleValues(options.scaleValues);
+        element->SetLineWidth(options.lineWidth);
+        element->SetHorizontalLines(options.horizontalLines);
+        element->SetHorizontalLineColor(options.horizontalLineColor, options.horizontalLineAlpha);
+        element->SetGraphStartLeft(options.graphStartLeft);
+        element->SetGraphHorizontalOrientation(options.graphHorizontalOrientation);
+        element->SetFlip(options.flip);
+        element->SetStrokeTransformType(options.transformStroke);
+        element->SetAutoScale(options.autoScale);
+        element->SetScaleRange(options.scaleMin, options.scaleMax);
+    }
+
     void ApplyRoundLineOptions(RoundLineElement *element, const RoundLineOptions &options)
     {
         if (!element)
@@ -1321,6 +1478,71 @@ namespace PropertyParser
         options.barGradient = element->GetBarGradient();
     }
 
+    void PreFillLineOptions(LineOptions &options, LineElement *element)
+    {
+        if (!element)
+            return;
+        options.id = element->GetId();
+        options.x = element->GetX();
+        options.y = element->GetY();
+        options.width = element->IsWDefined() ? (element->GetWidth() - element->GetPaddingLeft() - element->GetPaddingRight()) : 0;
+        options.height = element->IsHDefined() ? (element->GetHeight() - element->GetPaddingTop() - element->GetPaddingBottom()) : 0;
+
+        options.show = element->IsVisible();
+        options.containerId = element->GetContainerId();
+        options.groupId = element->GetGroupId();
+        options.mouseEventCursor = element->GetMouseEventCursor();
+        options.mouseEventCursorName = element->GetMouseEventCursorName();
+        options.cursorsDir = element->GetCursorsDir();
+        options.rotate = element->GetRotate();
+        options.antialias = element->GetAntiAlias();
+        options.solidColorRadius = element->GetCornerRadius();
+
+        options.paddingLeft = element->GetPaddingLeft();
+        options.paddingTop = element->GetPaddingTop();
+        options.paddingRight = element->GetPaddingRight();
+        options.paddingBottom = element->GetPaddingBottom();
+
+        if (element->HasSolidColor())
+        {
+            options.hasSolidColor = true;
+            options.solidColor = element->GetSolidColor();
+            options.solidAlpha = element->GetSolidAlpha();
+            options.solidGradient = element->GetSolidGradient();
+        }
+
+        options.bevelType = element->GetBevelType();
+        options.bevelWidth = element->GetBevelWidth();
+        options.bevelColor = element->GetBevelColor();
+        options.bevelAlpha = element->GetBevelAlpha();
+        options.bevelColor2 = element->GetBevelColor2();
+        options.bevelAlpha2 = element->GetBevelAlpha2();
+
+        if (element->HasTransformMatrix())
+        {
+            options.hasTransformMatrix = true;
+            const float *m = element->GetTransformMatrix();
+            for (int i = 0; i < 6; ++i) options.transformMatrix[i] = m[i];
+        }
+
+        options.lineCount = element->GetLineCount();
+        options.dataSets = element->GetDataSets();
+        options.lineColors = element->GetLineColors();
+        options.lineAlphas = element->GetLineAlphas();
+        options.scaleValues = element->GetScaleValues();
+        options.lineWidth = element->GetLineWidth();
+        options.horizontalLines = element->GetHorizontalLines();
+        options.horizontalLineColor = element->GetHorizontalLineColor();
+        options.horizontalLineAlpha = element->GetHorizontalLineAlpha();
+        options.graphStartLeft = element->GetGraphStartLeft();
+        options.graphHorizontalOrientation = element->GetGraphHorizontalOrientation();
+        options.flip = element->GetFlip();
+        options.transformStroke = element->GetStrokeTransformType();
+        options.autoScale = element->GetAutoScale();
+        options.scaleMin = element->GetScaleMin();
+        options.scaleMax = element->GetScaleMax();
+    }
+
     void PreFillRoundLineOptions(RoundLineOptions &options, RoundLineElement *element)
     {
         if (!element)
@@ -1468,6 +1690,7 @@ namespace PropertyParser
     void ParseImageOptions(duk_context *, ImageOptions &) {}
     void ParseTextOptions(duk_context *, TextOptions &) {}
     void ParseBarOptions(duk_context *, BarOptions &) {}
+    void ParseLineOptions(duk_context *, LineOptions &) {}
     void ParseRoundLineOptions(duk_context *, RoundLineOptions &) {}
     void ParseShapeOptions(duk_context *, ShapeOptions &) {}
 }

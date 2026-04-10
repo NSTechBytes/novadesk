@@ -7,6 +7,7 @@
 #include "../../domain/Widget.h"
 #include "../../render/BarElement.h"
 #include "../../render/ImageElement.h"
+#include "../../render/LineElement.h"
 #include "../../render/RoundLineElement.h"
 #include "../../render/ShapeElement.h"
 #include "../../render/RectangleShape.h"
@@ -126,6 +127,19 @@ namespace novadesk::scripting::quickjs
             PropertyParser::RoundLineOptions options;
             PropertyParser::ParseRoundLineOptions(ctx, argv[0], options, GetWidgetScriptBaseDir(widget));
             widget->AddRoundLine(options);
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsWidgetAddLine(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_EXCEPTION;
+            if (argc < 1 || !JS_IsObject(argv[0]))
+                return ThrowTypeError(ctx, "addLine", "expected options object");
+            PropertyParser::LineOptions options;
+            PropertyParser::ParseLineOptions(ctx, argv[0], options, GetWidgetScriptBaseDir(widget));
+            widget->AddLine(options);
             return JS_UNDEFINED;
         }
 
@@ -264,6 +278,13 @@ namespace novadesk::scripting::quickjs
                 PropertyParser::PreFillRoundLineOptions(options, round);
                 PropertyParser::ParseRoundLineOptions(ctx, argv[1], options, baseDir);
                 PropertyParser::ApplyRoundLineOptions(round, options);
+            }
+            else if (auto *line = dynamic_cast<LineElement *>(element))
+            {
+                PropertyParser::LineOptions options;
+                PropertyParser::PreFillLineOptions(options, line);
+                PropertyParser::ParseLineOptions(ctx, argv[1], options, baseDir);
+                PropertyParser::ApplyLineOptions(line, options);
             }
             else if (auto *shape = dynamic_cast<ShapeElement *>(element))
             {
@@ -605,6 +626,89 @@ namespace novadesk::scripting::quickjs
                     return JS_NewString(ctx, Utils::ToString(c).c_str());
                 }
             }
+            else if (element->GetType() == ELEMENT_LINE)
+            {
+                auto *line = static_cast<LineElement *>(element);
+                if (prop == "lineCount")
+                    return JS_NewInt32(ctx, line->GetLineCount());
+                if (prop == "lineWidth")
+                    return JS_NewFloat64(ctx, line->GetLineWidth());
+                if (prop == "horizontalLines")
+                    return JS_NewBool(ctx, line->GetHorizontalLines() ? 1 : 0);
+                if (prop == "horizontalLineColor")
+                {
+                    const std::wstring c = ColorUtil::ToRGBAString(line->GetHorizontalLineColor(), line->GetHorizontalLineAlpha());
+                    return JS_NewString(ctx, Utils::ToString(c).c_str());
+                }
+                if (prop == "graphStart")
+                    return JS_NewString(ctx, line->GetGraphStartLeft() ? "left" : "right");
+                if (prop == "graphOrientation")
+                    return JS_NewString(ctx, line->GetGraphHorizontalOrientation() ? "horizontal" : "vertical");
+                if (prop == "flip")
+                    return JS_NewBool(ctx, line->GetFlip() ? 1 : 0);
+                if (prop == "transformStroke")
+                    return JS_NewString(ctx, line->GetStrokeTransformType() == D2D1_STROKE_TRANSFORM_TYPE_FIXED ? "fixed" : "normal");
+                if (prop == "autoRange")
+                    return JS_NewBool(ctx, line->GetAutoScale() ? 1 : 0);
+                if (prop == "rangeMin")
+                    return JS_NewFloat64(ctx, line->GetScaleMin());
+                if (prop == "rangeMax")
+                    return JS_NewFloat64(ctx, line->GetScaleMax());
+
+                if (prop == "data")
+                {
+                    JSValue arr = JS_NewArray(ctx);
+                    const auto &dataSets = line->GetDataSets();
+                    if (!dataSets.empty())
+                    {
+                        for (uint32_t i = 0; i < static_cast<uint32_t>(dataSets[0].size()); ++i)
+                        {
+                            JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, dataSets[0][i]));
+                        }
+                    }
+                    return arr;
+                }
+
+                for (int i = 0; i < line->GetLineCount(); ++i)
+                {
+                    std::string colorKey = (i == 0) ? "lineColor" : ("lineColor" + std::to_string(i + 1));
+                    if (prop == colorKey)
+                    {
+                        const auto &colors = line->GetLineColors();
+                        const auto &alphas = line->GetLineAlphas();
+                        if (i < (int)colors.size() && i < (int)alphas.size())
+                        {
+                            const std::wstring c = ColorUtil::ToRGBAString(colors[(size_t)i], alphas[(size_t)i]);
+                            return JS_NewString(ctx, Utils::ToString(c).c_str());
+                        }
+                    }
+
+                    std::string scaleKey = (i == 0) ? "lineScale" : ("lineScale" + std::to_string(i + 1));
+                    if (prop == scaleKey)
+                    {
+                        const auto &scales = line->GetScaleValues();
+                        if (i < (int)scales.size())
+                        {
+                            return JS_NewFloat64(ctx, scales[(size_t)i]);
+                        }
+                    }
+
+                    std::string dataKey = (i == 0) ? "data" : ("data" + std::to_string(i + 1));
+                    if (prop == dataKey)
+                    {
+                        JSValue arr = JS_NewArray(ctx);
+                        const auto &dataSets = line->GetDataSets();
+                        if (i < (int)dataSets.size())
+                        {
+                            for (uint32_t k = 0; k < static_cast<uint32_t>(dataSets[(size_t)i].size()); ++k)
+                            {
+                                JS_SetPropertyUint32(ctx, arr, k, JS_NewFloat64(ctx, dataSets[(size_t)i][k]));
+                            }
+                        }
+                        return arr;
+                    }
+                }
+            }
             else if (element->GetType() == ELEMENT_SHAPE)
             {
                 auto *shape = static_cast<ShapeElement *>(element);
@@ -806,6 +910,7 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("addImage", 1, JsWidgetAddImage),
             JS_CFUNC_DEF("addText", 1, JsWidgetAddText),
             JS_CFUNC_DEF("addBar", 1, JsWidgetAddBar),
+            JS_CFUNC_DEF("addLine", 1, JsWidgetAddLine),
             JS_CFUNC_DEF("addRoundLine", 1, JsWidgetAddRoundLine),
             JS_CFUNC_DEF("addShape", 1, JsWidgetAddShape),
             JS_CFUNC_DEF("setElementProperty", 2, JsWidgetSetElementProperties),
