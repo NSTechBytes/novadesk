@@ -660,6 +660,16 @@ namespace PropertyParser
             }
         }
 
+        std::vector<float> scaleMargins;
+        if (GetFloatArrayProp(ctx, obj, "scaleMargins", scaleMargins, 4))
+        {
+            options.hasScaleMargins = true;
+            options.scaleMarginLeft = scaleMargins[0];
+            options.scaleMarginTop = scaleMargins[1];
+            options.scaleMarginRight = scaleMargins[2];
+            options.scaleMarginBottom = scaleMargins[3];
+        }
+
         GetBoolProp(ctx, obj, "grayscale", options.grayscale);
         GetBoolProp(ctx, obj, "tile", options.tile);
         GetBoolProp(ctx, obj, "useExifOrientation", options.useExifOrientation);
@@ -1202,6 +1212,8 @@ namespace PropertyParser
         element->SetImageFlip(options.imageFlip);
         if (options.hasImageCrop)
             element->SetImageCrop(options.imageCropX, options.imageCropY, options.imageCropW, options.imageCropH, options.imageCropOrigin);
+        if (options.hasScaleMargins)
+            element->SetScaleMargins(options.scaleMarginLeft, options.scaleMarginTop, options.scaleMarginRight, options.scaleMarginBottom);
         element->SetUseExifOrientation(options.useExifOrientation);
         element->SetGrayscale(options.grayscale);
         element->SetTile(options.tile);
@@ -1396,6 +1408,14 @@ namespace PropertyParser
             options.imageCropW = element->GetImageCropW();
             options.imageCropH = element->GetImageCropH();
             options.imageCropOrigin = element->GetImageCropOrigin();
+        }
+        options.hasScaleMargins = element->HasScaleMargins();
+        if (options.hasScaleMargins)
+        {
+            options.scaleMarginLeft = element->GetScaleMarginLeft();
+            options.scaleMarginTop = element->GetScaleMarginTop();
+            options.scaleMarginRight = element->GetScaleMarginRight();
+            options.scaleMarginBottom = element->GetScaleMarginBottom();
         }
         options.useExifOrientation = element->GetUseExifOrientation();
         options.imageAlpha = element->GetImageAlpha();

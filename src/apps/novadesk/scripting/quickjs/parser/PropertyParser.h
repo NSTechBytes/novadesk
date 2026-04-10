@@ -124,6 +124,11 @@ namespace PropertyParser
         float imageCropW = 0.0f;
         float imageCropH = 0.0f;
         ImageCropOrigin imageCropOrigin = IMAGE_CROP_ORIGIN_TOP_LEFT;
+        bool hasScaleMargins = false;
+        float scaleMarginLeft = 0.0f;
+        float scaleMarginTop = 0.0f;
+        float scaleMarginRight = 0.0f;
+        float scaleMarginBottom = 0.0f;
         bool useExifOrientation = false;
         BYTE imageAlpha = 255;
         bool grayscale = false;

@@ -600,6 +600,19 @@ namespace novadesk::scripting::quickjs
                     JS_SetPropertyUint32(ctx, arr, 4, JS_NewInt32(ctx, (int)img->GetImageCropOrigin()));
                     return arr;
                 }
+                if (prop == "scaleMargins")
+                {
+                    if (!img->HasScaleMargins())
+                    {
+                        return JS_UNDEFINED;
+                    }
+                    JSValue arr = JS_NewArray(ctx);
+                    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat64(ctx, img->GetScaleMarginLeft()));
+                    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat64(ctx, img->GetScaleMarginTop()));
+                    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat64(ctx, img->GetScaleMarginRight()));
+                    JS_SetPropertyUint32(ctx, arr, 3, JS_NewFloat64(ctx, img->GetScaleMarginBottom()));
+                    return arr;
+                }
                 if (prop == "grayscale")
                     return JS_NewBool(ctx, img->IsGrayscale() ? 1 : 0);
                 if (prop == "tile")

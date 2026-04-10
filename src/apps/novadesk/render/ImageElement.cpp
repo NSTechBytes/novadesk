@@ -32,6 +32,26 @@ void ImageElement::SetUseExifOrientation(bool enabled)
     m_pWICBitmap.Reset();
 }
 
+void ImageElement::SetScaleMargins(float left, float top, float right, float bottom)
+{
+    left = (std::max)(0.0f, left);
+    top = (std::max)(0.0f, top);
+    right = (std::max)(0.0f, right);
+    bottom = (std::max)(0.0f, bottom);
+
+    if (left <= 0.0f && top <= 0.0f && right <= 0.0f && bottom <= 0.0f)
+    {
+        m_HasScaleMargins = false;
+        return;
+    }
+
+    m_HasScaleMargins = true;
+    m_ScaleMarginLeft = left;
+    m_ScaleMarginTop = top;
+    m_ScaleMarginRight = right;
+    m_ScaleMarginBottom = bottom;
+}
+
 void ImageElement::SetImageCrop(float x, float y, float w, float h, ImageCropOrigin origin)
 {
     if (w <= 0.0f || h <= 0.0f)
@@ -389,7 +409,95 @@ void ImageElement::Render(ID2D1DeviceContext *context)
     }
     else
     {
-        if (pFinalImage.Get() == (ID2D1Image *)m_D2DBitmap.Get())
+        const bool useScaleMargins =
+            m_HasScaleMargins &&
+            !m_Tile &&
+            m_PreserveAspectRatio == IMAGE_ASPECT_STRETCH &&
+            pFinalImage.Get() == (ID2D1Image *)m_D2DBitmap.Get();
+
+        if (useScaleMargins)
+        {
+            const float srcW = layout.srcRect.right - layout.srcRect.left;
+            const float srcH = layout.srcRect.bottom - layout.srcRect.top;
+            const float dstW = layout.finalRect.right - layout.finalRect.left;
+            const float dstH = layout.finalRect.bottom - layout.finalRect.top;
+
+            float sl = (std::min)(m_ScaleMarginLeft, srcW);
+            float sr = (std::min)(m_ScaleMarginRight, srcW - sl);
+            float st = (std::min)(m_ScaleMarginTop, srcH);
+            float sb = (std::min)(m_ScaleMarginBottom, srcH - st);
+
+            if (sl + sr > srcW)
+            {
+                const float ratio = (srcW <= 0.0f) ? 0.0f : (srcW / (sl + sr));
+                sl *= ratio;
+                sr *= ratio;
+            }
+            if (st + sb > srcH)
+            {
+                const float ratio = (srcH <= 0.0f) ? 0.0f : (srcH / (st + sb));
+                st *= ratio;
+                sb *= ratio;
+            }
+
+            float dl = sl;
+            float dr = sr;
+            float dt = st;
+            float db = sb;
+            if (dl + dr > dstW)
+            {
+                const float ratio = (dstW <= 0.0f) ? 0.0f : (dstW / (dl + dr));
+                dl *= ratio;
+                dr *= ratio;
+            }
+            if (dt + db > dstH)
+            {
+                const float ratio = (dstH <= 0.0f) ? 0.0f : (dstH / (dt + db));
+                dt *= ratio;
+                db *= ratio;
+            }
+
+            const float sx0 = layout.srcRect.left;
+            const float sx1 = sx0 + sl;
+            const float sx2 = layout.srcRect.right - sr;
+            const float sx3 = layout.srcRect.right;
+            const float sy0 = layout.srcRect.top;
+            const float sy1 = sy0 + st;
+            const float sy2 = layout.srcRect.bottom - sb;
+            const float sy3 = layout.srcRect.bottom;
+
+            const float dx0 = layout.finalRect.left;
+            const float dx1 = dx0 + dl;
+            const float dx2 = layout.finalRect.right - dr;
+            const float dx3 = layout.finalRect.right;
+            const float dy0 = layout.finalRect.top;
+            const float dy1 = dy0 + dt;
+            const float dy2 = layout.finalRect.bottom - db;
+            const float dy3 = layout.finalRect.bottom;
+
+            auto drawPatch = [&](float dL, float dT, float dR, float dB, float sL, float sT, float sR, float sB)
+            {
+                if (dR <= dL || dB <= dT || sR <= sL || sB <= sT)
+                    return;
+                const D2D1_RECT_F dst = D2D1::RectF(dL, dT, dR, dB);
+                const D2D1_RECT_F src = D2D1::RectF(sL, sT, sR, sB);
+                context->DrawBitmap(m_D2DBitmap.Get(), &dst, opacity, interp, &src);
+            };
+
+            // Top row
+            drawPatch(dx0, dy0, dx1, dy1, sx0, sy0, sx1, sy1);
+            drawPatch(dx1, dy0, dx2, dy1, sx1, sy0, sx2, sy1);
+            drawPatch(dx2, dy0, dx3, dy1, sx2, sy0, sx3, sy1);
+            // Middle row
+            drawPatch(dx0, dy1, dx1, dy2, sx0, sy1, sx1, sy2);
+            drawPatch(dx1, dy1, dx2, dy2, sx1, sy1, sx2, sy2);
+            drawPatch(dx2, dy1, dx3, dy2, sx2, sy1, sx3, sy2);
+            // Bottom row
+            drawPatch(dx0, dy2, dx1, dy3, sx0, sy2, sx1, sy3);
+            drawPatch(dx1, dy2, dx2, dy3, sx1, sy2, sx2, sy3);
+            drawPatch(dx2, dy2, dx3, dy3, sx2, sy2, sx3, sy3);
+        }
+        else if (pFinalImage.Get() == (ID2D1Image *)m_D2DBitmap.Get())
         {
             context->DrawBitmap(m_D2DBitmap.Get(), &layout.finalRect, opacity, interp, &layout.srcRect);
         }

@@ -84,6 +84,8 @@ public:
     void SetUseExifOrientation(bool enabled);
     void SetImageCrop(float x, float y, float w, float h, ImageCropOrigin origin);
     void ClearImageCrop() { m_HasImageCrop = false; }
+    void SetScaleMargins(float left, float top, float right, float bottom);
+    void ClearScaleMargins() { m_HasScaleMargins = false; }
 
     const std::wstring &GetImagePath() const { return m_ImagePath; }
     ImageAspectRatio GetPreserveAspectRatio() const { return m_PreserveAspectRatio; }
@@ -101,6 +103,11 @@ public:
     float GetImageCropW() const { return m_ImageCropW; }
     float GetImageCropH() const { return m_ImageCropH; }
     ImageCropOrigin GetImageCropOrigin() const { return m_ImageCropOrigin; }
+    bool HasScaleMargins() const { return m_HasScaleMargins; }
+    float GetScaleMarginLeft() const { return m_ScaleMarginLeft; }
+    float GetScaleMarginTop() const { return m_ScaleMarginTop; }
+    float GetScaleMarginRight() const { return m_ScaleMarginRight; }
+    float GetScaleMarginBottom() const { return m_ScaleMarginBottom; }
     bool HasColorMatrix() const { return m_HasColorMatrix; }
     const float *GetColorMatrix() const { return (const float *)m_ColorMatrix; }
 
@@ -135,6 +142,11 @@ private:
     float m_ImageCropW = 0.0f;
     float m_ImageCropH = 0.0f;
     ImageCropOrigin m_ImageCropOrigin = IMAGE_CROP_ORIGIN_TOP_LEFT;
+    bool m_HasScaleMargins = false;
+    float m_ScaleMarginLeft = 0.0f;
+    float m_ScaleMarginTop = 0.0f;
+    float m_ScaleMarginRight = 0.0f;
+    float m_ScaleMarginBottom = 0.0f;
 
     // Cache management
     ID2D1RenderTarget *m_pLastTarget = nullptr;

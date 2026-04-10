@@ -599,4 +599,26 @@ ui.addText({
     fontColor: "rgb(255,255,255)"
 });
 
+// Test 28: ScaleMargins [Left, Top, Right, Bottom]
+// Active when Tile=false and PreserveAspectRatio=stretch
+ui.addImage({
+    id: "scale-margins",
+    path: "../assets/pic.png",
+    x: 20,
+    y: 1040,
+    width: 220,
+    height: 50,
+    preserveAspectRatio: "stretch",
+    tile: false,
+    scaleMargins: [20, 20, 20, 20]
+});
+ui.addText({
+    id: "label-scale-margins",
+    text: "ScaleMargins:\n[20,20,20,20]",
+    x: 20,
+    y: 1068,
+    fontSize: 12,
+    fontColor: "rgb(255,255,255)"
+});
+
 ui.endUpdate();
