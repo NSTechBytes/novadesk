@@ -6,30 +6,17 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "ImageElement.h"
-#include "Direct2DHelper.h"
-#include <d2d1effects.h>
 #include <algorithm>
-#include "../shared/Logging.h"
 
 ImageElement::ImageElement(const std::wstring &id, int x, int y, int w, int h,
                            const std::wstring &path)
-    : Element(ELEMENT_IMAGE, id, x, y, w, h),
-      m_ImagePath(path)
+    : Element(ELEMENT_IMAGE, id, x, y, w, h)
 {
+    m_GeneralImage.SetPath(path);
 }
 
 ImageElement::~ImageElement()
 {
-}
-
-void ImageElement::SetUseExifOrientation(bool enabled)
-{
-    if (m_UseExifOrientation == enabled)
-        return;
-
-    m_UseExifOrientation = enabled;
-    m_D2DBitmap.Reset();
-    m_pWICBitmap.Reset();
 }
 
 void ImageElement::SetScaleMargins(float left, float top, float right, float bottom)
@@ -52,69 +39,9 @@ void ImageElement::SetScaleMargins(float left, float top, float right, float bot
     m_ScaleMarginBottom = bottom;
 }
 
-void ImageElement::SetImageCrop(float x, float y, float w, float h, ImageCropOrigin origin)
-{
-    if (w <= 0.0f || h <= 0.0f)
-    {
-        m_HasImageCrop = false;
-        return;
-    }
-
-    m_HasImageCrop = true;
-    m_ImageCropX = x;
-    m_ImageCropY = y;
-    m_ImageCropW = w;
-    m_ImageCropH = h;
-    m_ImageCropOrigin = origin;
-}
-
 bool ImageElement::ResolveImageCropRect(float imageWidth, float imageHeight, D2D1_RECT_F &rect) const
 {
-    if (!m_HasImageCrop || imageWidth <= 0.0f || imageHeight <= 0.0f || m_ImageCropW <= 0.0f || m_ImageCropH <= 0.0f)
-    {
-        return false;
-    }
-
-    float startX = m_ImageCropX;
-    float startY = m_ImageCropY;
-
-    switch (m_ImageCropOrigin)
-    {
-    case IMAGE_CROP_ORIGIN_TOP_RIGHT:
-        startX = imageWidth + m_ImageCropX;
-        break;
-    case IMAGE_CROP_ORIGIN_BOTTOM_RIGHT:
-        startX = imageWidth + m_ImageCropX;
-        startY = imageHeight + m_ImageCropY;
-        break;
-    case IMAGE_CROP_ORIGIN_BOTTOM_LEFT:
-        startY = imageHeight + m_ImageCropY;
-        break;
-    case IMAGE_CROP_ORIGIN_CENTER:
-        startX = (imageWidth * 0.5f) + m_ImageCropX;
-        startY = (imageHeight * 0.5f) + m_ImageCropY;
-        break;
-    default:
-        break;
-    }
-
-    float left = startX;
-    float top = startY;
-    float right = startX + m_ImageCropW;
-    float bottom = startY + m_ImageCropH;
-
-    left = (std::max)(0.0f, left);
-    top = (std::max)(0.0f, top);
-    right = (std::min)(imageWidth, right);
-    bottom = (std::min)(imageHeight, bottom);
-
-    if (right <= left || bottom <= top)
-    {
-        return false;
-    }
-
-    rect = D2D1::RectF(left, top, right, bottom);
-    return true;
+    return m_GeneralImage.ResolveImageCropRect(imageWidth, imageHeight, rect);
 }
 
 bool ImageElement::ComputeImageLayout(float imageWidth, float imageHeight, ImageLayout &layout)
@@ -217,56 +144,14 @@ bool ImageElement::MapPointToImagePixel(float targetX, float targetY, UINT image
     pixelX = layout.srcRect.left + ((targetX - layout.finalRect.left) / finalW) * srcW;
     pixelY = layout.srcRect.top + ((targetY - layout.finalRect.top) / finalH) * srcH;
 
-    // Match render-time flip so alpha hit testing uses the visible image pixel.
-    switch (m_ImageFlip)
-    {
-    case IMAGE_FLIP_HORIZONTAL:
-        pixelX = layout.srcRect.right - (pixelX - layout.srcRect.left) - 0.001f;
-        break;
-    case IMAGE_FLIP_VERTICAL:
-        pixelY = layout.srcRect.bottom - (pixelY - layout.srcRect.top) - 0.001f;
-        break;
-    case IMAGE_FLIP_BOTH:
-        pixelX = layout.srcRect.right - (pixelX - layout.srcRect.left) - 0.001f;
-        pixelY = layout.srcRect.bottom - (pixelY - layout.srcRect.top) - 0.001f;
-        break;
-    default:
-        break;
-    }
+    m_GeneralImage.ApplyFlipToPixel(pixelX, pixelY, layout.srcRect);
 
     return pixelX >= 0.0f && pixelX < imageWidth && pixelY >= 0.0f && pixelY < imageHeight;
 }
 
-void ImageElement::EnsureBitmap(ID2D1DeviceContext *context)
-{
-    if (m_pLastTarget != (ID2D1RenderTarget *)context)
-    {
-        m_D2DBitmap.Reset();
-        // WIC bitmap is CPU side, doesn't strictly need reset on target change,
-        // but we'll re-verify it if we are reloading anyway.
-        m_pLastTarget = (ID2D1RenderTarget *)context;
-    }
-
-    if (!m_D2DBitmap)
-    {
-        const bool ok = Direct2D::LoadBitmapFromFile(context, m_ImagePath, m_D2DBitmap.ReleaseAndGetAddressOf(), m_pWICBitmap.ReleaseAndGetAddressOf(), m_UseExifOrientation);
-        if (!ok)
-        {
-            Logging::Log(LogLevel::Error, L"[novadesk] failed to load image bitmap: %s", m_ImagePath.c_str());
-        }
-    }
-}
-
 void ImageElement::UpdateImage(const std::wstring &path)
 {
-    m_ImagePath = path;
-    m_D2DBitmap.Reset();
-    m_pWICBitmap.Reset();
-    const bool ok = Direct2D::LoadWICBitmapFromFile(m_ImagePath, m_pWICBitmap.ReleaseAndGetAddressOf(), m_UseExifOrientation);
-    if (!ok)
-    {
-        Logging::Log(LogLevel::Error, L"[novadesk] failed to preload WIC image: %s", m_ImagePath.c_str());
-    }
+    m_GeneralImage.SetPath(path);
 }
 
 void ImageElement::Render(ID2D1DeviceContext *context)
@@ -283,14 +168,15 @@ void ImageElement::Render(ID2D1DeviceContext *context)
     RenderBackground(context);
     RenderBevel(context);
 
-    EnsureBitmap(context);
-    if (!m_D2DBitmap)
+    m_GeneralImage.EnsureBitmap(context);
+    ID2D1Bitmap *bitmap = m_GeneralImage.GetBitmap();
+    if (!bitmap)
     {
         RestoreRenderTransform(context, originalTransform);
         return;
     }
 
-    D2D1_SIZE_F imgSize = m_D2DBitmap->GetSize();
+    D2D1_SIZE_F imgSize = bitmap->GetSize();
     ImageLayout layout;
     if (!ComputeImageLayout(imgSize.width, imgSize.height, layout))
     {
@@ -300,95 +186,22 @@ void ImageElement::Render(ID2D1DeviceContext *context)
 
     D2D1_MATRIX_3X2_F imageBaseTransform;
     bool hasImageFlipTransform = false;
-    if (m_ImageFlip != IMAGE_FLIP_NONE)
+    D2D1_MATRIX_3X2_F flipTransform;
+    if (m_GeneralImage.BuildFlipTransform(layout.finalRect, flipTransform))
     {
-        float scaleX = 1.0f;
-        float scaleY = 1.0f;
-        if (m_ImageFlip == IMAGE_FLIP_HORIZONTAL || m_ImageFlip == IMAGE_FLIP_BOTH)
-            scaleX = -1.0f;
-        if (m_ImageFlip == IMAGE_FLIP_VERTICAL || m_ImageFlip == IMAGE_FLIP_BOTH)
-            scaleY = -1.0f;
-
-        const float centerX = (layout.finalRect.left + layout.finalRect.right) * 0.5f;
-        const float centerY = (layout.finalRect.top + layout.finalRect.bottom) * 0.5f;
-        const D2D1_MATRIX_3X2_F flipTransform =
-            D2D1::Matrix3x2F::Translation(-centerX, -centerY) *
-            D2D1::Matrix3x2F::Scale(scaleX, scaleY) *
-            D2D1::Matrix3x2F::Translation(centerX, centerY);
-
         context->GetTransform(&imageBaseTransform);
         context->SetTransform(flipTransform * imageBaseTransform);
         hasImageFlipTransform = true;
     }
 
-    // Rotation already applied above
-
-    float opacity = m_ImageAlpha / 255.0f;
+    float opacity = m_GeneralImage.GetImageAlpha() / 255.0f;
     D2D1_BITMAP_INTERPOLATION_MODE interp = m_AntiAlias ? D2D1_BITMAP_INTERPOLATION_MODE_LINEAR : D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR;
 
-    Microsoft::WRL::ComPtr<ID2D1Image> pFinalImage = m_D2DBitmap.Get();
-
-    if (m_Grayscale || m_HasImageTint || m_HasColorMatrix || m_ImageAlpha < 255)
+    Microsoft::WRL::ComPtr<ID2D1Image> pFinalImage;
+    if (!m_GeneralImage.BuildProcessedImage(context, pFinalImage))
     {
-        Microsoft::WRL::ComPtr<ID2D1Image> pCurrentInput = (ID2D1Image *)m_D2DBitmap.Get();
-
-        // Stage 1: Greyscale
-        if (m_Grayscale)
-        {
-            Microsoft::WRL::ComPtr<ID2D1Effect> pGreyscaleEffect;
-            if (SUCCEEDED(context->CreateEffect(CLSID_D2D1ColorMatrix, pGreyscaleEffect.GetAddressOf())))
-            {
-                D2D1_MATRIX_5X4_F matrix = D2D1::Matrix5x4F(
-                    0.299f, 0.299f, 0.299f, 0.0f,
-                    0.587f, 0.587f, 0.587f, 0.0f,
-                    0.114f, 0.114f, 0.114f, 0.0f,
-                    0.0f, 0.0f, 0.0f, 1.0f,
-                    0.0f, 0.0f, 0.0f, 0.0f);
-                pGreyscaleEffect->SetInput(0, pCurrentInput.Get());
-                pGreyscaleEffect->SetValue(D2D1_COLORMATRIX_PROP_COLOR_MATRIX, matrix);
-                pGreyscaleEffect->GetOutput(&pCurrentInput);
-            }
-        }
-
-        // Stage 2: ColorMatrix, Tint, or ImageAlpha
-        // We always run this stage if any of these are set, or if we need to apply ImageAlpha
-        if (m_HasColorMatrix || m_HasImageTint || m_ImageAlpha < 255)
-        {
-            Microsoft::WRL::ComPtr<ID2D1Effect> pColorMatrixEffect;
-            if (SUCCEEDED(context->CreateEffect(CLSID_D2D1ColorMatrix, pColorMatrixEffect.GetAddressOf())))
-            {
-                D2D1_MATRIX_5X4_F matrix = D2D1::Matrix5x4F(
-                    1.0f, 0.0f, 0.0f, 0.0f,
-                    0.0f, 1.0f, 0.0f, 0.0f,
-                    0.0f, 0.0f, 1.0f, 0.0f,
-                    0.0f, 0.0f, 0.0f, 1.0f,
-                    0.0f, 0.0f, 0.0f, 0.0f);
-
-                if (m_HasColorMatrix)
-                {
-                    memcpy(&matrix, m_ColorMatrix, sizeof(float) * 20);
-                }
-                else
-                {
-                    if (m_HasImageTint)
-                    {
-                        matrix.m[0][0] = GetRValue(m_ImageTint) / 255.0f;
-                        matrix.m[1][1] = GetGValue(m_ImageTint) / 255.0f;
-                        matrix.m[2][2] = GetBValue(m_ImageTint) / 255.0f;
-                        matrix.m[3][3] = m_ImageTintAlpha / 255.0f;
-                    }
-
-                    // Multiply by ImageAlpha for Tint or Identity
-                    matrix.m[3][3] *= (m_ImageAlpha / 255.0f);
-                }
-
-                pColorMatrixEffect->SetInput(0, pCurrentInput.Get());
-                pColorMatrixEffect->SetValue(D2D1_COLORMATRIX_PROP_COLOR_MATRIX, matrix);
-                pColorMatrixEffect->GetOutput(&pCurrentInput);
-            }
-        }
-
-        pFinalImage = pCurrentInput;
+        RestoreRenderTransform(context, originalTransform);
+        return;
     }
 
     if (m_Tile)
@@ -413,7 +226,7 @@ void ImageElement::Render(ID2D1DeviceContext *context)
             m_HasScaleMargins &&
             !m_Tile &&
             m_PreserveAspectRatio == IMAGE_ASPECT_STRETCH &&
-            pFinalImage.Get() == (ID2D1Image *)m_D2DBitmap.Get();
+            pFinalImage.Get() == (ID2D1Image *)bitmap;
 
         if (useScaleMargins)
         {
@@ -481,7 +294,7 @@ void ImageElement::Render(ID2D1DeviceContext *context)
                     return;
                 const D2D1_RECT_F dst = D2D1::RectF(dL, dT, dR, dB);
                 const D2D1_RECT_F src = D2D1::RectF(sL, sT, sR, sB);
-                context->DrawBitmap(m_D2DBitmap.Get(), &dst, opacity, interp, &src);
+                context->DrawBitmap(bitmap, &dst, opacity, interp, &src);
             };
 
             // Top row
@@ -497,9 +310,9 @@ void ImageElement::Render(ID2D1DeviceContext *context)
             drawPatch(dx1, dy2, dx2, dy3, sx1, sy2, sx2, sy3);
             drawPatch(dx2, dy2, dx3, dy3, sx2, sy2, sx3, sy3);
         }
-        else if (pFinalImage.Get() == (ID2D1Image *)m_D2DBitmap.Get())
+        else if (pFinalImage.Get() == (ID2D1Image *)bitmap)
         {
-            context->DrawBitmap(m_D2DBitmap.Get(), &layout.finalRect, opacity, interp, &layout.srcRect);
+            context->DrawBitmap(bitmap, &layout.finalRect, opacity, interp, &layout.srcRect);
         }
         else
         {
@@ -534,54 +347,12 @@ void ImageElement::Render(ID2D1DeviceContext *context)
 
 int ImageElement::GetAutoWidth()
 {
-    if (m_pWICBitmap)
-    {
-        UINT w = 0, h = 0;
-        m_pWICBitmap->GetSize(&w, &h);
-        float autoW = (float)w;
-        D2D1_RECT_F cropRect;
-        if (ResolveImageCropRect((float)w, (float)h, cropRect))
-        {
-            autoW = cropRect.right - cropRect.left;
-        }
-        return (int)autoW + m_PaddingLeft + m_PaddingRight;
-    }
-    if (!m_D2DBitmap)
-        return 0;
-    D2D1_SIZE_F size = m_D2DBitmap->GetSize();
-    float autoW = size.width;
-    D2D1_RECT_F cropRect;
-    if (ResolveImageCropRect(size.width, size.height, cropRect))
-    {
-        autoW = cropRect.right - cropRect.left;
-    }
-    return (int)autoW + m_PaddingLeft + m_PaddingRight;
+    return m_GeneralImage.GetAutoWidth() + m_PaddingLeft + m_PaddingRight;
 }
 
 int ImageElement::GetAutoHeight()
 {
-    if (m_pWICBitmap)
-    {
-        UINT w = 0, h = 0;
-        m_pWICBitmap->GetSize(&w, &h);
-        float autoH = (float)h;
-        D2D1_RECT_F cropRect;
-        if (ResolveImageCropRect((float)w, (float)h, cropRect))
-        {
-            autoH = cropRect.bottom - cropRect.top;
-        }
-        return (int)autoH + m_PaddingTop + m_PaddingBottom;
-    }
-    if (!m_D2DBitmap)
-        return 0;
-    D2D1_SIZE_F size = m_D2DBitmap->GetSize();
-    float autoH = size.height;
-    D2D1_RECT_F cropRect;
-    if (ResolveImageCropRect(size.width, size.height, cropRect))
-    {
-        autoH = cropRect.bottom - cropRect.top;
-    }
-    return (int)autoH + m_PaddingTop + m_PaddingBottom;
+    return m_GeneralImage.GetAutoHeight() + m_PaddingTop + m_PaddingBottom;
 }
 
 bool ImageElement::HitTest(int x, int y)
@@ -623,11 +394,12 @@ bool ImageElement::HitTest(int x, int y)
 
     if (m_HasSolidColor && m_SolidAlpha > 0)
         return true;
-    if (!m_pWICBitmap)
+    IWICBitmap *wic = m_GeneralImage.GetWICBitmap();
+    if (!wic)
         return false;
 
     UINT imgW, imgH;
-    m_pWICBitmap->GetSize(&imgW, &imgH);
+    wic->GetSize(&imgW, &imgH);
     if (imgW == 0 || imgH == 0)
         return false;
 
@@ -639,7 +411,7 @@ bool ImageElement::HitTest(int x, int y)
     // Get pixel alpha
     WICRect rect = {(INT)targetPixelX, (INT)targetPixelY, 1, 1};
     BYTE pixel[4]; // BGRA
-    HRESULT hr = m_pWICBitmap->CopyPixels(&rect, 4, 4, pixel);
+    HRESULT hr = wic->CopyPixels(&rect, 4, 4, pixel);
     if (FAILED(hr))
         return false;
 
