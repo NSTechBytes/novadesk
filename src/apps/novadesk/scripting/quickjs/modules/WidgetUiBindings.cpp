@@ -65,6 +65,103 @@ namespace novadesk::scripting::quickjs
             return JS_ThrowTypeError(ctx, "%s: %s", method, usage);
         }
 
+        JSValue GetGeneralImagePropertyValue(JSContext *ctx, Element *element, const std::string &prop)
+        {
+            if (prop == "grayscale")
+            {
+                bool val = false;
+                if (auto *img = dynamic_cast<ImageElement *>(element)) val = img->IsGrayscale();
+                else if (auto *btn = dynamic_cast<ButtonElement *>(element)) val = btn->IsGrayscale();
+                return JS_NewBool(ctx, val ? 1 : 0);
+            }
+            if (prop == "useExifOrientation")
+            {
+                bool val = false;
+                if (auto *img = dynamic_cast<ImageElement *>(element)) val = img->GetUseExifOrientation();
+                else if (auto *btn = dynamic_cast<ButtonElement *>(element)) val = btn->GetUseExifOrientation();
+                return JS_NewBool(ctx, val ? 1 : 0);
+            }
+            if (prop == "imageAlpha")
+            {
+                BYTE val = 255;
+                if (auto *img = dynamic_cast<ImageElement *>(element)) val = img->GetImageAlpha();
+                else if (auto *btn = dynamic_cast<ButtonElement *>(element)) val = btn->GetImageAlpha();
+                return JS_NewInt32(ctx, static_cast<int>(val));
+            }
+            if (prop == "imageTint")
+            {
+                bool hasTint = false;
+                COLORREF color = 0;
+                BYTE alpha = 255;
+                if (auto *img = dynamic_cast<ImageElement *>(element)) {
+                    hasTint = img->HasImageTint();
+                    if (hasTint) { color = img->GetImageTint(); alpha = img->GetImageTintAlpha(); }
+                } else if (auto *btn = dynamic_cast<ButtonElement *>(element)) {
+                    hasTint = btn->HasImageTint();
+                    if (hasTint) { color = btn->GetImageTint(); alpha = btn->GetImageTintAlpha(); }
+                }
+                if (hasTint) {
+                    const std::wstring c = ColorUtil::ToRGBAString(color, alpha);
+                    return JS_NewString(ctx, Utils::ToString(c).c_str());
+                }
+            }
+            if (prop == "imageFlip")
+            {
+                ImageFlipMode flip = IMAGE_FLIP_NONE;
+                if (auto *img = dynamic_cast<ImageElement *>(element)) flip = img->GetImageFlip();
+                else if (auto *btn = dynamic_cast<ButtonElement *>(element)) flip = btn->GetImageFlip();
+                
+                const char *flipStr = "none";
+                switch (flip) {
+                case IMAGE_FLIP_HORIZONTAL: flipStr = "horizontal"; break;
+                case IMAGE_FLIP_VERTICAL: flipStr = "vertical"; break;
+                case IMAGE_FLIP_BOTH: flipStr = "both"; break;
+                default: break;
+                }
+                return JS_NewString(ctx, flipStr);
+            }
+            if (prop == "imageCrop")
+            {
+                bool hasCrop = false;
+                float x = 0, y = 0, w = 0, h = 0;
+                ImageCropOrigin origin = IMAGE_CROP_ORIGIN_TOP_LEFT;
+                if (auto *img = dynamic_cast<ImageElement *>(element)) {
+                    hasCrop = img->HasImageCrop();
+                    if (hasCrop) { x = img->GetImageCropX(); y = img->GetImageCropY(); w = img->GetImageCropW(); h = img->GetImageCropH(); origin = img->GetImageCropOrigin(); }
+                } else if (auto *btn = dynamic_cast<ButtonElement *>(element)) {
+                    hasCrop = btn->HasImageCrop();
+                    if (hasCrop) { x = btn->GetImageCropX(); y = btn->GetImageCropY(); w = btn->GetImageCropW(); h = btn->GetImageCropH(); origin = btn->GetImageCropOrigin(); }
+                }
+                if (hasCrop) {
+                    JSValue arr = JS_NewArray(ctx);
+                    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat64(ctx, x));
+                    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat64(ctx, y));
+                    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat64(ctx, w));
+                    JS_SetPropertyUint32(ctx, arr, 3, JS_NewFloat64(ctx, h));
+                    JS_SetPropertyUint32(ctx, arr, 4, JS_NewInt32(ctx, (int)origin));
+                    return arr;
+                }
+            }
+            if (prop == "colorMatrix")
+            {
+                bool hasMatrix = false;
+                const float *m = nullptr;
+                if (auto *img = dynamic_cast<ImageElement *>(element)) {
+                    hasMatrix = img->HasColorMatrix();
+                    if (hasMatrix) m = img->GetColorMatrix();
+                } else if (auto *btn = dynamic_cast<ButtonElement *>(element)) {
+                    hasMatrix = btn->HasColorMatrix();
+                    if (hasMatrix) m = btn->GetColorMatrix();
+                }
+                if (hasMatrix && m) {
+                    JSValue arr = JS_NewArray(ctx);
+                    for (uint32_t i = 0; i < 20; ++i) JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, m[i]));
+                    return arr;
+                }
+            }
+            return JS_UNDEFINED;
+        }
+
         std::wstring GetWidgetScriptBaseDir(Widget *widget)
         {
             if (!widget)
@@ -88,6 +185,19 @@ namespace novadesk::scripting::quickjs
             PropertyParser::ImageOptions options;
             PropertyParser::ParseImageOptions(ctx, argv[0], options, GetWidgetScriptBaseDir(widget));
             widget->AddImage(options);
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsWidgetAddButton(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_EXCEPTION;
+            if (argc < 1 || !JS_IsObject(argv[0]))
+                return ThrowTypeError(ctx, "addButton", "expected options object");
+            PropertyParser::ButtonOptions options;
+            PropertyParser::ParseButtonOptions(ctx, argv[0], options, GetWidgetScriptBaseDir(widget));
+            widget->AddButton(options);
             return JS_UNDEFINED;
         }
 
@@ -257,6 +367,13 @@ namespace novadesk::scripting::quickjs
                 PropertyParser::PreFillImageOptions(options, image);
                 PropertyParser::ParseImageOptions(ctx, argv[1], options, baseDir);
                 PropertyParser::ApplyImageOptions(image, options);
+            }
+            else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+            {
+                PropertyParser::ButtonOptions options;
+                PropertyParser::PreFillButtonOptions(options, btn);
+                PropertyParser::ParseButtonOptions(ctx, argv[1], options, baseDir);
+                PropertyParser::ApplyButtonOptions(btn, options);
             }
             else if (auto *text = dynamic_cast<TextElement *>(element))
             {
@@ -567,39 +684,6 @@ namespace novadesk::scripting::quickjs
                     }
                     return JS_NewString(ctx, aspect);
                 }
-                if (prop == "imageFlip")
-                {
-                    const char *flip = "none";
-                    switch (img->GetImageFlip())
-                    {
-                    case IMAGE_FLIP_HORIZONTAL:
-                        flip = "horizontal";
-                        break;
-                    case IMAGE_FLIP_VERTICAL:
-                        flip = "vertical";
-                        break;
-                    case IMAGE_FLIP_BOTH:
-                        flip = "both";
-                        break;
-                    default:
-                        break;
-                    }
-                    return JS_NewString(ctx, flip);
-                }
-                if (prop == "imageCrop")
-                {
-                    if (!img->HasImageCrop())
-                    {
-                        return JS_UNDEFINED;
-                    }
-                    JSValue arr = JS_NewArray(ctx);
-                    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat64(ctx, img->GetImageCropX()));
-                    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat64(ctx, img->GetImageCropY()));
-                    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat64(ctx, img->GetImageCropW()));
-                    JS_SetPropertyUint32(ctx, arr, 3, JS_NewFloat64(ctx, img->GetImageCropH()));
-                    JS_SetPropertyUint32(ctx, arr, 4, JS_NewInt32(ctx, (int)img->GetImageCropOrigin()));
-                    return arr;
-                }
                 if (prop == "scaleMargins")
                 {
                     if (!img->HasScaleMargins())
@@ -613,19 +697,18 @@ namespace novadesk::scripting::quickjs
                     JS_SetPropertyUint32(ctx, arr, 3, JS_NewFloat64(ctx, img->GetScaleMarginBottom()));
                     return arr;
                 }
-                if (prop == "grayscale")
-                    return JS_NewBool(ctx, img->IsGrayscale() ? 1 : 0);
                 if (prop == "tile")
                     return JS_NewBool(ctx, img->IsTile() ? 1 : 0);
-                if (prop == "useExifOrientation")
-                    return JS_NewBool(ctx, img->GetUseExifOrientation() ? 1 : 0);
-                if (prop == "imageAlpha")
-                    return JS_NewInt32(ctx, static_cast<int>(img->GetImageAlpha()));
-                if (prop == "imageTint" && img->HasImageTint())
-                {
-                    const std::wstring c = ColorUtil::ToRGBAString(img->GetImageTint(), img->GetImageTintAlpha());
-                    return JS_NewString(ctx, Utils::ToString(c).c_str());
-                }
+                
+                return GetGeneralImagePropertyValue(ctx, element, prop);
+            }
+            else if (element->GetType() == ELEMENT_BUTTON)
+            {
+                auto *btn = static_cast<ButtonElement *>(element);
+                if (prop == "buttonImageName")
+                    return JS_NewString(ctx, Utils::ToString(btn->GetImagePath()).c_str());
+                
+                return GetGeneralImagePropertyValue(ctx, element, prop);
             }
             else if (element->GetType() == ELEMENT_BAR)
             {
@@ -956,6 +1039,7 @@ namespace novadesk::scripting::quickjs
 
         const JSCFunctionListEntry kWidgetProtoFuncs[] = {
             JS_CFUNC_DEF("addImage", 1, JsWidgetAddImage),
+            JS_CFUNC_DEF("addButton", 1, JsWidgetAddButton),
             JS_CFUNC_DEF("addText", 1, JsWidgetAddText),
             JS_CFUNC_DEF("addBar", 1, JsWidgetAddBar),
             JS_CFUNC_DEF("addLine", 1, JsWidgetAddLine),

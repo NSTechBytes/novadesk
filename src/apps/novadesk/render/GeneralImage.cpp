@@ -320,3 +320,28 @@ int GeneralImage::GetAutoHeight() const
     }
     return 0;
 }
+
+BYTE GeneralImage::GetPixelAlpha(int x, int y) const
+{
+    if (!m_pWICBitmap)
+        return 0;
+
+    UINT width = 0, height = 0;
+    m_pWICBitmap->GetSize(&width, &height);
+    if (x < 0 || x >= (int)width || y < 0 || y >= (int)height)
+        return 0;
+
+    Microsoft::WRL::ComPtr<IWICBitmapLock> pLock;
+    WICRect rcLock = { x, y, 1, 1 };
+    if (SUCCEEDED(m_pWICBitmap->Lock(&rcLock, WICBitmapLockRead, pLock.GetAddressOf())))
+    {
+        UINT cbBufferSize = 0;
+        BYTE* pv = nullptr;
+        if (SUCCEEDED(pLock->GetDataPointer(&cbBufferSize, &pv)) && cbBufferSize >= 4)
+        {
+            // 32bppPBGRA format used in Direct2DHelper
+            return pv[3];
+        }
+    }
+    return 0;
+}

@@ -45,6 +45,8 @@ public:
     ID2D1Bitmap *GetBitmap() const { return m_D2DBitmap.Get(); }
     IWICBitmap *GetWICBitmap() const { return m_pWICBitmap.Get(); }
 
+    BYTE GetPixelAlpha(int x, int y) const;
+
     void SetImageTint(COLORREF color, BYTE alpha);
     bool HasImageTint() const { return m_HasImageTint; }
     COLORREF GetImageTint() const { return m_ImageTint; }

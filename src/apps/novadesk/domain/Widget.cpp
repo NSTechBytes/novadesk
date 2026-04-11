@@ -30,6 +30,7 @@
 #include "ShapeElement.h"
 #include "ColorUtil.h"
 #include "PathUtils.h"
+#include "ButtonElement.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 
 #define WIDGET_CLASS_NAME L"NovadeskWidget"
@@ -1025,6 +1026,32 @@ void Widget::AddImage(const PropertyParser::ImageOptions &options)
 }
 
 /*
+** Add a button content item to the widget.
+*/
+void Widget::AddButton(const PropertyParser::ButtonOptions &options)
+{
+    if (options.id.empty())
+    {
+        Logging::Log(LogLevel::Error, L"AddButton failed: Element ID cannot be empty.");
+        return;
+    }
+
+    if (FindElementById(options.id))
+    {
+        RemoveElements(options.id);
+    }
+
+    ButtonElement *element = new ButtonElement(options.id, options.x, options.y, options.buttonImageName);
+
+    PropertyParser::ApplyButtonOptions(element, options);
+
+    m_Elements.push_back(element);
+    UpdateContainerForElement(element, options.containerId);
+
+    Redraw();
+}
+
+/*
 ** Add a text content item to the widget.
 ** Text will be rendered with the specified font and styling.
 */
@@ -1704,6 +1731,14 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, duk_context *ctx)
             }
         }
     }
+    else if (element->GetType() == ELEMENT_BUTTON)
+    {
+        PropertyParser::ButtonOptions options;
+        PropertyParser::PreFillButtonOptions(options, static_cast<ButtonElement *>(element));
+        PropertyParser::ParseButtonOptions(ctx, options);
+        PropertyParser::ApplyButtonOptions(static_cast<ButtonElement *>(element), options);
+        UpdateContainerForElement(element, options.containerId);
+    }
 }
 
 void Widget::SetElementProperties(const std::wstring &id, duk_context *ctx)
@@ -2149,6 +2184,34 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         y = pt.y;
     }
 
+    bool needRedraw = false;
+    if (message == WM_MOUSEMOVE || message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || message == WM_MOUSELEAVE)
+    {
+        bool isDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+        if (message == WM_LBUTTONDOWN) isDown = true;
+        if (message == WM_LBUTTONUP) isDown = false;
+        
+        for (Element *el : m_Elements)
+        {
+            if (el && el->GetType() == ELEMENT_BUTTON)
+            {
+                ButtonElement* btn = static_cast<ButtonElement*>(el);
+                ButtonState newState = BUTTON_STATE_NORMAL;
+                
+                if (message != WM_MOUSELEAVE && btn->IsVisible() && btn->HitTest(x, y))
+                {
+                    newState = isDown ? BUTTON_STATE_CLICKED : BUTTON_STATE_HOVERED;
+                }
+                
+                if (btn->GetButtonState() != newState)
+                {
+                    btn->SetButtonState(newState);
+                    needRedraw = true;
+                }
+            }
+        }
+    }
+
     {
         JSEngine::MouseEventData widgetEventData;
         widgetEventData.clientX = x;
@@ -2555,6 +2618,13 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             JSEngine::CallEventCallback(actionId, this, &eventData);
             handled = true;
         }
+    }
+
+
+
+    if (needRedraw && !m_IsBatchUpdating)
+    {
+        Redraw();
     }
 
     return handled;

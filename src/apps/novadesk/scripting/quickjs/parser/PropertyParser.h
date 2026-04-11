@@ -14,7 +14,9 @@
 #include "../../../render/LineElement.h"
 #include "../../../render/RoundLineElement.h"
 #include "../../../render/ShapeElement.h"
+#include "../../../render/ShapeElement.h"
 #include "../../../render/TextElement.h"
+#include "../../../render/ButtonElement.h"
 
 struct duk_hthread;
 using duk_context = duk_hthread;
@@ -113,10 +115,8 @@ namespace PropertyParser
         bool tooltipBalloon = false;
     };
 
-    struct ImageOptions : public ElementOptions
+    struct GeneralImageOptions : public ElementOptions
     {
-        std::wstring path;
-        ImageAspectRatio preserveAspectRatio = IMAGE_ASPECT_STRETCH;
         ImageFlipMode imageFlip = IMAGE_FLIP_NONE;
         bool hasImageCrop = false;
         float imageCropX = 0.0f;
@@ -124,22 +124,32 @@ namespace PropertyParser
         float imageCropW = 0.0f;
         float imageCropH = 0.0f;
         ImageCropOrigin imageCropOrigin = IMAGE_CROP_ORIGIN_TOP_LEFT;
-        bool hasScaleMargins = false;
-        float scaleMarginLeft = 0.0f;
-        float scaleMarginTop = 0.0f;
-        float scaleMarginRight = 0.0f;
-        float scaleMarginBottom = 0.0f;
         bool useExifOrientation = false;
         BYTE imageAlpha = 255;
         bool grayscale = false;
-        bool tile = false;
-        bool hasTransformMatrix = false;
-        std::array<float, 6> transformMatrix{};
         bool hasColorMatrix = false;
         std::array<float, 20> colorMatrix{};
         bool hasImageTint = false;
         COLORREF imageTint = RGB(255, 255, 255);
         BYTE imageTintAlpha = 255;
+    };
+
+    struct ImageOptions : public GeneralImageOptions
+    {
+        std::wstring path;
+        ImageAspectRatio preserveAspectRatio = IMAGE_ASPECT_STRETCH;
+        bool hasScaleMargins = false;
+        float scaleMarginLeft = 0.0f;
+        float scaleMarginTop = 0.0f;
+        float scaleMarginRight = 0.0f;
+        float scaleMarginBottom = 0.0f;
+        bool tile = false;
+    };
+
+    struct ButtonOptions : public GeneralImageOptions
+    {
+        std::wstring buttonImageName;
+        int buttonActionCallbackId = -1;
     };
 
     struct TextOptions : public ElementOptions
@@ -265,6 +275,7 @@ namespace PropertyParser
     void ParseElementOptions(JSContext *ctx, JSValueConst obj, ElementOptions &options, const std::wstring &baseDir = L"");
     void ParseImageOptions(JSContext *ctx, JSValueConst obj, ImageOptions &options, const std::wstring &baseDir = L"");
     void ParseTextOptions(JSContext *ctx, JSValueConst obj, TextOptions &options, const std::wstring &baseDir = L"");
+    void ParseButtonOptions(JSContext *ctx, JSValueConst obj, ButtonOptions &options, const std::wstring &baseDir = L"");
     void ParseBarOptions(JSContext *ctx, JSValueConst obj, BarOptions &options, const std::wstring &baseDir = L"");
     void ParseLineOptions(JSContext *ctx, JSValueConst obj, LineOptions &options, const std::wstring &baseDir = L"");
     void ParseRoundLineOptions(JSContext *ctx, JSValueConst obj, RoundLineOptions &options, const std::wstring &baseDir = L"");
@@ -273,25 +284,34 @@ namespace PropertyParser
     void ApplyElementOptions(Element *element, const ElementOptions &options);
     void ApplyImageOptions(ImageElement *element, const ImageOptions &options);
     void ApplyTextOptions(TextElement *element, const TextOptions &options);
+    void ApplyButtonOptions(class ButtonElement *element, const ButtonOptions &options);
     void ApplyBarOptions(BarElement *element, const BarOptions &options);
     void ApplyLineOptions(LineElement *element, const LineOptions &options);
     void ApplyRoundLineOptions(RoundLineElement *element, const RoundLineOptions &options);
     void ApplyShapeOptions(ShapeElement *element, const ShapeOptions &options);
 
+    void PreFillElementOptions(ElementOptions &options, Element *element);
     void PreFillImageOptions(ImageOptions &options, ImageElement *element);
     void PreFillTextOptions(TextOptions &options, TextElement *element);
+    void PreFillButtonOptions(ButtonOptions &options, class ButtonElement *element);
     void PreFillBarOptions(BarOptions &options, BarElement *element);
     void PreFillLineOptions(LineOptions &options, LineElement *element);
     void PreFillRoundLineOptions(RoundLineOptions &options, RoundLineElement *element);
     void PreFillShapeOptions(ShapeOptions &options, ShapeElement *element);
 
+    void ParseGeneralImageOptions(JSContext *ctx, JSValueConst obj, GeneralImageOptions &options);
+    void ApplyGeneralImageOptions(GeneralImage *image, const GeneralImageOptions &options);
+    void PreFillGeneralImageOptions(GeneralImageOptions &options, GeneralImage *image);
+
     void ParseElementOptions(duk_context *ctx, ElementOptions &options);
+    void ParseGeneralImageOptions(duk_context *ctx, GeneralImageOptions &options);
     void ParseImageOptions(duk_context *ctx, ImageOptions &options);
     void ParseTextOptions(duk_context *ctx, TextOptions &options);
     void ParseBarOptions(duk_context *ctx, BarOptions &options);
     void ParseLineOptions(duk_context *ctx, LineOptions &options);
     void ParseRoundLineOptions(duk_context *ctx, RoundLineOptions &options);
     void ParseShapeOptions(duk_context *ctx, ShapeOptions &options);
+    void ParseButtonOptions(duk_context *ctx, ButtonOptions &options);
 } // namespace PropertyParser
 
 namespace novadesk::scripting::quickjs::parser

@@ -607,25 +607,8 @@ namespace PropertyParser
         GetBoolProp(ctx, obj, "tooltipBalloon", options.tooltipBalloon);
     }
 
-    void ParseImageOptions(JSContext *ctx, JSValueConst obj, ImageOptions &options, const std::wstring &baseDir)
+    void ParseGeneralImageOptions(JSContext *ctx, JSValueConst obj, GeneralImageOptions &options)
     {
-        ParseElementOptions(ctx, obj, options);
-        options.path = GetStringProp(ctx, obj, "path");
-        if (!options.path.empty())
-        {
-            options.path = PathUtils::ResolvePath(options.path, baseDir);
-            std::error_code ec;
-            const bool exists = std::filesystem::exists(std::filesystem::path(options.path), ec);
-        }
-
-        std::wstring aspect = GetStringProp(ctx, obj, "preserveAspectRatio");
-        if (aspect == L"preserve")
-            options.preserveAspectRatio = IMAGE_ASPECT_PRESERVE;
-        else if (aspect == L"crop")
-            options.preserveAspectRatio = IMAGE_ASPECT_CROP;
-        else if (aspect == L"stretch")
-            options.preserveAspectRatio = IMAGE_ASPECT_STRETCH;
-
         std::wstring imageFlip = GetStringProp(ctx, obj, "imageFlip");
         std::transform(imageFlip.begin(), imageFlip.end(), imageFlip.begin(), ::towlower);
         if (imageFlip == L"horizontal")
@@ -660,18 +643,7 @@ namespace PropertyParser
             }
         }
 
-        std::vector<float> scaleMargins;
-        if (GetFloatArrayProp(ctx, obj, "scaleMargins", scaleMargins, 4))
-        {
-            options.hasScaleMargins = true;
-            options.scaleMarginLeft = scaleMargins[0];
-            options.scaleMarginTop = scaleMargins[1];
-            options.scaleMarginRight = scaleMargins[2];
-            options.scaleMarginBottom = scaleMargins[3];
-        }
-
         GetBoolProp(ctx, obj, "grayscale", options.grayscale);
-        GetBoolProp(ctx, obj, "tile", options.tile);
         GetBoolProp(ctx, obj, "useExifOrientation", options.useExifOrientation);
         int alpha = 255;
         if (GetIntProp(ctx, obj, "imageAlpha", alpha))
@@ -693,6 +665,54 @@ namespace PropertyParser
                 options.hasColorMatrix = true;
             }
         }
+    }
+
+    void ParseImageOptions(JSContext *ctx, JSValueConst obj, ImageOptions &options, const std::wstring &baseDir)
+    {
+        ParseElementOptions(ctx, obj, options, baseDir);
+        ParseGeneralImageOptions(ctx, obj, options);
+
+        options.path = GetStringProp(ctx, obj, "path");
+        if (!options.path.empty())
+        {
+            options.path = PathUtils::ResolvePath(options.path, baseDir);
+            std::error_code ec;
+            const bool exists = std::filesystem::exists(std::filesystem::path(options.path), ec);
+        }
+
+        std::wstring aspect = GetStringProp(ctx, obj, "preserveAspectRatio");
+        if (aspect == L"preserve")
+            options.preserveAspectRatio = IMAGE_ASPECT_PRESERVE;
+        else if (aspect == L"crop")
+            options.preserveAspectRatio = IMAGE_ASPECT_CROP;
+        else if (aspect == L"stretch")
+            options.preserveAspectRatio = IMAGE_ASPECT_STRETCH;
+
+        std::vector<float> scaleMargins;
+        if (GetFloatArrayProp(ctx, obj, "scaleMargins", scaleMargins, 4))
+        {
+            options.hasScaleMargins = true;
+            options.scaleMarginLeft = scaleMargins[0];
+            options.scaleMarginTop = scaleMargins[1];
+            options.scaleMarginRight = scaleMargins[2];
+            options.scaleMarginBottom = scaleMargins[3];
+        }
+
+        GetBoolProp(ctx, obj, "tile", options.tile);
+    }
+
+    void ParseButtonOptions(JSContext *ctx, JSValueConst obj, ButtonOptions &options, const std::wstring &baseDir)
+    {
+        ParseElementOptions(ctx, obj, options, baseDir);
+        ParseGeneralImageOptions(ctx, obj, options);
+        
+        options.buttonImageName = GetStringProp(ctx, obj, "buttonImageName");
+        if (!options.buttonImageName.empty())
+        {
+            options.buttonImageName = PathUtils::ResolvePath(options.buttonImageName, baseDir);
+        }
+
+        GetEventCallbackProp(ctx, obj, "buttonAction", options.onLeftMouseUpCallbackId);
     }
 
     void ParseTextOptions(JSContext *ctx, JSValueConst obj, TextOptions &options, const std::wstring &baseDir)
@@ -1201,6 +1221,22 @@ namespace PropertyParser
         }
     }
 
+    void ApplyGeneralImageOptions(GeneralImage *image, const GeneralImageOptions &options)
+    {
+        if (!image)
+            return;
+        image->SetImageFlip(options.imageFlip);
+        if (options.hasImageCrop)
+            image->SetImageCrop(options.imageCropX, options.imageCropY, options.imageCropW, options.imageCropH, options.imageCropOrigin);
+        image->SetUseExifOrientation(options.useExifOrientation);
+        image->SetGrayscale(options.grayscale);
+        image->SetImageAlpha(options.imageAlpha);
+        if (options.hasImageTint)
+            image->SetImageTint(options.imageTint, options.imageTintAlpha);
+        if (options.hasColorMatrix)
+            image->SetColorMatrix(options.colorMatrix.data());
+    }
+
     void ApplyImageOptions(ImageElement *element, const ImageOptions &options)
     {
         if (!element)
@@ -1209,15 +1245,44 @@ namespace PropertyParser
         if (!options.path.empty())
             element->UpdateImage(options.path);
         element->SetPreserveAspectRatio(options.preserveAspectRatio);
+        if (options.hasScaleMargins)
+            element->SetScaleMargins(options.scaleMarginLeft, options.scaleMarginTop, options.scaleMarginRight, options.scaleMarginBottom);
+        element->SetTile(options.tile);
+        
+        // This takes advantage of the fact that ImageElement exposes these methods 
+        // which delegate to its internal GeneralImage.
+        // We could also do: ApplyGeneralImageOptions(&element->GetImage(), options); 
+        // but ImageElement methods are public and easy.
+        
         element->SetImageFlip(options.imageFlip);
         if (options.hasImageCrop)
             element->SetImageCrop(options.imageCropX, options.imageCropY, options.imageCropW, options.imageCropH, options.imageCropOrigin);
-        if (options.hasScaleMargins)
-            element->SetScaleMargins(options.scaleMarginLeft, options.scaleMarginTop, options.scaleMarginRight, options.scaleMarginBottom);
         element->SetUseExifOrientation(options.useExifOrientation);
         element->SetGrayscale(options.grayscale);
-        element->SetTile(options.tile);
         element->SetImageAlpha(options.imageAlpha);
+        if (options.hasImageTint)
+            element->SetImageTint(options.imageTint, options.imageTintAlpha);
+        if (options.hasColorMatrix)
+            element->SetColorMatrix(options.colorMatrix.data());
+    }
+
+    void ApplyButtonOptions(ButtonElement *element, const ButtonOptions &options)
+    {
+        if (!element)
+            return;
+        ApplyElementOptions(element, options);
+        if (!options.buttonImageName.empty())
+            element->UpdateImage(options.buttonImageName);
+
+        element->SetUseExifOrientation(options.useExifOrientation);
+        element->SetGrayscale(options.grayscale);
+        element->SetImageAlpha(options.imageAlpha);
+        element->SetImageFlip(options.imageFlip);
+        if (options.hasImageCrop)
+            element->SetImageCrop(options.imageCropX, options.imageCropY, options.imageCropW, options.imageCropH, options.imageCropOrigin);
+        else
+            element->ClearImageCrop();
+
         if (options.hasImageTint)
             element->SetImageTint(options.imageTint, options.imageTintAlpha);
         if (options.hasColorMatrix)
@@ -1351,7 +1416,7 @@ namespace PropertyParser
             options.strokeDashes);
     }
 
-    void PreFillImageOptions(ImageOptions &options, ImageElement *element)
+    void PreFillElementOptions(ElementOptions &options, Element *element)
     {
         if (!element)
             return;
@@ -1397,8 +1462,47 @@ namespace PropertyParser
             const float *m = element->GetTransformMatrix();
             for (int i = 0; i < 6; ++i) options.transformMatrix[i] = m[i];
         }
+    }
+
+    void PreFillGeneralImageOptions(GeneralImageOptions &options, GeneralImage *image)
+    {
+        if (!image) return;
+        options.imageFlip = image->GetImageFlip();
+        options.hasImageCrop = image->HasImageCrop();
+        if (options.hasImageCrop)
+        {
+            options.imageCropX = image->GetImageCropX();
+            options.imageCropY = image->GetImageCropY();
+            options.imageCropW = image->GetImageCropW();
+            options.imageCropH = image->GetImageCropH();
+            options.imageCropOrigin = image->GetImageCropOrigin();
+        }
+        options.useExifOrientation = image->GetUseExifOrientation();
+        options.imageAlpha = image->GetImageAlpha();
+        options.grayscale = image->IsGrayscale();
+        if (image->HasImageTint())
+        {
+            options.hasImageTint = true;
+            options.imageTint = image->GetImageTint();
+            options.imageTintAlpha = image->GetImageTintAlpha();
+        }
+        if (image->HasColorMatrix())
+        {
+            options.hasColorMatrix = true;
+            const float *m = image->GetColorMatrix();
+            for (int i = 0; i < 20; ++i) options.colorMatrix[i] = m[i];
+        }
+    }
+
+    void PreFillImageOptions(ImageOptions &options, ImageElement *element)
+    {
+        if (!element)
+            return;
+        PreFillElementOptions(options, element);
         options.path = element->GetImagePath();
         options.preserveAspectRatio = element->GetPreserveAspectRatio();
+        options.tile = element->IsTile();
+
         options.imageFlip = element->GetImageFlip();
         options.hasImageCrop = element->HasImageCrop();
         if (options.hasImageCrop)
@@ -1420,12 +1524,51 @@ namespace PropertyParser
         options.useExifOrientation = element->GetUseExifOrientation();
         options.imageAlpha = element->GetImageAlpha();
         options.grayscale = element->IsGrayscale();
-        options.tile = element->IsTile();
         if (element->HasImageTint())
         {
             options.hasImageTint = true;
             options.imageTint = element->GetImageTint();
             options.imageTintAlpha = element->GetImageTintAlpha();
+        }
+        if (element->HasColorMatrix())
+        {
+            options.hasColorMatrix = true;
+            const float *m = element->GetColorMatrix();
+            for (int i = 0; i < 20; ++i) options.colorMatrix[i] = m[i];
+        }
+    }
+
+    void PreFillButtonOptions(ButtonOptions &options, ButtonElement *element)
+    {
+        if (!element)
+            return;
+        PreFillElementOptions(options, element);
+
+        options.buttonImageName = element->GetImagePath();
+        options.useExifOrientation = element->GetUseExifOrientation();
+        options.grayscale = element->IsGrayscale();
+        options.imageAlpha = element->GetImageAlpha();
+        options.imageFlip = element->GetImageFlip();
+        options.hasImageCrop = element->HasImageCrop();
+        if (options.hasImageCrop)
+        {
+            options.imageCropX = element->GetImageCropX();
+            options.imageCropY = element->GetImageCropY();
+            options.imageCropW = element->GetImageCropW();
+            options.imageCropH = element->GetImageCropH();
+            options.imageCropOrigin = element->GetImageCropOrigin();
+        }
+        if (element->HasImageTint())
+        {
+            options.hasImageTint = true;
+            options.imageTint = element->GetImageTint();
+            options.imageTintAlpha = element->GetImageTintAlpha();
+        }
+        if (element->HasColorMatrix())
+        {
+            options.hasColorMatrix = true;
+            const float *m = element->GetColorMatrix();
+            for (int i = 0; i < 20; ++i) options.colorMatrix[i] = m[i];
         }
     }
 
@@ -1756,13 +1899,23 @@ namespace PropertyParser
         options.strokeDashes = element->GetStrokeDashes();
     }
 
+    void ParseGeneralImageOptions(duk_context *, GeneralImageOptions &) {}
     void ParseElementOptions(duk_context *, ElementOptions &) {}
-    void ParseImageOptions(duk_context *, ImageOptions &) {}
+    void ParseImageOptions(duk_context *ctx, ImageOptions &options)
+    {
+        ParseElementOptions(ctx, options);
+        ParseGeneralImageOptions(ctx, options);
+    }
     void ParseTextOptions(duk_context *, TextOptions &) {}
     void ParseBarOptions(duk_context *, BarOptions &) {}
     void ParseLineOptions(duk_context *, LineOptions &) {}
     void ParseRoundLineOptions(duk_context *, RoundLineOptions &) {}
     void ParseShapeOptions(duk_context *, ShapeOptions &) {}
+    void ParseButtonOptions(duk_context *ctx, ButtonOptions &options)
+    {
+        ParseElementOptions(ctx, options);
+        ParseGeneralImageOptions(ctx, options);
+    }
 }
 
 namespace novadesk::scripting::quickjs::parser

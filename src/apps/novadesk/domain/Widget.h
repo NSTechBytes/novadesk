@@ -18,6 +18,7 @@
 #include "../render/Element.h"
 #include "../render/TextElement.h"
 #include "../render/ImageElement.h"
+#include "../render/ButtonElement.h"
 #include "../render/BarElement.h"
 #include "../render/LineElement.h"
 #include "../render/Tooltip.h"
@@ -31,6 +32,7 @@ typedef struct duk_hthread duk_context;
 namespace PropertyParser {
     struct ImageOptions;
     struct TextOptions;
+    struct ButtonOptions;
     struct BarOptions;
     struct LineOptions;
     struct RoundLineOptions;
@@ -94,6 +96,7 @@ public:
 
     void AddImage(const PropertyParser::ImageOptions& options);
     void AddText(const PropertyParser::TextOptions& options);
+    void AddButton(const PropertyParser::ButtonOptions& options);
     void AddBar(const PropertyParser::BarOptions& options);
     void AddLine(const PropertyParser::LineOptions& options);
     void AddRoundLine(const PropertyParser::RoundLineOptions& options);

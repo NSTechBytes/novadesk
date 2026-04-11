@@ -32,7 +32,8 @@ enum ElementType
     ELEMENT_BAR,
     ELEMENT_LINE,
     ELEMENT_ROUNDLINE,
-    ELEMENT_SHAPE
+    ELEMENT_SHAPE,
+    ELEMENT_BUTTON
 };
 
 struct GfxRect {
