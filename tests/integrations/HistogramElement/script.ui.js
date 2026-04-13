@@ -41,7 +41,7 @@ ui.addText({
     x: 20,
     y: 46,
     width: 940,
-    text: "Top: CPU vs Memory overlap. Bottom: CPU autoscale horizontal.",
+    text: "Top: CPU vs Memory overlap. Bottom: CPU autoRange horizontal.",
     fontSize: 13,
     fontColor: "rgba(208,220,232,0.95)"
 });
@@ -54,7 +54,7 @@ ui.addHistogram({
     height: 260,
     data: [],
     data2: [],
-    autoScale: false,
+    autoRange: false,
     graphStart: "right",
     graphOrientation: "vertical",
     flip: false,
@@ -83,7 +83,7 @@ ui.addHistogram({
     width: 920,
     height: 220,
     data: [],
-    autoScale: true,
+    autoRange: true,
     graphStart: "left",
     graphOrientation: "horizontal",
     flip: false,
@@ -106,8 +106,8 @@ ui.endUpdate();
 
 assertEq("graphStart", ui.getElementProperty("hist-main", "graphStart"), "right");
 assertEq("graphOrientation", ui.getElementProperty("hist-main", "graphOrientation"), "vertical");
-assertEq("autoScale", ui.getElementProperty("hist-main", "autoScale"), false);
-assertEq("horizontal.autoScale", ui.getElementProperty("hist-horizontal", "autoScale"), true);
+assertEq("autoRange", ui.getElementProperty("hist-main", "autoRange"), false);
+assertEq("horizontal.autoRange", ui.getElementProperty("hist-horizontal", "autoRange"), true);
 
 const cpuHistory = [];
 const memoryHistory = [];

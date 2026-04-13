@@ -1115,7 +1115,7 @@ namespace PropertyParser
             options.transformStroke = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
         }
 
-        GetBoolProp(ctx, obj, "autoRange", options.autoScale);
+        GetBoolProp(ctx, obj, "autoRange", options.autoRange);
         GetFloatProp(ctx, obj, "rangeMin", options.scaleMin);
         GetFloatProp(ctx, obj, "rangeMax", options.scaleMax);
         if (options.scaleMax < options.scaleMin)
@@ -1200,7 +1200,7 @@ namespace PropertyParser
         GetFloatArrayPropAllowEmpty(ctx, obj, "data", options.data);
         GetFloatArrayPropAllowEmpty(ctx, obj, "data2", options.data2);
 
-        GetBoolProp(ctx, obj, "autoScale", options.autoScale);
+        GetBoolProp(ctx, obj, "autoRange", options.autoRange);
         GetBoolProp(ctx, obj, "flip", options.flip);
 
         std::wstring graphStart = GetStringProp(ctx, obj, "graphStart");
@@ -1664,7 +1664,7 @@ namespace PropertyParser
         element->SetGraphHorizontalOrientation(options.graphHorizontalOrientation);
         element->SetFlip(options.flip);
         element->SetStrokeTransformType(options.transformStroke);
-        element->SetAutoScale(options.autoScale);
+        element->SetAutoRange(options.autoRange);
         element->SetScaleRange(options.scaleMin, options.scaleMax);
     }
 
@@ -1676,7 +1676,7 @@ namespace PropertyParser
         ApplyElementOptions(element, options);
         element->SetData(options.data);
         element->SetData2(options.data2);
-        element->SetAutoScale(options.autoScale);
+        element->SetAutoRange(options.autoRange);
         element->SetGraphStartLeft(options.graphStartLeft);
         element->SetGraphHorizontalOrientation(options.graphHorizontalOrientation);
         element->SetFlip(options.flip);
@@ -2172,7 +2172,7 @@ namespace PropertyParser
         options.graphHorizontalOrientation = element->GetGraphHorizontalOrientation();
         options.flip = element->GetFlip();
         options.transformStroke = element->GetStrokeTransformType();
-        options.autoScale = element->GetAutoScale();
+        options.autoRange = element->GetAutoRange();
         options.scaleMin = element->GetScaleMin();
         options.scaleMax = element->GetScaleMax();
     }
@@ -2186,7 +2186,7 @@ namespace PropertyParser
 
         options.data = element->GetData();
         options.data2 = element->GetData2();
-        options.autoScale = element->GetAutoScale();
+        options.autoRange = element->GetAutoRange();
         options.graphStartLeft = element->GetGraphStartLeft();
         options.graphHorizontalOrientation = element->GetGraphHorizontalOrientation();
         options.flip = element->GetFlip();

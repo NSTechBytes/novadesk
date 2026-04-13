@@ -114,9 +114,9 @@ void LineElement::EnsureStorage()
     }
 }
 
-bool LineElement::BuildScale(float& outMin, float& outMax) const
+bool LineElement::BuildAutoRange(float& outMin, float& outMax) const
 {
-    if (!m_AutoScale)
+    if (!m_AutoRange)
     {
         outMin = m_ScaleMin;
         outMax = m_ScaleMax;
@@ -306,7 +306,7 @@ bool LineElement::HitTest(int x, int y)
 
     float minV = 0.0f;
     float maxV = 1.0f;
-    BuildScale(minV, maxV);
+    BuildAutoRange(minV, maxV);
 
     const float tolerance = std::max(2.0f, (m_LineWidth * 0.5f) + 1.0f);
     for (int i = 0; i < m_LineCount && i < (int)m_DataSets.size(); ++i)
@@ -374,7 +374,7 @@ void LineElement::Render(ID2D1DeviceContext* context)
 
     float minV = 0.0f;
     float maxV = 1.0f;
-    BuildScale(minV, maxV);
+    BuildAutoRange(minV, maxV);
 
     Microsoft::WRL::ComPtr<ID2D1StrokeStyle> strokeStyle;
     ID2D1Factory1* factory = Direct2D::GetFactory();

@@ -28,8 +28,8 @@ public:
     const std::vector<float> &GetData() const { return m_PrimaryData; }
     const std::vector<float> &GetData2() const { return m_SecondaryData; }
 
-    void SetAutoScale(bool enable) { m_AutoScale = enable; }
-    bool GetAutoScale() const { return m_AutoScale; }
+    void SetAutoRange(bool enable) { m_AutoRange = enable; }
+    bool GetAutoRange() const { return m_AutoRange; }
 
     void SetGraphStartLeft(bool left) { m_GraphStartLeft = left; }
     bool GetGraphStartLeft() const { return m_GraphStartLeft; }
@@ -66,7 +66,7 @@ public:
     const GeneralImage &GetBothImage() const { return m_BothImage; }
 
 private:
-    bool BuildScale(float &outMin, float &outMax) const;
+    bool BuildAutoRange(float &outMin, float &outMax) const;
     float SampleAtFromNewest(const std::vector<float> &series, int sampleIndex) const;
     static float NormalizeValue(float value, float minValue, float maxValue);
     void DrawSpan(
@@ -81,7 +81,7 @@ private:
     std::vector<float> m_PrimaryData;
     std::vector<float> m_SecondaryData;
 
-    bool m_AutoScale = false;
+    bool m_AutoRange = false;
     bool m_GraphStartLeft = false;             // false = right
     bool m_GraphHorizontalOrientation = false; // false = vertical
     bool m_Flip = false;

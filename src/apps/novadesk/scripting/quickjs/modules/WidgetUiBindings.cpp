@@ -914,7 +914,7 @@ namespace novadesk::scripting::quickjs
                 if (prop == "transformStroke")
                     return JS_NewString(ctx, line->GetStrokeTransformType() == D2D1_STROKE_TRANSFORM_TYPE_FIXED ? "fixed" : "normal");
                 if (prop == "autoRange")
-                    return JS_NewBool(ctx, line->GetAutoScale() ? 1 : 0);
+                    return JS_NewBool(ctx, line->GetAutoRange() ? 1 : 0);
                 if (prop == "rangeMin")
                     return JS_NewFloat64(ctx, line->GetScaleMin());
                 if (prop == "rangeMax")
@@ -997,8 +997,8 @@ namespace novadesk::scripting::quickjs
                     }
                     return arr;
                 }
-                if (prop == "autoScale")
-                    return JS_NewBool(ctx, histogram->GetAutoScale() ? 1 : 0);
+                if (prop == "autoRange")
+                    return JS_NewBool(ctx, histogram->GetAutoRange() ? 1 : 0);
                 if (prop == "graphStart")
                     return JS_NewString(ctx, histogram->GetGraphStartLeft() ? "left" : "right");
                 if (prop == "graphOrientation")

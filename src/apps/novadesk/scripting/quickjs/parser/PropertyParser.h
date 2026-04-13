@@ -252,7 +252,7 @@ namespace PropertyParser
         bool graphHorizontalOrientation = false;   // false = vertical
         bool flip = false;
         D2D1_STROKE_TRANSFORM_TYPE transformStroke = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
-        bool autoScale = false;
+        bool autoRange = false;
         float scaleMin = 0.0f;
         float scaleMax = 100.0f;
     };
@@ -261,7 +261,7 @@ namespace PropertyParser
     {
         std::vector<float> data;
         std::vector<float> data2;
-        bool autoScale = false;
+        bool autoRange = false;
         bool graphStartLeft = false;             // false = right
         bool graphHorizontalOrientation = false; // false = vertical
         bool flip = false;

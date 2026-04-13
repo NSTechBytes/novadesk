@@ -61,8 +61,8 @@ public:
     void SetStrokeTransformType(D2D1_STROKE_TRANSFORM_TYPE type) { m_StrokeType = type; }
     D2D1_STROKE_TRANSFORM_TYPE GetStrokeTransformType() const { return m_StrokeType; }
 
-    void SetAutoScale(bool enabled) { m_AutoScale = enabled; }
-    bool GetAutoScale() const { return m_AutoScale; }
+    void SetAutoRange(bool enabled) { m_AutoRange = enabled; }
+    bool GetAutoRange() const { return m_AutoRange; }
 
     void SetScaleRange(float minValue, float maxValue);
     float GetScaleMin() const { return m_ScaleMin; }
@@ -70,7 +70,7 @@ public:
 
 private:
     void EnsureStorage();
-    bool BuildScale(float& outMin, float& outMax) const;
+    bool BuildAutoRange(float& outMin, float& outMax) const;
     bool MapPoint(int dataIndex, int pointIndex, int totalPoints, float minValue, float maxValue, D2D1_POINT_2F& outPoint);
     static float DistancePointToSegment(const D2D1_POINT_2F& p, const D2D1_POINT_2F& a, const D2D1_POINT_2F& b);
 
@@ -88,7 +88,7 @@ private:
     bool m_GraphHorizontalOrientation = false;
     bool m_Flip = false;
     D2D1_STROKE_TRANSFORM_TYPE m_StrokeType = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
-    bool m_AutoScale = false;
+    bool m_AutoRange = false;
     float m_ScaleMin = 0.0f;
     float m_ScaleMax = 100.0f;
 };

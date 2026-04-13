@@ -32,9 +32,9 @@ int HistogramElement::GetAutoHeight()
     return 0;
 }
 
-bool HistogramElement::BuildScale(float &outMin, float &outMax) const
+bool HistogramElement::BuildAutoRange(float &outMin, float &outMax) const
 {
-    if (!m_AutoScale)
+    if (!m_AutoRange)
     {
         outMin = 0.0f;
         outMax = 100.0f;
@@ -197,7 +197,7 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
 
     float minValue = 0.0f;
     float maxValue = 100.0f;
-    BuildScale(minValue, maxValue);
+    BuildAutoRange(minValue, maxValue);
 
     const bool hasSecondary = !m_SecondaryData.empty();
     const int samples = m_GraphHorizontalOrientation ? height : width;
