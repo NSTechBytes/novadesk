@@ -104,14 +104,14 @@ int BitmapElement::GetDigitCountForValue(long long value, int realFrames) const
     if (m_Digits > 0)
         return m_Digits;
 
-    const long long divisor = (realFrames == 1) ? 2LL : static_cast<long long>(realFrames);
-    long long tmp = std::abs(value);
+    const long long baseValue = (realFrames == 1) ? 2LL : static_cast<long long>(realFrames);
+    long long tmp = (value < 0) ? 0 : value;
     int count = 0;
 
     do
     {
         ++count;
-        tmp /= divisor;
+        tmp /= baseValue;
     } while (tmp > 0LL);
 
     return (count <= 0) ? 1 : count;
@@ -187,7 +187,10 @@ void BitmapElement::Render(ID2D1DeviceContext *context)
 
     if (m_Extend)
     {
-        long long value = static_cast<long long>(std::round(m_Value));
+        // Match Rainmeter: m_Value is truncated and clamped at 0
+        long long value = static_cast<long long>(m_Value);
+        if (value < 0) value = 0;
+
         const int realFrames = GetRealFrameCount();
         const int digitCount = GetDigitCountForValue(value, realFrames);
         const int spacing = m_Separation;
@@ -205,14 +208,14 @@ void BitmapElement::Render(ID2D1DeviceContext *context)
             startX -= totalWidth;
         }
 
-        long long tmpValue = std::abs(value);
-        const long long divisor = (realFrames == 1) ? 2LL : static_cast<long long>(realFrames);
+        long long tmpValue = value;
+        const long long baseValue = (realFrames == 1) ? 2LL : static_cast<long long>(realFrames);
 
         std::vector<int> digits(static_cast<size_t>(digitCount), 0);
         for (int i = digitCount - 1; i >= 0; --i)
         {
-            digits[static_cast<size_t>(i)] = static_cast<int>(tmpValue % divisor);
-            tmpValue /= divisor;
+            digits[static_cast<size_t>(i)] = static_cast<int>(tmpValue % baseValue);
+            tmpValue /= baseValue;
         }
 
         for (int i = 0; i < digitCount; ++i)
@@ -246,7 +249,12 @@ void BitmapElement::Render(ID2D1DeviceContext *context)
     }
     else
     {
-        int frame = ResolveFrameForNormalizedValue(m_Value);
+        // When extend=false, normalize the value to 0.0-1.0 range
+        double normalizedValue = m_Value / m_MaxValue;
+        if (normalizedValue < 0.0) normalizedValue = 0.0;
+        if (normalizedValue > 1.0) normalizedValue = 1.0;
+
+        int frame = ResolveFrameForNormalizedValue(normalizedValue);
         float srcX = 0.0f;
         float srcY = 0.0f;
         if (verticalFrames)

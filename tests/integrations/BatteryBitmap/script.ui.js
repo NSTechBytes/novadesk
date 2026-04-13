@@ -21,10 +21,10 @@ ui.addBitmap({
     y: 0,
     width: 100,
     height: 400,
-    value: 10,
+    value: 90,
     bitmapImageName: "./assets/battery-strip-11-vertical.png",
     bitmapFrames: 11,
-    bitmapExtend: false, // Single image mode
+    bitmapExtend: true, // Single image mode
     bitmapZeroFrame: true, // Reserve first frame for 0%
     bitmapOrientation: "vertical", // Slicing the row horizontally
     imageAlpha: 255

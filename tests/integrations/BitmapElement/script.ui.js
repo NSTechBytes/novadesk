@@ -49,10 +49,12 @@ ui.addBitmap({
     bitmapImageName: "./assets/digits-0-9.png",
     bitmapFrames: 10,
     bitmapZeroFrame: false,
-    bitmapExtend: false,
+    bitmapExtend: true,
+    bitmapMaxValue: 100, // Engine auto-normalizes: value/maxValue
+    bitmapOrientation: "horizontal",
     bitmapDigits: 3,
     bitmapAlign: "left",
-    bitmapSeparation: -8, // Adjusted for cleaner spacing
+    bitmapSeparation: -8,
     imageTint: "rgba(230,245,255,1)",
     imageAlpha: 255
 });
@@ -83,19 +85,21 @@ console.log("[PASS] bitmapFrames = " + ui.getElementProperty("cpu-bitmap", "bitm
 console.log("[PASS] bitmapExtend = " + ui.getElementProperty("cpu-bitmap", "bitmapExtend"));
 console.log("[PASS] bitmapSmoothRoll = " + ui.getElementProperty("cpu-bitmap", "bitmapSmoothRoll"));
 
-ipcRenderer.on("bitmap:cpu", function (event, payloadArg) {
-    var rawPayload = (payloadArg === undefined) ? event : payloadArg;
-    var payload = parsePayload(rawPayload);
-    if (!payload) return;
+// ipcRenderer.on("bitmap:cpu", function (event, payloadArg) {
+//     var rawPayload = (payloadArg === undefined) ? event : payloadArg;
+//     var payload = parsePayload(rawPayload);
+//     if (!payload) return;
 
-    var usage = clampPercent(payload.usage);
-    var tick = Number(payload.tick || 0);
+//     var usage = clampPercent(payload.usage);
+//     var tick = Number(payload.tick || 0);
 
-    ui.setElementProperties("cpu-bitmap", {
-        value: usage
-    });
+//     // Just pass the raw value — the engine handles normalization
+//     // via bitmapMaxValue when bitmapExtend=false
+//     ui.setElementProperties("cpu-bitmap", {
+//         value: usage
+//     });
 
-    ui.setElementProperties("cpu-readout", {
-        text: "CPU: " + usage + "%   (tick " + tick + ")"
-    });
-});
+//     ui.setElementProperties("cpu-readout", {
+//         text: "CPU: " + usage + "%   (tick " + tick + ")"
+//     });
+// });
