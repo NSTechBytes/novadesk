@@ -27,6 +27,7 @@ class ImageElement;
 class TextElement;
 class BarElement;
 class LineElement;
+class HistogramElement;
 class RoundLineElement;
 class ShapeElement;
 class ButtonElement;
@@ -256,6 +257,31 @@ namespace PropertyParser
         float scaleMax = 100.0f;
     };
 
+    struct HistogramOptions : public ElementOptions
+    {
+        std::vector<float> data;
+        std::vector<float> data2;
+        bool autoScale = false;
+        bool graphStartLeft = false;             // false = right
+        bool graphHorizontalOrientation = false; // false = vertical
+        bool flip = false;
+
+        COLORREF primaryColor = RGB(0, 128, 0);
+        BYTE primaryAlpha = 255;
+        COLORREF secondaryColor = RGB(255, 0, 0);
+        BYTE secondaryAlpha = 255;
+        COLORREF bothColor = RGB(255, 255, 0);
+        BYTE bothAlpha = 255;
+
+        std::wstring primaryImageName;
+        std::wstring secondaryImageName;
+        std::wstring bothImageName;
+
+        GeneralImageOptions primaryImageOptions;
+        GeneralImageOptions secondaryImageOptions;
+        GeneralImageOptions bothImageOptions;
+    };
+
     struct ShapeCombineOp
     {
         std::wstring id;
@@ -310,6 +336,7 @@ namespace PropertyParser
     void ParseRotatorOptions(JSContext *ctx, JSValueConst obj, RotatorOptions &options, const std::wstring &baseDir = L"");
     void ParseBarOptions(JSContext *ctx, JSValueConst obj, BarOptions &options, const std::wstring &baseDir = L"");
     void ParseLineOptions(JSContext *ctx, JSValueConst obj, LineOptions &options, const std::wstring &baseDir = L"");
+    void ParseHistogramOptions(JSContext *ctx, JSValueConst obj, HistogramOptions &options, const std::wstring &baseDir = L"");
     void ParseRoundLineOptions(JSContext *ctx, JSValueConst obj, RoundLineOptions &options, const std::wstring &baseDir = L"");
     void ParseShapeOptions(JSContext *ctx, JSValueConst obj, ShapeOptions &options, const std::wstring &baseDir = L"");
 
@@ -321,6 +348,7 @@ namespace PropertyParser
     void ApplyRotatorOptions(RotatorElement *element, const RotatorOptions &options);
     void ApplyBarOptions(BarElement *element, const BarOptions &options);
     void ApplyLineOptions(LineElement *element, const LineOptions &options);
+    void ApplyHistogramOptions(HistogramElement *element, const HistogramOptions &options);
     void ApplyRoundLineOptions(RoundLineElement *element, const RoundLineOptions &options);
     void ApplyShapeOptions(ShapeElement *element, const ShapeOptions &options);
 
@@ -332,6 +360,7 @@ namespace PropertyParser
     void PreFillRotatorOptions(RotatorOptions &options, RotatorElement *element);
     void PreFillBarOptions(BarOptions &options, BarElement *element);
     void PreFillLineOptions(LineOptions &options, LineElement *element);
+    void PreFillHistogramOptions(HistogramOptions &options, HistogramElement *element);
     void PreFillRoundLineOptions(RoundLineOptions &options, RoundLineElement *element);
     void PreFillShapeOptions(ShapeOptions &options, ShapeElement *element);
 
@@ -345,6 +374,7 @@ namespace PropertyParser
     void ParseTextOptions(duk_context *ctx, TextOptions &options);
     void ParseBarOptions(duk_context *ctx, BarOptions &options);
     void ParseLineOptions(duk_context *ctx, LineOptions &options);
+    void ParseHistogramOptions(duk_context *ctx, HistogramOptions &options);
     void ParseRoundLineOptions(duk_context *ctx, RoundLineOptions &options);
     void ParseShapeOptions(duk_context *ctx, ShapeOptions &options);
     void ParseButtonOptions(duk_context *ctx, ButtonOptions &options);

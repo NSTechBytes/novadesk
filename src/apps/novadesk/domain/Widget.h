@@ -20,6 +20,7 @@
 #include "../render/ImageElement.h"
 #include "../render/BitmapElement.h"
 #include "../render/RotatorElement.h"
+#include "../render/HistogramElement.h"
 #include "../render/ButtonElement.h"
 #include "../render/BarElement.h"
 #include "../render/LineElement.h"
@@ -39,6 +40,7 @@ namespace PropertyParser {
     struct RotatorOptions;
     struct BarOptions;
     struct LineOptions;
+    struct HistogramOptions;
     struct RoundLineOptions;
     struct ShapeOptions;
 }
@@ -105,6 +107,7 @@ public:
     void AddRotator(const PropertyParser::RotatorOptions& options);
     void AddBar(const PropertyParser::BarOptions& options);
     void AddLine(const PropertyParser::LineOptions& options);
+    void AddHistogram(const PropertyParser::HistogramOptions& options);
     void AddRoundLine(const PropertyParser::RoundLineOptions& options);
     void AddShape(const PropertyParser::ShapeOptions& options);
 

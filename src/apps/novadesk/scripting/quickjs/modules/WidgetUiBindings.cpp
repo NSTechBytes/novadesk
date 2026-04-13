@@ -7,6 +7,7 @@
 #include "../../domain/Widget.h"
 #include "../../render/BarElement.h"
 #include "../../render/BitmapElement.h"
+#include "../../render/HistogramElement.h"
 #include "../../render/ImageElement.h"
 #include "../../render/LineElement.h"
 #include "../../render/RoundLineElement.h"
@@ -264,6 +265,19 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
+        JSValue JsWidgetAddHistogram(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_EXCEPTION;
+            if (argc < 1 || !JS_IsObject(argv[0]))
+                return ThrowTypeError(ctx, "addHistogram", "expected options object");
+            PropertyParser::HistogramOptions options;
+            PropertyParser::ParseHistogramOptions(ctx, argv[0], options, GetWidgetScriptBaseDir(widget));
+            widget->AddHistogram(options);
+            return JS_UNDEFINED;
+        }
+
         JSValue JsWidgetAddShape(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -439,6 +453,13 @@ namespace novadesk::scripting::quickjs
                 PropertyParser::PreFillLineOptions(options, line);
                 PropertyParser::ParseLineOptions(ctx, argv[1], options, baseDir);
                 PropertyParser::ApplyLineOptions(line, options);
+            }
+            else if (auto *histogram = dynamic_cast<HistogramElement *>(element))
+            {
+                PropertyParser::HistogramOptions options;
+                PropertyParser::PreFillHistogramOptions(options, histogram);
+                PropertyParser::ParseHistogramOptions(ctx, argv[1], options, baseDir);
+                PropertyParser::ApplyHistogramOptions(histogram, options);
             }
             else if (auto *shape = dynamic_cast<ShapeElement *>(element))
             {
@@ -953,6 +974,59 @@ namespace novadesk::scripting::quickjs
                     }
                 }
             }
+            else if (element->GetType() == ELEMENT_HISTOGRAM)
+            {
+                auto *histogram = static_cast<HistogramElement *>(element);
+                if (prop == "data")
+                {
+                    JSValue arr = JS_NewArray(ctx);
+                    const auto &data = histogram->GetData();
+                    for (uint32_t i = 0; i < static_cast<uint32_t>(data.size()); ++i)
+                    {
+                        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, data[i]));
+                    }
+                    return arr;
+                }
+                if (prop == "data2")
+                {
+                    JSValue arr = JS_NewArray(ctx);
+                    const auto &data = histogram->GetData2();
+                    for (uint32_t i = 0; i < static_cast<uint32_t>(data.size()); ++i)
+                    {
+                        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, data[i]));
+                    }
+                    return arr;
+                }
+                if (prop == "autoScale")
+                    return JS_NewBool(ctx, histogram->GetAutoScale() ? 1 : 0);
+                if (prop == "graphStart")
+                    return JS_NewString(ctx, histogram->GetGraphStartLeft() ? "left" : "right");
+                if (prop == "graphOrientation")
+                    return JS_NewString(ctx, histogram->GetGraphHorizontalOrientation() ? "horizontal" : "vertical");
+                if (prop == "flip")
+                    return JS_NewBool(ctx, histogram->GetFlip() ? 1 : 0);
+                if (prop == "primaryColor")
+                {
+                    const std::wstring c = ColorUtil::ToRGBAString(histogram->GetPrimaryColor(), histogram->GetPrimaryAlpha());
+                    return JS_NewString(ctx, Utils::ToString(c).c_str());
+                }
+                if (prop == "secondaryColor")
+                {
+                    const std::wstring c = ColorUtil::ToRGBAString(histogram->GetSecondaryColor(), histogram->GetSecondaryAlpha());
+                    return JS_NewString(ctx, Utils::ToString(c).c_str());
+                }
+                if (prop == "bothColor")
+                {
+                    const std::wstring c = ColorUtil::ToRGBAString(histogram->GetBothColor(), histogram->GetBothAlpha());
+                    return JS_NewString(ctx, Utils::ToString(c).c_str());
+                }
+                if (prop == "primaryImageName")
+                    return JS_NewString(ctx, Utils::ToString(histogram->GetPrimaryImageName()).c_str());
+                if (prop == "secondaryImageName")
+                    return JS_NewString(ctx, Utils::ToString(histogram->GetSecondaryImageName()).c_str());
+                if (prop == "bothImageName")
+                    return JS_NewString(ctx, Utils::ToString(histogram->GetBothImageName()).c_str());
+            }
             else if (element->GetType() == ELEMENT_SHAPE)
             {
                 auto *shape = static_cast<ShapeElement *>(element);
@@ -1156,6 +1230,7 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("addText", 1, JsWidgetAddText),
             JS_CFUNC_DEF("addBar", 1, JsWidgetAddBar),
             JS_CFUNC_DEF("addLine", 1, JsWidgetAddLine),
+            JS_CFUNC_DEF("addHistogram", 1, JsWidgetAddHistogram),
             JS_CFUNC_DEF("addRoundLine", 1, JsWidgetAddRoundLine),
             JS_CFUNC_DEF("addShape", 1, JsWidgetAddShape),
             JS_CFUNC_DEF("addBitmap", 1, JsWidgetAddBitmap),

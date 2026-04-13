@@ -20,6 +20,7 @@
 #include "TextElement.h"
 #include "BarElement.h"
 #include "LineElement.h"
+#include "HistogramElement.h"
 #include "RoundLineElement.h"
 #include "RectangleShape.h"
 #include "EllipseShape.h"
@@ -1188,6 +1189,31 @@ void Widget::AddLine(const PropertyParser::LineOptions &options)
 }
 
 /*
+** Add a histogram content item to the widget.
+*/
+void Widget::AddHistogram(const PropertyParser::HistogramOptions &options)
+{
+    if (options.id.empty())
+    {
+        Logging::Log(LogLevel::Error, L"AddHistogram failed: Element ID cannot be empty.");
+        return;
+    }
+
+    if (FindElementById(options.id))
+    {
+        RemoveElements(options.id);
+    }
+
+    HistogramElement *element = new HistogramElement(options.id, options.x, options.y, options.width, options.height);
+    PropertyParser::ApplyHistogramOptions(element, options);
+
+    m_Elements.push_back(element);
+    UpdateContainerForElement(element, options.containerId);
+
+    Redraw();
+}
+
+/*
 ** Add a round line content item to the widget.
 */
 void Widget::AddRoundLine(const PropertyParser::RoundLineOptions &options)
@@ -1757,6 +1783,14 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, duk_context *ctx)
         PropertyParser::PreFillLineOptions(options, static_cast<LineElement *>(element));
         PropertyParser::ParseLineOptions(ctx, options);
         PropertyParser::ApplyLineOptions(static_cast<LineElement *>(element), options);
+        UpdateContainerForElement(element, options.containerId);
+    }
+    else if (element->GetType() == ELEMENT_HISTOGRAM)
+    {
+        PropertyParser::HistogramOptions options;
+        PropertyParser::PreFillHistogramOptions(options, static_cast<HistogramElement *>(element));
+        PropertyParser::ParseHistogramOptions(ctx, options);
+        PropertyParser::ApplyHistogramOptions(static_cast<HistogramElement *>(element), options);
         UpdateContainerForElement(element, options.containerId);
     }
     else if (element->GetType() == ELEMENT_ROUNDLINE)

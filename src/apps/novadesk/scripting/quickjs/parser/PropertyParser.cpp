@@ -10,6 +10,7 @@
 #include "../../../shared/PathUtils.h"
 #include "../../../shared/Utils.h"
 #include "../../render/RotatorElement.h"
+#include "../../render/HistogramElement.h"
 #include "../engine/JSEngine.h"
 
 namespace PropertyParser
@@ -200,6 +201,124 @@ namespace PropertyParser
             if (s == L"xor")
                 return D2D1_COMBINE_MODE_XOR;
             return D2D1_COMBINE_MODE_UNION;
+        }
+
+        bool GetFloatArrayPropAllowEmpty(JSContext *ctx, JSValueConst obj, const char *key, std::vector<float> &out)
+        {
+            JSValue v = JS_GetPropertyStr(ctx, obj, key);
+            if (JS_IsException(v) || !JS_IsArray(v))
+            {
+                JS_FreeValue(ctx, v);
+                return false;
+            }
+
+            uint32_t len = 0;
+            JSValue lenV = JS_GetPropertyStr(ctx, v, "length");
+            if (JS_ToUint32(ctx, &len, lenV) != 0)
+            {
+                JS_FreeValue(ctx, lenV);
+                JS_FreeValue(ctx, v);
+                return false;
+            }
+            JS_FreeValue(ctx, lenV);
+
+            std::vector<float> tmp;
+            tmp.reserve(len);
+            for (uint32_t i = 0; i < len; ++i)
+            {
+                JSValue iv = JS_GetPropertyUint32(ctx, v, i);
+                double d = 0.0;
+                if (JS_ToFloat64(ctx, &d, iv) == 0)
+                {
+                    tmp.push_back(static_cast<float>(d));
+                }
+                JS_FreeValue(ctx, iv);
+            }
+
+            JS_FreeValue(ctx, v);
+            out = std::move(tmp);
+            return true;
+        }
+
+        void ParsePrefixedGeneralImageOptions(
+            JSContext *ctx,
+            JSValueConst obj,
+            const std::string &prefix,
+            GeneralImageOptions &out)
+        {
+            out.imageFlip = IMAGE_FLIP_NONE;
+            out.hasImageCrop = false;
+            out.useExifOrientation = false;
+            out.imageAlpha = 255;
+            out.grayscale = false;
+            out.hasColorMatrix = false;
+            out.hasImageTint = false;
+
+            std::wstring imageFlip = GetStringProp(ctx, obj, (prefix + "ImageFlip").c_str());
+            std::transform(imageFlip.begin(), imageFlip.end(), imageFlip.begin(), ::towlower);
+            if (imageFlip == L"horizontal")
+                out.imageFlip = IMAGE_FLIP_HORIZONTAL;
+            else if (imageFlip == L"vertical")
+                out.imageFlip = IMAGE_FLIP_VERTICAL;
+            else if (imageFlip == L"both")
+                out.imageFlip = IMAGE_FLIP_BOTH;
+            else if (imageFlip == L"none")
+                out.imageFlip = IMAGE_FLIP_NONE;
+
+            std::vector<float> imageCrop;
+            if (GetFloatArrayProp(ctx, obj, (prefix + "ImageCrop").c_str(), imageCrop, 4))
+            {
+                out.hasImageCrop = true;
+                out.imageCropX = imageCrop[0];
+                out.imageCropY = imageCrop[1];
+                out.imageCropW = imageCrop[2];
+                out.imageCropH = imageCrop[3];
+                out.imageCropOrigin = IMAGE_CROP_ORIGIN_TOP_LEFT;
+                if (imageCrop.size() >= 5)
+                {
+                    int origin = static_cast<int>(imageCrop[4]);
+                    if (origin < static_cast<int>(IMAGE_CROP_ORIGIN_TOP_LEFT))
+                        origin = static_cast<int>(IMAGE_CROP_ORIGIN_TOP_LEFT);
+                    if (origin > static_cast<int>(IMAGE_CROP_ORIGIN_CENTER))
+                        origin = static_cast<int>(IMAGE_CROP_ORIGIN_CENTER);
+                    out.imageCropOrigin = static_cast<ImageCropOrigin>(origin);
+                }
+            }
+
+            GetBoolProp(ctx, obj, (prefix + "GreyScale").c_str(), out.grayscale);
+            GetBoolProp(ctx, obj, (prefix + "UseExifOrientation").c_str(), out.useExifOrientation);
+
+            int alpha = 255;
+            if (GetIntProp(ctx, obj, (prefix + "ImageAlpha").c_str(), alpha))
+                out.imageAlpha = static_cast<BYTE>(alpha);
+
+            std::wstring tint = GetStringProp(ctx, obj, (prefix + "ImageTint").c_str());
+            if (!tint.empty() && ColorUtil::ParseRGBA(tint, out.imageTint, out.imageTintAlpha))
+            {
+                out.hasImageTint = true;
+            }
+
+            std::vector<float> colorMatrix;
+            if (GetFloatArrayProp(ctx, obj, (prefix + "ColorMatrix").c_str(), colorMatrix, 20))
+            {
+                for (int i = 0; i < 20; ++i)
+                    out.colorMatrix[i] = colorMatrix[(size_t)i];
+                out.hasColorMatrix = true;
+            }
+            else
+            {
+                bool hasComponents = false;
+                for (int i = 1; i <= 20; ++i)
+                {
+                    float val = 0.0f;
+                    if (GetFloatProp(ctx, obj, (prefix + "ColorMatrix" + std::to_string(i)).c_str(), val))
+                    {
+                        out.colorMatrix[(size_t)(i - 1)] = val;
+                        hasComponents = true;
+                    }
+                }
+                out.hasColorMatrix = hasComponents;
+            }
         }
     } // namespace
 
@@ -1074,6 +1193,72 @@ namespace PropertyParser
         }
     }
 
+    void ParseHistogramOptions(JSContext *ctx, JSValueConst obj, HistogramOptions &options, const std::wstring &baseDir)
+    {
+        ParseElementOptions(ctx, obj, options, baseDir);
+
+        GetFloatArrayPropAllowEmpty(ctx, obj, "data", options.data);
+        GetFloatArrayPropAllowEmpty(ctx, obj, "data2", options.data2);
+
+        GetBoolProp(ctx, obj, "autoScale", options.autoScale);
+        GetBoolProp(ctx, obj, "flip", options.flip);
+
+        std::wstring graphStart = GetStringProp(ctx, obj, "graphStart");
+        std::transform(graphStart.begin(), graphStart.end(), graphStart.begin(), ::towlower);
+        if (graphStart == L"left")
+            options.graphStartLeft = true;
+        else if (graphStart == L"right")
+            options.graphStartLeft = false;
+
+        std::wstring graphOrientation = GetStringProp(ctx, obj, "graphOrientation");
+        std::transform(graphOrientation.begin(), graphOrientation.end(), graphOrientation.begin(), ::towlower);
+        if (graphOrientation == L"horizontal")
+            options.graphHorizontalOrientation = true;
+        else if (graphOrientation == L"vertical")
+            options.graphHorizontalOrientation = false;
+
+        std::wstring primaryColor = GetStringProp(ctx, obj, "primaryColor");
+        if (!primaryColor.empty())
+            ColorUtil::ParseRGBA(primaryColor, options.primaryColor, options.primaryAlpha);
+
+        std::wstring secondaryColor = GetStringProp(ctx, obj, "secondaryColor");
+        if (!secondaryColor.empty())
+            ColorUtil::ParseRGBA(secondaryColor, options.secondaryColor, options.secondaryAlpha);
+
+        std::wstring bothColor = GetStringProp(ctx, obj, "bothColor");
+        if (!bothColor.empty())
+            ColorUtil::ParseRGBA(bothColor, options.bothColor, options.bothAlpha);
+
+        options.primaryImageName = GetStringProp(ctx, obj, "primaryImageName");
+        if (!options.primaryImageName.empty())
+            options.primaryImageName = PathUtils::ResolvePath(options.primaryImageName, baseDir);
+
+        options.secondaryImageName = GetStringProp(ctx, obj, "secondaryImageName");
+        if (!options.secondaryImageName.empty())
+            options.secondaryImageName = PathUtils::ResolvePath(options.secondaryImageName, baseDir);
+
+        options.bothImageName = GetStringProp(ctx, obj, "bothImageName");
+        if (!options.bothImageName.empty())
+            options.bothImageName = PathUtils::ResolvePath(options.bothImageName, baseDir);
+
+        ParsePrefixedGeneralImageOptions(ctx, obj, "primary", options.primaryImageOptions);
+        ParsePrefixedGeneralImageOptions(ctx, obj, "secondary", options.secondaryImageOptions);
+        ParsePrefixedGeneralImageOptions(ctx, obj, "both", options.bothImageOptions);
+
+        if (!options.secondaryImageName.empty() && options.bothImageName.empty())
+        {
+            Logging::Log(LogLevel::Error, L"Histogram: bothImageName is required when secondaryImageName is defined.");
+            options.secondaryImageName.clear();
+        }
+
+        // Image-based histogram follows image dimensions.
+        if (!options.primaryImageName.empty())
+        {
+            options.width = 0;
+            options.height = 0;
+        }
+    }
+
     void ParseRoundLineOptions(JSContext *ctx, JSValueConst obj, RoundLineOptions &options, const std::wstring &baseDir)
     {
         ParseElementOptions(ctx, obj, options, baseDir);
@@ -1481,6 +1666,30 @@ namespace PropertyParser
         element->SetStrokeTransformType(options.transformStroke);
         element->SetAutoScale(options.autoScale);
         element->SetScaleRange(options.scaleMin, options.scaleMax);
+    }
+
+    void ApplyHistogramOptions(HistogramElement *element, const HistogramOptions &options)
+    {
+        if (!element)
+            return;
+
+        ApplyElementOptions(element, options);
+        element->SetData(options.data);
+        element->SetData2(options.data2);
+        element->SetAutoScale(options.autoScale);
+        element->SetGraphStartLeft(options.graphStartLeft);
+        element->SetGraphHorizontalOrientation(options.graphHorizontalOrientation);
+        element->SetFlip(options.flip);
+        element->SetPrimaryColor(options.primaryColor, options.primaryAlpha);
+        element->SetSecondaryColor(options.secondaryColor, options.secondaryAlpha);
+        element->SetBothColor(options.bothColor, options.bothAlpha);
+        element->SetPrimaryImageName(options.primaryImageName);
+        element->SetSecondaryImageName(options.secondaryImageName);
+        element->SetBothImageName(options.bothImageName);
+
+        ApplyGeneralImageOptions(&element->GetPrimaryImage(), options.primaryImageOptions);
+        ApplyGeneralImageOptions(&element->GetSecondaryImage(), options.secondaryImageOptions);
+        ApplyGeneralImageOptions(&element->GetBothImage(), options.bothImageOptions);
     }
 
     void ApplyRoundLineOptions(RoundLineElement *element, const RoundLineOptions &options)
@@ -1968,6 +2177,42 @@ namespace PropertyParser
         options.scaleMax = element->GetScaleMax();
     }
 
+    void PreFillHistogramOptions(HistogramOptions &options, HistogramElement *element)
+    {
+        if (!element)
+            return;
+
+        PreFillElementOptions(options, element);
+
+        options.data = element->GetData();
+        options.data2 = element->GetData2();
+        options.autoScale = element->GetAutoScale();
+        options.graphStartLeft = element->GetGraphStartLeft();
+        options.graphHorizontalOrientation = element->GetGraphHorizontalOrientation();
+        options.flip = element->GetFlip();
+
+        options.primaryColor = element->GetPrimaryColor();
+        options.primaryAlpha = element->GetPrimaryAlpha();
+        options.secondaryColor = element->GetSecondaryColor();
+        options.secondaryAlpha = element->GetSecondaryAlpha();
+        options.bothColor = element->GetBothColor();
+        options.bothAlpha = element->GetBothAlpha();
+
+        options.primaryImageName = element->GetPrimaryImageName();
+        options.secondaryImageName = element->GetSecondaryImageName();
+        options.bothImageName = element->GetBothImageName();
+
+        PreFillGeneralImageOptions(options.primaryImageOptions, &element->GetPrimaryImage());
+        PreFillGeneralImageOptions(options.secondaryImageOptions, &element->GetSecondaryImage());
+        PreFillGeneralImageOptions(options.bothImageOptions, &element->GetBothImage());
+
+        if (!options.primaryImageName.empty())
+        {
+            options.width = 0;
+            options.height = 0;
+        }
+    }
+
     void PreFillRoundLineOptions(RoundLineOptions &options, RoundLineElement *element)
     {
         if (!element)
@@ -2121,6 +2366,7 @@ namespace PropertyParser
     void ParseTextOptions(duk_context *, TextOptions &) {}
     void ParseBarOptions(duk_context *, BarOptions &) {}
     void ParseLineOptions(duk_context *, LineOptions &) {}
+    void ParseHistogramOptions(duk_context *, HistogramOptions &) {}
     void ParseRoundLineOptions(duk_context *, RoundLineOptions &) {}
     void ParseShapeOptions(duk_context *, ShapeOptions &) {}
     void ParseButtonOptions(duk_context *ctx, ButtonOptions &options)
