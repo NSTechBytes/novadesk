@@ -29,6 +29,9 @@ class BarElement;
 class LineElement;
 class RoundLineElement;
 class ShapeElement;
+class ButtonElement;
+class BitmapElement;
+class RotatorElement;
 
 namespace PropertyParser
 {
@@ -167,6 +170,18 @@ namespace PropertyParser
         int bitmapSeparation = 0;
     };
 
+    struct RotatorOptions : public GeneralImageOptions
+    {
+        double value = 0.0;
+        std::wstring rotatorImageName;
+        double offsetX = 0.0;
+        double offsetY = 0.0;
+        double startAngle = 0.0;
+        double rotationAngle = 6.283185307179586; // 2 * PI
+        int valueRemainder = 0;
+        double maxValue = 1.0;
+    };
+
     struct TextOptions : public ElementOptions
     {
         std::wstring text;
@@ -292,6 +307,7 @@ namespace PropertyParser
     void ParseTextOptions(JSContext *ctx, JSValueConst obj, TextOptions &options, const std::wstring &baseDir = L"");
     void ParseButtonOptions(JSContext *ctx, JSValueConst obj, ButtonOptions &options, const std::wstring &baseDir = L"");
     void ParseBitmapOptions(JSContext *ctx, JSValueConst obj, BitmapOptions &options, const std::wstring &baseDir = L"");
+    void ParseRotatorOptions(JSContext *ctx, JSValueConst obj, RotatorOptions &options, const std::wstring &baseDir = L"");
     void ParseBarOptions(JSContext *ctx, JSValueConst obj, BarOptions &options, const std::wstring &baseDir = L"");
     void ParseLineOptions(JSContext *ctx, JSValueConst obj, LineOptions &options, const std::wstring &baseDir = L"");
     void ParseRoundLineOptions(JSContext *ctx, JSValueConst obj, RoundLineOptions &options, const std::wstring &baseDir = L"");
@@ -300,8 +316,9 @@ namespace PropertyParser
     void ApplyElementOptions(Element *element, const ElementOptions &options);
     void ApplyImageOptions(ImageElement *element, const ImageOptions &options);
     void ApplyTextOptions(TextElement *element, const TextOptions &options);
-    void ApplyButtonOptions(class ButtonElement *element, const ButtonOptions &options);
+    void ApplyButtonOptions(ButtonElement *element, const ButtonOptions &options);
     void ApplyBitmapOptions(BitmapElement *element, const BitmapOptions &options);
+    void ApplyRotatorOptions(RotatorElement *element, const RotatorOptions &options);
     void ApplyBarOptions(BarElement *element, const BarOptions &options);
     void ApplyLineOptions(LineElement *element, const LineOptions &options);
     void ApplyRoundLineOptions(RoundLineElement *element, const RoundLineOptions &options);
@@ -310,8 +327,9 @@ namespace PropertyParser
     void PreFillElementOptions(ElementOptions &options, Element *element);
     void PreFillImageOptions(ImageOptions &options, ImageElement *element);
     void PreFillTextOptions(TextOptions &options, TextElement *element);
-    void PreFillButtonOptions(ButtonOptions &options, class ButtonElement *element);
+    void PreFillButtonOptions(ButtonOptions &options, ButtonElement *element);
     void PreFillBitmapOptions(BitmapOptions &options, BitmapElement *element);
+    void PreFillRotatorOptions(RotatorOptions &options, RotatorElement *element);
     void PreFillBarOptions(BarOptions &options, BarElement *element);
     void PreFillLineOptions(LineOptions &options, LineElement *element);
     void PreFillRoundLineOptions(RoundLineOptions &options, RoundLineElement *element);
@@ -331,6 +349,7 @@ namespace PropertyParser
     void ParseShapeOptions(duk_context *ctx, ShapeOptions &options);
     void ParseButtonOptions(duk_context *ctx, ButtonOptions &options);
     void ParseBitmapOptions(duk_context *ctx, BitmapOptions &options);
+    void ParseRotatorOptions(duk_context *ctx, RotatorOptions &options);
 } // namespace PropertyParser
 
 namespace novadesk::scripting::quickjs::parser

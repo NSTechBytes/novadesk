@@ -1079,6 +1079,33 @@ void Widget::AddBitmap(const PropertyParser::BitmapOptions &options)
 }
 
 /*
+** Add a rotator content item to the widget.
+** The rotator rotates an image based on the measure value.
+*/
+void Widget::AddRotator(const PropertyParser::RotatorOptions &options)
+{
+    if (options.id.empty())
+    {
+        Logging::Log(LogLevel::Error, L"AddRotator failed: Element ID cannot be empty.");
+        return;
+    }
+
+    if (FindElementById(options.id))
+    {
+        RemoveElements(options.id);
+    }
+
+    RotatorElement *element = new RotatorElement(options.id, options.x, options.y, options.rotatorImageName);
+
+    PropertyParser::ApplyRotatorOptions(element, options);
+
+    m_Elements.push_back(element);
+    UpdateContainerForElement(element, options.containerId);
+
+    Redraw();
+}
+
+/*
 ** Add a text content item to the widget.
 ** Text will be rendered with the specified font and styling.
 */
@@ -1772,6 +1799,14 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, duk_context *ctx)
         PropertyParser::PreFillBitmapOptions(options, static_cast<BitmapElement *>(element));
         PropertyParser::ParseBitmapOptions(ctx, options);
         PropertyParser::ApplyBitmapOptions(static_cast<BitmapElement *>(element), options);
+        UpdateContainerForElement(element, options.containerId);
+    }
+    else if (element->GetType() == ELEMENT_ROTATOR)
+    {
+        PropertyParser::RotatorOptions options;
+        PropertyParser::PreFillRotatorOptions(options, static_cast<RotatorElement *>(element));
+        PropertyParser::ParseRotatorOptions(ctx, options);
+        PropertyParser::ApplyRotatorOptions(static_cast<RotatorElement *>(element), options);
         UpdateContainerForElement(element, options.containerId);
     }
 }

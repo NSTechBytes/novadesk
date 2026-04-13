@@ -290,6 +290,19 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
+        JSValue JsWidgetAddRotator(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_EXCEPTION;
+            if (argc < 1 || !JS_IsObject(argv[0]))
+                return ThrowTypeError(ctx, "addRotator", "expected options object");
+            PropertyParser::RotatorOptions options;
+            PropertyParser::ParseRotatorOptions(ctx, argv[0], options, GetWidgetScriptBaseDir(widget));
+            widget->AddRotator(options);
+            return JS_UNDEFINED;
+        }
+
         JSValue JsWidgetRemoveElements(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -440,6 +453,13 @@ namespace novadesk::scripting::quickjs
                 PropertyParser::PreFillBitmapOptions(options, bitmap);
                 PropertyParser::ParseBitmapOptions(ctx, argv[1], options, baseDir);
                 PropertyParser::ApplyBitmapOptions(bitmap, options);
+            }
+            else if (auto *rotator = dynamic_cast<RotatorElement *>(element))
+            {
+                PropertyParser::RotatorOptions options;
+                PropertyParser::PreFillRotatorOptions(options, rotator);
+                PropertyParser::ParseRotatorOptions(ctx, argv[1], options, baseDir);
+                PropertyParser::ApplyRotatorOptions(rotator, options);
             }
 
             widget->Redraw();
@@ -781,6 +801,28 @@ namespace novadesk::scripting::quickjs
 
                 return GetGeneralImagePropertyValue(ctx, element, prop);
             }
+            else if (element->GetType() == ELEMENT_ROTATOR)
+            {
+                auto *rotator = static_cast<RotatorElement *>(element);
+                if (prop == "value")
+                    return JS_NewFloat64(ctx, rotator->GetValue());
+                if (prop == "rotatorImageName")
+                    return JS_NewString(ctx, Utils::ToString(rotator->GetImagePath()).c_str());
+                if (prop == "offsetX")
+                    return JS_NewFloat64(ctx, rotator->GetOffsetX());
+                if (prop == "offsetY")
+                    return JS_NewFloat64(ctx, rotator->GetOffsetY());
+                if (prop == "startAngle")
+                    return JS_NewFloat64(ctx, rotator->GetStartAngle());
+                if (prop == "rotationAngle")
+                    return JS_NewFloat64(ctx, rotator->GetRotationAngle());
+                if (prop == "valueRemainder")
+                    return JS_NewInt32(ctx, rotator->GetValueRemainder());
+                if (prop == "maxValue")
+                    return JS_NewFloat64(ctx, rotator->GetMaxValue());
+
+                return GetGeneralImagePropertyValue(ctx, element, prop);
+            }
             else if (element->GetType() == ELEMENT_BAR)
             {
                 auto *bar = static_cast<BarElement *>(element);
@@ -1117,6 +1159,7 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("addRoundLine", 1, JsWidgetAddRoundLine),
             JS_CFUNC_DEF("addShape", 1, JsWidgetAddShape),
             JS_CFUNC_DEF("addBitmap", 1, JsWidgetAddBitmap),
+            JS_CFUNC_DEF("addRotator", 1, JsWidgetAddRotator),
             JS_CFUNC_DEF("setElementProperty", 2, JsWidgetSetElementProperties),
             JS_CFUNC_DEF("setElementProperties", 2, JsWidgetSetElementProperties),
             JS_CFUNC_DEF("setElementPropertyByGroup", 2, JsWidgetSetElementPropertiesByGroup),

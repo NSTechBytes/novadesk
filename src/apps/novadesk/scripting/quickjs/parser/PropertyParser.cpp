@@ -9,6 +9,7 @@
 #include "../../../shared/Logging.h"
 #include "../../../shared/PathUtils.h"
 #include "../../../shared/Utils.h"
+#include "../../render/RotatorElement.h"
 #include "../engine/JSEngine.h"
 
 namespace PropertyParser
@@ -763,6 +764,39 @@ namespace PropertyParser
             options.bitmapAlign = BITMAP_ALIGN_LEFT;
     }
 
+    void ParseRotatorOptions(JSContext *ctx, JSValueConst obj, RotatorOptions &options, const std::wstring &baseDir)
+    {
+        ParseElementOptions(ctx, obj, options, baseDir);
+        ParseGeneralImageOptions(ctx, obj, options);
+
+        options.hasImageCrop = false;
+
+        // Read value
+        JSValue v = JS_GetPropertyStr(ctx, obj, "value");
+        if (!JS_IsException(v) && !JS_IsUndefined(v) && !JS_IsNull(v))
+        {
+            double d = 0.0;
+            if (JS_ToFloat64(ctx, &d, v) == 0)
+            {
+                options.value = d;
+            }
+        }
+        JS_FreeValue(ctx, v);
+
+        options.rotatorImageName = GetStringProp(ctx, obj, "rotatorImageName");
+        if (!options.rotatorImageName.empty())
+        {
+            options.rotatorImageName = PathUtils::ResolvePath(options.rotatorImageName, baseDir);
+        }
+
+        { float tmp = static_cast<float>(options.offsetX); if (GetFloatProp(ctx, obj, "offsetX", tmp)) options.offsetX = static_cast<double>(tmp); }
+        { float tmp = static_cast<float>(options.offsetY); if (GetFloatProp(ctx, obj, "offsetY", tmp)) options.offsetY = static_cast<double>(tmp); }
+        { float tmp = static_cast<float>(options.startAngle); if (GetFloatProp(ctx, obj, "startAngle", tmp)) options.startAngle = static_cast<double>(tmp); }
+        { float tmp = static_cast<float>(options.rotationAngle); if (GetFloatProp(ctx, obj, "rotationAngle", tmp)) options.rotationAngle = static_cast<double>(tmp); }
+        GetIntProp(ctx, obj, "valueRemainder", options.valueRemainder);
+        { float tmp = static_cast<float>(options.maxValue); if (GetFloatProp(ctx, obj, "maxValue", tmp)) options.maxValue = static_cast<double>(tmp); }
+    }
+
     void ParseTextOptions(JSContext *ctx, JSValueConst obj, TextOptions &options, const std::wstring &baseDir)
     {
         ParseElementOptions(ctx, obj, options, baseDir);
@@ -1366,6 +1400,33 @@ namespace PropertyParser
             element->SetColorMatrix(options.colorMatrix.data());
     }
 
+    void ApplyRotatorOptions(RotatorElement *element, const RotatorOptions &options)
+    {
+        if (!element)
+            return;
+
+        ApplyElementOptions(element, options);
+        if (!options.rotatorImageName.empty())
+            element->UpdateImage(options.rotatorImageName);
+
+        element->SetValue(options.value);
+        element->SetOffsetX(options.offsetX);
+        element->SetOffsetY(options.offsetY);
+        element->SetStartAngle(options.startAngle);
+        element->SetRotationAngle(options.rotationAngle);
+        element->SetValueRemainder(options.valueRemainder);
+        element->SetMaxValue(options.maxValue);
+
+        element->SetUseExifOrientation(options.useExifOrientation);
+        element->SetGrayscale(options.grayscale);
+        element->SetImageAlpha(options.imageAlpha);
+        element->SetImageFlip(options.imageFlip);
+        if (options.hasImageTint)
+            element->SetImageTint(options.imageTint, options.imageTintAlpha);
+        if (options.hasColorMatrix)
+            element->SetColorMatrix(options.colorMatrix.data());
+    }
+
     void ApplyTextOptions(TextElement *element, const TextOptions &options)
     {
         if (!element)
@@ -1670,6 +1731,40 @@ namespace PropertyParser
         options.bitmapDigits = element->GetBitmapDigits();
         options.bitmapAlign = element->GetBitmapAlign();
         options.bitmapSeparation = element->GetBitmapSeparation();
+
+        options.useExifOrientation = element->GetUseExifOrientation();
+        options.grayscale = element->IsGrayscale();
+        options.imageAlpha = element->GetImageAlpha();
+        options.imageFlip = element->GetImageFlip();
+        if (element->HasImageTint())
+        {
+            options.hasImageTint = true;
+            options.imageTint = element->GetImageTint();
+            options.imageTintAlpha = element->GetImageTintAlpha();
+        }
+        if (element->HasColorMatrix())
+        {
+            options.hasColorMatrix = true;
+            const float *m = element->GetColorMatrix();
+            for (int i = 0; i < 20; ++i) options.colorMatrix[i] = m[i];
+        }
+    }
+
+    void PreFillRotatorOptions(RotatorOptions &options, RotatorElement *element)
+    {
+        if (!element)
+            return;
+
+        PreFillElementOptions(options, element);
+
+        options.value = element->GetValue();
+        options.rotatorImageName = element->GetImagePath();
+        options.offsetX = element->GetOffsetX();
+        options.offsetY = element->GetOffsetY();
+        options.startAngle = element->GetStartAngle();
+        options.rotationAngle = element->GetRotationAngle();
+        options.valueRemainder = element->GetValueRemainder();
+        options.maxValue = element->GetMaxValue();
 
         options.useExifOrientation = element->GetUseExifOrientation();
         options.grayscale = element->IsGrayscale();
@@ -2039,6 +2134,12 @@ namespace PropertyParser
         ParseGeneralImageOptions(ctx, options);
         options.width = 0;
         options.height = 0;
+    }
+
+    void ParseRotatorOptions(duk_context *ctx, RotatorOptions &options)
+    {
+        ParseElementOptions(ctx, options);
+        ParseGeneralImageOptions(ctx, options);
     }
 }
 

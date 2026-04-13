@@ -187,16 +187,16 @@ void BitmapElement::Render(ID2D1DeviceContext *context)
 
     if (m_Extend)
     {
-        // Match Rainmeter: m_Value is truncated and clamped at 0
         long long value = static_cast<long long>(m_Value);
-        if (value < 0) value = 0;
+        if (value < 0)
+            value = 0;
 
         const int realFrames = GetRealFrameCount();
         const int digitCount = GetDigitCountForValue(value, realFrames);
         const int spacing = m_Separation;
 
         const float totalWidth = frameWidth * static_cast<float>(digitCount) +
-                               static_cast<float>((digitCount > 1 ? (digitCount - 1) : 0) * spacing);
+                                 static_cast<float>((digitCount > 1 ? (digitCount - 1) : 0) * spacing);
 
         float startX = static_cast<float>(contentX);
         if (m_Align == BITMAP_ALIGN_CENTER)
@@ -251,8 +251,10 @@ void BitmapElement::Render(ID2D1DeviceContext *context)
     {
         // When extend=false, normalize the value to 0.0-1.0 range
         double normalizedValue = m_Value / m_MaxValue;
-        if (normalizedValue < 0.0) normalizedValue = 0.0;
-        if (normalizedValue > 1.0) normalizedValue = 1.0;
+        if (normalizedValue < 0.0)
+            normalizedValue = 0.0;
+        if (normalizedValue > 1.0)
+            normalizedValue = 1.0;
 
         int frame = ResolveFrameForNormalizedValue(normalizedValue);
         float srcX = 0.0f;

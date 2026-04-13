@@ -34,7 +34,8 @@ enum ElementType
     ELEMENT_ROUNDLINE,
     ELEMENT_SHAPE,
     ELEMENT_BITMAP,
-    ELEMENT_BUTTON
+    ELEMENT_BUTTON,
+    ELEMENT_ROTATOR
 };
 
 struct GfxRect {
