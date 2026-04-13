@@ -6,6 +6,7 @@
 
 #include "../../domain/Widget.h"
 #include "../../render/BarElement.h"
+#include "../../render/BitmapElement.h"
 #include "../../render/ImageElement.h"
 #include "../../render/LineElement.h"
 #include "../../render/RoundLineElement.h"
@@ -72,6 +73,7 @@ namespace novadesk::scripting::quickjs
                 bool val = false;
                 if (auto *img = dynamic_cast<ImageElement *>(element)) val = img->IsGrayscale();
                 else if (auto *btn = dynamic_cast<ButtonElement *>(element)) val = btn->IsGrayscale();
+                else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) val = bmp->IsGrayscale();
                 return JS_NewBool(ctx, val ? 1 : 0);
             }
             if (prop == "useExifOrientation")
@@ -79,6 +81,7 @@ namespace novadesk::scripting::quickjs
                 bool val = false;
                 if (auto *img = dynamic_cast<ImageElement *>(element)) val = img->GetUseExifOrientation();
                 else if (auto *btn = dynamic_cast<ButtonElement *>(element)) val = btn->GetUseExifOrientation();
+                else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) val = bmp->GetUseExifOrientation();
                 return JS_NewBool(ctx, val ? 1 : 0);
             }
             if (prop == "imageAlpha")
@@ -86,6 +89,7 @@ namespace novadesk::scripting::quickjs
                 BYTE val = 255;
                 if (auto *img = dynamic_cast<ImageElement *>(element)) val = img->GetImageAlpha();
                 else if (auto *btn = dynamic_cast<ButtonElement *>(element)) val = btn->GetImageAlpha();
+                else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) val = bmp->GetImageAlpha();
                 return JS_NewInt32(ctx, static_cast<int>(val));
             }
             if (prop == "imageTint")
@@ -99,6 +103,9 @@ namespace novadesk::scripting::quickjs
                 } else if (auto *btn = dynamic_cast<ButtonElement *>(element)) {
                     hasTint = btn->HasImageTint();
                     if (hasTint) { color = btn->GetImageTint(); alpha = btn->GetImageTintAlpha(); }
+                } else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) {
+                    hasTint = bmp->HasImageTint();
+                    if (hasTint) { color = bmp->GetImageTint(); alpha = bmp->GetImageTintAlpha(); }
                 }
                 if (hasTint) {
                     const std::wstring c = ColorUtil::ToRGBAString(color, alpha);
@@ -110,6 +117,7 @@ namespace novadesk::scripting::quickjs
                 ImageFlipMode flip = IMAGE_FLIP_NONE;
                 if (auto *img = dynamic_cast<ImageElement *>(element)) flip = img->GetImageFlip();
                 else if (auto *btn = dynamic_cast<ButtonElement *>(element)) flip = btn->GetImageFlip();
+                else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) flip = bmp->GetImageFlip();
                 
                 const char *flipStr = "none";
                 switch (flip) {
@@ -152,6 +160,9 @@ namespace novadesk::scripting::quickjs
                 } else if (auto *btn = dynamic_cast<ButtonElement *>(element)) {
                     hasMatrix = btn->HasColorMatrix();
                     if (hasMatrix) m = btn->GetColorMatrix();
+                } else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) {
+                    hasMatrix = bmp->HasColorMatrix();
+                    if (hasMatrix) m = bmp->GetColorMatrix();
                 }
                 if (hasMatrix && m) {
                     JSValue arr = JS_NewArray(ctx);
@@ -263,6 +274,19 @@ namespace novadesk::scripting::quickjs
             PropertyParser::ShapeOptions options;
             PropertyParser::ParseShapeOptions(ctx, argv[0], options, GetWidgetScriptBaseDir(widget));
             widget->AddShape(options);
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsWidgetAddBitmap(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_EXCEPTION;
+            if (argc < 1 || !JS_IsObject(argv[0]))
+                return ThrowTypeError(ctx, "addBitmap", "expected options object");
+            PropertyParser::BitmapOptions options;
+            PropertyParser::ParseBitmapOptions(ctx, argv[0], options, GetWidgetScriptBaseDir(widget));
+            widget->AddBitmap(options);
             return JS_UNDEFINED;
         }
 
@@ -409,6 +433,13 @@ namespace novadesk::scripting::quickjs
                 PropertyParser::PreFillShapeOptions(options, shape);
                 PropertyParser::ParseShapeOptions(ctx, argv[1], options, baseDir);
                 PropertyParser::ApplyShapeOptions(shape, options);
+            }
+            else if (auto *bitmap = dynamic_cast<BitmapElement *>(element))
+            {
+                PropertyParser::BitmapOptions options;
+                PropertyParser::PreFillBitmapOptions(options, bitmap);
+                PropertyParser::ParseBitmapOptions(ctx, argv[1], options, baseDir);
+                PropertyParser::ApplyBitmapOptions(bitmap, options);
             }
 
             widget->Redraw();
@@ -708,6 +739,44 @@ namespace novadesk::scripting::quickjs
                 if (prop == "buttonImageName")
                     return JS_NewString(ctx, Utils::ToString(btn->GetImagePath()).c_str());
                 
+                return GetGeneralImagePropertyValue(ctx, element, prop);
+            }
+            else if (element->GetType() == ELEMENT_BITMAP)
+            {
+                auto *bitmap = static_cast<BitmapElement *>(element);
+                if (prop == "value")
+                    return JS_NewFloat64(ctx, bitmap->GetValue());
+                if (prop == "bitmapImageName")
+                    return JS_NewString(ctx, Utils::ToString(bitmap->GetImagePath()).c_str());
+                if (prop == "bitmapFrames")
+                    return JS_NewInt32(ctx, bitmap->GetBitmapFrames());
+                if (prop == "bitmapZeroFrame")
+                    return JS_NewBool(ctx, bitmap->GetBitmapZeroFrame() ? 1 : 0);
+                if (prop == "bitmapExtend")
+                    return JS_NewBool(ctx, bitmap->GetBitmapExtend() ? 1 : 0);
+                if (prop == "bitmapOrientation")
+                    return JS_NewString(ctx, Utils::ToString(bitmap->GetBitmapOrientation()).c_str());
+                if (prop == "bitmapDigits")
+                    return JS_NewInt32(ctx, bitmap->GetBitmapDigits());
+                if (prop == "bitmapSeparation")
+                    return JS_NewInt32(ctx, bitmap->GetBitmapSeparation());
+                if (prop == "bitmapAlign")
+                {
+                    const char *align = "left";
+                    switch (bitmap->GetBitmapAlign())
+                    {
+                    case BITMAP_ALIGN_CENTER:
+                        align = "center";
+                        break;
+                    case BITMAP_ALIGN_RIGHT:
+                        align = "right";
+                        break;
+                    default:
+                        break;
+                    }
+                    return JS_NewString(ctx, align);
+                }
+
                 return GetGeneralImagePropertyValue(ctx, element, prop);
             }
             else if (element->GetType() == ELEMENT_BAR)
@@ -1045,6 +1114,7 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("addLine", 1, JsWidgetAddLine),
             JS_CFUNC_DEF("addRoundLine", 1, JsWidgetAddRoundLine),
             JS_CFUNC_DEF("addShape", 1, JsWidgetAddShape),
+            JS_CFUNC_DEF("addBitmap", 1, JsWidgetAddBitmap),
             JS_CFUNC_DEF("setElementProperty", 2, JsWidgetSetElementProperties),
             JS_CFUNC_DEF("setElementProperties", 2, JsWidgetSetElementProperties),
             JS_CFUNC_DEF("setElementPropertyByGroup", 2, JsWidgetSetElementPropertiesByGroup),

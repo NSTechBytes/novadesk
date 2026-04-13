@@ -31,6 +31,7 @@
 #include "ColorUtil.h"
 #include "PathUtils.h"
 #include "ButtonElement.h"
+#include "BitmapElement.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 
 #define WIDGET_CLASS_NAME L"NovadeskWidget"
@@ -1052,6 +1053,32 @@ void Widget::AddButton(const PropertyParser::ButtonOptions &options)
 }
 
 /*
+** Add a bitmap content item to the widget.
+*/
+void Widget::AddBitmap(const PropertyParser::BitmapOptions &options)
+{
+    if (options.id.empty())
+    {
+        Logging::Log(LogLevel::Error, L"AddBitmap failed: Element ID cannot be empty.");
+        return;
+    }
+
+    if (FindElementById(options.id))
+    {
+        RemoveElements(options.id);
+    }
+
+    BitmapElement *element = new BitmapElement(options.id, options.x, options.y, options.bitmapImageName);
+
+    PropertyParser::ApplyBitmapOptions(element, options);
+
+    m_Elements.push_back(element);
+    UpdateContainerForElement(element, options.containerId);
+
+    Redraw();
+}
+
+/*
 ** Add a text content item to the widget.
 ** Text will be rendered with the specified font and styling.
 */
@@ -1737,6 +1764,14 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, duk_context *ctx)
         PropertyParser::PreFillButtonOptions(options, static_cast<ButtonElement *>(element));
         PropertyParser::ParseButtonOptions(ctx, options);
         PropertyParser::ApplyButtonOptions(static_cast<ButtonElement *>(element), options);
+        UpdateContainerForElement(element, options.containerId);
+    }
+    else if (element->GetType() == ELEMENT_BITMAP)
+    {
+        PropertyParser::BitmapOptions options;
+        PropertyParser::PreFillBitmapOptions(options, static_cast<BitmapElement *>(element));
+        PropertyParser::ParseBitmapOptions(ctx, options);
+        PropertyParser::ApplyBitmapOptions(static_cast<BitmapElement *>(element), options);
         UpdateContainerForElement(element, options.containerId);
     }
 }

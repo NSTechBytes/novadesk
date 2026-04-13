@@ -715,6 +715,53 @@ namespace PropertyParser
         GetEventCallbackProp(ctx, obj, "buttonAction", options.onLeftMouseUpCallbackId);
     }
 
+    void ParseBitmapOptions(JSContext *ctx, JSValueConst obj, BitmapOptions &options, const std::wstring &baseDir)
+    {
+        ParseElementOptions(ctx, obj, options, baseDir);
+        ParseGeneralImageOptions(ctx, obj, options);
+
+        // Bitmap meter behavior is frame-driven; width/height are ignored.
+        options.width = 0;
+        options.height = 0;
+
+        // ImageCrop is intentionally ignored for Bitmap element semantics.
+        options.hasImageCrop = false;
+
+        // Read as double to preserve numeric precision from JS.
+        JSValue v = JS_GetPropertyStr(ctx, obj, "value");
+        if (!JS_IsException(v) && !JS_IsUndefined(v) && !JS_IsNull(v))
+        {
+            double d = 0.0;
+            if (JS_ToFloat64(ctx, &d, v) == 0)
+            {
+                options.value = d;
+            }
+        }
+        JS_FreeValue(ctx, v);
+
+        options.bitmapImageName = GetStringProp(ctx, obj, "bitmapImageName");
+        if (!options.bitmapImageName.empty())
+        {
+            options.bitmapImageName = PathUtils::ResolvePath(options.bitmapImageName, baseDir);
+        }
+
+        GetIntProp(ctx, obj, "bitmapFrames", options.bitmapFrames);
+        GetBoolProp(ctx, obj, "bitmapZeroFrame", options.bitmapZeroFrame);
+        GetBoolProp(ctx, obj, "bitmapExtend", options.bitmapExtend);
+        options.bitmapOrientation = GetStringProp(ctx, obj, "bitmapOrientation");
+        GetIntProp(ctx, obj, "bitmapDigits", options.bitmapDigits);
+        GetIntProp(ctx, obj, "bitmapSeparation", options.bitmapSeparation);
+
+        std::wstring align = GetStringProp(ctx, obj, "bitmapAlign");
+        std::transform(align.begin(), align.end(), align.begin(), ::towlower);
+        if (align == L"center")
+            options.bitmapAlign = BITMAP_ALIGN_CENTER;
+        else if (align == L"right")
+            options.bitmapAlign = BITMAP_ALIGN_RIGHT;
+        else if (align == L"left")
+            options.bitmapAlign = BITMAP_ALIGN_LEFT;
+    }
+
     void ParseTextOptions(JSContext *ctx, JSValueConst obj, TextOptions &options, const std::wstring &baseDir)
     {
         ParseElementOptions(ctx, obj, options, baseDir);
@@ -1289,6 +1336,34 @@ namespace PropertyParser
             element->SetColorMatrix(options.colorMatrix.data());
     }
 
+    void ApplyBitmapOptions(BitmapElement *element, const BitmapOptions &options)
+    {
+        if (!element)
+            return;
+
+        ApplyElementOptions(element, options);
+        if (!options.bitmapImageName.empty())
+            element->UpdateImage(options.bitmapImageName);
+
+        element->SetValue(options.value);
+        element->SetBitmapFrames(options.bitmapFrames);
+        element->SetBitmapZeroFrame(options.bitmapZeroFrame);
+        element->SetBitmapExtend(options.bitmapExtend);
+        element->SetBitmapOrientation(options.bitmapOrientation);
+        element->SetBitmapDigits(options.bitmapDigits);
+        element->SetBitmapAlign(options.bitmapAlign);
+        element->SetBitmapSeparation(options.bitmapSeparation);
+
+        element->SetUseExifOrientation(options.useExifOrientation);
+        element->SetGrayscale(options.grayscale);
+        element->SetImageAlpha(options.imageAlpha);
+        element->SetImageFlip(options.imageFlip);
+        if (options.hasImageTint)
+            element->SetImageTint(options.imageTint, options.imageTintAlpha);
+        if (options.hasColorMatrix)
+            element->SetColorMatrix(options.colorMatrix.data());
+    }
+
     void ApplyTextOptions(TextElement *element, const TextOptions &options)
     {
         if (!element)
@@ -1558,6 +1633,45 @@ namespace PropertyParser
             options.imageCropH = element->GetImageCropH();
             options.imageCropOrigin = element->GetImageCropOrigin();
         }
+        if (element->HasImageTint())
+        {
+            options.hasImageTint = true;
+            options.imageTint = element->GetImageTint();
+            options.imageTintAlpha = element->GetImageTintAlpha();
+        }
+        if (element->HasColorMatrix())
+        {
+            options.hasColorMatrix = true;
+            const float *m = element->GetColorMatrix();
+            for (int i = 0; i < 20; ++i) options.colorMatrix[i] = m[i];
+        }
+    }
+
+    void PreFillBitmapOptions(BitmapOptions &options, BitmapElement *element)
+    {
+        if (!element)
+            return;
+
+        PreFillElementOptions(options, element);
+
+        // Keep width/height invalid for bitmap element options.
+        options.width = 0;
+        options.height = 0;
+
+        options.value = element->GetValue();
+        options.bitmapImageName = element->GetImagePath();
+        options.bitmapFrames = element->GetBitmapFrames();
+        options.bitmapZeroFrame = element->GetBitmapZeroFrame();
+        options.bitmapExtend = element->GetBitmapExtend();
+        options.bitmapOrientation = element->GetBitmapOrientation();
+        options.bitmapDigits = element->GetBitmapDigits();
+        options.bitmapAlign = element->GetBitmapAlign();
+        options.bitmapSeparation = element->GetBitmapSeparation();
+
+        options.useExifOrientation = element->GetUseExifOrientation();
+        options.grayscale = element->IsGrayscale();
+        options.imageAlpha = element->GetImageAlpha();
+        options.imageFlip = element->GetImageFlip();
         if (element->HasImageTint())
         {
             options.hasImageTint = true;
@@ -1915,6 +2029,13 @@ namespace PropertyParser
     {
         ParseElementOptions(ctx, options);
         ParseGeneralImageOptions(ctx, options);
+    }
+    void ParseBitmapOptions(duk_context *ctx, BitmapOptions &options)
+    {
+        ParseElementOptions(ctx, options);
+        ParseGeneralImageOptions(ctx, options);
+        options.width = 0;
+        options.height = 0;
     }
 }
 
