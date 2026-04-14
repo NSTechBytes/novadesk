@@ -865,15 +865,15 @@ namespace novadesk::scripting::quickjs
                 if (prop == "autoRange")
                     return JS_NewBool(ctx, graph->GetAutoRange() ? 1 : 0);
                 if (prop == "lineColor")
-                    return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(graph->GetLineColor(), graph->GetLineAlpha())).c_str());
-                if (prop == "lineAlpha")
-                    return JS_NewInt32(ctx, graph->GetLineAlpha());
+                    return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(graph->GetLineColor(), 255)).c_str());
                 if (prop == "lineWidth")
                     return JS_NewFloat64(ctx, graph->GetLineWidth());
                 if (prop == "fillColor")
                     return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(graph->GetFillColor(), graph->GetFillAlpha())).c_str());
                 if (prop == "fillAlpha")
                     return JS_NewInt32(ctx, graph->GetFillAlpha());
+                if (prop == "maxPoints")
+                    return JS_NewInt32(ctx, graph->GetMaxPoints());
                 if (prop == "gridColor")
                     return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(graph->GetGridColor(), graph->GetGridAlpha())).c_str());
                 if (prop == "gridAlpha")

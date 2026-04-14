@@ -952,7 +952,8 @@ namespace PropertyParser
         {
             GradientInfo dummy;
             bool dummyHasSolid;
-            ParseGradientOrColor(lc, options.lineColor, options.lineAlpha, dummy, dummyHasSolid);
+            BYTE dummyAlpha = 255;
+            ParseGradientOrColor(lc, options.lineColor, dummyAlpha, dummy, dummyHasSolid);
         }
         GetFloatProp(ctx, obj, "lineWidth", options.lineWidth);
 
@@ -963,6 +964,7 @@ namespace PropertyParser
             bool dummyHasSolid;
             ParseGradientOrColor(fc, options.fillColor, options.fillAlpha, dummy, dummyHasSolid);
         }
+        GetIntProp(ctx, obj, "maxPoints", options.maxPoints);
 
         std::wstring gc = GetStringProp(ctx, obj, "gridColor");
         if (!gc.empty())
@@ -1658,9 +1660,10 @@ namespace PropertyParser
         element->SetMinValue(options.minValue);
         element->SetMaxValue(options.maxValue);
         element->SetAutoRange(options.autoRange);
-        element->SetLineColor(options.lineColor, options.lineAlpha);
+        element->SetLineColor(options.lineColor);
         element->SetLineWidth(options.lineWidth);
         element->SetFillColor(options.fillColor, options.fillAlpha);
+        element->SetMaxPoints(options.maxPoints);
         element->SetGridColor(options.gridColor, options.gridAlpha);
         element->SetGridXSpacing(options.gridX);
         element->SetGridYSpacing(options.gridY);
@@ -2055,10 +2058,10 @@ namespace PropertyParser
         options.maxValue = element->GetMaxValue();
         options.autoRange = element->GetAutoRange();
         options.lineColor = element->GetLineColor();
-        options.lineAlpha = element->GetLineAlpha();
         options.lineWidth = element->GetLineWidth();
         options.fillColor = element->GetFillColor();
         options.fillAlpha = element->GetFillAlpha();
+        options.maxPoints = element->GetMaxPoints();
         options.gridColor = element->GetGridColor();
         options.gridAlpha = element->GetGridAlpha();
         options.gridX = element->GetGridXSpacing();

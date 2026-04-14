@@ -15,6 +15,18 @@ AreaGraphElement::AreaGraphElement(const std::wstring &id, int x, int y, int w, 
 {
 }
 
+void AreaGraphElement::SetData(const std::vector<float> &data)
+{
+    if (m_MaxPoints > 0 && data.size() > (size_t)m_MaxPoints)
+    {
+        m_Data.assign(data.end() - m_MaxPoints, data.end());
+    }
+    else
+    {
+        m_Data = data;
+    }
+}
+
 void AreaGraphElement::Render(ID2D1DeviceContext *context)
 {
     if (!m_Show || !context)
@@ -80,8 +92,10 @@ void AreaGraphElement::Render(ID2D1DeviceContext *context)
             if (norm < 0.0f) norm = 0.0f;
             if (norm > 1.0f) norm = 1.0f;
 
-            float t = (numPoints <= 1) ? 0.0f : (float)i / (float)(numPoints - 1);
-            float px = m_GraphStartLeft ? (left + t * (width - 1.0f)) : (right - t * (width - 1.0f));
+            int capacity = (m_MaxPoints > numPoints) ? m_MaxPoints : numPoints;
+            float dx = (capacity > 1) ? (width - 1.0f) / (float)(capacity - 1) : 0.0f;
+
+            float px = m_GraphStartLeft ? (left + (float)(numPoints - 1 - i) * dx) : (right - (float)(numPoints - 1 - i) * dx);
             float py = !m_Flip ? (bottom - norm * (height - 1.0f)) : (top + norm * (height - 1.0f));
 
             points.push_back(D2D1::Point2F(px, py));
@@ -120,7 +134,6 @@ void AreaGraphElement::Render(ID2D1DeviceContext *context)
                 }
 
                 // Top Line Path (separately to ensure clean stroke)
-                if (m_LineAlpha > 0)
                 {
                     Microsoft::WRL::ComPtr<ID2D1PathGeometry> lineGeom;
                     if (SUCCEEDED(factory->CreatePathGeometry(lineGeom.GetAddressOf())))
@@ -137,10 +150,9 @@ void AreaGraphElement::Render(ID2D1DeviceContext *context)
                             sink->Close();
 
                             Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> lineBrush;
-                            Direct2D::CreateSolidBrush(context, m_LineColor, m_LineAlpha / 255.0f, lineBrush.GetAddressOf());
+                            Direct2D::CreateSolidBrush(context, m_LineColor, 1.0f, lineBrush.GetAddressOf());
                             if (lineBrush)
                             {
-                                context->SetAntialiasMode(m_AntiAlias ? D2D1_ANTIALIAS_MODE_PER_PRIMITIVE : D2D1_ANTIALIAS_MODE_ALIASED);
                                 context->DrawGeometry(lineGeom.Get(), lineBrush.Get(), m_LineWidth);
                             }
                         }

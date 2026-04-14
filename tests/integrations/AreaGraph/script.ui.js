@@ -30,6 +30,7 @@ ui.addAreaGraph({
     gridAlpha: 40,
     gridX: 30,
     gridY: 20,
+    maxPoints: 20,
     graphStart: "right"
 });
 
@@ -45,7 +46,7 @@ ui.addText({
 ui.endUpdate();
 
 const cpuHistory = [];
-const maxPoints = 100;
+// const maxPoints = 20;
 
 ipcRenderer.on("graph:tick", function (event, payloadArg) {
     const rawPayload = (payloadArg === undefined) ? event : payloadArg;
@@ -58,7 +59,7 @@ ipcRenderer.on("graph:tick", function (event, payloadArg) {
 
     const cpu = payload.cpu;
     cpuHistory.push(cpu);
-    if (cpuHistory.length > maxPoints) cpuHistory.shift();
+    // if (cpuHistory.length > maxPoints) cpuHistory.shift();
 
     ui.setElementProperties("cpu-graph", {
         data: cpuHistory

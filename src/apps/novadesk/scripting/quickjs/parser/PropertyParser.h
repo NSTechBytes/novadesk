@@ -193,10 +193,10 @@ namespace PropertyParser
         float maxValue = 1.0f;
         bool autoRange = false;
         COLORREF lineColor = RGB(0, 180, 255);
-        BYTE lineAlpha = 255;
         float lineWidth = 1.0f;
         COLORREF fillColor = RGB(0, 180, 255);
         BYTE fillAlpha = 50;
+        int maxPoints = 0;
         COLORREF gridColor = RGB(100, 100, 100);
         BYTE gridAlpha = 100;
         int gridX = 20;

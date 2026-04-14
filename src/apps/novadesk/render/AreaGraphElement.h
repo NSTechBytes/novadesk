@@ -21,7 +21,7 @@ public:
     virtual int GetAutoWidth() override { return 0; }
     virtual int GetAutoHeight() override { return 0; }
 
-    void SetData(const std::vector<float> &data) { m_Data = data; }
+    void SetData(const std::vector<float> &data);
     const std::vector<float> &GetData() const { return m_Data; }
 
     void SetMinValue(float minValue) { m_MinValue = minValue; }
@@ -31,9 +31,8 @@ public:
     void SetAutoRange(bool enable) { m_AutoRange = enable; }
     bool GetAutoRange() const { return m_AutoRange; }
 
-    void SetLineColor(COLORREF color, BYTE alpha) { m_LineColor = color; m_LineAlpha = alpha; }
+    void SetLineColor(COLORREF color) { m_LineColor = color; }
     COLORREF GetLineColor() const { return m_LineColor; }
-    BYTE GetLineAlpha() const { return m_LineAlpha; }
     
     void SetFillColor(COLORREF color, BYTE alpha) { m_FillColor = color; m_FillAlpha = alpha; }
     COLORREF GetFillColor() const { return m_FillColor; }
@@ -45,6 +44,9 @@ public:
 
     void SetLineWidth(float width) { m_LineWidth = (width < 0.1f) ? 0.1f : width; }
     float GetLineWidth() const { return m_LineWidth; }
+
+    void SetMaxPoints(int maxPoints) { m_MaxPoints = (maxPoints < 0) ? 0 : maxPoints; }
+    int GetMaxPoints() const { return m_MaxPoints; }
 
     void SetGridXSpacing(int spacing) { m_GridXSpacing = spacing; }
     int GetGridXSpacing() const { return m_GridXSpacing; }
@@ -64,9 +66,9 @@ private:
     float m_MinValue = 0.0f;
     float m_MaxValue = 1.0f;
     bool m_AutoRange = false;
+    int m_MaxPoints = 0;
 
     COLORREF m_LineColor = RGB(0, 180, 255);
-    BYTE m_LineAlpha = 255;
     float m_LineWidth = 1.0f;
 
     COLORREF m_FillColor = RGB(0, 180, 255);
