@@ -21,6 +21,7 @@
 #include "BarElement.h"
 #include "LineElement.h"
 #include "HistogramElement.h"
+#include "AreaGraphElement.h"
 #include "RoundLineElement.h"
 #include "RectangleShape.h"
 #include "EllipseShape.h"
@@ -1300,6 +1301,31 @@ void Widget::AddShape(const PropertyParser::ShapeOptions &options)
     Redraw();
 }
 
+/*
+** Add an area graph content item to the widget.
+*/
+void Widget::AddAreaGraph(const PropertyParser::AreaGraphOptions &options)
+{
+    if (options.id.empty())
+    {
+        Logging::Log(LogLevel::Error, L"AddAreaGraph failed: Element ID cannot be empty.");
+        return;
+    }
+
+    if (FindElementById(options.id))
+    {
+        RemoveElements(options.id);
+    }
+
+    AreaGraphElement *element = new AreaGraphElement(options.id, options.x, options.y, options.width, options.height);
+    PropertyParser::ApplyAreaGraphOptions(element, options);
+
+    m_Elements.push_back(element);
+    UpdateContainerForElement(element, options.containerId);
+
+    Redraw();
+}
+
 bool Widget::BuildCombinedShapeGeometry(PathShape *target, const PropertyParser::ShapeOptions &options)
 {
     if (!target)
@@ -1841,6 +1867,14 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, duk_context *ctx)
         PropertyParser::PreFillRotatorOptions(options, static_cast<RotatorElement *>(element));
         PropertyParser::ParseRotatorOptions(ctx, options);
         PropertyParser::ApplyRotatorOptions(static_cast<RotatorElement *>(element), options);
+        UpdateContainerForElement(element, options.containerId);
+    }
+    else if (element->GetType() == ELEMENT_AREA_GRAPH)
+    {
+        PropertyParser::AreaGraphOptions options;
+        PropertyParser::PreFillAreaGraphOptions(options, static_cast<AreaGraphElement *>(element));
+        PropertyParser::ParseAreaGraphOptions(ctx, options);
+        PropertyParser::ApplyAreaGraphOptions(static_cast<AreaGraphElement *>(element), options);
         UpdateContainerForElement(element, options.containerId);
     }
 }

@@ -8,6 +8,7 @@
 #include "../../render/BarElement.h"
 #include "../../render/BitmapElement.h"
 #include "../../render/HistogramElement.h"
+#include "../../render/AreaGraphElement.h"
 #include "../../render/ImageElement.h"
 #include "../../render/LineElement.h"
 #include "../../render/RoundLineElement.h"
@@ -317,6 +318,19 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
+        JSValue JsWidgetAddAreaGraph(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_EXCEPTION;
+            if (argc < 1 || !JS_IsObject(argv[0]))
+                return ThrowTypeError(ctx, "addAreaGraph", "expected options object");
+            PropertyParser::AreaGraphOptions options;
+            PropertyParser::ParseAreaGraphOptions(ctx, argv[0], options, GetWidgetScriptBaseDir(widget));
+            widget->AddAreaGraph(options);
+            return JS_UNDEFINED;
+        }
+
         JSValue JsWidgetRemoveElements(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -481,6 +495,13 @@ namespace novadesk::scripting::quickjs
                 PropertyParser::PreFillRotatorOptions(options, rotator);
                 PropertyParser::ParseRotatorOptions(ctx, argv[1], options, baseDir);
                 PropertyParser::ApplyRotatorOptions(rotator, options);
+            }
+            else if (auto *graph = dynamic_cast<AreaGraphElement *>(element))
+            {
+                PropertyParser::AreaGraphOptions options;
+                PropertyParser::PreFillAreaGraphOptions(options, graph);
+                PropertyParser::ParseAreaGraphOptions(ctx, argv[1], options, baseDir);
+                PropertyParser::ApplyAreaGraphOptions(graph, options);
             }
 
             widget->Redraw();
@@ -823,6 +844,48 @@ namespace novadesk::scripting::quickjs
                 }
 
                 return GetGeneralImagePropertyValue(ctx, element, prop);
+            }
+            else if (element->GetType() == ELEMENT_AREA_GRAPH)
+            {
+                auto *graph = static_cast<AreaGraphElement *>(element);
+                if (prop == "data")
+                {
+                    JSValue arr = JS_NewArray(ctx);
+                    const auto &data = graph->GetData();
+                    for (uint32_t i = 0; i < static_cast<uint32_t>(data.size()); ++i)
+                    {
+                        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, data[i]));
+                    }
+                    return arr;
+                }
+                if (prop == "minValue")
+                    return JS_NewFloat64(ctx, graph->GetMinValue());
+                if (prop == "maxValue")
+                    return JS_NewFloat64(ctx, graph->GetMaxValue());
+                if (prop == "autoRange")
+                    return JS_NewBool(ctx, graph->GetAutoRange() ? 1 : 0);
+                if (prop == "lineColor")
+                    return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(graph->GetLineColor(), graph->GetLineAlpha())).c_str());
+                if (prop == "lineAlpha")
+                    return JS_NewInt32(ctx, graph->GetLineAlpha());
+                if (prop == "lineWidth")
+                    return JS_NewFloat64(ctx, graph->GetLineWidth());
+                if (prop == "fillColor")
+                    return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(graph->GetFillColor(), graph->GetFillAlpha())).c_str());
+                if (prop == "fillAlpha")
+                    return JS_NewInt32(ctx, graph->GetFillAlpha());
+                if (prop == "gridColor")
+                    return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(graph->GetGridColor(), graph->GetGridAlpha())).c_str());
+                if (prop == "gridAlpha")
+                    return JS_NewInt32(ctx, graph->GetGridAlpha());
+                if (prop == "gridX")
+                    return JS_NewInt32(ctx, graph->GetGridXSpacing());
+                if (prop == "gridY")
+                    return JS_NewInt32(ctx, graph->GetGridYSpacing());
+                if (prop == "graphStart")
+                    return JS_NewString(ctx, graph->GetGraphStartLeft() ? "left" : "right");
+                if (prop == "flip")
+                    return JS_NewBool(ctx, graph->GetFlip() ? 1 : 0);
             }
             else if (element->GetType() == ELEMENT_ROTATOR)
             {
@@ -1233,6 +1296,7 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("addShape", 1, JsWidgetAddShape),
             JS_CFUNC_DEF("addBitmap", 1, JsWidgetAddBitmap),
             JS_CFUNC_DEF("addRotator", 1, JsWidgetAddRotator),
+            JS_CFUNC_DEF("addAreaGraph", 1, JsWidgetAddAreaGraph),
             JS_CFUNC_DEF("setElementProperty", 2, JsWidgetSetElementProperties),
             JS_CFUNC_DEF("setElementProperties", 2, JsWidgetSetElementProperties),
             JS_CFUNC_DEF("setElementPropertyByGroup", 2, JsWidgetSetElementPropertiesByGroup),

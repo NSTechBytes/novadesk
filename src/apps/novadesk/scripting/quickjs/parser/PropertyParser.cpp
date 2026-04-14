@@ -10,6 +10,7 @@
 #include "../../../shared/PathUtils.h"
 #include "../../../shared/Utils.h"
 #include "../../render/RotatorElement.h"
+#include "../../render/AreaGraphElement.h"
 #include "../../render/HistogramElement.h"
 #include "../engine/JSEngine.h"
 
@@ -918,6 +919,65 @@ namespace PropertyParser
         { float tmp = static_cast<float>(options.maxValue); if (GetFloatProp(ctx, obj, "maxValue", tmp)) options.maxValue = static_cast<double>(tmp); }
     }
 
+    void ParseAreaGraphOptions(JSContext *ctx, JSValueConst obj, AreaGraphOptions &options, const std::wstring &baseDir)
+    {
+        ParseElementOptions(ctx, obj, options, baseDir);
+
+        JSValue dataVal = JS_GetPropertyStr(ctx, obj, "data");
+        if (JS_IsArray(dataVal))
+        {
+            uint32_t len = 0;
+            JSValue lenVal = JS_GetPropertyStr(ctx, dataVal, "length");
+            JS_ToUint32(ctx, &len, lenVal);
+            JS_FreeValue(ctx, lenVal);
+
+            options.data.clear();
+            for (uint32_t i = 0; i < len; ++i)
+            {
+                JSValue v = JS_GetPropertyUint32(ctx, dataVal, i);
+                double d = 0.0;
+                JS_ToFloat64(ctx, &d, v);
+                options.data.push_back(static_cast<float>(d));
+                JS_FreeValue(ctx, v);
+            }
+        }
+        JS_FreeValue(ctx, dataVal);
+
+        GetFloatProp(ctx, obj, "minValue", options.minValue);
+        GetFloatProp(ctx, obj, "maxValue", options.maxValue);
+        GetBoolProp(ctx, obj, "autoRange", options.autoRange);
+
+        std::wstring lc = GetStringProp(ctx, obj, "lineColor");
+        if (!lc.empty())
+        {
+            GradientInfo dummy;
+            bool dummyHasSolid;
+            ParseGradientOrColor(lc, options.lineColor, options.lineAlpha, dummy, dummyHasSolid);
+        }
+        GetFloatProp(ctx, obj, "lineWidth", options.lineWidth);
+
+        std::wstring fc = GetStringProp(ctx, obj, "fillColor");
+        if (!fc.empty())
+        {
+            GradientInfo dummy;
+            bool dummyHasSolid;
+            ParseGradientOrColor(fc, options.fillColor, options.fillAlpha, dummy, dummyHasSolid);
+        }
+
+        std::wstring gc = GetStringProp(ctx, obj, "gridColor");
+        if (!gc.empty())
+        {
+            GradientInfo dummy;
+            bool dummyHasSolid;
+            ParseGradientOrColor(gc, options.gridColor, options.gridAlpha, dummy, dummyHasSolid);
+        }
+
+        GetIntProp(ctx, obj, "gridX", options.gridX);
+        GetIntProp(ctx, obj, "gridY", options.gridY);
+        GetBoolProp(ctx, obj, "graphStartLeft", options.graphStartLeft);
+        GetBoolProp(ctx, obj, "flip", options.flip);
+    }
+
     void ParseTextOptions(JSContext *ctx, JSValueConst obj, TextOptions &options, const std::wstring &baseDir)
     {
         ParseElementOptions(ctx, obj, options, baseDir);
@@ -1588,6 +1648,26 @@ namespace PropertyParser
             element->SetColorMatrix(options.colorMatrix.data());
     }
 
+    void ApplyAreaGraphOptions(AreaGraphElement *element, const AreaGraphOptions &options)
+    {
+        if (!element)
+            return;
+
+        ApplyElementOptions(element, options);
+        element->SetData(options.data);
+        element->SetMinValue(options.minValue);
+        element->SetMaxValue(options.maxValue);
+        element->SetAutoRange(options.autoRange);
+        element->SetLineColor(options.lineColor, options.lineAlpha);
+        element->SetLineWidth(options.lineWidth);
+        element->SetFillColor(options.fillColor, options.fillAlpha);
+        element->SetGridColor(options.gridColor, options.gridAlpha);
+        element->SetGridXSpacing(options.gridX);
+        element->SetGridYSpacing(options.gridY);
+        element->SetGraphStartLeft(options.graphStartLeft);
+        element->SetFlip(options.flip);
+    }
+
     void ApplyTextOptions(TextElement *element, const TextOptions &options)
     {
         if (!element)
@@ -1962,6 +2042,29 @@ namespace PropertyParser
             const float *m = element->GetColorMatrix();
             for (int i = 0; i < 20; ++i) options.colorMatrix[i] = m[i];
         }
+    }
+
+    void PreFillAreaGraphOptions(AreaGraphOptions &options, AreaGraphElement *element)
+    {
+        if (!element)
+            return;
+
+        PreFillElementOptions(options, element);
+        options.data = element->GetData();
+        options.minValue = element->GetMinValue();
+        options.maxValue = element->GetMaxValue();
+        options.autoRange = element->GetAutoRange();
+        options.lineColor = element->GetLineColor();
+        options.lineAlpha = element->GetLineAlpha();
+        options.lineWidth = element->GetLineWidth();
+        options.fillColor = element->GetFillColor();
+        options.fillAlpha = element->GetFillAlpha();
+        options.gridColor = element->GetGridColor();
+        options.gridAlpha = element->GetGridAlpha();
+        options.gridX = element->GetGridXSpacing();
+        options.gridY = element->GetGridYSpacing();
+        options.graphStartLeft = element->GetGraphStartLeft();
+        options.flip = element->GetFlip();
     }
 
     void PreFillTextOptions(TextOptions &options, TextElement *element)
@@ -2343,6 +2446,11 @@ namespace PropertyParser
     {
         ParseElementOptions(ctx, options);
         ParseGeneralImageOptions(ctx, options);
+    }
+
+    void ParseAreaGraphOptions(duk_context *ctx, AreaGraphOptions &options)
+    {
+        ParseElementOptions(ctx, options);
     }
 }
 

@@ -43,6 +43,7 @@ namespace PropertyParser {
     struct HistogramOptions;
     struct RoundLineOptions;
     struct ShapeOptions;
+    struct AreaGraphOptions;
 }
 
 #include "MenuItem.h"
@@ -110,6 +111,7 @@ public:
     void AddHistogram(const PropertyParser::HistogramOptions& options);
     void AddRoundLine(const PropertyParser::RoundLineOptions& options);
     void AddShape(const PropertyParser::ShapeOptions& options);
+    void AddAreaGraph(const PropertyParser::AreaGraphOptions& options);
 
     void SetElementProperties(const std::wstring& id, duk_context* ctx);
     void SetGroupProperties(const std::wstring& group, duk_context* ctx);

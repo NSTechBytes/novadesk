@@ -30,6 +30,7 @@ class LineElement;
 class HistogramElement;
 class RoundLineElement;
 class ShapeElement;
+class AreaGraphElement;
 class ButtonElement;
 class BitmapElement;
 class RotatorElement;
@@ -184,6 +185,25 @@ namespace PropertyParser
         double rotationAngle = 6.283185307179586; // 2 * PI
         int valueRemainder = 0;
     };
+    
+    struct AreaGraphOptions : public ElementOptions
+    {
+        std::vector<float> data;
+        float minValue = 0.0f;
+        float maxValue = 1.0f;
+        bool autoRange = false;
+        COLORREF lineColor = RGB(0, 180, 255);
+        BYTE lineAlpha = 255;
+        float lineWidth = 1.0f;
+        COLORREF fillColor = RGB(0, 180, 255);
+        BYTE fillAlpha = 50;
+        COLORREF gridColor = RGB(100, 100, 100);
+        BYTE gridAlpha = 100;
+        int gridX = 20;
+        int gridY = 20;
+        bool graphStartLeft = false;
+        bool flip = false;
+    };
 
     struct TextOptions : public ElementOptions
     {
@@ -333,6 +353,7 @@ namespace PropertyParser
     void ParseHistogramOptions(JSContext *ctx, JSValueConst obj, HistogramOptions &options, const std::wstring &baseDir = L"");
     void ParseRoundLineOptions(JSContext *ctx, JSValueConst obj, RoundLineOptions &options, const std::wstring &baseDir = L"");
     void ParseShapeOptions(JSContext *ctx, JSValueConst obj, ShapeOptions &options, const std::wstring &baseDir = L"");
+    void ParseAreaGraphOptions(JSContext *ctx, JSValueConst obj, AreaGraphOptions &options, const std::wstring &baseDir = L"");
 
     void ApplyElementOptions(Element *element, const ElementOptions &options);
     void ApplyImageOptions(ImageElement *element, const ImageOptions &options);
@@ -345,6 +366,7 @@ namespace PropertyParser
     void ApplyHistogramOptions(HistogramElement *element, const HistogramOptions &options);
     void ApplyRoundLineOptions(RoundLineElement *element, const RoundLineOptions &options);
     void ApplyShapeOptions(ShapeElement *element, const ShapeOptions &options);
+    void ApplyAreaGraphOptions(AreaGraphElement *element, const AreaGraphOptions &options);
 
     void PreFillElementOptions(ElementOptions &options, Element *element);
     void PreFillImageOptions(ImageOptions &options, ImageElement *element);
@@ -357,6 +379,7 @@ namespace PropertyParser
     void PreFillHistogramOptions(HistogramOptions &options, HistogramElement *element);
     void PreFillRoundLineOptions(RoundLineOptions &options, RoundLineElement *element);
     void PreFillShapeOptions(ShapeOptions &options, ShapeElement *element);
+    void PreFillAreaGraphOptions(AreaGraphOptions &options, AreaGraphElement *element);
 
     void ParseGeneralImageOptions(JSContext *ctx, JSValueConst obj, GeneralImageOptions &options);
     void ApplyGeneralImageOptions(GeneralImage *image, const GeneralImageOptions &options);
@@ -374,6 +397,7 @@ namespace PropertyParser
     void ParseButtonOptions(duk_context *ctx, ButtonOptions &options);
     void ParseBitmapOptions(duk_context *ctx, BitmapOptions &options);
     void ParseRotatorOptions(duk_context *ctx, RotatorOptions &options);
+    void ParseAreaGraphOptions(duk_context *ctx, AreaGraphOptions &options);
 } // namespace PropertyParser
 
 namespace novadesk::scripting::quickjs::parser

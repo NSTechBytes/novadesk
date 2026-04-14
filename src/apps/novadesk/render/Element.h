@@ -36,7 +36,8 @@ enum ElementType
     ELEMENT_HISTOGRAM,
     ELEMENT_BITMAP,
     ELEMENT_BUTTON,
-    ELEMENT_ROTATOR
+    ELEMENT_ROTATOR,
+    ELEMENT_AREA_GRAPH
 };
 
 struct GfxRect {
