@@ -1020,12 +1020,6 @@ namespace novadesk::scripting::quickjs
                     const std::wstring c = ColorUtil::ToRGBAString(histogram->GetBothColor(), histogram->GetBothAlpha());
                     return JS_NewString(ctx, Utils::ToString(c).c_str());
                 }
-                if (prop == "primaryImageName")
-                    return JS_NewString(ctx, Utils::ToString(histogram->GetPrimaryImageName()).c_str());
-                if (prop == "secondaryImageName")
-                    return JS_NewString(ctx, Utils::ToString(histogram->GetSecondaryImageName()).c_str());
-                if (prop == "bothImageName")
-                    return JS_NewString(ctx, Utils::ToString(histogram->GetBothImageName()).c_str());
             }
             else if (element->GetType() == ELEMENT_SHAPE)
             {

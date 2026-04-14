@@ -20,8 +20,8 @@ public:
     virtual ~HistogramElement() {}
 
     virtual void Render(ID2D1DeviceContext *context) override;
-    virtual int GetAutoWidth() override;
-    virtual int GetAutoHeight() override;
+    virtual int GetAutoWidth() override { return 0; }
+    virtual int GetAutoHeight() override { return 0; }
 
     void SetData(const std::vector<float> &data) { m_PrimaryData = data; }
     void SetData2(const std::vector<float> &data) { m_SecondaryData = data; }
@@ -50,30 +50,13 @@ public:
     COLORREF GetBothColor() const { return m_BothColor; }
     BYTE GetBothAlpha() const { return m_BothAlpha; }
 
-    void SetPrimaryImageName(const std::wstring &path) { m_PrimaryImage.SetPath(path); }
-    void SetSecondaryImageName(const std::wstring &path) { m_SecondaryImage.SetPath(path); }
-    void SetBothImageName(const std::wstring &path) { m_BothImage.SetPath(path); }
-
-    const std::wstring &GetPrimaryImageName() const { return m_PrimaryImage.GetPath(); }
-    const std::wstring &GetSecondaryImageName() const { return m_SecondaryImage.GetPath(); }
-    const std::wstring &GetBothImageName() const { return m_BothImage.GetPath(); }
-
-    GeneralImage &GetPrimaryImage() { return m_PrimaryImage; }
-    GeneralImage &GetSecondaryImage() { return m_SecondaryImage; }
-    GeneralImage &GetBothImage() { return m_BothImage; }
-    const GeneralImage &GetPrimaryImage() const { return m_PrimaryImage; }
-    const GeneralImage &GetSecondaryImage() const { return m_SecondaryImage; }
-    const GeneralImage &GetBothImage() const { return m_BothImage; }
-
 private:
     bool BuildAutoRange(float &outMin, float &outMax) const;
     float SampleAtFromNewest(const std::vector<float> &series, int sampleIndex) const;
     static float NormalizeValue(float value, float minValue, float maxValue);
     void DrawSpan(
         ID2D1DeviceContext *context,
-        const D2D1_RECT_F &contentRect,
         const D2D1_RECT_F &dstRect,
-        GeneralImage &image,
         COLORREF color,
         BYTE alpha);
 
@@ -92,10 +75,6 @@ private:
     BYTE m_SecondaryAlpha = 255;
     COLORREF m_BothColor = RGB(255, 255, 0);
     BYTE m_BothAlpha = 255;
-
-    GeneralImage m_PrimaryImage;
-    GeneralImage m_SecondaryImage;
-    GeneralImage m_BothImage;
 };
 
 #endif

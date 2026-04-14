@@ -1229,34 +1229,6 @@ namespace PropertyParser
         if (!bothColor.empty())
             ColorUtil::ParseRGBA(bothColor, options.bothColor, options.bothAlpha);
 
-        options.primaryImageName = GetStringProp(ctx, obj, "primaryImageName");
-        if (!options.primaryImageName.empty())
-            options.primaryImageName = PathUtils::ResolvePath(options.primaryImageName, baseDir);
-
-        options.secondaryImageName = GetStringProp(ctx, obj, "secondaryImageName");
-        if (!options.secondaryImageName.empty())
-            options.secondaryImageName = PathUtils::ResolvePath(options.secondaryImageName, baseDir);
-
-        options.bothImageName = GetStringProp(ctx, obj, "bothImageName");
-        if (!options.bothImageName.empty())
-            options.bothImageName = PathUtils::ResolvePath(options.bothImageName, baseDir);
-
-        ParsePrefixedGeneralImageOptions(ctx, obj, "primary", options.primaryImageOptions);
-        ParsePrefixedGeneralImageOptions(ctx, obj, "secondary", options.secondaryImageOptions);
-        ParsePrefixedGeneralImageOptions(ctx, obj, "both", options.bothImageOptions);
-
-        if (!options.secondaryImageName.empty() && options.bothImageName.empty())
-        {
-            Logging::Log(LogLevel::Error, L"Histogram: bothImageName is required when secondaryImageName is defined.");
-            options.secondaryImageName.clear();
-        }
-
-        // Image-based histogram follows image dimensions.
-        if (!options.primaryImageName.empty())
-        {
-            options.width = 0;
-            options.height = 0;
-        }
     }
 
     void ParseRoundLineOptions(JSContext *ctx, JSValueConst obj, RoundLineOptions &options, const std::wstring &baseDir)
@@ -1683,13 +1655,6 @@ namespace PropertyParser
         element->SetPrimaryColor(options.primaryColor, options.primaryAlpha);
         element->SetSecondaryColor(options.secondaryColor, options.secondaryAlpha);
         element->SetBothColor(options.bothColor, options.bothAlpha);
-        element->SetPrimaryImageName(options.primaryImageName);
-        element->SetSecondaryImageName(options.secondaryImageName);
-        element->SetBothImageName(options.bothImageName);
-
-        ApplyGeneralImageOptions(&element->GetPrimaryImage(), options.primaryImageOptions);
-        ApplyGeneralImageOptions(&element->GetSecondaryImage(), options.secondaryImageOptions);
-        ApplyGeneralImageOptions(&element->GetBothImage(), options.bothImageOptions);
     }
 
     void ApplyRoundLineOptions(RoundLineElement *element, const RoundLineOptions &options)
@@ -2197,20 +2162,6 @@ namespace PropertyParser
         options.secondaryAlpha = element->GetSecondaryAlpha();
         options.bothColor = element->GetBothColor();
         options.bothAlpha = element->GetBothAlpha();
-
-        options.primaryImageName = element->GetPrimaryImageName();
-        options.secondaryImageName = element->GetSecondaryImageName();
-        options.bothImageName = element->GetBothImageName();
-
-        PreFillGeneralImageOptions(options.primaryImageOptions, &element->GetPrimaryImage());
-        PreFillGeneralImageOptions(options.secondaryImageOptions, &element->GetSecondaryImage());
-        PreFillGeneralImageOptions(options.bothImageOptions, &element->GetBothImage());
-
-        if (!options.primaryImageName.empty())
-        {
-            options.width = 0;
-            options.height = 0;
-        }
     }
 
     void PreFillRoundLineOptions(RoundLineOptions &options, RoundLineElement *element)

@@ -272,14 +272,6 @@ namespace PropertyParser
         BYTE secondaryAlpha = 255;
         COLORREF bothColor = RGB(255, 255, 0);
         BYTE bothAlpha = 255;
-
-        std::wstring primaryImageName;
-        std::wstring secondaryImageName;
-        std::wstring bothImageName;
-
-        GeneralImageOptions primaryImageOptions;
-        GeneralImageOptions secondaryImageOptions;
-        GeneralImageOptions bothImageOptions;
     };
 
     struct ShapeCombineOp

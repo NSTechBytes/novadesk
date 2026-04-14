@@ -14,24 +14,6 @@ HistogramElement::HistogramElement(const std::wstring &id, int x, int y, int w, 
 {
 }
 
-int HistogramElement::GetAutoWidth()
-{
-    if (!m_PrimaryImage.GetPath().empty())
-    {
-        return m_PrimaryImage.GetAutoWidth() + m_PaddingLeft + m_PaddingRight;
-    }
-    return 0;
-}
-
-int HistogramElement::GetAutoHeight()
-{
-    if (!m_PrimaryImage.GetPath().empty())
-    {
-        return m_PrimaryImage.GetAutoHeight() + m_PaddingTop + m_PaddingBottom;
-    }
-    return 0;
-}
-
 bool HistogramElement::BuildAutoRange(float &outMin, float &outMax) const
 {
     if (!m_AutoRange)
@@ -109,9 +91,7 @@ float HistogramElement::NormalizeValue(float value, float minValue, float maxVal
 
 void HistogramElement::DrawSpan(
     ID2D1DeviceContext *context,
-    const D2D1_RECT_F &contentRect,
     const D2D1_RECT_F &dstRect,
-    GeneralImage &image,
     COLORREF color,
     BYTE alpha)
 {
@@ -120,55 +100,11 @@ void HistogramElement::DrawSpan(
     if (dstRect.right <= dstRect.left || dstRect.bottom <= dstRect.top)
         return;
 
-    ID2D1Bitmap *bitmap = nullptr;
-    if (!image.GetPath().empty())
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush;
+    Direct2D::CreateSolidBrush(context, color, alpha / 255.0f, brush.GetAddressOf());
+    if (brush)
     {
-        image.EnsureBitmap(context);
-        bitmap = image.GetBitmap();
-    }
-    if (!bitmap)
-    {
-        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush;
-        Direct2D::CreateSolidBrush(context, color, alpha / 255.0f, brush.GetAddressOf());
-        if (brush)
-        {
-            context->FillRectangle(dstRect, brush.Get());
-        }
-        return;
-    }
-
-    Microsoft::WRL::ComPtr<ID2D1Image> finalImage;
-    if (!image.BuildProcessedImage(context, finalImage) || !finalImage)
-    {
-        return;
-    }
-
-    const float srcLeft = dstRect.left - contentRect.left;
-    const float srcTop = dstRect.top - contentRect.top;
-    const float srcRight = dstRect.right - contentRect.left;
-    const float srcBottom = dstRect.bottom - contentRect.top;
-    const D2D1_RECT_F srcRect = D2D1::RectF(srcLeft, srcTop, srcRight, srcBottom);
-
-    const D2D1_BITMAP_INTERPOLATION_MODE interp = m_AntiAlias
-                                                      ? D2D1_BITMAP_INTERPOLATION_MODE_LINEAR
-                                                      : D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR;
-    const float opacity = image.GetImageAlpha() / 255.0f;
-
-    if (finalImage.Get() == static_cast<ID2D1Image *>(bitmap))
-    {
-        context->DrawBitmap(bitmap, &dstRect, opacity, interp, &srcRect);
-    }
-    else
-    {
-        D2D1_MATRIX_3X2_F effectTransform;
-        context->GetTransform(&effectTransform);
-        context->SetTransform(D2D1::Matrix3x2F::Translation(dstRect.left, dstRect.top) * effectTransform);
-        context->DrawImage(
-            finalImage.Get(),
-            nullptr,
-            &srcRect,
-            m_AntiAlias ? D2D1_INTERPOLATION_MODE_LINEAR : D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR);
-        context->SetTransform(effectTransform);
+        context->FillRectangle(dstRect, brush.Get());
     }
 }
 
@@ -193,7 +129,6 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
     const float top = static_cast<float>(m_Y + m_PaddingTop);
     const float right = left + static_cast<float>(width);
     const float bottom = top + static_cast<float>(height);
-    const D2D1_RECT_F contentRect = D2D1::RectF(left, top, right, bottom);
 
     float minValue = 0.0f;
     float maxValue = 100.0f;
@@ -232,7 +167,7 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
                 D2D1_RECT_F bothRect = m_GraphStartLeft
                                            ? D2D1::RectF(left, y, left + static_cast<float>(bothSize), y + 1.0f)
                                            : D2D1::RectF(right - static_cast<float>(bothSize), y, right, y + 1.0f);
-                DrawSpan(context, contentRect, bothRect, m_BothImage, m_BothColor, m_BothAlpha);
+                DrawSpan(context, bothRect, m_BothColor, m_BothAlpha);
             }
 
             if (hasSecondary)
@@ -246,11 +181,11 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
                                                : D2D1::RectF(right - static_cast<float>(larger), y, right - static_cast<float>(bothSize), y + 1.0f);
                     if (secondaryLarger)
                     {
-                        DrawSpan(context, contentRect, restRect, m_SecondaryImage, m_SecondaryColor, m_SecondaryAlpha);
+                        DrawSpan(context, restRect, m_SecondaryColor, m_SecondaryAlpha);
                     }
                     else
                     {
-                        DrawSpan(context, contentRect, restRect, m_PrimaryImage, m_PrimaryColor, m_PrimaryAlpha);
+                        DrawSpan(context, restRect, m_PrimaryColor, m_PrimaryAlpha);
                     }
                 }
             }
@@ -259,7 +194,7 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
                 D2D1_RECT_F primaryRect = m_GraphStartLeft
                                               ? D2D1::RectF(left, y, left + static_cast<float>(primarySize), y + 1.0f)
                                               : D2D1::RectF(right - static_cast<float>(primarySize), y, right, y + 1.0f);
-                DrawSpan(context, contentRect, primaryRect, m_PrimaryImage, m_PrimaryColor, m_PrimaryAlpha);
+                DrawSpan(context, primaryRect, m_PrimaryColor, m_PrimaryAlpha);
             }
         }
         else
@@ -272,7 +207,7 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
                 D2D1_RECT_F bothRect = m_Flip
                                            ? D2D1::RectF(x, top, x + 1.0f, top + static_cast<float>(bothSize))
                                            : D2D1::RectF(x, bottom - static_cast<float>(bothSize), x + 1.0f, bottom);
-                DrawSpan(context, contentRect, bothRect, m_BothImage, m_BothColor, m_BothAlpha);
+                DrawSpan(context, bothRect, m_BothColor, m_BothAlpha);
             }
 
             if (hasSecondary)
@@ -286,11 +221,11 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
                                                : D2D1::RectF(x, bottom - static_cast<float>(larger), x + 1.0f, bottom - static_cast<float>(bothSize));
                     if (secondaryLarger)
                     {
-                        DrawSpan(context, contentRect, restRect, m_SecondaryImage, m_SecondaryColor, m_SecondaryAlpha);
+                        DrawSpan(context, restRect, m_SecondaryColor, m_SecondaryAlpha);
                     }
                     else
                     {
-                        DrawSpan(context, contentRect, restRect, m_PrimaryImage, m_PrimaryColor, m_PrimaryAlpha);
+                        DrawSpan(context, restRect, m_PrimaryColor, m_PrimaryAlpha);
                     }
                 }
             }
@@ -299,7 +234,7 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
                 D2D1_RECT_F primaryRect = m_Flip
                                               ? D2D1::RectF(x, top, x + 1.0f, top + static_cast<float>(primarySize))
                                               : D2D1::RectF(x, bottom - static_cast<float>(primarySize), x + 1.0f, bottom);
-                DrawSpan(context, contentRect, primaryRect, m_PrimaryImage, m_PrimaryColor, m_PrimaryAlpha);
+                DrawSpan(context, primaryRect, m_PrimaryColor, m_PrimaryAlpha);
             }
         }
     }
