@@ -868,6 +868,7 @@ namespace PropertyParser
         GetIntProp(ctx, obj, "bitmapFrames", options.bitmapFrames);
         GetBoolProp(ctx, obj, "bitmapZeroFrame", options.bitmapZeroFrame);
         GetBoolProp(ctx, obj, "bitmapExtend", options.bitmapExtend);
+        { float tmp = static_cast<float>(options.minValue); if (GetFloatProp(ctx, obj, "minValue", tmp)) options.minValue = static_cast<double>(tmp); }
         { float tmp = static_cast<float>(options.maxValue); if (GetFloatProp(ctx, obj, "maxValue", tmp)) options.maxValue = static_cast<double>(tmp); }
         options.bitmapOrientation = GetStringProp(ctx, obj, "bitmapOrientation");
         GetIntProp(ctx, obj, "bitmapDigits", options.bitmapDigits);
@@ -913,6 +914,7 @@ namespace PropertyParser
         { float tmp = static_cast<float>(options.startAngle); if (GetFloatProp(ctx, obj, "startAngle", tmp)) options.startAngle = static_cast<double>(tmp); }
         { float tmp = static_cast<float>(options.rotationAngle); if (GetFloatProp(ctx, obj, "rotationAngle", tmp)) options.rotationAngle = static_cast<double>(tmp); }
         GetIntProp(ctx, obj, "valueRemainder", options.valueRemainder);
+        { float tmp = static_cast<float>(options.minValue); if (GetFloatProp(ctx, obj, "minValue", tmp)) options.minValue = static_cast<double>(tmp); }
         { float tmp = static_cast<float>(options.maxValue); if (GetFloatProp(ctx, obj, "maxValue", tmp)) options.maxValue = static_cast<double>(tmp); }
     }
 
@@ -1541,6 +1543,7 @@ namespace PropertyParser
         element->SetBitmapFrames(options.bitmapFrames);
         element->SetBitmapZeroFrame(options.bitmapZeroFrame);
         element->SetBitmapExtend(options.bitmapExtend);
+        element->SetMinValue(options.minValue);
         element->SetMaxValue(options.maxValue);
         element->SetBitmapOrientation(options.bitmapOrientation);
         element->SetBitmapDigits(options.bitmapDigits);
@@ -1572,6 +1575,7 @@ namespace PropertyParser
         element->SetStartAngle(options.startAngle);
         element->SetRotationAngle(options.rotationAngle);
         element->SetValueRemainder(options.valueRemainder);
+        element->SetMinValue(options.minValue);
         element->SetMaxValue(options.maxValue);
 
         element->SetUseExifOrientation(options.useExifOrientation);
@@ -1900,6 +1904,7 @@ namespace PropertyParser
         options.bitmapFrames = element->GetBitmapFrames();
         options.bitmapZeroFrame = element->GetBitmapZeroFrame();
         options.bitmapExtend = element->GetBitmapExtend();
+        options.minValue = element->GetMinValue();
         options.maxValue = element->GetMaxValue();
         options.bitmapOrientation = element->GetBitmapOrientation();
         options.bitmapDigits = element->GetBitmapDigits();
@@ -1938,6 +1943,7 @@ namespace PropertyParser
         options.startAngle = element->GetStartAngle();
         options.rotationAngle = element->GetRotationAngle();
         options.valueRemainder = element->GetValueRemainder();
+        options.minValue = element->GetMinValue();
         options.maxValue = element->GetMaxValue();
 
         options.useExifOrientation = element->GetUseExifOrientation();

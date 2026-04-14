@@ -30,7 +30,8 @@ public:
     void SetStartAngle(double startAngle) { m_StartAngle = startAngle; }
     void SetRotationAngle(double rotationAngle) { m_RotationAngle = rotationAngle; }
     void SetValueRemainder(int valueRemainder) { m_ValueRemainder = (valueRemainder < 0) ? 0 : valueRemainder; }
-    void SetMaxValue(double maxValue) { m_MaxValue = (maxValue > 0.0) ? maxValue : 1.0; }
+    void SetMinValue(double minValue) { m_MinValue = minValue; }
+    void SetMaxValue(double maxValue) { m_MaxValue = (maxValue > m_MinValue) ? maxValue : (m_MinValue + 0.001); }
 
     void SetImageTint(COLORREF color, BYTE alpha) { m_RotatorImage.SetImageTint(color, alpha); }
     void SetImageAlpha(BYTE alpha) { m_RotatorImage.SetImageAlpha(alpha); }
@@ -46,6 +47,7 @@ public:
     double GetStartAngle() const { return m_StartAngle; }
     double GetRotationAngle() const { return m_RotationAngle; }
     int GetValueRemainder() const { return m_ValueRemainder; }
+    double GetMinValue() const { return m_MinValue; }
     double GetMaxValue() const { return m_MaxValue; }
 
     bool HasImageTint() const { return m_RotatorImage.HasImageTint(); }
@@ -67,6 +69,7 @@ private:
     double m_StartAngle = 0.0;
     double m_RotationAngle = 6.283185307179586; // 2 * PI
     int m_ValueRemainder = 0;
+    double m_MinValue = 0.0;
     double m_MaxValue = 1.0;
 };
 

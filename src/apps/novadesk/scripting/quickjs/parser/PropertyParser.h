@@ -164,6 +164,7 @@ namespace PropertyParser
         int bitmapFrames = 1;
         bool bitmapZeroFrame = false;
         bool bitmapExtend = false;
+        double minValue = 0.0;
         double maxValue = 1.0;
         std::wstring bitmapOrientation = L"auto";
         int bitmapDigits = 0;
@@ -175,12 +176,13 @@ namespace PropertyParser
     {
         double value = 0.0;
         std::wstring rotatorImageName;
+        double minValue = 0.0;
+        double maxValue = 1.0;
         double offsetX = 0.0;
         double offsetY = 0.0;
         double startAngle = 0.0;
         double rotationAngle = 6.283185307179586; // 2 * PI
         int valueRemainder = 0;
-        double maxValue = 1.0;
     };
 
     struct TextOptions : public ElementOptions

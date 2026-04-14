@@ -795,6 +795,8 @@ namespace novadesk::scripting::quickjs
                     return JS_NewBool(ctx, bitmap->GetBitmapZeroFrame() ? 1 : 0);
                 if (prop == "bitmapExtend")
                     return JS_NewBool(ctx, bitmap->GetBitmapExtend() ? 1 : 0);
+                if (prop == "minValue")
+                    return JS_NewFloat64(ctx, bitmap->GetMinValue());
                 if (prop == "maxValue")
                     return JS_NewFloat64(ctx, bitmap->GetMaxValue());
                 if (prop == "bitmapOrientation")
@@ -839,6 +841,8 @@ namespace novadesk::scripting::quickjs
                     return JS_NewFloat64(ctx, rotator->GetRotationAngle());
                 if (prop == "valueRemainder")
                     return JS_NewInt32(ctx, rotator->GetValueRemainder());
+                if (prop == "minValue")
+                    return JS_NewFloat64(ctx, rotator->GetMinValue());
                 if (prop == "maxValue")
                     return JS_NewFloat64(ctx, rotator->GetMaxValue());
 

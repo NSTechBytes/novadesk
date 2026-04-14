@@ -66,7 +66,8 @@ void RotatorElement::Render(ID2D1DeviceContext *context)
     else
     {
         // Standard mode: normalize using maxValue
-        normalizedValue = m_Value / m_MaxValue;
+        double range = m_MaxValue - m_MinValue;
+        normalizedValue = (range > 0.0) ? (m_Value - m_MinValue) / range : 0.0;
         if (normalizedValue < 0.0)
             normalizedValue = 0.0;
         if (normalizedValue > 1.0)

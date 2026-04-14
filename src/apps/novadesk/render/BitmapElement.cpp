@@ -249,8 +249,9 @@ void BitmapElement::Render(ID2D1DeviceContext *context)
     }
     else
     {
-        // When extend=false, normalize the value to 0.0-1.0 range
-        double normalizedValue = m_Value / m_MaxValue;
+        // When extend=false, normalize the value to m_MinValue...m_MaxValue range
+        double range = m_MaxValue - m_MinValue;
+        double normalizedValue = (range > 0.0) ? (m_Value - m_MinValue) / range : 0.0;
         if (normalizedValue < 0.0)
             normalizedValue = 0.0;
         if (normalizedValue > 1.0)
