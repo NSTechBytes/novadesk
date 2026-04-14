@@ -35,7 +35,7 @@ public:
     void SetBitmapFrames(int frameCount);
     void SetBitmapZeroFrame(bool zeroFrame) { m_ZeroFrame = zeroFrame; }
     void SetBitmapExtend(bool extend) { m_Extend = extend; }
-    void SetBitmapMaxValue(double maxValue) { m_MaxValue = (maxValue > 0.0) ? maxValue : 1.0; }
+    void SetMaxValue(double maxValue) { m_MaxValue = (maxValue > 0.0) ? maxValue : 1.0; }
     void SetBitmapDigits(int digits) { m_Digits = (digits < 0) ? 0 : digits; }
     void SetBitmapOrientation(const std::wstring &orientation);
     void SetBitmapAlign(BitmapAlign align) { m_Align = align; }
@@ -53,7 +53,7 @@ public:
     int GetBitmapFrames() const { return m_FrameCount; }
     bool GetBitmapZeroFrame() const { return m_ZeroFrame; }
     bool GetBitmapExtend() const { return m_Extend; }
-    double GetBitmapMaxValue() const { return m_MaxValue; }
+    double GetMaxValue() const { return m_MaxValue; }
     int GetBitmapDigits() const { return m_Digits; }
     std::wstring GetBitmapOrientation() const;
     BitmapAlign GetBitmapAlign() const { return m_Align; }

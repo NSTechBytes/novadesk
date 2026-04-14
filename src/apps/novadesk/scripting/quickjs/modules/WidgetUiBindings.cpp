@@ -795,8 +795,8 @@ namespace novadesk::scripting::quickjs
                     return JS_NewBool(ctx, bitmap->GetBitmapZeroFrame() ? 1 : 0);
                 if (prop == "bitmapExtend")
                     return JS_NewBool(ctx, bitmap->GetBitmapExtend() ? 1 : 0);
-                if (prop == "bitmapMaxValue")
-                    return JS_NewFloat64(ctx, bitmap->GetBitmapMaxValue());
+                if (prop == "maxValue")
+                    return JS_NewFloat64(ctx, bitmap->GetMaxValue());
                 if (prop == "bitmapOrientation")
                     return JS_NewString(ctx, Utils::ToString(bitmap->GetBitmapOrientation()).c_str());
                 if (prop == "bitmapDigits")

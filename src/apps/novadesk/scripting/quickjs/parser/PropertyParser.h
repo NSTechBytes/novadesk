@@ -164,7 +164,7 @@ namespace PropertyParser
         int bitmapFrames = 1;
         bool bitmapZeroFrame = false;
         bool bitmapExtend = false;
-        double bitmapMaxValue = 1.0;
+        double maxValue = 1.0;
         std::wstring bitmapOrientation = L"auto";
         int bitmapDigits = 0;
         BitmapAlign bitmapAlign = BITMAP_ALIGN_LEFT;

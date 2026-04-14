@@ -868,7 +868,7 @@ namespace PropertyParser
         GetIntProp(ctx, obj, "bitmapFrames", options.bitmapFrames);
         GetBoolProp(ctx, obj, "bitmapZeroFrame", options.bitmapZeroFrame);
         GetBoolProp(ctx, obj, "bitmapExtend", options.bitmapExtend);
-        { float tmp = static_cast<float>(options.bitmapMaxValue); if (GetFloatProp(ctx, obj, "bitmapMaxValue", tmp)) options.bitmapMaxValue = static_cast<double>(tmp); }
+        { float tmp = static_cast<float>(options.maxValue); if (GetFloatProp(ctx, obj, "maxValue", tmp)) options.maxValue = static_cast<double>(tmp); }
         options.bitmapOrientation = GetStringProp(ctx, obj, "bitmapOrientation");
         GetIntProp(ctx, obj, "bitmapDigits", options.bitmapDigits);
         GetIntProp(ctx, obj, "bitmapSeparation", options.bitmapSeparation);
@@ -1541,7 +1541,7 @@ namespace PropertyParser
         element->SetBitmapFrames(options.bitmapFrames);
         element->SetBitmapZeroFrame(options.bitmapZeroFrame);
         element->SetBitmapExtend(options.bitmapExtend);
-        element->SetBitmapMaxValue(options.bitmapMaxValue);
+        element->SetMaxValue(options.maxValue);
         element->SetBitmapOrientation(options.bitmapOrientation);
         element->SetBitmapDigits(options.bitmapDigits);
         element->SetBitmapAlign(options.bitmapAlign);
@@ -1900,7 +1900,7 @@ namespace PropertyParser
         options.bitmapFrames = element->GetBitmapFrames();
         options.bitmapZeroFrame = element->GetBitmapZeroFrame();
         options.bitmapExtend = element->GetBitmapExtend();
-        options.bitmapMaxValue = element->GetBitmapMaxValue();
+        options.maxValue = element->GetMaxValue();
         options.bitmapOrientation = element->GetBitmapOrientation();
         options.bitmapDigits = element->GetBitmapDigits();
         options.bitmapAlign = element->GetBitmapAlign();

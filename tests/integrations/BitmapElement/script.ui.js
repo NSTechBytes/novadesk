@@ -50,7 +50,7 @@ ui.addBitmap({
     bitmapFrames: 10,
     bitmapZeroFrame: false,
     bitmapExtend: true,
-    bitmapMaxValue: 100, // Engine auto-normalizes: value/maxValue
+    maxValue: 100, // Engine auto-normalizes: value/maxValue
     bitmapOrientation: "horizontal",
     bitmapDigits: 3,
     bitmapAlign: "left",
@@ -94,7 +94,7 @@ console.log("[PASS] bitmapSmoothRoll = " + ui.getElementProperty("cpu-bitmap", "
 //     var tick = Number(payload.tick || 0);
 
 //     // Just pass the raw value — the engine handles normalization
-//     // via bitmapMaxValue when bitmapExtend=false
+//     // via maxValue when bitmapExtend=false
 //     ui.setElementProperties("cpu-bitmap", {
 //         value: usage
 //     });
