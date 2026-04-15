@@ -1146,7 +1146,15 @@ namespace PropertyParser
         std::wstring horizontalLineColor = GetStringProp(ctx, obj, "horizontalLineColor");
         if (!horizontalLineColor.empty())
         {
-            ColorUtil::ParseRGBA(horizontalLineColor, options.horizontalLineColor, options.horizontalLineAlpha);
+            GradientInfo parsedGradient;
+            if (ParseGradientString(horizontalLineColor, parsedGradient))
+            {
+                options.horizontalLineGradient = parsedGradient;
+            }
+            else if (ColorUtil::ParseRGBA(horizontalLineColor, options.horizontalLineColor, options.horizontalLineAlpha))
+            {
+                options.horizontalLineGradient = GradientInfo();
+            }
         }
 
         std::wstring graphStart = GetStringProp(ctx, obj, "graphStart");
@@ -1221,6 +1229,15 @@ namespace PropertyParser
             options.lineAlphas.resize(desiredLineCount);
         }
 
+        if (options.lineGradients.size() < desiredLineCount)
+        {
+            options.lineGradients.resize(desiredLineCount);
+        }
+        else if (options.lineGradients.size() > desiredLineCount)
+        {
+            options.lineGradients.resize(desiredLineCount);
+        }
+
         if (options.scaleValues.size() < desiredLineCount)
         {
             options.scaleValues.resize(desiredLineCount, 1.0f);
@@ -1245,7 +1262,15 @@ namespace PropertyParser
             std::wstring colorValue = GetStringProp(ctx, obj, colorKeyUtf8.c_str());
             if (!colorValue.empty())
             {
-                ColorUtil::ParseRGBA(colorValue, options.lineColors[(size_t)i], options.lineAlphas[(size_t)i]);
+                GradientInfo parsedGradient;
+                if (ParseGradientString(colorValue, parsedGradient))
+                {
+                    options.lineGradients[(size_t)i] = parsedGradient;
+                }
+                else if (ColorUtil::ParseRGBA(colorValue, options.lineColors[(size_t)i], options.lineAlphas[(size_t)i]))
+                {
+                    options.lineGradients[(size_t)i] = GradientInfo();
+                }
             }
 
             std::wstring scaleKey = (i == 0) ? L"lineScale" : (L"lineScale" + std::to_wstring(i + 1));
@@ -1720,11 +1745,13 @@ namespace PropertyParser
         element->SetLineCount(options.lineCount);
         element->SetDataSets(options.dataSets);
         element->SetLineColors(options.lineColors, options.lineAlphas);
+        element->SetLineGradients(options.lineGradients);
         element->SetScaleValues(options.scaleValues);
         element->SetLineWidth(options.lineWidth);
         element->SetMaxPoints(options.maxPoints);
         element->SetHorizontalLines(options.horizontalLines);
         element->SetHorizontalLineColor(options.horizontalLineColor, options.horizontalLineAlpha);
+        element->SetHorizontalLineGradient(options.horizontalLineGradient);
         element->SetGraphStartLeft(options.graphStartLeft);
         element->SetGraphHorizontalOrientation(options.graphHorizontalOrientation);
         element->SetFlip(options.flip);
@@ -2246,12 +2273,14 @@ namespace PropertyParser
         options.dataSets = element->GetDataSets();
         options.lineColors = element->GetLineColors();
         options.lineAlphas = element->GetLineAlphas();
+        options.lineGradients = element->GetLineGradients();
         options.scaleValues = element->GetScaleValues();
         options.lineWidth = element->GetLineWidth();
         options.maxPoints = element->GetMaxPoints();
         options.horizontalLines = element->GetHorizontalLines();
         options.horizontalLineColor = element->GetHorizontalLineColor();
         options.horizontalLineAlpha = element->GetHorizontalLineAlpha();
+        options.horizontalLineGradient = element->GetHorizontalLineGradient();
         options.graphStartLeft = element->GetGraphStartLeft();
         options.graphHorizontalOrientation = element->GetGraphHorizontalOrientation();
         options.flip = element->GetFlip();

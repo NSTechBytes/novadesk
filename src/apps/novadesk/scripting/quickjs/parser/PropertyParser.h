@@ -265,12 +265,14 @@ namespace PropertyParser
         std::vector<std::vector<float>> dataSets;
         std::vector<COLORREF> lineColors;
         std::vector<BYTE> lineAlphas;
+        std::vector<GradientInfo> lineGradients;
         std::vector<float> scaleValues;
         float lineWidth = 1.0f;
         int maxPoints = 0;
         bool horizontalLines = false;
         COLORREF horizontalLineColor = RGB(0, 0, 0);
         BYTE horizontalLineAlpha = 255;
+        GradientInfo horizontalLineGradient;
         bool graphStartLeft = false;               // false = right
         bool graphHorizontalOrientation = false;   // false = vertical
         bool flip = false;

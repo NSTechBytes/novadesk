@@ -32,6 +32,8 @@ public:
     void SetLineColors(const std::vector<COLORREF>& colors, const std::vector<BYTE>& alphas);
     const std::vector<COLORREF>& GetLineColors() const { return m_LineColors; }
     const std::vector<BYTE>& GetLineAlphas() const { return m_LineAlphas; }
+    void SetLineGradients(const std::vector<GradientInfo>& gradients);
+    const std::vector<GradientInfo>& GetLineGradients() const { return m_LineGradients; }
     void SetScaleValues(const std::vector<float>& scaleValues);
     const std::vector<float>& GetScaleValues() const { return m_ScaleValues; }
 
@@ -50,6 +52,8 @@ public:
     }
     COLORREF GetHorizontalLineColor() const { return m_HorizontalLineColor; }
     BYTE GetHorizontalLineAlpha() const { return m_HorizontalLineAlpha; }
+    void SetHorizontalLineGradient(const GradientInfo& gradient) { m_HorizontalLineGradient = gradient; }
+    const GradientInfo& GetHorizontalLineGradient() const { return m_HorizontalLineGradient; }
 
     void SetGraphStartLeft(bool left) { m_GraphStartLeft = left; }
     bool GetGraphStartLeft() const { return m_GraphStartLeft; }
@@ -81,12 +85,14 @@ private:
     std::vector<std::vector<float>> m_DataSets;
     std::vector<COLORREF> m_LineColors;
     std::vector<BYTE> m_LineAlphas;
+    std::vector<GradientInfo> m_LineGradients;
     std::vector<float> m_ScaleValues;
     float m_LineWidth = 1.0f;
     int m_MaxPoints = 0;
     bool m_HorizontalLines = false;
     COLORREF m_HorizontalLineColor = RGB(0, 0, 0);
     BYTE m_HorizontalLineAlpha = 255;
+    GradientInfo m_HorizontalLineGradient;
     bool m_GraphStartLeft = false;
     bool m_GraphHorizontalOrientation = false;
     bool m_Flip = false;

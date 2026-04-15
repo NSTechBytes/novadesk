@@ -47,6 +47,12 @@ void LineElement::SetLineColors(const std::vector<COLORREF>& colors, const std::
     EnsureStorage();
 }
 
+void LineElement::SetLineGradients(const std::vector<GradientInfo>& gradients)
+{
+    m_LineGradients = gradients;
+    EnsureStorage();
+}
+
 void LineElement::SetScaleValues(const std::vector<float>& scaleValues)
 {
     m_ScaleValues = scaleValues;
@@ -119,6 +125,15 @@ void LineElement::EnsureStorage()
     else if ((int)m_LineAlphas.size() > m_LineCount)
     {
         m_LineAlphas.resize((size_t)m_LineCount);
+    }
+
+    if ((int)m_LineGradients.size() < m_LineCount)
+    {
+        m_LineGradients.resize((size_t)m_LineCount);
+    }
+    else if ((int)m_LineGradients.size() > m_LineCount)
+    {
+        m_LineGradients.resize((size_t)m_LineCount);
     }
 
     if ((int)m_ScaleValues.size() < m_LineCount)
@@ -449,8 +464,15 @@ void LineElement::Render(ID2D1DeviceContext* context)
 
     if (m_HorizontalLines)
     {
-        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> markerBrush;
-        Direct2D::CreateSolidBrush(context, m_HorizontalLineColor, m_HorizontalLineAlpha / 255.0f, markerBrush.GetAddressOf());
+        Microsoft::WRL::ComPtr<ID2D1Brush> markerBrush;
+        const D2D1_RECT_F elementRect = D2D1::RectF((float)m_X, (float)m_Y, (float)m_X + width, (float)m_Y + height);
+        Direct2D::CreateBrushFromGradientOrColor(
+            context,
+            elementRect,
+            &m_HorizontalLineGradient,
+            m_HorizontalLineColor,
+            m_HorizontalLineAlpha / 255.0f,
+            markerBrush.GetAddressOf());
         if (markerBrush)
         {
             const float left = (float)m_X;
@@ -523,9 +545,17 @@ void LineElement::Render(ID2D1DeviceContext* context)
             continue;
         }
 
-        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush;
-        Direct2D::CreateSolidBrush(
+        Microsoft::WRL::ComPtr<ID2D1Brush> brush;
+        const D2D1_RECT_F elementRect = D2D1::RectF((float)m_X, (float)m_Y, (float)m_X + width, (float)m_Y + height);
+        const GradientInfo* lineGradient = nullptr;
+        if ((size_t)i < m_LineGradients.size())
+        {
+            lineGradient = &m_LineGradients[(size_t)i];
+        }
+        Direct2D::CreateBrushFromGradientOrColor(
             context,
+            elementRect,
+            lineGradient,
             m_LineColors[(size_t)i],
             m_LineAlphas[(size_t)i] / 255.0f,
             brush.GetAddressOf());
