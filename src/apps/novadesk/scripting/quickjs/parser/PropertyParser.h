@@ -293,10 +293,13 @@ namespace PropertyParser
 
         COLORREF primaryColor = RGB(0, 128, 0);
         BYTE primaryAlpha = 255;
+        GradientInfo primaryGradient;
         COLORREF secondaryColor = RGB(255, 0, 0);
         BYTE secondaryAlpha = 255;
+        GradientInfo secondaryGradient;
         COLORREF bothColor = RGB(255, 255, 0);
         BYTE bothAlpha = 255;
+        GradientInfo bothGradient;
     };
 
     struct ShapeCombineOp

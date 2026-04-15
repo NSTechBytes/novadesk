@@ -1313,15 +1313,45 @@ namespace PropertyParser
 
         std::wstring primaryColor = GetStringProp(ctx, obj, "primaryColor");
         if (!primaryColor.empty())
-            ColorUtil::ParseRGBA(primaryColor, options.primaryColor, options.primaryAlpha);
+        {
+            GradientInfo parsedGradient;
+            if (ParseGradientString(primaryColor, parsedGradient))
+            {
+                options.primaryGradient = parsedGradient;
+            }
+            else if (ColorUtil::ParseRGBA(primaryColor, options.primaryColor, options.primaryAlpha))
+            {
+                options.primaryGradient = GradientInfo();
+            }
+        }
 
         std::wstring secondaryColor = GetStringProp(ctx, obj, "secondaryColor");
         if (!secondaryColor.empty())
-            ColorUtil::ParseRGBA(secondaryColor, options.secondaryColor, options.secondaryAlpha);
+        {
+            GradientInfo parsedGradient;
+            if (ParseGradientString(secondaryColor, parsedGradient))
+            {
+                options.secondaryGradient = parsedGradient;
+            }
+            else if (ColorUtil::ParseRGBA(secondaryColor, options.secondaryColor, options.secondaryAlpha))
+            {
+                options.secondaryGradient = GradientInfo();
+            }
+        }
 
         std::wstring bothColor = GetStringProp(ctx, obj, "bothColor");
         if (!bothColor.empty())
-            ColorUtil::ParseRGBA(bothColor, options.bothColor, options.bothAlpha);
+        {
+            GradientInfo parsedGradient;
+            if (ParseGradientString(bothColor, parsedGradient))
+            {
+                options.bothGradient = parsedGradient;
+            }
+            else if (ColorUtil::ParseRGBA(bothColor, options.bothColor, options.bothAlpha))
+            {
+                options.bothGradient = GradientInfo();
+            }
+        }
 
     }
 
@@ -1775,6 +1805,9 @@ namespace PropertyParser
         element->SetPrimaryColor(options.primaryColor, options.primaryAlpha);
         element->SetSecondaryColor(options.secondaryColor, options.secondaryAlpha);
         element->SetBothColor(options.bothColor, options.bothAlpha);
+        element->SetPrimaryGradient(options.primaryGradient);
+        element->SetSecondaryGradient(options.secondaryGradient);
+        element->SetBothGradient(options.bothGradient);
     }
 
     void ApplyRoundLineOptions(RoundLineElement *element, const RoundLineOptions &options)
@@ -2310,6 +2343,9 @@ namespace PropertyParser
         options.secondaryAlpha = element->GetSecondaryAlpha();
         options.bothColor = element->GetBothColor();
         options.bothAlpha = element->GetBothAlpha();
+        options.primaryGradient = element->GetPrimaryGradient();
+        options.secondaryGradient = element->GetSecondaryGradient();
+        options.bothGradient = element->GetBothGradient();
     }
 
     void PreFillRoundLineOptions(RoundLineOptions &options, RoundLineElement *element)

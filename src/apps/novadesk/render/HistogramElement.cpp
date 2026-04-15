@@ -92,6 +92,8 @@ float HistogramElement::NormalizeValue(float value, float minValue, float maxVal
 void HistogramElement::DrawSpan(
     ID2D1DeviceContext *context,
     const D2D1_RECT_F &dstRect,
+    const D2D1_RECT_F &gradientRect,
+    const GradientInfo *gradient,
     COLORREF color,
     BYTE alpha)
 {
@@ -100,8 +102,14 @@ void HistogramElement::DrawSpan(
     if (dstRect.right <= dstRect.left || dstRect.bottom <= dstRect.top)
         return;
 
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush;
-    Direct2D::CreateSolidBrush(context, color, alpha / 255.0f, brush.GetAddressOf());
+    Microsoft::WRL::ComPtr<ID2D1Brush> brush;
+    Direct2D::CreateBrushFromGradientOrColor(
+        context,
+        gradientRect,
+        gradient,
+        color,
+        alpha / 255.0f,
+        brush.GetAddressOf());
     if (brush)
     {
         context->FillRectangle(dstRect, brush.Get());
@@ -129,6 +137,7 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
     const float top = static_cast<float>(m_Y + m_PaddingTop);
     const float right = left + static_cast<float>(width);
     const float bottom = top + static_cast<float>(height);
+    const D2D1_RECT_F gradientRect = D2D1::RectF(left, top, right, bottom);
 
     float minValue = 0.0f;
     float maxValue = 100.0f;
@@ -167,7 +176,7 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
                 D2D1_RECT_F bothRect = m_GraphStartLeft
                                            ? D2D1::RectF(left, y, left + static_cast<float>(bothSize), y + 1.0f)
                                            : D2D1::RectF(right - static_cast<float>(bothSize), y, right, y + 1.0f);
-                DrawSpan(context, bothRect, m_BothColor, m_BothAlpha);
+                DrawSpan(context, bothRect, gradientRect, &m_BothGradient, m_BothColor, m_BothAlpha);
             }
 
             if (hasSecondary)
@@ -181,11 +190,11 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
                                                : D2D1::RectF(right - static_cast<float>(larger), y, right - static_cast<float>(bothSize), y + 1.0f);
                     if (secondaryLarger)
                     {
-                        DrawSpan(context, restRect, m_SecondaryColor, m_SecondaryAlpha);
+                        DrawSpan(context, restRect, gradientRect, &m_SecondaryGradient, m_SecondaryColor, m_SecondaryAlpha);
                     }
                     else
                     {
-                        DrawSpan(context, restRect, m_PrimaryColor, m_PrimaryAlpha);
+                        DrawSpan(context, restRect, gradientRect, &m_PrimaryGradient, m_PrimaryColor, m_PrimaryAlpha);
                     }
                 }
             }
@@ -194,7 +203,7 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
                 D2D1_RECT_F primaryRect = m_GraphStartLeft
                                               ? D2D1::RectF(left, y, left + static_cast<float>(primarySize), y + 1.0f)
                                               : D2D1::RectF(right - static_cast<float>(primarySize), y, right, y + 1.0f);
-                DrawSpan(context, primaryRect, m_PrimaryColor, m_PrimaryAlpha);
+                DrawSpan(context, primaryRect, gradientRect, &m_PrimaryGradient, m_PrimaryColor, m_PrimaryAlpha);
             }
         }
         else
@@ -207,7 +216,7 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
                 D2D1_RECT_F bothRect = m_Flip
                                            ? D2D1::RectF(x, top, x + 1.0f, top + static_cast<float>(bothSize))
                                            : D2D1::RectF(x, bottom - static_cast<float>(bothSize), x + 1.0f, bottom);
-                DrawSpan(context, bothRect, m_BothColor, m_BothAlpha);
+                DrawSpan(context, bothRect, gradientRect, &m_BothGradient, m_BothColor, m_BothAlpha);
             }
 
             if (hasSecondary)
@@ -221,11 +230,11 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
                                                : D2D1::RectF(x, bottom - static_cast<float>(larger), x + 1.0f, bottom - static_cast<float>(bothSize));
                     if (secondaryLarger)
                     {
-                        DrawSpan(context, restRect, m_SecondaryColor, m_SecondaryAlpha);
+                        DrawSpan(context, restRect, gradientRect, &m_SecondaryGradient, m_SecondaryColor, m_SecondaryAlpha);
                     }
                     else
                     {
-                        DrawSpan(context, restRect, m_PrimaryColor, m_PrimaryAlpha);
+                        DrawSpan(context, restRect, gradientRect, &m_PrimaryGradient, m_PrimaryColor, m_PrimaryAlpha);
                     }
                 }
             }
@@ -234,7 +243,7 @@ void HistogramElement::Render(ID2D1DeviceContext *context)
                 D2D1_RECT_F primaryRect = m_Flip
                                               ? D2D1::RectF(x, top, x + 1.0f, top + static_cast<float>(primarySize))
                                               : D2D1::RectF(x, bottom - static_cast<float>(primarySize), x + 1.0f, bottom);
-                DrawSpan(context, primaryRect, m_PrimaryColor, m_PrimaryAlpha);
+                DrawSpan(context, primaryRect, gradientRect, &m_PrimaryGradient, m_PrimaryColor, m_PrimaryAlpha);
             }
         }
     }

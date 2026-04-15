@@ -43,12 +43,18 @@ public:
     void SetPrimaryColor(COLORREF color, BYTE alpha) { m_PrimaryColor = color; m_PrimaryAlpha = alpha; }
     void SetSecondaryColor(COLORREF color, BYTE alpha) { m_SecondaryColor = color; m_SecondaryAlpha = alpha; }
     void SetBothColor(COLORREF color, BYTE alpha) { m_BothColor = color; m_BothAlpha = alpha; }
+    void SetPrimaryGradient(const GradientInfo &gradient) { m_PrimaryGradient = gradient; }
+    void SetSecondaryGradient(const GradientInfo &gradient) { m_SecondaryGradient = gradient; }
+    void SetBothGradient(const GradientInfo &gradient) { m_BothGradient = gradient; }
     COLORREF GetPrimaryColor() const { return m_PrimaryColor; }
     BYTE GetPrimaryAlpha() const { return m_PrimaryAlpha; }
     COLORREF GetSecondaryColor() const { return m_SecondaryColor; }
     BYTE GetSecondaryAlpha() const { return m_SecondaryAlpha; }
     COLORREF GetBothColor() const { return m_BothColor; }
     BYTE GetBothAlpha() const { return m_BothAlpha; }
+    const GradientInfo &GetPrimaryGradient() const { return m_PrimaryGradient; }
+    const GradientInfo &GetSecondaryGradient() const { return m_SecondaryGradient; }
+    const GradientInfo &GetBothGradient() const { return m_BothGradient; }
 
 private:
     bool BuildAutoRange(float &outMin, float &outMax) const;
@@ -57,6 +63,8 @@ private:
     void DrawSpan(
         ID2D1DeviceContext *context,
         const D2D1_RECT_F &dstRect,
+        const D2D1_RECT_F &gradientRect,
+        const GradientInfo *gradient,
         COLORREF color,
         BYTE alpha);
 
@@ -71,10 +79,13 @@ private:
 
     COLORREF m_PrimaryColor = RGB(0, 128, 0);
     BYTE m_PrimaryAlpha = 255;
+    GradientInfo m_PrimaryGradient;
     COLORREF m_SecondaryColor = RGB(255, 0, 0);
     BYTE m_SecondaryAlpha = 255;
+    GradientInfo m_SecondaryGradient;
     COLORREF m_BothColor = RGB(255, 255, 0);
     BYTE m_BothAlpha = 255;
+    GradientInfo m_BothGradient;
 };
 
 #endif
