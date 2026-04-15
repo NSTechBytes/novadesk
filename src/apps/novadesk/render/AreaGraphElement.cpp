@@ -46,12 +46,19 @@ void AreaGraphElement::Render(ID2D1DeviceContext *context)
     const float top = (float)m_Y + m_PaddingTop;
     const float right = left + width - 1.0f;
     const float bottom = top + height - 1.0f;
+    const D2D1_RECT_F elementRect = D2D1::RectF(left, top, right + 1.0f, bottom + 1.0f);
 
     // 1. Draw Grid
-    if (m_GridAlpha > 0)
+    if (m_GridVisible && m_GridAlpha > 0)
     {
-        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> gridBrush;
-        Direct2D::CreateSolidBrush(context, m_GridColor, m_GridAlpha / 255.0f, gridBrush.GetAddressOf());
+        Microsoft::WRL::ComPtr<ID2D1Brush> gridBrush;
+        Direct2D::CreateBrushFromGradientOrColor(
+            context,
+            elementRect,
+            &m_GridGradient,
+            m_GridColor,
+            m_GridAlpha / 255.0f,
+            gridBrush.GetAddressOf());
         if (gridBrush)
         {
             // Vertical lines
@@ -124,8 +131,14 @@ void AreaGraphElement::Render(ID2D1DeviceContext *context)
                         sink->Close();
 
                         // Draw Fill
-                        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> fillBrush;
-                        Direct2D::CreateSolidBrush(context, m_FillColor, m_FillAlpha / 255.0f, fillBrush.GetAddressOf());
+                        Microsoft::WRL::ComPtr<ID2D1Brush> fillBrush;
+                        Direct2D::CreateBrushFromGradientOrColor(
+                            context,
+                            elementRect,
+                            &m_FillGradient,
+                            m_FillColor,
+                            m_FillAlpha / 255.0f,
+                            fillBrush.GetAddressOf());
                         if (fillBrush)
                         {
                             context->FillGeometry(geometry.Get(), fillBrush.Get());
@@ -149,8 +162,14 @@ void AreaGraphElement::Render(ID2D1DeviceContext *context)
                             sink->EndFigure(D2D1_FIGURE_END_OPEN);
                             sink->Close();
 
-                            Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> lineBrush;
-                            Direct2D::CreateSolidBrush(context, m_LineColor, 1.0f, lineBrush.GetAddressOf());
+                            Microsoft::WRL::ComPtr<ID2D1Brush> lineBrush;
+                            Direct2D::CreateBrushFromGradientOrColor(
+                                context,
+                                elementRect,
+                                &m_LineGradient,
+                                m_LineColor,
+                                1.0f,
+                                lineBrush.GetAddressOf());
                             if (lineBrush)
                             {
                                 context->DrawGeometry(lineGeom.Get(), lineBrush.Get(), m_LineWidth);

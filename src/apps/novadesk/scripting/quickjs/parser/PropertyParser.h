@@ -193,12 +193,16 @@ namespace PropertyParser
         float maxValue = 1.0f;
         bool autoRange = false;
         COLORREF lineColor = RGB(0, 180, 255);
+        GradientInfo lineGradient;
         float lineWidth = 1.0f;
         COLORREF fillColor = RGB(0, 180, 255);
         BYTE fillAlpha = 50;
+        GradientInfo fillGradient;
         int maxPoints = 0;
         COLORREF gridColor = RGB(100, 100, 100);
         BYTE gridAlpha = 100;
+        GradientInfo gridGradient;
+        bool gridVisible = true;
         int gridX = 20;
         int gridY = 20;
         bool graphStartLeft = false;

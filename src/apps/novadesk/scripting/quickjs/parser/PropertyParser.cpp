@@ -950,32 +950,51 @@ namespace PropertyParser
         std::wstring lc = GetStringProp(ctx, obj, "lineColor");
         if (!lc.empty())
         {
-            GradientInfo dummy;
-            bool dummyHasSolid;
-            BYTE dummyAlpha = 255;
-            ParseGradientOrColor(lc, options.lineColor, dummyAlpha, dummy, dummyHasSolid);
+            GradientInfo parsedGradient;
+            BYTE parsedAlpha = 255;
+            if (ParseGradientString(lc, parsedGradient))
+            {
+                options.lineGradient = parsedGradient;
+            }
+            else if (ColorUtil::ParseRGBA(lc, options.lineColor, parsedAlpha))
+            {
+                options.lineGradient = GradientInfo();
+            }
         }
         GetFloatProp(ctx, obj, "lineWidth", options.lineWidth);
 
         std::wstring fc = GetStringProp(ctx, obj, "fillColor");
         if (!fc.empty())
         {
-            GradientInfo dummy;
-            bool dummyHasSolid;
-            ParseGradientOrColor(fc, options.fillColor, options.fillAlpha, dummy, dummyHasSolid);
+            GradientInfo parsedGradient;
+            if (ParseGradientString(fc, parsedGradient))
+            {
+                options.fillGradient = parsedGradient;
+            }
+            else if (ColorUtil::ParseRGBA(fc, options.fillColor, options.fillAlpha))
+            {
+                options.fillGradient = GradientInfo();
+            }
         }
         GetIntProp(ctx, obj, "maxPoints", options.maxPoints);
 
         std::wstring gc = GetStringProp(ctx, obj, "gridColor");
         if (!gc.empty())
         {
-            GradientInfo dummy;
-            bool dummyHasSolid;
-            ParseGradientOrColor(gc, options.gridColor, options.gridAlpha, dummy, dummyHasSolid);
+            GradientInfo parsedGradient;
+            if (ParseGradientString(gc, parsedGradient))
+            {
+                options.gridGradient = parsedGradient;
+            }
+            else if (ColorUtil::ParseRGBA(gc, options.gridColor, options.gridAlpha))
+            {
+                options.gridGradient = GradientInfo();
+            }
         }
 
         GetIntProp(ctx, obj, "gridX", options.gridX);
         GetIntProp(ctx, obj, "gridY", options.gridY);
+        GetBoolProp(ctx, obj, "gridVisible", options.gridVisible);
         GetBoolProp(ctx, obj, "graphStartLeft", options.graphStartLeft);
         GetBoolProp(ctx, obj, "flip", options.flip);
     }
@@ -1721,10 +1740,14 @@ namespace PropertyParser
         element->SetMaxValue(options.maxValue);
         element->SetAutoRange(options.autoRange);
         element->SetLineColor(options.lineColor);
+        element->SetLineGradient(options.lineGradient);
         element->SetLineWidth(options.lineWidth);
         element->SetFillColor(options.fillColor, options.fillAlpha);
+        element->SetFillGradient(options.fillGradient);
         element->SetMaxPoints(options.maxPoints);
         element->SetGridColor(options.gridColor, options.gridAlpha);
+        element->SetGridGradient(options.gridGradient);
+        element->SetGridVisible(options.gridVisible);
         element->SetGridXSpacing(options.gridX);
         element->SetGridYSpacing(options.gridY);
         element->SetGraphStartLeft(options.graphStartLeft);
@@ -2124,12 +2147,16 @@ namespace PropertyParser
         options.maxValue = element->GetMaxValue();
         options.autoRange = element->GetAutoRange();
         options.lineColor = element->GetLineColor();
+        options.lineGradient = element->GetLineGradient();
         options.lineWidth = element->GetLineWidth();
         options.fillColor = element->GetFillColor();
         options.fillAlpha = element->GetFillAlpha();
+        options.fillGradient = element->GetFillGradient();
         options.maxPoints = element->GetMaxPoints();
         options.gridColor = element->GetGridColor();
         options.gridAlpha = element->GetGridAlpha();
+        options.gridGradient = element->GetGridGradient();
+        options.gridVisible = element->GetGridVisible();
         options.gridX = element->GetGridXSpacing();
         options.gridY = element->GetGridYSpacing();
         options.graphStartLeft = element->GetGraphStartLeft();

@@ -33,14 +33,22 @@ public:
 
     void SetLineColor(COLORREF color) { m_LineColor = color; }
     COLORREF GetLineColor() const { return m_LineColor; }
+    void SetLineGradient(const GradientInfo &gradient) { m_LineGradient = gradient; }
+    const GradientInfo &GetLineGradient() const { return m_LineGradient; }
     
     void SetFillColor(COLORREF color, BYTE alpha) { m_FillColor = color; m_FillAlpha = alpha; }
     COLORREF GetFillColor() const { return m_FillColor; }
     BYTE GetFillAlpha() const { return m_FillAlpha; }
+    void SetFillGradient(const GradientInfo &gradient) { m_FillGradient = gradient; }
+    const GradientInfo &GetFillGradient() const { return m_FillGradient; }
 
     void SetGridColor(COLORREF color, BYTE alpha) { m_GridColor = color; m_GridAlpha = alpha; }
     COLORREF GetGridColor() const { return m_GridColor; }
     BYTE GetGridAlpha() const { return m_GridAlpha; }
+    void SetGridGradient(const GradientInfo &gradient) { m_GridGradient = gradient; }
+    const GradientInfo &GetGridGradient() const { return m_GridGradient; }
+    void SetGridVisible(bool visible) { m_GridVisible = visible; }
+    bool GetGridVisible() const { return m_GridVisible; }
 
     void SetLineWidth(float width) { m_LineWidth = (width < 0.1f) ? 0.1f : width; }
     float GetLineWidth() const { return m_LineWidth; }
@@ -70,12 +78,16 @@ private:
 
     COLORREF m_LineColor = RGB(0, 180, 255);
     float m_LineWidth = 1.0f;
+    GradientInfo m_LineGradient;
 
     COLORREF m_FillColor = RGB(0, 180, 255);
     BYTE m_FillAlpha = 50;
+    GradientInfo m_FillGradient;
 
     COLORREF m_GridColor = RGB(100, 100, 100);
     BYTE m_GridAlpha = 100;
+    GradientInfo m_GridGradient;
+    bool m_GridVisible = true;
 
     int m_GridXSpacing = 20;
     int m_GridYSpacing = 20;

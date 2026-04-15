@@ -878,6 +878,8 @@ namespace novadesk::scripting::quickjs
                     return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(graph->GetGridColor(), graph->GetGridAlpha())).c_str());
                 if (prop == "gridAlpha")
                     return JS_NewInt32(ctx, graph->GetGridAlpha());
+                if (prop == "gridVisible")
+                    return JS_NewBool(ctx, graph->GetGridVisible() ? 1 : 0);
                 if (prop == "gridX")
                     return JS_NewInt32(ctx, graph->GetGridXSpacing());
                 if (prop == "gridY")
