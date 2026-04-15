@@ -76,8 +76,10 @@ namespace PropertyParser
         int bevelWidth = 0;
         COLORREF bevelColor = RGB(255, 255, 255);
         BYTE bevelAlpha = 200;
+        GradientInfo bevelGradient;
         COLORREF bevelColor2 = RGB(0, 0, 0);
         BYTE bevelAlpha2 = 150;
+        GradientInfo bevelGradient2;
         int paddingLeft = 0;
         int paddingTop = 0;
         int paddingRight = 0;

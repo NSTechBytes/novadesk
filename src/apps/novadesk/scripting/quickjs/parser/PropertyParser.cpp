@@ -642,14 +642,18 @@ namespace PropertyParser
             options.bevelType = 0;
 
         GetIntProp(ctx, obj, "bevelWidth", options.bevelWidth);
-        BYTE a = options.bevelAlpha;
         std::wstring b1 = GetStringProp(ctx, obj, "bevelColor");
         if (!b1.empty())
-            ColorUtil::ParseRGBA(b1, options.bevelColor, a), options.bevelAlpha = a;
-        a = options.bevelAlpha2;
+        {
+            bool hasBevelColor = false;
+            ParseGradientOrColor(b1, options.bevelColor, options.bevelAlpha, options.bevelGradient, hasBevelColor);
+        }
         std::wstring b2 = GetStringProp(ctx, obj, "bevelColor2");
         if (!b2.empty())
-            ColorUtil::ParseRGBA(b2, options.bevelColor2, a), options.bevelAlpha2 = a;
+        {
+            bool hasBevelColor2 = false;
+            ParseGradientOrColor(b2, options.bevelColor2, options.bevelAlpha2, options.bevelGradient2, hasBevelColor2);
+        }
 
         JSValue pad = JS_GetPropertyStr(ctx, obj, "padding");
         if (JS_IsNumber(pad))
@@ -1537,10 +1541,14 @@ namespace PropertyParser
         if (options.bevelType > 0)
         {
             element->SetBevel(options.bevelType, options.bevelWidth, options.bevelColor, options.bevelAlpha, options.bevelColor2, options.bevelAlpha2);
+            element->SetBevelGradient(options.bevelGradient);
+            element->SetBevelGradient2(options.bevelGradient2);
         }
         else
         {
             element->SetBevel(0, 0, 0, 0, 0, 0);
+            element->SetBevelGradient(GradientInfo());
+            element->SetBevelGradient2(GradientInfo());
         }
 
         if (options.hasTransformMatrix && options.transformMatrix.size() >= 6)
@@ -1941,8 +1949,10 @@ namespace PropertyParser
         options.bevelWidth = element->GetBevelWidth();
         options.bevelColor = element->GetBevelColor();
         options.bevelAlpha = element->GetBevelAlpha();
+        options.bevelGradient = element->GetBevelGradient();
         options.bevelColor2 = element->GetBevelColor2();
         options.bevelAlpha2 = element->GetBevelAlpha2();
+        options.bevelGradient2 = element->GetBevelGradient2();
 
         if (element->HasTransformMatrix())
         {
