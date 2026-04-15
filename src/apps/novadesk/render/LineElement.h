@@ -37,6 +37,8 @@ public:
 
     void SetLineWidth(float width);
     float GetLineWidth() const { return m_LineWidth; }
+    void SetMaxPoints(int maxPoints);
+    int GetMaxPoints() const { return m_MaxPoints; }
 
     void SetHorizontalLines(bool enabled) { m_HorizontalLines = enabled; }
     bool GetHorizontalLines() const { return m_HorizontalLines; }
@@ -71,7 +73,7 @@ public:
 private:
     void EnsureStorage();
     bool BuildAutoRange(float& outMin, float& outMax) const;
-    bool MapPoint(int dataIndex, int pointIndex, int totalPoints, float minValue, float maxValue, D2D1_POINT_2F& outPoint);
+    bool MapPoint(int dataIndex, int pointIndex, int totalPoints, int capacityPoints, float minValue, float maxValue, D2D1_POINT_2F& outPoint);
     static float DistancePointToSegment(const D2D1_POINT_2F& p, const D2D1_POINT_2F& a, const D2D1_POINT_2F& b);
 
 private:
@@ -81,6 +83,7 @@ private:
     std::vector<BYTE> m_LineAlphas;
     std::vector<float> m_ScaleValues;
     float m_LineWidth = 1.0f;
+    int m_MaxPoints = 0;
     bool m_HorizontalLines = false;
     COLORREF m_HorizontalLineColor = RGB(0, 0, 0);
     BYTE m_HorizontalLineAlpha = 255;

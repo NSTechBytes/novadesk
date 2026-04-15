@@ -15,7 +15,11 @@ let phase = 0;
 const timer = setInterval(function () {
     phase += 1;
     const cpu = system.cpu.usage();
-    const memory = system.memory.usagePercent();
+    const totalMemory = system.memory.totalBytes();
+    const usedMemory = system.memory.usedBytes();
+    const memory = (totalMemory > 0)
+        ? ((usedMemory / totalMemory) * 100.0)
+        : system.memory.usagePercent();
     const netIn = system.network.rxSpeed();
     const netOut = system.network.txSpeed();
     // Send as JSON string for maximum compatibility with the ui bridge.

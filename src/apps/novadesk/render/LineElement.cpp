@@ -27,6 +27,16 @@ void LineElement::SetLineCount(int count)
 void LineElement::SetDataSets(const std::vector<std::vector<float>>& dataSets)
 {
     m_DataSets = dataSets;
+    if (m_MaxPoints > 0)
+    {
+        for (auto& series : m_DataSets)
+        {
+            if (series.size() > (size_t)m_MaxPoints)
+            {
+                series.erase(series.begin(), series.end() - m_MaxPoints);
+            }
+        }
+    }
     EnsureStorage();
 }
 
@@ -46,6 +56,21 @@ void LineElement::SetScaleValues(const std::vector<float>& scaleValues)
 void LineElement::SetLineWidth(float width)
 {
     m_LineWidth = (width < 1.0f) ? 1.0f : width;
+}
+
+void LineElement::SetMaxPoints(int maxPoints)
+{
+    m_MaxPoints = (maxPoints < 0) ? 0 : maxPoints;
+    if (m_MaxPoints > 0)
+    {
+        for (auto& series : m_DataSets)
+        {
+            if (series.size() > (size_t)m_MaxPoints)
+            {
+                series.erase(series.begin(), series.end() - m_MaxPoints);
+            }
+        }
+    }
 }
 
 void LineElement::SetScaleRange(float minValue, float maxValue)
@@ -175,7 +200,7 @@ bool LineElement::BuildAutoRange(float& outMin, float& outMax) const
     return true;
 }
 
-bool LineElement::MapPoint(int dataIndex, int pointIndex, int totalPoints, float minValue, float maxValue, D2D1_POINT_2F& outPoint)
+bool LineElement::MapPoint(int dataIndex, int pointIndex, int totalPoints, int capacityPoints, float minValue, float maxValue, D2D1_POINT_2F& outPoint)
 {
     if (dataIndex < 0 || dataIndex >= (int)m_DataSets.size() || totalPoints <= 0 || pointIndex < 0 || pointIndex >= totalPoints)
     {
@@ -199,7 +224,11 @@ bool LineElement::MapPoint(int dataIndex, int pointIndex, int totalPoints, float
     const float top = (float)m_Y;
     const float valueRange = maxValue - minValue;
 
-    float t = (totalPoints <= 1) ? 0.0f : ((float)pointIndex / (float)(totalPoints - 1));
+    if (capacityPoints < totalPoints)
+    {
+        capacityPoints = totalPoints;
+    }
+
     int valueIndex = pointIndex;
     if (valueIndex >= (int)series.size())
     {
@@ -216,13 +245,17 @@ bool LineElement::MapPoint(int dataIndex, int pointIndex, int totalPoints, float
 
     if (!m_GraphHorizontalOrientation)
     {
-        float x = m_GraphStartLeft ? (left + t * (w - 1.0f)) : (left + (w - 1.0f) - t * (w - 1.0f));
+        const float dx = (capacityPoints > 1) ? ((w - 1.0f) / (float)(capacityPoints - 1)) : 0.0f;
+        const int axisIndex = m_GraphStartLeft ? (totalPoints - 1 - pointIndex) : ((capacityPoints - totalPoints) + pointIndex);
+        float x = left + (float)axisIndex * dx;
         float y = !m_Flip ? (top + (h - 1.0f) - normalized * (h - 1.0f)) : (top + normalized * (h - 1.0f));
         outPoint = D2D1::Point2F(x, y);
         return true;
     }
 
-    float y = !m_Flip ? (top + t * (h - 1.0f)) : (top + (h - 1.0f) - t * (h - 1.0f));
+    const float dy = (capacityPoints > 1) ? ((h - 1.0f) / (float)(capacityPoints - 1)) : 0.0f;
+    const int axisIndex = !m_Flip ? ((capacityPoints - totalPoints) + pointIndex) : (totalPoints - 1 - pointIndex);
+    float y = top + (float)axisIndex * dy;
     float x = m_GraphStartLeft ? (left + normalized * (w - 1.0f)) : (left + (w - 1.0f) - normalized * (w - 1.0f));
     outPoint = D2D1::Point2F(x, y);
     return true;
@@ -314,15 +347,33 @@ bool LineElement::HitTest(int x, int y)
         const auto& series = m_DataSets[(size_t)i];
         if (series.size() < 2)
             continue;
+        const int totalPoints = (int)series.size();
+        const int capacityPoints = (m_MaxPoints > totalPoints) ? m_MaxPoints : totalPoints;
 
         D2D1_POINT_2F a{};
-        if (!MapPoint(i, 0, (int)series.size(), minV, maxV, a))
+        if (!MapPoint(i, 0, totalPoints, capacityPoints, minV, maxV, a))
             continue;
 
-        for (int j = 1; j < (int)series.size(); ++j)
+        D2D1_POINT_2F base{};
+        if (!m_GraphHorizontalOrientation)
+        {
+            const float baseY = !m_Flip ? ((float)m_Y + (float)GetHeight() - 1.0f) : (float)m_Y;
+            base = D2D1::Point2F(a.x, baseY);
+        }
+        else
+        {
+            const float baseX = m_GraphStartLeft ? (float)m_X : ((float)m_X + (float)GetWidth() - 1.0f);
+            base = D2D1::Point2F(baseX, a.y);
+        }
+        if (DistancePointToSegment(p, base, a) <= tolerance)
+        {
+            return true;
+        }
+
+        for (int j = 1; j < totalPoints; ++j)
         {
             D2D1_POINT_2F b{};
-            if (!MapPoint(i, j, (int)series.size(), minV, maxV, b))
+            if (!MapPoint(i, j, totalPoints, capacityPoints, minV, maxV, b))
                 continue;
 
             if (DistancePointToSegment(p, a, b) <= tolerance)
@@ -427,6 +478,8 @@ void LineElement::Render(ID2D1DeviceContext* context)
         const auto& series = m_DataSets[(size_t)i];
         if (series.size() < 2)
             continue;
+        const int totalPoints = (int)series.size();
+        const int capacityPoints = (m_MaxPoints > totalPoints) ? m_MaxPoints : totalPoints;
 
         Microsoft::WRL::ComPtr<ID2D1PathGeometry> geometry;
         if (!factory || FAILED(factory->CreatePathGeometry(geometry.GetAddressOf())))
@@ -437,17 +490,29 @@ void LineElement::Render(ID2D1DeviceContext* context)
             continue;
 
         D2D1_POINT_2F first{};
-        if (!MapPoint(i, 0, (int)series.size(), minV, maxV, first))
+        if (!MapPoint(i, 0, totalPoints, capacityPoints, minV, maxV, first))
         {
             sink->Close();
             continue;
         }
+        D2D1_POINT_2F base{};
+        if (!m_GraphHorizontalOrientation)
+        {
+            const float baseY = !m_Flip ? ((float)m_Y + height - 1.0f) : (float)m_Y;
+            base = D2D1::Point2F(first.x, baseY);
+        }
+        else
+        {
+            const float baseX = m_GraphStartLeft ? (float)m_X : ((float)m_X + width - 1.0f);
+            base = D2D1::Point2F(baseX, first.y);
+        }
 
-        sink->BeginFigure(first, D2D1_FIGURE_BEGIN_HOLLOW);
-        for (int j = 1; j < (int)series.size(); ++j)
+        sink->BeginFigure(base, D2D1_FIGURE_BEGIN_HOLLOW);
+        sink->AddLine(first);
+        for (int j = 1; j < totalPoints; ++j)
         {
             D2D1_POINT_2F p{};
-            if (MapPoint(i, j, (int)series.size(), minV, maxV, p))
+            if (MapPoint(i, j, totalPoints, capacityPoints, minV, maxV, p))
             {
                 sink->AddLine(p);
             }

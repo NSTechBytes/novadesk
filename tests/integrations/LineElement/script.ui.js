@@ -20,6 +20,7 @@ var CPU_COLOR = "rgba(255, 96, 96, 1)";
 var MEMORY_COLOR = "rgba(82, 200, 255, 1)";
 var RX_COLOR = "rgba(130, 255, 130, 1)";
 var TX_COLOR = "rgba(255, 196, 92, 1)";
+var maxPoints = 10;
 
 ui.beginUpdate();
 
@@ -58,6 +59,7 @@ ui.addLine({
     backgroundColor: "rgba(255, 255, 255, 0.04)",
     backgroundColorRadius: 8,
     bevelType: "raised",
+    maxPoints:10,
     bevelWidth: 1
 });
 
@@ -122,6 +124,7 @@ ui.addLine({
     lineColor: CPU_COLOR,    // CPU
     lineColor2: MEMORY_COLOR, // Memory
     lineWidth: 3,
+    maxPoints: maxPoints,
     horizontalLines: true,
     horizontalLineColor: "rgba(255, 255, 255, 0.18)",
     graphStart: "right",
@@ -185,6 +188,7 @@ ui.addLine({
     lineColor: RX_COLOR, // Net In
     lineColor2: TX_COLOR, // Net Out
     lineWidth: 3,
+    maxPoints: maxPoints,
     horizontalLines: true,
     horizontalLineColor: "rgba(255, 255, 255, 0.18)",
     graphStart: "left",
@@ -238,6 +242,7 @@ logAssert("transformStroke", ui.getElementProperty("line-horizontal", "transform
 logAssert("lineScale", ui.getElementProperty("line-main", "lineScale"), 1);
 logAssert("lineScale2", ui.getElementProperty("line-main", "lineScale2"), 0.75);
 logAssert("lineScale3", ui.getElementProperty("line-main", "lineScale3"), 1.2);
+logAssert("maxPoints", ui.getElementProperty("line-live-usage", "maxPoints"), maxPoints);
 logAssert("autoRange", ui.getElementProperty("line-live-usage", "autoRange"), false);
 logAssert("rangeMin", ui.getElementProperty("line-live-usage", "rangeMin"), 0);
 logAssert("rangeMax", ui.getElementProperty("line-live-usage", "rangeMax"), 100);
@@ -253,7 +258,6 @@ var cpuHistory = [];
 var memoryHistory = [];
 var netInHistory = [];
 var netOutHistory = [];
-var maxPoints = 120;
 
 function clampPercent(v) {
     if (v < 0) return 0;

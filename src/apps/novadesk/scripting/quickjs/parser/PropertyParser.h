@@ -267,6 +267,7 @@ namespace PropertyParser
         std::vector<BYTE> lineAlphas;
         std::vector<float> scaleValues;
         float lineWidth = 1.0f;
+        int maxPoints = 0;
         bool horizontalLines = false;
         COLORREF horizontalLineColor = RGB(0, 0, 0);
         BYTE horizontalLineAlpha = 255;

@@ -965,6 +965,8 @@ namespace novadesk::scripting::quickjs
                     return JS_NewInt32(ctx, line->GetLineCount());
                 if (prop == "lineWidth")
                     return JS_NewFloat64(ctx, line->GetLineWidth());
+                if (prop == "maxPoints")
+                    return JS_NewInt32(ctx, line->GetMaxPoints());
                 if (prop == "horizontalLines")
                     return JS_NewBool(ctx, line->GetHorizontalLines() ? 1 : 0);
                 if (prop == "horizontalLineColor")

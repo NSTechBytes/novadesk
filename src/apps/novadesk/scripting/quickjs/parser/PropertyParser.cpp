@@ -1136,6 +1136,11 @@ namespace PropertyParser
         {
             options.lineWidth = 1.0f;
         }
+        GetIntProp(ctx, obj, "maxPoints", options.maxPoints);
+        if (options.maxPoints < 0)
+        {
+            options.maxPoints = 0;
+        }
 
         GetBoolProp(ctx, obj, "horizontalLines", options.horizontalLines);
         std::wstring horizontalLineColor = GetStringProp(ctx, obj, "horizontalLineColor");
@@ -1717,6 +1722,7 @@ namespace PropertyParser
         element->SetLineColors(options.lineColors, options.lineAlphas);
         element->SetScaleValues(options.scaleValues);
         element->SetLineWidth(options.lineWidth);
+        element->SetMaxPoints(options.maxPoints);
         element->SetHorizontalLines(options.horizontalLines);
         element->SetHorizontalLineColor(options.horizontalLineColor, options.horizontalLineAlpha);
         element->SetGraphStartLeft(options.graphStartLeft);
@@ -2242,6 +2248,7 @@ namespace PropertyParser
         options.lineAlphas = element->GetLineAlphas();
         options.scaleValues = element->GetScaleValues();
         options.lineWidth = element->GetLineWidth();
+        options.maxPoints = element->GetMaxPoints();
         options.horizontalLines = element->GetHorizontalLines();
         options.horizontalLineColor = element->GetHorizontalLineColor();
         options.horizontalLineAlpha = element->GetHorizontalLineAlpha();
