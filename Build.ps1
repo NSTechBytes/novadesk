@@ -3,7 +3,8 @@ param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Debug",
     [string]$Platform = "x64",
-    [switch]$Reconfigure
+    [switch]$Reconfigure,
+    [int]$Jobs = 0
 )
 
 $ErrorActionPreference = "Stop"
@@ -168,8 +169,15 @@ try {
         Write-Host "Using existing CMake configuration in $effectiveBuildDir (CMAKE_BUILD_TYPE=$cachedBuildType)" -ForegroundColor DarkGray
     }
 
-    Write-Host "Building MinGW target(s) from $effectiveBuildDir..." -ForegroundColor Cyan
-    & $cmake --build $effectiveBuildDir -j
+    $effectiveJobs = $Jobs
+    if ($effectiveJobs -le 0) {
+        $effectiveJobs = [Environment]::ProcessorCount
+        if ($effectiveJobs -lt 1) {
+            $effectiveJobs = 1
+        }
+    }
+    Write-Host "Building MinGW target(s) from $effectiveBuildDir with $effectiveJobs parallel job(s)..." -ForegroundColor Cyan
+    & $cmake --build $effectiveBuildDir --parallel $effectiveJobs
     if ($LASTEXITCODE -ne 0) {
         throw "CMake build failed."
     }
