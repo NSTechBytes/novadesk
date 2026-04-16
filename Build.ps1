@@ -199,7 +199,7 @@ try {
     $restartExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\restart_novadesk\restart_novadesk.exe"
     $ndpkgInstallerExeSrc = Join-Path $RepoRoot "src\apps\$Platform\$Configuration\ndpkg_installer\ndpkg_installer.exe"
     $addonsBuildRoot = Join-Path $RepoRoot "src\addons\dist\$Platform\$Configuration"
-    $addonProjectNames = @("AppVolume", "AudioLevel", "Brightness", "Hotkey", "NowPlaying", "InputBox")
+    $addonProjectNames = @("AppVolume", "AudioLevel", "Brightness", "Hotkey", "NowPlaying", "InputBox", "BlurBehind")
 
     Assert-PathExists -PathValue $novadeskExeSrc -Label "novadesk.exe"
     Assert-PathExists -PathValue $widgetsSrc -Label "Widgets source"
