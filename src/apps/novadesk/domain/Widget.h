@@ -92,10 +92,10 @@ public:
     void SetWindowPosition(int x, int y, int w, int h);
     void SetWindowOpacity(BYTE opacity);
     void SetBackgroundColor(const std::wstring& colorStr);
-    void SetDraggable(bool enable) { m_Options.draggable = enable; }
+    void SetDraggable(bool enable);
     void SetClickThrough(bool enable);
-    void SetKeepOnScreen(bool enable) { m_Options.keepOnScreen = enable; }
-    void SetSnapEdges(bool enable) { m_Options.snapEdges = enable; }
+    void SetKeepOnScreen(bool enable);
+    void SetSnapEdges(bool enable);
 
     const WidgetOptions& GetOptions() const { return m_Options; }
     HWND GetWindow() const { return m_hWnd; }
