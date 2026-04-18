@@ -635,6 +635,21 @@ namespace novadesk::scripting::quickjs
                 return arr;
             }
 
+            if (prop == "tooltipText")
+                return JS_NewString(ctx, Utils::ToString(element->GetToolTipText()).c_str());
+            if (prop == "tooltipTitle")
+                return JS_NewString(ctx, Utils::ToString(element->GetToolTipTitle()).c_str());
+            if (prop == "tooltipIcon")
+                return JS_NewString(ctx, Utils::ToString(element->GetToolTipIcon()).c_str());
+            if (prop == "tooltipMaxWidth")
+                return JS_NewInt32(ctx, element->GetToolTipMaxWidth());
+            if (prop == "tooltipMaxHeight")
+                return JS_NewInt32(ctx, element->GetToolTipMaxHeight());
+            if (prop == "tooltipBalloon")
+                return JS_NewBool(ctx, element->GetToolTipBalloon() ? 1 : 0);
+            if (prop == "tooltipDisabled")
+                return JS_NewBool(ctx, element->GetToolTipDisabled() ? 1 : 0);
+
             if (element->GetType() == ELEMENT_TEXT)
             {
                 auto *t = static_cast<TextElement *>(element);

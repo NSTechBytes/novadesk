@@ -121,6 +121,7 @@ namespace PropertyParser
         int tooltipMaxWidth = 0;
         int tooltipMaxHeight = 0;
         bool tooltipBalloon = false;
+        bool tooltipDisabled = false;
     };
 
     struct GeneralImageOptions : public ElementOptions
