@@ -5,8 +5,13 @@ ui.addText({
     text: "Hover here (Tooltip ENABLED)",
     fontColor: "white",
     fontSize: 24,
-    textAlign: "center",
     tooltipText: "This tooltip SHOULD show up",
+    tooltipTitle: "Tooltip Title",
+    tooltipIcon: "error",
+    // tooltipBalloon: true,
+    onMouseOver: () => {
+        console.log("Mouse Overded");
+    },
     onLeftMouseDown: function () {
         console.log("Mouse Overded");
     }

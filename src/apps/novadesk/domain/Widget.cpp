@@ -815,30 +815,6 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     widget->ChangeZPos(ZPOSITION_ONTOPMOST);
                 }
             }
-            else if (wParam == TIMER_TOOLTIP)
-            {
-                widget->m_Tooltip.CheckVisibility();
-                // If tooltip is no longer active after check, kill the timer
-                if (!widget->m_Tooltip.IsActive())
-                {
-                    KillTimer(hWnd, TIMER_TOOLTIP);
-
-                    // If we hid the tooltip, we likely lost mouse focus or are covered.
-                    // Reset mouse over element state so that when we return, we trigger a fresh enter.
-                    if (widget->m_MouseOverElement)
-                    {
-
-                        widget->m_MouseOverElement->m_IsMouseOver = false;
-
-                        int leaveId = widget->m_MouseOverElement->m_OnMouseLeaveCallbackId;
-                        if (leaveId != -1)
-                            JSEngine::CallEventCallback(leaveId);
-
-                        widget->m_MouseOverElement = nullptr;
-                    }
-                    widget->m_TooltipElement = nullptr;
-                }
-            }
         }
         return 0;
 
@@ -2361,6 +2337,9 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     int y = GET_Y_LPARAM(lParam);
     bool justEnteredWidget = false;
 
+    // Manual tracking for tooltips to support hybrid delayed moves
+    m_Tooltip.Move();
+
     if (message == WM_MOUSEMOVE)
     {
         if (!m_IsMouseOverWidget)
@@ -2368,7 +2347,6 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             m_IsMouseOverWidget = true;
             justEnteredWidget = true;
         }
-        m_Tooltip.Move();
     }
 
     // For mouse wheel, coordinates are screen relative
@@ -2599,16 +2577,6 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         {
             m_Tooltip.Update(nextToolTipElement);
             m_TooltipElement = nextToolTipElement;
-
-            // Start timer to periodically check if tooltip should be hidden (e.g., another window covers)
-            if (m_Tooltip.IsActive())
-            {
-                SetTimer(m_hWnd, TIMER_TOOLTIP, 100, nullptr); // Check every 100ms
-            }
-            else
-            {
-                KillTimer(m_hWnd, TIMER_TOOLTIP);
-            }
         }
 
         // Ensure we track mouse leave window events
