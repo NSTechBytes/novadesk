@@ -2574,6 +2574,34 @@ namespace novadesk::scripting::quickjs::parser
         out.hasClickThrough = PropertyParser::GetBoolProp(ctx, options, "clickThrough", out.clickThrough);
         out.hasKeepOnScreen = PropertyParser::GetBoolProp(ctx, options, "keepOnScreen", out.keepOnScreen);
         out.hasSnapEdges = PropertyParser::GetBoolProp(ctx, options, "snapEdges", out.snapEdges);
+        out.hasShowInToolbar = PropertyParser::GetBoolProp(ctx, options, "showInToolbar", out.showInToolbar);
+
+        JSValue toolbarIconVal = JS_GetPropertyStr(ctx, options, "toolbarIcon");
+        if (!JS_IsUndefined(toolbarIconVal) && !JS_IsNull(toolbarIconVal))
+        {
+            const char *s = JS_ToCString(ctx, toolbarIconVal);
+            if (s)
+            {
+                out.toolbarIcon = Utils::ToWString(s);
+                out.hasToolbarIcon = true;
+                JS_FreeCString(ctx, s);
+            }
+        }
+        JS_FreeValue(ctx, toolbarIconVal);
+
+        JSValue toolbarTitleVal = JS_GetPropertyStr(ctx, options, "toolbarTitle");
+        if (!JS_IsUndefined(toolbarTitleVal) && !JS_IsNull(toolbarTitleVal))
+        {
+            const char *s = JS_ToCString(ctx, toolbarTitleVal);
+            if (s)
+            {
+                out.toolbarTitle = Utils::ToWString(s);
+                out.hasToolbarTitle = true;
+                JS_FreeCString(ctx, s);
+            }
+        }
+        JS_FreeValue(ctx, toolbarTitleVal);
+
         out.hasShow = PropertyParser::GetBoolProp(ctx, options, "show", out.show);
 
         std::wstring bg = PropertyParser::GetStringProp(ctx, options, "backgroundColor");

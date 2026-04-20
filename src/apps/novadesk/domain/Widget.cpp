@@ -104,6 +104,8 @@ Widget::~Widget()
 {
     JSEngine::TriggerWidgetEvent(this, "close");
 
+    DestroyToolbarIcon();
+
     if (m_hWnd)
     {
         DestroyWindow(m_hWnd);
@@ -158,16 +160,25 @@ bool Widget::Create()
 
     HINSTANCE hInstance = GetModuleHandle(nullptr);
 
-    DWORD dwExStyle = WS_EX_TOOLWINDOW | WS_EX_LAYERED;
+    DWORD dwExStyle = WS_EX_LAYERED;
+    if (m_Options.showInToolbar)
+    {
+        dwExStyle |= WS_EX_APPWINDOW;
+    }
+    else
+    {
+        dwExStyle |= WS_EX_TOOLWINDOW;
+    }
     if (m_Options.clickThrough)
     {
         dwExStyle |= WS_EX_TRANSPARENT;
     }
 
+    const std::wstring windowTitle = m_Options.toolbarTitle.empty() ? m_Options.id : m_Options.toolbarTitle;
     m_hWnd = CreateWindowExW(
         dwExStyle,
         WIDGET_CLASS_NAME,
-        m_Options.id.c_str(),
+        windowTitle.c_str(),
         WS_POPUP,
         m_Options.x, m_Options.y, m_Options.width, m_Options.height,
         nullptr, nullptr, hInstance, this);
@@ -197,6 +208,9 @@ bool Widget::Create()
     {
         SetTimer(m_hWnd, TIMER_TOPMOST, 500, nullptr);
     }
+
+    ApplyToolbarTitle();
+    ApplyToolbarIcon();
 
     // Initialize tooltip
     m_Tooltip.Initialize(m_hWnd, hInstance);
@@ -253,6 +267,22 @@ void Widget::UnFocus()
     if (m_hWnd && ::GetFocus() == m_hWnd)
     {
         ::SetFocus(NULL);
+    }
+}
+
+void Widget::Minimize()
+{
+    if (m_hWnd)
+    {
+        ShowWindow(m_hWnd, SW_MINIMIZE);
+    }
+}
+
+void Widget::UnMinimize()
+{
+    if (m_hWnd)
+    {
+        ShowWindow(m_hWnd, SW_RESTORE);
     }
 }
 
@@ -548,6 +578,124 @@ void Widget::SetClickThrough(bool enable)
         SetWindowLong(m_hWnd, GWL_EXSTYLE, exStyle);
         Settings::SaveWidget(m_Options.id, m_Options);
     }
+}
+
+void Widget::SetShowInToolbar(bool enable)
+{
+    if (m_Options.showInToolbar == enable)
+        return;
+
+    m_Options.showInToolbar = enable;
+    ApplyToolbarStyle();
+    Settings::SaveWidget(m_Options.id, m_Options);
+}
+
+void Widget::SetToolbarIcon(const std::wstring &path)
+{
+    if (m_Options.toolbarIcon == path)
+        return;
+
+    m_Options.toolbarIcon = path;
+    ApplyToolbarIcon();
+    Settings::SaveWidget(m_Options.id, m_Options);
+}
+
+void Widget::SetToolbarTitle(const std::wstring &title)
+{
+    if (m_Options.toolbarTitle == title)
+        return;
+
+    m_Options.toolbarTitle = title;
+    ApplyToolbarTitle();
+    Settings::SaveWidget(m_Options.id, m_Options);
+}
+
+void Widget::ApplyToolbarStyle()
+{
+    if (!m_hWnd)
+        return;
+
+    LONG_PTR exStyle = GetWindowLongPtrW(m_hWnd, GWL_EXSTYLE);
+    if (m_Options.showInToolbar)
+    {
+        exStyle &= ~static_cast<LONG_PTR>(WS_EX_TOOLWINDOW);
+        exStyle |= WS_EX_APPWINDOW;
+    }
+    else
+    {
+        exStyle &= ~static_cast<LONG_PTR>(WS_EX_APPWINDOW);
+        exStyle |= WS_EX_TOOLWINDOW;
+    }
+
+    SetWindowLongPtrW(m_hWnd, GWL_EXSTYLE, exStyle);
+    SetWindowPos(
+        m_hWnd,
+        nullptr,
+        0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+
+    if (IsWindowVisible(m_hWnd))
+    {
+        ShowWindow(m_hWnd, SW_HIDE);
+        ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
+    }
+}
+
+void Widget::DestroyToolbarIcon()
+{
+    if (m_ToolbarIconOwned && m_ToolbarIconHandle)
+    {
+        DestroyIcon(m_ToolbarIconHandle);
+    }
+    m_ToolbarIconHandle = nullptr;
+    m_ToolbarIconOwned = false;
+}
+
+void Widget::ApplyToolbarIcon()
+{
+    if (!m_hWnd)
+        return;
+
+    DestroyToolbarIcon();
+
+    HICON icon = nullptr;
+    if (!m_Options.toolbarIcon.empty())
+    {
+        icon = reinterpret_cast<HICON>(LoadImageW(
+            nullptr,
+            m_Options.toolbarIcon.c_str(),
+            IMAGE_ICON,
+            0,
+            0,
+            LR_LOADFROMFILE | LR_DEFAULTSIZE));
+
+        if (icon)
+        {
+            m_ToolbarIconHandle = icon;
+            m_ToolbarIconOwned = true;
+        }
+        else
+        {
+            Logging::Log(LogLevel::Warn, L"Widget '%s': failed to load toolbarIcon '%s'", m_Options.id.c_str(), m_Options.toolbarIcon.c_str());
+        }
+    }
+
+    if (!icon)
+    {
+        icon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_NOVADESK));
+    }
+
+    SendMessageW(m_hWnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(icon));
+    SendMessageW(m_hWnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(icon));
+}
+
+void Widget::ApplyToolbarTitle()
+{
+    if (!m_hWnd)
+        return;
+
+    const std::wstring title = m_Options.toolbarTitle.empty() ? m_Options.id : m_Options.toolbarTitle;
+    SetWindowTextW(m_hWnd, title.c_str());
 }
 
 /*
@@ -983,6 +1131,27 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
         }
         return 0;
+    case WM_SIZE:
+        if (widget)
+        {
+            if (wParam == SIZE_MINIMIZED)
+            {
+                if (!widget->m_IsMinimized)
+                {
+                    widget->m_IsMinimized = true;
+                    JSEngine::TriggerWidgetEvent(widget, "minimize");
+                }
+            }
+            else
+            {
+                if (widget->m_IsMinimized)
+                {
+                    widget->m_IsMinimized = false;
+                    JSEngine::TriggerWidgetEvent(widget, "unMinimize");
+                }
+            }
+        }
+        return 0;
     case WM_EXITSIZEMOVE:
         if (widget)
         {
@@ -997,6 +1166,21 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
         }
         return 0;
+    case WM_CLOSE:
+        if (widget)
+        {
+            // Native close (taskbar/titlebar/system menu) must follow the same
+            // lifecycle as widget.close(): remove from registry and delete widget
+            // so "close"/"closed" events are triggered from the destructor.
+            auto it = std::find(widgets.begin(), widgets.end(), widget);
+            if (it != widgets.end())
+                widgets.erase(it);
+
+            SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
+            delete widget;
+            return 0;
+        }
+        break;
     case WM_DESTROY:
         if (widget)
         {

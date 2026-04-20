@@ -434,6 +434,12 @@ namespace novadesk::scripting::quickjs::parser
         bool hasKeepOnScreen = false;
         bool snapEdges = true;
         bool hasSnapEdges = false;
+        bool showInToolbar = false;
+        bool hasShowInToolbar = false;
+        std::wstring toolbarIcon;
+        bool hasToolbarIcon = false;
+        std::wstring toolbarTitle;
+        bool hasToolbarTitle = false;
         bool show = true;
         bool hasShow = false;
         std::wstring backgroundColor = L"rgba(0,0,0,0)";
