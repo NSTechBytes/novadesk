@@ -274,6 +274,11 @@ void Widget::Minimize()
 {
     if (m_hWnd)
     {
+        if (!m_IsMinimized)
+        {
+            m_IsMinimized = true;
+            JSEngine::TriggerWidgetEvent(this, "minimize");
+        }
         ShowWindow(m_hWnd, SW_MINIMIZE);
     }
 }
@@ -282,6 +287,11 @@ void Widget::UnMinimize()
 {
     if (m_hWnd)
     {
+        if (m_IsMinimized)
+        {
+            m_IsMinimized = false;
+            JSEngine::TriggerWidgetEvent(this, "unMinimize");
+        }
         ShowWindow(m_hWnd, SW_RESTORE);
     }
 }
@@ -949,6 +959,28 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
         }
         return MA_ACTIVATE;
+    case WM_SYSCOMMAND:
+        if (widget)
+        {
+            const UINT command = static_cast<UINT>(wParam & 0xFFF0);
+            if (command == SC_MINIMIZE)
+            {
+                if (!widget->m_IsMinimized)
+                {
+                    widget->m_IsMinimized = true;
+                    JSEngine::TriggerWidgetEvent(widget, "minimize");
+                }
+            }
+            else if (command == SC_RESTORE)
+            {
+                if (widget->m_IsMinimized)
+                {
+                    widget->m_IsMinimized = false;
+                    JSEngine::TriggerWidgetEvent(widget, "unMinimize");
+                }
+            }
+        }
+        return DefWindowProc(hWnd, message, wParam, lParam);
 
     case WM_NCHITTEST:
         return HTCLIENT; // We handle everything in client area to get mouse messages

@@ -14,3 +14,24 @@ const widget = new widgetWindow({
 
 widget.on("close", () => console.log("Widget closing"));
 widget.on("closed", () => console.log("Widget closed"));
+
+function testWidgetMinimization() {
+    widget.minimize();
+   
+}
+
+function testWidgetRestoration() {
+    widget.unMinimize();
+    
+}
+ widget.on("minimize", () => console.log("minimized"));
+ widget.on("unMinimize", () => console.log("restored"));
+setTimeout(() => {
+    testWidgetMinimization();
+    // testWidgetRestoration();
+}, 5000);
+
+setTimeout(() => {
+    // testWidgetUnMinimization();
+    testWidgetRestoration();
+}, 8000);
