@@ -2646,6 +2646,30 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             message == WM_LBUTTONUP || message == WM_RBUTTONUP || message == WM_MBUTTONUP || message == WM_XBUTTONUP)
         {
             JSEngine::TriggerWidgetEvent(this, "mouseUp", &widgetEventData);
+            if (message == WM_LBUTTONUP)
+            {
+                JSEngine::TriggerWidgetEvent(this, "click", &widgetEventData);
+            }
+            else if (message == WM_RBUTTONUP)
+            {
+                JSEngine::TriggerWidgetEvent(this, "right-click", &widgetEventData);
+            }
+        }
+        else if (message == WM_LBUTTONDBLCLK)
+        {
+            JSEngine::TriggerWidgetEvent(this, "double-click", &widgetEventData);
+        }
+        else if (message == WM_MOUSEWHEEL)
+        {
+            const int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+            if (delta > 0)
+            {
+                JSEngine::TriggerWidgetEvent(this, "scroll-up", &widgetEventData);
+            }
+            else if (delta < 0)
+            {
+                JSEngine::TriggerWidgetEvent(this, "scroll-down", &widgetEventData);
+            }
         }
     }
 
