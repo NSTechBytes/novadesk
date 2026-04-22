@@ -8,6 +8,6 @@ ui.addText({
     fontSize:16,
     fontColor:"#000000",
     fontWeight:"bold",
-    fontFamily:"Arial",
+    fontFace:"Arial",
     textAlign:"centercenter",
 });

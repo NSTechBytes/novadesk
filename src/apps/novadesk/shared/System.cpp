@@ -20,6 +20,7 @@
 #include <powrprof.h>
 #include <iphlpapi.h>
 #include <wininet.h>
+#include <shellapi.h>
 
 #ifndef __IAudioMeterInformation_INTERFACE_DEFINED__
 #define __IAudioMeterInformation_INTERFACE_DEFINED__
@@ -347,6 +348,50 @@ namespace novadesk::shared::system
                                ? static_cast<int>((outStats.used * 100.0) / outStats.total + 0.5)
                                : 0;
         return true;
+    }
+
+    // *****************************************************************************
+    // RecycleBin Object
+    // *****************************************************************************
+
+    bool GetRecycleBinStats(RecycleBinStats &outStats)
+    {
+        SHQUERYRBINFO rbi{};
+        rbi.cbSize = sizeof(rbi);
+
+        HRESULT hr = SHQueryRecycleBinW(nullptr, &rbi);
+        if (FAILED(hr))
+        {
+            return false;
+        }
+
+        outStats.count = static_cast<double>(rbi.i64NumItems);
+        outStats.size = static_cast<double>(rbi.i64Size);
+        return true;
+    }
+
+    bool OpenRecycleBin()
+    {
+        HINSTANCE result = ShellExecuteW(
+            nullptr,
+            L"open",
+            L"explorer.exe",
+            L"/N,::{645FF040-5081-101B-9F08-00AA002F954E}",
+            nullptr,
+            SW_SHOWNORMAL);
+        return reinterpret_cast<INT_PTR>(result) > 32;
+    }
+
+    bool EmptyRecycleBin(bool silent)
+    {
+        DWORD flags = 0;
+        if (silent)
+        {
+            flags = SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND;
+        }
+
+        HRESULT hr = SHEmptyRecycleBinW(nullptr, nullptr, flags);
+        return SUCCEEDED(hr);
     }
 
     // *****************************************************************************

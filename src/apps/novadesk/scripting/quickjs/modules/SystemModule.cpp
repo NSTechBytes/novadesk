@@ -223,6 +223,33 @@ namespace novadesk::scripting::quickjs
             return JS_NewInt32(ctx, stats.percent);
         }
 
+        JSValue JsRecycleBinOpenBin(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewBool(ctx, shared::system::OpenRecycleBin() ? 1 : 0);
+        }
+
+        JSValue JsRecycleBinEmptyBin(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewBool(ctx, shared::system::EmptyRecycleBin(false) ? 1 : 0);
+        }
+
+        JSValue JsRecycleBinEmptyBinSilent(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewBool(ctx, shared::system::EmptyRecycleBin(true) ? 1 : 0);
+        }
+
+        JSValue JsRecycleBinGetStats(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            shared::system::RecycleBinStats stats;
+            if (!shared::system::GetRecycleBinStats(stats))
+                return JS_NULL;
+
+            JSValue out = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, out, "count", JS_NewFloat64(ctx, stats.count));
+            JS_SetPropertyStr(ctx, out, "size", JS_NewFloat64(ctx, stats.size));
+            return out;
+        }
+
 
         JSValue JsFileIconExtractIcon(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
@@ -663,6 +690,13 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, disk, "usagePercent", JS_NewCFunction(ctx, JsDiskUsagePercent, "usagePercent", 1));
             JS_SetModuleExport(ctx, m, "disk", disk);
 
+            JSValue recycleBin = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, recycleBin, "openBin", JS_NewCFunction(ctx, JsRecycleBinOpenBin, "openBin", 0));
+            JS_SetPropertyStr(ctx, recycleBin, "emptyBin", JS_NewCFunction(ctx, JsRecycleBinEmptyBin, "emptyBin", 0));
+            JS_SetPropertyStr(ctx, recycleBin, "emptyBinSilent", JS_NewCFunction(ctx, JsRecycleBinEmptyBinSilent, "emptyBinSilent", 0));
+            JS_SetPropertyStr(ctx, recycleBin, "getStats", JS_NewCFunction(ctx, JsRecycleBinGetStats, "getStats", 0));
+            JS_SetModuleExport(ctx, m, "recycleBin", recycleBin);
+
             JSValue audio = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, audio, "setVolume", JS_NewCFunction(ctx, JsAudioSetVolume, "setVolume", 1));
             JS_SetPropertyStr(ctx, audio, "getVolume", JS_NewCFunction(ctx, JsAudioGetVolume, "getVolume", 0));
@@ -718,6 +752,8 @@ namespace novadesk::scripting::quickjs
         if (JS_AddModuleExport(ctx, m, "network") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "disk") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "recycleBin") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "audio") < 0)
             return nullptr;
