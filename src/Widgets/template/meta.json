@@ -6,6 +6,7 @@
   "description": "Widget Description",
   "icon": "assets/icon.ico",
   "preview": "defaultPreview.png",
+  "excludeItems": [],
   "setup": {
     "createDesktopShortcut": true,
     "createStartupShortcut": false,

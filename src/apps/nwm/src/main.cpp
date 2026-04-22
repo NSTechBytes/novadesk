@@ -794,6 +794,31 @@ std::string SanitizeFileNameComponent(const std::string& value) {
     return out;
 }
 
+std::string NormalizeRelativeExcludeItem(const std::string& value) {
+    fs::path p(value);
+    std::string normalized = p.lexically_normal().generic_string();
+    while (normalized.rfind("./", 0) == 0) {
+        normalized.erase(0, 2);
+    }
+    while (!normalized.empty() && normalized.back() == '/') {
+        normalized.pop_back();
+    }
+    return normalized;
+}
+
+bool ShouldExcludeRelativePath(const fs::path& relativePath, const std::vector<std::string>& excludeItems) {
+    const std::string rel = NormalizeRelativeExcludeItem(relativePath.generic_string());
+    if (rel.empty()) return false;
+
+    for (const auto& rawItem : excludeItems) {
+        const std::string item = NormalizeRelativeExcludeItem(rawItem);
+        if (item.empty()) continue;
+        if (rel == item) return true;
+        if (rel.rfind(item + "/", 0) == 0) return true;
+    }
+    return false;
+}
+
 bool AddFileToZip(zipFile zf, const fs::path& filePath, const std::string& zipEntryPath) {
     std::ifstream in(filePath, std::ios::binary);
     if (!in) {
@@ -915,20 +940,64 @@ bool AppendNdpkgFooter(const fs::path& ndpkgPath) {
     return static_cast<bool>(out);
 }
 
-void CopyWidgetFilesForPackaging(const fs::path& widgetPath, const fs::path& targetDir, const std::string& widgetRealName) {
+void CopyWidgetFilesForPackaging(const fs::path& widgetPath,
+                                 const fs::path& targetDir,
+                                 const std::string& widgetRealName,
+                                 const std::vector<std::string>& excludeItems) {
     fs::create_directories(targetDir);
-    for (const auto& entry : fs::directory_iterator(widgetPath)) {
-        const auto& path = entry.path();
-        std::string filename = path.filename().string();
 
-        if (filename == "dist") continue;
+    std::vector<std::string> effectiveExclude = excludeItems;
+    effectiveExclude.push_back("dist");
 
-        if (fs::is_directory(path)) {
-            fs::copy(path, targetDir / filename, fs::copy_options::recursive);
-        } else if (filename != (widgetRealName + ".exe")) {
-            fs::copy_file(path, targetDir / filename, fs::copy_options::overwrite_existing);
+    fs::recursive_directory_iterator it(widgetPath, fs::directory_options::skip_permission_denied);
+    fs::recursive_directory_iterator end;
+    for (; it != end; ++it) {
+        const auto& entry = *it;
+        const fs::path relPath = fs::relative(entry.path(), widgetPath);
+        if (relPath.empty()) continue;
+
+        if (ShouldExcludeRelativePath(relPath, effectiveExclude)) {
+            if (entry.is_directory()) {
+                it.disable_recursion_pending();
+            }
+            continue;
+        }
+
+        if (entry.is_directory()) {
+            fs::create_directories(targetDir / relPath);
+            continue;
+        }
+
+        if (!entry.is_regular_file()) continue;
+        if (!relPath.has_parent_path() && relPath.filename().string() == (widgetRealName + ".exe")) continue;
+
+        fs::create_directories((targetDir / relPath).parent_path());
+        fs::copy_file(entry.path(), targetDir / relPath, fs::copy_options::overwrite_existing);
+    }
+}
+
+bool ParseExcludeItems(const nlohmann::json& meta, std::vector<std::string>& excludeItems) {
+    excludeItems.clear();
+    if (!meta.contains("excludeItems")) {
+        return true;
+    }
+
+    if (!meta["excludeItems"].is_array()) {
+        std::cerr << "Error: 'excludeItems' must be an array in meta.json" << std::endl;
+        return false;
+    }
+
+    for (const auto& entry : meta["excludeItems"]) {
+        if (!entry.is_string()) {
+            std::cerr << "Error: all entries in 'excludeItems' must be strings" << std::endl;
+            return false;
+        }
+        const std::string item = entry.get<std::string>();
+        if (!NormalizeRelativeExcludeItem(item).empty()) {
+            excludeItems.push_back(item);
         }
     }
+    return true;
 }
 
 bool InitWidget(const std::string& name) {
@@ -1056,6 +1125,10 @@ bool BuildWidget() {
     std::string icon = meta.value("icon", "");
     std::string author = meta.value("author", "");
     std::string description = meta.value("description", "");
+    std::vector<std::string> excludeItems;
+    if (!ParseExcludeItems(meta, excludeItems)) {
+        return false;
+    }
     std::string previewPath;
     if (meta.contains("preview") && meta["preview"].is_string()) {
         previewPath = meta["preview"].get<std::string>();
@@ -1157,10 +1230,10 @@ bool BuildWidget() {
         }
 
         fs::path widgetsSubDir = stagingDir / "Widgets";
-        CopyWidgetFilesForPackaging(widgetPath, widgetsSubDir, widgetRealName);
+        CopyWidgetFilesForPackaging(widgetPath, widgetsSubDir, widgetRealName, excludeItems);
 
         fs::path ndpkgWidgetsDir = ndpkgStageDir / "Widgets" / widgetRealName;
-        CopyWidgetFilesForPackaging(widgetPath, ndpkgWidgetsDir, widgetRealName);
+        CopyWidgetFilesForPackaging(widgetPath, ndpkgWidgetsDir, widgetRealName, excludeItems);
 
         if (!previewPath.empty()) {
             fs::path previewSource = widgetPath / previewPath;
