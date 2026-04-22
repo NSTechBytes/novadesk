@@ -41,6 +41,7 @@
 #define SNAP_DISTANCE 10
 #define TIMER_TOPMOST 2
 #define TIMER_TOOLTIP 3
+#define TIMER_CTRL_OVERRIDE 4
 
 // Menu Command IDs
 #define CMD_REFRESH 1001
@@ -214,6 +215,8 @@ bool Widget::Create()
 
     // Initialize tooltip
     m_Tooltip.Initialize(m_hWnd, hInstance);
+    // Poll Ctrl key to provide temporary runtime overrides
+    SetTimer(m_hWnd, TIMER_CTRL_OVERRIDE, 50, nullptr);
 
     return true;
 }
@@ -769,7 +772,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 widget->ChangeSingleZPos(widget->m_WindowZPosition);
             }
 
-            if (widget->m_Options.draggable)
+            const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+            if (widget->m_Options.draggable || ctrlHeld)
             {
                 SetCapture(hWnd);
                 widget->m_IsDragging = true;
@@ -995,6 +999,24 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     widget->ChangeZPos(ZPOSITION_ONTOPMOST);
                 }
             }
+            else if (wParam == TIMER_CTRL_OVERRIDE)
+            {
+                if (widget->m_Options.clickThrough)
+                {
+                    const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+                    const bool shouldBeTransparent = !ctrlHeld;
+                    LONG_PTR exStyle = GetWindowLongPtrW(hWnd, GWL_EXSTYLE);
+                    const bool isTransparent = (exStyle & WS_EX_TRANSPARENT) != 0;
+                    if (isTransparent != shouldBeTransparent)
+                    {
+                        if (shouldBeTransparent)
+                            exStyle |= WS_EX_TRANSPARENT;
+                        else
+                            exStyle &= ~static_cast<LONG_PTR>(WS_EX_TRANSPARENT);
+                        SetWindowLongPtrW(hWnd, GWL_EXSTYLE, exStyle);
+                    }
+                }
+            }
         }
         return 0;
 
@@ -1018,7 +1040,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (!(wp->flags & SWP_NOMOVE))
             {
                 // Snapping
-                if (widget->m_Options.snapEdges)
+                const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+                if (widget->m_Options.snapEdges && !ctrlHeld)
                 {
                     const auto &monitors = System::GetMultiMonitorInfo().monitors;
                     RECT windowRect = {wp->x, wp->y, wp->x + widget->m_Options.width, wp->y + widget->m_Options.height};
@@ -1216,6 +1239,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_DESTROY:
         if (widget)
         {
+            KillTimer(hWnd, TIMER_CTRL_OVERRIDE);
             auto it = std::find(widgets.begin(), widgets.end(), widget);
             if (it != widgets.end())
                 widgets.erase(it);
