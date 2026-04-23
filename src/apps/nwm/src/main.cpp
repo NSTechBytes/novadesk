@@ -714,7 +714,6 @@ bool CopyAddonsToStaging(const fs::path& addonsSourceDir,
                          const std::vector<std::string>& requestedAddons,
                          std::vector<std::string>* outIncludedAddons = nullptr) {
     if (requestedAddons.empty()) {
-        std::cout << "No addons requested in meta.json; skipping addon copy." << std::endl;
         return true;
     }
 
@@ -1220,6 +1219,9 @@ bool BuildWidget() {
         fs::copy_file(srcExe, destExe, fs::copy_options::overwrite_existing);
 
         const fs::path addonsSourceDir = ResolveAddonsSourcePath(srcExe);
+        if (requestedAddons.empty() && ndpkgAddons.empty()) {
+            std::cout << "No addons requested in meta.json; skipping addon copy." << std::endl;
+        }
         if (!CopyAddonsToStaging(addonsSourceDir, stagingDir, requestedAddons)) {
             return false;
         }
