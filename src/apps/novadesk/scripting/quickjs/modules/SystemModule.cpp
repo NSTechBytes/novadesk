@@ -2,11 +2,16 @@
 
 #include <chrono>
 #include <cstring>
+#include <memory>
 #include <string>
+#include <thread>
+#include <unordered_map>
+#include <mutex>
 
 #include "../../shared/System.h"
 #include "../../shared/Utils.h"
 #include "../../shared/PathUtils.h"
+#include "../../shared/Logging.h"
 #include "../engine/JSEngine.h"
 
 namespace novadesk::scripting::quickjs
@@ -15,6 +20,80 @@ namespace novadesk::scripting::quickjs
     {
         shared::system::NetworkStats g_cachedNetworkStats{};
         std::chrono::steady_clock::time_point g_cachedNetworkAt = std::chrono::steady_clock::time_point::min();
+        uint64_t g_nextWebFetchId = 1;
+
+        struct WebFetchRequest
+        {
+            uint64_t id = 0;
+            JSContext *ctx = nullptr;
+            JSValue resolve = JS_UNDEFINED;
+            JSValue reject = JS_UNDEFINED;
+            bool ok = false;
+            std::string data;
+            std::string error;
+        };
+
+        std::mutex g_webFetchMutex;
+        std::unordered_map<uint64_t, std::unique_ptr<WebFetchRequest>> g_webFetchRequests;
+
+        void DispatchWebFetchResult(void *payload)
+        {
+            std::unique_ptr<uint64_t> requestId(static_cast<uint64_t *>(payload));
+            if (!requestId)
+            {
+                return;
+            }
+
+            std::unique_ptr<WebFetchRequest> req;
+            {
+                std::lock_guard<std::mutex> lock(g_webFetchMutex);
+                auto it = g_webFetchRequests.find(*requestId);
+                if (it == g_webFetchRequests.end())
+                {
+                    return;
+                }
+                req = std::move(it->second);
+                g_webFetchRequests.erase(it);
+            }
+
+            if (!req || !req->ctx)
+            {
+                return;
+            }
+
+            JSValue arg = req->ok
+                              ? JS_NewStringLen(req->ctx, req->data.data(), req->data.size())
+                              : JS_NewString(req->ctx, req->error.empty() ? "webFetch failed" : req->error.c_str());
+            JSValue fn = req->ok ? req->resolve : req->reject;
+            JSValue ret = JS_Call(req->ctx, fn, JS_UNDEFINED, 1, &arg);
+            JS_FreeValue(req->ctx, arg);
+            if (JS_IsException(ret))
+            {
+                JS_FreeValue(req->ctx, JS_GetException(req->ctx));
+            }
+            else
+            {
+                JS_FreeValue(req->ctx, ret);
+            }
+
+            JS_FreeValue(req->ctx, req->resolve);
+            JS_FreeValue(req->ctx, req->reject);
+
+            JSRuntime *runtime = JS_GetRuntime(req->ctx);
+            JSContext *jobCtx = nullptr;
+            while (runtime && JS_IsJobPending(runtime))
+            {
+                int err = JS_ExecutePendingJob(runtime, &jobCtx);
+                if (err < 0)
+                {
+                    if (jobCtx)
+                    {
+                        JS_FreeValue(jobCtx, JS_GetException(jobCtx));
+                    }
+                    break;
+                }
+            }
+        }
 
         bool ReadNetworkCached(shared::system::NetworkStats &out)
         {
@@ -641,12 +720,82 @@ namespace novadesk::scripting::quickjs
                 pathOrUrl = PathUtils::ResolvePath(pathOrUrl, JSEngine::GetEntryScriptDir());
             }
 
-            std::string data;
-            if (!shared::system::WebFetch(pathOrUrl, data))
+            JSValue funcs[2] = {JS_UNDEFINED, JS_UNDEFINED};
+            JSValue promise = JS_NewPromiseCapability(ctx, funcs);
+            if (JS_IsException(promise))
             {
-                return JS_NULL;
+                if (!JS_IsUndefined(funcs[0]))
+                    JS_FreeValue(ctx, funcs[0]);
+                if (!JS_IsUndefined(funcs[1]))
+                    JS_FreeValue(ctx, funcs[1]);
+                return JS_EXCEPTION;
             }
-            return JS_NewStringLen(ctx, data.data(), data.size());
+
+            auto req = std::make_unique<WebFetchRequest>();
+            req->id = g_nextWebFetchId++;
+            req->ctx = ctx;
+            req->resolve = JS_DupValue(ctx, funcs[0]);
+            req->reject = JS_DupValue(ctx, funcs[1]);
+
+            JS_FreeValue(ctx, funcs[0]);
+            JS_FreeValue(ctx, funcs[1]);
+
+            const uint64_t requestId = req->id;
+            {
+                std::lock_guard<std::mutex> lock(g_webFetchMutex);
+                g_webFetchRequests[requestId] = std::move(req);
+            }
+
+            std::thread([requestId, pathOrUrl]()
+                        {
+                            bool ok = false;
+                            std::string data;
+                            std::string error;
+
+                            ok = shared::system::WebFetch(pathOrUrl, data);
+                            if (!ok)
+                            {
+                                error = "webFetch failed";
+                            }
+
+                            {
+                                std::lock_guard<std::mutex> lock(g_webFetchMutex);
+                                auto it = g_webFetchRequests.find(requestId);
+                                if (it == g_webFetchRequests.end() || !it->second)
+                                {
+                                    return;
+                                }
+                                it->second->ok = ok;
+                                if (ok)
+                                {
+                                    it->second->data = std::move(data);
+                                }
+                                else
+                                {
+                                    it->second->error = std::move(error);
+                                }
+                            }
+
+                            HWND hwnd = JSEngine::GetMessageWindow();
+                            if (!hwnd)
+                            {
+                                return;
+                            }
+
+                            auto *payload = new uint64_t(requestId);
+                            if (!PostMessageW(
+                                    hwnd,
+                                    JSEngine::WM_NOVADESK_DISPATCH,
+                                    reinterpret_cast<WPARAM>(&DispatchWebFetchResult),
+                                    reinterpret_cast<LPARAM>(payload)))
+                            {
+                                delete payload;
+                                std::lock_guard<std::mutex> lock(g_webFetchMutex);
+                                g_webFetchRequests.erase(requestId);
+                            } })
+                .detach();
+
+            return promise;
         }
 
         int SystemModuleInit(JSContext *ctx, JSModuleDef *m)
