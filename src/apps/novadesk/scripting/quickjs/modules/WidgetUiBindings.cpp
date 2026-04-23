@@ -45,12 +45,16 @@ namespace novadesk::scripting::quickjs
 
         Widget *GetWidget(JSContext *ctx, JSValueConst thisVal)
         {
-            return static_cast<Widget *>(JS_GetOpaque2(ctx, thisVal, g_widgetWindowClassId));
+            (void)ctx;
+            Widget *widget = static_cast<Widget *>(JS_GetOpaque(thisVal, g_widgetWindowClassId));
+            return Widget::IsValid(widget) ? widget : nullptr;
         }
 
         Widget *GetUiWidget(JSContext *ctx, JSValueConst thisVal)
         {
-            return static_cast<Widget *>(JS_GetOpaque2(ctx, thisVal, g_widgetUiClassId));
+            (void)ctx;
+            Widget *widget = static_cast<Widget *>(JS_GetOpaque(thisVal, g_widgetUiClassId));
+            return Widget::IsValid(widget) ? widget : nullptr;
         }
 
         Widget *GetAnyWidget(JSContext *ctx, JSValueConst thisVal)
@@ -192,7 +196,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1 || !JS_IsObject(argv[0]))
                 return ThrowTypeError(ctx, "addImage", "expected options object");
             PropertyParser::ImageOptions options;
@@ -205,7 +209,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1 || !JS_IsObject(argv[0]))
                 return ThrowTypeError(ctx, "addButton", "expected options object");
             PropertyParser::ButtonOptions options;
@@ -218,7 +222,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1 || !JS_IsObject(argv[0]))
                 return ThrowTypeError(ctx, "addText", "expected options object");
             PropertyParser::TextOptions options;
@@ -231,7 +235,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1 || !JS_IsObject(argv[0]))
                 return ThrowTypeError(ctx, "addBar", "expected options object");
             PropertyParser::BarOptions options;
@@ -244,7 +248,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1 || !JS_IsObject(argv[0]))
                 return ThrowTypeError(ctx, "addRoundLine", "expected options object");
             PropertyParser::RoundLineOptions options;
@@ -257,7 +261,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1 || !JS_IsObject(argv[0]))
                 return ThrowTypeError(ctx, "addLine", "expected options object");
             PropertyParser::LineOptions options;
@@ -270,7 +274,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1 || !JS_IsObject(argv[0]))
                 return ThrowTypeError(ctx, "addHistogram", "expected options object");
             PropertyParser::HistogramOptions options;
@@ -283,7 +287,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1 || !JS_IsObject(argv[0]))
                 return ThrowTypeError(ctx, "addShape", "expected options object");
             PropertyParser::ShapeOptions options;
@@ -296,7 +300,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1 || !JS_IsObject(argv[0]))
                 return ThrowTypeError(ctx, "addBitmap", "expected options object");
             PropertyParser::BitmapOptions options;
@@ -309,7 +313,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1 || !JS_IsObject(argv[0]))
                 return ThrowTypeError(ctx, "addRotator", "expected options object");
             PropertyParser::RotatorOptions options;
@@ -322,7 +326,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1 || !JS_IsObject(argv[0]))
                 return ThrowTypeError(ctx, "addAreaGraph", "expected options object");
             PropertyParser::AreaGraphOptions options;
@@ -335,7 +339,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_NewBool(ctx, 0);
 
             if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
             {
@@ -377,7 +381,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1)
                 return ThrowTypeError(ctx, "removeElementsByGroup", "expected group id string");
             const char *groupUtf8 = JS_ToCString(ctx, argv[0]);
@@ -393,7 +397,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             widget->BeginUpdate();
             return JS_UNDEFINED;
         }
@@ -402,7 +406,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             widget->EndUpdate();
             return JS_UNDEFINED;
         }
@@ -411,7 +415,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 2 || !JS_IsObject(argv[1]))
                 return ThrowTypeError(ctx, "setElementProperties", "expected (id, options)");
 
@@ -512,7 +516,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 2)
                 return ThrowTypeError(ctx, "setElementPropertiesByGroup", "expected (groupId, options)");
             const char *groupUtf8 = JS_ToCString(ctx, argv[0]);
@@ -1271,7 +1275,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 2)
                 return ThrowTypeError(ctx, "getElementProperty", "expected (id, propertyName)");
 
