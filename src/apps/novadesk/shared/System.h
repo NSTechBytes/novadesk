@@ -76,6 +76,12 @@ namespace novadesk::shared::system
         int percent = 0;
     };
 
+    struct RecycleBinStats
+    {
+        double count = 0.0;
+        double size = 0.0;
+    };
+
     enum class RegistryValueType
     {
         None = 0,
@@ -101,6 +107,9 @@ namespace novadesk::shared::system
     bool GetMemoryStats(MemoryStats &outStats);
     bool GetNetworkStats(NetworkStats &outStats);
     bool GetDiskStats(const std::wstring &path, DiskStats &outStats);
+    bool GetRecycleBinStats(RecycleBinStats &outStats);
+    bool OpenRecycleBin();
+    bool EmptyRecycleBin(bool silent);
     DisplayMetrics GetDisplayMetrics();
 
     bool AudioSetVolume(int volumePercent);

@@ -361,6 +361,9 @@ bool ImageElement::HitTest(int x, int y)
     if (!Element::HitTest(x, y))
         return false;
 
+    if (!GetPixelHitTest())
+        return true;
+
     // Map the point to image local space
     float targetX = (float)x;
     float targetY = (float)y;

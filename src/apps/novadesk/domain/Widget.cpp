@@ -15,6 +15,7 @@
 #include <vector>
 #include <windowsx.h>
 #include <algorithm>
+#include <functional>
 #include "Direct2DHelper.h"
 #include "ImageElement.h"
 #include "TextElement.h"
@@ -41,6 +42,7 @@
 #define SNAP_DISTANCE 10
 #define TIMER_TOPMOST 2
 #define TIMER_TOOLTIP 3
+#define TIMER_CTRL_OVERRIDE 4
 
 // Menu Command IDs
 #define CMD_REFRESH 1001
@@ -214,6 +216,8 @@ bool Widget::Create()
 
     // Initialize tooltip
     m_Tooltip.Initialize(m_hWnd, hInstance);
+    // Poll Ctrl key to provide temporary runtime overrides
+    SetTimer(m_hWnd, TIMER_CTRL_OVERRIDE, 50, nullptr);
 
     return true;
 }
@@ -769,7 +773,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 widget->ChangeSingleZPos(widget->m_WindowZPosition);
             }
 
-            if (widget->m_Options.draggable)
+            const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+            if (widget->m_Options.draggable || ctrlHeld)
             {
                 SetCapture(hWnd);
                 widget->m_IsDragging = true;
@@ -995,6 +1000,24 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     widget->ChangeZPos(ZPOSITION_ONTOPMOST);
                 }
             }
+            else if (wParam == TIMER_CTRL_OVERRIDE)
+            {
+                if (widget->m_Options.clickThrough)
+                {
+                    const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+                    const bool shouldBeTransparent = !ctrlHeld;
+                    LONG_PTR exStyle = GetWindowLongPtrW(hWnd, GWL_EXSTYLE);
+                    const bool isTransparent = (exStyle & WS_EX_TRANSPARENT) != 0;
+                    if (isTransparent != shouldBeTransparent)
+                    {
+                        if (shouldBeTransparent)
+                            exStyle |= WS_EX_TRANSPARENT;
+                        else
+                            exStyle &= ~static_cast<LONG_PTR>(WS_EX_TRANSPARENT);
+                        SetWindowLongPtrW(hWnd, GWL_EXSTYLE, exStyle);
+                    }
+                }
+            }
         }
         return 0;
 
@@ -1018,7 +1041,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (!(wp->flags & SWP_NOMOVE))
             {
                 // Snapping
-                if (widget->m_Options.snapEdges)
+                const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+                if (widget->m_Options.snapEdges && !ctrlHeld)
                 {
                     const auto &monitors = System::GetMultiMonitorInfo().monitors;
                     RECT windowRect = {wp->x, wp->y, wp->x + widget->m_Options.width, wp->y + widget->m_Options.height};
@@ -1216,6 +1240,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_DESTROY:
         if (widget)
         {
+            KillTimer(hWnd, TIMER_CTRL_OVERRIDE);
             auto it = std::find(widgets.begin(), widgets.end(), widget);
             if (it != widgets.end())
                 widgets.erase(it);
@@ -2498,6 +2523,68 @@ void Widget::UpdateLayeredWindowContent()
         }
     }
 
+    // Keep bounds-hit interactive element areas mouse-reachable even when their
+    // pixels are fully transparent in the layered window surface.
+    if (pvBits)
+    {
+        auto stampRectAlpha = [&](int left, int top, int right, int bottom)
+        {
+            left = (std::max)(0, left);
+            top = (std::max)(0, top);
+            right = (std::min)(w, right);
+            bottom = (std::min)(h, bottom);
+            if (left >= right || top >= bottom)
+                return;
+
+            BYTE *pixels = static_cast<BYTE *>(pvBits);
+            for (int yy = top; yy < bottom; ++yy)
+            {
+                BYTE *row = pixels + static_cast<size_t>(yy) * static_cast<size_t>(w) * 4;
+                for (int xx = left; xx < right; ++xx)
+                {
+                    BYTE &alpha = row[static_cast<size_t>(xx) * 4 + 3];
+                    if (alpha == 0)
+                    {
+                        alpha = 1;
+                    }
+                }
+            }
+        };
+
+        std::function<void(Element *, int, int)> stampInteractiveBounds;
+        stampInteractiveBounds = [&](Element *element, int offsetX, int offsetY)
+        {
+            if (!element || !element->IsVisible())
+                return;
+
+            GfxRect bounds = element->GetBounds();
+            const int absLeft = offsetX + bounds.X;
+            const int absTop = offsetY + bounds.Y;
+            const int absRight = absLeft + bounds.Width;
+            const int absBottom = absTop + bounds.Height;
+
+            if (element->HasMouseAction() && !element->GetPixelHitTest())
+            {
+                stampRectAlpha(absLeft, absTop, absRight, absBottom);
+            }
+
+            if (element->IsContainer())
+            {
+                for (Element *child : element->GetContainerItems())
+                {
+                    stampInteractiveBounds(child, absLeft, absTop);
+                }
+            }
+        };
+
+        for (Element *element : m_Elements)
+        {
+            if (!element || element->IsContained())
+                continue;
+            stampInteractiveBounds(element, 0, 0);
+        }
+    }
+
     POINT pptDst = {0, 0};
     // We need current window position
     RECT rc;
@@ -2565,13 +2652,24 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         }
     }
 
-    // For mouse wheel, coordinates are screen relative
+    // For mouse wheel, coordinates are screen relative.
+    // Ignore wheel when cursor is outside this widget.
     if (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL)
     {
         POINT pt = {x, y};
         ScreenToClient(m_hWnd, &pt);
         x = pt.x;
         y = pt.y;
+
+        RECT clientRect = {};
+        if (GetClientRect(m_hWnd, &clientRect))
+        {
+            POINT clientPt = {x, y};
+            if (!PtInRect(&clientRect, clientPt))
+            {
+                return false;
+            }
+        }
     }
 
     bool needRedraw = false;
@@ -2646,6 +2744,30 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             message == WM_LBUTTONUP || message == WM_RBUTTONUP || message == WM_MBUTTONUP || message == WM_XBUTTONUP)
         {
             JSEngine::TriggerWidgetEvent(this, "mouseUp", &widgetEventData);
+            if (message == WM_LBUTTONUP)
+            {
+                JSEngine::TriggerWidgetEvent(this, "click", &widgetEventData);
+            }
+            else if (message == WM_RBUTTONUP)
+            {
+                JSEngine::TriggerWidgetEvent(this, "right-click", &widgetEventData);
+            }
+        }
+        else if (message == WM_LBUTTONDBLCLK)
+        {
+            JSEngine::TriggerWidgetEvent(this, "double-click", &widgetEventData);
+        }
+        else if (message == WM_MOUSEWHEEL)
+        {
+            const int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+            if (delta > 0)
+            {
+                JSEngine::TriggerWidgetEvent(this, "scroll-up", &widgetEventData);
+            }
+            else if (delta < 0)
+            {
+                JSEngine::TriggerWidgetEvent(this, "scroll-down", &widgetEventData);
+            }
         }
     }
 

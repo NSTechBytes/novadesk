@@ -18,6 +18,7 @@ public:
     virtual ~AreaGraphElement() {}
 
     virtual void Render(ID2D1DeviceContext *context) override;
+    virtual bool HitTest(int x, int y) override;
     virtual int GetAutoWidth() override { return 0; }
     virtual int GetAutoHeight() override { return 0; }
 

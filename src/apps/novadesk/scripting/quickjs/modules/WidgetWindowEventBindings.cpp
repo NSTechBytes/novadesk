@@ -27,14 +27,16 @@ namespace novadesk::scripting::quickjs
 
         Widget *GetWidget(JSContext *ctx, JSValueConst thisVal)
         {
-            return static_cast<Widget *>(JS_GetOpaque2(ctx, thisVal, g_widgetWindowClassId));
+            (void)ctx;
+            Widget *widget = static_cast<Widget *>(JS_GetOpaque(thisVal, g_widgetWindowClassId));
+            return Widget::IsValid(widget) ? widget : nullptr;
         }
 
         JSValue JsWidgetWindowOn(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
 
             if (argc < 2 || !JS_IsFunction(ctx, argv[1]))
             {
@@ -64,7 +66,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1 || !JS_IsObject(argv[0]))
             {
                 return ThrowTypeError(ctx, "setProperties", "expected options object");
@@ -137,7 +139,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
 
             const WidgetOptions &o = widget->GetOptions();
             JSValue out = JS_NewObject(ctx);
@@ -180,7 +182,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             widget->Refresh();
             return JS_UNDEFINED;
         }
@@ -189,7 +191,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             widget->SetFocus();
             return JS_UNDEFINED;
         }
@@ -198,7 +200,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             widget->UnFocus();
             return JS_UNDEFINED;
         }
@@ -207,7 +209,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             widget->Minimize();
             return JS_UNDEFINED;
         }
@@ -216,7 +218,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             widget->UnMinimize();
             return JS_UNDEFINED;
         }
@@ -321,7 +323,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc < 1 || !JS_IsArray(argv[0]))
                 return ThrowTypeError(ctx, "setContextMenu", "expected items array");
 
@@ -342,7 +344,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             widget->ClearContextMenu();
             JSEngine::ClearWidgetContextMenuCallbacks(widget->GetOptions().id);
             return JS_DupValue(ctx, thisVal);
@@ -352,7 +354,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             bool disable = true;
             if (argc > 0)
             {
@@ -368,7 +370,7 @@ namespace novadesk::scripting::quickjs
         {
             Widget *widget = GetWidget(ctx, thisVal);
             if (!widget)
-                return JS_EXCEPTION;
+                return JS_UNDEFINED;
             if (argc > 0)
             {
                 int b = JS_ToBool(ctx, argv[0]);

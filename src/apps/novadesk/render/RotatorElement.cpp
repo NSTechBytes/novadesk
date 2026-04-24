@@ -35,6 +35,66 @@ int RotatorElement::GetAutoHeight()
     return m_RotatorImage.GetAutoHeight();
 }
 
+bool RotatorElement::HitTest(int x, int y)
+{
+    if (!Element::HitTest(x, y))
+        return false;
+
+    if (!GetPixelHitTest())
+        return true;
+
+    if ((m_HasSolidColor && m_SolidAlpha > 0) || (m_SolidGradient.type != GRADIENT_NONE))
+        return true;
+
+    if (!m_RotatorImage.IsLoaded())
+        return false;
+
+    const float imageW = static_cast<float>(m_RotatorImage.GetAutoWidth());
+    const float imageH = static_cast<float>(m_RotatorImage.GetAutoHeight());
+    if (imageW <= 0.0f || imageH <= 0.0f)
+        return false;
+
+    double normalizedValue = 0.0;
+    if (m_ValueRemainder > 0)
+    {
+        long long rawValue = static_cast<long long>(m_Value);
+        normalizedValue = static_cast<double>(rawValue % m_ValueRemainder) / static_cast<double>(m_ValueRemainder);
+    }
+    else
+    {
+        const double range = m_MaxValue - m_MinValue;
+        normalizedValue = (range > 0.0) ? (m_Value - m_MinValue) / range : 0.0;
+        if (normalizedValue < 0.0)
+            normalizedValue = 0.0;
+        if (normalizedValue > 1.0)
+            normalizedValue = 1.0;
+    }
+
+    const float angleDeg = static_cast<float>(CONVERT_TO_DEGREES(m_RotationAngle * normalizedValue + m_StartAngle));
+
+    const int contentX = m_X + m_PaddingLeft;
+    const int contentY = m_Y + m_PaddingTop;
+    const int elementW = GetWidth();
+    const int elementH = GetHeight();
+    const float cx = static_cast<float>(contentX) + static_cast<float>(elementW) / 2.0f;
+    const float cy = static_cast<float>(contentY) + static_cast<float>(elementH) / 2.0f;
+
+    D2D1::Matrix3x2F matrix =
+        D2D1::Matrix3x2F::Translation(static_cast<float>(-m_OffsetX), static_cast<float>(-m_OffsetY)) *
+        D2D1::Matrix3x2F::Rotation(angleDeg) *
+        D2D1::Matrix3x2F::Translation(cx, cy);
+
+    if (!matrix.Invert())
+        return false;
+
+    const D2D1_POINT_2F local = matrix.TransformPoint(D2D1::Point2F(static_cast<float>(x), static_cast<float>(y)));
+    if (local.x < 0.0f || local.y < 0.0f || local.x >= imageW || local.y >= imageH)
+        return false;
+
+    const BYTE alpha = m_RotatorImage.GetPixelAlpha(static_cast<int>(local.x), static_cast<int>(local.y));
+    return alpha > 0;
+}
+
 void RotatorElement::Render(ID2D1DeviceContext *context)
 {
     if (!m_Show || !context)

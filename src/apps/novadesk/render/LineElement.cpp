@@ -316,6 +316,9 @@ float LineElement::DistancePointToSegment(const D2D1_POINT_2F& p, const D2D1_POI
 
 bool LineElement::HitTest(int x, int y)
 {
+    if (!GetPixelHitTest())
+        return Element::HitTest(x, y);
+
     GfxRect bounds = GetBounds();
     float centerX = bounds.X + bounds.Width / 2.0f;
     float centerY = bounds.Y + bounds.Height / 2.0f;

@@ -1,9 +1,9 @@
-;--------------------------------
+﻿;--------------------------------
 ; Novadesk Installer Script
 ;--------------------------------
 
 ; Define global version variable (Update this as needed)
-!define VERSION "0.9.1.0"
+!define VERSION "0.9.2.0"
 
 ; The name of the installer
 Name "Novadesk"
@@ -264,8 +264,8 @@ Function un.CompleteRemovePageCreate
   Pop $0
   ${NSD_CreateCheckbox} 0 28u 100% 14u "Completely Remove Novadesk (remove Documents\Novadesk and AppData\Novadesk)"
   Pop $UnRemoveCheckbox
-  ${NSD_Uncheck} $UnRemoveCheckbox
-  StrCpy $RemoveCompletely ${BST_UNCHECKED}
+  ${NSD_Check} $UnRemoveCheckbox
+  StrCpy $RemoveCompletely ${BST_CHECKED}
   nsDialogs::Show
 FunctionEnd
 

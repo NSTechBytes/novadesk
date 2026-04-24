@@ -18,6 +18,7 @@ public:
     virtual ~RotatorElement();
 
     virtual void Render(ID2D1DeviceContext *context) override;
+    virtual bool HitTest(int x, int y) override;
     virtual int GetAutoWidth() override;
     virtual int GetAutoHeight() override;
 

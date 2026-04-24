@@ -11,6 +11,8 @@
 #include <NovadeskAPI/novadesk_addon.h>
 #include <Windows.h>
 #include <CommCtrl.h>
+#include <uxtheme.h>
+#include <dwmapi.h>
 #include "../../apps/novadesk/shared/ColorUtil.h"
 #include <algorithm>
 #include <cwctype>
@@ -18,10 +20,22 @@
 #include <unordered_map>
 #include <vector>
 
+#pragma comment(lib, "UxTheme.lib")
+#pragma comment(lib, "Dwmapi.lib")
+
+#ifndef DWMWA_BORDER_COLOR
+#define DWMWA_BORDER_COLOR 34
+#endif
+#ifndef DWMWA_COLOR_NONE
+#define DWMWA_COLOR_NONE 0xFFFFFFFE
+#endif
+
 const NovadeskHostAPI *g_Host = nullptr;
 
 namespace
 {
+    constexpr UINT WM_ND_SET_CARET_END = WM_APP + 42;
+
     enum class InputType
     {
         Any,
@@ -59,11 +73,8 @@ namespace
         COLORREF bg = RGB(32, 32, 32);
         COLORREF fg = RGB(240, 240, 240);
         COLORREF bd = RGB(90, 90, 90);
-        COLORREF msgColor = RGB(200, 200, 200);
 
-        std::wstring msg;
         std::wstring def;
-        std::wstring placeholder;
         std::wstring font = L"Segoe UI";
         std::wstring allowed;
 
@@ -86,7 +97,7 @@ namespace
         int id = 0;
         Opt o;
         Cb cb;
-        HWND w = nullptr, e = nullptr, l = nullptr;
+        HWND w = nullptr, e = nullptr;
         HFONT f = nullptr;
         HBRUSH b = nullptr;
         WNDPROC oldEdit = nullptr;
@@ -458,19 +469,13 @@ namespace
             if (!s)
                 return -1;
             int b = s->o.borderVisible ? clampi(s->o.border, 0, 12) : 0;
-            int mg = b, lh = s->o.msg.empty() ? 0 : 18, tg = 0, top = mg + lh + tg, eh = s->o.h - top - mg;
+            int mg = b, top = mg, eh = s->o.h - top - mg;
             if (eh < 24)
                 eh = 24;
             HDC dc = GetDC(h);
             int fh = -MulDiv(s->o.fontSize, GetDeviceCaps(dc, LOGPIXELSY), 72);
             ReleaseDC(h, dc);
             s->f = CreateFontW(fh, 0, 0, 0, s->o.bold ? FW_BOLD : FW_NORMAL, s->o.italic, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, s->o.font.c_str());
-            if (lh)
-            {
-                s->l = CreateWindowExW(0, L"STATIC", s->o.msg.c_str(), WS_CHILD | WS_VISIBLE, mg, mg, s->o.w - (mg * 2), lh, h, nullptr, GetModuleHandleW(nullptr), nullptr);
-                if (s->l && s->f)
-                    SendMessageW(s->l, WM_SETFONT, (WPARAM)s->f, TRUE);
-            }
             DWORD es = WS_CHILD | WS_VISIBLE | WS_TABSTOP | s->o.align;
             if (s->o.multiline)
             {
@@ -482,12 +487,17 @@ namespace
                 es |= ES_AUTOHSCROLL;
             if (s->o.password)
                 es |= ES_PASSWORD;
-            DWORD editEx = s->o.borderVisible ? WS_EX_CLIENTEDGE : 0;
+            // Use only the custom border drawn by the overlay window.
+            // Native EDIT client-edge border causes a double-border look.
+            DWORD editEx = 0;
             s->e = CreateWindowExW(editEx, L"EDIT", s->o.def.c_str(), es, mg, top, s->o.w - (mg * 2), eh, h, (HMENU)1001, GetModuleHandleW(nullptr), nullptr);
+            if (s->e)
+            {
+                // Prevent themed focus accent underline on borderless EDIT control.
+                SetWindowTheme(s->e, L"", L"");
+            }
             if (s->e && s->o.maxLen > 0)
                 SendMessageW(s->e, EM_LIMITTEXT, (WPARAM)s->o.maxLen, 0);
-            if (s->e && !s->o.placeholder.empty())
-                SendMessageW(s->e, EM_SETCUEBANNER, TRUE, (LPARAM)s->o.placeholder.c_str());
             if (s->e && s->f)
                 SendMessageW(s->e, WM_SETFONT, (WPARAM)s->f, TRUE);
             if (s->e)
@@ -495,11 +505,25 @@ namespace
                 SetWindowLongPtrW(s->e, GWLP_USERDATA, (LONG_PTR)s);
                 s->oldEdit = (WNDPROC)SetWindowLongPtrW(s->e, GWLP_WNDPROC, (LONG_PTR)EditProc);
                 SetFocus(s->e);
-                SendMessageW(s->e, EM_SETSEL, 0, -1);
+                int len = GetWindowTextLengthW(s->e);
+                SendMessageW(s->e, EM_SETSEL, (WPARAM)len, (LPARAM)len);
             }
+            PostMessageW(h, WM_ND_SET_CARET_END, 0, 0);
             s->b = CreateSolidBrush(s->o.bg);
             return 0;
         }
+        case WM_ND_SET_CARET_END:
+            if (s && s->e && IsWindow(s->e))
+            {
+                int len = GetWindowTextLengthW(s->e);
+                SendMessageW(s->e, EM_SETSEL, (WPARAM)len, (LPARAM)len);
+                SendMessageW(s->e, EM_SCROLLCARET, 0, 0);
+            }
+            return 0;
+        case WM_SHOWWINDOW:
+            if (s && w)
+                PostMessageW(h, WM_ND_SET_CARET_END, 0, 0);
+            break;
         case WM_COMMAND:
             if (HIWORD(w) == EN_UPDATE && s && s->e && (HWND)l == s->e)
             {
@@ -523,15 +547,6 @@ namespace
                 return (LRESULT)(s->b ? s->b : GetStockObject(WHITE_BRUSH));
             }
             break;
-        case WM_CTLCOLORSTATIC:
-            if (s && (HWND)l == s->l)
-            {
-                HDC dc = (HDC)w;
-                SetTextColor(dc, s->o.msgColor);
-                SetBkColor(dc, s->o.bg);
-                return (LRESULT)(s->b ? s->b : GetStockObject(WHITE_BRUSH));
-            }
-            break;
         case WM_PAINT:
             if (s)
             {
@@ -545,9 +560,12 @@ namespace
                 int bt = s->o.borderVisible ? clampi(s->o.border, 0, 12) : 0;
                 if (bt > 0)
                 {
-                    HPEN p = CreatePen(PS_SOLID, bt, s->o.bd);
+                    HPEN p = CreatePen(PS_SOLID, 1, s->o.bd);
                     HGDIOBJ op = SelectObject(dc, p), ob = SelectObject(dc, GetStockObject(HOLLOW_BRUSH));
-                    Rectangle(dc, 0, 0, rc.right, rc.bottom);
+                    for (int i = 0; i < bt; ++i)
+                    {
+                        Rectangle(dc, i, i, rc.right - i, rc.bottom - i);
+                    }
                     SelectObject(dc, ob);
                     SelectObject(dc, op);
                     DeleteObject(p);
@@ -697,18 +715,10 @@ namespace
             return false;
         if (f && !s.empty())
             o.font = s;
-        if (!getStr(c, 0, "message", s, f))
-            return false;
-        if (f)
-            o.msg = s;
         if (!getStr(c, 0, "defaultValue", s, f))
             return false;
         if (f)
             o.def = s;
-        if (!getStr(c, 0, "placeholder", s, f))
-            return false;
-        if (f)
-            o.placeholder = s;
         if (!getStr(c, 0, "allowedChars", s, f))
             return false;
         if (f)
@@ -751,10 +761,6 @@ namespace
             return false;
         if (f)
             parseColor(s, o.bd);
-        if (!getStr(c, 0, "messageColor", s, f))
-            return false;
-        if (f)
-            parseColor(s, o.msgColor);
         if (!getStr(c, 0, "align", s, f))
             return false;
         if (f)
@@ -807,6 +813,12 @@ namespace
         {
             delete s;
             return 0;
+        }
+        // On Windows 11, active popup windows can get an OS accent border.
+        // Disable DWM border color so only our custom border is visible.
+        {
+            COLORREF none = static_cast<COLORREF>(DWMWA_COLOR_NONE);
+            DwmSetWindowAttribute(s->w, DWMWA_BORDER_COLOR, &none, sizeof(none));
         }
         g_map[s->id] = s;
         ShowWindow(s->w, SW_SHOW);

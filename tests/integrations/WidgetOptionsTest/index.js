@@ -26,12 +26,23 @@ function testWidgetRestoration() {
 }
  widget.on("minimize", () => console.log("minimized"));
  widget.on("unMinimize", () => console.log("restored"));
-setTimeout(() => {
-    testWidgetMinimization();
-    // testWidgetRestoration();
-}, 5000);
 
-setTimeout(() => {
-    // testWidgetUnMinimization();
-    testWidgetRestoration();
-}, 8000);
+ widget.on("click", () => console.log("clicked"));
+ widget.on("right-click", () => console.log("right clicked"));
+ widget.on("scroll-up", () => console.log("scroll up"));
+ widget.on("scroll-down", () => console.log("scroll down"));
+
+ widget.on("double-click", () => {
+  console.log("double clicked");
+});
+
+
+// setTimeout(() => {
+//     testWidgetMinimization();
+//     // testWidgetRestoration();
+// }, 5000);
+
+// setTimeout(() => {
+//     // testWidgetUnMinimization();
+//     testWidgetRestoration();
+// }, 8000);
