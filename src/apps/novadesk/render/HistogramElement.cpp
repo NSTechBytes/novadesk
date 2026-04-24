@@ -89,6 +89,161 @@ float HistogramElement::NormalizeValue(float value, float minValue, float maxVal
     return n;
 }
 
+bool HistogramElement::HitTest(int x, int y)
+{
+    if (!Element::HitTest(x, y))
+        return false;
+
+    if (!GetPixelHitTest())
+        return true;
+
+    if ((m_HasSolidColor && m_SolidAlpha > 0) || (m_SolidGradient.type != GRADIENT_NONE))
+        return true;
+
+    float targetX = static_cast<float>(x);
+    float targetY = static_cast<float>(y);
+    if (m_HasTransformMatrix || m_Rotate != 0.0f)
+    {
+        GfxRect bounds = GetBounds();
+        float centerX = bounds.X + bounds.Width / 2.0f;
+        float centerY = bounds.Y + bounds.Height / 2.0f;
+
+        D2D1::Matrix3x2F matrix;
+        if (m_HasTransformMatrix)
+        {
+            matrix = D2D1::Matrix3x2F(
+                m_TransformMatrix[0], m_TransformMatrix[1],
+                m_TransformMatrix[2], m_TransformMatrix[3],
+                m_TransformMatrix[4], m_TransformMatrix[5]);
+        }
+        else
+        {
+            matrix = D2D1::Matrix3x2F::Rotation(m_Rotate, D2D1::Point2F(centerX, centerY));
+        }
+
+        if (matrix.Invert())
+        {
+            const D2D1_POINT_2F transformed = matrix.TransformPoint(D2D1::Point2F(targetX, targetY));
+            targetX = transformed.x;
+            targetY = transformed.y;
+        }
+    }
+
+    const int width = GetWidth();
+    const int height = GetHeight();
+    if (width <= 0 || height <= 0)
+        return false;
+
+    const float left = static_cast<float>(m_X + m_PaddingLeft);
+    const float top = static_cast<float>(m_Y + m_PaddingTop);
+    const float right = left + static_cast<float>(width);
+    const float bottom = top + static_cast<float>(height);
+    if (targetX < left || targetX >= right || targetY < top || targetY >= bottom)
+        return false;
+
+    float minValue = 0.0f;
+    float maxValue = 100.0f;
+    BuildAutoRange(minValue, maxValue);
+
+    const bool hasSecondary = !m_SecondaryData.empty();
+    const int samples = m_GraphHorizontalOrientation ? height : width;
+    if (samples <= 0)
+        return false;
+
+    int sampleIndex = 0;
+    if (m_GraphHorizontalOrientation)
+    {
+        const int yPix = static_cast<int>(targetY - top);
+        if (yPix < 0 || yPix >= height)
+            return false;
+        sampleIndex = m_Flip ? (height - 1 - yPix) : yPix;
+    }
+    else
+    {
+        const int xPix = static_cast<int>(targetX - left);
+        if (xPix < 0 || xPix >= width)
+            return false;
+        sampleIndex = m_GraphStartLeft ? xPix : (width - 1 - xPix);
+    }
+
+    if (sampleIndex < 0 || sampleIndex >= samples)
+        return false;
+
+    const float primaryValue = SampleAtFromNewest(m_PrimaryData, sampleIndex);
+    const float primaryN = NormalizeValue(primaryValue, minValue, maxValue);
+    const int primarySize = m_GraphHorizontalOrientation
+                                ? static_cast<int>(primaryN * static_cast<float>(width))
+                                : static_cast<int>(primaryN * static_cast<float>(height));
+
+    int secondarySize = 0;
+    if (hasSecondary)
+    {
+        const float secondaryValue = SampleAtFromNewest(m_SecondaryData, sampleIndex);
+        const float secondaryN = NormalizeValue(secondaryValue, minValue, maxValue);
+        secondarySize = m_GraphHorizontalOrientation
+                            ? static_cast<int>(secondaryN * static_cast<float>(width))
+                            : static_cast<int>(secondaryN * static_cast<float>(height));
+    }
+
+    const int bothSize = hasSecondary ? (std::min)(primarySize, secondarySize) : 0;
+    const bool bothVisible = hasSecondary && bothSize > 0 && (m_BothAlpha > 0 || m_BothGradient.type != GRADIENT_NONE);
+    const bool primaryVisible = primarySize > 0 && (m_PrimaryAlpha > 0 || m_PrimaryGradient.type != GRADIENT_NONE);
+    const bool secondaryVisible = secondarySize > 0 && (m_SecondaryAlpha > 0 || m_SecondaryGradient.type != GRADIENT_NONE);
+
+    if (m_GraphHorizontalOrientation)
+    {
+        const int xOffset = m_GraphStartLeft
+                                ? static_cast<int>(targetX - left)
+                                : static_cast<int>(right - targetX);
+        if (xOffset < 0 || xOffset >= width)
+            return false;
+
+        if (bothVisible && xOffset < bothSize)
+            return true;
+
+        if (hasSecondary)
+        {
+            const bool secondaryLarger = secondarySize > primarySize;
+            const int larger = secondaryLarger ? secondarySize : primarySize;
+            if (larger > bothSize)
+            {
+                if (xOffset >= bothSize && xOffset < larger)
+                {
+                    return secondaryLarger ? secondaryVisible : primaryVisible;
+                }
+            }
+            return false;
+        }
+
+        return primaryVisible && xOffset < primarySize;
+    }
+
+    const int yOffset = m_Flip
+                            ? static_cast<int>(targetY - top)
+                            : static_cast<int>(bottom - targetY);
+    if (yOffset < 0 || yOffset >= height)
+        return false;
+
+    if (bothVisible && yOffset < bothSize)
+        return true;
+
+    if (hasSecondary)
+    {
+        const bool secondaryLarger = secondarySize > primarySize;
+        const int larger = secondaryLarger ? secondarySize : primarySize;
+        if (larger > bothSize)
+        {
+            if (yOffset >= bothSize && yOffset < larger)
+            {
+                return secondaryLarger ? secondaryVisible : primaryVisible;
+            }
+        }
+        return false;
+    }
+
+    return primaryVisible && yOffset < primarySize;
+}
+
 void HistogramElement::DrawSpan(
     ID2D1DeviceContext *context,
     const D2D1_RECT_F &dstRect,
