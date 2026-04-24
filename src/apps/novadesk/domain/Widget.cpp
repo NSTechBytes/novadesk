@@ -2652,13 +2652,24 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         }
     }
 
-    // For mouse wheel, coordinates are screen relative
+    // For mouse wheel, coordinates are screen relative.
+    // Ignore wheel when cursor is outside this widget.
     if (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL)
     {
         POINT pt = {x, y};
         ScreenToClient(m_hWnd, &pt);
         x = pt.x;
         y = pt.y;
+
+        RECT clientRect = {};
+        if (GetClientRect(m_hWnd, &clientRect))
+        {
+            POINT clientPt = {x, y};
+            if (!PtInRect(&clientRect, clientPt))
+            {
+                return false;
+            }
+        }
     }
 
     bool needRedraw = false;
