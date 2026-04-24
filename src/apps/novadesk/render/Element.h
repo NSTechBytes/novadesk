@@ -143,6 +143,8 @@ public:
     void SetBevelGradient2(const GradientInfo& gradient) { m_BevelGradient2 = gradient; }
 
     void SetAntiAlias(bool enable) { m_AntiAlias = enable; }
+    void SetPixelHitTest(bool enabled) { m_PixelHitTest = enabled; }
+    bool GetPixelHitTest() const { return m_PixelHitTest; }
     
     void SetPadding(int left, int top, int right, int bottom);
 
@@ -287,6 +289,7 @@ protected:
 
     // Rendering properties
     bool m_AntiAlias = true;
+    bool m_PixelHitTest = false;
     bool m_Show = true;
 
     std::wstring m_ContainerId;

@@ -16,6 +16,9 @@ BarElement::BarElement(const std::wstring& id, int x, int y, int w, int h, float
 
 bool BarElement::HitTest(int x, int y)
 {
+    if (!GetPixelHitTest())
+        return Element::HitTest(x, y);
+
     // Transform the point into local (unrotated) space if needed.
     GfxRect bounds = GetBackgroundBounds();
     float centerX = bounds.X + bounds.Width / 2.0f;

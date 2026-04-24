@@ -686,6 +686,8 @@ namespace PropertyParser
         JS_FreeValue(ctx, pad);
 
         GetBoolProp(ctx, obj, "antiAlias", options.antialias);
+        if (GetBoolProp(ctx, obj, "pixelHitTest", options.pixelHitTest))
+            options.hasPixelHitTest = true;
         GetBoolProp(ctx, obj, "show", options.show);
         options.containerId = GetStringProp(ctx, obj, "container");
         options.groupId = GetStringProp(ctx, obj, "group");
@@ -1521,6 +1523,8 @@ namespace PropertyParser
         element->SetSize(options.width, options.height);
         element->SetRotate(options.rotate);
         element->SetAntiAlias(options.antialias);
+        if (options.hasPixelHitTest)
+            element->SetPixelHitTest(options.pixelHitTest);
         element->SetShow(options.show);
         element->SetContainerId(options.containerId);
         element->SetGroupId(options.groupId);
@@ -1927,6 +1931,8 @@ namespace PropertyParser
         options.cursorsDir = element->GetCursorsDir();
         options.rotate = element->GetRotate();
         options.antialias = element->GetAntiAlias();
+        options.hasPixelHitTest = true;
+        options.pixelHitTest = element->GetPixelHitTest();
         options.solidColorRadius = element->GetCornerRadius();
 
         options.paddingLeft = element->GetPaddingLeft();

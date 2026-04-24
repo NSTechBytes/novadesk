@@ -15,6 +15,7 @@
 #include <vector>
 #include <windowsx.h>
 #include <algorithm>
+#include <functional>
 #include "Direct2DHelper.h"
 #include "ImageElement.h"
 #include "TextElement.h"
@@ -2519,6 +2520,68 @@ void Widget::UpdateLayeredWindowContent()
             {
                 Logging::Log(LogLevel::Error, L"D2D EndDraw failed (0x%08X)", hr);
             }
+        }
+    }
+
+    // Keep bounds-hit interactive element areas mouse-reachable even when their
+    // pixels are fully transparent in the layered window surface.
+    if (pvBits)
+    {
+        auto stampRectAlpha = [&](int left, int top, int right, int bottom)
+        {
+            left = (std::max)(0, left);
+            top = (std::max)(0, top);
+            right = (std::min)(w, right);
+            bottom = (std::min)(h, bottom);
+            if (left >= right || top >= bottom)
+                return;
+
+            BYTE *pixels = static_cast<BYTE *>(pvBits);
+            for (int yy = top; yy < bottom; ++yy)
+            {
+                BYTE *row = pixels + static_cast<size_t>(yy) * static_cast<size_t>(w) * 4;
+                for (int xx = left; xx < right; ++xx)
+                {
+                    BYTE &alpha = row[static_cast<size_t>(xx) * 4 + 3];
+                    if (alpha == 0)
+                    {
+                        alpha = 1;
+                    }
+                }
+            }
+        };
+
+        std::function<void(Element *, int, int)> stampInteractiveBounds;
+        stampInteractiveBounds = [&](Element *element, int offsetX, int offsetY)
+        {
+            if (!element || !element->IsVisible())
+                return;
+
+            GfxRect bounds = element->GetBounds();
+            const int absLeft = offsetX + bounds.X;
+            const int absTop = offsetY + bounds.Y;
+            const int absRight = absLeft + bounds.Width;
+            const int absBottom = absTop + bounds.Height;
+
+            if (element->HasMouseAction() && !element->GetPixelHitTest())
+            {
+                stampRectAlpha(absLeft, absTop, absRight, absBottom);
+            }
+
+            if (element->IsContainer())
+            {
+                for (Element *child : element->GetContainerItems())
+                {
+                    stampInteractiveBounds(child, absLeft, absTop);
+                }
+            }
+        };
+
+        for (Element *element : m_Elements)
+        {
+            if (!element || element->IsContained())
+                continue;
+            stampInteractiveBounds(element, 0, 0);
         }
     }
 

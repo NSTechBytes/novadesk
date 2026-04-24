@@ -85,6 +85,8 @@ namespace PropertyParser
         int paddingRight = 0;
         int paddingBottom = 0;
         bool antialias = true;
+        bool hasPixelHitTest = false;
+        bool pixelHitTest = false;
         bool show = true;
         std::wstring containerId;
         std::wstring groupId;

@@ -577,6 +577,8 @@ namespace novadesk::scripting::quickjs
                 return JS_NewFloat64(ctx, element->GetRotate());
             if (prop == "antiAlias")
                 return JS_NewBool(ctx, element->GetAntiAlias() ? 1 : 0);
+            if (prop == "pixelHitTest")
+                return JS_NewBool(ctx, element->GetPixelHitTest() ? 1 : 0);
             if (prop == "backgroundColorRadius")
                 return JS_NewInt32(ctx, element->GetCornerRadius());
             if (prop == "backgroundColor" && element->HasSolidColor())

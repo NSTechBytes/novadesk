@@ -33,6 +33,9 @@ int RoundLineElement::GetAutoHeight()
 
 bool RoundLineElement::HitTest(int x, int y)
 {
+    if (!GetPixelHitTest())
+        return Element::HitTest(x, y);
+
     // Transform the point into local (unrotated) space if needed.
     GfxRect bounds = GetBounds();
     float centerX = bounds.X + bounds.Width / 2.0f;

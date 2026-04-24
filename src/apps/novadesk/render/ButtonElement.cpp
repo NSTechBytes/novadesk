@@ -129,6 +129,9 @@ bool ButtonElement::HitTest(int x, int y)
     if (!Element::HitTest(x, y))
         return false;
 
+    if (!GetPixelHitTest())
+        return true;
+
     if (!m_ButtonImage.IsLoaded())
         return true; // fallback to bounds hit testing
     
