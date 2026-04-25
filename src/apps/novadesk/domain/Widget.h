@@ -194,6 +194,8 @@ private:
     bool m_DragThresholdMet = false;
     POINT m_DragStartCursor = { 0, 0 };
     POINT m_DragStartWindow = { 0, 0 };
+    bool m_IsElementDragging = false;
+    Element *m_DragElement = nullptr;
     bool m_IsMouseOverWidget = false;
     bool m_IsMinimized = false;
     CursorManager m_CursorManager;
