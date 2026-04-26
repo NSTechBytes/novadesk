@@ -104,7 +104,10 @@ Widget::Widget(const WidgetOptions &options)
 */
 Widget::~Widget()
 {
-    JSEngine::TriggerWidgetEvent(this, "close");
+    if (!m_SkipCloseEventOnDestroy)
+    {
+        JSEngine::TriggerWidgetEvent(this, "close");
+    }
 
     DestroyToolbarIcon();
 

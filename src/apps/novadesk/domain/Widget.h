@@ -104,6 +104,7 @@ public:
     void SetShowInToolbar(bool enable);
     void SetToolbarIcon(const std::wstring& path);
     void SetToolbarTitle(const std::wstring& title);
+    void SetSkipCloseEventOnDestroy(bool skip) { m_SkipCloseEventOnDestroy = skip; }
 
     const WidgetOptions& GetOptions() const { return m_Options; }
     HWND GetWindow() const { return m_hWnd; }
@@ -198,6 +199,7 @@ private:
     Element *m_DragElement = nullptr;
     bool m_IsMouseOverWidget = false;
     bool m_IsMinimized = false;
+    bool m_SkipCloseEventOnDestroy = false;
     CursorManager m_CursorManager;
     HICON m_ToolbarIconHandle = nullptr;
     bool m_ToolbarIconOwned = false;
