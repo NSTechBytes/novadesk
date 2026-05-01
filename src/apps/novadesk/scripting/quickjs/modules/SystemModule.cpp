@@ -835,6 +835,94 @@ namespace novadesk::scripting::quickjs
             return promise;
         }
 
+        std::string ReadOptionalStringArg(JSContext *ctx, int argc, JSValueConst *argv, int index, const std::string &fallback = "")
+        {
+            if (index >= argc || JS_IsUndefined(argv[index]) || JS_IsNull(argv[index]))
+            {
+                return fallback;
+            }
+            const char *s = JS_ToCString(ctx, argv[index]);
+            if (!s)
+            {
+                return fallback;
+            }
+            std::string out = s;
+            JS_FreeCString(ctx, s);
+            return out;
+        }
+
+        JSValue JsTimeNow(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            const std::string format = ReadOptionalStringArg(ctx, argc, argv, 0, "%H:%M:%S");
+            const std::string localeName = ReadOptionalStringArg(ctx, argc, argv, 1, "");
+            const std::string out = shared::system::FormatCurrentTime(format, localeName);
+            return JS_NewStringLen(ctx, out.data(), out.size());
+        }
+
+        JSValue JsTimeStamp(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewFloat64(ctx, shared::system::CurrentUnixTimestamp());
+        }
+
+        JSValue JsTimeStampFormat(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 2)
+            {
+                return JS_ThrowTypeError(ctx, "timeStampFormat(timestamp, format[, locale])");
+            }
+
+            double timestamp = 0.0;
+            if (JS_ToFloat64(ctx, &timestamp, argv[0]) < 0)
+            {
+                return JS_EXCEPTION;
+            }
+            const std::string format = ReadOptionalStringArg(ctx, argc, argv, 1, "%H:%M:%S");
+            const std::string localeName = ReadOptionalStringArg(ctx, argc, argv, 2, "");
+            const std::string out = shared::system::FormatTimestamp(timestamp, format, localeName);
+            return JS_NewStringLen(ctx, out.data(), out.size());
+        }
+
+        JSValue JsTimeStampLocale(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 3)
+            {
+                return JS_ThrowTypeError(ctx, "timeStampLocale(text, format, locale)");
+            }
+
+            const std::string text = ReadOptionalStringArg(ctx, argc, argv, 0, "");
+            const std::string format = ReadOptionalStringArg(ctx, argc, argv, 1, "");
+            const std::string localeName = ReadOptionalStringArg(ctx, argc, argv, 2, "");
+            double parsed = 0.0;
+            if (!shared::system::ParseTimestamp(text, format, localeName, parsed))
+            {
+                return JS_NULL;
+            }
+            return JS_NewFloat64(ctx, parsed);
+        }
+
+        JSValue JsFormatLocale(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 3)
+            {
+                return JS_ThrowTypeError(ctx, "formatLocale(timestamp, format, locale)");
+            }
+
+            double timestamp = 0.0;
+            if (JS_ToFloat64(ctx, &timestamp, argv[0]) < 0)
+            {
+                return JS_EXCEPTION;
+            }
+            const std::string format = ReadOptionalStringArg(ctx, argc, argv, 1, "");
+            const std::string localeName = ReadOptionalStringArg(ctx, argc, argv, 2, "");
+            const std::string out = shared::system::FormatTimestamp(timestamp, format.empty() ? "%H:%M:%S" : format, localeName);
+            return JS_NewStringLen(ctx, out.data(), out.size());
+        }
+
+        JSValue JsDaylightSavingTime(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            return JS_NewBool(ctx, shared::system::IsDaylightSavingTimeNow() ? 1 : 0);
+        }
+
         int SystemModuleInit(JSContext *ctx, JSModuleDef *m)
         {
             JSValue clipboard = JS_NewObject(ctx);
@@ -884,6 +972,15 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, recycleBin, "emptyBinSilent", JS_NewCFunction(ctx, JsRecycleBinEmptyBinSilent, "emptyBinSilent", 0));
             JS_SetPropertyStr(ctx, recycleBin, "getStats", JS_NewCFunction(ctx, JsRecycleBinGetStats, "getStats", 0));
             JS_SetModuleExport(ctx, m, "recycleBin", recycleBin);
+
+            JSValue time = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, time, "time", JS_NewCFunction(ctx, JsTimeNow, "time", 2));
+            JS_SetPropertyStr(ctx, time, "timeStamp", JS_NewCFunction(ctx, JsTimeStamp, "timeStamp", 0));
+            JS_SetPropertyStr(ctx, time, "timeStampFormat", JS_NewCFunction(ctx, JsTimeStampFormat, "timeStampFormat", 3));
+            JS_SetPropertyStr(ctx, time, "timeStampLocale", JS_NewCFunction(ctx, JsTimeStampLocale, "timeStampLocale", 3));
+            JS_SetPropertyStr(ctx, time, "formatLocale", JS_NewCFunction(ctx, JsFormatLocale, "formatLocale", 3));
+            JS_SetPropertyStr(ctx, time, "daylightSavingTime", JS_NewCFunction(ctx, JsDaylightSavingTime, "daylightSavingTime", 0));
+            JS_SetModuleExport(ctx, m, "time", time);
 
             JSValue audio = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, audio, "setVolume", JS_NewCFunction(ctx, JsAudioSetVolume, "setVolume", 1));
@@ -942,6 +1039,8 @@ namespace novadesk::scripting::quickjs
         if (JS_AddModuleExport(ctx, m, "disk") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "recycleBin") < 0)
+            return nullptr;
+        if (JS_AddModuleExport(ctx, m, "time") < 0)
             return nullptr;
         if (JS_AddModuleExport(ctx, m, "audio") < 0)
             return nullptr;
