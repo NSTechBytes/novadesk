@@ -1,4 +1,4 @@
-﻿;--------------------------------
+;--------------------------------
 ; Novadesk Installer Script
 ;--------------------------------
 
@@ -104,12 +104,13 @@ Section -CoreFiles SecCoreFiles
   SetOutPath "$INSTDIR"
   
   ; Kill process if running
-  nsExec::ExecToStack 'taskkill /F /T /IM "novadesk.exe"'
-  nsExec::ExecToStack 'taskkill /F /T /IM "Novadesk.exe"'
-  nsExec::ExecToStack 'taskkill /F /T /IM "manage_novadesk.exe"'
-  nsExec::ExecToStack 'taskkill /F /T /IM "restart_novadesk.exe"'
-  nsExec::ExecToStack 'taskkill /F /T /IM "ndpkg_installer.exe"'
-  nsExec::ExecToStack 'taskkill /F /T /IM "nwm.exe"'
+  nsExec::ExecToStack 'taskkill /F /IM "novadesk.exe"'
+  nsExec::ExecToStack 'taskkill /F /IM "Novadesk.exe"'
+  nsExec::ExecToStack 'taskkill /F /IM "manage_novadesk.exe"'
+  nsExec::ExecToStack 'taskkill /F /IM "restart_novadesk.exe"'
+  nsExec::ExecToStack 'taskkill /F /IM "ndpkg_installer.exe"'
+  nsExec::ExecToStack 'taskkill /F /IM "nwm.exe"'
+  Sleep 1000
 
   ; Add Novadesk files from dist
   SetOutPath "$INSTDIR"
@@ -309,11 +310,12 @@ Section "Uninstall"
   ReadRegStr $INSTDIR HKLM "Software\Novadesk" "Install_Dir"
   
   ; Kill process if running
-  nsExec::ExecToStack 'taskkill /F /T /IM "novadesk.exe"'
-  nsExec::ExecToStack 'taskkill /F /T /IM "manage_novadesk.exe"'
-  nsExec::ExecToStack 'taskkill /F /T /IM "restart_novadesk.exe"'
-  nsExec::ExecToStack 'taskkill /F /T /IM "ndpkg_installer.exe"'
-  nsExec::ExecToStack 'taskkill /F /T /IM "nwm.exe"'
+  nsExec::ExecToStack 'taskkill /F /IM "novadesk.exe"'
+  nsExec::ExecToStack 'taskkill /F /IM "manage_novadesk.exe"'
+  nsExec::ExecToStack 'taskkill /F /IM "restart_novadesk.exe"'
+  nsExec::ExecToStack 'taskkill /F /IM "ndpkg_installer.exe"'
+  nsExec::ExecToStack 'taskkill /F /IM "nwm.exe"'
+  Sleep 1000
 
   ; Remove from PATH
   EnVar::SetHKLM
