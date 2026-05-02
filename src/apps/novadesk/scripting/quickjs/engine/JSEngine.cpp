@@ -1287,6 +1287,14 @@ namespace JSEngine
         ClearAllTrayEventCallbacksInternal();
     }
 
+    void ClearUiIpcForScript(const std::wstring &scriptPath)
+    {
+        if (scriptPath.empty() || !g_context)
+            return;
+        ClearIpcListenersForScript(g_uiIpcListeners, scriptPath);
+        ClearIpcChannelListenersForScript(g_uiIpcChannelListeners, scriptPath);
+    }
+
     void InitializeJavaScriptAPI(duk_context *ctx)
     {
         (void)ctx;

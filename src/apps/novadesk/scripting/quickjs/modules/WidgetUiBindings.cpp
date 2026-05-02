@@ -1409,6 +1409,11 @@ namespace novadesk::scripting::quickjs
             {
                 absPath = PathUtils::NormalizePath(scriptPath);
             }
+
+            // Refresh can re-run the same .ui.js before old callbacks are fully gone.
+            // Ensure stale ipcRenderer listeners from prior UI instances are detached.
+            JSEngine::ClearUiIpcForScript(absPath);
+
             const std::string scriptSource = FileUtils::ReadFileContent(absPath);
             if (scriptSource.empty())
             {
