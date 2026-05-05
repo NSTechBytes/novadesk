@@ -377,6 +377,22 @@ namespace novadesk::scripting::quickjs
             return JS_NewBool(ctx, widget->RemoveElements(id) ? 1 : 0);
         }
 
+        JSValue JsWidgetRemoveElementById(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 1)
+                return ThrowTypeError(ctx, "removeElementById", "expected (id)");
+
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8)
+                return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            return JS_NewBool(ctx, widget->RemoveElements(id) ? 1 : 0);
+        }
+
         JSValue JsWidgetRemoveElementsByGroup(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -1374,6 +1390,7 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("getElementProperty", 2, JsWidgetGetElementProperty),
             JS_CFUNC_DEF("isElementExist", 1, JsWidgetIsElementExist),
             JS_CFUNC_DEF("removeElements", 1, JsWidgetRemoveElements),
+            JS_CFUNC_DEF("removeElementById", 1, JsWidgetRemoveElementById),
             JS_CFUNC_DEF("removeElementsByGroup", 1, JsWidgetRemoveElementsByGroup),
             JS_CFUNC_DEF("beginUpdate", 0, JsWidgetBeginUpdate),
             JS_CFUNC_DEF("endUpdate", 0, JsWidgetEndUpdate),
