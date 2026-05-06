@@ -2198,21 +2198,49 @@ void Widget::RemoveElementsByGroup(const std::wstring &group)
     if (group.empty())
         return;
 
-    std::vector<std::wstring> ids;
-    ids.reserve(m_Elements.size());
-    for (Element *element : m_Elements)
+    bool changed = false;
+    for (auto it = m_Elements.begin(); it != m_Elements.end(); )
     {
-        if (!element)
-            continue;
-        if (element->GetGroupId() == group)
+        Element *element = *it;
+        if (element && element->GetGroupId() == group)
         {
-            ids.push_back(element->GetId());
+            if (element == m_MouseOverElement)
+                m_MouseOverElement = nullptr;
+            if (element == m_TooltipElement)
+                m_TooltipElement = nullptr;
+            
+            if (PathShape *path = dynamic_cast<PathShape *>(element))
+            {
+                ReleaseCombinedConsumes(path);
+            }
+            
+            if (element->IsContainer())
+            {
+                for (Element *child : element->GetContainerItems())
+                {
+                    if (child)
+                    {
+                        child->SetContainer(nullptr);
+                        child->SetContainerId(L"");
+                    }
+                }
+                element->ClearContainerItems();
+            }
+            
+            UpdateContainerForElement(element, L"");
+            delete element;
+            it = m_Elements.erase(it);
+            changed = true;
+        }
+        else
+        {
+            ++it;
         }
     }
 
-    if (!ids.empty())
+    if (changed)
     {
-        RemoveElements(ids);
+        Redraw();
     }
 }
 
@@ -2251,38 +2279,53 @@ bool Widget::RemoveElements(const std::wstring &id)
         return true;
     }
 
-    for (auto it = m_Elements.begin(); it != m_Elements.end(); ++it)
+    bool changed = false;
+    for (auto it = m_Elements.begin(); it != m_Elements.end(); )
     {
-        if ((*it)->GetId() == id)
+        Element *element = *it;
+        if (element && element->GetId() == id)
         {
-            if (*it == m_MouseOverElement)
+            if (element == m_MouseOverElement)
                 m_MouseOverElement = nullptr;
-            if (*it == m_TooltipElement)
+            if (element == m_TooltipElement)
                 m_TooltipElement = nullptr;
-            if (PathShape *path = dynamic_cast<PathShape *>(*it))
+            
+            if (PathShape *path = dynamic_cast<PathShape *>(element))
             {
                 ReleaseCombinedConsumes(path);
             }
-            if (*it && (*it)->IsContainer())
+            
+            if (element->IsContainer())
             {
-                for (Element *child : (*it)->GetContainerItems())
+                for (Element *child : element->GetContainerItems())
                 {
-                    if (!child)
-                        continue;
-                    child->SetContainer(nullptr);
-                    child->SetContainerId(L"");
+                    if (child)
+                    {
+                        child->SetContainer(nullptr);
+                        child->SetContainerId(L"");
+                    }
                 }
-                (*it)->ClearContainerItems();
+                element->ClearContainerItems();
             }
-            UpdateContainerForElement(*it, L"");
-            delete *it;
-            m_Elements.erase(it);
-            Redraw();
-            return true;
+            
+            UpdateContainerForElement(element, L"");
+            delete element;
+            it = m_Elements.erase(it);
+            changed = true;
+        }
+        else
+        {
+            ++it;
         }
     }
-    return false;
+
+    if (changed)
+    {
+        Redraw();
+    }
+    return changed;
 }
+
 
 /*
 ** Remove multiple elements by their IDs.
