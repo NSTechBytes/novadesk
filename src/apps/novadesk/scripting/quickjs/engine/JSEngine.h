@@ -61,6 +61,7 @@ namespace JSEngine
     bool RegisterTrayEventCallback(JSContext *ctx, int trayId, const std::string &eventName, JSValueConst fn);
     void ClearTrayEventCallbacks(int trayId);
     void ClearAllTrayEventCallbacks();
+    void ClearUiIpcForScript(const std::wstring &scriptPath);
     bool ExecuteWidgetScript(Widget *widget);
     JSValue CreateUiIpcObject(JSContext *ctx);
 

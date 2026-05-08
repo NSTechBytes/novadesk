@@ -147,7 +147,7 @@ static const UINT_PTR kStartupSyncTimerId = 3;
 static const UINT kStartupSyncDelayMs = 120;
 static const UINT kAutoUpdateIntervalMs = 60 * 1000; // 1 minute
 static const int kMaxLogRows = 2000;
-static const wchar_t *kCurrentVersion = L"0.9.3.0";
+static const wchar_t *kCurrentVersion = L"0.9.4.0";
 static const wchar_t *kSingleInstanceLockArg = L"--request-single-instance-lock";
 static const wchar_t *kManageWindowClassName = L"NovadeskManagerWindow";
 static const wchar_t *kManageCloseMessageName = L"Novadesk.Manage.RequestClose";
@@ -158,6 +158,8 @@ static bool ExecuteNovadeskCommandNoPath(const std::wstring &cmd);
 static std::wstring GetAboutLogoPath();
 static void ConfigureAutoUpdateTimer(HWND hWnd);
 static void RequestAppExit(HWND hWnd);
+static bool HasCommandLineFlag(const wchar_t *flag);
+static bool RequestExistingManageWindowClose();
 
 static void InitGdiPlus()
 {
@@ -2328,7 +2330,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                                          WS_CHILD | SS_LEFT,
                                          pageRect.left + 120, pageRect.top, pageRect.right - pageRect.left - 140, 32,
                                          hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
-        g_aboutVersion = CreateWindowExW(0, L"STATIC", L"Version 0.9.3.0 (Beta)",
+        g_aboutVersion = CreateWindowExW(0, L"STATIC", L"Version 0.9.4.0 (Beta)",
                                          WS_CHILD | SS_LEFT,
                                          pageRect.left + 120, pageRect.top + 34, pageRect.right - pageRect.left - 140, 22,
                                          hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
@@ -2753,6 +2755,59 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     return 0;
 }
 
+static bool HasCommandLineFlag(const wchar_t *flag)
+{
+    if (!flag || !*flag)
+    {
+        return false;
+    }
+
+    int argc = 0;
+    LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (!argv)
+    {
+        return false;
+    }
+
+    bool found = false;
+    for (int i = 1; i < argc; ++i)
+    {
+        if (argv[i] && _wcsicmp(argv[i], flag) == 0)
+        {
+            found = true;
+            break;
+        }
+    }
+    LocalFree(argv);
+    return found;
+}
+
+static bool RequestExistingManageWindowClose()
+{
+    if (g_manageCloseMessage == 0)
+    {
+        return false;
+    }
+
+    HWND existing = FindWindowW(kManageWindowClassName, nullptr);
+    if (!existing)
+    {
+        return true;
+    }
+
+    DWORD_PTR result = 0;
+    SendMessageTimeoutW(existing, g_manageCloseMessage, 0, 0, SMTO_ABORTIFHUNG, 1500, &result);
+    for (int i = 0; i < 80; ++i)
+    {
+        if (!FindWindowW(kManageWindowClassName, nullptr))
+        {
+            return true;
+        }
+        Sleep(100);
+    }
+    return !FindWindowW(kManageWindowClassName, nullptr);
+}
+
 int APIENTRY WinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE,
                      _In_ LPSTR,
@@ -2765,6 +2820,10 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
 
     const wchar_t *className = kManageWindowClassName;
     g_manageCloseMessage = RegisterWindowMessageW(kManageCloseMessageName);
+    if (HasCommandLineFlag(L"--request-close"))
+    {
+        return RequestExistingManageWindowClose() ? 0 : 1;
+    }
     HANDLE instanceMutex = CreateMutexW(nullptr, FALSE, L"Global\\NovadeskManageWindowSingleton");
     if (instanceMutex && GetLastError() == ERROR_ALREADY_EXISTS)
     {

@@ -12,6 +12,10 @@
 #include <queue>
 #include <condition_variable>
 #include <fstream>
+#include <ctime>
+#include <sstream>
+#include <iomanip>
+#include <locale>
 
 #include <mmdeviceapi.h>
 #include <mmsystem.h>
@@ -1327,6 +1331,91 @@ namespace novadesk::shared::system
     }
 
     // *****************************************************************************
+    // Time
+    // *****************************************************************************
+
+    std::locale ResolveLocale(const std::string &localeName)
+        {
+            if (!localeName.empty())
+            {
+                try
+                {
+                    return std::locale(localeName.c_str());
+                }
+                catch (...)
+                {
+                }
+            }
+            return std::locale::classic();
+        }
+        
+    std::string FormatCurrentTime(const std::string &format, const std::string &localeName)
+    {
+        return FormatTimestamp(CurrentUnixTimestamp(), format, localeName);
+    }
+
+    double CurrentUnixTimestamp()
+    {
+        using namespace std::chrono;
+        return duration_cast<duration<double>>(system_clock::now().time_since_epoch()).count();
+    }
+
+    std::string FormatTimestamp(double timestamp, const std::string &format, const std::string &localeName)
+    {
+        const std::time_t tt = static_cast<std::time_t>(timestamp);
+        std::tm tmLocal{};
+#ifdef _WIN32
+        localtime_s(&tmLocal, &tt);
+#else
+        localtime_r(&tt, &tmLocal);
+#endif
+
+        std::ostringstream oss;
+        oss.imbue(ResolveLocale(localeName));
+        const std::string fmt = format.empty() ? "%H:%M:%S" : format;
+        oss << std::put_time(&tmLocal, fmt.c_str());
+        return oss.str();
+    }
+
+    bool ParseTimestamp(const std::string &text, const std::string &format, const std::string &localeName, double &outTimestamp)
+    {
+        outTimestamp = 0.0;
+        if (text.empty() || format.empty())
+        {
+            return false;
+        }
+
+        std::tm tmParsed{};
+        std::istringstream iss(text);
+        iss.imbue(ResolveLocale(localeName));
+        iss >> std::get_time(&tmParsed, format.c_str());
+        if (iss.fail())
+        {
+            return false;
+        }
+
+        const std::time_t tt = std::mktime(&tmParsed);
+        if (tt == static_cast<std::time_t>(-1))
+        {
+            return false;
+        }
+        outTimestamp = static_cast<double>(tt);
+        return true;
+    }
+
+    bool IsDaylightSavingTimeNow()
+    {
+        const std::time_t now = std::time(nullptr);
+        std::tm tmLocal{};
+#ifdef _WIN32
+        localtime_s(&tmLocal, &now);
+#else
+        localtime_r(&now, &tmLocal);
+#endif
+        return tmLocal.tm_isdst > 0;
+    }
+     
+    // *****************************************************************************
     // Wallpaper
     // *****************************************************************************
 
@@ -1473,5 +1562,4 @@ namespace novadesk::shared::system
         InternetCloseHandle(hInternet);
         return true;
     }
-
-} // namespace novadesk::shared::system
+} // namespace novadesk::shared::system    

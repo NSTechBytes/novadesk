@@ -117,6 +117,11 @@ namespace novadesk::shared::system
     bool GetRecycleBinStats(RecycleBinStats &outStats);
     bool OpenRecycleBin();
     bool EmptyRecycleBin(bool silent);
+    std::string FormatCurrentTime(const std::string &format, const std::string &localeName);
+    double CurrentUnixTimestamp();
+    std::string FormatTimestamp(double timestamp, const std::string &format, const std::string &localeName);
+    bool ParseTimestamp(const std::string &text, const std::string &format, const std::string &localeName, double &outTimestamp);
+    bool IsDaylightSavingTimeNow();
     DisplayMetrics GetDisplayMetrics();
 
     bool AudioSetVolume(int volumePercent);
