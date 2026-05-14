@@ -689,14 +689,23 @@ namespace PropertyParser
         if (GetBoolProp(ctx, obj, "pixelHitTest", options.pixelHitTest))
             options.hasPixelHitTest = true;
         GetBoolProp(ctx, obj, "show", options.show);
-        options.containerId = GetStringProp(ctx, obj, "container");
-        options.groupId = GetStringProp(ctx, obj, "group");
+        std::wstring containerId = GetStringProp(ctx, obj, "container");
+        if (!containerId.empty())
+            options.containerId = containerId;
+
+        std::wstring groupId = GetStringProp(ctx, obj, "group");
+        if (!groupId.empty())
+            options.groupId = groupId;
+
         GetBoolProp(ctx, obj, "mouseEventCursor", options.mouseEventCursor);
-        options.mouseEventCursorName = GetStringProp(ctx, obj, "mouseEventCursorName");
-        options.cursorsDir = GetStringProp(ctx, obj, "cursorsDir");
-        if (!options.cursorsDir.empty())
+
+        std::wstring mouseEventCursorName = GetStringProp(ctx, obj, "mouseEventCursorName");
+        if (!mouseEventCursorName.empty())
+            options.mouseEventCursorName = mouseEventCursorName;
+        std::wstring cursorsDir = GetStringProp(ctx, obj, "cursorsDir");
+        if (!cursorsDir.empty())
         {
-            options.cursorsDir = PathUtils::ResolvePath(options.cursorsDir, baseDir);
+            options.cursorsDir = PathUtils::ResolvePath(cursorsDir, baseDir);
         }
 
         if (GetFloatArrayProp(ctx, obj, "transformMatrix", options.transformMatrix, 6))
@@ -729,9 +738,18 @@ namespace PropertyParser
         GetEventCallbackProp(ctx, obj, "onDrag", options.onDragCallbackId);
         GetEventCallbackProp(ctx, obj, "onDragEnd", options.onDragEndCallbackId);
 
-        options.tooltipText = GetStringProp(ctx, obj, "tooltipText");
-        options.tooltipTitle = GetStringProp(ctx, obj, "tooltipTitle");
-        options.tooltipIcon = GetStringProp(ctx, obj, "tooltipIcon");
+        std::wstring tooltipText = GetStringProp(ctx, obj, "tooltipText");
+        if (!tooltipText.empty())
+            options.tooltipText = tooltipText;
+
+        std::wstring tooltipTitle = GetStringProp(ctx, obj, "tooltipTitle");
+        if (!tooltipTitle.empty())
+            options.tooltipTitle = tooltipTitle;
+
+        std::wstring tooltipIcon = GetStringProp(ctx, obj, "tooltipIcon");
+        if (!tooltipIcon.empty())
+            options.tooltipIcon = tooltipIcon;
+
         GetIntProp(ctx, obj, "tooltipMaxWidth", options.tooltipMaxWidth);
         GetIntProp(ctx, obj, "tooltipMaxHeight", options.tooltipMaxHeight);
         GetBoolProp(ctx, obj, "tooltipBalloon", options.tooltipBalloon);
@@ -812,12 +830,15 @@ namespace PropertyParser
         }
 
         std::wstring aspect = GetStringProp(ctx, obj, "preserveAspectRatio");
-        if (aspect == L"preserve")
-            options.preserveAspectRatio = IMAGE_ASPECT_PRESERVE;
-        else if (aspect == L"crop")
-            options.preserveAspectRatio = IMAGE_ASPECT_CROP;
-        else if (aspect == L"stretch")
-            options.preserveAspectRatio = IMAGE_ASPECT_STRETCH;
+        if (!aspect.empty())
+        {
+            if (aspect == L"preserve")
+                options.preserveAspectRatio = IMAGE_ASPECT_PRESERVE;
+            else if (aspect == L"crop")
+                options.preserveAspectRatio = IMAGE_ASPECT_CROP;
+            else if (aspect == L"stretch")
+                options.preserveAspectRatio = IMAGE_ASPECT_STRETCH;
+        }
 
         std::vector<float> scaleMargins;
         if (GetFloatArrayProp(ctx, obj, "scaleMargins", scaleMargins, 4))
@@ -1091,47 +1112,55 @@ namespace PropertyParser
         }
         JS_FreeValue(ctx, fw);
 
-        options.fontPath = GetStringProp(ctx, obj, "fontPath");
-        if (!options.fontPath.empty())
+        std::wstring fontPath = GetStringProp(ctx, obj, "fontPath");
+        if (!fontPath.empty())
         {
-            options.fontPath = PathUtils::ResolvePath(options.fontPath, baseDir);
+            options.fontPath = PathUtils::ResolvePath(fontPath, baseDir);
         }
 
         std::wstring style = GetStringProp(ctx, obj, "fontStyle");
-        options.italic = (style == L"italic");
+        if (!style.empty())
+            options.italic = (style == L"italic");
 
         std::wstring align = GetStringProp(ctx, obj, "textAlign");
         if (align.empty())
             align = GetStringProp(ctx, obj, "align");
-        std::transform(align.begin(), align.end(), align.begin(), ::towlower);
-        if (align == L"left" || align == L"lefttop")
-            options.textAlign = TEXT_ALIGN_LEFT_TOP;
-        else if (align == L"center" || align == L"centertop")
-            options.textAlign = TEXT_ALIGN_CENTER_TOP;
-        else if (align == L"right" || align == L"righttop")
-            options.textAlign = TEXT_ALIGN_RIGHT_TOP;
-        else if (align == L"leftcenter")
-            options.textAlign = TEXT_ALIGN_LEFT_CENTER;
-        else if (align == L"centercenter" || align == L"middlecenter" || align == L"middle")
-            options.textAlign = TEXT_ALIGN_CENTER_CENTER;
-        else if (align == L"rightcenter")
-            options.textAlign = TEXT_ALIGN_RIGHT_CENTER;
-        else if (align == L"leftbottom")
-            options.textAlign = TEXT_ALIGN_LEFT_BOTTOM;
-        else if (align == L"centerbottom")
-            options.textAlign = TEXT_ALIGN_CENTER_BOTTOM;
-        else if (align == L"rightbottom")
-            options.textAlign = TEXT_ALIGN_RIGHT_BOTTOM;
+        
+        if (!align.empty())
+        {
+            std::transform(align.begin(), align.end(), align.begin(), ::towlower);
+            if (align == L"left" || align == L"lefttop")
+                options.textAlign = TEXT_ALIGN_LEFT_TOP;
+            else if (align == L"center" || align == L"centertop")
+                options.textAlign = TEXT_ALIGN_CENTER_TOP;
+            else if (align == L"right" || align == L"righttop")
+                options.textAlign = TEXT_ALIGN_RIGHT_TOP;
+            else if (align == L"leftcenter")
+                options.textAlign = TEXT_ALIGN_LEFT_CENTER;
+            else if (align == L"centercenter" || align == L"middlecenter" || align == L"middle")
+                options.textAlign = TEXT_ALIGN_CENTER_CENTER;
+            else if (align == L"rightcenter")
+                options.textAlign = TEXT_ALIGN_RIGHT_CENTER;
+            else if (align == L"leftbottom")
+                options.textAlign = TEXT_ALIGN_LEFT_BOTTOM;
+            else if (align == L"centerbottom")
+                options.textAlign = TEXT_ALIGN_CENTER_BOTTOM;
+            else if (align == L"rightbottom")
+                options.textAlign = TEXT_ALIGN_RIGHT_BOTTOM;
+        }
 
         std::wstring clip = GetStringProp(ctx, obj, "textClip");
-        if (clip == L"none")
-            options.clip = TEXT_CLIP_NONE;
-        else if (clip == L"on" || clip == L"clip")
-            options.clip = TEXT_CLIP_ON;
-        else if (clip == L"wrap")
-            options.clip = TEXT_CLIP_WRAP;
-        else if (clip == L"ellipsis")
-            options.clip = TEXT_CLIP_ELLIPSIS;
+        if (!clip.empty())
+        {
+            if (clip == L"none")
+                options.clip = TEXT_CLIP_NONE;
+            else if (clip == L"on" || clip == L"clip")
+                options.clip = TEXT_CLIP_ON;
+            else if (clip == L"wrap")
+                options.clip = TEXT_CLIP_WRAP;
+            else if (clip == L"ellipsis")
+                options.clip = TEXT_CLIP_ELLIPSIS;
+        }
     }
 
     void ParseBarOptions(JSContext *ctx, JSValueConst obj, BarOptions &options, const std::wstring &baseDir)
@@ -1785,7 +1814,8 @@ namespace PropertyParser
         element->SetItalic(options.italic);
         element->SetTextAlign(options.textAlign);
         element->SetClip(options.clip);
-        element->SetFontPath(options.fontPath);
+        if (!options.fontPath.empty())
+            element->SetFontPath(options.fontPath);
         element->SetShadows(options.shadows);
         element->SetFontGradient(options.fontGradient);
         element->SetLetterSpacing(options.letterSpacing);
