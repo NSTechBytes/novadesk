@@ -213,6 +213,27 @@ namespace novadesk::scripting::quickjs
             return JS_NewFloat64(ctx, stats.usage);
         }
 
+        JSValue JsGetCpuUpTime(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            shared::system::UptimeStats stats;
+            if (!shared::system::GetSystemUptime(stats))
+                return JS_NULL;
+
+            if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
+            {
+                const char *fmt = JS_ToCString(ctx, argv[0]);
+                if (fmt)
+                {
+                    std::string format = fmt;
+                    JS_FreeCString(ctx, fmt);
+                    std::string out = shared::system::FormatUptime(stats, format);
+                    return JS_NewString(ctx, out.c_str());
+                }
+            }
+
+            return JS_NewFloat64(ctx, stats.seconds);
+        }
+
         JSValue JsMemoryTotalBytes(JSContext *ctx, JSValueConst, int, JSValueConst *)
         {
             shared::system::MemoryStats stats;
@@ -941,6 +962,7 @@ namespace novadesk::scripting::quickjs
 
             JSValue cpu = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, cpu, "usage", JS_NewCFunction(ctx, JsCpuUsage, "usage", 0));
+            JS_SetPropertyStr(ctx, cpu, "getUpTime", JS_NewCFunction(ctx, JsGetCpuUpTime, "getUpTime", 1));
             JS_SetModuleExport(ctx, m, "cpu", cpu);
 
             JSValue memory = JS_NewObject(ctx);

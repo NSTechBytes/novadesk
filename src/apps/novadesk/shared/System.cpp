@@ -1437,6 +1437,54 @@ namespace novadesk::shared::system
 #endif
         return tmLocal.tm_isdst > 0;
     }
+
+    bool GetSystemUptime(UptimeStats &outStats)
+    {
+        ULONGLONG ticks = GetTickCount64();
+        outStats.seconds = static_cast<double>(ticks) / 1000.0;
+
+        uint64_t s = ticks / 1000;
+        outStats.days = static_cast<int>(s / 86400);
+        s %= 86400;
+        outStats.hours = static_cast<int>(s / 3600);
+        s %= 3600;
+        outStats.minutes = static_cast<int>(s / 60);
+        outStats.secs = static_cast<int>(s % 60);
+
+        return true;
+    }
+
+    std::string FormatUptime(const UptimeStats &stats, const std::string &format)
+    {
+        std::string res = format;
+        if (res.empty())
+            res = "%d days, %h hours, %m minutes";
+
+        auto replace = [&](const std::string &key, const std::string &val)
+        {
+            size_t pos = 0;
+            while ((pos = res.find(key, pos)) != std::string::npos)
+            {
+                res.replace(pos, key.length(), val);
+                pos += val.length();
+            }
+        };
+
+        replace("%d", std::to_string(stats.days));
+        replace("%h", std::to_string(stats.hours));
+        replace("%m", std::to_string(stats.minutes));
+        replace("%s", std::to_string(stats.secs));
+
+        char buf[16];
+        sprintf_s(buf, "%02d", stats.hours);
+        replace("%H", buf);
+        sprintf_s(buf, "%02d", stats.minutes);
+        replace("%M", buf);
+        sprintf_s(buf, "%02d", stats.secs);
+        replace("%S", buf);
+
+        return res;
+    }
      
     // *****************************************************************************
     // Wallpaper

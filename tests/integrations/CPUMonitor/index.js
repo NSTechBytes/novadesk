@@ -7,7 +7,9 @@ var tick = 0;
 var intervalId = setInterval(function () {
     tick += 1;
     var usage = system.cpu.usage();
+    const uptime = system.cpu.getUpTime("%d days, %H:%M:%S");
     console.log("[PASS] tick=" + tick + " cpu.usage()=" + usage + "%");
+    console.log("[PASS] cpu.getUpTime()=" + uptime);
 }, 1000);
 
 setTimeout(function () {

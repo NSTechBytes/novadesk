@@ -140,5 +140,15 @@ namespace novadesk::shared::system
     bool RegistryWriteString(const std::wstring &fullPath, const std::wstring &valueName, const std::wstring &value);
     bool RegistryWriteNumber(const std::wstring &fullPath, const std::wstring &valueName, double value);
 
+    struct UptimeStats
+    {
+        double seconds = 0.0;
+        int days = 0;
+        int hours = 0;
+        int minutes = 0;
+        int secs = 0;
+    };
+    bool GetSystemUptime(UptimeStats &outStats);
+    std::string FormatUptime(const UptimeStats &stats, const std::string &format);
 
 } // namespace novadesk::shared::system
