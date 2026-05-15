@@ -2391,7 +2391,7 @@ void Widget::ClearContextMenu()
 */
 void Widget::Redraw()
 {
-    if (!m_IsBatchUpdating)
+    if (m_IsBatchUpdating <= 0)
     {
         UpdateLayeredWindowContent();
     }
@@ -3368,11 +3368,17 @@ void Widget::OnContextMenu()
 
 void Widget::BeginUpdate()
 {
-    m_IsBatchUpdating = true;
+    m_IsBatchUpdating++;
 }
 
 void Widget::EndUpdate()
 {
-    m_IsBatchUpdating = false;
-    Redraw();
+    m_IsBatchUpdating--;
+    if (m_IsBatchUpdating < 0)
+        m_IsBatchUpdating = 0;
+    
+    if (m_IsBatchUpdating == 0)
+    {
+        Redraw();
+    }
 }

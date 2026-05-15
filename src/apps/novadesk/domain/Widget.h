@@ -183,7 +183,7 @@ private:
     std::vector<Element*> m_Elements;
     Element* m_MouseOverElement = nullptr;
     Element* m_TooltipElement = nullptr;
-    bool m_IsBatchUpdating = false;
+    int m_IsBatchUpdating = 0;
     
     // Context Menu
     std::vector<MenuItem> m_ContextMenu;

@@ -1312,7 +1312,10 @@ namespace JSEngine
     {
         (void)ctx;
         const bool isDefaultLoad = scriptPaths.empty();
-        if (!g_staleScripts.empty())
+        // Only perform a full reset if we are loading the default set or explicitly requested via an empty stale check.
+        // Previously this was too aggressive, clearing all widgets whenever any script was previously removed.
+        // We now rely on surgical cleanup in AddScript/RemoveScript.
+        if (scriptPaths.empty() && !g_staleScripts.empty())
         {
             DestroyAllWidgets();
             DestroyAllTrays();
@@ -1463,12 +1466,9 @@ namespace JSEngine
             if (p == resolved)
                 return true;
         }
-        if (g_staleScripts.find(resolved) != g_staleScripts.end())
-        {
-            std::vector<std::wstring> next = g_loadedScriptPaths;
-            next.push_back(resolved);
-            return LoadAndExecuteScripts(nullptr, next);
-        }
+        // If it was stale, just remove it from stale list and continue to execute it fresh.
+        // We avoid calling LoadAndExecuteScripts here because it would destroy all other active widgets.
+        g_staleScripts.erase(resolved);
         if (!EnsureRuntime())
             return false;
         if (!ExecuteScriptFile(resolved))
