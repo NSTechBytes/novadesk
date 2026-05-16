@@ -2686,11 +2686,31 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     int y = GET_Y_LPARAM(lParam);
     bool justEnteredWidget = false;
 
-    auto isTrackedElement = [&](Element *el) -> bool
+    std::function<bool(Element *)> isTrackedElement = [&](Element *el) -> bool
     {
         if (!el)
             return false;
-        return std::find(m_Elements.begin(), m_Elements.end(), el) != m_Elements.end();
+        
+        // Search in top-level elements
+        for (Element* root : m_Elements) {
+            if (root == el) return true;
+            
+            // If it's a container, search recursively
+            if (root && root->IsContainer()) {
+                const auto& items = root->GetContainerItems();
+                std::function<bool(const std::vector<Element*>&)> searchInItems = [&](const std::vector<Element*>& subItems) -> bool {
+                    for (Element* item : subItems) {
+                        if (item == el) return true;
+                        if (item && item->IsContainer()) {
+                            if (searchInItems(item->GetContainerItems())) return true;
+                        }
+                    }
+                    return false;
+                };
+                if (searchInItems(items)) return true;
+            }
+        }
+        return false;
     };
 
     if (!isTrackedElement(m_DragElement))
@@ -2925,9 +2945,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
         if (hoverElement != m_MouseOverElement)
         {
-            if (m_MouseOverElement)
+            if (m_MouseOverElement && isTrackedElement(m_MouseOverElement))
             {
-
                 m_MouseOverElement->m_IsMouseOver = false;
                 int leaveId = m_MouseOverElement->m_OnMouseLeaveCallbackId;
                 if (leaveId != -1)
@@ -2936,7 +2955,12 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                     JSEngine::CallEventCallback(leaveId, this, &leaveData);
                 }
 
-                // If callback cleared the elements, m_MouseOverElement is now invalid
+                // If callback cleared the elements or deleted hoverElement/actionElement, handle it
+                if (!isTrackedElement(hoverElement)) hoverElement = nullptr;
+                if (!isTrackedElement(actionElement)) actionElement = nullptr;
+                if (!isTrackedElement(mouseActionElement)) mouseActionElement = nullptr;
+                if (!isTrackedElement(toolTipElement)) toolTipElement = nullptr;
+
                 if (m_Elements.empty())
                 {
                     m_MouseOverElement = nullptr;
@@ -2945,9 +2969,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 }
             }
 
-            if (hoverElement)
+            if (hoverElement && isTrackedElement(hoverElement))
             {
-
                 hoverElement->m_IsMouseOver = true;
                 int overId = hoverElement->m_OnMouseOverCallbackId;
                 if (overId != -1)
@@ -2956,7 +2979,12 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                     JSEngine::CallEventCallback(overId, this, &overData);
                 }
 
-                // If callback cleared the elements, hitElement is now invalid
+                // Re-verify after callback
+                if (!isTrackedElement(hoverElement)) hoverElement = nullptr;
+                if (!isTrackedElement(actionElement)) actionElement = nullptr;
+                if (!isTrackedElement(mouseActionElement)) mouseActionElement = nullptr;
+                if (!isTrackedElement(toolTipElement)) toolTipElement = nullptr;
+
                 if (m_Elements.empty())
                 {
                     m_MouseOverElement = nullptr;
@@ -3020,9 +3048,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             }
             JSEngine::TriggerWidgetEvent(this, "mouseLeave", &leaveEventData);
         }
-        if (m_MouseOverElement)
+        if (m_MouseOverElement && isTrackedElement(m_MouseOverElement))
         {
-
             m_MouseOverElement->m_IsMouseOver = false;
             int leaveId = m_MouseOverElement->m_OnMouseLeaveCallbackId;
             if (leaveId != -1)
@@ -3063,7 +3090,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     }
 
     // Dispatch Actions
-    if (actionElement)
+    if (actionElement && isTrackedElement(actionElement))
     {
         int actionId = -1;
 
