@@ -10,7 +10,6 @@
 #include "../shared/Logging.h"
 #include "Settings.h"
 #include "Resource.h"
-#include "../shared/MenuUtils.h"
 #include "Utils.h"
 #include <vector>
 #include <windowsx.h>
@@ -33,10 +32,10 @@
 #include "CurveShape.h"
 #include "ShapeElement.h"
 #include "ColorUtil.h"
-#include "PathUtils.h"
 #include "AnimationEasing.h"
 #include "ButtonElement.h"
 #include "BitmapElement.h"
+#include "WidgetContextMenuHelper.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 
 #define WIDGET_CLASS_NAME L"NovadeskWidget"
@@ -46,24 +45,6 @@
 #define TIMER_TOOLTIP 3
 #define TIMER_CTRL_OVERRIDE 4
 #define TIMER_ANIMATION 5
-
-// Menu Command IDs
-#define CMD_REFRESH 1001
-#define CMD_CLOSE   1002
-#define CMD_EXIT    1003
-
-#define CMD_MANAGE_ZPOS_NORMAL   1101
-#define CMD_MANAGE_ZPOS_DESKTOP  1102
-#define CMD_MANAGE_ZPOS_BOTTOM   1103
-#define CMD_MANAGE_ZPOS_ONTOP    1104
-#define CMD_MANAGE_ZPOS_ONTOPMOST 1105
-
-#define CMD_MANAGE_OPACITY_START 1110 // 1110 to 1120 for 0% to 100%
-
-#define CMD_MANAGE_DRAGGABLE     1130
-#define CMD_MANAGE_CLICKTHROUGH  1131
-#define CMD_MANAGE_SNAPEDGES     1132
-#define CMD_MANAGE_KEEPOFFSCREEN 1133
 
 
 extern std::vector<Widget *> widgets; // Defined in Novadesk.cpp
@@ -3517,122 +3498,13 @@ void Widget::OnContextMenu()
     if (m_ContextMenuDisabled)
         return;
 
-    POINT pt;
-    GetCursorPos(&pt);
-
-    HMENU hMenu = CreatePopupMenu();
-
-    MenuUtils::BuildMenu(hMenu, m_ContextMenu);
-
-    if (m_ShowDefaultContextMenuItems)
-    {
-        if (!m_ContextMenu.empty())
-        {
-            AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
-        }
-
-        HMENU hManageMenu = CreatePopupMenu();
-
-        // 1. Zpos Submenu
-        HMENU hZPosMenu = CreatePopupMenu();
-        AppendMenuW(hZPosMenu, MF_STRING | (m_WindowZPosition == ZPOSITION_NORMAL ? MF_CHECKED : 0), CMD_MANAGE_ZPOS_NORMAL, L"Normal");
-        AppendMenuW(hZPosMenu, MF_STRING | (m_WindowZPosition == ZPOSITION_ONDESKTOP ? MF_CHECKED : 0), CMD_MANAGE_ZPOS_DESKTOP, L"OnDesktop");
-        AppendMenuW(hZPosMenu, MF_STRING | (m_WindowZPosition == ZPOSITION_ONTOP ? MF_CHECKED : 0), CMD_MANAGE_ZPOS_ONTOP, L"OnTop");
-        AppendMenuW(hZPosMenu, MF_STRING | (m_WindowZPosition == ZPOSITION_ONTOPMOST ? MF_CHECKED : 0), CMD_MANAGE_ZPOS_ONTOPMOST, L"OnTopMost");
-        AppendMenuW(hZPosMenu, MF_STRING | (m_WindowZPosition == ZPOSITION_ONBOTTOM ? MF_CHECKED : 0), CMD_MANAGE_ZPOS_BOTTOM, L"Bottom");
-        AppendMenuW(hManageMenu, MF_POPUP, (UINT_PTR)hZPosMenu, L"Zpos");
-
-        // 2. Opacity Submenu
-        HMENU hOpacityMenu = CreatePopupMenu();
-        for (int i = 0; i <= 100; i += 10)
-        {
-            BYTE targetOpacity = (BYTE)(i * 255 / 100);
-            std::wstring label = std::to_wstring(i) + L"%";
-            // Use a small range for check to account for rounding
-            bool isCurrent = abs((int)m_Options.windowOpacity - (int)targetOpacity) < 5;
-            AppendMenuW(hOpacityMenu, MF_STRING | (isCurrent ? MF_CHECKED : 0), CMD_MANAGE_OPACITY_START + (i / 10), label.c_str());
-        }
-        AppendMenuW(hManageMenu, MF_POPUP, (UINT_PTR)hOpacityMenu, L"Opacity");
-
-        AppendMenuW(hManageMenu, MF_SEPARATOR, 0, nullptr);
-
-        // 3. Toggles
-        AppendMenuW(hManageMenu, MF_STRING | (m_Options.draggable ? MF_CHECKED : 0), CMD_MANAGE_DRAGGABLE, L"Draggable");
-        AppendMenuW(hManageMenu, MF_STRING | (m_Options.clickThrough ? MF_CHECKED : 0), CMD_MANAGE_CLICKTHROUGH, L"Clickthrough");
-        AppendMenuW(hManageMenu, MF_STRING | (m_Options.snapEdges ? MF_CHECKED : 0), CMD_MANAGE_SNAPEDGES, L"Snap to Edges");
-        AppendMenuW(hManageMenu, MF_STRING | (m_Options.keepOnScreen ? MF_CHECKED : 0), CMD_MANAGE_KEEPOFFSCREEN, L"Keep On Screen");
-
-        AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hManageMenu, L"Manage");
-
-        HMENU hAppMenu = CreatePopupMenu();
-        AppendMenuW(hAppMenu, MF_STRING, CMD_REFRESH, L"Refresh");
-        AppendMenuW(hAppMenu, MF_STRING, CMD_EXIT, L"Exit");
-
-        std::wstring appTitle = PathUtils::GetProductName();
-        AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hAppMenu, appTitle.c_str());
-    }
-
-    SetForegroundWindow(m_hWnd);
-    int cmd = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, m_hWnd, NULL);
-    DestroyMenu(hMenu);
-
-    if (cmd >= 2000)
-    {
-        JSEngine::OnWidgetContextCommand(m_Options.id, cmd);
-    }
-    else if (cmd == CMD_REFRESH)
-    {
-        JSEngine::Reload();
-    }
-    else if (cmd == CMD_CLOSE)
-    {
-        DestroyWindow(m_hWnd);
-    }
-    else if (cmd == CMD_EXIT)
-    {
-        PostQuitMessage(0);
-    }
-    else if (cmd == CMD_MANAGE_ZPOS_NORMAL)
-    {
-        ChangeZPos(ZPOSITION_NORMAL);
-    }
-    else if (cmd == CMD_MANAGE_ZPOS_DESKTOP)
-    {
-        ChangeZPos(ZPOSITION_ONDESKTOP);
-    }
-    else if (cmd == CMD_MANAGE_ZPOS_BOTTOM)
-    {
-        ChangeZPos(ZPOSITION_ONBOTTOM);
-    }
-    else if (cmd == CMD_MANAGE_ZPOS_ONTOP)
-    {
-        ChangeZPos(ZPOSITION_ONTOP);
-    }
-    else if (cmd == CMD_MANAGE_ZPOS_ONTOPMOST)
-    {
-        ChangeZPos(ZPOSITION_ONTOPMOST);
-    }
-    else if (cmd >= CMD_MANAGE_OPACITY_START && cmd <= CMD_MANAGE_OPACITY_START + 10)
-    {
-        int percent = (cmd - CMD_MANAGE_OPACITY_START) * 10;
-        SetWindowOpacity((BYTE)(percent * 255 / 100));
-    }
-    else if (cmd == CMD_MANAGE_DRAGGABLE)
-    {
-        SetDraggable(!m_Options.draggable);
-    }
-    else if (cmd == CMD_MANAGE_CLICKTHROUGH)
-    {
-        SetClickThrough(!m_Options.clickThrough);
-    }
-    else if (cmd == CMD_MANAGE_SNAPEDGES)
-    {
-        SetSnapEdges(!m_Options.snapEdges);
-    }
-    else if (cmd == CMD_MANAGE_KEEPOFFSCREEN)
-    {
-        SetKeepOnScreen(!m_Options.keepOnScreen);
-    }
+    const int cmd = WidgetContextMenuHelper::ShowContextMenu(
+        m_hWnd,
+        m_ContextMenu,
+        m_ShowDefaultContextMenuItems,
+        m_WindowZPosition,
+        m_Options);
+    WidgetContextMenuHelper::HandleContextCommand(*this, cmd);
 }
 
 void Widget::BeginUpdate()
