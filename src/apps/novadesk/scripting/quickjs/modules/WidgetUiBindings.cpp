@@ -465,6 +465,88 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
+        JSValue JsWidgetAnimate(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_UNDEFINED;
+            if (argc < 1 || !JS_IsObject(argv[0]))
+                return ThrowTypeError(ctx, "animate", "expected options object");
+
+            JSValue idVal = JS_GetPropertyStr(ctx, argv[0], "id");
+            const char *idUtf8 = JS_ToCString(ctx, idVal);
+            std::wstring id;
+            if (idUtf8)
+            {
+                id = Utils::ToWString(idUtf8);
+                JS_FreeCString(ctx, idUtf8);
+            }
+            JS_FreeValue(ctx, idVal);
+            if (id.empty())
+                return ThrowTypeError(ctx, "animate", "id is required");
+
+            int duration = 250;
+            JSValue durationVal = JS_GetPropertyStr(ctx, argv[0], "duration");
+            if (!JS_IsUndefined(durationVal) && !JS_IsNull(durationVal))
+            {
+                int32_t d = 0;
+                if (JS_ToInt32(ctx, &d, durationVal) == 0 && d > 0)
+                    duration = static_cast<int>(d);
+            }
+            JS_FreeValue(ctx, durationVal);
+
+            std::wstring easing = L"linear";
+            JSValue easingVal = JS_GetPropertyStr(ctx, argv[0], "easing");
+            if (!JS_IsUndefined(easingVal) && !JS_IsNull(easingVal))
+            {
+                const char *eUtf8 = JS_ToCString(ctx, easingVal);
+                if (eUtf8)
+                {
+                    easing = Utils::ToWString(eUtf8);
+                    JS_FreeCString(ctx, eUtf8);
+                }
+            }
+            JS_FreeValue(ctx, easingVal);
+
+            JSValue toVal = JS_GetPropertyStr(ctx, argv[0], "to");
+            if (!JS_IsObject(toVal))
+            {
+                JS_FreeValue(ctx, toVal);
+                return ThrowTypeError(ctx, "animate", "`to` object is required");
+            }
+
+            Widget::AnimationTarget target{};
+            auto readToFloat = [&](const char *key, float &out) -> bool
+            {
+                JSValue v = JS_GetPropertyStr(ctx, toVal, key);
+                if (JS_IsUndefined(v) || JS_IsNull(v) || JS_IsException(v))
+                {
+                    JS_FreeValue(ctx, v);
+                    return false;
+                }
+                double d = 0.0;
+                bool ok = (JS_ToFloat64(ctx, &d, v) == 0);
+                JS_FreeValue(ctx, v);
+                if (!ok)
+                    return false;
+                out = static_cast<float>(d);
+                return true;
+            };
+
+            target.hasX = readToFloat("x", target.x);
+            target.hasY = readToFloat("y", target.y);
+            target.hasWidth = readToFloat("width", target.width);
+            target.hasHeight = readToFloat("height", target.height);
+            target.hasRotate = readToFloat("rotate", target.rotate);
+            JS_FreeValue(ctx, toVal);
+
+            if (!target.hasX && !target.hasY && !target.hasWidth && !target.hasHeight && !target.hasRotate)
+                return ThrowTypeError(ctx, "animate", "to must include at least one supported property");
+
+            widget->StartElementAnimation(id, target, duration, easing);
+            return JS_UNDEFINED;
+        }
+
         JSValue JsWidgetRemoveElements(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -1514,6 +1596,7 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("addRotator", 1, JsWidgetAddRotator),
             JS_CFUNC_DEF("addAreaGraph", 1, JsWidgetAddAreaGraph),
             JS_CFUNC_DEF("addLayout", 1, JsWidgetAddLayout),
+            JS_CFUNC_DEF("animate", 1, JsWidgetAnimate),
             JS_CFUNC_DEF("setElementProperty", 3, JsWidgetSetElementProperty),
             JS_CFUNC_DEF("setElementProperties", 2, JsWidgetSetElementProperties),
             JS_CFUNC_DEF("setElementPropertyByGroup", 2, JsWidgetSetElementPropertiesByGroup),

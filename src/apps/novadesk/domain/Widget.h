@@ -89,6 +89,19 @@ public:
         int paddingRight = 0;
         int paddingBottom = 0;
     };
+    struct AnimationTarget
+    {
+        bool hasX = false;
+        bool hasY = false;
+        bool hasWidth = false;
+        bool hasHeight = false;
+        bool hasRotate = false;
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        float rotate = 0.0f;
+    };
 
     Widget(const WidgetOptions& options);
 
@@ -158,6 +171,7 @@ public:
     void SetLayoutConfig(const std::wstring &id, const LayoutConfig &config);
     bool IsLayoutContainer(const std::wstring &id) const;
     void ReflowLayout(const std::wstring &id);
+    void StartElementAnimation(const std::wstring &id, const AnimationTarget &target, int durationMs, const std::wstring &easing);
 
 private:
     static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -177,6 +191,8 @@ private:
     void UpdateContainerForElement(Element* element, const std::wstring& newContainerId);
     bool WouldCreateContainerCycle(Element* element, Element* container) const;
     void ApplyLayoutForContainer(Element *container);
+    void StepAnimations();
+    float EaseProgress(float t, const std::wstring &easing) const;
     void RenderContainerChildren(Element* container);
     bool HitTestContainerChildren(Element* container, int x, int y, Element*& outElement);
     bool HitTestContainerChildrenDetailed(
@@ -199,6 +215,16 @@ private:
     ZPOSITION m_WindowZPosition;
     std::vector<Element*> m_Elements;
     std::unordered_map<std::wstring, LayoutConfig> m_LayoutConfigs;
+    struct ElementAnimation
+    {
+        std::wstring id;
+        std::wstring easing = L"linear";
+        DWORD startTick = 0;
+        int durationMs = 250;
+        AnimationTarget from;
+        AnimationTarget to;
+    };
+    std::vector<ElementAnimation> m_Animations;
     Element* m_MouseOverElement = nullptr;
     Element* m_TooltipElement = nullptr;
     int m_IsBatchUpdating = 0;
@@ -233,6 +259,7 @@ private:
     static const UINT_PTR TIMER_TOPMOST = 2;
     static const UINT_PTR TIMER_TOOLTIP = 3;
     static const UINT_PTR TIMER_CTRL_OVERRIDE = 4;
+    static const UINT_PTR TIMER_ANIMATION = 5;
 };
 
 #endif

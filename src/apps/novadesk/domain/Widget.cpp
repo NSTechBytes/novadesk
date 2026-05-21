@@ -15,6 +15,7 @@
 #include <vector>
 #include <windowsx.h>
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include "Direct2DHelper.h"
 #include "ImageElement.h"
@@ -43,6 +44,7 @@
 #define TIMER_TOPMOST 2
 #define TIMER_TOOLTIP 3
 #define TIMER_CTRL_OVERRIDE 4
+#define TIMER_ANIMATION 5
 
 // Menu Command IDs
 #define CMD_REFRESH 1001
@@ -1021,6 +1023,10 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
                 }
             }
+            else if (wParam == TIMER_ANIMATION)
+            {
+                widget->StepAnimations();
+            }
         }
         return 0;
 
@@ -1865,6 +1871,131 @@ void Widget::SetLayoutConfig(const std::wstring &id, const LayoutConfig &config)
     ReflowLayout(id);
 }
 
+void Widget::StartElementAnimation(const std::wstring &id, const AnimationTarget &target, int durationMs, const std::wstring &easing)
+{
+    if (id.empty())
+        return;
+    Element *element = FindElementById(id);
+    if (!element)
+        return;
+
+    ElementAnimation anim{};
+    anim.id = id;
+    anim.easing = easing.empty() ? L"linear" : easing;
+    anim.durationMs = durationMs > 0 ? durationMs : 1;
+    anim.startTick = GetTickCount();
+    anim.to = target;
+
+    anim.from.hasX = target.hasX;
+    anim.from.hasY = target.hasY;
+    anim.from.hasWidth = target.hasWidth;
+    anim.from.hasHeight = target.hasHeight;
+    anim.from.hasRotate = target.hasRotate;
+
+    anim.from.x = static_cast<float>(element->GetX());
+    anim.from.y = static_cast<float>(element->GetY());
+    anim.from.width = static_cast<float>(element->GetWidth());
+    anim.from.height = static_cast<float>(element->GetHeight());
+    anim.from.rotate = element->GetRotate();
+
+    m_Animations.erase(
+        std::remove_if(m_Animations.begin(), m_Animations.end(), [&](const ElementAnimation &a)
+                       { return a.id == id; }),
+        m_Animations.end());
+    m_Animations.push_back(anim);
+
+    if (m_hWnd)
+    {
+        SetTimer(m_hWnd, TIMER_ANIMATION, 16, nullptr);
+    }
+}
+
+float Widget::EaseProgress(float t, const std::wstring &easing) const
+{
+    std::wstring e = easing;
+    std::transform(e.begin(), e.end(), e.begin(), ::towlower);
+    if (e == L"easeoutcubic")
+    {
+        float inv = 1.0f - t;
+        return 1.0f - inv * inv * inv;
+    }
+    if (e == L"easeinoutcubic")
+    {
+        return (t < 0.5f) ? 4.0f * t * t * t : 1.0f - std::pow(-2.0f * t + 2.0f, 3.0f) / 2.0f;
+    }
+    if (e == L"easeoutquad")
+    {
+        return 1.0f - (1.0f - t) * (1.0f - t);
+    }
+    if (e == L"easeinquad")
+    {
+        return t * t;
+    }
+    return t;
+}
+
+void Widget::StepAnimations()
+{
+    if (m_Animations.empty())
+    {
+        if (m_hWnd)
+            KillTimer(m_hWnd, TIMER_ANIMATION);
+        return;
+    }
+
+    const DWORD now = GetTickCount();
+    bool changed = false;
+
+    for (auto it = m_Animations.begin(); it != m_Animations.end();)
+    {
+        Element *element = FindElementById(it->id);
+        if (!element)
+        {
+            it = m_Animations.erase(it);
+            continue;
+        }
+
+        const DWORD elapsed = now - it->startTick;
+        float t = static_cast<float>(elapsed) / static_cast<float>(it->durationMs);
+        if (t < 0.0f) t = 0.0f;
+        if (t > 1.0f) t = 1.0f;
+        const float p = EaseProgress(t, it->easing);
+
+        int x = element->GetX();
+        int y = element->GetY();
+        int w = element->GetWidth();
+        int h = element->GetHeight();
+
+        if (it->to.hasX) x = static_cast<int>(std::lround(it->from.x + (it->to.x - it->from.x) * p));
+        if (it->to.hasY) y = static_cast<int>(std::lround(it->from.y + (it->to.y - it->from.y) * p));
+        if (it->to.hasWidth) w = static_cast<int>(std::lround(it->from.width + (it->to.width - it->from.width) * p));
+        if (it->to.hasHeight) h = static_cast<int>(std::lround(it->from.height + (it->to.height - it->from.height) * p));
+        element->SetPosition(x, y);
+        element->SetSize(w, h);
+        if (it->to.hasRotate)
+        {
+            float r = it->from.rotate + (it->to.rotate - it->from.rotate) * p;
+            element->SetRotate(r);
+        }
+        changed = true;
+
+        if (t >= 1.0f)
+            it = m_Animations.erase(it);
+        else
+            ++it;
+    }
+
+    if (changed)
+    {
+        Redraw();
+    }
+
+    if (m_Animations.empty() && m_hWnd)
+    {
+        KillTimer(m_hWnd, TIMER_ANIMATION);
+    }
+}
+
 bool Widget::IsLayoutContainer(const std::wstring &id) const
 {
     return !id.empty() && m_LayoutConfigs.find(id) != m_LayoutConfigs.end();
@@ -2396,6 +2527,7 @@ bool Widget::RemoveElements(const std::wstring &id)
         }
         m_Elements.clear();
         m_LayoutConfigs.clear();
+        m_Animations.clear();
         m_MouseOverElement = nullptr;
         m_TooltipElement = nullptr;
         Redraw();
@@ -2433,6 +2565,10 @@ bool Widget::RemoveElements(const std::wstring &id)
             
             UpdateContainerForElement(element, L"");
             m_LayoutConfigs.erase(id);
+            m_Animations.erase(
+                std::remove_if(m_Animations.begin(), m_Animations.end(), [&](const ElementAnimation &a)
+                               { return a.id == id; }),
+                m_Animations.end());
             delete element;
             it = m_Elements.erase(it);
             changed = true;
@@ -2484,6 +2620,10 @@ void Widget::RemoveElements(const std::vector<std::wstring> &ids)
                 }
                 UpdateContainerForElement(*it, L"");
                 m_LayoutConfigs.erase(id);
+                m_Animations.erase(
+                    std::remove_if(m_Animations.begin(), m_Animations.end(), [&](const ElementAnimation &a)
+                                   { return a.id == id; }),
+                    m_Animations.end());
                 delete *it;
                 m_Elements.erase(it);
                 changed = true;
