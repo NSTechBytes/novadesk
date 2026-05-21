@@ -192,7 +192,6 @@ private:
     bool WouldCreateContainerCycle(Element* element, Element* container) const;
     void ApplyLayoutForContainer(Element *container);
     void StepAnimations();
-    float EaseProgress(float t, const std::wstring &easing) const;
     void RenderContainerChildren(Element* container);
     bool HitTestContainerChildren(Element* container, int x, int y, Element*& outElement);
     bool HitTestContainerChildrenDetailed(

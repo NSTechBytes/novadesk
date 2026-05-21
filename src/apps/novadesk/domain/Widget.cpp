@@ -34,6 +34,7 @@
 #include "ShapeElement.h"
 #include "ColorUtil.h"
 #include "PathUtils.h"
+#include "AnimationEasing.h"
 #include "ButtonElement.h"
 #include "BitmapElement.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
@@ -1910,30 +1911,6 @@ void Widget::StartElementAnimation(const std::wstring &id, const AnimationTarget
     }
 }
 
-float Widget::EaseProgress(float t, const std::wstring &easing) const
-{
-    std::wstring e = easing;
-    std::transform(e.begin(), e.end(), e.begin(), ::towlower);
-    if (e == L"easeoutcubic")
-    {
-        float inv = 1.0f - t;
-        return 1.0f - inv * inv * inv;
-    }
-    if (e == L"easeinoutcubic")
-    {
-        return (t < 0.5f) ? 4.0f * t * t * t : 1.0f - std::pow(-2.0f * t + 2.0f, 3.0f) / 2.0f;
-    }
-    if (e == L"easeoutquad")
-    {
-        return 1.0f - (1.0f - t) * (1.0f - t);
-    }
-    if (e == L"easeinquad")
-    {
-        return t * t;
-    }
-    return t;
-}
-
 void Widget::StepAnimations()
 {
     if (m_Animations.empty())
@@ -1959,7 +1936,7 @@ void Widget::StepAnimations()
         float t = static_cast<float>(elapsed) / static_cast<float>(it->durationMs);
         if (t < 0.0f) t = 0.0f;
         if (t > 1.0f) t = 1.0f;
-        const float p = EaseProgress(t, it->easing);
+        const float p = AnimationEasing::Evaluate(t, it->easing);
 
         int x = element->GetX();
         int y = element->GetY();
