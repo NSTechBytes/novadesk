@@ -144,10 +144,12 @@ static const UINT kLogAppendMessage = WM_APP + 20;
 static const UINT_PTR kLogsRefreshTimerId = 1;
 static const UINT_PTR kAutoUpdateTimerId = 2;
 static const UINT_PTR kStartupSyncTimerId = 3;
+static const UINT_PTR kProcessMonitorTimerId = 4;
+static const UINT kProcessMonitorIntervalMs = 500;
 static const UINT kStartupSyncDelayMs = 120;
 static const UINT kAutoUpdateIntervalMs = 60 * 1000; // 1 minute
 static const int kMaxLogRows = 2000;
-static const wchar_t *kCurrentVersion = L"0.9.5.0";
+static const wchar_t *kCurrentVersion = L"0.9.6.0";
 static const wchar_t *kSingleInstanceLockArg = L"--request-single-instance-lock";
 static const wchar_t *kManageWindowClassName = L"NovadeskManagerWindow";
 static const wchar_t *kManageCloseMessageName = L"Novadesk.Manage.RequestClose";
@@ -2330,7 +2332,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                                          WS_CHILD | SS_LEFT,
                                          pageRect.left + 120, pageRect.top, pageRect.right - pageRect.left - 140, 32,
                                          hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
-        g_aboutVersion = CreateWindowExW(0, L"STATIC", L"Version 0.9.5.0 (Beta)",
+        g_aboutVersion = CreateWindowExW(0, L"STATIC", L"Version 0.9.6.0 (Beta)",
                                          WS_CHILD | SS_LEFT,
                                          pageRect.left + 120, pageRect.top + 34, pageRect.right - pageRect.left - 140, 22,
                                          hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
@@ -2490,6 +2492,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         ApplyTabState();
         SetTimer(hWnd, kStartupSyncTimerId, kStartupSyncDelayMs, nullptr);
         SetTimer(hWnd, kLogsRefreshTimerId, 700, nullptr);
+        SetTimer(hWnd, kProcessMonitorTimerId, kProcessMonitorIntervalMs, nullptr);
         UpdateButtonState();
         return 0;
     }
@@ -2664,6 +2667,21 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             RefreshListView();
             UpdateButtonState();
         }
+        else if (wParam == kProcessMonitorTimerId)
+        {
+            if (g_novadeskRunning && g_novadeskProcess.hProcess)
+            {
+                DWORD exitCode = 0;
+                if (GetExitCodeProcess(g_novadeskProcess.hProcess, &exitCode))
+                {
+                    if (exitCode != STILL_ACTIVE)
+                    {
+                        LogLine(L"[Manage] Novadesk process exited. Shutting down Manager.");
+                        RequestAppExit(hWnd);
+                    }
+                }
+            }
+        }
         return 0;
     case kLogAppendMessage:
     {
@@ -2704,6 +2722,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         KillTimer(hWnd, kLogsRefreshTimerId);
         KillTimer(hWnd, kAutoUpdateTimerId);
         KillTimer(hWnd, kStartupSyncTimerId);
+        KillTimer(hWnd, kProcessMonitorTimerId);
         if (g_windowIconLarge)
         {
             DestroyIcon(g_windowIconLarge);
