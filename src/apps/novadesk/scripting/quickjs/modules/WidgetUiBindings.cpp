@@ -1,3 +1,10 @@
+/* Copyright (C) 2026 OfficialNovadesk
+ *
+ * This Source Code Form is subject to the terms of the GNU General Public
+ * License; either version 2 of the License, or (at your option) any later
+ * version. If a copy of the GPL was not distributed with this file, You can
+ * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
+ 
 #include "WidgetUiBindings.h"
 
 #include <algorithm>
@@ -371,6 +378,116 @@ namespace novadesk::scripting::quickjs
             return ok;
         }
 
+        static bool ReadObjectFloat(JSContext *ctx, JSValueConst obj, const char *key, float &out)
+        {
+            JSValue v = JS_GetPropertyStr(ctx, obj, key);
+            if (JS_IsException(v) || JS_IsUndefined(v) || JS_IsNull(v))
+            {
+                JS_FreeValue(ctx, v);
+                return false;
+            }
+            double tmp = 0.0;
+            const bool ok = (JS_ToFloat64(ctx, &tmp, v) == 0);
+            JS_FreeValue(ctx, v);
+            if (ok)
+                out = static_cast<float>(tmp);
+            return ok;
+        }
+
+        static bool ReadObjectBool(JSContext *ctx, JSValueConst obj, const char *key, bool &out)
+        {
+            JSValue v = JS_GetPropertyStr(ctx, obj, key);
+            if (JS_IsException(v) || JS_IsUndefined(v) || JS_IsNull(v))
+            {
+                JS_FreeValue(ctx, v);
+                return false;
+            }
+            int b = JS_ToBool(ctx, v);
+            JS_FreeValue(ctx, v);
+            if (b < 0)
+                return false;
+            out = (b != 0);
+            return true;
+        }
+
+        static bool ParseLayoutBoxShadowObject(JSContext *ctx, JSValueConst obj, ElementLayoutBox::BoxShadow &outShadow)
+        {
+            if (!JS_IsObject(obj) || JS_IsArray(obj))
+                return false;
+
+            ReadObjectFloat(ctx, obj, "x", outShadow.x);
+            ReadObjectFloat(ctx, obj, "y", outShadow.y);
+            ReadObjectFloat(ctx, obj, "blur", outShadow.blur);
+            ReadObjectFloat(ctx, obj, "spread", outShadow.spread);
+            ReadObjectBool(ctx, obj, "inset", outShadow.inset);
+
+            std::wstring color = ReadObjectString(ctx, obj, "color");
+            if (!color.empty())
+            {
+                COLORREF c = RGB(0, 0, 0);
+                BYTE a = 255;
+                if (ColorUtil::ParseRGBA(color, c, a))
+                {
+                    outShadow.color = c;
+                    outShadow.alpha = a;
+                }
+            }
+            return true;
+        }
+
+        static bool ParseLayoutBoxShadows(JSContext *ctx, JSValueConst layoutObj, std::vector<ElementLayoutBox::BoxShadow> &outShadows, std::wstring &error)
+        {
+            outShadows.clear();
+            JSValue shadowV = JS_GetPropertyStr(ctx, layoutObj, "boxShadow");
+            if (JS_IsUndefined(shadowV) || JS_IsNull(shadowV))
+            {
+                JS_FreeValue(ctx, shadowV);
+                return true;
+            }
+
+            if (JS_IsString(shadowV))
+            {
+                error = L"addLayoutBox: boxShadow string syntax is not supported; use object or object[]";
+                JS_FreeValue(ctx, shadowV);
+                return false;
+            }
+
+            if (JS_IsArray(shadowV))
+            {
+                JSValue lenV = JS_GetPropertyStr(ctx, shadowV, "length");
+                uint32_t len = 0;
+                JS_ToUint32(ctx, &len, lenV);
+                JS_FreeValue(ctx, lenV);
+                for (uint32_t i = 0; i < len; ++i)
+                {
+                    JSValue item = JS_GetPropertyUint32(ctx, shadowV, i);
+                    ElementLayoutBox::BoxShadow shadow;
+                    if (!ParseLayoutBoxShadowObject(ctx, item, shadow))
+                    {
+                        JS_FreeValue(ctx, item);
+                        JS_FreeValue(ctx, shadowV);
+                        error = L"addLayoutBox: each boxShadow array item must be an object";
+                        return false;
+                    }
+                    outShadows.push_back(shadow);
+                    JS_FreeValue(ctx, item);
+                }
+                JS_FreeValue(ctx, shadowV);
+                return true;
+            }
+
+            ElementLayoutBox::BoxShadow shadow;
+            const bool ok = ParseLayoutBoxShadowObject(ctx, shadowV, shadow);
+            JS_FreeValue(ctx, shadowV);
+            if (!ok)
+            {
+                error = L"addLayoutBox: boxShadow must be an object or object[]";
+                return false;
+            }
+            outShadows.push_back(shadow);
+            return true;
+        }
+
         static JSValue CreateTypedElementObject(JSContext *ctx, JSValueConst srcOptions, const char *typeName)
         {
             JSValue obj = JS_NewObject(ctx);
@@ -536,12 +653,8 @@ namespace novadesk::scripting::quickjs
                 BYTE a = 255;
                 if (ColorUtil::ParseRGBA(bg, c, a))
                 {
-                    shapeOptions.solidColor = c;
-                    shapeOptions.solidAlpha = a;
                     shapeOptions.fillColor = c;
                     shapeOptions.fillAlpha = a;
-                    shapeOptions.hasSolidColor = true;
-                    shapeOptions.solidGradient.type = GRADIENT_NONE;
                 }
             }
 
@@ -607,6 +720,18 @@ namespace novadesk::scripting::quickjs
                     else
                         lb->SetBorderPosition(ElementLayoutBox::BorderPosition::Outside);
                 }
+            }
+
+            {
+                std::vector<ElementLayoutBox::BoxShadow> shadows;
+                std::wstring shadowError;
+                if (!ParseLayoutBoxShadows(ctx, argv[0], shadows, shadowError))
+                {
+                    return ThrowTypeError(ctx, "addLayoutBox", Utils::ToString(shadowError).c_str());
+                }
+                Element *layoutElement = widget->FindElementById(shapeOptions.id);
+                if (auto *lb = dynamic_cast<ElementLayoutBox *>(layoutElement))
+                    lb->SetBoxShadows(shadows);
             }
 
             Widget::LayoutConfig cfg;
@@ -741,6 +866,9 @@ namespace novadesk::scripting::quickjs
             JSValue childRes = AddLayoutBoxChildren(ctx, widget, thisVal, argv[0], shapeOptions.id);
             if (JS_IsException(childRes))
                 return childRes;
+            // Ensure a post-config render pass. AddLayoutBox redraws once before
+            // layout metadata is fully applied, which can briefly show stale visuals.
+            widget->Redraw();
             return JS_UNDEFINED;
         }
 
