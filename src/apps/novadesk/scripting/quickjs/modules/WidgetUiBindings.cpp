@@ -704,21 +704,90 @@ namespace novadesk::scripting::quickjs
             std::wstring borderPosition = readString("borderPosition");
             std::transform(borderPosition.begin(), borderPosition.end(), borderPosition.begin(), ::towlower);
 
-            {
+            auto parseBorderStyleString = [](const std::wstring& str) -> ElementLayoutBox::BorderStyle {
+                std::wstring lower = str;
+                std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
+                if (lower == L"none") return ElementLayoutBox::BorderStyle::None;
+                if (lower == L"hidden") return ElementLayoutBox::BorderStyle::Hidden;
+                if (lower == L"dotted") return ElementLayoutBox::BorderStyle::Dotted;
+                if (lower == L"dashed") return ElementLayoutBox::BorderStyle::Dashed;
+                if (lower == L"double") return ElementLayoutBox::BorderStyle::Double;
+                if (lower == L"groove") return ElementLayoutBox::BorderStyle::Groove;
+                if (lower == L"ridge") return ElementLayoutBox::BorderStyle::Ridge;
+                if (lower == L"inset") return ElementLayoutBox::BorderStyle::Inset;
+                if (lower == L"outset") return ElementLayoutBox::BorderStyle::Outset;
+                return ElementLayoutBox::BorderStyle::Solid;
+            };
+
+            ElementLayoutBox::BorderStyle bTop = ElementLayoutBox::BorderStyle::Solid;
+            ElementLayoutBox::BorderStyle bRight = ElementLayoutBox::BorderStyle::Solid;
+            ElementLayoutBox::BorderStyle bBottom = ElementLayoutBox::BorderStyle::Solid;
+            ElementLayoutBox::BorderStyle bLeft = ElementLayoutBox::BorderStyle::Solid;
+
+            JSValue styleV = JS_GetPropertyStr(ctx, argv[0], "borderStyle");
+            if (!JS_IsUndefined(styleV) && !JS_IsNull(styleV)) {
+                if (JS_IsString(styleV)) {
+                    const char *s = JS_ToCString(ctx, styleV);
+                    if (s) {
+                        auto parsed = parseBorderStyleString(Utils::ToWString(s));
+                        bTop = bRight = bBottom = bLeft = parsed;
+                        JS_FreeCString(ctx, s);
+                    }
+                } else if (JS_IsArray(styleV)) {
+                    uint32_t len = 0;
+                    JSValue lenV = JS_GetPropertyStr(ctx, styleV, "length");
+                    JS_ToUint32(ctx, &len, lenV);
+                    JS_FreeValue(ctx, lenV);
+                    
+                    std::vector<ElementLayoutBox::BorderStyle> styles;
+                    for (uint32_t i = 0; i < len; ++i) {
+                        JSValue item = JS_GetPropertyUint32(ctx, styleV, i);
+                        const char *s = JS_ToCString(ctx, item);
+                        if (s) {
+                            styles.push_back(parseBorderStyleString(Utils::ToWString(s)));
+                            JS_FreeCString(ctx, s);
+                        } else {
+                            styles.push_back(ElementLayoutBox::BorderStyle::Solid);
+                        }
+                        JS_FreeValue(ctx, item);
+                    }
+                    
+                    if (styles.size() == 1) {
+                        bTop = bRight = bBottom = bLeft = styles[0];
+                    } else if (styles.size() == 2) {
+                        bTop = bBottom = styles[0];
+                        bRight = bLeft = styles[1];
+                    } else if (styles.size() == 3) {
+                        bTop = styles[0];
+                        bRight = bLeft = styles[1];
+                        bBottom = styles[2];
+                    } else if (styles.size() >= 4) {
+                        bTop = styles[0];
+                        bRight = styles[1];
+                        bBottom = styles[2];
+                        bLeft = styles[3];
+                    }
+                }
             }
+            JS_FreeValue(ctx, styleV);
 
             widget->AddLayoutBox(shapeOptions);
-            if (!borderPosition.empty())
+            if (!borderPosition.empty() || !JS_IsUndefined(styleV))
             {
                 Element *layoutElement = widget->FindElementById(shapeOptions.id);
                 if (auto *lb = dynamic_cast<ElementLayoutBox *>(layoutElement))
                 {
-                    if (borderPosition == L"inside")
-                        lb->SetBorderPosition(ElementLayoutBox::BorderPosition::Inside);
-                    else if (borderPosition == L"center")
-                        lb->SetBorderPosition(ElementLayoutBox::BorderPosition::Center);
-                    else
-                        lb->SetBorderPosition(ElementLayoutBox::BorderPosition::Outside);
+                    if (!borderPosition.empty())
+                    {
+                        if (borderPosition == L"inside")
+                            lb->SetBorderPosition(ElementLayoutBox::BorderPosition::Inside);
+                        else if (borderPosition == L"center")
+                            lb->SetBorderPosition(ElementLayoutBox::BorderPosition::Center);
+                        else
+                            lb->SetBorderPosition(ElementLayoutBox::BorderPosition::Outside);
+                    }
+                    
+                    lb->SetBorderStyle(bTop, bRight, bBottom, bLeft);
                 }
             }
 

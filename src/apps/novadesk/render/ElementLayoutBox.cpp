@@ -95,7 +95,6 @@ void ElementLayoutBox::Render(ID2D1DeviceContext *context)
 
     if (strokeBrush)
     {
-        UpdateStrokeStyle(context);
         D2D1_ROUNDED_RECT borderRect = rect;
         float radiusX = m_RadiusX;
         float radiusY = m_RadiusY;
@@ -125,7 +124,7 @@ void ElementLayoutBox::Render(ID2D1DeviceContext *context)
 
         borderRect.radiusX = radiusX;
         borderRect.radiusY = radiusY;
-        context->DrawRoundedRectangle(borderRect, strokeBrush.Get(), m_StrokeWidth, m_StrokeStyle);
+        RenderBorderWithStyle(context, borderRect, strokeBrush.Get(), m_StrokeWidth);
     }
 
     RenderBevel(context);
@@ -256,4 +255,297 @@ void ElementLayoutBox::RenderSingleShadow(ID2D1DeviceContext *context, const D2D
     }
 
     context->DrawImage(colorMatrixEffect.Get(), shadowOffset);
+}
+
+void ElementLayoutBox::RenderBorderWithStyle(ID2D1DeviceContext *context, const D2D1_ROUNDED_RECT &rect,
+                                             ID2D1Brush *strokeBrush, float strokeWidth)
+{
+    if (m_BorderStyleTop == BorderStyle::None && m_BorderStyleRight == BorderStyle::None &&
+        m_BorderStyleBottom == BorderStyle::None && m_BorderStyleLeft == BorderStyle::None)
+        return;
+    if (m_BorderStyleTop == BorderStyle::Hidden && m_BorderStyleRight == BorderStyle::Hidden &&
+        m_BorderStyleBottom == BorderStyle::Hidden && m_BorderStyleLeft == BorderStyle::Hidden)
+        return;
+
+    bool sameStyle = (m_BorderStyleTop == m_BorderStyleRight &&
+                      m_BorderStyleRight == m_BorderStyleBottom &&
+                      m_BorderStyleBottom == m_BorderStyleLeft);
+
+    auto getStrokeStyle = [&](BorderStyle style, ID2D1StrokeStyle1** outStyle) {
+        *outStyle = nullptr;
+        ID2D1Factory1* factory = Direct2D::GetFactory();
+        if (!factory) return;
+
+        D2D1_STROKE_STYLE_PROPERTIES1 props = {};
+        props.startCap = m_StrokeStartCap;
+        props.endCap = m_StrokeEndCap;
+        props.dashCap = m_StrokeDashCap;
+        props.lineJoin = m_StrokeLineJoin;
+        props.miterLimit = 10.0f;
+        props.dashOffset = m_StrokeDashOffset;
+        props.transformType = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
+
+        if (style == BorderStyle::Dotted) {
+            props.dashStyle = D2D1_DASH_STYLE_CUSTOM;
+            props.startCap = D2D1_CAP_STYLE_ROUND;
+            props.endCap = D2D1_CAP_STYLE_ROUND;
+            props.dashCap = D2D1_CAP_STYLE_ROUND;
+            float dashes[] = { 0.0f, 2.0f };
+            factory->CreateStrokeStyle(props, dashes, 2, outStyle);
+        } else if (style == BorderStyle::Dashed) {
+            props.dashStyle = D2D1_DASH_STYLE_CUSTOM;
+            float dashes[] = { 3.0f, 1.0f };
+            factory->CreateStrokeStyle(props, dashes, 2, outStyle);
+        } else {
+            props.dashStyle = D2D1_DASH_STYLE_SOLID;
+            factory->CreateStrokeStyle(props, nullptr, 0, outStyle);
+        }
+    };
+
+    auto drawStyleRect = [&](const D2D1_ROUNDED_RECT& r, BorderStyle style, ID2D1Brush* brush, float width) {
+        if (style == BorderStyle::None || style == BorderStyle::Hidden) return;
+        
+        Microsoft::WRL::ComPtr<ID2D1StrokeStyle1> sstyle;
+        getStrokeStyle(style, &sstyle);
+
+        if (style == BorderStyle::Double) {
+            float third = width / 3.0f;
+            D2D1_ROUNDED_RECT r1 = r;
+            D2D1_ROUNDED_RECT r2 = r;
+            r1.rect.left -= third; r1.rect.top -= third; r1.rect.right += third; r1.rect.bottom += third;
+            r2.rect.left += third; r2.rect.top += third; r2.rect.right -= third; r2.rect.bottom -= third;
+            context->DrawRoundedRectangle(r1, brush, third, sstyle.Get());
+            context->DrawRoundedRectangle(r2, brush, third, sstyle.Get());
+        } else if (style == BorderStyle::Groove || style == BorderStyle::Ridge || 
+                   style == BorderStyle::Inset || style == BorderStyle::Outset) {
+            float half = width / 2.0f;
+            D2D1_ROUNDED_RECT rOuter = r;
+            D2D1_ROUNDED_RECT rInner = r;
+            rOuter.rect.left -= half/2; rOuter.rect.top -= half/2; rOuter.rect.right += half/2; rOuter.rect.bottom += half/2;
+            rInner.rect.left += half/2; rInner.rect.top += half/2; rInner.rect.right -= half/2; rInner.rect.bottom -= half/2;
+
+            Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> lightBrush;
+            Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> darkBrush;
+            
+            COLORREF baseColor = m_StrokeColor;
+            BYTE rC = GetRValue(baseColor);
+            BYTE gC = GetGValue(baseColor);
+            BYTE bC = GetBValue(baseColor);
+            
+            COLORREF lightC = RGB(std::min(255, rC + 50), std::min(255, gC + 50), std::min(255, bC + 50));
+            COLORREF darkC = RGB(std::max(0, rC - 50), std::max(0, gC - 50), std::max(0, bC - 50));
+
+            context->CreateSolidColorBrush(Direct2D::ColorToD2D(lightC, m_StrokeAlpha / 255.0f), &lightBrush);
+            context->CreateSolidColorBrush(Direct2D::ColorToD2D(darkC, m_StrokeAlpha / 255.0f), &darkBrush);
+
+            ID2D1Brush* brush1 = nullptr;
+            ID2D1Brush* brush2 = nullptr;
+
+            if (style == BorderStyle::Groove) { brush1 = darkBrush.Get(); brush2 = lightBrush.Get(); }
+            else if (style == BorderStyle::Ridge) { brush1 = lightBrush.Get(); brush2 = darkBrush.Get(); }
+            else if (style == BorderStyle::Inset) { brush1 = darkBrush.Get(); brush2 = lightBrush.Get(); }
+            else if (style == BorderStyle::Outset) { brush1 = lightBrush.Get(); brush2 = darkBrush.Get(); }
+
+            context->DrawRoundedRectangle(rOuter, brush1 ? brush1 : brush, half, sstyle.Get());
+            context->DrawRoundedRectangle(rInner, brush2 ? brush2 : brush, half, sstyle.Get());
+        } else if (style == BorderStyle::Dotted && m_RadiusX == 0.0f && m_RadiusY == 0.0f) {
+            float left = r.rect.left;
+            float top = r.rect.top;
+            float right = r.rect.right;
+            float bottom = r.rect.bottom;
+            float r_dot = width / 2.0f;
+
+            auto drawSideDotted = [&](D2D1_POINT_2F p0, D2D1_POINT_2F p1) {
+                float dx = p1.x - p0.x;
+                float dy = p1.y - p0.y;
+                float len = sqrtf(dx*dx + dy*dy);
+                if (len < 0.001f) return;
+
+                float ideal_spacing = width * 2.0f;
+                int num_dots = static_cast<int>(len / ideal_spacing + 0.5f) + 1;
+                if (num_dots < 2) num_dots = 2;
+
+                for (int i = 0; i < num_dots; ++i) {
+                    float t = static_cast<float>(i) / (num_dots - 1);
+                    D2D1_POINT_2F pt = D2D1::Point2F(p0.x + dx * t, p0.y + dy * t);
+                    context->FillEllipse(D2D1::Ellipse(pt, r_dot, r_dot), brush);
+                }
+            };
+
+            drawSideDotted(D2D1::Point2F(left, top), D2D1::Point2F(right, top));
+            drawSideDotted(D2D1::Point2F(right, top), D2D1::Point2F(right, bottom));
+            drawSideDotted(D2D1::Point2F(right, bottom), D2D1::Point2F(left, bottom));
+            drawSideDotted(D2D1::Point2F(left, bottom), D2D1::Point2F(left, top));
+        } else if (style == BorderStyle::Dashed && m_RadiusX == 0.0f && m_RadiusY == 0.0f) {
+            // CSS-style dashed border:
+            //   - L-shaped filled-rectangle dashes at each corner
+            //   - Evenly-spaced rectangular dashes along each straight side
+            float left   = r.rect.left;
+            float top    = r.rect.top;
+            float right  = r.rect.right;
+            float bottom = r.rect.bottom;
+
+            // Dash length ≈ 3× stroke width, gap ≈ 1× stroke width (CSS ratio 3:1)
+            float dashLen = width * 3.0f;
+            float gap     = width * 1.0f;
+            float period  = dashLen + gap;
+
+            // ----------------------------------------------------------------
+            // Corner L-shapes
+            // Each corner: one horizontal arm + one vertical arm, each dashLen long,
+            // both strokeWidth thick, forming an L inside the border band.
+            // ----------------------------------------------------------------
+            // Top-left corner
+            context->FillRectangle(D2D1::RectF(left, top, left + dashLen, top + width), brush);
+            context->FillRectangle(D2D1::RectF(left, top, left + width, top + dashLen), brush);
+
+            // Top-right corner
+            context->FillRectangle(D2D1::RectF(right - dashLen, top, right, top + width), brush);
+            context->FillRectangle(D2D1::RectF(right - width, top, right, top + dashLen), brush);
+
+            // Bottom-right corner
+            context->FillRectangle(D2D1::RectF(right - dashLen, bottom - width, right, bottom), brush);
+            context->FillRectangle(D2D1::RectF(right - width, bottom - dashLen, right, bottom), brush);
+
+            // Bottom-left corner
+            context->FillRectangle(D2D1::RectF(left, bottom - width, left + dashLen, bottom), brush);
+            context->FillRectangle(D2D1::RectF(left, bottom - dashLen, left + width, bottom), brush);
+
+            // ----------------------------------------------------------------
+            // Straight dashes between corners (excluding the dashLen already used)
+            // CSS pattern: [L-corner] GAP [dash GAP]×n [L-corner]
+            // → n dashes, (n+1) equal gaps; dashes never touch the corner arms.
+            // ----------------------------------------------------------------
+
+            // isHoriz == true  → horizontal band; edgeCoord is the band's top-left y
+            // isHoriz == false → vertical band;   edgeCoord is the band's top-left x
+            auto fillDashes = [&](float runStart, float runEnd, bool isHoriz, float edgeCoord) {
+                float runLen = runEnd - runStart;
+                if (runLen <= 0.0f) return;
+
+                // CSS layout: n dashes with (n+1) gaps
+                // Minimum to fit 1 dash: dashLen + 2*gap
+                // General: n*(dashLen+gap) + gap <= runLen
+                //          n <= (runLen - gap) / period
+                int n = (runLen >= gap + dashLen)
+                        ? static_cast<int>((runLen - gap) / period)
+                        : 0;
+                if (n < 1) return;
+
+                // Distribute the leftover space equally into the (n+1) gaps
+                // while keeping each dash exactly dashLen long.
+                float gapActual = (runLen - static_cast<float>(n) * dashLen)
+                                   / static_cast<float>(n + 1);
+
+                for (int i = 0; i < n; ++i) {
+                    float s = runStart + gapActual
+                              + static_cast<float>(i) * (dashLen + gapActual);
+                    float e = s + dashLen;
+                    if (isHoriz)
+                        context->FillRectangle(D2D1::RectF(s, edgeCoord, e, edgeCoord + width), brush);
+                    else
+                        context->FillRectangle(D2D1::RectF(edgeCoord, s, edgeCoord + width, e), brush);
+                }
+            };
+
+            // Top side:    left+dashLen  →  right-dashLen,  band top=top
+            fillDashes(left + dashLen, right - dashLen, true, top);
+            // Bottom side: left+dashLen  →  right-dashLen,  band top=bottom-width
+            fillDashes(left + dashLen, right - dashLen, true, bottom - width);
+            // Left side:   top+dashLen   →  bottom-dashLen, band left=left
+            fillDashes(top + dashLen, bottom - dashLen, false, left);
+            // Right side:  top+dashLen   →  bottom-dashLen, band left=right-width
+            fillDashes(top + dashLen, bottom - dashLen, false, right - width);
+        } else {
+            context->DrawRoundedRectangle(r, brush, width, sstyle.Get());
+        }
+    };
+
+    if (sameStyle) {
+        drawStyleRect(rect, m_BorderStyleTop, strokeBrush, strokeWidth);
+    } else {
+        auto drawSide = [&](BorderStyle style, D2D1_POINT_2F p0, D2D1_POINT_2F p1) {
+            if (style == BorderStyle::None || style == BorderStyle::Hidden) return;
+
+            if (style == BorderStyle::Dotted) {
+                float dx = p1.x - p0.x;
+                float dy = p1.y - p0.y;
+                float len = sqrtf(dx*dx + dy*dy);
+                if (len < 0.001f) return;
+
+                float ideal_spacing = strokeWidth * 2.0f;
+                int num_dots = static_cast<int>(len / ideal_spacing + 0.5f) + 1;
+                if (num_dots < 2) num_dots = 2;
+
+                float r_dot = strokeWidth / 2.0f;
+                for (int i = 0; i < num_dots; ++i) {
+                    float t = static_cast<float>(i) / (num_dots - 1);
+                    D2D1_POINT_2F pt = D2D1::Point2F(p0.x + dx * t, p0.y + dy * t);
+                    context->FillEllipse(D2D1::Ellipse(pt, r_dot, r_dot), strokeBrush);
+                }
+                return;
+            }
+
+            if (style == BorderStyle::Dashed) {
+                // Straight dash run (per-side path, no L-corners)
+                float dx = p1.x - p0.x;
+                float dy = p1.y - p0.y;
+                float len = sqrtf(dx*dx + dy*dy);
+                if (len < 0.001f) return;
+
+                float dashL = strokeWidth * 3.0f;
+                float gapL  = strokeWidth * 1.0f;
+                float period = dashL + gapL;
+                int count = std::max(1, static_cast<int>(len / period + 0.5f));
+                float actualPeriod = len / static_cast<float>(count);
+                float actualDash   = actualPeriod * (dashL / period);
+
+                float ux = dx / len, uy = dy / len;
+                // Perpendicular (left of direction)
+                float px = -uy * (strokeWidth * 0.5f);
+                float py =  ux * (strokeWidth * 0.5f);
+
+                Microsoft::WRL::ComPtr<ID2D1PathGeometry> path;
+                ID2D1Factory1* factory = Direct2D::GetFactory();
+                if (!factory) return;
+
+                for (int i = 0; i < count; ++i) {
+                    float s = i * actualPeriod;
+                    float e = s + actualDash;
+                    D2D1_POINT_2F a = D2D1::Point2F(p0.x + ux*s + px, p0.y + uy*s + py);
+                    D2D1_POINT_2F b = D2D1::Point2F(p0.x + ux*e + px, p0.y + uy*e + py);
+                    D2D1_POINT_2F c = D2D1::Point2F(p0.x + ux*e - px, p0.y + uy*e - py);
+                    D2D1_POINT_2F d = D2D1::Point2F(p0.x + ux*s - px, p0.y + uy*s - py);
+
+                    Microsoft::WRL::ComPtr<ID2D1PathGeometry> dashPath;
+                    Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
+                    if (SUCCEEDED(factory->CreatePathGeometry(&dashPath)) &&
+                        SUCCEEDED(dashPath->Open(&sink))) {
+                        sink->BeginFigure(a, D2D1_FIGURE_BEGIN_FILLED);
+                        sink->AddLine(b);
+                        sink->AddLine(c);
+                        sink->AddLine(d);
+                        sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+                        sink->Close();
+                        context->FillGeometry(dashPath.Get(), strokeBrush);
+                    }
+                }
+                return;
+            }
+
+            Microsoft::WRL::ComPtr<ID2D1StrokeStyle1> sstyle;
+            getStrokeStyle(style, &sstyle);
+
+            if (style == BorderStyle::Double) {
+                context->DrawLine(p0, p1, strokeBrush, strokeWidth, sstyle.Get());
+            } else {
+                context->DrawLine(p0, p1, strokeBrush, strokeWidth, sstyle.Get());
+            }
+        };
+
+        drawSide(m_BorderStyleTop,    D2D1::Point2F(rect.rect.left,  rect.rect.top),    D2D1::Point2F(rect.rect.right, rect.rect.top));
+        drawSide(m_BorderStyleRight,  D2D1::Point2F(rect.rect.right, rect.rect.top),    D2D1::Point2F(rect.rect.right, rect.rect.bottom));
+        drawSide(m_BorderStyleBottom, D2D1::Point2F(rect.rect.right, rect.rect.bottom), D2D1::Point2F(rect.rect.left,  rect.rect.bottom));
+        drawSide(m_BorderStyleLeft,   D2D1::Point2F(rect.rect.left,  rect.rect.bottom), D2D1::Point2F(rect.rect.left,  rect.rect.top));
+    }
 }
