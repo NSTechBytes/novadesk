@@ -25,6 +25,7 @@
 #include "../../../render/ShapeElement.h"
 #include "../../../render/TextElement.h"
 #include "../../../render/ButtonElement.h"
+#include "../../../render/ElementLayoutBox.h"
 
 struct duk_hthread;
 using duk_context = duk_hthread;
@@ -367,6 +368,42 @@ namespace PropertyParser
         bool combineConsumeAll = false;
     };
 
+    struct LayoutBoxShadowOptions
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float blur = 0.0f;
+        float spread = 0.0f;
+        COLORREF color = RGB(0, 0, 0);
+        BYTE alpha = 255;
+        bool inset = false;
+    };
+
+    struct LayoutBoxOptions
+    {
+        ShapeOptions shape;
+        std::wstring borderPosition;
+        bool hasBorderStyle = false;
+        ElementLayoutBox::BorderStyle borderTop = ElementLayoutBox::BorderStyle::Solid;
+        ElementLayoutBox::BorderStyle borderRight = ElementLayoutBox::BorderStyle::Solid;
+        ElementLayoutBox::BorderStyle borderBottom = ElementLayoutBox::BorderStyle::Solid;
+        ElementLayoutBox::BorderStyle borderLeft = ElementLayoutBox::BorderStyle::Solid;
+        std::vector<LayoutBoxShadowOptions> boxShadows;
+        bool hasBoxShadowError = false;
+        std::wstring boxShadowError;
+
+        std::wstring direction = L"column";
+        int gap = 0;
+        std::wstring align;
+        std::wstring justify;
+        int paddingLeft = 0;
+        int paddingTop = 0;
+        int paddingRight = 0;
+        int paddingBottom = 0;
+        int minWidth = 0;
+        int minHeight = 0;
+    };
+
     void ParseElementOptions(JSContext *ctx, JSValueConst obj, ElementOptions &options, const std::wstring &baseDir = L"");
     void ParseImageOptions(JSContext *ctx, JSValueConst obj, ImageOptions &options, const std::wstring &baseDir = L"");
     void ParseTextOptions(JSContext *ctx, JSValueConst obj, TextOptions &options, const std::wstring &baseDir = L"");
@@ -378,6 +415,7 @@ namespace PropertyParser
     void ParseHistogramOptions(JSContext *ctx, JSValueConst obj, HistogramOptions &options, const std::wstring &baseDir = L"");
     void ParseRoundLineOptions(JSContext *ctx, JSValueConst obj, RoundLineOptions &options, const std::wstring &baseDir = L"");
     void ParseShapeOptions(JSContext *ctx, JSValueConst obj, ShapeOptions &options, const std::wstring &baseDir = L"");
+    void ParseLayoutBoxOptions(JSContext *ctx, JSValueConst obj, LayoutBoxOptions &options, const std::wstring &baseDir = L"");
     void ParseAreaGraphOptions(JSContext *ctx, JSValueConst obj, AreaGraphOptions &options, const std::wstring &baseDir = L"");
 
     void ApplyElementOptions(Element *element, const ElementOptions &options);
@@ -391,6 +429,7 @@ namespace PropertyParser
     void ApplyHistogramOptions(HistogramElement *element, const HistogramOptions &options);
     void ApplyRoundLineOptions(RoundLineElement *element, const RoundLineOptions &options);
     void ApplyShapeOptions(ShapeElement *element, const ShapeOptions &options);
+    void ApplyLayoutBoxOptions(ElementLayoutBox *element, const LayoutBoxOptions &options);
     void ApplyAreaGraphOptions(AreaGraphElement *element, const AreaGraphOptions &options);
 
     void PreFillElementOptions(ElementOptions &options, Element *element);
@@ -404,6 +443,19 @@ namespace PropertyParser
     void PreFillHistogramOptions(HistogramOptions &options, HistogramElement *element);
     void PreFillRoundLineOptions(RoundLineOptions &options, RoundLineElement *element);
     void PreFillShapeOptions(ShapeOptions &options, ShapeElement *element);
+    void PreFillLayoutBoxOptions(
+        LayoutBoxOptions &options,
+        ElementLayoutBox *element,
+        const std::wstring *direction = nullptr,
+        const int *gap = nullptr,
+        const std::wstring *align = nullptr,
+        const std::wstring *justify = nullptr,
+        const int *paddingLeft = nullptr,
+        const int *paddingTop = nullptr,
+        const int *paddingRight = nullptr,
+        const int *paddingBottom = nullptr,
+        const int *minWidth = nullptr,
+        const int *minHeight = nullptr);
     void PreFillAreaGraphOptions(AreaGraphOptions &options, AreaGraphElement *element);
 
     void ParseGeneralImageOptions(JSContext *ctx, JSValueConst obj, GeneralImageOptions &options);
