@@ -608,34 +608,109 @@ void ElementLayoutBox::RenderBorderWithStyle(ID2D1DeviceContext *context, const 
                     }
                 }
             }
-        } else if (style == BorderStyle::Dotted && m_RadiusX == 0.0f && m_RadiusY == 0.0f) {
-            float left = r.rect.left;
-            float top = r.rect.top;
-            float right = r.rect.right;
-            float bottom = r.rect.bottom;
-            float r_dot = width / 2.0f;
+        } else if (style == BorderStyle::Dotted) {
+            float L = r.rect.left,  T = r.rect.top;
+            float R = r.rect.right, B = r.rect.bottom;
+            float rx = std::min(r.radiusX, (R - L) * 0.5f);
+            float ry = std::min(r.radiusY, (B - T) * 0.5f);
 
-            auto drawSideDotted = [&](D2D1_POINT_2F p0, D2D1_POINT_2F p1) {
-                float dx = p1.x - p0.x;
-                float dy = p1.y - p0.y;
-                float len = sqrtf(dx*dx + dy*dy);
-                if (len < 0.001f) return;
+            float L_top = R - L - 2.0f * rx;
+            float L_bottom = L_top;
+            float L_left = B - T - 2.0f * ry;
+            float L_right = L_left;
 
+            // Length of each quarter-ellipse arc
+            float L_arc = (rx > 0.0f || ry > 0.0f)
+                          ? 1.570796f * sqrtf((rx * rx + ry * ry) / 2.0f)
+                          : 0.0f;
+
+            // Total perimeter
+            float perimeter = L_top + L_right + L_bottom + L_left + 4.0f * L_arc;
+            if (perimeter > 0.001f) {
                 float ideal_spacing = width * 2.0f;
-                int num_dots = static_cast<int>(len / ideal_spacing + 0.5f) + 1;
-                if (num_dots < 2) num_dots = 2;
+                int num_dots = static_cast<int>(perimeter / ideal_spacing + 0.5f);
+                if (num_dots < 4) num_dots = 4;
+
+                float step = perimeter / num_dots;
+                float r_dot = width / 2.0f;
+
+                auto getPoint = [&](float t, float& x, float& y) {
+                    if (t < 0.0f) t = 0.0f;
+                    if (t > perimeter) t = perimeter;
+
+                    // Segment 0: Top straight edge
+                    if (t < L_top) {
+                        x = L + rx + t;
+                        y = T;
+                        return;
+                    }
+                    t -= L_top;
+
+                    // Segment 1: Top-right corner
+                    if (t < L_arc) {
+                        float theta = -1.570796f + 1.570796f * (t / L_arc);
+                        x = R - rx + rx * cosf(theta);
+                        y = T + ry + ry * sinf(theta);
+                        return;
+                    }
+                    t -= L_arc;
+
+                    // Segment 2: Right straight edge
+                    if (t < L_right) {
+                        x = R;
+                        y = T + ry + t;
+                        return;
+                    }
+                    t -= L_right;
+
+                    // Segment 3: Bottom-right corner
+                    if (t < L_arc) {
+                        float theta = 0.0f + 1.570796f * (t / L_arc);
+                        x = R - rx + rx * cosf(theta);
+                        y = B - ry + ry * sinf(theta);
+                        return;
+                    }
+                    t -= L_arc;
+
+                    // Segment 4: Bottom straight edge
+                    if (t < L_bottom) {
+                        x = R - rx - t;
+                        y = B;
+                        return;
+                    }
+                    t -= L_bottom;
+
+                    // Segment 5: Bottom-left corner
+                    if (t < L_arc) {
+                        float theta = 1.570796f + 1.570796f * (t / L_arc);
+                        x = L + rx + rx * cosf(theta);
+                        y = B - ry + ry * sinf(theta);
+                        return;
+                    }
+                    t -= L_arc;
+
+                    // Segment 6: Left straight edge
+                    if (t < L_left) {
+                        x = L;
+                        y = B - ry - t;
+                        return;
+                    }
+                    t -= L_left;
+
+                    // Segment 7: Top-left corner
+                    {
+                        float theta = 3.1415927f + 1.570796f * (t / L_arc);
+                        x = L + rx + rx * cosf(theta);
+                        y = T + ry + ry * sinf(theta);
+                    }
+                };
 
                 for (int i = 0; i < num_dots; ++i) {
-                    float t = static_cast<float>(i) / (num_dots - 1);
-                    D2D1_POINT_2F pt = D2D1::Point2F(p0.x + dx * t, p0.y + dy * t);
-                    context->FillEllipse(D2D1::Ellipse(pt, r_dot, r_dot), brush);
+                    float x = 0.0f, y = 0.0f;
+                    getPoint(static_cast<float>(i) * step, x, y);
+                    context->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), r_dot, r_dot), brush);
                 }
-            };
-
-            drawSideDotted(D2D1::Point2F(left, top), D2D1::Point2F(right, top));
-            drawSideDotted(D2D1::Point2F(right, top), D2D1::Point2F(right, bottom));
-            drawSideDotted(D2D1::Point2F(right, bottom), D2D1::Point2F(left, bottom));
-            drawSideDotted(D2D1::Point2F(left, bottom), D2D1::Point2F(left, top));
+            }
         } else if (style == BorderStyle::Dashed && m_RadiusX == 0.0f && m_RadiusY == 0.0f) {
             // CSS-style dashed border:
             //   - L-shaped filled-rectangle dashes at each corner
