@@ -1,4 +1,4 @@
-const styles = ["double"];
+const styles = ["double", "dotted", "dashed", "groove", "ridge", "inset", "outset", "solid"];
 const perSideStyles = [
   ["solid", "dotted"],
   ["dashed", "double", "solid"],
@@ -13,10 +13,10 @@ for (let i = 0; i < styles.length; i++) {
     id: "box_" + style,
     x: 80 + (i % 5) * 150,
     y: 80 + Math.floor(i / 5) * 150,
-    width: 200,
-    height: 200,
+    width: 100,
+    height: 100,
     backgroundColor: "rgb(102, 255, 0)",
-    borderWidth: 50,
+    borderWidth: 10,
     borderColor: "rgb(100, 100, 200)",
     borderStyle: style,
     children: [{

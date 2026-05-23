@@ -617,7 +617,11 @@ void ElementLayoutBox::RenderBorderWithStyle(ID2D1DeviceContext *context, const 
             // Right side:  top+dashLen   →  bottom-dashLen, band left=right-width
             fillDashes(top + dashLen, bottom - dashLen, false, right - width);
         } else {
-            context->DrawRoundedRectangle(r, brush, width, sstyle.Get());
+            if (r.radiusX == 0.0f && r.radiusY == 0.0f) {
+                context->DrawRectangle(r.rect, brush, width, sstyle.Get());
+            } else {
+                context->DrawRoundedRectangle(r, brush, width, sstyle.Get());
+            }
         }
     };
 
