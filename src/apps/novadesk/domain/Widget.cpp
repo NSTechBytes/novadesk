@@ -1808,6 +1808,15 @@ void Widget::SetLayoutConfig(const std::wstring &id, const LayoutConfig &config)
     ReflowLayout(id);
 }
 
+bool Widget::TryGetLayoutConfig(const std::wstring &id, LayoutConfig &config) const
+{
+    auto it = m_LayoutConfigs.find(id);
+    if (it == m_LayoutConfigs.end())
+        return false;
+    config = it->second;
+    return true;
+}
+
 void Widget::StartElementAnimation(const std::wstring &id, const AnimationTarget &target, int durationMs, const std::wstring &easing)
 {
     if (id.empty())

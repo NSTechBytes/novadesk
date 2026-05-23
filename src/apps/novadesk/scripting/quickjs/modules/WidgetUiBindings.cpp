@@ -569,77 +569,27 @@ namespace novadesk::scripting::quickjs
             if (argc < 1 || !JS_IsObject(argv[0]))
                 return ThrowTypeError(ctx, "animate", "expected options object");
 
-            JSValue idVal = JS_GetPropertyStr(ctx, argv[0], "id");
-            const char *idUtf8 = JS_ToCString(ctx, idVal);
-            std::wstring id;
-            if (idUtf8)
-            {
-                id = Utils::ToWString(idUtf8);
-                JS_FreeCString(ctx, idUtf8);
-            }
-            JS_FreeValue(ctx, idVal);
-            if (id.empty())
+            PropertyParser::AnimationOptions options;
+            PropertyParser::ParseAnimationOptions(ctx, argv[0], options);
+            if (options.id.empty())
                 return ThrowTypeError(ctx, "animate", "id is required");
 
-            int duration = 250;
-            JSValue durationVal = JS_GetPropertyStr(ctx, argv[0], "duration");
-            if (!JS_IsUndefined(durationVal) && !JS_IsNull(durationVal))
-            {
-                int32_t d = 0;
-                if (JS_ToInt32(ctx, &d, durationVal) == 0 && d > 0)
-                    duration = static_cast<int>(d);
-            }
-            JS_FreeValue(ctx, durationVal);
-
-            std::wstring easing = L"linear";
-            JSValue easingVal = JS_GetPropertyStr(ctx, argv[0], "easing");
-            if (!JS_IsUndefined(easingVal) && !JS_IsNull(easingVal))
-            {
-                const char *eUtf8 = JS_ToCString(ctx, easingVal);
-                if (eUtf8)
-                {
-                    easing = Utils::ToWString(eUtf8);
-                    JS_FreeCString(ctx, eUtf8);
-                }
-            }
-            JS_FreeValue(ctx, easingVal);
-
-            JSValue toVal = JS_GetPropertyStr(ctx, argv[0], "to");
-            if (!JS_IsObject(toVal))
-            {
-                JS_FreeValue(ctx, toVal);
-                return ThrowTypeError(ctx, "animate", "`to` object is required");
-            }
-
             Widget::AnimationTarget target{};
-            auto readToFloat = [&](const char *key, float &out) -> bool
-            {
-                JSValue v = JS_GetPropertyStr(ctx, toVal, key);
-                if (JS_IsUndefined(v) || JS_IsNull(v) || JS_IsException(v))
-                {
-                    JS_FreeValue(ctx, v);
-                    return false;
-                }
-                double d = 0.0;
-                bool ok = (JS_ToFloat64(ctx, &d, v) == 0);
-                JS_FreeValue(ctx, v);
-                if (!ok)
-                    return false;
-                out = static_cast<float>(d);
-                return true;
-            };
-
-            target.hasX = readToFloat("x", target.x);
-            target.hasY = readToFloat("y", target.y);
-            target.hasWidth = readToFloat("width", target.width);
-            target.hasHeight = readToFloat("height", target.height);
-            target.hasRotate = readToFloat("rotate", target.rotate);
-            JS_FreeValue(ctx, toVal);
+            target.hasX = options.hasX;
+            target.hasY = options.hasY;
+            target.hasWidth = options.hasWidth;
+            target.hasHeight = options.hasHeight;
+            target.hasRotate = options.hasRotate;
+            target.x = options.x;
+            target.y = options.y;
+            target.width = options.width;
+            target.height = options.height;
+            target.rotate = options.rotate;
 
             if (!target.hasX && !target.hasY && !target.hasWidth && !target.hasHeight && !target.hasRotate)
                 return ThrowTypeError(ctx, "animate", "to must include at least one supported property");
 
-            widget->StartElementAnimation(id, target, duration, easing);
+            widget->StartElementAnimation(options.id, target, options.duration, options.easing);
             return JS_UNDEFINED;
         }
 
@@ -802,6 +752,48 @@ namespace novadesk::scripting::quickjs
                 PropertyParser::PreFillHistogramOptions(options, histogram);
                 PropertyParser::ParseHistogramOptions(ctx, argv[1], options, baseDir);
                 PropertyParser::ApplyHistogramOptions(histogram, options);
+            }
+            else if (auto *layout = dynamic_cast<ElementLayoutBox *>(element))
+            {
+                PropertyParser::LayoutBoxOptions options;
+                Widget::LayoutConfig cfg{};
+                if (widget->TryGetLayoutConfig(id, cfg))
+                {
+                    PropertyParser::PreFillLayoutBoxOptions(
+                        options,
+                        layout,
+                        &cfg.direction,
+                        &cfg.gap,
+                        &cfg.align,
+                        &cfg.justify,
+                        &cfg.paddingLeft,
+                        &cfg.paddingTop,
+                        &cfg.paddingRight,
+                        &cfg.paddingBottom,
+                        &cfg.minWidth,
+                        &cfg.minHeight);
+                }
+                else
+                {
+                    PropertyParser::PreFillLayoutBoxOptions(options, layout);
+                }
+                PropertyParser::ParseLayoutBoxOptions(ctx, argv[1], options, baseDir);
+                if (options.hasBoxShadowError)
+                    return ThrowTypeError(ctx, "setElementProperties", Utils::ToString(options.boxShadowError).c_str());
+                PropertyParser::ApplyLayoutBoxOptions(layout, options);
+
+                Widget::LayoutConfig nextCfg{};
+                nextCfg.direction = options.direction;
+                nextCfg.gap = options.gap;
+                nextCfg.align = options.align.empty() ? L"start" : options.align;
+                nextCfg.justify = options.justify.empty() ? L"start" : options.justify;
+                nextCfg.paddingLeft = options.paddingLeft;
+                nextCfg.paddingTop = options.paddingTop;
+                nextCfg.paddingRight = options.paddingRight;
+                nextCfg.paddingBottom = options.paddingBottom;
+                nextCfg.minWidth = options.minWidth;
+                nextCfg.minHeight = options.minHeight;
+                widget->SetLayoutConfig(id, nextCfg);
             }
             else if (auto *shape = dynamic_cast<ShapeElement *>(element))
             {
@@ -1485,6 +1477,12 @@ namespace novadesk::scripting::quickjs
             else if (element->GetType() == ELEMENT_SHAPE || element->GetType() == ELEMENT_LAYOUT_BOX)
             {
                 auto *shape = static_cast<ShapeElement *>(element);
+                ElementLayoutBox *layoutBox = (element->GetType() == ELEMENT_LAYOUT_BOX)
+                    ? static_cast<ElementLayoutBox *>(element)
+                    : nullptr;
+                PropertyParser::LayoutBoxOptions layoutPrefill;
+                if (layoutBox)
+                    PropertyParser::PreFillLayoutBoxOptions(layoutPrefill, layoutBox);
 
                 auto capToStr = [](D2D1_CAP_STYLE cap) -> const char *
                 {
@@ -1594,6 +1592,55 @@ namespace novadesk::scripting::quickjs
                         JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, dashes[i]));
                     }
                     return arr;
+                }
+
+                if (layoutBox)
+                {
+                    if (prop == "borderPosition")
+                        return JS_NewString(ctx, Utils::ToString(layoutPrefill.borderPosition).c_str());
+                    if (prop == "borderStyle")
+                    {
+                        auto styleToStr = [](ElementLayoutBox::BorderStyle s) -> const char *
+                        {
+                            switch (s)
+                            {
+                            case ElementLayoutBox::BorderStyle::None: return "none";
+                            case ElementLayoutBox::BorderStyle::Hidden: return "hidden";
+                            case ElementLayoutBox::BorderStyle::Dotted: return "dotted";
+                            case ElementLayoutBox::BorderStyle::Dashed: return "dashed";
+                            case ElementLayoutBox::BorderStyle::Double: return "double";
+                            case ElementLayoutBox::BorderStyle::Groove: return "groove";
+                            case ElementLayoutBox::BorderStyle::Ridge: return "ridge";
+                            case ElementLayoutBox::BorderStyle::Inset: return "inset";
+                            case ElementLayoutBox::BorderStyle::Outset: return "outset";
+                            default: return "solid";
+                            }
+                        };
+                        JSValue arr = JS_NewArray(ctx);
+                        JS_SetPropertyUint32(ctx, arr, 0, JS_NewString(ctx, styleToStr(layoutPrefill.borderTop)));
+                        JS_SetPropertyUint32(ctx, arr, 1, JS_NewString(ctx, styleToStr(layoutPrefill.borderRight)));
+                        JS_SetPropertyUint32(ctx, arr, 2, JS_NewString(ctx, styleToStr(layoutPrefill.borderBottom)));
+                        JS_SetPropertyUint32(ctx, arr, 3, JS_NewString(ctx, styleToStr(layoutPrefill.borderLeft)));
+                        return arr;
+                    }
+                    if (prop == "boxShadow")
+                    {
+                        JSValue arr = JS_NewArray(ctx);
+                        for (uint32_t i = 0; i < static_cast<uint32_t>(layoutPrefill.boxShadows.size()); ++i)
+                        {
+                            const auto &sh = layoutPrefill.boxShadows[i];
+                            JSValue item = JS_NewObject(ctx);
+                            JS_SetPropertyStr(ctx, item, "x", JS_NewFloat64(ctx, sh.x));
+                            JS_SetPropertyStr(ctx, item, "y", JS_NewFloat64(ctx, sh.y));
+                            JS_SetPropertyStr(ctx, item, "blur", JS_NewFloat64(ctx, sh.blur));
+                            JS_SetPropertyStr(ctx, item, "spread", JS_NewFloat64(ctx, sh.spread));
+                            const std::wstring c = ColorUtil::ToRGBAString(sh.color, sh.alpha);
+                            JS_SetPropertyStr(ctx, item, "color", JS_NewString(ctx, Utils::ToString(c).c_str()));
+                            JS_SetPropertyStr(ctx, item, "inset", JS_NewBool(ctx, sh.inset ? 1 : 0));
+                            JS_SetPropertyUint32(ctx, arr, i, item);
+                        }
+                        return arr;
+                    }
                 }
 
                 if (auto *pathShape = dynamic_cast<PathShape *>(shape))

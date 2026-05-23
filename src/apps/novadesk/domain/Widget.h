@@ -173,6 +173,7 @@ public:
     static void ClearAllWidgets();
     static bool IsValid(Widget* pWidget);
     void SetLayoutConfig(const std::wstring &id, const LayoutConfig &config);
+    bool TryGetLayoutConfig(const std::wstring &id, LayoutConfig &config) const;
     bool IsLayoutContainer(const std::wstring &id) const;
     void ReflowLayout(const std::wstring &id);
     void StartElementAnimation(const std::wstring &id, const AnimationTarget &target, int durationMs, const std::wstring &easing);

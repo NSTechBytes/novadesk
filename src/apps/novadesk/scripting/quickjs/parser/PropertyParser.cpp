@@ -1953,6 +1953,29 @@ namespace PropertyParser
         JS_FreeValue(ctx, stylePadding);
     }
 
+    void ParseAnimationOptions(JSContext *ctx, JSValueConst obj, AnimationOptions &options)
+    {
+        options.id = GetStringProp(ctx, obj, "id");
+        GetIntProp(ctx, obj, "duration", options.duration);
+        if (options.duration <= 0)
+            options.duration = 250;
+
+        std::wstring easing = GetStringProp(ctx, obj, "easing");
+        if (!easing.empty())
+            options.easing = easing;
+
+        JSValue toVal = JS_GetPropertyStr(ctx, obj, "to");
+        if (JS_IsObject(toVal))
+        {
+            options.hasX = GetFloatProp(ctx, toVal, "x", options.x);
+            options.hasY = GetFloatProp(ctx, toVal, "y", options.y);
+            options.hasWidth = GetFloatProp(ctx, toVal, "width", options.width);
+            options.hasHeight = GetFloatProp(ctx, toVal, "height", options.height);
+            options.hasRotate = GetFloatProp(ctx, toVal, "rotate", options.rotate);
+        }
+        JS_FreeValue(ctx, toVal);
+    }
+
     void ApplyElementOptions(Element *element, const ElementOptions &options)
     {
         if (!element)

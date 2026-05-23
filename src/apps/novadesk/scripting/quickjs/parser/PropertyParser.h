@@ -404,6 +404,23 @@ namespace PropertyParser
         int minHeight = 0;
     };
 
+    struct AnimationOptions
+    {
+        std::wstring id;
+        int duration = 250;
+        std::wstring easing = L"linear";
+        bool hasX = false;
+        bool hasY = false;
+        bool hasWidth = false;
+        bool hasHeight = false;
+        bool hasRotate = false;
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        float rotate = 0.0f;
+    };
+
     void ParseElementOptions(JSContext *ctx, JSValueConst obj, ElementOptions &options, const std::wstring &baseDir = L"");
     void ParseImageOptions(JSContext *ctx, JSValueConst obj, ImageOptions &options, const std::wstring &baseDir = L"");
     void ParseTextOptions(JSContext *ctx, JSValueConst obj, TextOptions &options, const std::wstring &baseDir = L"");
@@ -416,6 +433,7 @@ namespace PropertyParser
     void ParseRoundLineOptions(JSContext *ctx, JSValueConst obj, RoundLineOptions &options, const std::wstring &baseDir = L"");
     void ParseShapeOptions(JSContext *ctx, JSValueConst obj, ShapeOptions &options, const std::wstring &baseDir = L"");
     void ParseLayoutBoxOptions(JSContext *ctx, JSValueConst obj, LayoutBoxOptions &options, const std::wstring &baseDir = L"");
+    void ParseAnimationOptions(JSContext *ctx, JSValueConst obj, AnimationOptions &options);
     void ParseAreaGraphOptions(JSContext *ctx, JSValueConst obj, AreaGraphOptions &options, const std::wstring &baseDir = L"");
 
     void ApplyElementOptions(Element *element, const ElementOptions &options);
