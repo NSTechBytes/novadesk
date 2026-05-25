@@ -8,6 +8,7 @@
 #include "ElementLayoutBox.h"
 
 #include "Direct2DHelper.h"
+#include "../shared/Logging.h"
 #include <algorithm>
 #include <cmath>
 #include <d2d1effects.h>
@@ -803,88 +804,522 @@ void ElementLayoutBox::RenderBorderWithStyle(ID2D1DeviceContext *context, const 
     if (sameStyle) {
         drawStyleRect(rect, m_BorderStyleTop, strokeBrush, strokeWidth);
     } else {
-        auto drawSide = [&](BorderStyle style, D2D1_POINT_2F p0, D2D1_POINT_2F p1) {
-            if (style == BorderStyle::None || style == BorderStyle::Hidden) return;
+        static bool s_loggedMixedBorderDebug = false;
+        // Chromium-like mixed border approach:
+        // draw side style while clipped to that side polygon.
+        const float L = std::floor(rect.rect.left) + 0.5f;
+        const float T = std::floor(rect.rect.top) + 0.5f;
+        const float R = std::floor(rect.rect.right) + 0.5f;
+        const float B = std::floor(rect.rect.bottom) + 0.5f;
+        const float w = strokeWidth;
+        const float eps = std::max(0.5f, w * 0.125f);
+        if (w <= 0.0f || R <= L || B <= T)
+            return;
 
-            if (style == BorderStyle::Dotted) {
-                float dx = p1.x - p0.x;
-                float dy = p1.y - p0.y;
-                float len = sqrtf(dx*dx + dy*dy);
-                if (len < 0.001f) return;
+        ID2D1Factory1 *factory = Direct2D::GetFactory();
+        if (!factory)
+            return;
 
-                float ideal_spacing = strokeWidth * 2.0f;
-                int num_dots = static_cast<int>(len / ideal_spacing + 0.5f) + 1;
-                if (num_dots < 2) num_dots = 2;
+        auto makePolyClip = [&](const D2D1_POINT_2F *pts) -> Microsoft::WRL::ComPtr<ID2D1Geometry> {
+            Microsoft::WRL::ComPtr<ID2D1PathGeometry> path;
+            Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
+            if (FAILED(factory->CreatePathGeometry(&path)) || FAILED(path->Open(&sink)))
+                return nullptr;
+            sink->BeginFigure(pts[0], D2D1_FIGURE_BEGIN_FILLED);
+            sink->AddLine(pts[1]);
+            sink->AddLine(pts[2]);
+            sink->AddLine(pts[3]);
+            sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+            sink->Close();
+            Microsoft::WRL::ComPtr<ID2D1Geometry> g = path;
+            return g;
+        };
 
-                float r_dot = strokeWidth / 2.0f;
-                for (int i = 0; i < num_dots; ++i) {
-                    float t = static_cast<float>(i) / (num_dots - 1);
-                    D2D1_POINT_2F pt = D2D1::Point2F(p0.x + dx * t, p0.y + dy * t);
-                    context->FillEllipse(D2D1::Ellipse(pt, r_dot, r_dot), strokeBrush);
+        D2D1_POINT_2F topPts[4] = {
+            D2D1::Point2F(L - eps, T - eps), D2D1::Point2F(R + eps, T - eps),
+            D2D1::Point2F(R - w + eps, T + w + eps), D2D1::Point2F(L + w - eps, T + w + eps)};
+        D2D1_POINT_2F rightPts[4] = {
+            D2D1::Point2F(R + eps, T - eps), D2D1::Point2F(R + eps, B + eps),
+            D2D1::Point2F(R - w - eps, B - w + eps), D2D1::Point2F(R - w - eps, T + w - eps)};
+        D2D1_POINT_2F bottomPts[4] = {
+            D2D1::Point2F(L - eps, B + eps), D2D1::Point2F(R + eps, B + eps),
+            D2D1::Point2F(R - w + eps, B - w - eps), D2D1::Point2F(L + w - eps, B - w - eps)};
+        D2D1_POINT_2F leftPts[4] = {
+            D2D1::Point2F(L - eps, T - eps), D2D1::Point2F(L - eps, B + eps),
+            D2D1::Point2F(L + w + eps, B - w + eps), D2D1::Point2F(L + w + eps, T + w - eps)};
+
+        auto topClip = makePolyClip(topPts);
+        auto rightClip = makePolyClip(rightPts);
+        auto bottomClip = makePolyClip(bottomPts);
+        auto leftClip = makePolyClip(leftPts);
+
+        struct SidePaint {
+            BorderStyle style;
+            Microsoft::WRL::ComPtr<ID2D1Geometry> clip;
+            int priority;
+            D2D1_POINT_2F p0;
+            D2D1_POINT_2F p1;
+            int index;
+        };
+
+        auto fillPolygon = [&](const D2D1_POINT_2F *pts, int count, ID2D1Brush *brush = nullptr) {
+            if (count < 3)
+                return;
+            if (!brush)
+                brush = strokeBrush;
+            Microsoft::WRL::ComPtr<ID2D1PathGeometry> path;
+            Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
+            if (FAILED(factory->CreatePathGeometry(&path)) || FAILED(path->Open(&sink)))
+                return;
+            sink->BeginFigure(pts[0], D2D1_FIGURE_BEGIN_FILLED);
+            for (int i = 1; i < count; ++i)
+                sink->AddLine(pts[i]);
+            sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+            sink->Close();
+            context->FillGeometry(path.Get(), brush);
+        };
+
+        auto drawBlinkSolidSideWithBrush = [&](int side, float x1, float y1, float x2, float y2,
+                                               float adjacentWidth1, float adjacentWidth2, ID2D1Brush *brush) {
+            if (x2 <= x1 || y2 <= y1)
+                return;
+            if (adjacentWidth1 == 0.0f && adjacentWidth2 == 0.0f) {
+                context->FillRectangle(D2D1::RectF(x1, y1, x2, y2), brush);
+                return;
+            }
+
+            D2D1_POINT_2F quad[4];
+            switch (side) {
+            case 0: // top
+                quad[0] = D2D1::Point2F(x1 + std::max(-adjacentWidth1, 0.0f), y1);
+                quad[1] = D2D1::Point2F(x1 + std::max(adjacentWidth1, 0.0f), y2);
+                quad[2] = D2D1::Point2F(x2 - std::max(adjacentWidth2, 0.0f), y2);
+                quad[3] = D2D1::Point2F(x2 - std::max(-adjacentWidth2, 0.0f), y1);
+                break;
+            case 2: // bottom
+                quad[0] = D2D1::Point2F(x1 + std::max(adjacentWidth1, 0.0f), y1);
+                quad[1] = D2D1::Point2F(x1 + std::max(-adjacentWidth1, 0.0f), y2);
+                quad[2] = D2D1::Point2F(x2 - std::max(-adjacentWidth2, 0.0f), y2);
+                quad[3] = D2D1::Point2F(x2 - std::max(adjacentWidth2, 0.0f), y1);
+                break;
+            case 3: // left
+                quad[0] = D2D1::Point2F(x1, y1 + std::max(-adjacentWidth1, 0.0f));
+                quad[1] = D2D1::Point2F(x1, y2 - std::max(-adjacentWidth2, 0.0f));
+                quad[2] = D2D1::Point2F(x2, y2 - std::max(adjacentWidth2, 0.0f));
+                quad[3] = D2D1::Point2F(x2, y1 + std::max(adjacentWidth1, 0.0f));
+                break;
+            case 1: // right
+            default:
+                quad[0] = D2D1::Point2F(x1, y1 + std::max(adjacentWidth1, 0.0f));
+                quad[1] = D2D1::Point2F(x1, y2 - std::max(adjacentWidth2, 0.0f));
+                quad[2] = D2D1::Point2F(x2, y2 - std::max(-adjacentWidth2, 0.0f));
+                quad[3] = D2D1::Point2F(x2, y1 + std::max(-adjacentWidth1, 0.0f));
+                break;
+            }
+            fillPolygon(quad, 4, brush);
+        };
+
+        auto drawBlinkSolidSide = [&](int side, float x1, float y1, float x2, float y2,
+                                      float adjacentWidth1, float adjacentWidth2) {
+            drawBlinkSolidSideWithBrush(side, x1, y1, x2, y2, adjacentWidth1, adjacentWidth2, strokeBrush);
+        };
+
+        auto drawBlinkDoubleSide = [&](int side, float x1, float y1, float x2, float y2,
+                                       float adjacentWidth1, float adjacentWidth2) {
+            const float thickness = (side == 0 || side == 2) ? (y2 - y1) : (x2 - x1);
+            const float length = (side == 0 || side == 2) ? (x2 - x1) : (y2 - y1);
+            if (thickness <= 0.0f || length <= 0.0f)
+                return;
+
+            const float third = std::max(1.0f, std::floor((thickness + 1.0f) / 3.0f));
+            if (adjacentWidth1 == 0.0f && adjacentWidth2 == 0.0f) {
+                if (side == 0 || side == 2) {
+                    context->FillRectangle(D2D1::RectF(x1, y1, x2, y1 + third), strokeBrush);
+                    context->FillRectangle(D2D1::RectF(x1, y2 - third, x2, y2), strokeBrush);
+                } else {
+                    context->FillRectangle(D2D1::RectF(x1, y1, x1 + third, y2), strokeBrush);
+                    context->FillRectangle(D2D1::RectF(x2 - third, y1, x2, y2), strokeBrush);
                 }
                 return;
             }
 
-            if (style == BorderStyle::Dashed) {
-                // Straight dash run (per-side path, no L-corners)
-                float dx = p1.x - p0.x;
-                float dy = p1.y - p0.y;
-                float len = sqrtf(dx*dx + dy*dy);
-                if (len < 0.001f) return;
+            auto bigThird = [](float value) {
+                return value > 0.0f ? std::floor((value + 1.0f) / 3.0f) : std::ceil((value - 1.0f) / 3.0f);
+            };
+            const float adjacent1BigThird = bigThird(adjacentWidth1);
+            const float adjacent2BigThird = bigThird(adjacentWidth2);
 
-                float dashL = strokeWidth * 3.0f;
-                float gapL  = strokeWidth * 1.0f;
-                float period = dashL + gapL;
-                int count = std::max(1, static_cast<int>(len / period + 0.5f));
-                float actualPeriod = len / static_cast<float>(count);
-                float actualDash   = actualPeriod * (dashL / period);
-
-                float ux = dx / len, uy = dy / len;
-                // Perpendicular (left of direction)
-                float px = -uy * (strokeWidth * 0.5f);
-                float py =  ux * (strokeWidth * 0.5f);
-
-                Microsoft::WRL::ComPtr<ID2D1PathGeometry> path;
-                ID2D1Factory1* factory = Direct2D::GetFactory();
-                if (!factory) return;
-
-                for (int i = 0; i < count; ++i) {
-                    float s = i * actualPeriod;
-                    float e = s + actualDash;
-                    D2D1_POINT_2F a = D2D1::Point2F(p0.x + ux*s + px, p0.y + uy*s + py);
-                    D2D1_POINT_2F b = D2D1::Point2F(p0.x + ux*e + px, p0.y + uy*e + py);
-                    D2D1_POINT_2F c = D2D1::Point2F(p0.x + ux*e - px, p0.y + uy*e - py);
-                    D2D1_POINT_2F d = D2D1::Point2F(p0.x + ux*s - px, p0.y + uy*s - py);
-
-                    Microsoft::WRL::ComPtr<ID2D1PathGeometry> dashPath;
-                    Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
-                    if (SUCCEEDED(factory->CreatePathGeometry(&dashPath)) &&
-                        SUCCEEDED(dashPath->Open(&sink))) {
-                        sink->BeginFigure(a, D2D1_FIGURE_BEGIN_FILLED);
-                        sink->AddLine(b);
-                        sink->AddLine(c);
-                        sink->AddLine(d);
-                        sink->EndFigure(D2D1_FIGURE_END_CLOSED);
-                        sink->Close();
-                        context->FillGeometry(dashPath.Get(), strokeBrush);
-                    }
-                }
-                return;
-            }
-
-            Microsoft::WRL::ComPtr<ID2D1StrokeStyle1> sstyle;
-            getStrokeStyle(style, &sstyle);
-
-            if (style == BorderStyle::Double) {
-                context->DrawLine(p0, p1, strokeBrush, strokeWidth, sstyle.Get());
-            } else {
-                context->DrawLine(p0, p1, strokeBrush, strokeWidth, sstyle.Get());
+            switch (side) {
+            case 0: // top
+                drawBlinkSolidSide(side,
+                    x1 + std::max((-adjacentWidth1 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    y1,
+                    x2 - std::max((-adjacentWidth2 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    y1 + third,
+                    adjacent1BigThird, adjacent2BigThird);
+                drawBlinkSolidSide(side,
+                    x1 + std::max((adjacentWidth1 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    y2 - third,
+                    x2 - std::max((adjacentWidth2 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    y2,
+                    adjacent1BigThird, adjacent2BigThird);
+                break;
+            case 3: // left
+                drawBlinkSolidSide(side,
+                    x1,
+                    y1 + std::max((-adjacentWidth1 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    x1 + third,
+                    y2 - std::max((-adjacentWidth2 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    adjacent1BigThird, adjacent2BigThird);
+                drawBlinkSolidSide(side,
+                    x2 - third,
+                    y1 + std::max((adjacentWidth1 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    x2,
+                    y2 - std::max((adjacentWidth2 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    adjacent1BigThird, adjacent2BigThird);
+                break;
+            case 2: // bottom
+                drawBlinkSolidSide(side,
+                    x1 + std::max((adjacentWidth1 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    y1,
+                    x2 - std::max((adjacentWidth2 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    y1 + third,
+                    adjacent1BigThird, adjacent2BigThird);
+                drawBlinkSolidSide(side,
+                    x1 + std::max((-adjacentWidth1 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    y2 - third,
+                    x2 - std::max((-adjacentWidth2 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    y2,
+                    adjacent1BigThird, adjacent2BigThird);
+                break;
+            case 1: // right
+            default:
+                drawBlinkSolidSide(side,
+                    x1,
+                    y1 + std::max((adjacentWidth1 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    x1 + third,
+                    y2 - std::max((adjacentWidth2 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    adjacent1BigThird, adjacent2BigThird);
+                drawBlinkSolidSide(side,
+                    x2 - third,
+                    y1 + std::max((-adjacentWidth1 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    x2,
+                    y2 - std::max((-adjacentWidth2 * 2.0f + 1.0f) / 3.0f, 0.0f),
+                    adjacent1BigThird, adjacent2BigThird);
+                break;
             }
         };
 
-        drawSide(m_BorderStyleTop,    D2D1::Point2F(rect.rect.left,  rect.rect.top),    D2D1::Point2F(rect.rect.right, rect.rect.top));
-        drawSide(m_BorderStyleRight,  D2D1::Point2F(rect.rect.right, rect.rect.top),    D2D1::Point2F(rect.rect.right, rect.rect.bottom));
-        drawSide(m_BorderStyleBottom, D2D1::Point2F(rect.rect.right, rect.rect.bottom), D2D1::Point2F(rect.rect.left,  rect.rect.bottom));
-        drawSide(m_BorderStyleLeft,   D2D1::Point2F(rect.rect.left,  rect.rect.bottom), D2D1::Point2F(rect.rect.left,  rect.rect.top));
+        COLORREF baseColor = m_StrokeColor;
+        BYTE rC = GetRValue(baseColor), gC = GetGValue(baseColor), bC = GetBValue(baseColor);
+        COLORREF lightC = RGB(std::min(255, rC + 50), std::min(255, gC + 50), std::min(255, bC + 50));
+        COLORREF darkC  = RGB(std::max(0,   rC - 50), std::max(0,   gC - 50), std::max(0,   bC - 50));
+
+        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> lightBrush, darkBrush;
+        context->CreateSolidColorBrush(Direct2D::ColorToD2D(lightC, m_StrokeAlpha / 255.0f), &lightBrush);
+        context->CreateSolidColorBrush(Direct2D::ColorToD2D(darkC,  m_StrokeAlpha / 255.0f), &darkBrush);
+
+        auto drawBlink3DSide = [&](int side, BorderStyle style, float x1, float y1, float x2, float y2,
+                                   float adjacentWidth1, float adjacentWidth2) {
+            const float thickness = (side == 0 || side == 2) ? (y2 - y1) : (x2 - x1);
+            if (thickness <= 0.0f)
+                return;
+
+            auto bigHalf = [](float value) {
+                return value > 0.0f ? std::floor((value + 1.0f) / 2.0f) : std::ceil((value - 1.0f) / 2.0f);
+            };
+            const float adjacent1BigHalf = bigHalf(adjacentWidth1);
+            const float adjacent2BigHalf = bigHalf(adjacentWidth2);
+
+            ID2D1Brush *insetBrush = (side == 0 || side == 3) ? darkBrush.Get() : lightBrush.Get();
+            ID2D1Brush *outsetBrush = (side == 0 || side == 3) ? lightBrush.Get() : darkBrush.Get();
+            ID2D1Brush *firstBrush = (style == BorderStyle::Groove || style == BorderStyle::Inset) ? insetBrush : outsetBrush;
+            ID2D1Brush *secondBrush = (style == BorderStyle::Groove || style == BorderStyle::Inset) ? outsetBrush : insetBrush;
+
+            switch (side) {
+            case 0:
+                drawBlinkSolidSideWithBrush(0,
+                    x1 + std::max(-adjacentWidth1, 0.0f) / 2.0f,
+                    y1,
+                    x2 - std::max(-adjacentWidth2, 0.0f) / 2.0f,
+                    std::floor((y1 + y2 + 1.0f) / 2.0f),
+                    adjacent1BigHalf, adjacent2BigHalf, firstBrush);
+                drawBlinkSolidSideWithBrush(0,
+                    x1 + std::max(adjacentWidth1 + 1.0f, 0.0f) / 2.0f,
+                    std::floor((y1 + y2 + 1.0f) / 2.0f),
+                    x2 - std::max(adjacentWidth2 + 1.0f, 0.0f) / 2.0f,
+                    y2,
+                    adjacentWidth1 / 2.0f, adjacentWidth2 / 2.0f, secondBrush);
+                break;
+            case 2:
+                drawBlinkSolidSideWithBrush(2,
+                    x1 + std::max(adjacentWidth1, 0.0f) / 2.0f,
+                    y1,
+                    x2 - std::max(adjacentWidth2, 0.0f) / 2.0f,
+                    std::floor((y1 + y2 + 1.0f) / 2.0f),
+                    adjacent1BigHalf, adjacent2BigHalf, secondBrush);
+                drawBlinkSolidSideWithBrush(2,
+                    x1 + std::max(-adjacentWidth1 + 1.0f, 0.0f) / 2.0f,
+                    std::floor((y1 + y2 + 1.0f) / 2.0f),
+                    x2 - std::max(-adjacentWidth2 + 1.0f, 0.0f) / 2.0f,
+                    y2,
+                    adjacentWidth1 / 2.0f, adjacentWidth2 / 2.0f, firstBrush);
+                break;
+            case 3:
+                drawBlinkSolidSideWithBrush(3,
+                    x1,
+                    y1 + std::max(-adjacentWidth1, 0.0f) / 2.0f,
+                    std::floor((x1 + x2 + 1.0f) / 2.0f),
+                    y2 - std::max(-adjacentWidth2, 0.0f) / 2.0f,
+                    adjacent1BigHalf, adjacent2BigHalf, firstBrush);
+                drawBlinkSolidSideWithBrush(3,
+                    std::floor((x1 + x2 + 1.0f) / 2.0f),
+                    y1 + std::max(adjacentWidth1 + 1.0f, 0.0f) / 2.0f,
+                    x2,
+                    y2 - std::max(adjacentWidth2 + 1.0f, 0.0f) / 2.0f,
+                    adjacentWidth1 / 2.0f, adjacentWidth2 / 2.0f, secondBrush);
+                break;
+            case 1:
+            default:
+                drawBlinkSolidSideWithBrush(1,
+                    x1,
+                    y1 + std::max(adjacentWidth1, 0.0f) / 2.0f,
+                    std::floor((x1 + x2 + 1.0f) / 2.0f),
+                    y2 - std::max(adjacentWidth2, 0.0f) / 2.0f,
+                    adjacent1BigHalf, adjacent2BigHalf, secondBrush);
+                drawBlinkSolidSideWithBrush(1,
+                    std::floor((x1 + x2 + 1.0f) / 2.0f),
+                    y1 + std::max(-adjacentWidth1 + 1.0f, 0.0f) / 2.0f,
+                    x2,
+                    y2 - std::max(-adjacentWidth2 + 1.0f, 0.0f) / 2.0f,
+                    adjacentWidth1 / 2.0f, adjacentWidth2 / 2.0f, firstBrush);
+                break;
+            }
+        };
+
+        auto stylePriority = [](BorderStyle s) -> int {
+            // draw dashed/dotted/double first, then solids/3D styles.
+            if (s == BorderStyle::Dotted || s == BorderStyle::Dashed || s == BorderStyle::Double) return 1;
+            if (s == BorderStyle::None || s == BorderStyle::Hidden) return 0;
+            return 2;
+        };
+
+        const D2D1_POINT_2F topP0 = D2D1::Point2F(L + w * 0.5f, T + w * 0.5f);
+        const D2D1_POINT_2F topP1 = D2D1::Point2F(R - w * 0.5f, T + w * 0.5f);
+        const D2D1_POINT_2F rightP0 = D2D1::Point2F(R - w * 0.5f, T + w * 0.5f);
+        const D2D1_POINT_2F rightP1 = D2D1::Point2F(R - w * 0.5f, B - w * 0.5f);
+        const D2D1_POINT_2F bottomP0 = D2D1::Point2F(R - w * 0.5f, B - w * 0.5f);
+        const D2D1_POINT_2F bottomP1 = D2D1::Point2F(L + w * 0.5f, B - w * 0.5f);
+        const D2D1_POINT_2F leftP0 = D2D1::Point2F(L + w * 0.5f, B - w * 0.5f);
+        const D2D1_POINT_2F leftP1 = D2D1::Point2F(L + w * 0.5f, T + w * 0.5f);
+
+        std::vector<SidePaint> sides = {
+            {m_BorderStyleTop, topClip, stylePriority(m_BorderStyleTop), topP0, topP1, 0},
+            {m_BorderStyleRight, rightClip, stylePriority(m_BorderStyleRight), rightP0, rightP1, 1},
+            {m_BorderStyleBottom, bottomClip, stylePriority(m_BorderStyleBottom), bottomP0, bottomP1, 2},
+            {m_BorderStyleLeft, leftClip, stylePriority(m_BorderStyleLeft), leftP0, leftP1, 3}};
+
+        std::stable_sort(sides.begin(), sides.end(), [](const SidePaint &a, const SidePaint &b) {
+            return a.priority < b.priority;
+        });
+
+        auto isVisibleStyleForSide = [](BorderStyle style) {
+            return style != BorderStyle::None && style != BorderStyle::Hidden;
+        };
+
+        auto is3DStyleForSide = [](BorderStyle style) {
+            return style == BorderStyle::Groove || style == BorderStyle::Ridge ||
+                   style == BorderStyle::Inset || style == BorderStyle::Outset;
+        };
+
+        auto styleName = [](BorderStyle style) -> const wchar_t * {
+            switch (style) {
+            case BorderStyle::None: return L"none";
+            case BorderStyle::Hidden: return L"hidden";
+            case BorderStyle::Dotted: return L"dotted";
+            case BorderStyle::Dashed: return L"dashed";
+            case BorderStyle::Solid: return L"solid";
+            case BorderStyle::Double: return L"double";
+            case BorderStyle::Groove: return L"groove";
+            case BorderStyle::Ridge: return L"ridge";
+            case BorderStyle::Inset: return L"inset";
+            case BorderStyle::Outset: return L"outset";
+            default: return L"unknown";
+            }
+        };
+
+        if (!s_loggedMixedBorderDebug) {
+            s_loggedMixedBorderDebug = true;
+            Logging::Log(LogLevel::Info,
+                L"[LAYOUTBOX_BORDER_DBG] mixed rect=[%.1f,%.1f,%.1f,%.1f] w=%.1f styles top=%s right=%s bottom=%s left=%s",
+                L, T, R, B, w,
+                styleName(m_BorderStyleTop), styleName(m_BorderStyleRight),
+                styleName(m_BorderStyleBottom), styleName(m_BorderStyleLeft));
+            Logging::Log(LogLevel::Info,
+                L"[LAYOUTBOX_BORDER_DBG] bottom-left join bottom=%s left=%s visibleBottom=%d visibleLeft=%d",
+                styleName(m_BorderStyleBottom), styleName(m_BorderStyleLeft),
+                isVisibleStyleForSide(m_BorderStyleBottom) ? 1 : 0,
+                isVisibleStyleForSide(m_BorderStyleLeft) ? 1 : 0);
+            Logging::Log(LogLevel::Info,
+                L"[LAYOUTBOX_BORDER_DBG] bottom-left ownership leftIs3D=%d bottomSolidLeftAdjacentWidth=%.1f",
+                is3DStyleForSide(m_BorderStyleLeft) ? 1 : 0,
+                is3DStyleForSide(m_BorderStyleLeft) ? 0.0f : w);
+        }
+
+        for (const auto &side : sides) {
+            if (!side.clip || side.style == BorderStyle::None || side.style == BorderStyle::Hidden)
+                continue;
+            const bool useSideClip = side.style == BorderStyle::Dotted || side.style == BorderStyle::Dashed;
+            if (useSideClip) {
+                D2D1_LAYER_PARAMETERS1 params = D2D1::LayerParameters1(
+                    D2D1::InfiniteRect(),
+                    side.clip.Get(),
+                    D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                    D2D1::Matrix3x2F::Identity(),
+                    1.0f,
+                    nullptr,
+                    D2D1_LAYER_OPTIONS1_NONE);
+                context->PushLayer(params, nullptr);
+            }
+
+            // Side-local pattern generation for dotted/dashed to match CSS-like per-side distribution.
+            if (side.style == BorderStyle::Dotted || side.style == BorderStyle::Dashed) {
+                const float dx = side.p1.x - side.p0.x;
+                const float dy = side.p1.y - side.p0.y;
+                const float len = std::sqrt(dx * dx + dy * dy);
+                if (len > 0.001f) {
+                    const float ux = dx / len;
+                    const float uy = dy / len;
+
+                    if (side.style == BorderStyle::Dotted) {
+                        const float targetSpacing = w * 2.0f;
+                        int count = std::max(2, static_cast<int>(len / targetSpacing + 0.5f) + 1);
+                        for (int i = 0; i < count; ++i) {
+                            const float t = static_cast<float>(i) / static_cast<float>(count - 1);
+                            const D2D1_POINT_2F pt = D2D1::Point2F(side.p0.x + dx * t, side.p0.y + dy * t);
+                            context->FillEllipse(D2D1::Ellipse(pt, w * 0.5f, w * 0.5f), strokeBrush);
+                        }
+                    } else {
+                        const float dashLen = w * 3.0f;
+                        const float gapLen = w;
+                        const float period = dashLen + gapLen;
+                        const float px = -uy * (w * 0.5f);
+                        const float py = ux * (w * 0.5f);
+
+                        // CSS side borders start the dash pattern at the corner. That keeps
+                        // corner caps present while still repeating through short sides.
+                        const float edgeExtension = w * 0.5f;
+                        for (float start = -edgeExtension; start < len + edgeExtension; start += period) {
+                            const float s = std::max(-edgeExtension, start);
+                            const float e = std::min(len + edgeExtension, start + dashLen);
+                            if (e <= s)
+                                continue;
+                            const D2D1_POINT_2F a = D2D1::Point2F(side.p0.x + ux * s + px, side.p0.y + uy * s + py);
+                            const D2D1_POINT_2F b = D2D1::Point2F(side.p0.x + ux * e + px, side.p0.y + uy * e + py);
+                            const D2D1_POINT_2F c = D2D1::Point2F(side.p0.x + ux * e - px, side.p0.y + uy * e - py);
+                            const D2D1_POINT_2F d = D2D1::Point2F(side.p0.x + ux * s - px, side.p0.y + uy * s - py);
+
+                            Microsoft::WRL::ComPtr<ID2D1PathGeometry> dashPath;
+                            Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
+                            if (SUCCEEDED(factory->CreatePathGeometry(&dashPath)) &&
+                                SUCCEEDED(dashPath->Open(&sink))) {
+                                sink->BeginFigure(a, D2D1_FIGURE_BEGIN_FILLED);
+                                sink->AddLine(b);
+                                sink->AddLine(c);
+                                sink->AddLine(d);
+                                sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+                                sink->Close();
+                                context->FillGeometry(dashPath.Get(), strokeBrush);
+                            }
+                        }
+                    }
+                }
+            } else if (side.style == BorderStyle::Solid) {
+                const BorderStyle adjacentStyle1 = side.index == 0 ? m_BorderStyleLeft : side.index == 1 ? m_BorderStyleTop : side.index == 2 ? m_BorderStyleLeft : m_BorderStyleTop;
+                const BorderStyle adjacentStyle2 = side.index == 0 ? m_BorderStyleRight : side.index == 1 ? m_BorderStyleBottom : side.index == 2 ? m_BorderStyleRight : m_BorderStyleBottom;
+                const float adjacent1 = (side.index == 2 && is3DStyleForSide(adjacentStyle1)) ? 0.0f : (isVisibleStyleForSide(adjacentStyle1) ? w : 0.0f);
+                const float adjacent2 = isVisibleStyleForSide(adjacentStyle2) ? w : 0.0f;
+                if (side.index == 0)
+                    drawBlinkSolidSide(0, L, T, R, T + w, adjacent1, adjacent2);
+                else if (side.index == 1)
+                    drawBlinkSolidSide(1, R - w, T, R, B, adjacent1, adjacent2);
+                else if (side.index == 2)
+                    drawBlinkSolidSide(2, L, B - w, R, B, adjacent1, adjacent2);
+                else
+                    drawBlinkSolidSide(3, L, T, L + w, B, adjacent1, adjacent2);
+            } else if (side.style == BorderStyle::Double) {
+                const float adjacent1 = isVisibleStyleForSide(side.index == 0 ? m_BorderStyleLeft : side.index == 1 ? m_BorderStyleTop : side.index == 2 ? m_BorderStyleLeft : m_BorderStyleTop) ? w : 0.0f;
+                const float adjacent2 = isVisibleStyleForSide(side.index == 0 ? m_BorderStyleRight : side.index == 1 ? m_BorderStyleBottom : side.index == 2 ? m_BorderStyleRight : m_BorderStyleBottom) ? w : 0.0f;
+                if (side.index == 0)
+                    drawBlinkDoubleSide(0, L, T, R, T + w, adjacent1, adjacent2);
+                else if (side.index == 1)
+                    drawBlinkDoubleSide(1, R - w, T, R, B, adjacent1, adjacent2);
+                else if (side.index == 2)
+                    drawBlinkDoubleSide(2, L, B - w, R, B, adjacent1, adjacent2);
+                else
+                    drawBlinkDoubleSide(3, L, T, L + w, B, adjacent1, adjacent2);
+            } else {
+                const float adjacent1 = isVisibleStyleForSide(side.index == 0 ? m_BorderStyleLeft : side.index == 1 ? m_BorderStyleTop : side.index == 2 ? m_BorderStyleLeft : m_BorderStyleTop) ? w : 0.0f;
+                const float adjacent2 = isVisibleStyleForSide(side.index == 0 ? m_BorderStyleRight : side.index == 1 ? m_BorderStyleBottom : side.index == 2 ? m_BorderStyleRight : m_BorderStyleBottom) ? w : 0.0f;
+                if (side.index == 0)
+                    drawBlink3DSide(0, side.style, L, T, R, T + w, adjacent1, adjacent2);
+                else if (side.index == 1)
+                    drawBlink3DSide(1, side.style, R - w, T, R, B, adjacent1, adjacent2);
+                else if (side.index == 2)
+                    drawBlink3DSide(2, side.style, L, B - w, R, B, adjacent1, adjacent2);
+                else
+                    drawBlink3DSide(3, side.style, L, T, L + w, B, adjacent1, adjacent2);
+            }
+            if (useSideClip)
+                context->PopLayer();
+        }
+
+        // Close tiny corner seams/notches in mixed-side mode.
+        auto isVisibleStyle = [](BorderStyle s) {
+            return s != BorderStyle::None && s != BorderStyle::Hidden;
+        };
+        auto isComplexJoinStyle = [](BorderStyle s) {
+            return s == BorderStyle::Dotted || s == BorderStyle::Dashed ||
+                   s == BorderStyle::Double || s == BorderStyle::Groove ||
+                   s == BorderStyle::Ridge || s == BorderStyle::Inset ||
+                   s == BorderStyle::Outset;
+        };
+        auto fillCornerBevel = [&](D2D1_POINT_2F a, D2D1_POINT_2F b, D2D1_POINT_2F c) {
+            Microsoft::WRL::ComPtr<ID2D1PathGeometry> g;
+            Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
+            if (FAILED(factory->CreatePathGeometry(&g)) || FAILED(g->Open(&sink)))
+                return;
+            sink->BeginFigure(a, D2D1_FIGURE_BEGIN_FILLED);
+            sink->AddLine(b);
+            sink->AddLine(c);
+            sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+            sink->Close();
+            context->FillGeometry(g.Get(), strokeBrush);
+        };
+
+        if (isVisibleStyle(m_BorderStyleTop) && isVisibleStyle(m_BorderStyleLeft) &&
+            !isComplexJoinStyle(m_BorderStyleTop) && !isComplexJoinStyle(m_BorderStyleLeft))
+            fillCornerBevel(
+                D2D1::Point2F(L, T),
+                D2D1::Point2F(L + w, T),
+                D2D1::Point2F(L, T + w));
+        if (isVisibleStyle(m_BorderStyleTop) && isVisibleStyle(m_BorderStyleRight) &&
+            !isComplexJoinStyle(m_BorderStyleTop) && !isComplexJoinStyle(m_BorderStyleRight))
+            fillCornerBevel(
+                D2D1::Point2F(R - w, T),
+                D2D1::Point2F(R, T),
+                D2D1::Point2F(R, T + w));
+        if (isVisibleStyle(m_BorderStyleBottom) && isVisibleStyle(m_BorderStyleLeft) &&
+            !isComplexJoinStyle(m_BorderStyleBottom) && !isComplexJoinStyle(m_BorderStyleLeft))
+            fillCornerBevel(
+                D2D1::Point2F(L, B - w),
+                D2D1::Point2F(L + w, B - w),
+                D2D1::Point2F(L, B));
+        if (isVisibleStyle(m_BorderStyleBottom) && isVisibleStyle(m_BorderStyleRight) &&
+            !isComplexJoinStyle(m_BorderStyleBottom) && !isComplexJoinStyle(m_BorderStyleRight))
+            fillCornerBevel(
+                D2D1::Point2F(R - w, B - w),
+                D2D1::Point2F(R, B - w),
+                D2D1::Point2F(R, B));
     }
 }
