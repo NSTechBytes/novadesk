@@ -937,8 +937,14 @@ void ElementLayoutBox::RenderBorderWithStyle(ID2D1DeviceContext* context, const 
                 const float adjacent2BigHalf = bigHalf(adjacentWidth2);
                 ID2D1Brush* insetBrush = (side == 0 || side == 3) ? darkBrush.Get() : lightBrush.Get();
                 ID2D1Brush* outsetBrush = (side == 0 || side == 3) ? lightBrush.Get() : darkBrush.Get();
-                ID2D1Brush* firstBrush = (style == BorderStyle::Groove || style == BorderStyle::Inset) ? insetBrush : outsetBrush;
-                ID2D1Brush* secondBrush = (style == BorderStyle::Groove || style == BorderStyle::Inset) ? outsetBrush : insetBrush;
+                if (style == BorderStyle::Inset || style == BorderStyle::Outset)
+                {
+                    ID2D1Brush* solidBrush = (style == BorderStyle::Inset) ? insetBrush : outsetBrush;
+                    drawBlinkSolidSideWithBrush(side, x1, y1, x2, y2, adjacentWidth1, adjacentWidth2, solidBrush);
+                    return;
+                }
+                ID2D1Brush* firstBrush = (style == BorderStyle::Groove) ? insetBrush : outsetBrush;
+                ID2D1Brush* secondBrush = (style == BorderStyle::Groove) ? outsetBrush : insetBrush;
                 switch (side)
                 {
                 case 0:

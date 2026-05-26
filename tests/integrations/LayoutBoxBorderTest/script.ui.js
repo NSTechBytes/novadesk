@@ -1,8 +1,6 @@
 const styles = ["double", "dotted", "dashed", "groove", "ridge", "inset", "outset", "solid"];
 const perSideStyles = [
-  ["dotted", "dashed", "solid", "groove"],
-  // ["dashed", "double", "solid"],
-  // ["groove", "ridge", "inset", "outset"]
+  ["groove", "ridge", "inset", "outset"]
 ];
 
 ui.beginUpdate();
@@ -38,10 +36,11 @@ for (let i = 0; i < perSideStyles.length; i++) {
     id: "box_perside_" + i,
     x: 40 + i * 150,
     y: 350,
-    width: 600,
-    height: 150,
+    width: 100,
+    height: 100,
     backgroundColor: "rgb(255, 230, 230)",
     borderWidth: 10,
+    borderRadius: 20,
     borderColor: "rgb(200, 100, 100)",
     borderStyle: styleArr,
     children: [{
