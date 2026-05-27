@@ -574,22 +574,34 @@ namespace novadesk::scripting::quickjs
             if (options.id.empty())
                 return ThrowTypeError(ctx, "animate", "id is required");
 
-            Widget::AnimationTarget target{};
-            target.hasX = options.hasX;
-            target.hasY = options.hasY;
-            target.hasWidth = options.hasWidth;
-            target.hasHeight = options.hasHeight;
-            target.hasRotate = options.hasRotate;
-            target.x = options.x;
-            target.y = options.y;
-            target.width = options.width;
-            target.height = options.height;
-            target.rotate = options.rotate;
+            Widget::AnimationTarget to{};
+            to.hasX = options.hasX;
+            to.hasY = options.hasY;
+            to.hasWidth = options.hasWidth;
+            to.hasHeight = options.hasHeight;
+            to.hasRotate = options.hasRotate;
+            to.x = options.x;
+            to.y = options.y;
+            to.width = options.width;
+            to.height = options.height;
+            to.rotate = options.rotate;
 
-            if (!target.hasX && !target.hasY && !target.hasWidth && !target.hasHeight && !target.hasRotate)
+            if (!to.hasX && !to.hasY && !to.hasWidth && !to.hasHeight && !to.hasRotate)
                 return ThrowTypeError(ctx, "animate", "to must include at least one supported property");
 
-            widget->StartElementAnimation(options.id, target, options.duration, options.easing);
+            Widget::AnimationTarget from{};
+            from.hasX = options.fromHasX;
+            from.hasY = options.fromHasY;
+            from.hasWidth = options.fromHasWidth;
+            from.hasHeight = options.fromHasHeight;
+            from.hasRotate = options.fromHasRotate;
+            from.x = options.fromX;
+            from.y = options.fromY;
+            from.width = options.fromWidth;
+            from.height = options.fromHeight;
+            from.rotate = options.fromRotate;
+
+            widget->StartElementAnimation(options.id, to, from, options.duration, options.easing);
             return JS_UNDEFINED;
         }
 

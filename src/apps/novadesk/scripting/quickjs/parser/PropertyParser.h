@@ -419,6 +419,16 @@ namespace PropertyParser
         float width = 0.0f;
         float height = 0.0f;
         float rotate = 0.0f;
+        bool fromHasX = false;
+        bool fromHasY = false;
+        bool fromHasWidth = false;
+        bool fromHasHeight = false;
+        bool fromHasRotate = false;
+        float fromX = 0.0f;
+        float fromY = 0.0f;
+        float fromWidth = 0.0f;
+        float fromHeight = 0.0f;
+        float fromRotate = 0.0f;
     };
 
     void ParseElementOptions(JSContext *ctx, JSValueConst obj, ElementOptions &options, const std::wstring &baseDir = L"");

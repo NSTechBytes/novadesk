@@ -1817,7 +1817,7 @@ bool Widget::TryGetLayoutConfig(const std::wstring &id, LayoutConfig &config) co
     return true;
 }
 
-void Widget::StartElementAnimation(const std::wstring &id, const AnimationTarget &target, int durationMs, const std::wstring &easing)
+void Widget::StartElementAnimation(const std::wstring &id, const AnimationTarget &to, const AnimationTarget &from, int durationMs, const std::wstring &easing)
 {
     if (id.empty())
         return;
@@ -1830,19 +1830,55 @@ void Widget::StartElementAnimation(const std::wstring &id, const AnimationTarget
     anim.easing = easing.empty() ? L"linear" : easing;
     anim.durationMs = durationMs > 0 ? durationMs : 1;
     anim.startTick = GetTickCount();
-    anim.to = target;
+    anim.to = to;
 
-    anim.from.hasX = target.hasX;
-    anim.from.hasY = target.hasY;
-    anim.from.hasWidth = target.hasWidth;
-    anim.from.hasHeight = target.hasHeight;
-    anim.from.hasRotate = target.hasRotate;
+    anim.from.hasX = to.hasX;
+    anim.from.hasY = to.hasY;
+    anim.from.hasWidth = to.hasWidth;
+    anim.from.hasHeight = to.hasHeight;
+    anim.from.hasRotate = to.hasRotate;
 
-    anim.from.x = static_cast<float>(element->GetX());
-    anim.from.y = static_cast<float>(element->GetY());
-    anim.from.width = static_cast<float>(element->GetWidth());
-    anim.from.height = static_cast<float>(element->GetHeight());
-    anim.from.rotate = element->GetRotate();
+    int x = element->GetX();
+    int y = element->GetY();
+    int w = element->GetWidth();
+    int h = element->GetHeight();
+    float rotate = element->GetRotate();
+
+    if (to.hasX)
+    {
+        anim.from.x = from.hasX ? from.x : static_cast<float>(x);
+        if (from.hasX)
+            x = static_cast<int>(std::lround(from.x));
+    }
+    if (to.hasY)
+    {
+        anim.from.y = from.hasY ? from.y : static_cast<float>(y);
+        if (from.hasY)
+            y = static_cast<int>(std::lround(from.y));
+    }
+    if (to.hasWidth)
+    {
+        anim.from.width = from.hasWidth ? from.width : static_cast<float>(w);
+        if (from.hasWidth)
+            w = static_cast<int>(std::lround(from.width));
+    }
+    if (to.hasHeight)
+    {
+        anim.from.height = from.hasHeight ? from.height : static_cast<float>(h);
+        if (from.hasHeight)
+            h = static_cast<int>(std::lround(from.height));
+    }
+    if (to.hasRotate)
+    {
+        anim.from.rotate = from.hasRotate ? from.rotate : rotate;
+        if (from.hasRotate)
+            rotate = from.rotate;
+    }
+
+    element->SetPosition(x, y);
+    element->SetSize(w, h);
+    if (to.hasRotate)
+        element->SetRotate(rotate);
 
     m_Animations.erase(
         std::remove_if(m_Animations.begin(), m_Animations.end(), [&](const ElementAnimation &a)

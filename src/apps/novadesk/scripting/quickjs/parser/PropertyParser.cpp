@@ -1974,6 +1974,17 @@ namespace PropertyParser
             options.hasRotate = GetFloatProp(ctx, toVal, "rotate", options.rotate);
         }
         JS_FreeValue(ctx, toVal);
+
+        JSValue fromVal = JS_GetPropertyStr(ctx, obj, "from");
+        if (JS_IsObject(fromVal))
+        {
+            options.fromHasX = GetFloatProp(ctx, fromVal, "x", options.fromX);
+            options.fromHasY = GetFloatProp(ctx, fromVal, "y", options.fromY);
+            options.fromHasWidth = GetFloatProp(ctx, fromVal, "width", options.fromWidth);
+            options.fromHasHeight = GetFloatProp(ctx, fromVal, "height", options.fromHeight);
+            options.fromHasRotate = GetFloatProp(ctx, fromVal, "rotate", options.fromRotate);
+        }
+        JS_FreeValue(ctx, fromVal);
     }
 
     void ApplyElementOptions(Element *element, const ElementOptions &options)

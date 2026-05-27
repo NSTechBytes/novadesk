@@ -176,7 +176,7 @@ public:
     bool TryGetLayoutConfig(const std::wstring &id, LayoutConfig &config) const;
     bool IsLayoutContainer(const std::wstring &id) const;
     void ReflowLayout(const std::wstring &id);
-    void StartElementAnimation(const std::wstring &id, const AnimationTarget &target, int durationMs, const std::wstring &easing);
+    void StartElementAnimation(const std::wstring &id, const AnimationTarget &to, const AnimationTarget &from, int durationMs, const std::wstring &easing);
 
 private:
     static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
