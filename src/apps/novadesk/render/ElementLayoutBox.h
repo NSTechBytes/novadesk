@@ -7,6 +7,7 @@
  
 #pragma once
 
+#include "BoxBorderPaint.h"
 #include "ShapeElement.h"
 
 class ElementLayoutBox : public ShapeElement
@@ -23,26 +24,8 @@ public:
         bool inset = false;
     };
 
-    enum class BorderPosition
-    {
-        Outside,
-        Center,
-        Inside
-    };
-
-    enum class BorderStyle
-    {
-        None,
-        Hidden,
-        Dotted,
-        Dashed,
-        Solid,
-        Double,
-        Groove,
-        Ridge,
-        Inset,
-        Outset
-    };
+    using BorderPosition = BoxBorder::Position;
+    using BorderStyle = BoxBorder::Style;
 
     ElementLayoutBox(const std::wstring &id, int x, int y, int width, int height);
     ~ElementLayoutBox() override = default;
@@ -73,8 +56,7 @@ public:
 
 private:
     void RenderSingleShadow(ID2D1DeviceContext *context, const D2D1_ROUNDED_RECT &baseRect, const BoxShadow &shadow);
-    void RenderBorderWithStyle(ID2D1DeviceContext *context, const D2D1_ROUNDED_RECT &rect,
-                               ID2D1Brush *strokeBrush, float strokeWidth);
+    BoxBorderPaintParams BuildBorderPaintParams() const;
 
     float m_RadiusX = 0.0f;
     float m_RadiusY = 0.0f;

@@ -1,6 +1,6 @@
 const styles = ["double", "dotted", "dashed", "groove", "ridge", "inset", "outset", "solid"];
 const perSideStyles = [
-  ["groove", "dashed", "ridge", "double"]
+  ["groove", "dashed", "inset", "double"]
 ];
 
 ui.beginUpdate();
@@ -17,7 +17,7 @@ for (let i = 0; i < styles.length; i++) {
     borderWidth: 10,
     borderColor: "rgb(100, 100, 200)",
     borderStyle: style,
-    // borderRadius: 20,
+    borderRadius: 20,
     borderPosition: "inside",
     children: [{
       type: "text",
@@ -39,8 +39,8 @@ for (let i = 0; i < perSideStyles.length; i++) {
     width: 100,
     height: 100,
     backgroundColor: "rgb(28, 191, 166)",
-    borderWidth: 10,
-    // borderRadius: 20,
+    borderWidth: 15,
+    borderRadius: 20,
     borderPosition: "center",
     borderColor: "rgb(200, 100, 100)",
     borderStyle: styleArr,
