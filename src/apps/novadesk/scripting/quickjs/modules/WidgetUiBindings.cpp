@@ -561,6 +561,102 @@ namespace novadesk::scripting::quickjs
             return CreateTypedElementObject(ctx, argv[0], typeName);
         }
 
+        Widget::AnimationTarget BuildAnimationTargetFromOptions(const PropertyParser::AnimationOptions &options, bool useFrom)
+        {
+            Widget::AnimationTarget target{};
+            if (useFrom)
+            {
+                target.hasX = options.fromHasX;
+                target.hasY = options.fromHasY;
+                target.hasWidth = options.fromHasWidth;
+                target.hasHeight = options.fromHasHeight;
+                target.hasRotate = options.fromHasRotate;
+                target.x = options.fromX;
+                target.y = options.fromY;
+                target.width = options.fromWidth;
+                target.height = options.fromHeight;
+                target.rotate = options.fromRotate;
+                target.hasFontSize = options.fromHasFontSize;
+                target.hasFontWeight = options.fromHasFontWeight;
+                target.hasLetterSpacing = options.fromHasLetterSpacing;
+                target.hasFontColor = options.fromHasFontColor;
+                target.fontSize = options.fromFontSize;
+                target.fontWeight = options.fromFontWeight;
+                target.letterSpacing = options.fromLetterSpacing;
+                target.fontColorR = options.fromFontColorR;
+                target.fontColorG = options.fromFontColorG;
+                target.fontColorB = options.fromFontColorB;
+                target.fontAlpha = options.fromFontAlpha;
+            }
+            else
+            {
+                target.hasX = options.hasX;
+                target.hasY = options.hasY;
+                target.hasWidth = options.hasWidth;
+                target.hasHeight = options.hasHeight;
+                target.hasRotate = options.hasRotate;
+                target.x = options.x;
+                target.y = options.y;
+                target.width = options.width;
+                target.height = options.height;
+                target.rotate = options.rotate;
+                target.hasFontSize = options.hasFontSize;
+                target.hasFontWeight = options.hasFontWeight;
+                target.hasLetterSpacing = options.hasLetterSpacing;
+                target.hasFontColor = options.hasFontColor;
+                target.fontSize = options.fontSize;
+                target.fontWeight = options.fontWeight;
+                target.letterSpacing = options.letterSpacing;
+                target.fontColorR = options.fontColorR;
+                target.fontColorG = options.fontColorG;
+                target.fontColorB = options.fontColorB;
+                target.fontAlpha = options.fontAlpha;
+            }
+            return target;
+        }
+
+        Widget::AnimationTarget BuildAnimationTargetFromKeyframe(const PropertyParser::AnimationKeyframeOptions &kf)
+        {
+            Widget::AnimationTarget target{};
+            target.hasX = kf.hasX;
+            target.hasY = kf.hasY;
+            target.hasWidth = kf.hasWidth;
+            target.hasHeight = kf.hasHeight;
+            target.hasRotate = kf.hasRotate;
+            target.x = kf.x;
+            target.y = kf.y;
+            target.width = kf.width;
+            target.height = kf.height;
+            target.rotate = kf.rotate;
+            target.hasFontSize = kf.hasFontSize;
+            target.hasFontWeight = kf.hasFontWeight;
+            target.hasLetterSpacing = kf.hasLetterSpacing;
+            target.hasFontColor = kf.hasFontColor;
+            target.fontSize = kf.fontSize;
+            target.fontWeight = kf.fontWeight;
+            target.letterSpacing = kf.letterSpacing;
+            target.fontColorR = kf.fontColorR;
+            target.fontColorG = kf.fontColorG;
+            target.fontColorB = kf.fontColorB;
+            target.fontAlpha = kf.fontAlpha;
+            return target;
+        }
+
+        std::vector<Widget::AnimationKeyframe> BuildKeyframesFromOptions(const PropertyParser::AnimationOptions &options)
+        {
+            std::vector<Widget::AnimationKeyframe> keyframes;
+            keyframes.reserve(options.keyframes.size());
+            for (const PropertyParser::AnimationKeyframeOptions &kf : options.keyframes)
+            {
+                Widget::AnimationKeyframe entry{};
+                entry.offset = kf.offset;
+                entry.easing = kf.easing;
+                entry.values = BuildAnimationTargetFromKeyframe(kf);
+                keyframes.push_back(entry);
+            }
+            return keyframes;
+        }
+
         JSValue JsWidgetAnimate(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -574,34 +670,39 @@ namespace novadesk::scripting::quickjs
             if (options.id.empty())
                 return ThrowTypeError(ctx, "animate", "id is required");
 
-            Widget::AnimationTarget to{};
-            to.hasX = options.hasX;
-            to.hasY = options.hasY;
-            to.hasWidth = options.hasWidth;
-            to.hasHeight = options.hasHeight;
-            to.hasRotate = options.hasRotate;
-            to.x = options.x;
-            to.y = options.y;
-            to.width = options.width;
-            to.height = options.height;
-            to.rotate = options.rotate;
-
-            if (!to.hasX && !to.hasY && !to.hasWidth && !to.hasHeight && !to.hasRotate)
+            if (!options.HasAnyToProps())
                 return ThrowTypeError(ctx, "animate", "to must include at least one supported property");
 
-            Widget::AnimationTarget from{};
-            from.hasX = options.fromHasX;
-            from.hasY = options.fromHasY;
-            from.hasWidth = options.fromHasWidth;
-            from.hasHeight = options.fromHasHeight;
-            from.hasRotate = options.fromHasRotate;
-            from.x = options.fromX;
-            from.y = options.fromY;
-            from.width = options.fromWidth;
-            from.height = options.fromHeight;
-            from.rotate = options.fromRotate;
+            Element *element = widget->FindElementById(options.id);
+            if (!element)
+                return ThrowTypeError(ctx, "animate", "element not found");
 
-            widget->StartElementAnimation(options.id, to, from, options.duration, options.easing);
+            if (options.HasAnyTextToProps() && element->GetType() != ELEMENT_TEXT)
+                return ThrowTypeError(ctx, "animate", "fontSize, fontWeight, letterSpacing, and fontColor require a text element");
+
+            if (options.iterationCountInvalid)
+                return ThrowTypeError(ctx, "animate", "iterationCount must be at least 1 or 'infinite'");
+
+            if (options.keyframesInvalid)
+            {
+                const std::string msg = Utils::ToString(options.keyframesError.empty() ? L"invalid keyframes" : options.keyframesError);
+                return ThrowTypeError(ctx, "animate", msg.c_str());
+            }
+
+            int iterationCount = options.iterationCount;
+            if (options.iterationInfinite)
+                iterationCount = -1;
+
+            if (options.hasKeyframes)
+            {
+                const std::vector<Widget::AnimationKeyframe> keyframes = BuildKeyframesFromOptions(options);
+                widget->StartElementKeyframeAnimation(options.id, keyframes, options.duration, options.easing, iterationCount);
+                return JS_UNDEFINED;
+            }
+
+            const Widget::AnimationTarget to = BuildAnimationTargetFromOptions(options, false);
+            const Widget::AnimationTarget from = BuildAnimationTargetFromOptions(options, true);
+            widget->StartElementAnimation(options.id, to, from, options.duration, options.easing, iterationCount);
             return JS_UNDEFINED;
         }
 

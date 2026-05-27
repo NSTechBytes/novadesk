@@ -104,6 +104,39 @@ public:
         float width = 0.0f;
         float height = 0.0f;
         float rotate = 0.0f;
+        bool hasFontSize = false;
+        bool hasFontWeight = false;
+        bool hasLetterSpacing = false;
+        bool hasFontColor = false;
+        float fontSize = 12.0f;
+        float fontWeight = 400.0f;
+        float letterSpacing = 0.0f;
+        float fontColorR = 0.0f;
+        float fontColorG = 0.0f;
+        float fontColorB = 0.0f;
+        float fontAlpha = 255.0f;
+
+        bool HasTransformProps() const
+        {
+            return hasX || hasY || hasWidth || hasHeight || hasRotate;
+        }
+
+        bool HasTextProps() const
+        {
+            return hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor;
+        }
+
+        bool HasAnyProps() const
+        {
+            return HasTransformProps() || HasTextProps();
+        }
+    };
+
+    struct AnimationKeyframe
+    {
+        float offset = 0.0f;
+        std::wstring easing;
+        AnimationTarget values;
     };
 
     Widget(const WidgetOptions& options);
@@ -176,7 +209,8 @@ public:
     bool TryGetLayoutConfig(const std::wstring &id, LayoutConfig &config) const;
     bool IsLayoutContainer(const std::wstring &id) const;
     void ReflowLayout(const std::wstring &id);
-    void StartElementAnimation(const std::wstring &id, const AnimationTarget &to, const AnimationTarget &from, int durationMs, const std::wstring &easing);
+    void StartElementAnimation(const std::wstring &id, const AnimationTarget &to, const AnimationTarget &from, int durationMs, const std::wstring &easing, int iterationCount);
+    void StartElementKeyframeAnimation(const std::wstring &id, const std::vector<AnimationKeyframe> &keyframes, int durationMs, const std::wstring &easing, int iterationCount);
 
 private:
     static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -225,6 +259,12 @@ private:
         std::wstring easing = L"linear";
         DWORD startTick = 0;
         int durationMs = 250;
+        int iterationCount = 1;
+        int completedIterations = 0;
+        bool useKeyframes = false;
+        std::vector<float> keyframeOffsets;
+        std::vector<std::wstring> keyframeEasings;
+        std::vector<AnimationTarget> resolvedStops;
         AnimationTarget from;
         AnimationTarget to;
     };

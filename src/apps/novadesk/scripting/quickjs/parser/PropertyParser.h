@@ -404,11 +404,58 @@ namespace PropertyParser
         int minHeight = 0;
     };
 
+    struct AnimationKeyframeOptions
+    {
+        float offset = 0.0f;
+        bool hasOffset = false;
+        std::wstring easing;
+        bool hasX = false;
+        bool hasY = false;
+        bool hasWidth = false;
+        bool hasHeight = false;
+        bool hasRotate = false;
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        float rotate = 0.0f;
+        bool hasFontSize = false;
+        bool hasFontWeight = false;
+        bool hasLetterSpacing = false;
+        bool hasFontColor = false;
+        float fontSize = 12.0f;
+        float fontWeight = 400.0f;
+        float letterSpacing = 0.0f;
+        float fontColorR = 0.0f;
+        float fontColorG = 0.0f;
+        float fontColorB = 0.0f;
+        float fontAlpha = 255.0f;
+
+        bool HasAnyProps() const
+        {
+            return hasX || hasY || hasWidth || hasHeight || hasRotate ||
+                   hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor;
+        }
+
+        bool HasTextProps() const
+        {
+            return hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor;
+        }
+    };
+
     struct AnimationOptions
     {
         std::wstring id;
         int duration = 250;
         std::wstring easing = L"linear";
+        int iterationCount = 1;
+        bool iterationInfinite = false;
+        bool hasIterationCount = false;
+        bool iterationCountInvalid = false;
+        bool hasKeyframes = false;
+        bool keyframesInvalid = false;
+        std::wstring keyframesError;
+        std::vector<AnimationKeyframeOptions> keyframes;
         bool hasX = false;
         bool hasY = false;
         bool hasWidth = false;
@@ -429,6 +476,62 @@ namespace PropertyParser
         float fromWidth = 0.0f;
         float fromHeight = 0.0f;
         float fromRotate = 0.0f;
+        bool hasFontSize = false;
+        bool hasFontWeight = false;
+        bool hasLetterSpacing = false;
+        bool hasFontColor = false;
+        float fontSize = 12.0f;
+        float fontWeight = 400.0f;
+        float letterSpacing = 0.0f;
+        float fontColorR = 0.0f;
+        float fontColorG = 0.0f;
+        float fontColorB = 0.0f;
+        float fontAlpha = 255.0f;
+        bool fromHasFontSize = false;
+        bool fromHasFontWeight = false;
+        bool fromHasLetterSpacing = false;
+        bool fromHasFontColor = false;
+        float fromFontSize = 12.0f;
+        float fromFontWeight = 400.0f;
+        float fromLetterSpacing = 0.0f;
+        float fromFontColorR = 0.0f;
+        float fromFontColorG = 0.0f;
+        float fromFontColorB = 0.0f;
+        float fromFontAlpha = 255.0f;
+
+        bool HasAnyToProps() const
+        {
+            if (hasKeyframes)
+            {
+                for (const AnimationKeyframeOptions &kf : keyframes)
+                {
+                    if (kf.HasAnyProps())
+                        return true;
+                }
+                return false;
+            }
+            return hasX || hasY || hasWidth || hasHeight || hasRotate ||
+                   hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor;
+        }
+
+        bool HasAnyTextToProps() const
+        {
+            if (hasKeyframes)
+            {
+                for (const AnimationKeyframeOptions &kf : keyframes)
+                {
+                    if (kf.HasTextProps())
+                        return true;
+                }
+                return false;
+            }
+            return hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor;
+        }
+
+        bool UsesTweenMode() const
+        {
+            return !hasKeyframes;
+        }
     };
 
     void ParseElementOptions(JSContext *ctx, JSValueConst obj, ElementOptions &options, const std::wstring &baseDir = L"");
