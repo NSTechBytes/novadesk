@@ -563,17 +563,6 @@ namespace novadesk::scripting::quickjs
                 target.width = options.fromWidth;
                 target.height = options.fromHeight;
                 target.rotate = options.fromRotate;
-                target.hasFontSize = options.fromHasFontSize;
-                target.hasFontWeight = options.fromHasFontWeight;
-                target.hasLetterSpacing = options.fromHasLetterSpacing;
-                target.hasFontColor = options.fromHasFontColor;
-                target.fontSize = options.fromFontSize;
-                target.fontWeight = options.fromFontWeight;
-                target.letterSpacing = options.fromLetterSpacing;
-                target.fontColorR = options.fromFontColorR;
-                target.fontColorG = options.fromFontColorG;
-                target.fontColorB = options.fromFontColorB;
-                target.fontAlpha = options.fromFontAlpha;
             }
             else
             {
@@ -587,17 +576,6 @@ namespace novadesk::scripting::quickjs
                 target.width = options.width;
                 target.height = options.height;
                 target.rotate = options.rotate;
-                target.hasFontSize = options.hasFontSize;
-                target.hasFontWeight = options.hasFontWeight;
-                target.hasLetterSpacing = options.hasLetterSpacing;
-                target.hasFontColor = options.hasFontColor;
-                target.fontSize = options.fontSize;
-                target.fontWeight = options.fontWeight;
-                target.letterSpacing = options.letterSpacing;
-                target.fontColorR = options.fontColorR;
-                target.fontColorG = options.fontColorG;
-                target.fontColorB = options.fontColorB;
-                target.fontAlpha = options.fontAlpha;
             }
             return target;
         }
@@ -664,8 +642,8 @@ namespace novadesk::scripting::quickjs
             if (!element)
                 return ThrowTypeError(ctx, "animate", "element not found");
 
-            if (options.HasAnyTextToProps() && element->GetType() != ELEMENT_TEXT)
-                return ThrowTypeError(ctx, "animate", "fontSize, fontWeight, letterSpacing, and fontColor require a text element");
+            if (options.hasKeyframes && options.HasAnyTextToProps() && element->GetType() != ELEMENT_TEXT)
+                return ThrowTypeError(ctx, "animate", "fontSize, fontWeight, letterSpacing, and fontColor in keyframes require a text element");
 
             if (options.iterationCountInvalid)
                 return ThrowTypeError(ctx, "animate", "iterationCount must be at least 1 or 'infinite'");
@@ -673,6 +651,12 @@ namespace novadesk::scripting::quickjs
             if (options.keyframesInvalid)
             {
                 const std::string msg = Utils::ToString(options.keyframesError.empty() ? L"invalid keyframes" : options.keyframesError);
+                return ThrowTypeError(ctx, "animate", msg.c_str());
+            }
+
+            if (options.tweenInvalid)
+            {
+                const std::string msg = Utils::ToString(options.tweenError.empty() ? L"invalid from/to" : options.tweenError);
                 return ThrowTypeError(ctx, "animate", msg.c_str());
             }
 

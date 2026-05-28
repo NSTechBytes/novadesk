@@ -211,6 +211,8 @@ public:
     void StartElementAnimation(const std::wstring &id, const AnimationTarget &to, const AnimationTarget &from, int durationMs, const std::wstring &easing, int iterationCount);
     void StartElementKeyframeAnimation(const std::wstring &id, const std::vector<AnimationKeyframe> &keyframes, int durationMs, const std::wstring &easing, int iterationCount);
 
+    friend class WidgetAnimationHelper;
+
 private:
     static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
@@ -229,7 +231,6 @@ private:
     void UpdateContainerForElement(Element* element, const std::wstring& newContainerId);
     bool WouldCreateContainerCycle(Element* element, Element* container) const;
     void ApplyLayoutForContainer(Element *container);
-    void StepAnimations();
     void RenderContainerChildren(Element* container);
     bool HitTestContainerChildren(Element* container, int x, int y, Element*& outElement);
     bool HitTestContainerChildrenDetailed(
@@ -267,6 +268,7 @@ private:
         AnimationTarget from;
         AnimationTarget to;
     };
+
     std::vector<ElementAnimation> m_Animations;
     Element* m_MouseOverElement = nullptr;
     Element* m_TooltipElement = nullptr;

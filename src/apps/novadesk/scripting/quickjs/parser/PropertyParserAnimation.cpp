@@ -16,6 +16,42 @@
 namespace PropertyParser
 {
     using namespace Js;
+
+    static bool HasDisallowedTweenTextProps(JSContext *ctx, JSValueConst obj)
+    {
+        static const char *kForbidden[] = {"fontSize", "fontWeight", "letterSpacing", "fontColor"};
+        for (const char *key : kForbidden)
+        {
+            JSValue v = JS_GetPropertyStr(ctx, obj, key);
+            const bool present = !JS_IsException(v) && !JS_IsUndefined(v) && !JS_IsNull(v);
+            JS_FreeValue(ctx, v);
+            if (present)
+                return true;
+        }
+        return false;
+    }
+
+    static void ParseAnimationTransformObject(
+        JSContext *ctx,
+        JSValueConst obj,
+        bool &hasX,
+        float &x,
+        bool &hasY,
+        float &y,
+        bool &hasWidth,
+        float &width,
+        bool &hasHeight,
+        float &height,
+        bool &hasRotate,
+        float &rotate)
+    {
+        hasX = GetFloatProp(ctx, obj, "x", x);
+        hasY = GetFloatProp(ctx, obj, "y", y);
+        hasWidth = GetFloatProp(ctx, obj, "width", width);
+        hasHeight = GetFloatProp(ctx, obj, "height", height);
+        hasRotate = GetFloatProp(ctx, obj, "rotate", rotate);
+    }
+
     static void ParseAnimationTargetObject(
         JSContext *ctx,
         JSValueConst obj,
@@ -372,60 +408,56 @@ namespace PropertyParser
         JSValue toVal = JS_GetPropertyStr(ctx, obj, "to");
         if (JS_IsObject(toVal))
         {
-            ParseAnimationTargetObject(
-                ctx,
-                toVal,
-                options.hasX,
-                options.x,
-                options.hasY,
-                options.y,
-                options.hasWidth,
-                options.width,
-                options.hasHeight,
-                options.height,
-                options.hasRotate,
-                options.rotate,
-                options.hasFontSize,
-                options.fontSize,
-                options.hasFontWeight,
-                options.fontWeight,
-                options.hasLetterSpacing,
-                options.letterSpacing,
-                options.hasFontColor,
-                options.fontColorR,
-                options.fontColorG,
-                options.fontColorB,
-                options.fontAlpha);
+            if (HasDisallowedTweenTextProps(ctx, toVal))
+            {
+                options.tweenInvalid = true;
+                options.tweenError =
+                    L"from/to support only x, y, width, height, and rotate; use keyframes for text properties";
+            }
+            else
+            {
+                ParseAnimationTransformObject(
+                    ctx,
+                    toVal,
+                    options.hasX,
+                    options.x,
+                    options.hasY,
+                    options.y,
+                    options.hasWidth,
+                    options.width,
+                    options.hasHeight,
+                    options.height,
+                    options.hasRotate,
+                    options.rotate);
+            }
         }
         JS_FreeValue(ctx, toVal);
 
         JSValue fromVal = JS_GetPropertyStr(ctx, obj, "from");
         if (JS_IsObject(fromVal))
         {
-            ParseAnimationTargetObject(
-                ctx,
-                fromVal,
-                options.fromHasX,
-                options.fromX,
-                options.fromHasY,
-                options.fromY,
-                options.fromHasWidth,
-                options.fromWidth,
-                options.fromHasHeight,
-                options.fromHeight,
-                options.fromHasRotate,
-                options.fromRotate,
-                options.fromHasFontSize,
-                options.fromFontSize,
-                options.fromHasFontWeight,
-                options.fromFontWeight,
-                options.fromHasLetterSpacing,
-                options.fromLetterSpacing,
-                options.fromHasFontColor,
-                options.fromFontColorR,
-                options.fromFontColorG,
-                options.fromFontColorB,
-                options.fromFontAlpha);
+            if (HasDisallowedTweenTextProps(ctx, fromVal))
+            {
+                options.tweenInvalid = true;
+                options.tweenError =
+                    L"from/to support only x, y, width, height, and rotate; use keyframes for text properties";
+            }
+            else
+            {
+                ParseAnimationTransformObject(
+                    ctx,
+                    fromVal,
+                    options.fromHasX,
+                    options.fromX,
+                    options.fromHasY,
+                    options.fromY,
+                    options.fromHasWidth,
+                    options.fromWidth,
+                    options.fromHasHeight,
+                    options.fromHeight,
+                    options.fromHasRotate,
+                    options.fromRotate);
+            }
         }
         JS_FreeValue(ctx, fromVal);
     }

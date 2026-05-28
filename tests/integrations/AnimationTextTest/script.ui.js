@@ -22,7 +22,7 @@ ui.addText({
   id: "title",
   x: 20,
   y: 12,
-  text: "Text animation test",
+  text: "Text animation test (keyframes)",
   fontSize: 14,
   fontColor: "#ffffff"
 });
@@ -42,20 +42,22 @@ ui.endUpdate();
 
 ui.animate({
   id: "animText",
-  from: {
-    fontSize: 12,
-    fontWeight: 300,
-    letterSpacing: -1,
-    fontColor: "rgba(80,180,255,0.5)"
-  },
-  to: {
-    fontSize: 36,
-    fontWeight: 700,
-    letterSpacing: 4,
-    fontColor: "rgba(255,200,80,1)"
-  },
   duration: 5000,
-  easing: "linear"
+  easing: "linear",
+  keyframes: {
+    "0%": {
+      fontSize: 12,
+      fontWeight: 300,
+      letterSpacing: -1,
+      fontColor: "rgba(80,180,255,0.5)"
+    },
+    "100%": {
+      fontSize: 36,
+      fontWeight: 700,
+      letterSpacing: 4,
+      fontColor: "rgba(255,200,80,1)"
+    }
+  }
 });
 
 expectEq("fontSize snap", ui.getElementProperty("animText", "fontSize"), 12);

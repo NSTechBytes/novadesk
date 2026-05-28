@@ -1,4 +1,4 @@
-﻿/* Copyright (C) 2026 OfficialNovadesk
+/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -413,6 +413,8 @@ namespace PropertyParser
         bool hasKeyframes = false;
         bool keyframesInvalid = false;
         std::wstring keyframesError;
+        bool tweenInvalid = false;
+        std::wstring tweenError;
         std::vector<AnimationKeyframeOptions> keyframes;
         bool hasX = false;
         bool hasY = false;
@@ -468,22 +470,17 @@ namespace PropertyParser
                 }
                 return false;
             }
-            return hasX || hasY || hasWidth || hasHeight || hasRotate ||
-                   hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor;
+            return hasX || hasY || hasWidth || hasHeight || hasRotate;
         }
 
         bool HasAnyTextToProps() const
         {
-            if (hasKeyframes)
+            for (const AnimationKeyframeOptions &kf : keyframes)
             {
-                for (const AnimationKeyframeOptions &kf : keyframes)
-                {
-                    if (kf.HasTextProps())
-                        return true;
-                }
-                return false;
+                if (kf.HasTextProps())
+                    return true;
             }
-            return hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor;
+            return false;
         }
 
         bool UsesTweenMode() const
