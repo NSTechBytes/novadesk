@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "AnimationEasing.h"
+#include "ColorUtil.h"
 #include "TextElement.h"
 #include "Widget.h"
 
@@ -29,17 +30,10 @@ namespace
             text->SetLetterSpacing(target.letterSpacing);
         if (target.hasFontColor)
         {
-            const auto clampByte = [](float v) -> BYTE
-            {
-                if (v < 0.0f) return 0;
-                if (v > 255.0f) return 255;
-                return static_cast<BYTE>(std::lround(v));
-            };
-            const COLORREF color = RGB(
-                clampByte(target.fontColorR),
-                clampByte(target.fontColorG),
-                clampByte(target.fontColorB));
-            text->SetFontColor(color, clampByte(target.fontAlpha));
+            COLORREF color = 0;
+            BYTE alpha = 255;
+            ColorUtil::FromFloatRGBA(target.fontColorR, target.fontColorG, target.fontColorB, target.fontAlpha, color, alpha);
+            text->SetFontColor(color, alpha);
         }
     }
 
