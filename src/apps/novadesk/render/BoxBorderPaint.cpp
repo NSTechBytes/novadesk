@@ -517,10 +517,10 @@ void BoxBorderPaint::Paint(ID2D1DeviceContext* context, const D2D1_ROUNDED_RECT&
                     float r_dot = width / 2.0f;
                     auto getPoint = [&](float t, float& x, float& y)
                         {
-                            if (t < 0.0f)
-                                t = 0.0f;
-                            if (t > perimeter)
-                                t = perimeter;
+                            while (t < 0.0f)
+                                t += perimeter;
+                            while (t >= perimeter)
+                                t -= perimeter;
                             if (t < L_top)
                             {
                                 x = L + rx + t;
@@ -573,42 +573,43 @@ void BoxBorderPaint::Paint(ID2D1DeviceContext* context, const D2D1_ROUNDED_RECT&
                                 return;
                             }
                             t -= L_left;
+                            if (L_arc > 0.0f)
                             {
                                 float theta = 3.1415927f + 1.570796f * (t / L_arc);
                                 x = L + rx + rx * cosf(theta);
                                 y = T + ry + ry * sinf(theta);
                             }
-                        };
-                    const float segStarts[] = {
-                        0.0f,
-                        L_top,
-                        L_top + L_arc,
-                        L_top + L_arc + L_right,
-                        L_top + L_arc + L_right + L_arc,
-                        L_top + L_arc + L_right + L_arc + L_bottom,
-                        L_top + L_arc + L_right + L_arc + L_bottom + L_arc,
-                        L_top + L_arc + L_right + L_arc + L_bottom + L_arc + L_left,
-                        perimeter };
-                    auto placeDotsOnSegment = [&](float tStart, float tEnd, bool skipFirst)
-                        {
-                            const float segLen = tEnd - tStart;
-                            if (segLen <= 0.001f)
-                                return;
-                            const int n = std::max(1, static_cast<int>(segLen / ideal_spacing + 0.5f));
-                            const int iStart = skipFirst ? 1 : 0;
-                            for (int i = iStart; i <= n; ++i)
+                            else
                             {
-                                const float t = tStart + segLen * static_cast<float>(i) / static_cast<float>(n);
-                                float x = 0.0f, y = 0.0f;
-                                getPoint(t, x, y);
-                                context->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), r_dot, r_dot), brush);
+                                x = L;
+                                y = T;
                             }
                         };
-                    for (int s = 0; s < 8; ++s)
+                    const float halfArc = 0.5f * L_arc;
+                    const float segStarts[] = {
+                        -halfArc,
+                        L_top + halfArc,
+                        L_top + L_arc + L_right + halfArc,
+                        L_top + L_arc + L_right + L_arc + L_bottom + halfArc,
+                        L_top + L_arc + L_right + L_arc + L_bottom + L_arc + L_left + halfArc
+                    };
+                    for (int s = 0; s < 4; ++s)
                     {
-                        if (segStarts[s + 1] - segStarts[s] <= 0.001f)
+                        const float tStart = segStarts[s];
+                        const float tEnd = segStarts[s + 1];
+                        const float segLen = tEnd - tStart;
+                        if (segLen <= 0.001f)
                             continue;
-                        placeDotsOnSegment(segStarts[s], segStarts[s + 1], s != 0);
+                        const int n = std::max(1, static_cast<int>(segLen / ideal_spacing + 0.5f));
+                        const int iStart = (s == 0) ? 0 : 1;
+                        const int iEnd = (s == 3) ? n - 1 : n;
+                        for (int i = iStart; i <= iEnd; ++i)
+                        {
+                            const float t = tStart + segLen * static_cast<float>(i) / static_cast<float>(n);
+                            float x = 0.0f, y = 0.0f;
+                            getPoint(t, x, y);
+                            context->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), r_dot, r_dot), brush);
+                        }
                     }
                 }
             }

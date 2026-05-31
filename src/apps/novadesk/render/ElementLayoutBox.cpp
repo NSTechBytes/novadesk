@@ -208,7 +208,7 @@ void ElementLayoutBox::RenderSingleShadow(ID2D1DeviceContext* context, const D2D
 BoxBorderPaintParams ElementLayoutBox::BuildBorderPaintParams() const
 {
     BoxBorderPaintParams params{};
-    params.position = m_BorderPosition;
+    params.position = BoxBorder::Position::Inside;
     params.styleTop = m_BorderStyleTop;
     params.styleRight = m_BorderStyleRight;
     params.styleBottom = m_BorderStyleBottom;

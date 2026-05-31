@@ -24,7 +24,6 @@ public:
         bool inset = false;
     };
 
-    using BorderPosition = BoxBorder::Position;
     using BorderStyle = BoxBorder::Style;
 
     ElementLayoutBox(const std::wstring &id, int x, int y, int width, int height);
@@ -37,8 +36,6 @@ public:
     void SetRadii(float rx, float ry) override { m_RadiusX = rx; m_RadiusY = ry; }
     float GetRadiusX() const override { return m_RadiusX; }
     float GetRadiusY() const override { return m_RadiusY; }
-    void SetBorderPosition(BorderPosition position) { m_BorderPosition = position; }
-    BorderPosition GetBorderPosition() const { return m_BorderPosition; }
     void SetBoxShadows(const std::vector<BoxShadow> &shadows) { m_BoxShadows = shadows; }
     const std::vector<BoxShadow> &GetBoxShadows() const { return m_BoxShadows; }
 
@@ -60,7 +57,6 @@ private:
 
     float m_RadiusX = 0.0f;
     float m_RadiusY = 0.0f;
-    BorderPosition m_BorderPosition = BorderPosition::Outside;
     std::vector<BoxShadow> m_BoxShadows;
     BorderStyle m_BorderStyleTop = BorderStyle::Solid;
     BorderStyle m_BorderStyleRight = BorderStyle::Solid;

@@ -1680,8 +1680,6 @@ namespace novadesk::scripting::quickjs
 
                 if (layoutBox)
                 {
-                    if (prop == "borderPosition")
-                        return JS_NewString(ctx, Utils::ToString(layoutPrefill.borderPosition).c_str());
                     if (prop == "borderStyle")
                     {
                         auto styleToStr = [](ElementLayoutBox::BorderStyle s) -> const char *

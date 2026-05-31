@@ -340,7 +340,6 @@ namespace PropertyParser
     struct LayoutBoxOptions
     {
         ShapeOptions shape;
-        std::wstring borderPosition;
         bool hasBorderStyle = false;
         ElementLayoutBox::BorderStyle borderTop = ElementLayoutBox::BorderStyle::Solid;
         ElementLayoutBox::BorderStyle borderRight = ElementLayoutBox::BorderStyle::Solid;
@@ -532,4 +531,3 @@ namespace novadesk::scripting::quickjs::parser
         bool hasScriptPath = false;
     };
 } // namespace novadesk::scripting::quickjs::parser
-

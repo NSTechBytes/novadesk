@@ -31,7 +31,6 @@ ui.addLayoutBox({
   borderRadius: 8,
   borderWidth: 1,
   borderColor: "rgba(255,255,255,0.1)",
-  borderPosition: "outside",
   children: [
     ui.shape({
       id: "childA",
@@ -122,7 +121,6 @@ ui.addLayoutBox({
   borderRadius: 10,
   borderWidth: 1,
   borderColor: "rgba(255,255,255,0.12)",
-  borderPosition: "outside",
   children: [
     // ui.text({ id: "cardTitle", x: 0, y: 0, text: "System", fontSize: 16, fontWeight: 700, fontColor: "#ffffff" }),
     // ui.layoutBox({
@@ -155,7 +153,6 @@ ui.addLayoutBox({
 //   alignItems: "stretch",
 //   backgroundColor: "rgba(18,22,30,0.85)",
 //   borderRadius: 8,
-//   borderPosition: "outside",
 //   children: [
 //     ui.layoutBox({
 //       id: "leftCol",

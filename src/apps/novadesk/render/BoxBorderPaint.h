@@ -12,7 +12,7 @@
 
 struct BoxBorderPaintParams
 {
-    BoxBorder::Position position = BoxBorder::Position::Outside;
+    BoxBorder::Position position = BoxBorder::Position::Inside;
     BoxBorder::Style styleTop = BoxBorder::Style::Solid;
     BoxBorder::Style styleRight = BoxBorder::Style::Solid;
     BoxBorder::Style styleBottom = BoxBorder::Style::Solid;

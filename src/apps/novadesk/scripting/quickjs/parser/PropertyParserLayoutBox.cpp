@@ -90,9 +90,6 @@ namespace PropertyParser
         }
         JS_FreeValue(ctx, opacityV);
 
-        options.borderPosition = GetStringProp(ctx, obj, "borderPosition");
-        std::transform(options.borderPosition.begin(), options.borderPosition.end(), options.borderPosition.begin(), ::towlower);
-
         auto parseBorderStyleString = [](const std::wstring &str) -> ElementLayoutBox::BorderStyle
         {
             std::wstring lower = str;
@@ -356,16 +353,6 @@ namespace PropertyParser
 
         ApplyShapeOptions(element, options.shape);
 
-        if (!options.borderPosition.empty())
-        {
-            if (options.borderPosition == L"inside")
-                element->SetBorderPosition(ElementLayoutBox::BorderPosition::Inside);
-            else if (options.borderPosition == L"center")
-                element->SetBorderPosition(ElementLayoutBox::BorderPosition::Center);
-            else
-                element->SetBorderPosition(ElementLayoutBox::BorderPosition::Outside);
-        }
-
         if (options.hasBorderStyle)
         {
             element->SetBorderStyle(
@@ -410,19 +397,6 @@ namespace PropertyParser
 
         PreFillShapeOptions(options.shape, element);
         options.shape.shapeType = L"rectangle";
-
-        switch (element->GetBorderPosition())
-        {
-        case ElementLayoutBox::BorderPosition::Inside:
-            options.borderPosition = L"inside";
-            break;
-        case ElementLayoutBox::BorderPosition::Center:
-            options.borderPosition = L"center";
-            break;
-        default:
-            options.borderPosition = L"outside";
-            break;
-        }
 
         options.hasBorderStyle = true;
         options.borderTop = element->GetBorderStyleTop();
