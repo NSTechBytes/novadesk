@@ -44,18 +44,74 @@ namespace
 
     D2D1_ROUNDED_RECT InsetRoundedRect(D2D1_ROUNDED_RECT rect, float amount)
     {
+        const float radiusInset = amount * 0.5f;
         rect.rect.left += amount;
         rect.rect.top += amount;
         rect.rect.right -= amount;
         rect.rect.bottom -= amount;
-        rect.radiusX = std::max(0.0f, rect.radiusX - amount);
-        rect.radiusY = std::max(0.0f, rect.radiusY - amount);
+        rect.radiusX = std::min(
+            std::max(0.0f, rect.radiusX - radiusInset),
+            std::max(0.0f, (rect.rect.right - rect.rect.left) * 0.5f));
+        rect.radiusY = std::min(
+            std::max(0.0f, rect.radiusY - radiusInset),
+            std::max(0.0f, (rect.rect.bottom - rect.rect.top) * 0.5f));
         return rect;
     }
 
     bool IsRenderableRect(const D2D1_RECT_F& rect)
     {
         return rect.right > rect.left && rect.bottom > rect.top;
+    }
+
+    bool CreateBorderBandGeometry(ID2D1Factory* factory, const D2D1_ROUNDED_RECT& outer,
+        float width, Microsoft::WRL::ComPtr<ID2D1Geometry>& bandGeometry)
+    {
+        bandGeometry.Reset();
+        if (!factory || width <= 0.0f || !IsRenderableRect(outer.rect))
+            return false;
+
+        Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> outerGeometry;
+        if (FAILED(factory->CreateRoundedRectangleGeometry(outer, &outerGeometry)))
+            return false;
+
+        const D2D1_ROUNDED_RECT inner = InsetRoundedRect(outer, width);
+        if (!IsRenderableRect(inner.rect))
+        {
+            return SUCCEEDED(outerGeometry.As(&bandGeometry));
+        }
+
+        Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> innerGeometry;
+        Microsoft::WRL::ComPtr<ID2D1PathGeometry> pathGeometry;
+        Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
+        if (FAILED(factory->CreateRoundedRectangleGeometry(inner, &innerGeometry)) ||
+            FAILED(factory->CreatePathGeometry(&pathGeometry)) ||
+            FAILED(pathGeometry->Open(&sink)))
+        {
+            return false;
+        }
+
+        if (FAILED(outerGeometry->CombineWithGeometry(
+            innerGeometry.Get(),
+            D2D1_COMBINE_MODE_EXCLUDE,
+            nullptr,
+            sink.Get())) ||
+            FAILED(sink->Close()))
+        {
+            return false;
+        }
+
+        return SUCCEEDED(pathGeometry.As(&bandGeometry));
+    }
+
+    bool CreateBorderBandGeometry(ID2D1Factory* factory, const D2D1_ROUNDED_RECT& outer,
+        float fromEdge, float toEdge, Microsoft::WRL::ComPtr<ID2D1Geometry>& bandGeometry)
+    {
+        bandGeometry.Reset();
+        if (toEdge <= fromEdge)
+            return false;
+
+        const D2D1_ROUNDED_RECT stripeOuter = InsetRoundedRect(outer, fromEdge);
+        return CreateBorderBandGeometry(factory, stripeOuter, toEdge - fromEdge, bandGeometry);
     }
 
     void FillBorderBand(ID2D1DeviceContext* context, const D2D1_ROUNDED_RECT& outer,
@@ -66,39 +122,9 @@ namespace
 
         Microsoft::WRL::ComPtr<ID2D1Factory> factory;
         context->GetFactory(&factory);
-        if (!factory)
-            return;
-
-        Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> outerGeometry;
-        if (FAILED(factory->CreateRoundedRectangleGeometry(outer, &outerGeometry)))
-            return;
-
-        const D2D1_ROUNDED_RECT inner = InsetRoundedRect(outer, width);
-        if (!IsRenderableRect(inner.rect))
-        {
-            context->FillGeometry(outerGeometry.Get(), brush);
-            return;
-        }
-
-        Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> innerGeometry;
-        Microsoft::WRL::ComPtr<ID2D1PathGeometry> bandGeometry;
-        Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
-        if (FAILED(factory->CreateRoundedRectangleGeometry(inner, &innerGeometry)) ||
-            FAILED(factory->CreatePathGeometry(&bandGeometry)) ||
-            FAILED(bandGeometry->Open(&sink)))
-        {
-            return;
-        }
-
-        if (SUCCEEDED(outerGeometry->CombineWithGeometry(
-            innerGeometry.Get(),
-            D2D1_COMBINE_MODE_EXCLUDE,
-            nullptr,
-            sink.Get())))
-        {
-            sink->Close();
+        Microsoft::WRL::ComPtr<ID2D1Geometry> bandGeometry;
+        if (CreateBorderBandGeometry(factory.Get(), outer, width, bandGeometry))
             context->FillGeometry(bandGeometry.Get(), brush);
-        }
     }
 
     void FillPolygon(ID2D1DeviceContext* context, ID2D1Factory* factory,
@@ -174,6 +200,38 @@ namespace
             };
             FillPolygon(context, factory, points, 4, brush);
         }
+    }
+
+    void FillSideBandClippedByBorder(ID2D1DeviceContext* context, ID2D1Factory* factory,
+        int side, float L, float T, float R, float B, float fromEdge, float toEdge,
+        float borderWidth, float joinOverlap, ID2D1Brush* brush)
+    {
+        const float width = R - L;
+        const float height = B - T;
+        const float overpaint = std::max(borderWidth, std::min(width, height) * 0.5f);
+        const bool reachesInnerEdge = toEdge >= borderWidth - 0.001f;
+        const float clippedToEdge = reachesInnerEdge ? overpaint : toEdge;
+        FillSideBand(context, factory, side, L, T, R, B, fromEdge, clippedToEdge, joinOverlap, brush);
+    }
+
+    void FillSideThroughBand(ID2D1DeviceContext* context, ID2D1Factory* factory,
+        ID2D1Geometry* bandGeometry, int side, float L, float T, float R, float B,
+        float borderWidth, float joinOverlap, ID2D1Brush* brush)
+    {
+        if (!bandGeometry)
+            return;
+
+        D2D1_LAYER_PARAMETERS1 layerParams = D2D1::LayerParameters1(
+            D2D1::RectF(L, T, R, B),
+            bandGeometry,
+            D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+            D2D1::Matrix3x2F::Identity(),
+            1.0f,
+            nullptr,
+            D2D1_LAYER_OPTIONS1_NONE);
+        context->PushLayer(layerParams, nullptr);
+        FillSideBandClippedByBorder(context, factory, side, L, T, R, B, 0.0f, borderWidth, borderWidth, joinOverlap, brush);
+        context->PopLayer();
     }
 }
 
@@ -288,25 +346,30 @@ void BoxBorderPaint::Paint(ID2D1DeviceContext* context, const D2D1_ROUNDED_RECT&
                 const BoxBorder::Style innerStyle = style == BoxBorder::Style::Groove
                     ? BoxBorder::Style::Outset
                     : BoxBorder::Style::Inset;
-                FillSideBand(context, factory.Get(), side, L, T, R, B, 0.0f, split, joinOverlap,
+
+                FillSideBandClippedByBorder(context, factory.Get(), side, L, T, R, B, 0.0f, w, w, joinOverlap,
                     brushForSide(outerStyle, side));
-                FillSideBand(context, factory.Get(), side, L, T, R, B, split, w, joinOverlap,
-                    brushForSide(innerStyle, side));
+
+                Microsoft::WRL::ComPtr<ID2D1Geometry> innerBandGeometry;
+                if (CreateBorderBandGeometry(factory.Get(), outer, split, w, innerBandGeometry))
+                {
+                    FillSideThroughBand(context, factory.Get(), innerBandGeometry.Get(), side, L, T, R, B,
+                        w, joinOverlap, brushForSide(innerStyle, side));
+                }
                 return;
             }
 
-            FillSideBand(context, factory.Get(), side, L, T, R, B, 0.0f, w, joinOverlap,
+            FillSideBandClippedByBorder(context, factory.Get(), side, L, T, R, B, 0.0f, w, w, joinOverlap,
                 brushForSide(style, side));
         };
 
-    Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> outerGeometry;
-    const bool shouldClipRounded = (radiusX > 0.0f || radiusY > 0.0f) &&
-        SUCCEEDED(factory->CreateRoundedRectangleGeometry(outer, &outerGeometry));
-    if (shouldClipRounded)
+    Microsoft::WRL::ComPtr<ID2D1Geometry> bandGeometry;
+    const bool shouldClipBorderBand = CreateBorderBandGeometry(factory.Get(), outer, w, bandGeometry);
+    if (shouldClipBorderBand)
     {
         D2D1_LAYER_PARAMETERS1 layerParams = D2D1::LayerParameters1(
             rect.rect,
-            outerGeometry.Get(),
+            bandGeometry.Get(),
             D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
             D2D1::Matrix3x2F::Identity(),
             1.0f,
@@ -324,6 +387,6 @@ void BoxBorderPaint::Paint(ID2D1DeviceContext* context, const D2D1_ROUNDED_RECT&
     if (left)
         paintSide(params.styleLeft, 3);
 
-    if (shouldClipRounded)
+    if (shouldClipBorderBand)
         context->PopLayer();
 }
