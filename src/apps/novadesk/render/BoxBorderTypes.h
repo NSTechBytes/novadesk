@@ -21,6 +21,7 @@ namespace BoxBorder
         None,
         Solid,
         Inset,
-        Outset
+        Outset,
+        Groove
     };
 }

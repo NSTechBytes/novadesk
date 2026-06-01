@@ -97,6 +97,7 @@ namespace PropertyParser
             if (lower == L"none" || lower == L"hidden") return ElementLayoutBox::BorderStyle::None;
             if (lower == L"inset") return ElementLayoutBox::BorderStyle::Inset;
             if (lower == L"outset") return ElementLayoutBox::BorderStyle::Outset;
+            if (lower == L"groove") return ElementLayoutBox::BorderStyle::Groove;
             return ElementLayoutBox::BorderStyle::Solid;
         };
 

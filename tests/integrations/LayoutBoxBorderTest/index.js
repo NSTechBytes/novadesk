@@ -39,3 +39,13 @@ const outsetTest = new widgetWindow({
   script: "./outset.ui.js",
   show: true
 });
+
+const grooveTest = new widgetWindow({
+  id: "grooveTest",
+  width: 410,
+  height: 200,
+  backgroundColor: "rgba(240, 240, 240, 1.0)",
+  script: "./groove.ui.js",
+  show: true
+});
+

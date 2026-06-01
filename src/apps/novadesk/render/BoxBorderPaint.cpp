@@ -20,7 +20,8 @@ namespace
     {
         return style == BoxBorder::Style::Solid ||
             style == BoxBorder::Style::Inset ||
-            style == BoxBorder::Style::Outset;
+            style == BoxBorder::Style::Outset ||
+            style == BoxBorder::Style::Groove;
     }
 
     COLORREF DarkenColor(COLORREF color)
@@ -121,6 +122,58 @@ namespace
         if (SUCCEEDED(sink->Close()))
             context->FillGeometry(geometry.Get(), brush);
     }
+
+    void FillSideBand(ID2D1DeviceContext* context, ID2D1Factory* factory,
+        int side, float L, float T, float R, float B, float fromEdge, float toEdge,
+        float joinOverlap, ID2D1Brush* brush)
+    {
+        if (toEdge <= fromEdge)
+            return;
+
+        const float nearOverlap = fromEdge > 0.0f ? joinOverlap : 0.0f;
+        const float farOverlap = joinOverlap;
+
+        if (side == 0)
+        {
+            const D2D1_POINT_2F points[] = {
+                D2D1::Point2F(L + fromEdge - nearOverlap, T + fromEdge),
+                D2D1::Point2F(R - fromEdge + nearOverlap, T + fromEdge),
+                D2D1::Point2F(R - toEdge + farOverlap, T + toEdge),
+                D2D1::Point2F(L + toEdge - farOverlap, T + toEdge)
+            };
+            FillPolygon(context, factory, points, 4, brush);
+        }
+        else if (side == 1)
+        {
+            const D2D1_POINT_2F points[] = {
+                D2D1::Point2F(R - fromEdge, T + fromEdge - nearOverlap),
+                D2D1::Point2F(R - fromEdge, B - fromEdge + nearOverlap),
+                D2D1::Point2F(R - toEdge, B - toEdge + farOverlap),
+                D2D1::Point2F(R - toEdge, T + toEdge - farOverlap)
+            };
+            FillPolygon(context, factory, points, 4, brush);
+        }
+        else if (side == 2)
+        {
+            const D2D1_POINT_2F points[] = {
+                D2D1::Point2F(R - fromEdge + nearOverlap, B - fromEdge),
+                D2D1::Point2F(L + fromEdge - nearOverlap, B - fromEdge),
+                D2D1::Point2F(L + toEdge - farOverlap, B - toEdge),
+                D2D1::Point2F(R - toEdge + farOverlap, B - toEdge)
+            };
+            FillPolygon(context, factory, points, 4, brush);
+        }
+        else
+        {
+            const D2D1_POINT_2F points[] = {
+                D2D1::Point2F(L + fromEdge, B - fromEdge + nearOverlap),
+                D2D1::Point2F(L + fromEdge, T + fromEdge - nearOverlap),
+                D2D1::Point2F(L + toEdge, T + toEdge - farOverlap),
+                D2D1::Point2F(L + toEdge, B - toEdge + farOverlap)
+            };
+            FillPolygon(context, factory, points, 4, brush);
+        }
+    }
 }
 
 D2D1_ROUNDED_RECT BoxBorderPaint::BuildBorderGeometryRect(const D2D1_ROUNDED_RECT& elementRect,
@@ -183,7 +236,7 @@ void BoxBorderPaint::Paint(ID2D1DeviceContext* context, const D2D1_ROUNDED_RECT&
 
     // Chromium's non-uniform border path paints individual sides and clips/masks
     // their joins. Solid rounded borders use the exact outer-minus-inner band
-    // above; inset/outset and mixed visibility are painted per side.
+    // above; inset/outset/groove and mixed visibility are painted per side.
     const float L = rect.rect.left;
     const float T = rect.rect.top;
     const float R = rect.rect.right;
@@ -194,6 +247,12 @@ void BoxBorderPaint::Paint(ID2D1DeviceContext* context, const D2D1_ROUNDED_RECT&
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> darkBrush;
     context->CreateSolidColorBrush(ToD2DColor(params.strokeColor, params.strokeAlpha), &baseBrush);
     context->CreateSolidColorBrush(ToD2DColor(DarkenColor(params.strokeColor), params.strokeAlpha), &darkBrush);
+
+    Microsoft::WRL::ComPtr<ID2D1Factory> factory;
+    context->GetFactory(&factory);
+    if (!factory)
+        return;
+
     auto brushForSide = [&](BoxBorder::Style style, int side) -> ID2D1Brush*
         {
             if (style == BoxBorder::Style::Inset && (side == 0 || side == 3))
@@ -217,10 +276,21 @@ void BoxBorderPaint::Paint(ID2D1DeviceContext* context, const D2D1_ROUNDED_RECT&
             return strokeBrush;
         };
 
-    Microsoft::WRL::ComPtr<ID2D1Factory> factory;
-    context->GetFactory(&factory);
-    if (!factory)
-        return;
+    auto paintSide = [&](BoxBorder::Style style, int side)
+        {
+            if (style == BoxBorder::Style::Groove)
+            {
+                const float split = w * 0.5f;
+                FillSideBand(context, factory.Get(), side, L, T, R, B, 0.0f, split, joinOverlap,
+                    brushForSide(BoxBorder::Style::Inset, side));
+                FillSideBand(context, factory.Get(), side, L, T, R, B, split, w, joinOverlap,
+                    brushForSide(BoxBorder::Style::Outset, side));
+                return;
+            }
+
+            FillSideBand(context, factory.Get(), side, L, T, R, B, 0.0f, w, joinOverlap,
+                brushForSide(style, side));
+        };
 
     Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> outerGeometry;
     const bool shouldClipRounded = (radiusX > 0.0f || radiusY > 0.0f) &&
@@ -239,45 +309,13 @@ void BoxBorderPaint::Paint(ID2D1DeviceContext* context, const D2D1_ROUNDED_RECT&
     }
 
     if (top)
-    {
-        const D2D1_POINT_2F points[] = {
-            D2D1::Point2F(L, T),
-            D2D1::Point2F(R, T),
-            D2D1::Point2F(R - w + joinOverlap, T + w),
-            D2D1::Point2F(L + w - joinOverlap, T + w)
-        };
-        FillPolygon(context, factory.Get(), points, 4, brushForSide(params.styleTop, 0));
-    }
+        paintSide(params.styleTop, 0);
     if (right)
-    {
-        const D2D1_POINT_2F points[] = {
-            D2D1::Point2F(R, T),
-            D2D1::Point2F(R, B),
-            D2D1::Point2F(R - w, B - w + joinOverlap),
-            D2D1::Point2F(R - w, T + w - joinOverlap)
-        };
-        FillPolygon(context, factory.Get(), points, 4, brushForSide(params.styleRight, 1));
-    }
+        paintSide(params.styleRight, 1);
     if (bottom)
-    {
-        const D2D1_POINT_2F points[] = {
-            D2D1::Point2F(R, B),
-            D2D1::Point2F(L, B),
-            D2D1::Point2F(L + w - joinOverlap, B - w),
-            D2D1::Point2F(R - w + joinOverlap, B - w)
-        };
-        FillPolygon(context, factory.Get(), points, 4, brushForSide(params.styleBottom, 2));
-    }
+        paintSide(params.styleBottom, 2);
     if (left)
-    {
-        const D2D1_POINT_2F points[] = {
-            D2D1::Point2F(L, B),
-            D2D1::Point2F(L, T),
-            D2D1::Point2F(L + w, T + w - joinOverlap),
-            D2D1::Point2F(L + w, B - w + joinOverlap)
-        };
-        FillPolygon(context, factory.Get(), points, 4, brushForSide(params.styleLeft, 3));
-    }
+        paintSide(params.styleLeft, 3);
 
     if (shouldClipRounded)
         context->PopLayer();
