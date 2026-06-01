@@ -164,7 +164,7 @@ namespace
         if (toEdge <= fromEdge)
             return;
 
-        const float nearOverlap = fromEdge > 0.0f ? joinOverlap : 0.0f;
+        const float nearOverlap = joinOverlap;
         const float farOverlap = joinOverlap;
 
         if (side == 0)
@@ -456,7 +456,7 @@ void BoxBorderPaint::Paint(ID2D1DeviceContext* context, const D2D1_ROUNDED_RECT&
     const float T = rect.rect.top;
     const float R = rect.rect.right;
     const float B = rect.rect.bottom;
-    const float joinOverlap = std::min(0.75f, w * 0.2f);
+    const float joinOverlap = std::min(w, std::max(1.5f, w * 0.25f));
 
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> baseBrush;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> darkBrush;
