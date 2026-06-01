@@ -1687,6 +1687,8 @@ namespace novadesk::scripting::quickjs
                             switch (s)
                             {
                             case ElementLayoutBox::BorderStyle::None: return "none";
+                            case ElementLayoutBox::BorderStyle::Inset: return "inset";
+                            case ElementLayoutBox::BorderStyle::Outset: return "outset";
                             default: return "solid";
                             }
                         };

@@ -19,6 +19,8 @@ namespace BoxBorder
     enum class Style
     {
         None,
-        Solid
+        Solid,
+        Inset,
+        Outset
     };
 }

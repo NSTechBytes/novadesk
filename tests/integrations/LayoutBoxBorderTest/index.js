@@ -15,8 +15,6 @@ console.log("=== LayoutBoxBorderTest Integration ===");
 
 const solidTest = new widgetWindow({
   id: "solidTest",
-  x: 100,
-  y: 100,
   width: 800,
   height: 600,
   backgroundColor: "rgba(240, 240, 240, 1.0)",
@@ -24,3 +22,20 @@ const solidTest = new widgetWindow({
   show: true
 });
 
+const insetTest = new widgetWindow({
+  id: "insetTest",
+  width: 800,
+  height: 600,
+  backgroundColor: "rgba(240, 240, 240, 1.0)",
+  script: "./inset.ui.js",
+  show: true
+});
+
+const outsetTest = new widgetWindow({
+  id: "outsetTest",
+  width: 800,
+  height: 600,
+  backgroundColor: "rgba(240, 240, 240, 1.0)",
+  script: "./outset.ui.js",
+  show: true
+});
