@@ -60,6 +60,7 @@ void ElementLayoutBox::Render(ID2D1DeviceContext* context)
 {
     D2D1_MATRIX_3X2_F originalTransform;
     ApplyRenderTransform(context, originalTransform);
+    context->SetAntialiasMode(m_AntiAlias ? D2D1_ANTIALIAS_MODE_PER_PRIMITIVE : D2D1_ANTIALIAS_MODE_ALIASED);
     Microsoft::WRL::ComPtr<ID2D1Brush> strokeBrush;
     Microsoft::WRL::ComPtr<ID2D1Brush> fillBrush;
     TryCreateStrokeBrush(context, strokeBrush);
@@ -73,16 +74,33 @@ void ElementLayoutBox::Render(ID2D1DeviceContext* context)
         if (!shadow.inset)
             RenderSingleShadow(context, rect, shadow);
     }
-    // Inside borders are painted inward on top of the fill. Insetting the fill leaves
-    // empty corner wedges (parent background shows through as white gaps).
-    const D2D1_ROUNDED_RECT fillRect = rect;
+    D2D1_ROUNDED_RECT fillRect = rect;
+    const bool hasVisibleBorder = strokeBrush.Get() && m_StrokeWidth > 0.0f &&
+        (m_BorderStyleTop != BorderStyle::None ||
+            m_BorderStyleRight != BorderStyle::None ||
+            m_BorderStyleBottom != BorderStyle::None ||
+            m_BorderStyleLeft != BorderStyle::None);
+    if (hasVisibleBorder)
+    {
+        const float borderWidth = std::min(
+            m_StrokeWidth,
+            std::max(0.0f, std::min(rect.rect.right - rect.rect.left, rect.rect.bottom - rect.rect.top) * 0.5f));
+        const float inset = std::max(0.0f, borderWidth - std::min(1.0f, borderWidth * 0.5f));
+        fillRect.rect.left += inset;
+        fillRect.rect.top += inset;
+        fillRect.rect.right -= inset;
+        fillRect.rect.bottom -= inset;
+        fillRect.radiusX = std::max(0.0f, rect.radiusX - inset);
+        fillRect.radiusY = std::max(0.0f, rect.radiusY - inset);
+    }
     if (fillBrush)
     {
-        context->FillRoundedRectangle(fillRect, fillBrush.Get());
+        if (fillRect.rect.right > fillRect.rect.left && fillRect.rect.bottom > fillRect.rect.top)
+            context->FillRoundedRectangle(fillRect, fillBrush.Get());
     }
     for (const auto& shadow : m_BoxShadows)
     {
-        if (shadow.inset)
+        if (shadow.inset && fillRect.rect.right > fillRect.rect.left && fillRect.rect.bottom > fillRect.rect.top)
             RenderSingleShadow(context, fillRect, shadow);
     }
     if (strokeBrush)
