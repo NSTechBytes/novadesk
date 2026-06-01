@@ -164,7 +164,7 @@ namespace
         if (toEdge <= fromEdge)
             return;
 
-        const float nearOverlap = joinOverlap;
+        const float nearOverlap = fromEdge > 0.0f ? joinOverlap : 0.0f;
         const float farOverlap = joinOverlap;
 
         if (side == 0)

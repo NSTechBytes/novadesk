@@ -75,37 +75,6 @@ void ElementLayoutBox::Render(ID2D1DeviceContext* context)
             RenderSingleShadow(context, rect, shadow);
     }
     D2D1_ROUNDED_RECT fillRect = rect;
-    const bool hasVisibleBorder = strokeBrush.Get() && m_StrokeWidth > 0.0f &&
-        (m_BorderStyleTop != BorderStyle::None ||
-            m_BorderStyleRight != BorderStyle::None ||
-            m_BorderStyleBottom != BorderStyle::None ||
-            m_BorderStyleLeft != BorderStyle::None);
-    const bool allBordersDotted =
-        m_BorderStyleTop == BorderStyle::Dotted &&
-        m_BorderStyleRight == BorderStyle::Dotted &&
-        m_BorderStyleBottom == BorderStyle::Dotted &&
-        m_BorderStyleLeft == BorderStyle::Dotted;
-    if (hasVisibleBorder && !allBordersDotted)
-    {
-        const float borderWidth = std::min(
-            m_StrokeWidth,
-            std::max(0.0f, std::min(rect.rect.right - rect.rect.left, rect.rect.bottom - rect.rect.top) * 0.5f));
-        const float fillBleed = std::min(2.0f, borderWidth * 0.5f);
-        const float inset = std::max(0.0f, borderWidth - fillBleed);
-        const float radiusInset = borderWidth * 0.5f;
-        const float innerRadiusX = std::max(0.0f, rect.radiusX - radiusInset);
-        const float innerRadiusY = std::max(0.0f, rect.radiusY - radiusInset);
-        fillRect.rect.left += inset;
-        fillRect.rect.top += inset;
-        fillRect.rect.right -= inset;
-        fillRect.rect.bottom -= inset;
-        fillRect.radiusX = std::min(
-            innerRadiusX + fillBleed,
-            std::max(0.0f, (fillRect.rect.right - fillRect.rect.left) * 0.5f));
-        fillRect.radiusY = std::min(
-            innerRadiusY + fillBleed,
-            std::max(0.0f, (fillRect.rect.bottom - fillRect.rect.top) * 0.5f));
-    }
     if (fillBrush)
     {
         if (fillRect.rect.right > fillRect.rect.left && fillRect.rect.bottom > fillRect.rect.top)
