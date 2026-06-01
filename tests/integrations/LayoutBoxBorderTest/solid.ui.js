@@ -45,6 +45,6 @@ ui.addLayoutBox({
     height: 120,
     backgroundColor: "rgb(0, 0, 0)",
     borderWidth: 15,
-    borderColor: "cyan",
+    borderColor: "rgba(70, 131, 180, 0.09)",
     borderStyle: "solid",
 });

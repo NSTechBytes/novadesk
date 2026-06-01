@@ -22,6 +22,14 @@ namespace
         return style == BoxBorder::Style::Dotted;
     }
 
+    bool AllDotted(const BoxBorderPaintParams& params)
+    {
+        return IsDotted(params.styleTop) &&
+            IsDotted(params.styleRight) &&
+            IsDotted(params.styleBottom) &&
+            IsDotted(params.styleLeft);
+    }
+
     bool IsVisible(BoxBorder::Style style)
     {
         return style == BoxBorder::Style::Solid ||
@@ -30,6 +38,13 @@ namespace
             style == BoxBorder::Style::Groove ||
             style == BoxBorder::Style::Ridge ||
             style == BoxBorder::Style::Dotted;
+    }
+
+    bool IsSingleLayerJoinStyle(BoxBorder::Style style)
+    {
+        return style == BoxBorder::Style::Solid ||
+            style == BoxBorder::Style::Inset ||
+            style == BoxBorder::Style::Outset;
     }
 
     COLORREF DarkenColor(COLORREF color)
@@ -62,6 +77,17 @@ namespace
         rect.radiusY = std::min(
             std::max(0.0f, rect.radiusY - radiusInset),
             std::max(0.0f, (rect.rect.bottom - rect.rect.top) * 0.5f));
+        return rect;
+    }
+
+    D2D1_ROUNDED_RECT OutsetRoundedRect(D2D1_ROUNDED_RECT rect, float amount)
+    {
+        rect.rect.left -= amount;
+        rect.rect.top -= amount;
+        rect.rect.right += amount;
+        rect.rect.bottom += amount;
+        rect.radiusX = std::max(0.0f, rect.radiusX + amount);
+        rect.radiusY = std::max(0.0f, rect.radiusY + amount);
         return rect;
     }
 
@@ -241,6 +267,100 @@ namespace
         context->PopLayer();
     }
 
+    void FillCornerJoin(ID2D1DeviceContext* context, ID2D1Factory* factory,
+        int corner, float L, float T, float R, float B, float borderWidth,
+        ID2D1Brush* firstBrush, ID2D1Brush* secondBrush)
+    {
+        const float w = borderWidth;
+        if (w <= 0.0f)
+            return;
+
+        if (corner == 0)
+        {
+            const D2D1_POINT_2F first[] = {
+                D2D1::Point2F(L, T),
+                D2D1::Point2F(L + w, T),
+                D2D1::Point2F(L + w, T + w),
+                D2D1::Point2F(L, T + w)
+            };
+            const D2D1_POINT_2F second[] = {
+                D2D1::Point2F(L, T),
+                D2D1::Point2F(L + w, T + w),
+                D2D1::Point2F(L, T + w)
+            };
+            FillPolygon(context, factory, first, 4, firstBrush);
+            FillPolygon(context, factory, second, 3, secondBrush);
+        }
+        else if (corner == 1)
+        {
+            const D2D1_POINT_2F first[] = {
+                D2D1::Point2F(R, T),
+                D2D1::Point2F(R, T + w),
+                D2D1::Point2F(R - w, T + w),
+                D2D1::Point2F(R - w, T)
+            };
+            const D2D1_POINT_2F second[] = {
+                D2D1::Point2F(R, T),
+                D2D1::Point2F(R, T + w),
+                D2D1::Point2F(R - w, T + w)
+            };
+            FillPolygon(context, factory, first, 4, firstBrush);
+            FillPolygon(context, factory, second, 3, secondBrush);
+        }
+        else if (corner == 2)
+        {
+            const D2D1_POINT_2F first[] = {
+                D2D1::Point2F(R, B),
+                D2D1::Point2F(R - w, B),
+                D2D1::Point2F(R - w, B - w),
+                D2D1::Point2F(R, B - w)
+            };
+            const D2D1_POINT_2F second[] = {
+                D2D1::Point2F(R, B),
+                D2D1::Point2F(R - w, B - w),
+                D2D1::Point2F(R, B - w)
+            };
+            FillPolygon(context, factory, first, 4, firstBrush);
+            FillPolygon(context, factory, second, 3, secondBrush);
+        }
+        else
+        {
+            const D2D1_POINT_2F first[] = {
+                D2D1::Point2F(L, B),
+                D2D1::Point2F(L, B - w),
+                D2D1::Point2F(L + w, B - w),
+                D2D1::Point2F(L + w, B)
+            };
+            const D2D1_POINT_2F second[] = {
+                D2D1::Point2F(L, B),
+                D2D1::Point2F(L, B - w),
+                D2D1::Point2F(L + w, B - w)
+            };
+            FillPolygon(context, factory, first, 4, firstBrush);
+            FillPolygon(context, factory, second, 3, secondBrush);
+        }
+    }
+
+    void FillCornerJoinThroughBand(ID2D1DeviceContext* context, ID2D1Geometry* bandGeometry,
+        ID2D1Factory* factory, int corner, float L, float T, float R, float B,
+        float borderWidth, ID2D1Brush* firstBrush, ID2D1Brush* secondBrush)
+    {
+        if (!bandGeometry)
+            return;
+
+        D2D1_LAYER_PARAMETERS1 layerParams = D2D1::LayerParameters1(
+            D2D1::RectF(L, T, R, B),
+            bandGeometry,
+            D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+            D2D1::Matrix3x2F::Identity(),
+            1.0f,
+            nullptr,
+            D2D1_LAYER_OPTIONS1_NONE);
+        context->PushLayer(layerParams, nullptr);
+        FillCornerJoin(context, factory, corner, L, T, R, B, borderWidth, firstBrush, secondBrush);
+        context->PopLayer();
+    }
+
     void FillDot(ID2D1DeviceContext* context, float x, float y, float radius, ID2D1Brush* brush)
     {
         context->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), radius, radius), brush);
@@ -408,7 +528,19 @@ void BoxBorderPaint::PaintForElement(ID2D1DeviceContext* context, const D2D1_ROU
         nullptr,
         D2D1_LAYER_OPTIONS1_NONE);
     context->PushLayer(clipParams, nullptr);
-    Paint(context, elementRect, params, strokeBrush);
+
+    D2D1_ROUNDED_RECT borderRect = elementRect;
+    BoxBorderPaintParams paintParams = params;
+    if (!AllDotted(params))
+    {
+        // Keep the content fill unchanged, but move the border antialias fringe
+        // just outside the visible edge so it cannot blend with the fill color.
+        constexpr float kOuterAntialiasBleed = 0.5f;
+        borderRect = OutsetRoundedRect(borderRect, kOuterAntialiasBleed);
+        paintParams.strokeWidth += kOuterAntialiasBleed;
+    }
+
+    Paint(context, borderRect, paintParams, strokeBrush);
     context->PopLayer();
 }
 
@@ -531,6 +663,34 @@ void BoxBorderPaint::Paint(ID2D1DeviceContext* context, const D2D1_ROUNDED_RECT&
                 brushForSide(style, side));
         };
 
+    auto paintLayeredCorner = [&](BoxBorder::Style firstStyle, int firstSide,
+        BoxBorder::Style secondStyle, int secondSide, int corner)
+        {
+            if (firstStyle != secondStyle ||
+                (firstStyle != BoxBorder::Style::Groove && firstStyle != BoxBorder::Style::Ridge))
+            {
+                return;
+            }
+
+            const float split = w * 0.5f;
+            const BoxBorder::Style outerStyle = firstStyle == BoxBorder::Style::Groove
+                ? BoxBorder::Style::Inset
+                : BoxBorder::Style::Outset;
+            const BoxBorder::Style innerStyle = firstStyle == BoxBorder::Style::Groove
+                ? BoxBorder::Style::Outset
+                : BoxBorder::Style::Inset;
+
+            FillCornerJoin(context, factory.Get(), corner, L, T, R, B, w,
+                brushForSide(outerStyle, firstSide), brushForSide(outerStyle, secondSide));
+
+            Microsoft::WRL::ComPtr<ID2D1Geometry> innerBandGeometry;
+            if (CreateBorderBandGeometry(factory.Get(), outer, split, w, innerBandGeometry))
+            {
+                FillCornerJoinThroughBand(context, innerBandGeometry.Get(), factory.Get(), corner, L, T, R, B, w,
+                    brushForSide(innerStyle, firstSide), brushForSide(innerStyle, secondSide));
+            }
+        };
+
     Microsoft::WRL::ComPtr<ID2D1Geometry> bandGeometry;
     const bool shouldClipBorderBand = CreateBorderBandGeometry(factory.Get(), outer, w, bandGeometry);
     if (shouldClipBorderBand)
@@ -554,6 +714,28 @@ void BoxBorderPaint::Paint(ID2D1DeviceContext* context, const D2D1_ROUNDED_RECT&
         paintSide(params.styleBottom, 2);
     if (left)
         paintSide(params.styleLeft, 3);
+
+    if (top && left && IsSingleLayerJoinStyle(params.styleTop) && IsSingleLayerJoinStyle(params.styleLeft))
+        FillCornerJoin(context, factory.Get(), 0, L, T, R, B, w,
+            brushForSide(params.styleTop, 0), brushForSide(params.styleLeft, 3));
+    if (top && right && IsSingleLayerJoinStyle(params.styleTop) && IsSingleLayerJoinStyle(params.styleRight))
+        FillCornerJoin(context, factory.Get(), 1, L, T, R, B, w,
+            brushForSide(params.styleTop, 0), brushForSide(params.styleRight, 1));
+    if (bottom && right && IsSingleLayerJoinStyle(params.styleBottom) && IsSingleLayerJoinStyle(params.styleRight))
+        FillCornerJoin(context, factory.Get(), 2, L, T, R, B, w,
+            brushForSide(params.styleBottom, 2), brushForSide(params.styleRight, 1));
+    if (bottom && left && IsSingleLayerJoinStyle(params.styleBottom) && IsSingleLayerJoinStyle(params.styleLeft))
+        FillCornerJoin(context, factory.Get(), 3, L, T, R, B, w,
+            brushForSide(params.styleBottom, 2), brushForSide(params.styleLeft, 3));
+
+    if (top && left)
+        paintLayeredCorner(params.styleTop, 0, params.styleLeft, 3, 0);
+    if (top && right)
+        paintLayeredCorner(params.styleTop, 0, params.styleRight, 1, 1);
+    if (bottom && right)
+        paintLayeredCorner(params.styleBottom, 2, params.styleRight, 1, 2);
+    if (bottom && left)
+        paintLayeredCorner(params.styleBottom, 2, params.styleLeft, 3, 3);
 
     if (shouldClipBorderBand)
         context->PopLayer();
