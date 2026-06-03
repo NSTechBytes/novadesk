@@ -1692,6 +1692,7 @@ namespace novadesk::scripting::quickjs
                             case ElementLayoutBox::BorderStyle::Groove: return "groove";
                             case ElementLayoutBox::BorderStyle::Ridge: return "ridge";
                             case ElementLayoutBox::BorderStyle::Dotted: return "dotted";
+                            case ElementLayoutBox::BorderStyle::Double: return "double";
                             default: return "solid";
                             }
                         };
