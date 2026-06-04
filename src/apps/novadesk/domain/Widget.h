@@ -80,7 +80,8 @@ class Widget
 public:
     struct LayoutConfig
     {
-        std::wstring direction = L"column"; // "row" | "column"
+        std::wstring direction = L"ltr"; // "ltr" | "rtl" - Text directionality
+        std::wstring flexDirection = L"row"; // "row" | "rowReverse" | "column" | "columnReverse"
         int gap = 0;
         std::wstring align = L"start";   // "start" | "center" | "end" | "stretch"
         std::wstring justify = L"start"; // currently used as start/center/end for main axis

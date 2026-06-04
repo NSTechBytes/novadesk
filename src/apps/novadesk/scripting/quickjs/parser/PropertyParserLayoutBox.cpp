@@ -241,10 +241,25 @@ namespace PropertyParser
             JS_FreeValue(ctx, styleDir);
         }
         if (options.direction.empty())
-            options.direction = L"column";
+            options.direction = L"ltr";
         std::transform(options.direction.begin(), options.direction.end(), options.direction.begin(), ::towlower);
-        if (options.direction != L"row")
-            options.direction = L"column";
+        if (options.direction != L"rtl")
+            options.direction = L"ltr";
+
+        // Parse flexDirection property
+        options.flexDirection = GetStringProp(ctx, obj, "flexDirection");
+        if (options.flexDirection.empty())
+        {
+            JSValue styleFlexDir = JS_GetPropertyStr(ctx, obj, "style");
+            if (JS_IsObject(styleFlexDir))
+                options.flexDirection = GetStringProp(ctx, styleFlexDir, "flexDirection");
+            JS_FreeValue(ctx, styleFlexDir);
+        }
+        if (options.flexDirection.empty())
+            options.flexDirection = L"row";
+        std::transform(options.flexDirection.begin(), options.flexDirection.end(), options.flexDirection.begin(), ::towlower);
+        if (options.flexDirection != L"rowreverse" && options.flexDirection != L"column" && options.flexDirection != L"columnreverse")
+            options.flexDirection = L"row";
 
         if (!GetIntProp(ctx, obj, "gap", options.gap))
         {
@@ -478,7 +493,8 @@ namespace PropertyParser
             options.boxShadows.push_back(outShadow);
         }
 
-        options.direction = direction ? *direction : L"column";
+        options.direction = direction ? *direction : L"ltr";
+        options.flexDirection = L"row"; // Default flex direction
         options.gap = gap ? *gap : 0;
         options.align = align ? *align : L"";
         options.justify = justify ? *justify : L"";

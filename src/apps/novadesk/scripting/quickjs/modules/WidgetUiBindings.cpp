@@ -496,6 +496,7 @@ namespace novadesk::scripting::quickjs
 
             Widget::LayoutConfig cfg;
             cfg.direction = layoutOptions.direction;
+            cfg.flexDirection = layoutOptions.flexDirection;
             cfg.gap = layoutOptions.gap;
             if (!layoutOptions.align.empty())
                 cfg.align = layoutOptions.align;
@@ -862,6 +863,7 @@ namespace novadesk::scripting::quickjs
 
                 Widget::LayoutConfig nextCfg{};
                 nextCfg.direction = options.direction;
+                nextCfg.flexDirection = options.flexDirection;
                 nextCfg.gap = options.gap;
                 nextCfg.align = options.align.empty() ? L"start" : options.align;
                 nextCfg.justify = options.justify.empty() ? L"start" : options.justify;
@@ -966,7 +968,7 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
-        JSValue GetElementPropertyValue(JSContext *ctx, Element *element, const std::string &prop)
+        JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget, Element *element, const std::string &prop)
         {
             const GfxRect contentBounds = element->GetBounds();
             GfxRect outerBounds = element->GetBackgroundBounds();
@@ -1680,21 +1682,47 @@ namespace novadesk::scripting::quickjs
                             {
                             case ElementLayoutBox::DisplayType::Inline: return "inline";
                             case ElementLayoutBox::DisplayType::Block: return "block";
-                            case ElementLayoutBox::DisplayType::InlineBlock: return "inlineBlock";
+                            case ElementLayoutBox::DisplayType::InlineBlock: return "inlineblock";
                             case ElementLayoutBox::DisplayType::Flex: return "flex";
                             case ElementLayoutBox::DisplayType::Contents: return "contents";
-                            case ElementLayoutBox::DisplayType::InlineFlex: return "inlineFlex";
+                            case ElementLayoutBox::DisplayType::InlineFlex: return "inlineflex";
                             case ElementLayoutBox::DisplayType::Grid: return "grid";
-                            case ElementLayoutBox::DisplayType::InlineGrid: return "inlineGrid";
+                            case ElementLayoutBox::DisplayType::InlineGrid: return "inlinegrid";
                             case ElementLayoutBox::DisplayType::Table: return "table";
-                            case ElementLayoutBox::DisplayType::InlineTable: return "inlineTable";
-                            case ElementLayoutBox::DisplayType::ListItem: return "listItem";
+                            case ElementLayoutBox::DisplayType::InlineTable: return "inlinetable";
+                            case ElementLayoutBox::DisplayType::ListItem: return "listitem";
                             case ElementLayoutBox::DisplayType::None: return "none";
-                            case ElementLayoutBox::DisplayType::RunIn: return "runIn";
+                            case ElementLayoutBox::DisplayType::RunIn: return "runin";
                             default: return "block";
                             }
                         };
                         return JS_NewString(ctx, displayToStr(layoutBox->GetDisplayType()));
+                    }
+                    
+                    // Layout configuration properties
+                    Widget::LayoutConfig cfg{};
+                    if (widget->TryGetLayoutConfig(element->GetId(), cfg))
+                    {
+                        if (prop == "direction")
+                        {
+                            return JS_NewString(ctx, Utils::ToString(cfg.direction).c_str());
+                        }
+                        if (prop == "flexDirection")
+                        {
+                            return JS_NewString(ctx, Utils::ToString(cfg.flexDirection).c_str());
+                        }
+                        if (prop == "gap")
+                        {
+                            return JS_NewInt32(ctx, cfg.gap);
+                        }
+                        if (prop == "alignItems" || prop == "align")
+                        {
+                            return JS_NewString(ctx, Utils::ToString(cfg.align).c_str());
+                        }
+                        if (prop == "justifyContent" || prop == "justify")
+                        {
+                            return JS_NewString(ctx, Utils::ToString(cfg.justify).c_str());
+                        }
                     }
                     if (prop == "borderStyle")
                     {
@@ -1814,7 +1842,7 @@ namespace novadesk::scripting::quickjs
             {
                 return JS_NULL;
             }
-            return GetElementPropertyValue(ctx, element, prop);
+            return GetElementPropertyValue(ctx, widget, element, prop);
         }
 
         void JsWidgetFinalizer(JSRuntime *, JSValue)

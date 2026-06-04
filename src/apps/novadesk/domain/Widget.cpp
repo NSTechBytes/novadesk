@@ -1863,22 +1863,31 @@ void Widget::ApplyLayoutForContainer(Element *container)
     if (innerW < 0) innerW = 0;
     if (innerH < 0) innerH = 0;
 
+    // Parse direction (for text directionality - affects alignment)
     std::wstring dir = cfg.direction;
     std::transform(dir.begin(), dir.end(), dir.begin(), ::towlower);
-    const bool isRow = (dir == L"row");
+    const bool isRtl = (dir == L"rtl");
 
+    // Parse flexDirection (for layout flow)
+    std::wstring flexDir = cfg.flexDirection;
+    std::transform(flexDir.begin(), flexDir.end(), flexDir.begin(), ::towlower);
+    
+    const bool isHorizontal = (flexDir == L"row" || flexDir == L"rowreverse");
+    const bool isReverse = (flexDir == L"rowreverse" || flexDir == L"columnreverse");
+
+    // Calculate total size needed for layout
     int mainTotal = 0;
     for (Element *child : items)
     {
         if (!child) continue;
-        mainTotal += isRow ? child->GetWidth() : child->GetHeight();
+        mainTotal += isHorizontal ? child->GetWidth() : child->GetHeight();
     }
     if (items.size() > 1)
     {
         mainTotal += cfg.gap * static_cast<int>(items.size() - 1);
     }
 
-    int mainAvail = isRow ? innerW : innerH;
+    int mainAvail = isHorizontal ? innerW : innerH;
     int mainStart = 0;
     std::wstring justify = cfg.justify;
     std::transform(justify.begin(), justify.end(), justify.begin(), ::towlower);
@@ -1892,8 +1901,19 @@ void Widget::ApplyLayoutForContainer(Element *container)
     }
     if (mainStart < 0) mainStart = 0;
 
+    // Create list of children (potentially reversed)
+    std::vector<Element*> orderedItems;
+    if (isReverse)
+    {
+        orderedItems.assign(items.rbegin(), items.rend());
+    }
+    else
+    {
+        orderedItems.assign(items.begin(), items.end());
+    }
+
     int cursor = mainStart;
-    for (Element *child : items)
+    for (Element *child : orderedItems)
     {
         if (!child) continue;
 
@@ -1904,20 +1924,44 @@ void Widget::ApplyLayoutForContainer(Element *container)
         std::transform(align.begin(), align.end(), align.begin(), ::towlower);
 
         int crossPos = 0;
-        if (isRow)
+        
+        if (isHorizontal)
         {
-            if (align == L"center") crossPos = (innerH - childH) / 2;
-            else if (align == L"end") crossPos = (innerH - childH);
-            else crossPos = 0;
+            // Horizontal layout (row/rowReverse)
+            // Cross axis is vertical
+            if (align == L"center") 
+                crossPos = (innerH - childH) / 2;
+            else if (align == L"end") 
+                crossPos = (innerH - childH);
+            else 
+                crossPos = 0; // start
 
             child->SetPosition(cfg.paddingLeft + cursor, cfg.paddingTop + (crossPos < 0 ? 0 : crossPos));
             cursor += childW + cfg.gap;
         }
         else
         {
-            if (align == L"center") crossPos = (innerW - childW) / 2;
-            else if (align == L"end") crossPos = (innerW - childW);
-            else crossPos = 0;
+            // Vertical layout (column/columnReverse)
+            // Cross axis is horizontal, affected by text direction
+            if (align == L"center")
+            {
+                crossPos = (innerW - childW) / 2;
+            }
+            else if (align == L"start")
+            {
+                // RTL: start means right side, LTR: start means left side
+                crossPos = isRtl ? (innerW - childW) : 0;
+            }
+            else if (align == L"end")
+            {
+                // RTL: end means left side, LTR: end means right side
+                crossPos = isRtl ? 0 : (innerW - childW);
+            }
+            else
+            {
+                // Default alignment based on text direction
+                crossPos = isRtl ? (innerW - childW) : 0;
+            }
 
             child->SetPosition(cfg.paddingLeft + (crossPos < 0 ? 0 : crossPos), cfg.paddingTop + cursor);
             cursor += childH + cfg.gap;

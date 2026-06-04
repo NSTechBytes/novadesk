@@ -349,7 +349,8 @@ namespace PropertyParser
         bool hasBoxShadowError = false;
         std::wstring boxShadowError;
 
-        std::wstring direction = L"column";
+        std::wstring direction = L"ltr";
+        std::wstring flexDirection = L"row";
         int gap = 0;
         std::wstring align;
         std::wstring justify;
