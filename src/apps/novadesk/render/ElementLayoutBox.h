@@ -13,6 +13,23 @@
 class ElementLayoutBox : public ShapeElement
 {
 public:
+    enum class DisplayType
+    {
+        Inline,
+        Block,
+        InlineBlock,
+        Flex,
+        Contents,
+        InlineFlex,
+        Grid,
+        InlineGrid,
+        Table,
+        InlineTable,
+        ListItem,
+        None,
+        RunIn
+    };
+
     struct BoxShadow
     {
         float x = 0.0f;
@@ -51,6 +68,9 @@ public:
     BorderStyle GetBorderStyleBottom() const { return m_BorderStyleBottom; }
     BorderStyle GetBorderStyleLeft() const { return m_BorderStyleLeft; }
 
+    void SetDisplayType(DisplayType display) { m_DisplayType = display; }
+    DisplayType GetDisplayType() const { return m_DisplayType; }
+
 private:
     void RenderSingleShadow(ID2D1DeviceContext *context, const D2D1_ROUNDED_RECT &baseRect, const BoxShadow &shadow);
     BoxBorderPaintParams BuildBorderPaintParams() const;
@@ -62,4 +82,5 @@ private:
     BorderStyle m_BorderStyleRight = BorderStyle::Solid;
     BorderStyle m_BorderStyleBottom = BorderStyle::Solid;
     BorderStyle m_BorderStyleLeft = BorderStyle::Solid;
+    DisplayType m_DisplayType = DisplayType::Block;
 };

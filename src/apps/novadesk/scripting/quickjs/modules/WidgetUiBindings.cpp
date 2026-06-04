@@ -1672,6 +1672,30 @@ namespace novadesk::scripting::quickjs
 
                 if (layoutBox)
                 {
+                    if (prop == "display")
+                    {
+                        auto displayToStr = [](ElementLayoutBox::DisplayType d) -> const char *
+                        {
+                            switch (d)
+                            {
+                            case ElementLayoutBox::DisplayType::Inline: return "inline";
+                            case ElementLayoutBox::DisplayType::Block: return "block";
+                            case ElementLayoutBox::DisplayType::InlineBlock: return "inlineBlock";
+                            case ElementLayoutBox::DisplayType::Flex: return "flex";
+                            case ElementLayoutBox::DisplayType::Contents: return "contents";
+                            case ElementLayoutBox::DisplayType::InlineFlex: return "inlineFlex";
+                            case ElementLayoutBox::DisplayType::Grid: return "grid";
+                            case ElementLayoutBox::DisplayType::InlineGrid: return "inlineGrid";
+                            case ElementLayoutBox::DisplayType::Table: return "table";
+                            case ElementLayoutBox::DisplayType::InlineTable: return "inlineTable";
+                            case ElementLayoutBox::DisplayType::ListItem: return "listItem";
+                            case ElementLayoutBox::DisplayType::None: return "none";
+                            case ElementLayoutBox::DisplayType::RunIn: return "runIn";
+                            default: return "block";
+                            }
+                        };
+                        return JS_NewString(ctx, displayToStr(layoutBox->GetDisplayType()));
+                    }
                     if (prop == "borderStyle")
                     {
                         auto styleToStr = [](ElementLayoutBox::BorderStyle s) -> const char *
