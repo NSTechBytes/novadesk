@@ -507,6 +507,9 @@ namespace novadesk::scripting::quickjs
             cfg.paddingRight = layoutOptions.paddingRight;
             cfg.paddingBottom = layoutOptions.paddingBottom;
 
+            Logging::Log(LogLevel::Debug, L"[PADDING] JsWidgetAddLayoutBox SetLayoutConfig for '%s': L=%d, T=%d, R=%d, B=%d",
+                shapeOptions.id.c_str(), cfg.paddingLeft, cfg.paddingTop, cfg.paddingRight, cfg.paddingBottom);
+
             widget->SetLayoutConfig(shapeOptions.id, cfg);
             JSValue childRes = AddLayoutBoxChildren(ctx, widget, thisVal, argv[0], shapeOptions.id);
             if (JS_IsException(childRes))

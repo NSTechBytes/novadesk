@@ -81,10 +81,10 @@ public:
     struct LayoutConfig
     {
         std::wstring direction = L"ltr"; // "ltr" | "rtl" - Text directionality
-        std::wstring flexDirection = L"row"; // "row" | "rowReverse" | "column" | "columnReverse"
+        std::wstring flexDirection = L"row"; // "row" | "rowreverse" | "column" | "columnreverse"
         int gap = 0;
-        std::wstring align = L"start";   // "start" | "center" | "end" | "stretch"
-        std::wstring justify = L"start"; // currently used as start/center/end for main axis
+        std::wstring align = L"start";   // "normal" | "stretch" | "center" | "start" | "end" | "flexstart" | "flexend"
+        std::wstring justify = L"start"; // "start" | "center" | "end" - main axis alignment
         int paddingLeft = 0;
         int paddingTop = 0;
         int paddingRight = 0;

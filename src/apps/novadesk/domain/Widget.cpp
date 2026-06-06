@@ -1863,6 +1863,11 @@ void Widget::ApplyLayoutForContainer(Element *container)
     if (innerW < 0) innerW = 0;
     if (innerH < 0) innerH = 0;
 
+    Logging::Log(LogLevel::Debug, L"[PADDING] ApplyFlexLayout on '%s': bounds W=%d H=%d, padding L=%d T=%d R=%d B=%d, inner W=%d H=%d",
+        container->GetId().c_str(), bounds.Width, bounds.Height, 
+        cfg.paddingLeft, cfg.paddingTop, cfg.paddingRight, cfg.paddingBottom,
+        innerW, innerH);
+
     // Parse direction (for text directionality - affects alignment)
     std::wstring dir = cfg.direction;
     std::transform(dir.begin(), dir.end(), dir.begin(), ::towlower);
@@ -1924,17 +1929,50 @@ void Widget::ApplyLayoutForContainer(Element *container)
         std::transform(align.begin(), align.end(), align.begin(), ::towlower);
 
         int crossPos = 0;
+        bool shouldStretch = false;
         
         if (isHorizontal)
         {
             // Horizontal layout (row/rowReverse)
             // Cross axis is vertical
             if (align == L"center") 
+            {
                 crossPos = (innerH - childH) / 2;
-            else if (align == L"end") 
+            }
+            else if (align == L"end" || align == L"flexend") 
+            {
                 crossPos = (innerH - childH);
-            else 
-                crossPos = 0; // start
+            }
+            else if (align == L"start" || align == L"flexstart") 
+            {
+                crossPos = 0;
+            }
+            else if (align == L"stretch")
+            {
+                crossPos = 0;
+                shouldStretch = true;
+                if (innerH > 0)
+                {
+                    childH = innerH;
+                    child->SetSize(childW, childH);
+                }
+            }
+            else if (align == L"normal")
+            {
+                // Normal: behaves like stretch for flex items
+                crossPos = 0;
+                shouldStretch = true;
+                if (innerH > 0)
+                {
+                    childH = innerH;
+                    child->SetSize(childW, childH);
+                }
+            }
+            else
+            {
+                // Default to start
+                crossPos = 0;
+            }
 
             child->SetPosition(cfg.paddingLeft + cursor, cfg.paddingTop + (crossPos < 0 ? 0 : crossPos));
             cursor += childW + cfg.gap;
@@ -1947,15 +1985,36 @@ void Widget::ApplyLayoutForContainer(Element *container)
             {
                 crossPos = (innerW - childW) / 2;
             }
-            else if (align == L"start")
+            else if (align == L"start" || align == L"flexstart")
             {
                 // RTL: start means right side, LTR: start means left side
                 crossPos = isRtl ? (innerW - childW) : 0;
             }
-            else if (align == L"end")
+            else if (align == L"end" || align == L"flexend")
             {
                 // RTL: end means left side, LTR: end means right side
                 crossPos = isRtl ? 0 : (innerW - childW);
+            }
+            else if (align == L"stretch")
+            {
+                crossPos = 0;
+                shouldStretch = true;
+                if (innerW > 0)
+                {
+                    childW = innerW;
+                    child->SetSize(childW, childH);
+                }
+            }
+            else if (align == L"normal")
+            {
+                // Normal: behaves like stretch for flex items
+                crossPos = 0;
+                shouldStretch = true;
+                if (innerW > 0)
+                {
+                    childW = innerW;
+                    child->SetSize(childW, childH);
+                }
             }
             else
             {
@@ -2265,6 +2324,7 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx, JS
             PropertyParser::ApplyLayoutBoxOptions(layout, parsed);
             LayoutConfig nextCfg{};
             nextCfg.direction = parsed.direction;
+            nextCfg.flexDirection = parsed.flexDirection;
             nextCfg.gap = parsed.gap;
             nextCfg.align = parsed.align.empty() ? L"start" : parsed.align;
             nextCfg.justify = parsed.justify.empty() ? L"start" : parsed.justify;
@@ -2272,6 +2332,9 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx, JS
             nextCfg.paddingTop = parsed.paddingTop;
             nextCfg.paddingRight = parsed.paddingRight;
             nextCfg.paddingBottom = parsed.paddingBottom;
+            Logging::Log(LogLevel::Debug, L"[PADDING] SetLayoutConfig for '%s': L=%d, T=%d, R=%d, B=%d, flexDirection='%s'",
+                element->GetId().c_str(), nextCfg.paddingLeft, nextCfg.paddingTop, 
+                nextCfg.paddingRight, nextCfg.paddingBottom, nextCfg.flexDirection.c_str());
             SetLayoutConfig(element->GetId(), nextCfg);
             UpdateContainerForElement(element, parsed.shape.containerId);
         }

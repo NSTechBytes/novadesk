@@ -7,6 +7,7 @@
 
 #include "ElementLayoutBox.h"
 #include "Direct2DHelper.h"
+#include "../shared/Logging.h"
 #include <algorithm>
 #include <cmath>
 #include <d2d1effects.h>
@@ -47,7 +48,14 @@ bool ElementLayoutBox::CreateGeometry(ID2D1Factory* factory, Microsoft::WRL::Com
         return false;
     Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> rounded;
     D2D1_ROUNDED_RECT rect;
-    rect.rect = D2D1::RectF((float)m_X, (float)m_Y, (float)(m_X + m_Width), (float)(m_Y + m_Height));
+    // Use GetWidth() and GetHeight() to include padding in the visual size
+    const int renderWidth = m_WDefined ? m_Width : const_cast<ElementLayoutBox*>(this)->GetAutoWidth();
+    const int renderHeight = m_HDefined ? m_Height : const_cast<ElementLayoutBox*>(this)->GetAutoHeight();
+    rect.rect = D2D1::RectF(
+        (float)m_X, 
+        (float)m_Y, 
+        (float)(m_X + renderWidth + m_PaddingLeft + m_PaddingRight), 
+        (float)(m_Y + renderHeight + m_PaddingTop + m_PaddingBottom));
     rect.radiusX = m_RadiusX;
     rect.radiusY = m_RadiusY;
     if (FAILED(factory->CreateRoundedRectangleGeometry(rect, rounded.GetAddressOf())))
@@ -66,7 +74,22 @@ void ElementLayoutBox::Render(ID2D1DeviceContext* context)
     TryCreateStrokeBrush(context, strokeBrush);
     TryCreateFillBrush(context, fillBrush);
     D2D1_ROUNDED_RECT rect;
-    rect.rect = D2D1::RectF((float)m_X, (float)m_Y, (float)(m_X + m_Width), (float)(m_Y + m_Height));
+    // Use GetWidth() and GetHeight() to include padding in the visual size
+    const int renderWidth = m_WDefined ? m_Width : GetAutoWidth();
+    const int renderHeight = m_HDefined ? m_Height : GetAutoHeight();
+    const int totalWidth = renderWidth + m_PaddingLeft + m_PaddingRight;
+    const int totalHeight = renderHeight + m_PaddingTop + m_PaddingBottom;
+    
+    Logging::Log(LogLevel::Debug, L"[PADDING] Render '%s': content W=%d H=%d, padding L=%d T=%d R=%d B=%d, total W=%d H=%d",
+        m_Id.c_str(), renderWidth, renderHeight, 
+        m_PaddingLeft, m_PaddingTop, m_PaddingRight, m_PaddingBottom,
+        totalWidth, totalHeight);
+    
+    rect.rect = D2D1::RectF(
+        (float)m_X, 
+        (float)m_Y, 
+        (float)(m_X + totalWidth), 
+        (float)(m_Y + totalHeight));
     rect.radiusX = m_RadiusX;
     rect.radiusY = m_RadiusY;
     for (const auto& shadow : m_BoxShadows)
