@@ -31,6 +31,7 @@
 #include "PathShape.h"
 #include "CurveShape.h"
 #include "ShapeElement.h"
+#include "ElementLayoutBox.h"
 #include "ColorUtil.h"
 #include "WidgetWindowChromeHelper.h"
 #include "WidgetAnimationHelper.h"
@@ -1857,6 +1858,23 @@ void Widget::ApplyLayoutForContainer(Element *container)
     if (items.empty())
         return;
 
+    // Check if this is a Grid layout container
+    // Note: Grid layout algorithm not yet fully implemented - currently falls through to flex logic
+    ElementLayoutBox *layoutBox = dynamic_cast<ElementLayoutBox*>(container);
+    const bool isGridLayout = layoutBox && 
+        (layoutBox->GetDisplayType() == ElementLayoutBox::DisplayType::Grid ||
+         layoutBox->GetDisplayType() == ElementLayoutBox::DisplayType::InlineGrid);
+
+    // Set layout properties on ElementLayoutBox for auto-sizing calculations
+    if (layoutBox)
+    {
+        layoutBox->SetLayoutDirection(cfg.flexDirection);
+        layoutBox->SetLayoutGap(cfg.gap);
+    }
+
+    // TODO: Implement proper Grid layout algorithm when Grid is fully supported
+    // For now, all layouts use Flexbox logic below
+
     GfxRect bounds = container->GetBounds();
     int innerW = bounds.Width - cfg.paddingLeft - cfg.paddingRight;
     int innerH = bounds.Height - cfg.paddingTop - cfg.paddingBottom;
@@ -1947,19 +1965,10 @@ void Widget::ApplyLayoutForContainer(Element *container)
             {
                 crossPos = 0;
             }
-            else if (align == L"stretch")
+            else if (align == L"stretch" || align == L"normal")
             {
-                crossPos = 0;
-                shouldStretch = true;
-                if (innerH > 0)
-                {
-                    childH = innerH;
-                    child->SetSize(childW, childH);
-                }
-            }
-            else if (align == L"normal")
-            {
-                // Normal: behaves like stretch for flex items
+                // CSS Spec: For flex items, both "stretch" and "normal" behave identically
+                // They stretch items to fill the cross axis
                 crossPos = 0;
                 shouldStretch = true;
                 if (innerH > 0)
@@ -1995,19 +2004,10 @@ void Widget::ApplyLayoutForContainer(Element *container)
                 // RTL: end means left side, LTR: end means right side
                 crossPos = isRtl ? 0 : (innerW - childW);
             }
-            else if (align == L"stretch")
+            else if (align == L"stretch" || align == L"normal")
             {
-                crossPos = 0;
-                shouldStretch = true;
-                if (innerW > 0)
-                {
-                    childW = innerW;
-                    child->SetSize(childW, childH);
-                }
-            }
-            else if (align == L"normal")
-            {
-                // Normal: behaves like stretch for flex items
+                // CSS Spec: For flex items, both "stretch" and "normal" behave identically
+                // They stretch items to fill the cross axis
                 crossPos = 0;
                 shouldStretch = true;
                 if (innerW > 0)

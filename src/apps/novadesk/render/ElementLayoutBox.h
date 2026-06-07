@@ -50,6 +50,9 @@ public:
     bool HitTestLocal(const D2D1_POINT_2F &point) override;
     bool CreateGeometry(ID2D1Factory *factory, Microsoft::WRL::ComPtr<ID2D1Geometry> &geometry) const override;
 
+    int GetAutoWidth() override;
+    int GetAutoHeight() override;
+
     void SetRadii(float rx, float ry) override { m_RadiusX = rx; m_RadiusY = ry; }
     float GetRadiusX() const override { return m_RadiusX; }
     float GetRadiusY() const override { return m_RadiusY; }
@@ -71,6 +74,12 @@ public:
     void SetDisplayType(DisplayType display) { m_DisplayType = display; }
     DisplayType GetDisplayType() const { return m_DisplayType; }
 
+    // Set layout configuration for auto-sizing calculations
+    void SetLayoutDirection(const std::wstring& flexDir) { m_FlexDirection = flexDir; }
+    void SetLayoutGap(int gap) { m_LayoutGap = gap; }
+    const std::wstring& GetLayoutDirection() const { return m_FlexDirection; }
+    int GetLayoutGap() const { return m_LayoutGap; }
+
 private:
     void RenderSingleShadow(ID2D1DeviceContext *context, const D2D1_ROUNDED_RECT &baseRect, const BoxShadow &shadow);
     BoxBorderPaintParams BuildBorderPaintParams() const;
@@ -83,4 +92,6 @@ private:
     BorderStyle m_BorderStyleBottom = BorderStyle::Solid;
     BorderStyle m_BorderStyleLeft = BorderStyle::Solid;
     DisplayType m_DisplayType = DisplayType::Block;
+    std::wstring m_FlexDirection = L"row";
+    int m_LayoutGap = 0;
 };

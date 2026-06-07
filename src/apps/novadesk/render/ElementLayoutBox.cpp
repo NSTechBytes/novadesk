@@ -18,6 +18,100 @@ ElementLayoutBox::ElementLayoutBox(const std::wstring& id, int x, int y, int wid
 {
 }
 
+int ElementLayoutBox::GetAutoWidth()
+{
+    // If width is explicitly defined, use it
+    if (m_WDefined)
+        return m_Width;
+    
+    // Calculate auto width based on children and layout direction
+    // NOTE: Do NOT include padding here - Element::GetWidth() will add it
+    const auto& children = GetContainerItems();
+    if (children.empty())
+        return 0; // Element::GetWidth() will add padding
+    
+    // Parse flex direction to determine layout
+    std::wstring flexDir = m_FlexDirection;
+    std::transform(flexDir.begin(), flexDir.end(), flexDir.begin(), ::towlower);
+    const bool isHorizontal = (flexDir == L"row" || flexDir == L"rowreverse");
+    
+    int contentWidth = 0;
+    
+    if (isHorizontal)
+    {
+        // Horizontal layout (row): sum all children widths + gaps
+        for (size_t i = 0; i < children.size(); ++i)
+        {
+            Element* child = children[i];
+            if (!child) continue;
+            contentWidth += child->GetWidth();
+            
+            // Add gap between items (not after last item)
+            if (i < children.size() - 1)
+                contentWidth += m_LayoutGap;
+        }
+    }
+    else
+    {
+        // Vertical layout (column): use maximum child width
+        for (Element* child : children)
+        {
+            if (!child) continue;
+            contentWidth = std::max(contentWidth, child->GetWidth());
+        }
+    }
+    
+    // Return content width WITHOUT padding (Element::GetWidth() adds it)
+    return contentWidth;
+}
+
+int ElementLayoutBox::GetAutoHeight()
+{
+    // If height is explicitly defined, use it
+    if (m_HDefined)
+        return m_Height;
+    
+    // Calculate auto height based on children and layout direction
+    // NOTE: Do NOT include padding here - Element::GetHeight() will add it
+    const auto& children = GetContainerItems();
+    if (children.empty())
+        return 0; // Element::GetHeight() will add padding
+    
+    // Parse flex direction to determine layout
+    std::wstring flexDir = m_FlexDirection;
+    std::transform(flexDir.begin(), flexDir.end(), flexDir.begin(), ::towlower);
+    const bool isHorizontal = (flexDir == L"row" || flexDir == L"rowreverse");
+    
+    int contentHeight = 0;
+    
+    if (isHorizontal)
+    {
+        // Horizontal layout (row): use maximum child height
+        for (Element* child : children)
+        {
+            if (!child) continue;
+            contentHeight = std::max(contentHeight, child->GetHeight());
+        }
+    }
+    else
+    {
+        // Vertical layout (column): sum all children heights + gaps
+        for (size_t i = 0; i < children.size(); ++i)
+        {
+            Element* child = children[i];
+            if (!child) continue;
+            contentHeight += child->GetHeight();
+            
+            // Add gap between items (not after last item)
+            if (i < children.size() - 1)
+                contentHeight += m_LayoutGap;
+        }
+    }
+    
+    // Return content height WITHOUT padding (Element::GetHeight() adds it)
+    return contentHeight;
+}
+
 bool ElementLayoutBox::HitTestLocal(const D2D1_POINT_2F& point)
 {
     ID2D1Factory1* factory = Direct2D::GetFactory();
@@ -48,14 +142,16 @@ bool ElementLayoutBox::CreateGeometry(ID2D1Factory* factory, Microsoft::WRL::Com
         return false;
     Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> rounded;
     D2D1_ROUNDED_RECT rect;
-    // Use GetWidth() and GetHeight() to include padding in the visual size
-    const int renderWidth = m_WDefined ? m_Width : const_cast<ElementLayoutBox*>(this)->GetAutoWidth();
-    const int renderHeight = m_HDefined ? m_Height : const_cast<ElementLayoutBox*>(this)->GetAutoHeight();
+    
+    // Use Element::GetWidth() and GetHeight() which handle auto-sizing and padding
+    const int totalWidth = const_cast<ElementLayoutBox*>(this)->GetWidth();
+    const int totalHeight = const_cast<ElementLayoutBox*>(this)->GetHeight();
+    
     rect.rect = D2D1::RectF(
         (float)m_X, 
         (float)m_Y, 
-        (float)(m_X + renderWidth + m_PaddingLeft + m_PaddingRight), 
-        (float)(m_Y + renderHeight + m_PaddingTop + m_PaddingBottom));
+        (float)(m_X + totalWidth), 
+        (float)(m_Y + totalHeight));
     rect.radiusX = m_RadiusX;
     rect.radiusY = m_RadiusY;
     if (FAILED(factory->CreateRoundedRectangleGeometry(rect, rounded.GetAddressOf())))
@@ -74,16 +170,14 @@ void ElementLayoutBox::Render(ID2D1DeviceContext* context)
     TryCreateStrokeBrush(context, strokeBrush);
     TryCreateFillBrush(context, fillBrush);
     D2D1_ROUNDED_RECT rect;
-    // Use GetWidth() and GetHeight() to include padding in the visual size
-    const int renderWidth = m_WDefined ? m_Width : GetAutoWidth();
-    const int renderHeight = m_HDefined ? m_Height : GetAutoHeight();
-    const int totalWidth = renderWidth + m_PaddingLeft + m_PaddingRight;
-    const int totalHeight = renderHeight + m_PaddingTop + m_PaddingBottom;
     
-    Logging::Log(LogLevel::Debug, L"[PADDING] Render '%s': content W=%d H=%d, padding L=%d T=%d R=%d B=%d, total W=%d H=%d",
-        m_Id.c_str(), renderWidth, renderHeight, 
-        m_PaddingLeft, m_PaddingTop, m_PaddingRight, m_PaddingBottom,
-        totalWidth, totalHeight);
+    // Use Element::GetWidth() and GetHeight() which handle auto-sizing and padding
+    const int totalWidth = GetWidth();
+    const int totalHeight = GetHeight();
+    
+    Logging::Log(LogLevel::Debug, L"[AUTO-SIZE] Render '%s': WDefined=%d HDefined=%d, total W=%d H=%d (includes padding L=%d T=%d R=%d B=%d)",
+        m_Id.c_str(), m_WDefined, m_HDefined, totalWidth, totalHeight,
+        m_PaddingLeft, m_PaddingTop, m_PaddingRight, m_PaddingBottom);
     
     rect.rect = D2D1::RectF(
         (float)m_X, 
