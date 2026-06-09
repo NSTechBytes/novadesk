@@ -392,6 +392,21 @@ namespace PropertyParser
 
         element->SetDisplayType(options.displayType);
 
+        // Handle display: none by hiding the element
+        if (options.displayType == ElementLayoutBox::DisplayType::None)
+        {
+            element->SetShow(false);
+        }
+        else
+        {
+            // Restore visibility if it was previously hidden by display:none
+            // Note: This respects the element's original visibility state
+            if (!element->IsVisible())
+            {
+                element->SetShow(true);
+            }
+        }
+
         if (options.hasBorderStyle)
         {
             element->SetBorderStyle(
