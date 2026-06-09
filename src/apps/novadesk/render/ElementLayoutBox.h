@@ -16,7 +16,8 @@ public:
     enum class DisplayType
     {
         Flex,
-        None
+        None,
+        ListItem
     };
 
     struct BoxShadow
@@ -28,6 +29,23 @@ public:
         COLORREF color = RGB(0, 0, 0);
         BYTE alpha = 255;
         bool inset = false;
+    };
+
+    enum class ListStyleType
+    {
+        Disc,      // • (filled circle)
+        Circle,    // ○ (hollow circle)
+        Square,    // ■ (filled square)
+        None       // No marker
+    };
+
+    struct ListMarker
+    {
+        ListStyleType type = ListStyleType::Disc;
+        COLORREF color = RGB(0, 0, 0);
+        BYTE alpha = 255;
+        float size = 6.0f;
+        float offsetX = -20.0f;  // Distance from content (negative = left)
     };
 
     using BorderStyle = BoxBorder::Style;
@@ -63,6 +81,12 @@ public:
     void SetDisplayType(DisplayType display) { m_DisplayType = display; }
     DisplayType GetDisplayType() const { return m_DisplayType; }
 
+    // List item marker methods
+    void SetListMarker(const ListMarker& marker) { m_ListMarker = marker; }
+    const ListMarker& GetListMarker() const { return m_ListMarker; }
+    void SetListStyleType(ListStyleType type) { m_ListMarker.type = type; }
+    ListStyleType GetListStyleType() const { return m_ListMarker.type; }
+
     // Set layout configuration for auto-sizing calculations
     void SetLayoutDirection(const std::wstring& flexDir) { m_FlexDirection = flexDir; }
     void SetLayoutGap(int gap) { m_LayoutGap = gap; }
@@ -71,6 +95,7 @@ public:
 
 private:
     void RenderSingleShadow(ID2D1DeviceContext *context, const D2D1_ROUNDED_RECT &baseRect, const BoxShadow &shadow);
+    void RenderListMarker(ID2D1DeviceContext *context);
     BoxBorderPaintParams BuildBorderPaintParams() const;
 
     float m_RadiusX = 0.0f;
@@ -81,6 +106,7 @@ private:
     BorderStyle m_BorderStyleBottom = BorderStyle::Solid;
     BorderStyle m_BorderStyleLeft = BorderStyle::Solid;
     DisplayType m_DisplayType = DisplayType::Flex;
+    ListMarker m_ListMarker;
     std::wstring m_FlexDirection = L"row";
     int m_LayoutGap = 0;
 };

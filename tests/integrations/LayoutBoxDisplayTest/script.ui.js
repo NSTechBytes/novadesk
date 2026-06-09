@@ -84,4 +84,108 @@ ui.addLayoutBox({
     ]
 })
 
+// Test 3: display:listitem with listStyleType:disc (default filled circle marker)
+ui.addLayoutBox({
+    id: "listitem-disc",
+    display: "listitem",
+    listStyleType: "disc",
+    x:"20",
+    y:"230",
+    flexDirection: "column",
+    padding:10,
+    gap:10,
+    width:500,
+    height:80,
+    backgroundColor:"rgba(10,10,10,0.5)",
+    children: [
+        {
+            elementType: "text",
+            id: "listitemText1",
+            text: "List item with disc marker (filled circle) \n New line goes here",
+            x: 20,
+            y: 10,
+            fontSize: 56,
+            fontColor: "rgba(255, 255, 255, 1)"
+        }
+    ]
+})
+
+// Test 4: display:listitem with listStyleType:circle (hollow circle marker)
+ui.addLayoutBox({
+    id: "listitem-circle",
+    display: "listitem",
+    listStyleType: "circle",
+    x:"20",
+    y:"330",
+    flexDirection: "column",
+    padding:10,
+    gap:10,
+    width:500,
+    height:80,
+    backgroundColor:"rgba(10,10,10,0.5)",
+    children: [
+        {
+            elementType: "text",
+            id: "listitemText2",
+            text: "List item with circle marker (hollow circle)",
+            x: 20,
+            y: 10,
+            fontSize: 16,
+            fontColor: "rgba(255, 255, 255, 1)"
+        }
+    ]
+})
+
+// Test 5: display:listitem with listStyleType:square (filled square marker)
+ui.addLayoutBox({
+    id: "listitem-square",
+    display: "listitem",
+    listStyleType: "square",
+    x:"20",
+    y:"430",
+    flexDirection: "column",
+    padding:10,
+    gap:10,
+    width:500,
+    height:80,
+    backgroundColor:"rgba(10,10,10,0.5)",
+    children: [
+        {
+            elementType: "text",
+            id: "listitemText3",
+            text: "List item with square marker (filled square)",
+            x: 20,
+            y: 10,
+            fontSize: 16,
+            fontColor: "rgba(255, 255, 255, 1)"
+        }
+    ]
+})
+
+// Test 6: display:listitem with listStyleType:none (no marker)
+ui.addLayoutBox({
+    id: "listitem-none",
+    display: "listitem",
+    listStyleType: "none",
+    x:"20",
+    y:"530",
+    flexDirection: "column",
+    padding:10,
+    gap:10,
+    width:500,
+    height:80,
+    backgroundColor:"rgba(10,10,10,0.5)",
+    children: [
+        {
+            elementType: "text",
+            id: "listitemText4",
+            text: "List item with no marker (listStyleType: none)",
+            x: 20,
+            y: 10,
+            fontSize: 16,
+            fontColor: "rgba(255, 255, 255, 1)"
+        }
+    ]
+})
+
 ui.endUpdate();

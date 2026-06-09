@@ -206,6 +206,10 @@ void ElementLayoutBox::Render(ID2D1DeviceContext* context)
     {
         BoxBorderPaint::PaintForElement(context, rect, BuildBorderPaintParams(), strokeBrush.Get());
     }
+    
+    // Render list marker if this is a list item
+    RenderListMarker(context);
+    
     RenderBevel(context);
     RestoreRenderTransform(context, originalTransform);
 }
@@ -341,4 +345,72 @@ BoxBorderPaintParams ElementLayoutBox::BuildBorderPaintParams() const
     params.strokeLineJoin = m_StrokeLineJoin;
     params.strokeDashOffset = m_StrokeDashOffset;
     return params;
+}
+
+void ElementLayoutBox::RenderListMarker(ID2D1DeviceContext* context)
+{
+    // Only render marker for list items
+    if (m_DisplayType != DisplayType::ListItem || !context)
+        return;
+    
+    // Don't render if marker type is None
+    if (m_ListMarker.type == ListStyleType::None)
+        return;
+    
+    // Create brush for the marker
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> markerBrush;
+    if (!Direct2D::CreateSolidBrush(context, m_ListMarker.color, m_ListMarker.alpha / 255.0f, &markerBrush))
+        return;
+    
+    // Calculate marker position
+    // Position marker to the left of the content box (respecting padding)
+    const float markerCenterX = (float)(m_X + m_PaddingLeft) + m_ListMarker.offsetX;
+    const float markerCenterY = (float)(m_Y + m_PaddingTop) + (m_ListMarker.size * 1.5f);
+    const float markerSize = m_ListMarker.size;
+    
+    // Render different marker types
+    switch (m_ListMarker.type)
+    {
+        case ListStyleType::Disc:
+        {
+            // Filled circle (•)
+            D2D1_ELLIPSE disc = D2D1::Ellipse(
+                D2D1::Point2F(markerCenterX, markerCenterY),
+                markerSize / 2.0f,
+                markerSize / 2.0f
+            );
+            context->FillEllipse(disc, markerBrush.Get());
+            break;
+        }
+        
+        case ListStyleType::Circle:
+        {
+            // Hollow circle (○)
+            D2D1_ELLIPSE circle = D2D1::Ellipse(
+                D2D1::Point2F(markerCenterX, markerCenterY),
+                markerSize / 2.0f,
+                markerSize / 2.0f
+            );
+            context->DrawEllipse(circle, markerBrush.Get(), 1.0f);
+            break;
+        }
+        
+        case ListStyleType::Square:
+        {
+            // Filled square (■)
+            D2D1_RECT_F square = D2D1::RectF(
+                markerCenterX - (markerSize / 2.0f),
+                markerCenterY - (markerSize / 2.0f),
+                markerCenterX + (markerSize / 2.0f),
+                markerCenterY + (markerSize / 2.0f)
+            );
+            context->FillRectangle(square, markerBrush.Get());
+            break;
+        }
+        
+        case ListStyleType::None:
+        default:
+            // Do nothing
+            break;
+    }
 }

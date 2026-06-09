@@ -1702,6 +1702,7 @@ namespace novadesk::scripting::quickjs
                             {
                             case ElementLayoutBox::DisplayType::Flex: return "flex";
                             case ElementLayoutBox::DisplayType::None: return "none";
+                            case ElementLayoutBox::DisplayType::ListItem: return "listitem";
                             default: return "flex";
                             }
                         };

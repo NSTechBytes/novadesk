@@ -359,6 +359,7 @@ namespace PropertyParser
         int paddingRight = 0;
         int paddingBottom = 0;
         ElementLayoutBox::DisplayType displayType = ElementLayoutBox::DisplayType::Flex;
+        ElementLayoutBox::ListStyleType listStyleType = ElementLayoutBox::ListStyleType::Disc;
     };
 
     struct AnimationKeyframeOptions

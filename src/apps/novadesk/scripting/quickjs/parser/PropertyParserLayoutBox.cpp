@@ -344,6 +344,23 @@ namespace PropertyParser
                 options.displayType = ElementLayoutBox::DisplayType::Flex;
             else if (displayStr == L"none")
                 options.displayType = ElementLayoutBox::DisplayType::None;
+            else if (displayStr == L"listitem")
+                options.displayType = ElementLayoutBox::DisplayType::ListItem;
+        }
+
+        // Parse listStyleType property
+        std::wstring listStyleTypeStr = GetStringProp(ctx, obj, "listStyleType");
+        if (!listStyleTypeStr.empty())
+        {
+            std::transform(listStyleTypeStr.begin(), listStyleTypeStr.end(), listStyleTypeStr.begin(), ::towlower);
+            if (listStyleTypeStr == L"disc")
+                options.listStyleType = ElementLayoutBox::ListStyleType::Disc;
+            else if (listStyleTypeStr == L"circle")
+                options.listStyleType = ElementLayoutBox::ListStyleType::Circle;
+            else if (listStyleTypeStr == L"square")
+                options.listStyleType = ElementLayoutBox::ListStyleType::Square;
+            else if (listStyleTypeStr == L"none")
+                options.listStyleType = ElementLayoutBox::ListStyleType::None;
         }
 
         JSValue stylePadding = JS_GetPropertyStr(ctx, obj, "style");
@@ -379,6 +396,23 @@ namespace PropertyParser
                     options.displayType = ElementLayoutBox::DisplayType::Flex;
                 else if (styleDisplay == L"none")
                     options.displayType = ElementLayoutBox::DisplayType::None;
+                else if (styleDisplay == L"listitem")
+                    options.displayType = ElementLayoutBox::DisplayType::ListItem;
+            }
+            
+            // Parse listStyleType from style object as well
+            std::wstring styleListStyleType = GetStringProp(ctx, stylePadding, "listStyleType");
+            if (!styleListStyleType.empty())
+            {
+                std::transform(styleListStyleType.begin(), styleListStyleType.end(), styleListStyleType.begin(), ::towlower);
+                if (styleListStyleType == L"disc")
+                    options.listStyleType = ElementLayoutBox::ListStyleType::Disc;
+                else if (styleListStyleType == L"circle")
+                    options.listStyleType = ElementLayoutBox::ListStyleType::Circle;
+                else if (styleListStyleType == L"square")
+                    options.listStyleType = ElementLayoutBox::ListStyleType::Square;
+                else if (styleListStyleType == L"none")
+                    options.listStyleType = ElementLayoutBox::ListStyleType::None;
             }
         }
         JS_FreeValue(ctx, stylePadding);
@@ -391,6 +425,9 @@ namespace PropertyParser
         ApplyShapeOptions(element, options.shape);
 
         element->SetDisplayType(options.displayType);
+        
+        // Set list style type
+        element->SetListStyleType(options.listStyleType);
 
         // Handle display: none by hiding the element
         if (options.displayType == ElementLayoutBox::DisplayType::None)
