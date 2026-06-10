@@ -34,10 +34,10 @@ void FlexLayoutEngine::ApplyLayout(Element* container, const FlexLayoutConfig& c
     if (innerW < 0) innerW = 0;
     if (innerH < 0) innerH = 0;
 
-    Logging::Log(LogLevel::Debug, L"[FLEX_LAYOUT] ApplyLayout on '%s': bounds W=%d H=%d, padding L=%d T=%d R=%d B=%d, inner W=%d H=%d",
-        container->GetId().c_str(), bounds.Width, bounds.Height,
-        config.paddingLeft, config.paddingTop, config.paddingRight, config.paddingBottom,
-        innerW, innerH);
+    // Logging::Log(LogLevel::Debug, L"[FLEX_LAYOUT] ApplyLayout on '%s': bounds W=%d H=%d, padding L=%d T=%d R=%d B=%d, inner W=%d H=%d",
+    //     container->GetId().c_str(), bounds.Width, bounds.Height,
+    //     config.paddingLeft, config.paddingTop, config.paddingRight, config.paddingBottom,
+    //     innerW, innerH);
 
     // Parse direction (for text directionality - affects alignment)
     std::wstring dir = config.direction;

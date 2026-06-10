@@ -1895,9 +1895,9 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx, JS
             nextCfg.paddingTop = parsed.paddingTop;
             nextCfg.paddingRight = parsed.paddingRight;
             nextCfg.paddingBottom = parsed.paddingBottom;
-            Logging::Log(LogLevel::Debug, L"[PADDING] SetLayoutConfig for '%s': L=%d, T=%d, R=%d, B=%d, flexDirection='%s'",
-                element->GetId().c_str(), nextCfg.paddingLeft, nextCfg.paddingTop, 
-                nextCfg.paddingRight, nextCfg.paddingBottom, nextCfg.flexDirection.c_str());
+            // Logging::Log(LogLevel::Debug, L"[PADDING] SetLayoutConfig for '%s': L=%d, T=%d, R=%d, B=%d, flexDirection='%s'",
+            //     element->GetId().c_str(), nextCfg.paddingLeft, nextCfg.paddingTop, 
+            //     nextCfg.paddingRight, nextCfg.paddingBottom, nextCfg.flexDirection.c_str());
             SetLayoutConfig(element->GetId(), nextCfg);
             UpdateContainerForElement(element, parsed.shape.containerId);
         }

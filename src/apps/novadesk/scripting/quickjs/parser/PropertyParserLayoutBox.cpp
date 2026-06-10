@@ -290,7 +290,7 @@ namespace PropertyParser
         if (GetIntProp(ctx, obj, "padding", pad))
         {
             options.paddingLeft = options.paddingTop = options.paddingRight = options.paddingBottom = pad;
-            Logging::Log(LogLevel::Debug, L"[PADDING] Parsed single padding value: %d", pad);
+            // Logging::Log(LogLevel::Debug, L"[PADDING] Parsed single padding value: %d", pad);
         }
 
         JSValue paddingVal = JS_GetPropertyStr(ctx, obj, "padding");
@@ -315,13 +315,13 @@ namespace PropertyParser
             if (values.size() == 1)
             {
                 options.paddingLeft = options.paddingTop = options.paddingRight = options.paddingBottom = values[0];
-                Logging::Log(LogLevel::Debug, L"[PADDING] Parsed array padding (1 value): %d", values[0]);
+                // Logging::Log(LogLevel::Debug, L"[PADDING] Parsed array padding (1 value): %d", values[0]);
             }
             else if (values.size() == 2)
             {
                 options.paddingLeft = options.paddingRight = values[0];
                 options.paddingTop = options.paddingBottom = values[1];
-                Logging::Log(LogLevel::Debug, L"[PADDING] Parsed array padding (2 values): H=%d, V=%d", values[0], values[1]);
+                // Logging::Log(LogLevel::Debug, L"[PADDING] Parsed array padding (2 values): H=%d, V=%d", values[0], values[1]);
             }
             else if (values.size() >= 4)
             {
@@ -329,8 +329,8 @@ namespace PropertyParser
                 options.paddingTop = values[1];
                 options.paddingRight = values[2];
                 options.paddingBottom = values[3];
-                Logging::Log(LogLevel::Debug, L"[PADDING] Parsed array padding (4 values): L=%d, T=%d, R=%d, B=%d", 
-                    values[0], values[1], values[2], values[3]);
+                // Logging::Log(LogLevel::Debug, L"[PADDING] Parsed array padding (4 values): L=%d, T=%d, R=%d, B=%d", 
+                //     values[0], values[1], values[2], values[3]);
             }
         }
         JS_FreeValue(ctx, paddingVal);
@@ -478,9 +478,9 @@ namespace PropertyParser
         element->SetBoxShadows(shadows);
 
         // Apply padding values to the element
-        Logging::Log(LogLevel::Debug, L"[PADDING] ApplyLayoutBoxOptions: Setting padding L=%d, T=%d, R=%d, B=%d on element '%s'",
-            options.paddingLeft, options.paddingTop, options.paddingRight, options.paddingBottom, 
-            element->GetId().c_str());
+        // Logging::Log(LogLevel::Debug, L"[PADDING] ApplyLayoutBoxOptions: Setting padding L=%d, T=%d, R=%d, B=%d on element '%s'",
+        //     options.paddingLeft, options.paddingTop, options.paddingRight, options.paddingBottom, 
+        //     element->GetId().c_str());
         element->SetPadding(
             options.paddingLeft,
             options.paddingTop,

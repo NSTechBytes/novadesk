@@ -175,9 +175,9 @@ void ElementLayoutBox::Render(ID2D1DeviceContext* context)
     const int totalWidth = GetWidth();
     const int totalHeight = GetHeight();
     
-    Logging::Log(LogLevel::Debug, L"[AUTO-SIZE] Render '%s': WDefined=%d HDefined=%d, total W=%d H=%d (includes padding L=%d T=%d R=%d B=%d)",
-        m_Id.c_str(), m_WDefined, m_HDefined, totalWidth, totalHeight,
-        m_PaddingLeft, m_PaddingTop, m_PaddingRight, m_PaddingBottom);
+    // Logging::Log(LogLevel::Debug, L"[AUTO-SIZE] Render '%s': WDefined=%d HDefined=%d, total W=%d H=%d (includes padding L=%d T=%d R=%d B=%d)",
+    //     m_Id.c_str(), m_WDefined, m_HDefined, totalWidth, totalHeight,
+    //     m_PaddingLeft, m_PaddingTop, m_PaddingRight, m_PaddingBottom);
     
     rect.rect = D2D1::RectF(
         (float)m_X, 
