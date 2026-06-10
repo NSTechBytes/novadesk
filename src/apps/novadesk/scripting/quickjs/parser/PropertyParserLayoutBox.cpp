@@ -361,6 +361,8 @@ namespace PropertyParser
                 options.listStyleType = ElementLayoutBox::ListStyleType::Square;
             else if (listStyleTypeStr == L"upper-roman")
                 options.listStyleType = ElementLayoutBox::ListStyleType::UpperRoman;
+            else if (listStyleTypeStr == L"lower-roman")
+                options.listStyleType = ElementLayoutBox::ListStyleType::LowerRoman;
             else if (listStyleTypeStr == L"none")
                 options.listStyleType = ElementLayoutBox::ListStyleType::None;
         }
@@ -415,6 +417,8 @@ namespace PropertyParser
                     options.listStyleType = ElementLayoutBox::ListStyleType::Square;
                 else if (styleListStyleType == L"upper-roman")
                     options.listStyleType = ElementLayoutBox::ListStyleType::UpperRoman;
+                else if (styleListStyleType == L"lower-roman")
+                    options.listStyleType = ElementLayoutBox::ListStyleType::LowerRoman;
                 else if (styleListStyleType == L"none")
                     options.listStyleType = ElementLayoutBox::ListStyleType::None;
             }

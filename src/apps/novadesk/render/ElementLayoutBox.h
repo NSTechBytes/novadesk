@@ -37,6 +37,7 @@ public:
         Circle,      // ○ (hollow circle)
         Square,      // ■ (filled square)
         UpperRoman,  // I, II, III, IV, V, etc.
+        LowerRoman,  // i, ii, iii, iv, v, etc.
         None         // No marker
     };
 

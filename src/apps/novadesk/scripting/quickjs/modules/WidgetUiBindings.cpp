@@ -1708,6 +1708,23 @@ namespace novadesk::scripting::quickjs
                         };
                         return JS_NewString(ctx, displayToStr(layoutBox->GetDisplayType()));
                     }
+                    if (prop == "listStyleType")
+                    {
+                        auto styleToStr = [](ElementLayoutBox::ListStyleType t) -> const char *
+                        {
+                            switch (t)
+                            {
+                            case ElementLayoutBox::ListStyleType::Disc: return "disc";
+                            case ElementLayoutBox::ListStyleType::Circle: return "circle";
+                            case ElementLayoutBox::ListStyleType::Square: return "square";
+                            case ElementLayoutBox::ListStyleType::UpperRoman: return "upper-roman";
+                            case ElementLayoutBox::ListStyleType::LowerRoman: return "lower-roman";
+                            case ElementLayoutBox::ListStyleType::None: return "none";
+                            default: return "disc";
+                            }
+                        };
+                        return JS_NewString(ctx, styleToStr(layoutBox->GetListStyleType()));
+                    }
                     
                     // Layout configuration properties
                     Widget::LayoutConfig cfg{};

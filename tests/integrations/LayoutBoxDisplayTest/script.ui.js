@@ -296,4 +296,55 @@ ui.addLayoutBox({
     ]
 })
 
+// Test 8: display:listitem with listStyleType:lower-roman (lowercase Roman numerals - auto-indexed)
+ui.addLayoutBox({
+    id: "listitem-lowerroman1",
+    display: "listitem",
+    listStyleType: "lower-roman",
+    x: "20",
+    y: "1060",
+    flexDirection: "column",
+    padding: 10,
+    gap: 10,
+    width: 500,
+    height: 80,
+    backgroundColor: "rgba(10,10,10,0.5)",
+    children: [
+        {
+            elementType: "text",
+            id: "listitemText8",
+            text: "First list item with lower Roman numeral (auto i.)",
+            x: 20,
+            y: 10,
+            fontSize: 16,
+            fontColor: "rgba(255, 255, 255, 1)"
+        }
+    ]
+})
+
+ui.addLayoutBox({
+    id: "listitem-lowerroman2",
+    display: "listitem",
+    listStyleType: "lower-roman",
+    x: "20",
+    y: "1150",
+    flexDirection: "column",
+    padding: 10,
+    gap: 10,
+    width: 500,
+    height: 80,
+    backgroundColor: "rgba(10,10,10,0.5)",
+    children: [
+        {
+            elementType: "text",
+            id: "listitemText9",
+            text: "Second list item with lower Roman numeral (auto ii.)",
+            x: 20,
+            y: 10,
+            fontSize: 16,
+            fontColor: "rgba(255, 255, 255, 1)"
+        }
+    ]
+})
+
 ui.endUpdate();
