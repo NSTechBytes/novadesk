@@ -45,13 +45,13 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>$(ProjectDir)dist\</OutDir>
-    <IntDir>$(ProjectDir)intermediate\novadesk\$(Configuration)\</IntDir>
+    <OutDir>$(ProjectDir)..\..\dist\</OutDir>
+    <IntDir>$(ProjectDir)..\..\intermediate\novadesk\$(Configuration)\</IntDir>
     <TargetName>novadesk</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(ProjectDir)dist\</OutDir>
-    <IntDir>$(ProjectDir)intermediate\novadesk\$(Configuration)\</IntDir>
+    <OutDir>$(ProjectDir)..\..\dist\</OutDir>
+    <IntDir>$(ProjectDir)..\..\intermediate\novadesk\$(Configuration)\</IntDir>
     <TargetName>novadesk</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -60,7 +60,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir)src\apps\novadesk;$(ProjectDir)src\apps\novadesk\domain;$(ProjectDir)src\apps\novadesk\domain\animation;$(ProjectDir)src\apps\novadesk\shared;$(ProjectDir)src\apps\novadesk\render;$(ProjectDir)src\apps\novadesk\scripting\quickjs;$(ProjectDir)src\apps\novadesk\scripting\quickjs\parser;$(ProjectDir)src\third_party\quick-js;$(ProjectDir)src\third_party\json;$(ProjectDir)src\third_party\nanosvg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)domain;$(ProjectDir)domain\animation;$(ProjectDir)shared;$(ProjectDir)render;$(ProjectDir)scripting\quickjs;$(ProjectDir)scripting\quickjs\parser;$(ProjectDir)..\..\src\third_party\quick-js;$(ProjectDir)..\..\src\third_party\json;$(ProjectDir)..\..\src\third_party\nanosvg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <AdditionalOptions>/wd4146 /wd4703 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
@@ -72,10 +72,10 @@
       <AdditionalOptions>/SUBSYSTEM:WINDOWS,5.02 %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <ResourceCompile>
-      <AdditionalIncludeDirectories>$(ProjectDir)src\apps\novadesk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Manifest>
-      <AdditionalManifestFiles>$(ProjectDir)src\apps\novadesk\Novadesk.exe.manifest%(AdditionalManifestFiles)</AdditionalManifestFiles>
+      <AdditionalManifestFiles>$(ProjectDir)Novadesk.exe.manifest%(AdditionalManifestFiles)</AdditionalManifestFiles>
     </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -86,7 +86,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir)src\apps\novadesk;$(ProjectDir)src\apps\novadesk\domain;$(ProjectDir)src\apps\novadesk\domain\animation;$(ProjectDir)src\apps\novadesk\shared;$(ProjectDir)src\apps\novadesk\render;$(ProjectDir)src\apps\novadesk\scripting\quickjs;$(ProjectDir)src\apps\novadesk\scripting\quickjs\parser;$(ProjectDir)src\third_party\quick-js;$(ProjectDir)src\third_party\json;$(ProjectDir)src\third_party\nanosvg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)domain;$(ProjectDir)domain\animation;$(ProjectDir)shared;$(ProjectDir)render;$(ProjectDir)scripting\quickjs;$(ProjectDir)scripting\quickjs\parser;$(ProjectDir)..\..\src\third_party\quick-js;$(ProjectDir)..\..\src\third_party\json;$(ProjectDir)..\..\src\third_party\nanosvg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <AdditionalOptions>/wd4146 /wd4703 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
@@ -102,147 +102,147 @@
       <AdditionalOptions>/SUBSYSTEM:WINDOWS,5.02 %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <ResourceCompile>
-      <AdditionalIncludeDirectories>$(ProjectDir)src\apps\novadesk;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Manifest>
-      <AdditionalManifestFiles>$(ProjectDir)src\apps\novadesk\Novadesk.exe.manifest%(AdditionalManifestFiles)</AdditionalManifestFiles>
+      <AdditionalManifestFiles>$(ProjectDir)Novadesk.exe.manifest%(AdditionalManifestFiles)</AdditionalManifestFiles>
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\apps\novadesk\domain\DesktopManager.cpp" />
-    <ClCompile Include="src\apps\novadesk\domain\Novadesk.cpp" />
-    <ClCompile Include="src\apps\novadesk\domain\Widget.cpp" />
-    <ClCompile Include="src\apps\novadesk\domain\WidgetContextMenuHelper.cpp" />
-    <ClCompile Include="src\apps\novadesk\domain\WidgetLayoutHelper.cpp" />
-    <ClCompile Include="src\apps\novadesk\domain\WidgetWindowChromeHelper.cpp" />
-    <ClCompile Include="src\apps\novadesk\domain\animation\AnimationEasing.cpp" />
-    <ClCompile Include="src\apps\novadesk\domain\animation\WidgetAnimationHelper.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\ArcShape.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\AreaGraphElement.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\BarElement.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\BitmapElement.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\BoxBorderPaint.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\ButtonElement.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\CursorManager.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\CurveShape.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\Direct2DHelper.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\Element.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\ElementLayoutBox.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\EllipseShape.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\FlexLayoutEngine.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\FontManager.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\GeneralImage.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\HistogramElement.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\ImageElement.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\LineElement.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\LineShape.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\PathShape.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\RectangleShape.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\RotatorElement.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\RoundLineElement.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\ShapeElement.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\TextElement.cpp" />
-    <ClCompile Include="src\apps\novadesk\render\Tooltip.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\engine\JSEngine.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\modules\FSModule.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\modules\ModuleSystem.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\modules\NovadeskModule.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\modules\SystemModule.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\modules\WidgetUiBindings.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\modules\WidgetWindowEventBindings.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\parser\PropertyParserAnimation.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\parser\PropertyParserChart.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\parser\PropertyParserElement.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\parser\PropertyParserGradient.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\parser\PropertyParserImage.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\parser\PropertyParserJs.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\parser\PropertyParserLayoutBox.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\parser\PropertyParserShape.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\parser\PropertyParserText.cpp" />
-    <ClCompile Include="src\apps\novadesk\scripting\quickjs\parser\PropertyParserWidgetWindow.cpp" />
-    <ClCompile Include="src\apps\novadesk\shared\FileUtils.cpp" />
-    <ClCompile Include="src\apps\novadesk\shared\Logging.cpp" />
-    <ClCompile Include="src\apps\novadesk\shared\MenuUtils.cpp" />
-    <ClCompile Include="src\apps\novadesk\shared\PathUtils.cpp" />
-    <ClCompile Include="src\apps\novadesk\shared\Settings.cpp" />
-    <ClCompile Include="src\apps\novadesk\shared\System.cpp" />
-    <ClCompile Include="src\apps\novadesk\shared\Utils.cpp" />
-    <ClCompile Include="$(ProjectDir)src\third_party\quick-js\quickjs.c" />
-    <ClCompile Include="$(ProjectDir)src\third_party\quick-js\libregexp.c" />
-    <ClCompile Include="$(ProjectDir)src\third_party\quick-js\libunicode.c" />
-    <ClCompile Include="$(ProjectDir)src\third_party\quick-js\dtoa.c" />
+    <ClCompile Include="domain\DesktopManager.cpp" />
+    <ClCompile Include="domain\Novadesk.cpp" />
+    <ClCompile Include="domain\Widget.cpp" />
+    <ClCompile Include="domain\WidgetContextMenuHelper.cpp" />
+    <ClCompile Include="domain\WidgetLayoutHelper.cpp" />
+    <ClCompile Include="domain\WidgetWindowChromeHelper.cpp" />
+    <ClCompile Include="domain\animation\AnimationEasing.cpp" />
+    <ClCompile Include="domain\animation\WidgetAnimationHelper.cpp" />
+    <ClCompile Include="render\ArcShape.cpp" />
+    <ClCompile Include="render\AreaGraphElement.cpp" />
+    <ClCompile Include="render\BarElement.cpp" />
+    <ClCompile Include="render\BitmapElement.cpp" />
+    <ClCompile Include="render\BoxBorderPaint.cpp" />
+    <ClCompile Include="render\ButtonElement.cpp" />
+    <ClCompile Include="render\CursorManager.cpp" />
+    <ClCompile Include="render\CurveShape.cpp" />
+    <ClCompile Include="render\Direct2DHelper.cpp" />
+    <ClCompile Include="render\Element.cpp" />
+    <ClCompile Include="render\ElementLayoutBox.cpp" />
+    <ClCompile Include="render\EllipseShape.cpp" />
+    <ClCompile Include="render\FlexLayoutEngine.cpp" />
+    <ClCompile Include="render\FontManager.cpp" />
+    <ClCompile Include="render\GeneralImage.cpp" />
+    <ClCompile Include="render\HistogramElement.cpp" />
+    <ClCompile Include="render\ImageElement.cpp" />
+    <ClCompile Include="render\LineElement.cpp" />
+    <ClCompile Include="render\LineShape.cpp" />
+    <ClCompile Include="render\PathShape.cpp" />
+    <ClCompile Include="render\RectangleShape.cpp" />
+    <ClCompile Include="render\RotatorElement.cpp" />
+    <ClCompile Include="render\RoundLineElement.cpp" />
+    <ClCompile Include="render\ShapeElement.cpp" />
+    <ClCompile Include="render\TextElement.cpp" />
+    <ClCompile Include="render\Tooltip.cpp" />
+    <ClCompile Include="scripting\quickjs\engine\JSEngine.cpp" />
+    <ClCompile Include="scripting\quickjs\modules\FSModule.cpp" />
+    <ClCompile Include="scripting\quickjs\modules\ModuleSystem.cpp" />
+    <ClCompile Include="scripting\quickjs\modules\NovadeskModule.cpp" />
+    <ClCompile Include="scripting\quickjs\modules\SystemModule.cpp" />
+    <ClCompile Include="scripting\quickjs\modules\WidgetUiBindings.cpp" />
+    <ClCompile Include="scripting\quickjs\modules\WidgetWindowEventBindings.cpp" />
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserAnimation.cpp" />
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserChart.cpp" />
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserElement.cpp" />
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserGradient.cpp" />
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserImage.cpp" />
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserJs.cpp" />
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserLayoutBox.cpp" />
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserShape.cpp" />
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserText.cpp" />
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserWidgetWindow.cpp" />
+    <ClCompile Include="shared\FileUtils.cpp" />
+    <ClCompile Include="shared\Logging.cpp" />
+    <ClCompile Include="shared\MenuUtils.cpp" />
+    <ClCompile Include="shared\PathUtils.cpp" />
+    <ClCompile Include="shared\Settings.cpp" />
+    <ClCompile Include="shared\System.cpp" />
+    <ClCompile Include="shared\Utils.cpp" />
+    <ClCompile Include="..\..\src\third_party\quick-js\quickjs.c" />
+    <ClCompile Include="..\..\src\third_party\quick-js\libregexp.c" />
+    <ClCompile Include="..\..\src\third_party\quick-js\libunicode.c" />
+    <ClCompile Include="..\..\src\third_party\quick-js\dtoa.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\apps\novadesk\domain\DesktopManager.h" />
-    <ClInclude Include="src\apps\novadesk\domain\Novadesk.h" />
-    <ClInclude Include="src\apps\novadesk\domain\Widget.h" />
-    <ClInclude Include="src\apps\novadesk\domain\WidgetContextMenuHelper.h" />
-    <ClInclude Include="src\apps\novadesk\domain\WidgetLayoutHelper.h" />
-    <ClInclude Include="src\apps\novadesk\domain\WidgetWindowChromeHelper.h" />
-    <ClInclude Include="src\apps\novadesk\domain\animation\AnimationEasing.h" />
-    <ClInclude Include="src\apps\novadesk\domain\animation\WidgetAnimationHelper.h" />
-    <ClInclude Include="src\apps\novadesk\render\ArcShape.h" />
-    <ClInclude Include="src\apps\novadesk\render\AreaGraphElement.h" />
-    <ClInclude Include="src\apps\novadesk\render\BarElement.h" />
-    <ClInclude Include="src\apps\novadesk\render\BitmapElement.h" />
-    <ClInclude Include="src\apps\novadesk\render\BoxBorderPaint.h" />
-    <ClInclude Include="src\apps\novadesk\render\BoxBorderTypes.h" />
-    <ClInclude Include="src\apps\novadesk\render\ButtonElement.h" />
-    <ClInclude Include="src\apps\novadesk\render\CursorManager.h" />
-    <ClInclude Include="src\apps\novadesk\render\CurveShape.h" />
-    <ClInclude Include="src\apps\novadesk\render\Direct2DHelper.h" />
-    <ClInclude Include="src\apps\novadesk\render\Element.h" />
-    <ClInclude Include="src\apps\novadesk\render\ElementLayoutBox.h" />
-    <ClInclude Include="src\apps\novadesk\render\EllipseShape.h" />
-    <ClInclude Include="src\apps\novadesk\render\FlexLayoutEngine.h" />
-    <ClInclude Include="src\apps\novadesk\render\FontManager.h" />
-    <ClInclude Include="src\apps\novadesk\render\GeneralImage.h" />
-    <ClInclude Include="src\apps\novadesk\render\HistogramElement.h" />
-    <ClInclude Include="src\apps\novadesk\render\ImageElement.h" />
-    <ClInclude Include="src\apps\novadesk\render\LineElement.h" />
-    <ClInclude Include="src\apps\novadesk\render\LineShape.h" />
-    <ClInclude Include="src\apps\novadesk\render\PathShape.h" />
-    <ClInclude Include="src\apps\novadesk\render\RectangleShape.h" />
-    <ClInclude Include="src\apps\novadesk\render\RotatorElement.h" />
-    <ClInclude Include="src\apps\novadesk\render\RoundLineElement.h" />
-    <ClInclude Include="src\apps\novadesk\render\ShapeElement.h" />
-    <ClInclude Include="src\apps\novadesk\render\TextElement.h" />
-    <ClInclude Include="src\apps\novadesk\render\Tooltip.h" />
-    <ClInclude Include="src\apps\novadesk\scripting\quickjs\engine\JSEngine.h" />
-    <ClInclude Include="src\apps\novadesk\scripting\quickjs\modules\FSModule.h" />
-    <ClInclude Include="src\apps\novadesk\scripting\quickjs\modules\ModuleSystem.h" />
-    <ClInclude Include="src\apps\novadesk\scripting\quickjs\modules\NovadeskModule.h" />
-    <ClInclude Include="src\apps\novadesk\scripting\quickjs\modules\SystemModule.h" />
-    <ClInclude Include="src\apps\novadesk\scripting\quickjs\modules\WidgetUiBindings.h" />
-    <ClInclude Include="src\apps\novadesk\scripting\quickjs\modules\WidgetWindowEventBindings.h" />
-    <ClInclude Include="src\apps\novadesk\scripting\quickjs\parser\PropertyParser.h" />
-    <ClInclude Include="src\apps\novadesk\scripting\quickjs\parser\PropertyParserJs.h" />
-    <ClInclude Include="src\apps\novadesk\scripting\quickjs\parser\PropertyParserTypes.h" />
-    <ClInclude Include="src\apps\novadesk\shared\ColorUtil.h" />
-    <ClInclude Include="src\apps\novadesk\shared\FileUtils.h" />
-    <ClInclude Include="src\apps\novadesk\shared\Logging.h" />
-    <ClInclude Include="src\apps\novadesk\shared\MenuItem.h" />
-    <ClInclude Include="src\apps\novadesk\shared\MenuUtils.h" />
-    <ClInclude Include="src\apps\novadesk\shared\PathUtils.h" />
-    <ClInclude Include="src\apps\novadesk\shared\Settings.h" />
-    <ClInclude Include="src\apps\novadesk\shared\System.h" />
-    <ClInclude Include="src\apps\novadesk\shared\Utils.h" />
-    <ClInclude Include="src\apps\novadesk\framework.h" />
-    <ClInclude Include="src\apps\novadesk\targetver.h" />
-    <ClInclude Include="src\apps\novadesk\Resource.h" />
-    <ClInclude Include="src\apps\novadesk\Version.h" />
-    <ClInclude Include="$(ProjectDir)src\third_party\quick-js\quickjs.h" />
-    <ClInclude Include="$(ProjectDir)src\third_party\quick-js\cutils.h" />
-    <ClInclude Include="$(ProjectDir)src\third_party\quick-js\dtoa.h" />
-    <ClInclude Include="$(ProjectDir)src\third_party\quick-js\libregexp.h" />
-    <ClInclude Include="$(ProjectDir)src\third_party\quick-js\libunicode.h" />
-    <ClInclude Include="$(ProjectDir)src\third_party\quick-js\list.h" />
+    <ClInclude Include="domain\DesktopManager.h" />
+    <ClInclude Include="domain\Novadesk.h" />
+    <ClInclude Include="domain\Widget.h" />
+    <ClInclude Include="domain\WidgetContextMenuHelper.h" />
+    <ClInclude Include="domain\WidgetLayoutHelper.h" />
+    <ClInclude Include="domain\WidgetWindowChromeHelper.h" />
+    <ClInclude Include="domain\animation\AnimationEasing.h" />
+    <ClInclude Include="domain\animation\WidgetAnimationHelper.h" />
+    <ClInclude Include="render\ArcShape.h" />
+    <ClInclude Include="render\AreaGraphElement.h" />
+    <ClInclude Include="render\BarElement.h" />
+    <ClInclude Include="render\BitmapElement.h" />
+    <ClInclude Include="render\BoxBorderPaint.h" />
+    <ClInclude Include="render\BoxBorderTypes.h" />
+    <ClInclude Include="render\ButtonElement.h" />
+    <ClInclude Include="render\CursorManager.h" />
+    <ClInclude Include="render\CurveShape.h" />
+    <ClInclude Include="render\Direct2DHelper.h" />
+    <ClInclude Include="render\Element.h" />
+    <ClInclude Include="render\ElementLayoutBox.h" />
+    <ClInclude Include="render\EllipseShape.h" />
+    <ClInclude Include="render\FlexLayoutEngine.h" />
+    <ClInclude Include="render\FontManager.h" />
+    <ClInclude Include="render\GeneralImage.h" />
+    <ClInclude Include="render\HistogramElement.h" />
+    <ClInclude Include="render\ImageElement.h" />
+    <ClInclude Include="render\LineElement.h" />
+    <ClInclude Include="render\LineShape.h" />
+    <ClInclude Include="render\PathShape.h" />
+    <ClInclude Include="render\RectangleShape.h" />
+    <ClInclude Include="render\RotatorElement.h" />
+    <ClInclude Include="render\RoundLineElement.h" />
+    <ClInclude Include="render\ShapeElement.h" />
+    <ClInclude Include="render\TextElement.h" />
+    <ClInclude Include="render\Tooltip.h" />
+    <ClInclude Include="scripting\quickjs\engine\JSEngine.h" />
+    <ClInclude Include="scripting\quickjs\modules\FSModule.h" />
+    <ClInclude Include="scripting\quickjs\modules\ModuleSystem.h" />
+    <ClInclude Include="scripting\quickjs\modules\NovadeskModule.h" />
+    <ClInclude Include="scripting\quickjs\modules\SystemModule.h" />
+    <ClInclude Include="scripting\quickjs\modules\WidgetUiBindings.h" />
+    <ClInclude Include="scripting\quickjs\modules\WidgetWindowEventBindings.h" />
+    <ClInclude Include="scripting\quickjs\parser\PropertyParser.h" />
+    <ClInclude Include="scripting\quickjs\parser\PropertyParserJs.h" />
+    <ClInclude Include="scripting\quickjs\parser\PropertyParserTypes.h" />
+    <ClInclude Include="shared\ColorUtil.h" />
+    <ClInclude Include="shared\FileUtils.h" />
+    <ClInclude Include="shared\Logging.h" />
+    <ClInclude Include="shared\MenuItem.h" />
+    <ClInclude Include="shared\MenuUtils.h" />
+    <ClInclude Include="shared\PathUtils.h" />
+    <ClInclude Include="shared\Settings.h" />
+    <ClInclude Include="shared\System.h" />
+    <ClInclude Include="shared\Utils.h" />
+    <ClInclude Include="framework.h" />
+    <ClInclude Include="targetver.h" />
+    <ClInclude Include="Resource.h" />
+    <ClInclude Include="Version.h" />
+    <ClInclude Include="..\..\src\third_party\quick-js\quickjs.h" />
+    <ClInclude Include="..\..\src\third_party\quick-js\cutils.h" />
+    <ClInclude Include="..\..\src\third_party\quick-js\dtoa.h" />
+    <ClInclude Include="..\..\src\third_party\quick-js\libregexp.h" />
+    <ClInclude Include="..\..\src\third_party\quick-js\libunicode.h" />
+    <ClInclude Include="..\..\src\third_party\quick-js\list.h" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="src\apps\novadesk\Novadesk.rc" />
+    <ResourceCompile Include="Novadesk.rc" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="src\apps\novadesk\Novadesk.exe.manifest" />
+    <None Include="Novadesk.exe.manifest" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
