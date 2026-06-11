@@ -63,7 +63,7 @@
       <AdditionalIncludeDirectories>.;domain;domain\animation;shared;render;scripting\quickjs;scripting\quickjs\parser;..\..\third_party\quick-js;..\..\third_party\json;..\..\third_party\nanosvg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
-      <AdditionalOptions>/wd4146 /wd4703 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/w /wd4146 /wd4703 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -89,7 +89,7 @@
       <AdditionalIncludeDirectories>.;domain;domain\animation;shared;render;scripting\quickjs;scripting\quickjs\parser;..\..\third_party\quick-js;..\..\third_party\json;..\..\third_party\nanosvg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
-      <AdditionalOptions>/wd4146 /wd4703 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/w /wd4146 /wd4703 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
       <FavorSizeOrSpeed>Size</FavorSizeOrSpeed>
       <WholeProgramOptimization>false</WholeProgramOptimization>
     </ClCompile>
@@ -239,24 +239,12 @@
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Version.h" />
-    <ClInclude Include="..\..\third_party\quick-js\quickjs.h">
-      <WarningSuppression>/w</WarningSuppression>
-    </ClInclude>
-    <ClInclude Include="..\..\third_party\quick-js\cutils.h">
-      <WarningSuppression>/w</WarningSuppression>
-    </ClInclude>
-    <ClInclude Include="..\..\third_party\quick-js\dtoa.h">
-      <WarningSuppression>/w</WarningSuppression>
-    </ClInclude>
-    <ClInclude Include="..\..\third_party\quick-js\libregexp.h">
-      <WarningSuppression>/w</WarningSuppression>
-    </ClInclude>
-    <ClInclude Include="..\..\third_party\quick-js\libunicode.h">
-      <WarningSuppression>/w</WarningSuppression>
-    </ClInclude>
-    <ClInclude Include="..\..\third_party\quick-js\list.h">
-      <WarningSuppression>/w</WarningSuppression>
-    </ClInclude>
+    <ClInclude Include="..\..\third_party\quick-js\quickjs.h" />
+    <ClInclude Include="..\..\third_party\quick-js\cutils.h" />
+    <ClInclude Include="..\..\third_party\quick-js\dtoa.h" />
+    <ClInclude Include="..\..\third_party\quick-js\libregexp.h" />
+    <ClInclude Include="..\..\third_party\quick-js\libunicode.h" />
+    <ClInclude Include="..\..\third_party\quick-js\list.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Novadesk.rc" />
