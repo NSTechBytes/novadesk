@@ -1143,35 +1143,35 @@ namespace novadesk::scripting::quickjs
                     return JS_NewString(ctx, Utils::ToString(t->GetFontPath()).c_str());
                 if (prop == "textAlign")
                 {
-                    const char *alStr = "lefttop";
+                    const char *alStr = "left-top";
                     switch (t->GetTextAlign())
                     {
                     case TEXT_ALIGN_LEFT_TOP:
-                        alStr = "lefttop";
+                        alStr = "left-top";
                         break;
                     case TEXT_ALIGN_CENTER_TOP:
-                        alStr = "centertop";
+                        alStr = "center-top";
                         break;
                     case TEXT_ALIGN_RIGHT_TOP:
-                        alStr = "righttop";
+                        alStr = "right-top";
                         break;
                     case TEXT_ALIGN_LEFT_CENTER:
-                        alStr = "leftcenter";
+                        alStr = "left-center";
                         break;
                     case TEXT_ALIGN_CENTER_CENTER:
-                        alStr = "centercenter";
+                        alStr = "center-center";
                         break;
                     case TEXT_ALIGN_RIGHT_CENTER:
-                        alStr = "rightcenter";
+                        alStr = "right-center";
                         break;
                     case TEXT_ALIGN_LEFT_BOTTOM:
-                        alStr = "leftbottom";
+                        alStr = "left-bottom";
                         break;
                     case TEXT_ALIGN_CENTER_BOTTOM:
-                        alStr = "centerbottom";
+                        alStr = "center-bottom";
                         break;
                     case TEXT_ALIGN_RIGHT_BOTTOM:
-                        alStr = "rightbottom";
+                        alStr = "right-bottom";
                         break;
                     default:
                         break;
