@@ -60,7 +60,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)domain;$(ProjectDir)domain\animation;$(ProjectDir)shared;$(ProjectDir)render;$(ProjectDir)scripting\quickjs;$(ProjectDir)scripting\quickjs\parser;$(ProjectDir)..\..\src\third_party\quick-js;$(ProjectDir)..\..\src\third_party\json;$(ProjectDir)..\..\src\third_party\nanosvg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;domain;domain\animation;shared;render;scripting\quickjs;scripting\quickjs\parser;..\..\third_party\quick-js;..\..\third_party\json;..\..\third_party\nanosvg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <AdditionalOptions>/wd4146 /wd4703 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
@@ -86,7 +86,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)domain;$(ProjectDir)domain\animation;$(ProjectDir)shared;$(ProjectDir)render;$(ProjectDir)scripting\quickjs;$(ProjectDir)scripting\quickjs\parser;$(ProjectDir)..\..\src\third_party\quick-js;$(ProjectDir)..\..\src\third_party\json;$(ProjectDir)..\..\src\third_party\nanosvg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;domain;domain\animation;shared;render;scripting\quickjs;scripting\quickjs\parser;..\..\third_party\quick-js;..\..\third_party\json;..\..\third_party\nanosvg;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <AdditionalOptions>/wd4146 /wd4703 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
@@ -167,10 +167,18 @@
     <ClCompile Include="shared\Settings.cpp" />
     <ClCompile Include="shared\System.cpp" />
     <ClCompile Include="shared\Utils.cpp" />
-    <ClCompile Include="..\..\src\third_party\quick-js\quickjs.c" />
-    <ClCompile Include="..\..\src\third_party\quick-js\libregexp.c" />
-    <ClCompile Include="..\..\src\third_party\quick-js\libunicode.c" />
-    <ClCompile Include="..\..\src\third_party\quick-js\dtoa.c" />
+    <ClCompile Include="..\..\third_party\quick-js\quickjs.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\quick-js\libregexp.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\quick-js\libunicode.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\quick-js\dtoa.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="domain\DesktopManager.h" />
@@ -231,12 +239,12 @@
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Version.h" />
-    <ClInclude Include="..\..\src\third_party\quick-js\quickjs.h" />
-    <ClInclude Include="..\..\src\third_party\quick-js\cutils.h" />
-    <ClInclude Include="..\..\src\third_party\quick-js\dtoa.h" />
-    <ClInclude Include="..\..\src\third_party\quick-js\libregexp.h" />
-    <ClInclude Include="..\..\src\third_party\quick-js\libunicode.h" />
-    <ClInclude Include="..\..\src\third_party\quick-js\list.h" />
+    <ClInclude Include="..\..\third_party\quick-js\quickjs.h" />
+    <ClInclude Include="..\..\third_party\quick-js\cutils.h" />
+    <ClInclude Include="..\..\third_party\quick-js\dtoa.h" />
+    <ClInclude Include="..\..\third_party\quick-js\libregexp.h" />
+    <ClInclude Include="..\..\third_party\quick-js\libunicode.h" />
+    <ClInclude Include="..\..\third_party\quick-js\list.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Novadesk.rc" />
