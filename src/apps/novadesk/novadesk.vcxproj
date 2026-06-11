@@ -239,12 +239,24 @@
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Version.h" />
-    <ClInclude Include="..\..\third_party\quick-js\quickjs.h" />
-    <ClInclude Include="..\..\third_party\quick-js\cutils.h" />
-    <ClInclude Include="..\..\third_party\quick-js\dtoa.h" />
-    <ClInclude Include="..\..\third_party\quick-js\libregexp.h" />
-    <ClInclude Include="..\..\third_party\quick-js\libunicode.h" />
-    <ClInclude Include="..\..\third_party\quick-js\list.h" />
+    <ClInclude Include="..\..\third_party\quick-js\quickjs.h">
+      <WarningSuppression>/w</WarningSuppression>
+    </ClInclude>
+    <ClInclude Include="..\..\third_party\quick-js\cutils.h">
+      <WarningSuppression>/w</WarningSuppression>
+    </ClInclude>
+    <ClInclude Include="..\..\third_party\quick-js\dtoa.h">
+      <WarningSuppression>/w</WarningSuppression>
+    </ClInclude>
+    <ClInclude Include="..\..\third_party\quick-js\libregexp.h">
+      <WarningSuppression>/w</WarningSuppression>
+    </ClInclude>
+    <ClInclude Include="..\..\third_party\quick-js\libunicode.h">
+      <WarningSuppression>/w</WarningSuppression>
+    </ClInclude>
+    <ClInclude Include="..\..\third_party\quick-js\list.h">
+      <WarningSuppression>/w</WarningSuppression>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Novadesk.rc" />
