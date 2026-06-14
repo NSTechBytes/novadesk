@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "ElementLayoutBox.h"
+#include "TextElement.h"
 #include "Direct2DHelper.h"
 #include "../shared/Logging.h"
 #include <algorithm>
@@ -391,32 +392,56 @@ void ElementLayoutBox::RenderTextMarker(
 
 void ElementLayoutBox::RenderListMarker(ID2D1DeviceContext* context)
 {
+    Logging::Log(LogLevel::Debug, L"[LIST-MARKER] ==== RenderListMarker START for '%s' ====", m_Id.c_str());
+    Logging::Log(LogLevel::Debug, L"[LIST-MARKER] DisplayType=%d (ListItem=%d), context=%p", 
+        static_cast<int>(m_DisplayType), static_cast<int>(DisplayType::ListItem), context);
+    Logging::Log(LogLevel::Debug, L"[LIST-MARKER] ListStyleType=%d, marker color=0x%X, alpha=%d", 
+        static_cast<int>(m_ListMarker.type), m_ListMarker.color, m_ListMarker.alpha);
+    
     // Only render marker for list items
     if (m_DisplayType != DisplayType::ListItem || !context)
+    {
+        Logging::Log(LogLevel::Debug, L"[LIST-MARKER] SKIP: Not a listitem or no context");
         return;
+    }
     
     // Don't render if marker type is None
     if (m_ListMarker.type == ListStyleType::None)
+    {
+        Logging::Log(LogLevel::Debug, L"[LIST-MARKER] SKIP: Marker type is None");
         return;
+    }
     
     // Check if this listitem has children
     const auto& children = GetContainerItems();
-    if (children.empty())
-        return;  // No children, no markers to render
+    Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Children count: %d", static_cast<int>(children.size()));
     
-    // Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Rendering markers for listitem '%s' with %d children", 
-    //     m_Id.c_str(), static_cast<int>(children.size()));
+    if (children.empty())
+    {
+        Logging::Log(LogLevel::Debug, L"[LIST-MARKER] SKIP: No children");
+        return;  // No children, no markers to render
+    }
+    
+    Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Rendering markers for listitem '%s' with %d children", 
+        m_Id.c_str(), static_cast<int>(children.size()));
     
     // Auto-calculate starting index based on sibling position
     int startingIndex = 1;
     Element* container = GetContainer();
+    Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Container=%p", container);
+    
     if (container)
     {
         const auto& siblings = container->GetContainerItems();
+        Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Siblings count: %d", static_cast<int>(siblings.size()));
+        
         for (Element* sibling : siblings)
         {
             if (sibling == this)
+            {
+                Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Found self, stopping");
                 break;  // Found ourselves, stop counting
+            }
             
             // Count only list items with same list style type
             ElementLayoutBox* siblingBox = dynamic_cast<ElementLayoutBox*>(sibling);
@@ -426,10 +451,15 @@ void ElementLayoutBox::RenderListMarker(ID2D1DeviceContext* context)
             {
                 // Add the number of children in the sibling (each child gets a marker)
                 const auto& siblingChildren = siblingBox->GetContainerItems();
-                startingIndex += std::max(1, static_cast<int>(siblingChildren.size()));
+                int count = std::max(1, static_cast<int>(siblingChildren.size()));
+                Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Sibling '%s' has %d children, adding %d", 
+                    siblingBox->GetId().c_str(), static_cast<int>(siblingChildren.size()), count);
+                startingIndex += count;
             }
         }
     }
+    
+    Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Final startingIndex=%d", startingIndex);
 
     // Helper lambdas for converting an index to a marker string
     auto toRoman = [](int num, bool upper) -> std::wstring
@@ -476,17 +506,40 @@ void ElementLayoutBox::RenderListMarker(ID2D1DeviceContext* context)
     for (Element* child : children)
     {
         if (!child || !child->IsVisible())
+        {
+            Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Child %d: skipped (null or not visible)", childIndex);
             continue;
+        }
         
         const int displayIndex = startingIndex + childIndex;
         
-        // Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Child %d: pos(%d,%d) index=%d", 
-        //     childIndex, child->GetX(), child->GetY(), displayIndex);
+        Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Child %d: pos(%d,%d) displayIndex=%d", 
+            childIndex, child->GetX(), child->GetY(), displayIndex);
+        
+        // Calculate marker size based on child element
+        float markerSize = m_ListMarker.size;
+        
+        // If child is a text element, scale marker size based on font size
+        TextElement* textChild = dynamic_cast<TextElement*>(child);
+        if (textChild)
+        {
+            int fontSize = textChild->GetFontSize();
+            // Scale marker: use roughly half the font size for visual balance
+            markerSize = static_cast<float>(fontSize) * 0.5f;
+            if (markerSize < 4.0f) markerSize = 4.0f;  // Minimum size
+            if (markerSize > 20.0f) markerSize = 20.0f;  // Maximum size
+            
+            Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Text child fontSize=%d, scaled markerSize=%.1f", 
+                fontSize, markerSize);
+        }
         
         // Create brush for the marker
         Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> markerBrush;
         if (!Direct2D::CreateSolidBrush(context, m_ListMarker.color, m_ListMarker.alpha / 255.0f, &markerBrush))
+        {
+            Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Failed to create brush");
             continue;
+        }
         
         // Calculate marker position
         // Children have RELATIVE positions, so we need to add the parent's position
@@ -494,11 +547,12 @@ void ElementLayoutBox::RenderListMarker(ID2D1DeviceContext* context)
         const float childAbsoluteX = (float)(m_X + child->GetX());
         const float childAbsoluteY = (float)(m_Y + child->GetY());
         const float markerCenterX = childAbsoluteX + m_ListMarker.offsetX;
-        const float markerCenterY = childAbsoluteY + (m_ListMarker.size * 1.5f);
-        const float markerSize = m_ListMarker.size;
+        const float markerCenterY = childAbsoluteY + (markerSize * 1.5f);
         
-        // Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Marker at (%.1f, %.1f) size=%.1f type=%d", 
-        //     markerCenterX, markerCenterY, markerSize, static_cast<int>(m_ListMarker.type));
+        Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Parent pos=(%d,%d), Child rel=(%d,%d), Child abs=(%.1f,%.1f)", 
+            m_X, m_Y, child->GetX(), child->GetY(), childAbsoluteX, childAbsoluteY);
+        Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Marker at (%.1f, %.1f) size=%.1f type=%d", 
+            markerCenterX, markerCenterY, markerSize, static_cast<int>(m_ListMarker.type));
         
         // Render different marker types
         switch (m_ListMarker.type)
