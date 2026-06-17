@@ -9,7 +9,7 @@ const win = new widgetWindow({
   width: 620,
   height: 1800,
   backgroundColor: "rgba(255, 255, 255, 0.95)",
-  script: "./script.ui.js",
+  script: "./image.ui.js",
   show: true
 });
 

@@ -526,12 +526,28 @@ void ElementLayoutBox::RenderListMarker(ID2D1DeviceContext* context)
             int fontSize = textChild->GetFontSize();
             // Scale marker: use roughly half the font size for visual balance
             markerSize = static_cast<float>(fontSize) * 0.5f;
-            if (markerSize < 4.0f) markerSize = 4.0f;  // Minimum size
-            if (markerSize > 20.0f) markerSize = 20.0f;  // Maximum size
             
             Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Text child fontSize=%d, scaled markerSize=%.1f", 
                 fontSize, markerSize);
         }
+        else
+        {
+            // For non-text elements (shapes, images, bars, etc.), 
+            // scale based on element height for better visual proportion
+            int childHeight = child->GetHeight();
+            if (childHeight > 0)
+            {
+                // Use 20% of height as marker size for good proportion
+                markerSize = static_cast<float>(childHeight) * 0.2f;
+                
+                Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Non-text child height=%d, scaled markerSize=%.1f", 
+                    childHeight, markerSize);
+            }
+        }
+        
+        // Clamp marker size to reasonable bounds
+        if (markerSize < 4.0f) markerSize = 4.0f;   // Minimum size
+        if (markerSize > 24.0f) markerSize = 24.0f; // Maximum size
         
         // Create brush for the marker
         Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> markerBrush;
@@ -551,7 +567,7 @@ void ElementLayoutBox::RenderListMarker(ID2D1DeviceContext* context)
         
         Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Parent pos=(%d,%d), Child rel=(%d,%d), Child abs=(%.1f,%.1f)", 
             m_X, m_Y, child->GetX(), child->GetY(), childAbsoluteX, childAbsoluteY);
-        Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Marker at (%.1f, %.1f) size=%.1f type=%d", 
+        Logging::Log(LogLevel::Debug, L"[LIST-MARKER] Final marker at (%.1f, %.1f) size=%.1f type=%d", 
             markerCenterX, markerCenterY, markerSize, static_cast<int>(m_ListMarker.type));
         
         // Render different marker types

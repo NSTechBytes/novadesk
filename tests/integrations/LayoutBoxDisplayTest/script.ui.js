@@ -84,10 +84,10 @@ ui.addLayoutBox({
     ]
 })
 
-// Test 3: display:listitem with listStyleType:disc (default filled circle marker)
+// Test 3: display:list-item with listStyleType:disc (default filled circle marker)
 ui.addLayoutBox({
-    id: "listitem-disc",
-    display: "listitem",
+    id: "list-item-disc",
+    display: "list-item",
     listStyleType: "disc",
     x: "20",
     y: "230",
@@ -100,7 +100,7 @@ ui.addLayoutBox({
     children: [
         {
             elementType: "text",
-            id: "listitemText1",
+            id: "list-itemText1",
             text: "List item with disc marker (filled circle) \n New line goes here",
             x: 20,
             y: 10,
@@ -110,10 +110,10 @@ ui.addLayoutBox({
     ]
 })
 
-// Test 4: display:listitem with listStyleType:circle (hollow circle marker)
+// Test 4: display:list-item with listStyleType:circle (hollow circle marker)
 ui.addLayoutBox({
-    id: "listitem-circle",
-    display: "listitem",
+    id: "list-item-circle",
+    display: "list-item",
     listStyleType: "circle",
     x: "20",
     y: "330",
@@ -126,7 +126,7 @@ ui.addLayoutBox({
     children: [
         {
             elementType: "text",
-            id: "listitemText2",
+            id: "list-itemText2",
             text: "List item with circle marker (hollow circle)",
             x: 20,
             y: 10,
@@ -136,10 +136,10 @@ ui.addLayoutBox({
     ]
 })
 
-// Test 5: display:listitem with listStyleType:square (filled square marker)
+// Test 5: display:list-item with listStyleType:square (filled square marker)
 ui.addLayoutBox({
-    id: "listitem-square",
-    display: "listitem",
+    id: "list-item-square",
+    display: "list-item",
     listStyleType: "square",
     x: "20",
     y: "430",
@@ -152,7 +152,7 @@ ui.addLayoutBox({
     children: [
         {
             elementType: "text",
-            id: "listitemText3",
+            id: "list-itemText3",
             text: "List item with square marker (filled square)",
             x: 20,
             y: 10,
@@ -162,10 +162,10 @@ ui.addLayoutBox({
     ]
 })
 
-// Test 6: display:listitem with listStyleType:none (no marker)
+// Test 6: display:list-item with listStyleType:none (no marker)
 ui.addLayoutBox({
-    id: "listitem-none",
-    display: "listitem",
+    id: "list-item-none",
+    display: "list-item",
     listStyleType: "none",
     x: "20",
     y: "530",
@@ -178,7 +178,7 @@ ui.addLayoutBox({
     children: [
         {
             elementType: "text",
-            id: "listitemText4",
+            id: "list-itemText4",
             text: "List item with no marker (listStyleType: none)",
             x: 20,
             y: 10,
@@ -188,10 +188,10 @@ ui.addLayoutBox({
     ]
 })
 
-// Test 7: display:listitem with listStyleType:upperroman (Roman numerals - auto-indexed)
+// Test 7: display:list-item with listStyleType:upperroman (Roman numerals - auto-indexed)
 ui.addLayoutBox({
-    id: "listitem-roman1",
-    display: "listitem",
+    id: "list-item-roman1",
+    display: "list-item",
     listStyleType: "upper-roman",
     x: "20",
     y: "630",
@@ -204,7 +204,7 @@ ui.addLayoutBox({
     children: [
         {
             elementType: "text",
-            id: "listitemText5",
+            id: "list-itemText5",
             text: "First list item with Roman numeral (auto I.)",
             x: 20,
             y: 10,
@@ -215,8 +215,8 @@ ui.addLayoutBox({
 })
 
 ui.addLayoutBox({
-    id: "listitem-roman2",
-    display: "listitem",
+    id: "list-item-roman2",
+    display: "list-item",
     listStyleType: "upper-roman",
     x: "20",
     y: "730",
@@ -229,7 +229,7 @@ ui.addLayoutBox({
     children: [
         {
             elementType: "text",
-            id: "listitemText6",
+            id: "list-itemText6",
             text: "Second list item with Roman numeral (auto II.)",
             // NO x/y - let flex layout position it automatically
             fontSize: 16,
@@ -237,7 +237,7 @@ ui.addLayoutBox({
         },
         {
             elementType: "text",
-            id: "listitemText65",
+            id: "list-itemText65",
             text: "Third list item with Roman numeral (auto III.)",
             // NO x/y - let flex layout position it automatically
             fontSize: 16,
@@ -247,8 +247,8 @@ ui.addLayoutBox({
 })
 
 ui.addLayoutBox({
-    id: "listitem-roman3",
-    display: "listitem",
+    id: "list-item-roman3",
+    display: "list-item",
     listStyleType: "upper-roman",
     x: "20",
     y: "870",
@@ -261,7 +261,7 @@ ui.addLayoutBox({
     children: [
         {
             elementType: "text",
-            id: "listitemText67",
+            id: "list-itemText67",
             text: "Fourth list item with Roman numeral (auto IV.)",
             x: 20,
             y: 10,
@@ -272,8 +272,8 @@ ui.addLayoutBox({
 })
 
 ui.addLayoutBox({
-    id: "listitem-roman4",
-    display: "listitem",
+    id: "list-item-roman4",
+    display: "list-item",
     listStyleType: "upper-roman",
     x: "20",
     y: "970",
@@ -286,7 +286,7 @@ ui.addLayoutBox({
     children: [
         {
             elementType: "text",
-            id: "listitemText7",
+            id: "list-itemText7",
             text: "Fifth list item with Roman numeral (auto V.)",
             x: 20,
             y: 10,
@@ -296,10 +296,10 @@ ui.addLayoutBox({
     ]
 })
 
-// Test 8: display:listitem with listStyleType:lower-roman (lowercase Roman numerals - auto-indexed)
+// Test 8: display:list-item with listStyleType:lower-roman (lowercase Roman numerals - auto-indexed)
 ui.addLayoutBox({
-    id: "listitem-lowerroman1",
-    display: "listitem",
+    id: "list-item-lowerroman1",
+    display: "list-item",
     listStyleType: "lower-roman",
     x: "20",
     y: "1060",
@@ -312,7 +312,7 @@ ui.addLayoutBox({
     children: [
         {
             elementType: "text",
-            id: "listitemText8",
+            id: "list-itemText8",
             text: "First list item with lower Roman numeral (auto i.)",
             x: 20,
             y: 10,
@@ -323,8 +323,8 @@ ui.addLayoutBox({
 })
 
 ui.addLayoutBox({
-    id: "listitem-lowerroman2",
-    display: "listitem",
+    id: "list-item-lowerroman2",
+    display: "list-item",
     listStyleType: "lower-roman",
     x: "20",
     y: "1150",
@@ -337,7 +337,7 @@ ui.addLayoutBox({
     children: [
         {
             elementType: "text",
-            id: "listitemText9",
+            id: "list-itemText9",
             text: "Second list item with lower Roman numeral (auto ii.)",
             x: 20,
             y: 10,
@@ -348,8 +348,8 @@ ui.addLayoutBox({
 })
 
 ui.addLayoutBox({
-    id: "listitem-lowerroman56",
-    display: "listitem",
+    id: "list-item-lowerroman56",
+    display: "list-item",
     listStyleType: "upper-alpha",
     x: "20",
     y: "1350",
@@ -362,7 +362,7 @@ ui.addLayoutBox({
     children: [
         {
             elementType: "text",
-            id: "listitemText9",
+            id: "list-itemText9",
             text: "Second list item with lower Roman numeral (auto ii.)",
             x: 20,
             y: 10,
@@ -371,7 +371,7 @@ ui.addLayoutBox({
         },
                 {
             elementType: "text",
-            id: "listitemText95454",
+            id: "list-itemText95454",
             text: "Second list item with lower Roman numeral (auto ii.)",
             x: 20,
             y: 10,
