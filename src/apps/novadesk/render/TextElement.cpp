@@ -394,10 +394,7 @@ void TextElement::Render(ID2D1DeviceContext *context)
                 }
             }
 
-            // Draw main text
-            context->DrawTextLayout(D2D1::Point2F(layoutX, layoutY), pLayout.Get(), pBrush.Get());
-
-            // Draw text selection highlight if enabled and active
+            // Draw text selection highlight FIRST (before text) if enabled and active
             if (m_TextSelection && HasTextSelection())
             {
                 std::wstring processedText = GetProcessedText();
@@ -417,10 +414,16 @@ void TextElement::Render(ID2D1DeviceContext *context)
                         metrics.resize(actualCount);
                         pLayout->HitTestTextRange(m_SelectionStart, m_SelectionEnd - m_SelectionStart, layoutX, layoutY, metrics.data(), actualCount, &actualCount);
                         
-                        // Draw selection rectangles
+                        // Draw selection background rectangles BEHIND the text
                         Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> selectionBrush;
-                        // Blue selection color with 50% opacity (0x4D87CEEB)
-                        hr = context->CreateSolidColorBrush(D2D1::ColorF(0x87CEEB, 0.5f), selectionBrush.GetAddressOf());
+                        float bgOpacity = m_SelectionBackgroundAlpha / 255.0f;
+                        D2D1_COLOR_F bgColor = D2D1::ColorF(
+                            GetRValue(m_SelectionBackgroundColor) / 255.0f,
+                            GetGValue(m_SelectionBackgroundColor) / 255.0f,
+                            GetBValue(m_SelectionBackgroundColor) / 255.0f,
+                            bgOpacity
+                        );
+                        hr = context->CreateSolidColorBrush(bgColor, selectionBrush.GetAddressOf());
                         
                         if (SUCCEEDED(hr) && selectionBrush)
                         {
@@ -437,6 +440,81 @@ void TextElement::Render(ID2D1DeviceContext *context)
                         }
                     }
                 }
+            }
+
+            // Draw main text (on top of selection highlight)
+            if (m_TextSelection && HasTextSelection() && m_HasSelectionTextColor)
+            {
+                // If we have custom selection text color, we need special rendering
+                std::wstring processedText = GetProcessedText();
+                UINT32 textLength = (UINT32)processedText.length();
+                
+                if (m_SelectionStart < textLength && m_SelectionEnd <= textLength && m_SelectionStart < m_SelectionEnd)
+                {
+                    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> selectionTextBrush;
+                    float textOpacity = m_SelectionTextAlpha / 255.0f;
+                    D2D1_COLOR_F textColor = D2D1::ColorF(
+                        GetRValue(m_SelectionTextColor) / 255.0f,
+                        GetGValue(m_SelectionTextColor) / 255.0f,
+                        GetBValue(m_SelectionTextColor) / 255.0f,
+                        textOpacity
+                    );
+                    hr = context->CreateSolidColorBrush(textColor, selectionTextBrush.GetAddressOf());
+                    
+                    if (SUCCEEDED(hr) && selectionTextBrush)
+                    {
+                        // Create a new layout to apply custom color to selected range
+                        Microsoft::WRL::ComPtr<IDWriteTextLayout> pCustomLayout;
+                        hr = Direct2D::GetWriteFactory()->CreateTextLayout(
+                            processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
+                            layoutW, layoutH, pCustomLayout.GetAddressOf());
+                        
+                        if (SUCCEEDED(hr))
+                        {
+                            ApplyInlineTextStyles(pCustomLayout.Get(), m_Segments, processedText, m_LetterSpacing, m_UnderLine, m_StrikeThrough);
+                            
+                            // Apply segment colors
+                            for (const auto &segment : m_Segments)
+                            {
+                                DWRITE_TEXT_RANGE range = {segment.startPos, segment.length};
+                                if (segment.style.gradient.has_value() && segment.style.gradient->type != GRADIENT_NONE)
+                                {
+                                    Microsoft::WRL::ComPtr<ID2D1Brush> pSegmentGradientBrush;
+                                    if (Direct2D::CreateGradientBrush(context, layoutRect, segment.style.gradient.value(), &pSegmentGradientBrush))
+                                    {
+                                        pCustomLayout->SetDrawingEffect(pSegmentGradientBrush.Get(), range);
+                                    }
+                                }
+                                else if (segment.style.color.has_value())
+                                {
+                                    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pSegmentBrush;
+                                    BYTE a = segment.style.alpha.value_or(255);
+                                    if (Direct2D::CreateSolidBrush(context, segment.style.color.value(), a / 255.0f, &pSegmentBrush))
+                                    {
+                                        pCustomLayout->SetDrawingEffect(pSegmentBrush.Get(), range);
+                                    }
+                                }
+                            }
+                            
+                            // Set the custom color for the selected range
+                            DWRITE_TEXT_RANGE selectedRange = {m_SelectionStart, m_SelectionEnd - m_SelectionStart};
+                            pCustomLayout->SetDrawingEffect(selectionTextBrush.Get(), selectedRange);
+                            
+                            // Draw the text with custom selection color
+                            context->DrawTextLayout(D2D1::Point2F(layoutX, layoutY), pCustomLayout.Get(), pBrush.Get());
+                        }
+                    }
+                }
+                else
+                {
+                    // No selection or outside bounds, draw normally
+                    context->DrawTextLayout(D2D1::Point2F(layoutX, layoutY), pLayout.Get(), pBrush.Get());
+                }
+            }
+            else
+            {
+                // No custom selection text color, draw normally
+                context->DrawTextLayout(D2D1::Point2F(layoutX, layoutY), pLayout.Get(), pBrush.Get());
             }
         }
     }

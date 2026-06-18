@@ -56,6 +56,33 @@ namespace PropertyParser
         GetBoolProp(ctx, obj, "strikeThrough", options.strikeThrough);
         GetBoolProp(ctx, obj, "textSelection", options.textSelection);
 
+        // Selection background color
+        std::wstring selBgColor = GetStringProp(ctx, obj, "selectionBackgroundColor");
+        if (!selBgColor.empty())
+        {
+            COLORREF color;
+            BYTE alpha;
+            if (ColorUtil::ParseRGBA(selBgColor, color, alpha))
+            {
+                options.selectionBackgroundColor = color;
+                options.selectionBackgroundAlpha = alpha;
+            }
+        }
+
+        // Selection text color
+        std::wstring selTextColor = GetStringProp(ctx, obj, "selectionTextColor");
+        if (!selTextColor.empty())
+        {
+            COLORREF color;
+            BYTE alpha;
+            if (ColorUtil::ParseRGBA(selTextColor, color, alpha))
+            {
+                options.selectionTextColor = color;
+                options.selectionTextAlpha = alpha;
+                options.hasSelectionTextColor = true;
+            }
+        }
+
         std::wstring caseStr = GetStringProp(ctx, obj, "case");
         if (caseStr == L"upper")
             options.textCase = TEXT_CASE_UPPER;
@@ -177,6 +204,11 @@ namespace PropertyParser
         element->SetStrikethrough(options.strikeThrough);
         element->SetTextCase(options.textCase);
         element->SetTextSelection(options.textSelection);
+        element->SetSelectionBackgroundColor(options.selectionBackgroundColor, options.selectionBackgroundAlpha);
+        if (options.hasSelectionTextColor)
+        {
+            element->SetSelectionTextColor(options.selectionTextColor, options.selectionTextAlpha);
+        }
     }
     void PreFillTextOptions(TextOptions &options, TextElement *element)
     {
@@ -201,5 +233,10 @@ namespace PropertyParser
         options.strikeThrough = element->GetStrikethrough();
         options.textCase = element->GetTextCase();
         options.textSelection = element->GetTextSelection();
+        options.selectionBackgroundColor = element->GetSelectionBackgroundColor();
+        options.selectionBackgroundAlpha = element->GetSelectionBackgroundAlpha();
+        options.hasSelectionTextColor = element->HasSelectionTextColor();
+        options.selectionTextColor = element->GetSelectionTextColor();
+        options.selectionTextAlpha = element->GetSelectionTextAlpha();
     }
 }

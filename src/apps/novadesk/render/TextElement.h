@@ -111,6 +111,17 @@ public:
     void SetStrikethrough(bool strikethrough) { m_StrikeThrough = strikethrough; }
     void SetTextCase(TextCase textCase) { m_TextCase = textCase; }
     void SetTextSelection(bool selectable) { m_TextSelection = selectable; }
+    void SetSelectionBackgroundColor(COLORREF color, BYTE alpha) 
+    { 
+        m_SelectionBackgroundColor = color; 
+        m_SelectionBackgroundAlpha = alpha; 
+    }
+    void SetSelectionTextColor(COLORREF color, BYTE alpha)
+    {
+        m_SelectionTextColor = color;
+        m_SelectionTextAlpha = alpha;
+        m_HasSelectionTextColor = true;
+    }
 
     const std::wstring &GetText() const { return m_Text; }
     const std::wstring &GetCleanText() const { return m_CleanText; }
@@ -130,6 +141,11 @@ public:
     bool GetStrikethrough() const { return m_StrikeThrough; }
     TextCase GetTextCase() const { return m_TextCase; }
     bool GetTextSelection() const { return m_TextSelection; }
+    COLORREF GetSelectionBackgroundColor() const { return m_SelectionBackgroundColor; }
+    BYTE GetSelectionBackgroundAlpha() const { return m_SelectionBackgroundAlpha; }
+    COLORREF GetSelectionTextColor() const { return m_SelectionTextColor; }
+    BYTE GetSelectionTextAlpha() const { return m_SelectionTextAlpha; }
+    bool HasSelectionTextColor() const { return m_HasSelectionTextColor; }
 
     virtual int GetAutoWidth() override;
     virtual int GetAutoHeight() override;
@@ -172,6 +188,11 @@ private:
     bool m_StrikeThrough = false;
     TextCase m_TextCase = TEXT_CASE_NORMAL;
     bool m_TextSelection = false;
+    COLORREF m_SelectionBackgroundColor = 0x87CEEB; // Default: Sky blue
+    BYTE m_SelectionBackgroundAlpha = 128;           // Default: 50% opacity
+    COLORREF m_SelectionTextColor = 0xFFFFFF;        // Default: White
+    BYTE m_SelectionTextAlpha = 255;                 // Default: Fully opaque
+    bool m_HasSelectionTextColor = false;            // Whether custom text color is set
 
     std::vector<TextSegment> m_Segments;
 

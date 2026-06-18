@@ -202,6 +202,11 @@ namespace PropertyParser
         bool strikeThrough = false;
         TextCase textCase = TEXT_CASE_NORMAL;
         bool textSelection = false;
+        COLORREF selectionBackgroundColor = 0xFF9033; // #3390FF selection blue
+        BYTE selectionBackgroundAlpha = 120;          
+        bool hasSelectionTextColor = false;
+        COLORREF selectionTextColor = RGB(255, 255, 255);
+        BYTE selectionTextAlpha = 255;
     };
 
     struct BarOptions : public ElementOptions
