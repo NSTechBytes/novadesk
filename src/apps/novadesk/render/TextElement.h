@@ -110,6 +110,7 @@ public:
     void SetUnderline(bool underline) { m_UnderLine = underline; }
     void SetStrikethrough(bool strikethrough) { m_StrikeThrough = strikethrough; }
     void SetTextCase(TextCase textCase) { m_TextCase = textCase; }
+    void SetTextSelection(bool selectable) { m_TextSelection = selectable; }
 
     const std::wstring &GetText() const { return m_Text; }
     const std::wstring &GetCleanText() const { return m_CleanText; }
@@ -128,6 +129,7 @@ public:
     bool GetUnderline() const { return m_UnderLine; }
     bool GetStrikethrough() const { return m_StrikeThrough; }
     TextCase GetTextCase() const { return m_TextCase; }
+    bool GetTextSelection() const { return m_TextSelection; }
 
     virtual int GetAutoWidth() override;
     virtual int GetAutoHeight() override;
@@ -136,8 +138,18 @@ public:
 
     std::wstring GetProcessedText() const;
 
+    // Text selection methods
+    void HandleTextSelectionMouseDown(int x, int y);
+    void HandleTextSelectionMouseMove(int x, int y);
+    void HandleTextSelectionMouseUp();
+    bool HasTextSelection() const { return m_SelectionStart != m_SelectionEnd; }
+    void ClearTextSelection();
+    std::wstring GetSelectedText() const;
+    void SelectAll();
+
 private:
     void ParseInlineStyles();
+    UINT32 HitTestTextPosition(int x, int y);
 
     std::wstring m_Text;
     std::wstring m_CleanText;
@@ -156,8 +168,15 @@ private:
     bool m_UnderLine = false;
     bool m_StrikeThrough = false;
     TextCase m_TextCase = TEXT_CASE_NORMAL;
+    bool m_TextSelection = false;
 
     std::vector<TextSegment> m_Segments;
+
+    // Text selection state
+    bool m_IsSelecting = false;
+    UINT32 m_SelectionStart = 0;
+    UINT32 m_SelectionEnd = 0;
+    UINT32 m_SelectionAnchor = 0; // Anchor point for selection
 };
 
 #endif

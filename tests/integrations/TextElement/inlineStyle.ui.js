@@ -6,7 +6,8 @@ ui.addText({
     x: 20, y: startY,
     text: "Basic: <b>Bold</b>, <i>Italic</i>, <u>Underline</u>, <s>Strike</s>",
     fontSize: 18,
-    fontColor: "#FFFFFF"
+    fontColor: "#FFFFFF",
+    textSelection: true
 });
 
 ui.addText({

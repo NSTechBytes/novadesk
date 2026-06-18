@@ -288,6 +288,9 @@ private:
     HICON m_ToolbarIconHandle = nullptr;
     bool m_ToolbarIconOwned = false;
 
+    // Text Selection State
+    TextElement* m_TextSelectionElement = nullptr;
+
     void ApplyToolbarStyle();
     void ApplyToolbarIcon();
     void ApplyToolbarTitle();

@@ -38,6 +38,7 @@
 #include "WidgetWindowChromeHelper.h"
 #include "WidgetAnimationHelper.h"
 #include "ButtonElement.h"
+#include "../shared/System.h"
 #include "BitmapElement.h"
 #include "WidgetContextMenuHelper.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
@@ -697,8 +698,11 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 widget->ChangeSingleZPos(widget->m_WindowZPosition);
             }
 
+            // Don't start widget drag if we're selecting text
+            const bool isSelectingText = (widget->m_TextSelectionElement != nullptr);
+            
             const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-            if (!widget->m_IsElementDragging && (widget->m_Options.draggable || ctrlHeld))
+            if (!widget->m_IsElementDragging && !isSelectingText && (widget->m_Options.draggable || ctrlHeld))
             {
                 SetCapture(hWnd);
                 widget->m_IsDragging = true;
@@ -793,6 +797,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
             Element *hitElement = nullptr;
             Element *mouseActionElement = nullptr;
+            TextElement *textElement = nullptr;
+            
             for (auto it = widget->m_Elements.rbegin(); it != widget->m_Elements.rend(); ++it)
             {
                 Element *candidate = *it;
@@ -814,6 +820,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                             hitElement = childHit;
                         if (!mouseActionElement)
                             mouseActionElement = childMouseAction;
+                        if (!textElement && childHit && childHit->GetType() == ELEMENT_TEXT)
+                            textElement = static_cast<TextElement*>(childHit);
                     }
                 }
 
@@ -823,10 +831,19 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         hitElement = candidate;
                     if (!mouseActionElement && candidate->HasMouseAction())
                         mouseActionElement = candidate;
+                    if (!textElement && candidate->GetType() == ELEMENT_TEXT)
+                        textElement = static_cast<TextElement*>(candidate);
                 }
 
-                if (hitElement && mouseActionElement)
+                if (hitElement && mouseActionElement && textElement)
                     break;
+            }
+
+            // Show I-beam cursor for selectable text
+            if (textElement && textElement->GetTextSelection())
+            {
+                SetCursor(LoadCursorW(nullptr, IDC_IBEAM));
+                return TRUE;
             }
 
             Element *cursorElement = mouseActionElement ? mouseActionElement : hitElement;
@@ -845,6 +862,16 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_MOUSEMOVE:
         if (widget)
         {
+            // Don't allow widget drag while selecting text
+            if (widget->m_IsDragging && widget->m_TextSelectionElement != nullptr)
+            {
+                widget->m_IsDragging = false;
+                if (GetCapture() == hWnd)
+                {
+                    ReleaseCapture();
+                }
+            }
+            
             if (widget->m_IsDragging)
             {
                 POINT pt;
@@ -1165,6 +1192,43 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             return 0;
         }
         break;
+
+    case WM_KEYDOWN:
+        if (widget && widget->m_TextSelectionElement)
+        {
+            TextElement* textElem = widget->m_TextSelectionElement;
+            
+            // Handle Ctrl+C (Copy)
+            if (wParam == 'C' && (GetAsyncKeyState(VK_CONTROL) & 0x8000))
+            {
+                if (textElem->HasTextSelection())
+                {
+                    std::wstring selectedText = textElem->GetSelectedText();
+                    if (!selectedText.empty())
+                    {
+                        novadesk::shared::system::ClipboardSetText(selectedText);
+                    }
+                }
+                return 0;
+            }
+            // Handle Ctrl+A (Select All)
+            else if (wParam == 'A' && (GetAsyncKeyState(VK_CONTROL) & 0x8000))
+            {
+                textElem->SelectAll();
+                widget->Redraw();
+                return 0;
+            }
+            // Handle Escape (Clear Selection)
+            else if (wParam == VK_ESCAPE)
+            {
+                textElem->ClearTextSelection();
+                widget->m_TextSelectionElement = nullptr;
+                widget->Redraw();
+                return 0;
+            }
+        }
+        return DefWindowProc(hWnd, message, wParam, lParam);
+
     case WM_DESTROY:
         if (widget)
         {
@@ -3063,6 +3127,31 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     // Dispatch drag actions (for slider-like interactions on any element).
     if (message == WM_LBUTTONDOWN)
     {
+        // Handle text selection
+        TextElement* textElem = dynamic_cast<TextElement*>(hitElement);
+        if (textElem && textElem->GetTextSelection())
+        {
+            // Clear previous selection from other elements
+            if (m_TextSelectionElement && m_TextSelectionElement != textElem)
+            {
+                m_TextSelectionElement->ClearTextSelection();
+            }
+            m_TextSelectionElement = textElem;
+            textElem->HandleTextSelectionMouseDown(x, y);
+            handled = true;
+            needRedraw = true;
+        }
+        else
+        {
+            // Clicked on non-selectable element, clear selection
+            if (m_TextSelectionElement)
+            {
+                m_TextSelectionElement->ClearTextSelection();
+                m_TextSelectionElement = nullptr;
+                needRedraw = true;
+            }
+        }
+
         Element *dragTarget = actionElement ? actionElement : hitElement;
         if (dragTarget && dragTarget->HasDragAction())
         {
@@ -3080,6 +3169,16 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     }
     else if (message == WM_MOUSEMOVE)
     {
+        // Handle text selection dragging
+        if (m_TextSelectionElement && m_TextSelectionElement->GetTextSelection())
+        {
+            if (hitElement == m_TextSelectionElement || isTrackedElement(m_TextSelectionElement))
+            {
+                m_TextSelectionElement->HandleTextSelectionMouseMove(x, y);
+                needRedraw = true;
+            }
+        }
+
         if (m_IsElementDragging && isTrackedElement(m_DragElement))
         {
             if (m_DragElement->m_OnDragCallbackId != -1)
@@ -3092,6 +3191,12 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     }
     else if (message == WM_LBUTTONUP)
     {
+        // Handle text selection release
+        if (m_TextSelectionElement && m_TextSelectionElement->GetTextSelection())
+        {
+            m_TextSelectionElement->HandleTextSelectionMouseUp();
+        }
+
         if (m_IsElementDragging && isTrackedElement(m_DragElement))
         {
             if (m_DragElement->m_OnDragEndCallbackId != -1)

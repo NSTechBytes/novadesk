@@ -201,6 +201,7 @@ namespace PropertyParser
         bool underLine = false;
         bool strikeThrough = false;
         TextCase textCase = TEXT_CASE_NORMAL;
+        bool textSelection = false;
     };
 
     struct BarOptions : public ElementOptions

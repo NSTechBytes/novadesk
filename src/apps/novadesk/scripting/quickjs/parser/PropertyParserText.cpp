@@ -54,6 +54,7 @@ namespace PropertyParser
         GetFloatProp(ctx, obj, "letterSpacing", options.letterSpacing);
         GetBoolProp(ctx, obj, "underLine", options.underLine);
         GetBoolProp(ctx, obj, "strikeThrough", options.strikeThrough);
+        GetBoolProp(ctx, obj, "textSelection", options.textSelection);
 
         std::wstring caseStr = GetStringProp(ctx, obj, "case");
         if (caseStr == L"upper")
@@ -175,6 +176,7 @@ namespace PropertyParser
         element->SetUnderline(options.underLine);
         element->SetStrikethrough(options.strikeThrough);
         element->SetTextCase(options.textCase);
+        element->SetTextSelection(options.textSelection);
     }
     void PreFillTextOptions(TextOptions &options, TextElement *element)
     {
@@ -198,5 +200,6 @@ namespace PropertyParser
         options.underLine = element->GetUnderline();
         options.strikeThrough = element->GetStrikethrough();
         options.textCase = element->GetTextCase();
+        options.textSelection = element->GetTextSelection();
     }
 }

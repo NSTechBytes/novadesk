@@ -396,6 +396,48 @@ void TextElement::Render(ID2D1DeviceContext *context)
 
             // Draw main text
             context->DrawTextLayout(D2D1::Point2F(layoutX, layoutY), pLayout.Get(), pBrush.Get());
+
+            // Draw text selection highlight if enabled and active
+            if (m_TextSelection && HasTextSelection())
+            {
+                std::wstring processedText = GetProcessedText();
+                UINT32 textLength = (UINT32)processedText.length();
+                
+                if (m_SelectionStart < textLength && m_SelectionEnd <= textLength && m_SelectionStart < m_SelectionEnd)
+                {
+                    // Get selection metrics
+                    UINT32 actualCount = 0;
+                    std::vector<DWRITE_HIT_TEST_METRICS> metrics;
+                    
+                    // First call to get count
+                    pLayout->HitTestTextRange(m_SelectionStart, m_SelectionEnd - m_SelectionStart, layoutX, layoutY, nullptr, 0, &actualCount);
+                    
+                    if (actualCount > 0)
+                    {
+                        metrics.resize(actualCount);
+                        pLayout->HitTestTextRange(m_SelectionStart, m_SelectionEnd - m_SelectionStart, layoutX, layoutY, metrics.data(), actualCount, &actualCount);
+                        
+                        // Draw selection rectangles
+                        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> selectionBrush;
+                        // Blue selection color with 50% opacity (0x4D87CEEB)
+                        hr = context->CreateSolidColorBrush(D2D1::ColorF(0x87CEEB, 0.5f), selectionBrush.GetAddressOf());
+                        
+                        if (SUCCEEDED(hr) && selectionBrush)
+                        {
+                            for (UINT32 i = 0; i < actualCount; ++i)
+                            {
+                                D2D1_RECT_F selectionRect = D2D1::RectF(
+                                    metrics[i].left,
+                                    metrics[i].top,
+                                    metrics[i].left + metrics[i].width,
+                                    metrics[i].top + metrics[i].height
+                                );
+                                context->FillRectangle(selectionRect, selectionBrush.Get());
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -886,4 +928,152 @@ void TextElement::ParseInlineStyles()
         seg.length = 1;
         m_Segments.push_back(seg);
     }
+}
+
+// Text Selection Implementation
+
+UINT32 TextElement::HitTestTextPosition(int x, int y)
+{
+    std::wstring fontFace = m_FontFace.empty() ? L"Arial" : m_FontFace;
+
+    Microsoft::WRL::ComPtr<IDWriteFontCollection> pCollection;
+    if (!m_FontPath.empty())
+    {
+        pCollection = FontManager::GetFontCollection(m_FontPath);
+        if (pCollection)
+        {
+            UINT32 index;
+            BOOL exists;
+            if (FAILED(pCollection->FindFamilyName(fontFace.c_str(), &index, &exists)) || !exists)
+            {
+                pCollection = nullptr;
+            }
+        }
+    }
+
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
+    HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
+        fontFace.c_str(), pCollection.Get(),
+        (DWRITE_FONT_WEIGHT)m_FontWeight,
+        m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL, (float)m_FontSize, L"",
+        pTextFormat.GetAddressOf());
+    if (FAILED(hr))
+        return 0;
+
+    GfxRect bounds = GetBounds();
+    float layoutW = (float)bounds.Width - m_PaddingLeft - m_PaddingRight;
+    float layoutH = (float)bounds.Height - m_PaddingTop - m_PaddingBottom;
+    if (layoutW < 0)
+        layoutW = 1;
+    if (layoutH < 0)
+        layoutH = 1;
+
+    ApplyTextAlignment(pTextFormat.Get(), m_TextAlign);
+    ApplyClipSettings(pTextFormat.Get(), m_textClip, m_WDefined);
+
+    std::wstring processedText = GetProcessedText();
+    if (processedText.empty())
+        return 0;
+
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
+    hr = Direct2D::GetWriteFactory()->CreateTextLayout(
+        processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
+        layoutW, layoutH, pLayout.GetAddressOf());
+    if (FAILED(hr))
+        return 0;
+
+    ApplyInlineTextStyles(pLayout.Get(), m_Segments, processedText, m_LetterSpacing, m_UnderLine, m_StrikeThrough);
+
+    // Get point relative to layout area
+    float relX = (float)x - (bounds.X + m_PaddingLeft);
+    float relY = (float)y - (bounds.Y + m_PaddingTop);
+
+    BOOL isTrailingHit = FALSE;
+    BOOL isInside = FALSE;
+    DWRITE_HIT_TEST_METRICS hitMetrics = {};
+    pLayout->HitTestPoint(relX, relY, &isTrailingHit, &isInside, &hitMetrics);
+
+    if (!isInside)
+    {
+        // Clamp to text bounds
+        if (relX < 0) return 0;
+        if (relX >= layoutW || relY >= layoutH) return (UINT32)processedText.length();
+    }
+
+    UINT32 position = hitMetrics.textPosition;
+    if (isTrailingHit)
+    {
+        position += hitMetrics.length;
+    }
+
+    // Clamp to valid range
+    if (position > (UINT32)processedText.length())
+        position = (UINT32)processedText.length();
+
+    return position;
+}
+
+void TextElement::HandleTextSelectionMouseDown(int x, int y)
+{
+    if (!m_TextSelection)
+        return;
+
+    UINT32 position = HitTestTextPosition(x, y);
+    m_IsSelecting = true;
+    m_SelectionAnchor = position;
+    m_SelectionStart = position;
+    m_SelectionEnd = position;
+}
+
+void TextElement::HandleTextSelectionMouseMove(int x, int y)
+{
+    if (!m_TextSelection || !m_IsSelecting)
+        return;
+
+    UINT32 position = HitTestTextPosition(x, y);
+    
+    if (position < m_SelectionAnchor)
+    {
+        m_SelectionStart = position;
+        m_SelectionEnd = m_SelectionAnchor;
+    }
+    else
+    {
+        m_SelectionStart = m_SelectionAnchor;
+        m_SelectionEnd = position;
+    }
+}
+
+void TextElement::HandleTextSelectionMouseUp()
+{
+    m_IsSelecting = false;
+}
+
+void TextElement::ClearTextSelection()
+{
+    m_SelectionStart = 0;
+    m_SelectionEnd = 0;
+    m_SelectionAnchor = 0;
+    m_IsSelecting = false;
+}
+
+std::wstring TextElement::GetSelectedText() const
+{
+    if (!HasTextSelection())
+        return L"";
+
+    std::wstring processedText = GetProcessedText();
+    if (m_SelectionEnd > processedText.length())
+        return L"";
+
+    return processedText.substr(m_SelectionStart, m_SelectionEnd - m_SelectionStart);
+}
+
+void TextElement::SelectAll()
+{
+    std::wstring processedText = GetProcessedText();
+    m_SelectionStart = 0;
+    m_SelectionEnd = (UINT32)processedText.length();
+    m_SelectionAnchor = 0;
 }
