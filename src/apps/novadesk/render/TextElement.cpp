@@ -1077,3 +1077,73 @@ void TextElement::SelectAll()
     m_SelectionEnd = (UINT32)processedText.length();
     m_SelectionAnchor = 0;
 }
+
+void TextElement::FindWordBoundaries(UINT32 position, UINT32& wordStart, UINT32& wordEnd)
+{
+    std::wstring processedText = GetProcessedText();
+    UINT32 textLength = (UINT32)processedText.length();
+    
+    if (position >= textLength)
+    {
+        wordStart = wordEnd = textLength;
+        return;
+    }
+
+    // Find word start (move left until we hit non-word character or start)
+    wordStart = position;
+    while (wordStart > 0)
+    {
+        wchar_t c = processedText[wordStart - 1];
+        // Word characters: letters, numbers, underscore
+        if (iswalnum(c) || c == L'_')
+        {
+            wordStart--;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    // Find word end (move right until we hit non-word character or end)
+    wordEnd = position;
+    while (wordEnd < textLength)
+    {
+        wchar_t c = processedText[wordEnd];
+        // Word characters: letters, numbers, underscore
+        if (iswalnum(c) || c == L'_')
+        {
+            wordEnd++;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    // If we didn't find any word characters, select the current position
+    if (wordStart == wordEnd && position < textLength)
+    {
+        wordStart = position;
+        wordEnd = position + 1;
+    }
+}
+
+void TextElement::SelectWordAt(UINT32 position)
+{
+    UINT32 wordStart, wordEnd;
+    FindWordBoundaries(position, wordStart, wordEnd);
+    
+    m_SelectionStart = wordStart;
+    m_SelectionEnd = wordEnd;
+    m_SelectionAnchor = wordStart;
+}
+
+void TextElement::HandleTextSelectionDoubleClick(int x, int y)
+{
+    if (!m_TextSelection)
+        return;
+
+    UINT32 position = HitTestTextPosition(x, y);
+    SelectWordAt(position);
+}

@@ -142,14 +142,17 @@ public:
     void HandleTextSelectionMouseDown(int x, int y);
     void HandleTextSelectionMouseMove(int x, int y);
     void HandleTextSelectionMouseUp();
+    void HandleTextSelectionDoubleClick(int x, int y);
     bool HasTextSelection() const { return m_SelectionStart != m_SelectionEnd; }
     void ClearTextSelection();
     std::wstring GetSelectedText() const;
     void SelectAll();
+    void SelectWordAt(UINT32 position);
 
 private:
     void ParseInlineStyles();
     UINT32 HitTestTextPosition(int x, int y);
+    void FindWordBoundaries(UINT32 position, UINT32& wordStart, UINT32& wordEnd);
 
     std::wstring m_Text;
     std::wstring m_CleanText;

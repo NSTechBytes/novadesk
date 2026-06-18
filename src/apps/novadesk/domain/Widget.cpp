@@ -3167,6 +3167,18 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             }
         }
     }
+    else if (message == WM_LBUTTONDBLCLK)
+    {
+        // Handle double-click for word selection
+        TextElement* textElem = dynamic_cast<TextElement*>(hitElement);
+        if (textElem && textElem->GetTextSelection())
+        {
+            m_TextSelectionElement = textElem;
+            textElem->HandleTextSelectionDoubleClick(x, y);
+            handled = true;
+            needRedraw = true;
+        }
+    }
     else if (message == WM_MOUSEMOVE)
     {
         // Handle text selection dragging
