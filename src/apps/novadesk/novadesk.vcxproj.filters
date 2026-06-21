@@ -144,6 +144,9 @@
     <ClCompile Include="render\TextElement.cpp">
       <Filter>render</Filter>
     </ClCompile>
+    <ClCompile Include="render\InputBoxElement.cpp">
+      <Filter>render</Filter>
+    </ClCompile>
     <ClCompile Include="render\Tooltip.cpp">
       <Filter>render</Filter>
     </ClCompile>
@@ -193,6 +196,9 @@
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
     <ClCompile Include="scripting\quickjs\parser\PropertyParserText.cpp">
+      <Filter>scripting\quickjs\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserInputBox.cpp">
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
     <ClCompile Include="scripting\quickjs\parser\PropertyParserWidgetWindow.cpp">
@@ -333,6 +339,9 @@
       <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="render\TextElement.h">
+      <Filter>render</Filter>
+    </ClInclude>
+    <ClInclude Include="render\InputBoxElement.h">
       <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="render\Tooltip.h">

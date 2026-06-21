@@ -154,6 +154,7 @@
     <ClCompile Include="render\RoundLineElement.cpp" />
     <ClCompile Include="render\ShapeElement.cpp" />
     <ClCompile Include="render\TextElement.cpp" />
+    <ClCompile Include="render\InputBoxElement.cpp" />
     <ClCompile Include="render\Tooltip.cpp" />
     <ClCompile Include="scripting\quickjs\engine\JSEngine.cpp" />
     <ClCompile Include="scripting\quickjs\modules\FSModule.cpp" />
@@ -171,6 +172,7 @@
     <ClCompile Include="scripting\quickjs\parser\PropertyParserLayoutBox.cpp" />
     <ClCompile Include="scripting\quickjs\parser\PropertyParserShape.cpp" />
     <ClCompile Include="scripting\quickjs\parser\PropertyParserText.cpp" />
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserInputBox.cpp" />
     <ClCompile Include="scripting\quickjs\parser\PropertyParserWidgetWindow.cpp" />
     <ClCompile Include="shared\FileUtils.cpp" />
     <ClCompile Include="shared\Logging.cpp" />
@@ -227,6 +229,7 @@
     <ClInclude Include="render\RoundLineElement.h" />
     <ClInclude Include="render\ShapeElement.h" />
     <ClInclude Include="render\TextElement.h" />
+    <ClInclude Include="render\InputBoxElement.h" />
     <ClInclude Include="render\Tooltip.h" />
     <ClInclude Include="scripting\quickjs\engine\JSEngine.h" />
     <ClInclude Include="scripting\quickjs\modules\FSModule.h" />

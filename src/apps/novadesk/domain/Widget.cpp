@@ -50,6 +50,7 @@
 #define TIMER_TOPMOST 2
 #define TIMER_TOOLTIP 3
 #define TIMER_CTRL_OVERRIDE 4
+#define TIMER_CARET 5
 
 
 extern std::vector<Widget *> widgets; // Defined in Novadesk.cpp
@@ -674,7 +675,19 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
     case WM_KILLFOCUS:
         if (widget)
+        {
+            // Blur any focused input box
+            if (widget->m_FocusedInputBox)
+            {
+                KillTimer(hWnd, TIMER_CARET);
+                if (widget->m_FocusedInputBox->m_OnBlurCallbackId != -1)
+                    JSEngine::CallEventCallback(widget->m_FocusedInputBox->m_OnBlurCallbackId, widget, nullptr);
+                widget->m_FocusedInputBox->SetFocus(false);
+                widget->m_FocusedInputBox = nullptr;
+                widget->Redraw();
+            }
             JSEngine::TriggerWidgetEvent(widget, "unFocus");
+        }
         return 0;
 
     case WM_ERASEBKGND:
@@ -951,6 +964,12 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     widget->ChangeZPos(ZPOSITION_ONTOPMOST);
                 }
             }
+            else if (wParam == TIMER_CARET)
+            {
+                // Blink the focused input box caret.
+                if (widget->m_FocusedInputBox)
+                    widget->Redraw();
+            }
             else if (wParam == TIMER_CTRL_OVERRIDE)
             {
                 if (widget->m_Options.clickThrough)
@@ -1226,6 +1245,90 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 widget->Redraw();
                 return 0;
             }
+        }
+        // Route keyboard to focused input box (editable text field).
+        if (widget && widget->m_FocusedInputBox)
+        {
+            InputBoxElement *input = widget->m_FocusedInputBox;
+            bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+            bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+
+            if (ctrl && wParam == 'A')
+            {
+                input->SelectAll();
+                widget->Redraw();
+                return 0;
+            }
+            if (ctrl && wParam == 'C')
+            {
+                std::wstring sel = input->GetSelectedText();
+                if (!sel.empty())
+                    novadesk::shared::system::ClipboardSetText(sel);
+                return 0;
+            }
+            if (ctrl && wParam == 'X')
+            {
+                std::wstring sel = input->GetSelectedText();
+                if (!sel.empty())
+                {
+                    novadesk::shared::system::ClipboardSetText(sel);
+                    input->DeleteSelection();
+                    if (input->m_OnTextChangeCallbackId != -1)
+                        JSEngine::CallEventCallback(input->m_OnTextChangeCallbackId, widget, nullptr);
+                    widget->Redraw();
+                }
+                return 0;
+            }
+            if (ctrl && wParam == 'V')
+            {
+                std::wstring clip;
+                if (novadesk::shared::system::ClipboardGetText(clip))
+                {
+                    input->ReplaceSelection(clip);
+                    if (input->m_OnTextChangeCallbackId != -1)
+                        JSEngine::CallEventCallback(input->m_OnTextChangeCallbackId, widget, nullptr);
+                    widget->Redraw();
+                }
+                return 0;
+            }
+            if (wParam == VK_RETURN)
+            {
+                if (input->m_OnEnterCallbackId != -1)
+                    JSEngine::CallEventCallback(input->m_OnEnterCallbackId, widget, nullptr);
+                return 0;
+            }
+            if (wParam == VK_ESCAPE)
+            {
+                // Clear selection or blur on Escape
+                if (input->HasSelection())
+                    input->ClearSelection();
+                else
+                {
+                    input->SetFocus(false);
+                    widget->m_FocusedInputBox = nullptr;
+                }
+                widget->Redraw();
+                return 0;
+            }
+
+            bool changed = input->HandleKeyDown(wParam, shift, ctrl);
+            if (changed && input->m_OnTextChangeCallbackId != -1)
+                JSEngine::CallEventCallback(input->m_OnTextChangeCallbackId, widget, nullptr);
+            widget->Redraw();
+            return 0;
+        }
+        return DefWindowProc(hWnd, message, wParam, lParam);
+
+    case WM_CHAR:
+        if (widget && widget->m_FocusedInputBox)
+        {
+            wchar_t ch = (wchar_t)wParam;
+            InputBoxElement *input = widget->m_FocusedInputBox;
+            bool changed = input->HandleChar(ch);
+            if (changed && input->m_OnTextChangeCallbackId != -1)
+                JSEngine::CallEventCallback(input->m_OnTextChangeCallbackId, widget, nullptr);
+            widget->Redraw();
+            return 0;
         }
         return DefWindowProc(hWnd, message, wParam, lParam);
 
@@ -1610,6 +1713,28 @@ void Widget::AddLayoutBox(const PropertyParser::ShapeOptions &options)
     PropertyParser::ApplyShapeOptions(element, options);
     m_Elements.push_back(element);
     UpdateContainerForElement(element, options.containerId);
+    Redraw();
+}
+
+void Widget::AddInputBox(const PropertyParser::InputBoxOptions &options)
+{
+    if (options.id.empty())
+    {
+        Logging::Log(LogLevel::Error, L"AddInputBox failed: Element ID cannot be empty.");
+        return;
+    }
+
+    if (FindElementById(options.id))
+    {
+        RemoveElements(options.id);
+    }
+
+    InputBoxElement *element = new InputBoxElement(options.id, options.x, options.y, options.width, options.height);
+    PropertyParser::ApplyInputBoxOptions(element, options);
+
+    m_Elements.push_back(element);
+    UpdateContainerForElement(element, options.containerId);
+
     Redraw();
 }
 
@@ -2453,6 +2578,10 @@ void Widget::UpdateLayeredWindowContent()
                 m_pContext->FillRectangle(backRect, pBackBrush.Get());
             }
 
+            // Advance the caret blink phase for the focused input box.
+            if (m_FocusedInputBox)
+                m_FocusedInputBox->UpdateBlink();
+
             // Draw Elements
             for (Element *element : m_Elements)
             {
@@ -3152,6 +3281,46 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             }
         }
 
+        // Input box focus + caret placement on click.
+        InputBoxElement* inputElem = dynamic_cast<InputBoxElement*>(hitElement);
+        if (inputElem)
+        {
+            if (m_FocusedInputBox && m_FocusedInputBox != inputElem)
+            {
+                if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
+                    JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
+                m_FocusedInputBox->SetFocus(false);
+                KillTimer(m_hWnd, TIMER_CARET);
+            }
+            if (!inputElem->IsFocused())
+            {
+                inputElem->SetFocus(true);
+                SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
+                if (inputElem->m_OnFocusCallbackId != -1)
+                    JSEngine::CallEventCallback(inputElem->m_OnFocusCallbackId, this, nullptr);
+            }
+            m_FocusedInputBox = inputElem;
+            bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+            inputElem->HandleMouseDown(x, y, shift);
+            SetFocus();
+            SetCapture(m_hWnd);
+            handled = true;
+            needRedraw = true;
+        }
+        else
+        {
+            // Clicked outside any input box: blur the focused one.
+            if (m_FocusedInputBox)
+            {
+                if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
+                    JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
+                m_FocusedInputBox->SetFocus(false);
+                m_FocusedInputBox = nullptr;
+                KillTimer(m_hWnd, TIMER_CARET);
+                needRedraw = true;
+            }
+        }
+
         Element *dragTarget = actionElement ? actionElement : hitElement;
         if (dragTarget && dragTarget->HasDragAction())
         {
@@ -3200,6 +3369,13 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 handled = true;
             }
         }
+
+        // Drag selection inside a focused input box.
+        if (m_FocusedInputBox)
+        {
+            m_FocusedInputBox->HandleMouseMove(x, y);
+            needRedraw = true;
+        }
     }
     else if (message == WM_LBUTTONUP)
     {
@@ -3207,6 +3383,11 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         if (m_TextSelectionElement && m_TextSelectionElement->GetTextSelection())
         {
             m_TextSelectionElement->HandleTextSelectionMouseUp();
+        }
+
+        if (m_FocusedInputBox)
+        {
+            m_FocusedInputBox->HandleMouseUp();
         }
 
         if (m_IsElementDragging && isTrackedElement(m_DragElement))

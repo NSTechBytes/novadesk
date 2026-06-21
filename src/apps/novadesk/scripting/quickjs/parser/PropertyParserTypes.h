@@ -209,6 +209,37 @@ namespace PropertyParser
         BYTE selectionTextAlpha = 255;
     };
 
+    // Options for the Direct2D-rendered input box element.
+    struct InputBoxOptions : public ElementOptions
+    {
+        std::wstring text;
+        std::wstring placeholder;
+        std::wstring fontFace = L"Segoe UI";
+        int fontSize = 14;
+        COLORREF fontColor = RGB(240, 240, 240);
+        BYTE fontAlpha = 255;
+        int fontWeight = 400;
+        bool italic = false;
+        TextAlignment textAlign = TEXT_ALIGN_LEFT_CENTER;
+        std::wstring fontPath;
+
+        COLORREF placeholderColor = RGB(150, 150, 150);
+        BYTE placeholderAlpha = 255;
+        COLORREF caretColor = RGB(255, 255, 255);
+        BYTE caretAlpha = 255;
+        COLORREF selectionColor = RGB(135, 206, 235);
+        BYTE selectionAlpha = 128;
+
+        bool password = false;
+        int maxLength = 0;
+
+        // JS callback ids (resolved via GetEventCallbackProp).
+        int onTextChangeCallbackId = -1;
+        int onEnterCallbackId = -1;
+        int onFocusCallbackId = -1;
+        int onBlurCallbackId = -1;
+    };
+
     struct BarOptions : public ElementOptions
     {
         float value = 0.0f;

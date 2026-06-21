@@ -28,6 +28,7 @@
 #include "../../render/PathShape.h"
 #include "../../render/TextElement.h"
 #include "../../render/ElementLayoutBox.h"
+#include "../../render/InputBoxElement.h"
 #include "../../shared/FileUtils.h"
 #include "../../shared/Logging.h"
 #include "../../shared/PathUtils.h"
@@ -226,6 +227,19 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
+        JSValue JsWidgetAddInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_UNDEFINED;
+            if (argc < 1 || !JS_IsObject(argv[0]))
+                return ThrowTypeError(ctx, "addInputBox", "expected options object");
+            PropertyParser::InputBoxOptions options;
+            PropertyParser::ParseInputBoxOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
+            widget->AddInputBox(options);
+            return JS_UNDEFINED;
+        }
+
         JSValue JsWidgetAddBar(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -406,6 +420,8 @@ namespace novadesk::scripting::quickjs
                 return JsWidgetAddShape(ctx, thisVal, 1, argvLocal);
             if (type == L"button")
                 return JsWidgetAddButton(ctx, thisVal, 1, argvLocal);
+            if (type == L"inputbox")
+                return JsWidgetAddInputBox(ctx, thisVal, 1, argvLocal);
             if (type == L"bitmap")
                 return JsWidgetAddBitmap(ctx, thisVal, 1, argvLocal);
             if (type == L"rotator")
@@ -561,6 +577,7 @@ namespace novadesk::scripting::quickjs
             case 9: typeName = "roundLine"; break;
             case 10: typeName = "areaGraph"; break;
             case 11: typeName = "layoutBox"; break;
+            case 12: typeName = "inputBox"; break;
             }
             return CreateTypedElementObject(ctx, argv[0], typeName);
         }
@@ -920,6 +937,13 @@ namespace novadesk::scripting::quickjs
                 PropertyParser::PreFillAreaGraphOptions(options, graph);
                 PropertyParser::ParseAreaGraphOptions(ctx, argv[1], options, baseDir);
                 PropertyParser::ApplyAreaGraphOptions(graph, options);
+            }
+            else if (auto *input = dynamic_cast<InputBoxElement *>(element))
+            {
+                PropertyParser::InputBoxOptions options;
+                PropertyParser::PreFillInputBoxOptions(options, input);
+                PropertyParser::ParseInputBoxOptions(ctx, argv[1], options, baseDir);
+                PropertyParser::ApplyInputBoxOptions(input, options);
             }
 
             widget->Redraw();
@@ -1839,6 +1863,26 @@ namespace novadesk::scripting::quickjs
                     }
                 }
             }
+            else if (element->GetType() == ELEMENT_INPUT_BOX)
+            {
+                auto *input = static_cast<InputBoxElement *>(element);
+                if (prop == "text")
+                    return JS_NewString(ctx, Utils::ToString(input->GetText()).c_str());
+                if (prop == "placeholder")
+                    return JS_NewString(ctx, Utils::ToString(input->GetPlaceholder()).c_str());
+                if (prop == "focused")
+                    return JS_NewBool(ctx, input->IsFocused() ? 1 : 0);
+                if (prop == "fontFace")
+                    return JS_NewString(ctx, Utils::ToString(input->GetFontFace()).c_str());
+                if (prop == "fontSize")
+                    return JS_NewInt32(ctx, input->GetFontSize());
+                if (prop == "fontColor")
+                    return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(input->GetFontColor(), input->GetFontAlpha())).c_str());
+                if (prop == "password")
+                    return JS_NewBool(ctx, input->IsPasswordMode() ? 1 : 0);
+                if (prop == "maxLength")
+                    return JS_NewInt32(ctx, input->GetMaxLength());
+            }
 
             return JS_UNDEFINED;
         }
@@ -1884,6 +1928,7 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("addImage", 1, JsWidgetAddImage),
             JS_CFUNC_DEF("addButton", 1, JsWidgetAddButton),
             JS_CFUNC_DEF("addText", 1, JsWidgetAddText),
+            JS_CFUNC_DEF("addInputBox", 1, JsWidgetAddInputBox),
             JS_CFUNC_DEF("addBar", 1, JsWidgetAddBar),
             JS_CFUNC_DEF("addLine", 1, JsWidgetAddLine),
             JS_CFUNC_DEF("addHistogram", 1, JsWidgetAddHistogram),
