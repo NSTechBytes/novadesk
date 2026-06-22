@@ -79,6 +79,12 @@ namespace PropertyParser
 
         // JS callbacks
         GetEventCallbackProp(ctx, obj, "onTextChange", options.onTextChangeCallbackId);
+
+        // Border (solid only)
+        int borderWidth = 0;
+        if (GetIntProp(ctx, obj, "borderWidth", borderWidth))
+            options.borderWidth = static_cast<float>(borderWidth);
+        ParseColorAlphaProp(ctx, obj, "borderColor", options.borderColor, options.borderColorAlpha);
         GetEventCallbackProp(ctx, obj, "onChange", options.onTextChangeCallbackId);
         GetEventCallbackProp(ctx, obj, "onEnter", options.onEnterCallbackId);
         GetEventCallbackProp(ctx, obj, "onFocus", options.onFocusCallbackId);
@@ -113,6 +119,8 @@ namespace PropertyParser
         element->SetCaretColor(options.caretColor, options.caretAlpha);
         element->SetSelectionColor(options.selectionColor, options.selectionAlpha);
         element->SetTextAlign(options.textAlign);
+        element->SetBorderWidth(options.borderWidth);
+        element->SetBorderColor(options.borderColor, options.borderColorAlpha);
 
         element->m_OnTextChangeCallbackId = options.onTextChangeCallbackId;
         element->m_OnEnterCallbackId = options.onEnterCallbackId;
@@ -135,6 +143,9 @@ namespace PropertyParser
         options.textAlign = element->GetTextAlign();
         options.password = element->IsPasswordMode();
         options.maxLength = element->GetMaxLength();
+        options.borderWidth = element->GetBorderWidth();
+        options.borderColor = element->GetBorderColor();
+        options.borderColorAlpha = element->GetBorderAlpha();
         options.onTextChangeCallbackId = element->m_OnTextChangeCallbackId;
         options.onEnterCallbackId = element->m_OnEnterCallbackId;
         options.onFocusCallbackId = element->m_OnFocusCallbackId;

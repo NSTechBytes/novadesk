@@ -78,6 +78,17 @@ public:
         m_SelectionAlpha = alpha;
     }
 
+    // Border (solid only)
+    void SetBorderColor(COLORREF color, BYTE alpha)
+    {
+        m_BorderColor = color;
+        m_BorderAlpha = alpha;
+    }
+    void SetBorderWidth(float width) { m_BorderWidth = width; }
+    COLORREF GetBorderColor() const { return m_BorderColor; }
+    BYTE GetBorderAlpha() const { return m_BorderAlpha; }
+    float GetBorderWidth() const { return m_BorderWidth; }
+
     // Password masking (reserved for future; off by default)
     void SetPasswordMode(bool enabled) { m_Password = enabled; }
     bool IsPasswordMode() const { return m_Password; }
@@ -150,6 +161,11 @@ private:
     BYTE m_CaretAlpha = 255;
     COLORREF m_SelectionColor = RGB(135, 206, 235);
     BYTE m_SelectionAlpha = 128;
+
+    // Border (solid)
+    float m_BorderWidth = 0.0f;
+    COLORREF m_BorderColor = RGB(0, 0, 0);
+    BYTE m_BorderAlpha = 255;
 
     bool m_Password = false;
     int m_MaxLength = 0;

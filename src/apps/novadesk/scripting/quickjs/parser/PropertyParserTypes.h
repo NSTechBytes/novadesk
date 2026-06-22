@@ -233,6 +233,11 @@ namespace PropertyParser
         bool password = false;
         int maxLength = 0;
 
+        // Border (solid only)
+        float borderWidth = 1.0f;
+        COLORREF borderColor = RGB(0, 0, 0);
+        BYTE borderColorAlpha = 255;
+
         // JS callback ids (resolved via GetEventCallbackProp).
         int onTextChangeCallbackId = -1;
         int onEnterCallbackId = -1;

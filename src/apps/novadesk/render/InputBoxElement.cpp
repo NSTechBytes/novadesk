@@ -95,10 +95,10 @@ bool InputBoxElement::HitTest(int x, int y)
 D2D1_RECT_F InputBoxElement::GetContentRect() const
 {
     GfxRect b = const_cast<InputBoxElement *>(this)->GetBounds();
-    float left = (float)b.X + m_PaddingLeft;
-    float top = (float)b.Y + m_PaddingTop;
-    float right = (float)b.X + b.Width - m_PaddingRight;
-    float bottom = (float)b.Y + b.Height - m_PaddingBottom;
+    float left = (float)b.X + m_BorderWidth + m_PaddingLeft;
+    float top = (float)b.Y + m_BorderWidth + m_PaddingTop;
+    float right = (float)b.X + b.Width - m_BorderWidth - m_PaddingRight;
+    float bottom = (float)b.Y + b.Height - m_BorderWidth - m_PaddingBottom;
     if (right < left)
         right = left;
     if (bottom < top)
@@ -534,6 +534,28 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
     // Background (uses m_SolidColor / m_CornerRadius set via SetSolidColor/SetCornerRadius)
     RenderBackground(context);
     RenderBevel(context);
+
+    // Solid border
+    if (m_BorderWidth > 0.0f && m_BorderAlpha > 0)
+    {
+        D2D1_ROUNDED_RECT borderRect;
+        borderRect.rect = D2D1::RectF((float)m_X, (float)m_Y,
+                                       (float)(m_X + GetWidth()), (float)(m_Y + GetHeight()));
+        borderRect.radiusX = (float)m_CornerRadius;
+        borderRect.radiusY = (float)m_CornerRadius;
+
+        D2D1_COLOR_F col = D2D1::ColorF(
+            GetRValue(m_BorderColor) / 255.0f,
+            GetGValue(m_BorderColor) / 255.0f,
+            GetBValue(m_BorderColor) / 255.0f,
+            m_BorderAlpha / 255.0f);
+
+        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> borderBrush;
+        if (SUCCEEDED(context->CreateSolidColorBrush(col, borderBrush.GetAddressOf())) && borderBrush)
+        {
+            context->DrawRoundedRectangle(borderRect, borderBrush.Get(), m_BorderWidth, nullptr);
+        }
+    }
 
     D2D1_RECT_F content = GetContentRect();
     float layoutW = content.right - content.left;
