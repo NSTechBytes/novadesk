@@ -65,7 +65,7 @@ InputBoxElement::InputBoxElement(const std::wstring &id, int x, int y, int width
 {
     // Input fields typically want a solid background and a small corner radius.
     m_MouseEventCursor = true;
-    m_MouseEventCursorName = L"IBeam";
+    m_MouseEventCursorName = L"text";
 }
 
 GfxRect InputBoxElement::GetBounds()

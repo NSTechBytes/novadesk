@@ -92,6 +92,10 @@ namespace PropertyParser
 
         ApplyElementOptions(element, options);
 
+        // Force I-beam cursor for input boxes (ApplyElementOptions may
+        // overwrite it with the empty default if no cursor prop was passed).
+        element->SetMouseEventCursorName(L"text");
+
         if (!options.text.empty())
             element->SetText(options.text);
         element->SetFontFace(options.fontFace);
