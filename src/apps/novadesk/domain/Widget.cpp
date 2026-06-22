@@ -711,11 +711,12 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 widget->ChangeSingleZPos(widget->m_WindowZPosition);
             }
 
-            // Don't start widget drag if we're selecting text
+            // Don't start widget drag if we're selecting text or an input box is focused
             const bool isSelectingText = (widget->m_TextSelectionElement != nullptr);
-            
+            const bool inputBoxFocused = (widget->m_FocusedInputBox != nullptr);
+
             const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-            if (!widget->m_IsElementDragging && !isSelectingText && (widget->m_Options.draggable || ctrlHeld))
+            if (!widget->m_IsElementDragging && !isSelectingText && !inputBoxFocused && (widget->m_Options.draggable || ctrlHeld))
             {
                 SetCapture(hWnd);
                 widget->m_IsDragging = true;
@@ -875,8 +876,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_MOUSEMOVE:
         if (widget)
         {
-            // Don't allow widget drag while selecting text
-            if (widget->m_IsDragging && widget->m_TextSelectionElement != nullptr)
+            // Don't allow widget drag while selecting text or input box is focused
+            if (widget->m_IsDragging && (widget->m_TextSelectionElement != nullptr || widget->m_FocusedInputBox != nullptr))
             {
                 widget->m_IsDragging = false;
                 if (GetCapture() == hWnd)
