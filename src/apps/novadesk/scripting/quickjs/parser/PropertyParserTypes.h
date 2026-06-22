@@ -235,6 +235,7 @@ namespace PropertyParser
 
         // Border (solid only)
         float borderWidth = 1.0f;
+        float borderRadius = 8.0f;
         COLORREF borderColor = RGB(0, 0, 0);
         BYTE borderColorAlpha = 255;
 

@@ -85,9 +85,11 @@ public:
         m_BorderAlpha = alpha;
     }
     void SetBorderWidth(float width) { m_BorderWidth = width; }
+    void SetBorderRadius(float radius) { m_BorderRadius = radius; }
     COLORREF GetBorderColor() const { return m_BorderColor; }
     BYTE GetBorderAlpha() const { return m_BorderAlpha; }
     float GetBorderWidth() const { return m_BorderWidth; }
+    float GetBorderRadius() const { return m_BorderRadius; }
 
     // Password masking (reserved for future; off by default)
     void SetPasswordMode(bool enabled) { m_Password = enabled; }
@@ -164,6 +166,7 @@ private:
 
     // Border (solid)
     float m_BorderWidth = 0.0f;
+    float m_BorderRadius = 0.0f;
     COLORREF m_BorderColor = RGB(0, 0, 0);
     BYTE m_BorderAlpha = 255;
 

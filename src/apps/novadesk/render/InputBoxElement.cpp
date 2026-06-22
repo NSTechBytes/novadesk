@@ -541,8 +541,8 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
         D2D1_ROUNDED_RECT borderRect;
         borderRect.rect = D2D1::RectF((float)m_X, (float)m_Y,
                                        (float)(m_X + GetWidth()), (float)(m_Y + GetHeight()));
-        borderRect.radiusX = (float)m_CornerRadius;
-        borderRect.radiusY = (float)m_CornerRadius;
+        borderRect.radiusX = m_BorderRadius;
+        borderRect.radiusY = m_BorderRadius;
 
         D2D1_COLOR_F col = D2D1::ColorF(
             GetRValue(m_BorderColor) / 255.0f,

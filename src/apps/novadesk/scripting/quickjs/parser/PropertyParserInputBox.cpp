@@ -85,6 +85,9 @@ namespace PropertyParser
         if (GetIntProp(ctx, obj, "borderWidth", borderWidth))
             options.borderWidth = static_cast<float>(borderWidth);
         ParseColorAlphaProp(ctx, obj, "borderColor", options.borderColor, options.borderColorAlpha);
+        int borderRadius = 0;
+        if (GetIntProp(ctx, obj, "borderRadius", borderRadius))
+            options.borderRadius = static_cast<float>(borderRadius);
         GetEventCallbackProp(ctx, obj, "onChange", options.onTextChangeCallbackId);
         GetEventCallbackProp(ctx, obj, "onEnter", options.onEnterCallbackId);
         GetEventCallbackProp(ctx, obj, "onFocus", options.onFocusCallbackId);
@@ -120,6 +123,7 @@ namespace PropertyParser
         element->SetSelectionColor(options.selectionColor, options.selectionAlpha);
         element->SetTextAlign(options.textAlign);
         element->SetBorderWidth(options.borderWidth);
+        element->SetBorderRadius(options.borderRadius);
         element->SetBorderColor(options.borderColor, options.borderColorAlpha);
 
         element->m_OnTextChangeCallbackId = options.onTextChangeCallbackId;
@@ -144,6 +148,7 @@ namespace PropertyParser
         options.password = element->IsPasswordMode();
         options.maxLength = element->GetMaxLength();
         options.borderWidth = element->GetBorderWidth();
+        options.borderRadius = element->GetBorderRadius();
         options.borderColor = element->GetBorderColor();
         options.borderColorAlpha = element->GetBorderAlpha();
         options.onTextChangeCallbackId = element->m_OnTextChangeCallbackId;
