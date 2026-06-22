@@ -565,7 +565,7 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
         maskedText.assign(m_Text.size(), L'\x2022');
     }
     const std::wstring &renderText = m_Password ? (m_Text.empty() ? m_Placeholder : maskedText)
-                                                 : drawText;
+                                                : drawText;
 
     if (!renderText.empty())
     {

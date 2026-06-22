@@ -32,14 +32,18 @@ public:
     virtual GfxRect GetBounds() override;
     virtual bool HitTest(int x, int y) override;
 
-    // --- Text content ---
+    // Text content
     void SetText(const std::wstring &text);
     const std::wstring &GetText() const { return m_Text; }
 
-    // --- Typography ---
+    // Typography
     void SetFontFace(const std::wstring &font) { m_FontFace = font; }
     void SetFontSize(int size) { m_FontSize = size; }
-    void SetFontColor(COLORREF color, BYTE alpha) { m_FontColor = color; m_FontAlpha = alpha; }
+    void SetFontColor(COLORREF color, BYTE alpha)
+    {
+        m_FontColor = color;
+        m_FontAlpha = alpha;
+    }
     void SetFontWeight(int weight) { m_FontWeight = weight; }
     void SetItalic(bool italic) { m_Italic = italic; }
     void SetFontPath(const std::wstring &path) { m_FontPath = path; }
@@ -53,31 +57,43 @@ public:
     bool IsItalic() const { return m_Italic; }
     TextAlignment GetTextAlign() const { return m_TextAlign; }
 
-    // --- Placeholder ---
+    // Placeholder
     void SetPlaceholder(const std::wstring &placeholder) { m_Placeholder = placeholder; }
     const std::wstring &GetPlaceholder() const { return m_Placeholder; }
-    void SetPlaceholderColor(COLORREF color, BYTE alpha) { m_PlaceholderColor = color; m_PlaceholderAlpha = alpha; }
+    void SetPlaceholderColor(COLORREF color, BYTE alpha)
+    {
+        m_PlaceholderColor = color;
+        m_PlaceholderAlpha = alpha;
+    }
 
-    // --- Caret / selection colors ---
-    void SetCaretColor(COLORREF color, BYTE alpha) { m_CaretColor = color; m_CaretAlpha = alpha; }
-    void SetSelectionColor(COLORREF color, BYTE alpha) { m_SelectionColor = color; m_SelectionAlpha = alpha; }
+    // Caret / selection colors
+    void SetCaretColor(COLORREF color, BYTE alpha)
+    {
+        m_CaretColor = color;
+        m_CaretAlpha = alpha;
+    }
+    void SetSelectionColor(COLORREF color, BYTE alpha)
+    {
+        m_SelectionColor = color;
+        m_SelectionAlpha = alpha;
+    }
 
-    // --- Password masking (reserved for future; off by default) ---
+    // Password masking (reserved for future; off by default)
     void SetPasswordMode(bool enabled) { m_Password = enabled; }
     bool IsPasswordMode() const { return m_Password; }
 
-    // --- Max length (reserved; 0 = unlimited) ---
+    // Max length (reserved; 0 = unlimited)
     void SetMaxLength(int len) { m_MaxLength = len; }
     int GetMaxLength() const { return m_MaxLength; }
 
-    // --- Focus ---
+    // Focus
     bool IsFocused() const { return m_Focused; }
     void SetFocus(bool focused);
 
     // Caret visibility toggles on a timer; the Widget calls this each repaint.
     void UpdateBlink();
 
-    // --- Editing mutations (called by Widget keyboard routing) ---
+    // Editing mutations (called by Widget keyboard routing)
     // Returns true if the content changed (so Widget can fire onChange + redraw).
     bool HandleChar(wchar_t ch);
     bool HandleKeyDown(WPARAM vk, bool shift, bool control);
@@ -85,7 +101,7 @@ public:
     void HandleMouseMove(int x, int y);
     void HandleMouseUp();
 
-    // --- Caret / selection state ---
+    // Caret / selection state
     bool HasSelection() const { return m_SelectionStart != m_SelectionEnd; }
     void SelectAll();
     void ClearSelection();
@@ -93,7 +109,7 @@ public:
     void DeleteSelection();
     void ReplaceSelection(const std::wstring &text);
 
-    // --- Callback IDs (Widget fills these in from JS) ---
+    // Callback IDs (Widget fills these in from JS)
     int m_OnTextChangeCallbackId = -1;
     int m_OnEnterCallbackId = -1;
     int m_OnFocusCallbackId = -1;
@@ -141,10 +157,10 @@ private:
     bool m_Focused = false;
 
     // Caret / selection state
-    UINT32 m_CaretPos = 0;          // Caret position (0..text.length())
-    UINT32 m_SelectionAnchor = 0;   // Anchor for shift-click / drag selection
-    UINT32 m_SelectionStart = 0;    // Normalized selection start
-    UINT32 m_SelectionEnd = 0;      // Normalized selection end
+    UINT32 m_CaretPos = 0;        // Caret position (0..text.length())
+    UINT32 m_SelectionAnchor = 0; // Anchor for shift-click / drag selection
+    UINT32 m_SelectionStart = 0;  // Normalized selection start
+    UINT32 m_SelectionEnd = 0;    // Normalized selection end
     bool m_IsDragging = false;
 
     // Blink state
