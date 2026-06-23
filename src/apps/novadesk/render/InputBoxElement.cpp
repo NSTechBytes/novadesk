@@ -653,6 +653,33 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
     RenderBackground(context);
     RenderBevel(context);
 
+    // Draw the custom Fill Color if defined
+    if (m_HasFillColor && m_FillAlpha > 0)
+    {
+        D2D1_RECT_F fillRect = D2D1::RectF((float)m_X, (float)m_Y,
+                                            (float)(m_X + GetWidth()), (float)(m_Y + GetHeight()));
+
+        D2D1_COLOR_F col = D2D1::ColorF(
+            GetRValue(m_FillColor) / 255.0f,
+            GetGValue(m_FillColor) / 255.0f,
+            GetBValue(m_FillColor) / 255.0f,
+            m_FillAlpha / 255.0f);
+
+        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> fillBrush;
+        if (SUCCEEDED(context->CreateSolidColorBrush(col, fillBrush.GetAddressOf())) && fillBrush)
+        {
+            if (m_BorderRadius > 0.0f)
+            {
+                D2D1_ROUNDED_RECT roundedRect = D2D1::RoundedRect(fillRect, m_BorderRadius, m_BorderRadius);
+                context->FillRoundedRectangle(roundedRect, fillBrush.Get());
+            }
+            else
+            {
+                context->FillRectangle(fillRect, fillBrush.Get());
+            }
+        }
+    }
+
     // Solid border
     if (m_BorderWidth > 0.0f && m_BorderAlpha > 0)
     {

@@ -40,6 +40,7 @@ ui.addInputBox({
     fontSize: 14,
     fontColor: "#ffffff",
     placeholderColor: "rgba(150, 150, 150, 1)",
+    // fillColor: "rgba(45, 45, 50, 1)",
     caretColor: "black",
     selectionColor: "rgba(81, 188, 254, 0.4)",
     // backgroundColor: "rgba(45, 45, 50, 1)",

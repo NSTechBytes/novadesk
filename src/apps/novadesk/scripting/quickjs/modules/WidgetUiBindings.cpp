@@ -1888,6 +1888,12 @@ namespace novadesk::scripting::quickjs
                     return JS_NewInt32(ctx, (int)input->GetBorderWidth());
                 if (prop == "borderRadius")
                     return JS_NewInt32(ctx, (int)input->GetBorderRadius());
+                if (prop == "fillColor")
+                {
+                    if (input->HasFillColor())
+                        return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(input->GetFillColor(), input->GetFillAlpha())).c_str());
+                    return JS_UNDEFINED;
+                }
             }
 
             return JS_UNDEFINED;

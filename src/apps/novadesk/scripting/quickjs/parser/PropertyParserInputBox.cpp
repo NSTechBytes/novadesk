@@ -72,6 +72,8 @@ namespace PropertyParser
         ParseColorAlphaProp(ctx, obj, "placeholderColor", options.placeholderColor, options.placeholderAlpha);
         ParseColorAlphaProp(ctx, obj, "caretColor", options.caretColor, options.caretAlpha);
         ParseColorAlphaProp(ctx, obj, "selectionColor", options.selectionColor, options.selectionAlpha);
+        if (ParseColorAlphaProp(ctx, obj, "fillColor", options.fillColor, options.fillAlpha))
+            options.hasFillColor = true;
 
         std::wstring align = GetStringProp(ctx, obj, "align");
         if (!align.empty())
@@ -121,6 +123,10 @@ namespace PropertyParser
         element->SetPlaceholderColor(options.placeholderColor, options.placeholderAlpha);
         element->SetCaretColor(options.caretColor, options.caretAlpha);
         element->SetSelectionColor(options.selectionColor, options.selectionAlpha);
+        if (options.hasFillColor)
+            element->SetFillColor(options.fillColor, options.fillAlpha);
+        else
+            element->ClearFillColor();
         element->SetTextAlign(options.textAlign);
         element->SetBorderWidth(options.borderWidth);
         element->SetBorderRadius(options.borderRadius);
@@ -147,6 +153,9 @@ namespace PropertyParser
         options.textAlign = element->GetTextAlign();
         options.password = element->IsPasswordMode();
         options.maxLength = element->GetMaxLength();
+        options.hasFillColor = element->HasFillColor();
+        options.fillColor = element->GetFillColor();
+        options.fillAlpha = element->GetFillAlpha();
         options.borderWidth = element->GetBorderWidth();
         options.borderRadius = element->GetBorderRadius();
         options.borderColor = element->GetBorderColor();

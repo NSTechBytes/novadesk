@@ -79,6 +79,21 @@ public:
         m_SelectionAlpha = alpha;
     }
 
+    // Fill color
+    void SetFillColor(COLORREF color, BYTE alpha)
+    {
+        m_FillColor = color;
+        m_FillAlpha = alpha;
+        m_HasFillColor = true;
+    }
+    void ClearFillColor()
+    {
+        m_HasFillColor = false;
+    }
+    bool HasFillColor() const { return m_HasFillColor; }
+    COLORREF GetFillColor() const { return m_FillColor; }
+    BYTE GetFillAlpha() const { return m_FillAlpha; }
+
     // Border (solid only)
     void SetBorderColor(COLORREF color, BYTE alpha)
     {
@@ -171,6 +186,10 @@ private:
     BYTE m_CaretAlpha = 255;
     COLORREF m_SelectionColor = RGB(135, 206, 235);
     BYTE m_SelectionAlpha = 128;
+
+    bool m_HasFillColor = false;
+    COLORREF m_FillColor = RGB(255, 255, 255);
+    BYTE m_FillAlpha = 255;
 
     // Border (solid)
     float m_BorderWidth = 0.0f;

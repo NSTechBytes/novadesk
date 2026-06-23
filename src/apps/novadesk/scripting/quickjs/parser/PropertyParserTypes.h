@@ -230,6 +230,10 @@ namespace PropertyParser
         COLORREF selectionColor = RGB(135, 206, 235);
         BYTE selectionAlpha = 128;
 
+        bool hasFillColor = false;
+        COLORREF fillColor = RGB(255, 255, 255);
+        BYTE fillAlpha = 255;
+
         bool password = false;
         int maxLength = 0;
 
