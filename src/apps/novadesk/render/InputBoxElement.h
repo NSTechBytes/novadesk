@@ -14,6 +14,7 @@
 #include <dwrite_1.h>
 #include <wrl/client.h>
 #include <string>
+#include <vector>
 
 // A custom text input field rendered entirely with Direct2D/DirectWrite inside
 // the Widget paint loop. Because it lives in the same m_Elements list as every
@@ -196,6 +197,20 @@ private:
     // Horizontal scroll offset (positive = text shifted left). Applied so that
     // the caret remains visible when the text overflows the content area.
     float m_ScrollOffset = 0.0f;
+
+    struct UndoState
+    {
+        std::wstring text;
+        UINT32 caretPos;
+        UINT32 selectionStart;
+        UINT32 selectionEnd;
+    };
+    std::vector<UndoState> m_UndoStack;
+    std::vector<UndoState> m_RedoStack;
+
+    void SaveUndoState();
+    bool Undo();
+    bool Redo();
 };
 
 #endif

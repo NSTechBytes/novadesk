@@ -323,6 +323,7 @@ void InputBoxElement::DeleteSelection()
     NormalizeSelection(s, e);
     if (s >= e)
         return;
+    SaveUndoState();
     m_Text.erase(s, e - s);
     m_CaretPos = s;
     m_SelectionStart = m_SelectionEnd = s;
@@ -332,7 +333,15 @@ void InputBoxElement::DeleteSelection()
 
 void InputBoxElement::ReplaceSelection(const std::wstring &text)
 {
-    DeleteSelection();
+    if (!HasSelection())
+    {
+        SaveUndoState();
+    }
+    else
+    {
+        DeleteSelection();
+    }
+
     if (m_MaxLength > 0 && (int)(m_Text.size() + text.size()) > m_MaxLength)
     {
         int remaining = m_MaxLength - (int)m_Text.size();
@@ -375,6 +384,9 @@ void InputBoxElement::SetText(const std::wstring &text)
     m_SelectionAnchor = m_CaretPos;
     // Programmatic text change: reset scroll to the start.
     m_ScrollOffset = 0.0f;
+
+    m_UndoStack.clear();
+    m_RedoStack.clear();
 }
 
 bool InputBoxElement::HandleChar(wchar_t ch)
@@ -391,9 +403,17 @@ bool InputBoxElement::HandleChar(wchar_t ch)
         return false;
 
     if (HasSelection())
+    {
         DeleteSelection();
+    }
     else if (m_MaxLength > 0 && (int)m_Text.size() >= m_MaxLength)
+    {
         return false;
+    }
+    else
+    {
+        SaveUndoState();
+    }
 
     m_Text.insert(m_CaretPos, 1, ch);
     m_CaretPos += 1;
@@ -401,6 +421,7 @@ bool InputBoxElement::HandleChar(wchar_t ch)
     m_SelectionAnchor = m_CaretPos;
     m_CaretVisible = true;
     m_LastBlinkTick = GetTickCount();
+
     EnsureCaretVisible();
     return true;
 }
@@ -433,6 +454,19 @@ bool InputBoxElement::HandleKeyDown(WPARAM vk, bool shift, bool control)
         // Cut: Widget reads selection into clipboard then we delete.
         return false;
     }
+    if (control && (vk == 'Z'))
+    {
+        if (shift)
+            changed = Redo();
+        else
+            changed = Undo();
+        return changed;
+    }
+    if (control && (vk == 'Y'))
+    {
+        changed = Redo();
+        return changed;
+    }
 
     switch (vk)
     {
@@ -444,6 +478,7 @@ bool InputBoxElement::HandleKeyDown(WPARAM vk, bool shift, bool control)
         }
         else if (m_CaretPos > 0)
         {
+            SaveUndoState();
             // Delete previous code unit. For surrogate pairs this is simplified.
             m_Text.erase(m_CaretPos - 1, 1);
             m_CaretPos -= 1;
@@ -461,6 +496,7 @@ bool InputBoxElement::HandleKeyDown(WPARAM vk, bool shift, bool control)
         }
         else if (m_CaretPos < m_Text.size())
         {
+            SaveUndoState();
             m_Text.erase(m_CaretPos, 1);
             changed = true;
         }
@@ -757,4 +793,83 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
         context->PopLayer();
 
     RestoreRenderTransform(context, originalTransform);
+}
+
+void InputBoxElement::SaveUndoState()
+{
+    if (!m_UndoStack.empty())
+    {
+        const auto &top = m_UndoStack.back();
+        if (top.text == m_Text &&
+            top.caretPos == m_CaretPos &&
+            top.selectionStart == m_SelectionStart &&
+            top.selectionEnd == m_SelectionEnd)
+        {
+            return;
+        }
+    }
+
+    if (m_UndoStack.size() >= 100)
+    {
+        m_UndoStack.erase(m_UndoStack.begin());
+    }
+
+    UndoState state;
+    state.text = m_Text;
+    state.caretPos = m_CaretPos;
+    state.selectionStart = m_SelectionStart;
+    state.selectionEnd = m_SelectionEnd;
+    m_UndoStack.push_back(state);
+
+    m_RedoStack.clear();
+}
+
+bool InputBoxElement::Undo()
+{
+    if (m_UndoStack.empty())
+        return false;
+
+    UndoState currentState;
+    currentState.text = m_Text;
+    currentState.caretPos = m_CaretPos;
+    currentState.selectionStart = m_SelectionStart;
+    currentState.selectionEnd = m_SelectionEnd;
+    m_RedoStack.push_back(currentState);
+
+    UndoState prevState = m_UndoStack.back();
+    m_UndoStack.pop_back();
+
+    m_Text = prevState.text;
+    m_CaretPos = prevState.caretPos;
+    m_SelectionStart = prevState.selectionStart;
+    m_SelectionEnd = prevState.selectionEnd;
+    m_SelectionAnchor = m_CaretPos;
+
+    EnsureCaretVisible();
+    return true;
+}
+
+bool InputBoxElement::Redo()
+{
+    if (m_RedoStack.empty())
+        return false;
+
+    UndoState currentState;
+    currentState.text = m_Text;
+    currentState.caretPos = m_CaretPos;
+    currentState.selectionStart = m_SelectionStart;
+    currentState.selectionEnd = m_SelectionEnd;
+    m_UndoStack.push_back(currentState);
+
+    UndoState nextState = m_RedoStack.back();
+    m_RedoStack.pop_back();
+
+    m_Text = nextState.text;
+    m_CaretPos = nextState.caretPos;
+    m_SelectionStart = nextState.selectionStart;
+    m_SelectionEnd = nextState.selectionEnd;
+    m_SelectionAnchor = m_CaretPos;
+
+    EnsureCaretVisible();
+    return true;
 }
