@@ -1275,7 +1275,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     novadesk::shared::system::ClipboardSetText(sel);
                     input->DeleteSelection();
                     if (input->m_OnTextChangeCallbackId != -1)
-                        JSEngine::CallEventCallback(input->m_OnTextChangeCallbackId, widget, nullptr);
+                        JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId, widget, input->GetText());
                     widget->Redraw();
                 }
                 return 0;
@@ -1287,7 +1287,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 {
                     input->ReplaceSelection(clip);
                     if (input->m_OnTextChangeCallbackId != -1)
-                        JSEngine::CallEventCallback(input->m_OnTextChangeCallbackId, widget, nullptr);
+                        JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId, widget, input->GetText());
                     widget->Redraw();
                 }
                 return 0;
@@ -1295,7 +1295,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (wParam == VK_RETURN)
             {
                 if (input->m_OnEnterCallbackId != -1)
-                    JSEngine::CallEventCallback(input->m_OnEnterCallbackId, widget, nullptr);
+                    JSEngine::CallEventCallbackWithText(input->m_OnEnterCallbackId, widget, input->GetText());
                 return 0;
             }
             if (wParam == VK_ESCAPE)
@@ -1314,7 +1314,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
             bool changed = input->HandleKeyDown(wParam, shift, ctrl);
             if (changed && input->m_OnTextChangeCallbackId != -1)
-                JSEngine::CallEventCallback(input->m_OnTextChangeCallbackId, widget, nullptr);
+                JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId, widget, input->GetText());
             widget->Redraw();
             return 0;
         }
@@ -1327,7 +1327,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             InputBoxElement *input = widget->m_FocusedInputBox;
             bool changed = input->HandleChar(ch);
             if (changed && input->m_OnTextChangeCallbackId != -1)
-                JSEngine::CallEventCallback(input->m_OnTextChangeCallbackId, widget, nullptr);
+                JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId, widget, input->GetText());
             widget->Redraw();
             return 0;
         }
