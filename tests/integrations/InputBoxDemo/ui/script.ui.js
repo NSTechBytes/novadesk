@@ -39,7 +39,7 @@ ui.addInputBox({
     fontFace: "Segoe UI",
     fontSize: 14,
     fontColor: "#ffffff",
-    // password: true,
+    password: true,
     placeholderColor: "rgba(150, 150, 150, 1)",
     // fillColor: "rgba(45, 45, 50, 1)",
     caretColor: "black",

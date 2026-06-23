@@ -891,7 +891,7 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
         if (layout)
         {
             // Selection highlight (behind text)
-            if (m_Focused && HasSelection() && !showingPlaceholder && !m_Password)
+            if (m_Focused && HasSelection() && !showingPlaceholder)
             {
                 UINT32 s, e;
                 NormalizeSelection(s, e);
