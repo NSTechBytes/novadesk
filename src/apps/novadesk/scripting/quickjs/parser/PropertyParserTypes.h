@@ -242,6 +242,9 @@ namespace PropertyParser
         float borderRadius = 8.0f;
         COLORREF borderColor = RGB(0, 0, 0);
         BYTE borderColorAlpha = 255;
+        bool hasBorderFocusColor = false;
+        COLORREF borderFocusColor = RGB(0, 0, 0);
+        BYTE borderFocusColorAlpha = 255;
 
         // JS callback ids (resolved via GetEventCallbackProp).
         int onTextChangeCallbackId = -1;

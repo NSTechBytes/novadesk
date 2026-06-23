@@ -107,6 +107,20 @@ public:
     float GetBorderWidth() const { return m_BorderWidth; }
     float GetBorderRadius() const { return m_BorderRadius; }
 
+    void SetBorderFocusColor(COLORREF color, BYTE alpha)
+    {
+        m_BorderFocusColor = color;
+        m_BorderFocusAlpha = alpha;
+        m_HasBorderFocusColor = true;
+    }
+    void ClearBorderFocusColor()
+    {
+        m_HasBorderFocusColor = false;
+    }
+    bool HasBorderFocusColor() const { return m_HasBorderFocusColor; }
+    COLORREF GetBorderFocusColor() const { return m_BorderFocusColor; }
+    BYTE GetBorderFocusAlpha() const { return m_BorderFocusAlpha; }
+
     // Password masking (reserved for future; off by default)
     void SetPasswordMode(bool enabled) { m_Password = enabled; }
     bool IsPasswordMode() const { return m_Password; }
@@ -196,6 +210,9 @@ private:
     float m_BorderRadius = 0.0f;
     COLORREF m_BorderColor = RGB(0, 0, 0);
     BYTE m_BorderAlpha = 255;
+    bool m_HasBorderFocusColor = false;
+    COLORREF m_BorderFocusColor = RGB(0, 0, 0);
+    BYTE m_BorderFocusAlpha = 255;
 
     bool m_Password = false;
     int m_MaxLength = 0;

@@ -101,6 +101,22 @@ namespace PropertyParser
         if (GetIntProp(ctx, obj, "borderWidth", borderWidth))
             options.borderWidth = static_cast<float>(borderWidth);
         ParseColorAlphaProp(ctx, obj, "borderColor", options.borderColor, options.borderColorAlpha);
+        {
+            std::wstring focusStr = GetStringProp(ctx, obj, "borderFocusColor");
+            if (!focusStr.empty())
+            {
+                std::wstring lower = focusStr;
+                std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
+                if (lower == L"none" || lower == L"transparent")
+                {
+                    options.hasBorderFocusColor = false;
+                }
+                else if (ColorUtil::ParseRGBA(focusStr, options.borderFocusColor, options.borderFocusColorAlpha))
+                {
+                    options.hasBorderFocusColor = true;
+                }
+            }
+        }
         int borderRadius = 0;
         if (GetIntProp(ctx, obj, "borderRadius", borderRadius))
             options.borderRadius = static_cast<float>(borderRadius);
@@ -145,6 +161,10 @@ namespace PropertyParser
         element->SetBorderWidth(options.borderWidth);
         element->SetBorderRadius(options.borderRadius);
         element->SetBorderColor(options.borderColor, options.borderColorAlpha);
+        if (options.hasBorderFocusColor)
+            element->SetBorderFocusColor(options.borderFocusColor, options.borderFocusColorAlpha);
+        else
+            element->ClearBorderFocusColor();
 
         element->m_OnTextChangeCallbackId = options.onTextChangeCallbackId;
         element->m_OnEnterCallbackId = options.onEnterCallbackId;
@@ -174,6 +194,9 @@ namespace PropertyParser
         options.borderRadius = element->GetBorderRadius();
         options.borderColor = element->GetBorderColor();
         options.borderColorAlpha = element->GetBorderAlpha();
+        options.hasBorderFocusColor = element->HasBorderFocusColor();
+        options.borderFocusColor = element->GetBorderFocusColor();
+        options.borderFocusColorAlpha = element->GetBorderFocusAlpha();
         options.onTextChangeCallbackId = element->m_OnTextChangeCallbackId;
         options.onEnterCallbackId = element->m_OnEnterCallbackId;
         options.onFocusCallbackId = element->m_OnFocusCallbackId;

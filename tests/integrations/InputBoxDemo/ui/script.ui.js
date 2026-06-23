@@ -44,7 +44,8 @@ ui.addInputBox({
     caretColor: "black",
     selectionColor: "rgba(81, 188, 254, 0.4)",
     // backgroundColor: "rgba(45, 45, 50, 1)",
-    radius: 8,
+    // borderRadius: 80,
+    borderFocusColor: "rgba(81, 188, 254, 1)",
     padding: 10,
     align: "left",
     onTextChange: function (e) {

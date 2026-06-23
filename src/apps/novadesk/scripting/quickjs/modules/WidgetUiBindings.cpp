@@ -1894,6 +1894,12 @@ namespace novadesk::scripting::quickjs
                         return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(input->GetFillColor(), input->GetFillAlpha())).c_str());
                     return JS_UNDEFINED;
                 }
+                if (prop == "borderFocusColor")
+                {
+                    if (input->HasBorderFocusColor())
+                        return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(input->GetBorderFocusColor(), input->GetBorderFocusAlpha())).c_str());
+                    return JS_UNDEFINED;
+                }
             }
 
             return JS_UNDEFINED;

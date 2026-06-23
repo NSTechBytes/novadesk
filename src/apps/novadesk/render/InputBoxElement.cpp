@@ -686,7 +686,15 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
     }
 
     // Solid border
-    if (m_BorderWidth > 0.0f && m_BorderAlpha > 0)
+    COLORREF activeColor = m_BorderColor;
+    BYTE activeAlpha = m_BorderAlpha;
+    if (m_Focused && m_HasBorderFocusColor)
+    {
+        activeColor = m_BorderFocusColor;
+        activeAlpha = m_BorderFocusAlpha;
+    }
+
+    if (m_BorderWidth > 0.0f && activeAlpha > 0)
     {
         D2D1_ROUNDED_RECT borderRect;
         borderRect.rect = D2D1::RectF((float)m_X, (float)m_Y,
@@ -695,10 +703,10 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
         borderRect.radiusY = m_BorderRadius;
 
         D2D1_COLOR_F col = D2D1::ColorF(
-            GetRValue(m_BorderColor) / 255.0f,
-            GetGValue(m_BorderColor) / 255.0f,
-            GetBValue(m_BorderColor) / 255.0f,
-            m_BorderAlpha / 255.0f);
+            GetRValue(activeColor) / 255.0f,
+            GetGValue(activeColor) / 255.0f,
+            GetBValue(activeColor) / 255.0f,
+            activeAlpha / 255.0f);
 
         Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> borderBrush;
         if (SUCCEEDED(context->CreateSolidColorBrush(col, borderBrush.GetAddressOf())) && borderBrush)
