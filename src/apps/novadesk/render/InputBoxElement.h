@@ -145,6 +145,13 @@ private:
     // Normalize selection so start <= end.
     void NormalizeSelection(UINT32 &outStart, UINT32 &outEnd) const;
 
+    // Recompute the horizontal scroll offset so the caret stays visible
+    // when the text is wider than the content area.
+    void EnsureCaretVisible();
+
+    // Measure the rendered text width (in DIPs), accounting for password masking.
+    float MeasureTextWidth() const;
+
     std::wstring m_Text;
     std::wstring m_Placeholder;
 
@@ -185,6 +192,10 @@ private:
     // Blink state
     DWORD m_LastBlinkTick = 0;
     bool m_CaretVisible = true;
+
+    // Horizontal scroll offset (positive = text shifted left). Applied so that
+    // the caret remains visible when the text overflows the content area.
+    float m_ScrollOffset = 0.0f;
 };
 
 #endif

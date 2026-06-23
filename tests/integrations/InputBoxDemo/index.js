@@ -5,5 +5,5 @@ var myWindow = new widgetWindow({
     width: 520,
     height: 200,
     script: "ui/script.ui.js",
-    backgroundColor: "#ffffff",
+    backgroundColor: "green",
 });

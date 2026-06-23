@@ -124,6 +124,10 @@ void InputBoxElement::SetFocus(bool focused)
     // Reset blink phase so the caret appears immediately on focus.
     m_CaretVisible = focused;
     m_LastBlinkTick = GetTickCount();
+    if (focused)
+        EnsureCaretVisible();
+    else
+        m_ScrollOffset = 0.0f;
 }
 
 Microsoft::WRL::ComPtr<IDWriteTextLayout> InputBoxElement::CreateTextLayout(
@@ -191,6 +195,74 @@ float InputBoxElement::CaretIndexToX(UINT32 index) const
     return content.left + x;
 }
 
+float InputBoxElement::MeasureTextWidth() const
+{
+    D2D1_RECT_F content = GetContentRect();
+    float w = content.right - content.left;
+    float h = content.bottom - content.top;
+    if (w < 1.0f)
+        w = 1.0f;
+    if (h < 1.0f)
+        h = 1.0f;
+
+    std::wstring text = m_Password ? std::wstring(m_Text.size(), L'\x2022') : m_Text;
+    if (text.empty())
+        return 0.0f;
+
+    auto layout = const_cast<InputBoxElement *>(this)->CreateTextLayout(nullptr, text, w, h);
+    if (!layout)
+        return 0.0f;
+
+    DWRITE_TEXT_METRICS metrics{};
+    layout->GetMetrics(&metrics);
+    return metrics.widthIncludingTrailingWhitespace;
+}
+
+void InputBoxElement::EnsureCaretVisible()
+{
+    D2D1_RECT_F content = GetContentRect();
+    float contentW = content.right - content.left;
+    if (contentW < 1.0f)
+        contentW = 1.0f;
+
+    float textW = MeasureTextWidth();
+
+    // A small margin (in DIPs) to ensure the caret is not clipped at the right edge.
+    constexpr float kCaretMargin = 2.0f;
+
+    // If the text fits entirely (including the caret margin), no scrolling needed.
+    if (textW + kCaretMargin <= contentW)
+    {
+        m_ScrollOffset = 0.0f;
+        return;
+    }
+
+    // Caret x position relative to the text origin (unscrolled).
+    float caretX = CaretIndexToX(m_CaretPos) - content.left;
+
+    // Visible window of the text in text-local coordinates:
+    //   [m_ScrollOffset, m_ScrollOffset + contentW)
+    float caretScreenX = caretX - m_ScrollOffset;
+
+    if (caretScreenX < 0.0f)
+    {
+        // Caret scrolled off the left edge: snap so caret is at the left.
+        m_ScrollOffset = caretX;
+    }
+    else if (caretScreenX > contentW - kCaretMargin)
+    {
+        // Caret scrolled off the right edge: snap so caret is at the right edge minus margin.
+        m_ScrollOffset = caretX - (contentW - kCaretMargin);
+    }
+
+    // Clamp so we don't scroll past the end of the text.
+    float maxOffset = textW - (contentW - kCaretMargin);
+    if (m_ScrollOffset > maxOffset)
+        m_ScrollOffset = maxOffset;
+    if (m_ScrollOffset < 0.0f)
+        m_ScrollOffset = 0.0f;
+}
+
 UINT32 InputBoxElement::PointToCaretIndex(int x, int y) const
 {
     D2D1_RECT_F content = GetContentRect();
@@ -206,7 +278,7 @@ UINT32 InputBoxElement::PointToCaretIndex(int x, int y) const
     if (!layout)
         return (UINT32)m_Text.size();
 
-    float relX = (float)x - content.left;
+    float relX = (float)x - content.left + m_ScrollOffset;
     float relY = (float)y - content.top;
 
     BOOL isTrailing = FALSE;
@@ -255,6 +327,7 @@ void InputBoxElement::DeleteSelection()
     m_CaretPos = s;
     m_SelectionStart = m_SelectionEnd = s;
     m_SelectionAnchor = s;
+    EnsureCaretVisible();
 }
 
 void InputBoxElement::ReplaceSelection(const std::wstring &text)
@@ -275,6 +348,7 @@ void InputBoxElement::ReplaceSelection(const std::wstring &text)
     }
     m_SelectionStart = m_SelectionEnd = m_CaretPos;
     m_SelectionAnchor = m_CaretPos;
+    EnsureCaretVisible();
 }
 
 void InputBoxElement::SelectAll()
@@ -283,6 +357,7 @@ void InputBoxElement::SelectAll()
     m_SelectionEnd = (UINT32)m_Text.size();
     m_SelectionAnchor = 0;
     m_CaretPos = (UINT32)m_Text.size();
+    EnsureCaretVisible();
 }
 
 void InputBoxElement::ClearSelection()
@@ -298,6 +373,8 @@ void InputBoxElement::SetText(const std::wstring &text)
         m_CaretPos = (UINT32)m_Text.size();
     m_SelectionStart = m_SelectionEnd = m_CaretPos;
     m_SelectionAnchor = m_CaretPos;
+    // Programmatic text change: reset scroll to the start.
+    m_ScrollOffset = 0.0f;
 }
 
 bool InputBoxElement::HandleChar(wchar_t ch)
@@ -324,6 +401,7 @@ bool InputBoxElement::HandleChar(wchar_t ch)
     m_SelectionAnchor = m_CaretPos;
     m_CaretVisible = true;
     m_LastBlinkTick = GetTickCount();
+    EnsureCaretVisible();
     return true;
 }
 
@@ -337,6 +415,7 @@ bool InputBoxElement::HandleKeyDown(WPARAM vk, bool shift, bool control)
     if (control && (vk == 'A'))
     {
         SelectAll();
+        EnsureCaretVisible();
         return false; // no content change, but redraw needed
     }
     if (control && (vk == 'C'))
@@ -481,6 +560,7 @@ bool InputBoxElement::HandleKeyDown(WPARAM vk, bool shift, bool control)
 
     m_CaretVisible = true;
     m_LastBlinkTick = GetTickCount();
+    EnsureCaretVisible();
     return changed;
 }
 
@@ -504,6 +584,7 @@ void InputBoxElement::HandleMouseDown(int x, int y, bool shift)
     m_IsDragging = true;
     m_CaretVisible = true;
     m_LastBlinkTick = GetTickCount();
+    EnsureCaretVisible();
 }
 
 void InputBoxElement::HandleMouseMove(int x, int y)
@@ -516,6 +597,7 @@ void InputBoxElement::HandleMouseMove(int x, int y)
     m_SelectionEnd = pos;
     m_CaretVisible = true;
     m_LastBlinkTick = GetTickCount();
+    EnsureCaretVisible();
 }
 
 void InputBoxElement::HandleMouseUp()
@@ -619,9 +701,9 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
                             for (UINT32 i = 0; i < actualCount; ++i)
                             {
                                 D2D1_RECT_F r = D2D1::RectF(
-                                    content.left + metrics[i].left,
+                                    content.left + metrics[i].left - m_ScrollOffset,
                                     content.top + metrics[i].top,
-                                    content.left + metrics[i].left + metrics[i].width,
+                                    content.left + metrics[i].left + metrics[i].width - m_ScrollOffset,
                                     content.top + metrics[i].top + metrics[i].height);
                                 context->FillRectangle(r, selBrush.Get());
                             }
@@ -642,7 +724,7 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
             if (SUCCEEDED(context->CreateSolidColorBrush(col, textBrush.GetAddressOf())) && textBrush)
             {
                 context->SetTextAntialiasMode(m_AntiAlias ? D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE : D2D1_TEXT_ANTIALIAS_MODE_ALIASED);
-                context->DrawTextLayout(D2D1::Point2F(content.left, content.top),
+                context->DrawTextLayout(D2D1::Point2F(content.left - m_ScrollOffset, content.top),
                                         layout.Get(), textBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
             }
         }
@@ -651,7 +733,7 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
     // Caret (only when focused and blinking on)
     if (m_Focused && m_CaretVisible)
     {
-        float caretX = showingPlaceholder ? content.left : CaretIndexToX(m_CaretPos);
+        float caretX = showingPlaceholder ? content.left : CaretIndexToX(m_CaretPos) - m_ScrollOffset;
         float caretH = (float)m_FontSize;
         if (caretH > layoutH)
             caretH = layoutH;
