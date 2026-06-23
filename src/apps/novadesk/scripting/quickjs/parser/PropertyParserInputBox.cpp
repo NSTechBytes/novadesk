@@ -62,6 +62,7 @@ namespace PropertyParser
         GetBoolProp(ctx, obj, "italic", options.italic);
         GetBoolProp(ctx, obj, "password", options.password);
         GetIntProp(ctx, obj, "maxLength", options.maxLength);
+        GetBoolProp(ctx, obj, "multiline", options.multiline);
 
         std::wstring fontPath = GetStringProp(ctx, obj, "fontPath");
         if (!fontPath.empty())
@@ -145,6 +146,7 @@ namespace PropertyParser
         element->SetItalic(options.italic);
         element->SetPasswordMode(options.password);
         element->SetMaxLength(options.maxLength);
+        element->SetMultiline(options.multiline);
         if (!options.fontPath.empty())
             element->SetFontPath(options.fontPath);
 
@@ -187,6 +189,7 @@ namespace PropertyParser
         options.textAlign = element->GetTextAlign();
         options.password = element->IsPasswordMode();
         options.maxLength = element->GetMaxLength();
+        options.multiline = element->IsMultiline();
         options.hasFillColor = element->HasFillColor();
         options.fillColor = element->GetFillColor();
         options.fillAlpha = element->GetFillAlpha();

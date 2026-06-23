@@ -1882,6 +1882,8 @@ namespace novadesk::scripting::quickjs
                     return JS_NewBool(ctx, input->IsPasswordMode() ? 1 : 0);
                 if (prop == "maxLength")
                     return JS_NewInt32(ctx, input->GetMaxLength());
+                if (prop == "multiline")
+                    return JS_NewBool(ctx, input->IsMultiline() ? 1 : 0);
                 if (prop == "borderColor")
                     return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(input->GetBorderColor(), input->GetBorderAlpha())).c_str());
                 if (prop == "borderWidth")

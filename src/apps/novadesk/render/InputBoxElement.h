@@ -129,6 +129,9 @@ public:
     void SetMaxLength(int len) { m_MaxLength = len; }
     int GetMaxLength() const { return m_MaxLength; }
 
+    void SetMultiline(bool enabled) { m_Multiline = enabled; }
+    bool IsMultiline() const { return m_Multiline; }
+
     // Focus
     bool IsFocused() const { return m_Focused; }
     void SetFocus(bool focused);
@@ -169,6 +172,7 @@ private:
 
     // Map a caret index to an x offset (in content-local coordinates).
     float CaretIndexToX(UINT32 index) const;
+    void CaretIndexToXY(UINT32 index, float &outX, float &outY, float &outH) const;
     // Map a point (element-local) to a caret index.
     UINT32 PointToCaretIndex(int x, int y) const;
 
@@ -216,6 +220,7 @@ private:
 
     bool m_Password = false;
     int m_MaxLength = 0;
+    bool m_Multiline = false;
 
     bool m_Focused = false;
 

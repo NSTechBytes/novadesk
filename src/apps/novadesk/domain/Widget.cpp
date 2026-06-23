@@ -1294,8 +1294,18 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
             if (wParam == VK_RETURN)
             {
-                if (input->m_OnEnterCallbackId != -1)
-                    JSEngine::CallEventCallbackWithText(input->m_OnEnterCallbackId, widget, input->GetText());
+                if (input->IsMultiline())
+                {
+                    input->ReplaceSelection(L"\n");
+                    if (input->m_OnTextChangeCallbackId != -1)
+                        JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId, widget, input->GetText());
+                    widget->Redraw();
+                }
+                else
+                {
+                    if (input->m_OnEnterCallbackId != -1)
+                        JSEngine::CallEventCallbackWithText(input->m_OnEnterCallbackId, widget, input->GetText());
+                }
                 return 0;
             }
             if (wParam == VK_ESCAPE)

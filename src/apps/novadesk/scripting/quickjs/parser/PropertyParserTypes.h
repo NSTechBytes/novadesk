@@ -236,6 +236,7 @@ namespace PropertyParser
 
         bool password = false;
         int maxLength = 0;
+        bool multiline = false;
 
         // Border (solid only)
         float borderWidth = 1.0f;
