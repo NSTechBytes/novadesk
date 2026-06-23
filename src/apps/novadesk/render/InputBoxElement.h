@@ -187,8 +187,8 @@ private:
     COLORREF m_SelectionColor = RGB(135, 206, 235);
     BYTE m_SelectionAlpha = 128;
 
-    bool m_HasFillColor = false;
-    COLORREF m_FillColor = RGB(255, 255, 255);
+    bool m_HasFillColor = true;
+    COLORREF m_FillColor = RGB(30, 30, 34);
     BYTE m_FillAlpha = 255;
 
     // Border (solid)

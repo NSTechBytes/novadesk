@@ -72,8 +72,22 @@ namespace PropertyParser
         ParseColorAlphaProp(ctx, obj, "placeholderColor", options.placeholderColor, options.placeholderAlpha);
         ParseColorAlphaProp(ctx, obj, "caretColor", options.caretColor, options.caretAlpha);
         ParseColorAlphaProp(ctx, obj, "selectionColor", options.selectionColor, options.selectionAlpha);
-        if (ParseColorAlphaProp(ctx, obj, "fillColor", options.fillColor, options.fillAlpha))
-            options.hasFillColor = true;
+        {
+            std::wstring fillStr = GetStringProp(ctx, obj, "fillColor");
+            if (!fillStr.empty())
+            {
+                std::wstring lower = fillStr;
+                std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
+                if (lower == L"none" || lower == L"transparent")
+                {
+                    options.hasFillColor = false;
+                }
+                else if (ColorUtil::ParseRGBA(fillStr, options.fillColor, options.fillAlpha))
+                {
+                    options.hasFillColor = true;
+                }
+            }
+        }
 
         std::wstring align = GetStringProp(ctx, obj, "align");
         if (!align.empty())
