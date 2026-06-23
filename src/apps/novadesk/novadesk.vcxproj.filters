@@ -48,6 +48,9 @@
     <ClCompile Include="domain\DesktopManager.cpp">
       <Filter>domain</Filter>
     </ClCompile>
+    <ClCompile Include="domain\InputBoxContextMenuHelper.cpp">
+      <Filter>domain</Filter>
+    </ClCompile>
     <ClCompile Include="domain\Novadesk.cpp">
       <Filter>domain</Filter>
     </ClCompile>
@@ -240,6 +243,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="domain\DesktopManager.h">
+      <Filter>domain</Filter>
+    </ClInclude>
+    <ClInclude Include="domain\InputBoxContextMenuHelper.h">
       <Filter>domain</Filter>
     </ClInclude>
     <ClInclude Include="domain\Novadesk.h">

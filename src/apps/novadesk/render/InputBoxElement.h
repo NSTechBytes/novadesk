@@ -154,6 +154,10 @@ public:
     std::wstring GetSelectedText() const;
     void DeleteSelection();
     void ReplaceSelection(const std::wstring &text);
+    bool CanUndo() const { return !m_UndoStack.empty(); }
+    bool CanRedo() const { return !m_RedoStack.empty(); }
+    bool Undo();
+    bool Redo();
 
     // Callback IDs (Widget fills these in from JS)
     int m_OnTextChangeCallbackId = -1;
@@ -250,8 +254,6 @@ private:
     std::vector<UndoState> m_RedoStack;
 
     void SaveUndoState();
-    bool Undo();
-    bool Redo();
 };
 
 #endif

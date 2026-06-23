@@ -41,6 +41,7 @@
 #include "../shared/System.h"
 #include "BitmapElement.h"
 #include "WidgetContextMenuHelper.h"
+#include "InputBoxContextMenuHelper.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "../shared/PathUtils.h"
 
@@ -3415,6 +3416,18 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         if (GetCapture() == m_hWnd && !m_IsDragging)
         {
             ReleaseCapture();
+        }
+    }
+    else if (message == WM_RBUTTONUP)
+    {
+        InputBoxElement* inputElem = dynamic_cast<InputBoxElement*>(hitElement);
+        if (inputElem)
+        {
+            if (InputBoxContextMenuHelper::ShowInputBoxContextMenu(*this, inputElem, x, y))
+            {
+                needRedraw = true;
+            }
+            handled = true;
         }
     }
 

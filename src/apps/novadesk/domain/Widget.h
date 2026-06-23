@@ -192,6 +192,9 @@ public:
     void SetContextMenuDisabled(bool disabled) { m_ContextMenuDisabled = disabled; }
     void SetShowDefaultContextMenuItems(bool show) { m_ShowDefaultContextMenuItems = show; }
 
+    InputBoxElement* GetFocusedInputBox() const { return m_FocusedInputBox; }
+    void SetFocusedInputBox(InputBoxElement* inputElem) { m_FocusedInputBox = inputElem; }
+
     void BeginUpdate();
     void EndUpdate();
 
