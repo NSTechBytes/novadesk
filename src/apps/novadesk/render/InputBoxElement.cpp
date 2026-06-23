@@ -470,6 +470,11 @@ bool InputBoxElement::HandleKeyDown(WPARAM vk, bool shift, bool control)
 
     switch (vk)
     {
+    case VK_TAB:
+        ReplaceSelection(L"    ");
+        changed = true;
+        break;
+
     case VK_BACK:
         if (HasSelection())
         {
