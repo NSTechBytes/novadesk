@@ -1884,6 +1884,24 @@ namespace novadesk::scripting::quickjs
                     return JS_NewInt32(ctx, input->GetMaxLength());
                 if (prop == "multiline")
                     return JS_NewBool(ctx, input->IsMultiline() ? 1 : 0);
+                if (prop == "inputType")
+                {
+                    const char *typeName = "any";
+                    switch (input->GetInputType())
+                    {
+                    case InputType::Integer:     typeName = "integer";     break;
+                    case InputType::Float:       typeName = "float";       break;
+                    case InputType::Letters:     typeName = "letters";     break;
+                    case InputType::Alphanumeric:typeName = "alphanumeric";break;
+                    case InputType::Hex:         typeName = "hex";         break;
+                    case InputType::Email:       typeName = "email";       break;
+                    case InputType::Custom:      typeName = "custom";      break;
+                    default:                     typeName = "any";         break;
+                    }
+                    return JS_NewString(ctx, typeName);
+                }
+                if (prop == "allowedChars")
+                    return JS_NewString(ctx, Utils::ToString(input->GetAllowedChars()).c_str());
                 if (prop == "borderColor")
                     return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(input->GetBorderColor(), input->GetBorderAlpha())).c_str());
                 if (prop == "borderWidth")

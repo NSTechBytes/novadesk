@@ -33,13 +33,20 @@ ui.addInputBox({
     x: 20,
     y: 55,
     width: 280,
-    height: 156,
+    height: 46,
     text: "",
     placeholder: "Type to search...",
     fontFace: "Segoe UI",
     fontSize: 14,
     fontColor: "#ffffff",
-    password: true,
+    // password: true,
+    // inputType: "hex",
+    onInvalidInput: (e) => {
+        // e.text = the rejected character the user tried to type
+        console.log("Invalid char typed:", e.data);
+    },
+    // inputType: "custom",
+    // allowedChars: "0123456789+-*/(). ", // e.g. calculator input
     placeholderColor: "rgba(150, 150, 150, 1)",
     // fillColor: "rgba(45, 45, 50, 1)",
     caretColor: "black",
@@ -61,6 +68,10 @@ ui.addInputBox({
         ui.setElementProperties("resultText", {
             text: "Submitted: " + e.data,
         });
+    },
+    onBlur: (e) => {
+        // e.text = the rejected character the user tried to type
+        console.log("Blur Event Executed");
     },
 });
 

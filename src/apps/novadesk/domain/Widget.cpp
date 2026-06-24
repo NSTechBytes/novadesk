@@ -1336,9 +1336,17 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         {
             wchar_t ch = (wchar_t)wParam;
             InputBoxElement *input = widget->m_FocusedInputBox;
-            bool changed = input->HandleChar(ch);
-            if (changed && input->m_OnTextChangeCallbackId != -1)
-                JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId, widget, input->GetText());
+            auto result = input->HandleChar(ch);
+            if (result == InputBoxElement::HandleCharResult::Changed)
+            {
+                if (input->m_OnTextChangeCallbackId != -1)
+                    JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId, widget, input->GetText());
+            }
+            else if (result == InputBoxElement::HandleCharResult::Rejected)
+            {
+                if (input->m_OnInvalidInputCallbackId != -1)
+                    JSEngine::CallEventCallbackWithText(input->m_OnInvalidInputCallbackId, widget, std::wstring(1, ch));
+            }
             widget->Redraw();
             return 0;
         }

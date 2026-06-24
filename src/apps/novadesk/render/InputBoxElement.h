@@ -16,6 +16,19 @@
 #include <string>
 #include <vector>
 
+// Restricts which characters the user may type into an InputBoxElement.
+enum class InputType
+{
+    Any,         // No restriction (default)
+    Integer,     // Digits and optional leading '-'
+    Float,       // Digits, optional '-' and one '.'
+    Letters,     // Unicode alphabetic only
+    Alphanumeric,// Alphanumeric characters only
+    Hex,         // 0-9 a-f A-F
+    Email,       // alphanum + @ . - _ +
+    Custom,      // Only characters in the allowedChars set
+};
+
 // A custom text input field rendered entirely with Direct2D/DirectWrite inside
 // the Widget paint loop. Because it lives in the same m_Elements list as every
 // other element, it composites between/over siblings in insertion order
@@ -125,6 +138,14 @@ public:
     void SetPasswordMode(bool enabled) { m_Password = enabled; }
     bool IsPasswordMode() const { return m_Password; }
 
+    // Input type filtering
+    void SetInputType(InputType type) { m_InputType = type; }
+    InputType GetInputType() const { return m_InputType; }
+
+    // Allowed characters for Custom input type
+    void SetAllowedChars(const std::wstring &chars) { m_AllowedChars = chars; }
+    const std::wstring &GetAllowedChars() const { return m_AllowedChars; }
+
     // Max length (reserved; 0 = unlimited)
     void SetMaxLength(int len) { m_MaxLength = len; }
     int GetMaxLength() const { return m_MaxLength; }
@@ -141,7 +162,9 @@ public:
 
     // Editing mutations (called by Widget keyboard routing)
     // Returns true if the content changed (so Widget can fire onChange + redraw).
-    bool HandleChar(wchar_t ch);
+    // HandleChar returns HandleCharResult so the caller can also fire onInvalidInput.
+    enum class HandleCharResult { Ignored, Changed, Rejected };
+    HandleCharResult HandleChar(wchar_t ch);
     bool HandleKeyDown(WPARAM vk, bool shift, bool control);
     void HandleMouseDown(int x, int y, bool shift);
     void HandleMouseMove(int x, int y);
@@ -164,6 +187,7 @@ public:
     int m_OnEnterCallbackId = -1;
     int m_OnFocusCallbackId = -1;
     int m_OnBlurCallbackId = -1;
+    int m_OnInvalidInputCallbackId = -1; // fired when a typed char is rejected by inputType
 
 private:
     // Build/retrieve a DirectWrite text layout for the currently rendered text.
@@ -225,6 +249,8 @@ private:
     bool m_Password = false;
     int m_MaxLength = 0;
     bool m_Multiline = false;
+    InputType m_InputType = InputType::Any;
+    std::wstring m_AllowedChars;  // used when m_InputType == InputType::Custom
 
     bool m_Focused = false;
 

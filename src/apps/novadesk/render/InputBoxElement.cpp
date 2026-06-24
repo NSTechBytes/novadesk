@@ -476,18 +476,62 @@ void InputBoxElement::SetText(const std::wstring &text)
     m_RedoStack.clear();
 }
 
-bool InputBoxElement::HandleChar(wchar_t ch)
+InputBoxElement::HandleCharResult InputBoxElement::HandleChar(wchar_t ch)
 {
     if (!m_Focused)
-        return false;
+        return HandleCharResult::Ignored;
 
     // Ignore control characters (handled by HandleKeyDown).
     if (ch < 32)
-        return false;
+        return HandleCharResult::Ignored;
 
     // Ctrl-key shortcuts arrive as WM_CHAR (e.g. 0x03 for Ctrl+C); skip them.
     if (ch == 3 /*Ctrl+C*/ || ch == 22 /*Ctrl+V*/ || ch == 1 /*Ctrl+A*/ || ch == 24 /*Ctrl+X*/)
-        return false;
+        return HandleCharResult::Ignored;
+
+    // Input type filtering
+    switch (m_InputType)
+    {
+    case InputType::Integer:
+        // Allow digits and a leading '-' only at position 0
+        if (!((ch >= L'0' && ch <= L'9') || (ch == L'-' && m_CaretPos == 0 && m_Text.find(L'-') == std::wstring::npos)))
+            return HandleCharResult::Rejected;
+        break;
+    case InputType::Float:
+        // Allow digits, leading '-' at position 0, and a single '.'
+        if (!((ch >= L'0' && ch <= L'9') ||
+              (ch == L'-' && m_CaretPos == 0 && m_Text.find(L'-') == std::wstring::npos) ||
+              (ch == L'.' && m_Text.find(L'.') == std::wstring::npos)))
+            return HandleCharResult::Rejected;
+        break;
+    case InputType::Letters:
+        if (!iswalpha(ch))
+            return HandleCharResult::Rejected;
+        break;
+    case InputType::Alphanumeric:
+        if (!iswalnum(ch))
+            return HandleCharResult::Rejected;
+        break;
+    case InputType::Hex:
+    {
+        wchar_t u = (wchar_t)towupper(ch);
+        if (!((u >= L'0' && u <= L'9') || (u >= L'A' && u <= L'F')))
+            return HandleCharResult::Rejected;
+        break;
+    }
+    case InputType::Email:
+        if (!(iswalnum(ch) || ch == L'@' || ch == L'.' || ch == L'-' || ch == L'_' || ch == L'+'))
+            return HandleCharResult::Rejected;
+        break;
+    case InputType::Custom:
+        // Only allow characters that are in the user-supplied allowedChars set.
+        if (m_AllowedChars.empty() || m_AllowedChars.find(ch) == std::wstring::npos)
+            return HandleCharResult::Rejected;
+        break;
+    case InputType::Any:
+    default:
+        break;
+    }
 
     if (HasSelection())
     {
@@ -495,7 +539,7 @@ bool InputBoxElement::HandleChar(wchar_t ch)
     }
     else if (m_MaxLength > 0 && (int)m_Text.size() >= m_MaxLength)
     {
-        return false;
+        return HandleCharResult::Ignored;
     }
     else
     {
@@ -510,8 +554,9 @@ bool InputBoxElement::HandleChar(wchar_t ch)
     m_LastBlinkTick = GetTickCount();
 
     EnsureCaretVisible();
-    return true;
+    return HandleCharResult::Changed;
 }
+
 
 bool InputBoxElement::HandleKeyDown(WPARAM vk, bool shift, bool control)
 {

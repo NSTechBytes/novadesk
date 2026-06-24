@@ -39,7 +39,28 @@ namespace PropertyParser
             // default left
             return TEXT_ALIGN_LEFT_CENTER;
         }
-    }
+
+        InputType ParseInputType(const std::wstring &s)
+        {
+            std::wstring u = s;
+            std::transform(u.begin(), u.end(), u.begin(), ::towupper);
+            if (u == L"INTEGER" || u == L"INT")
+                return InputType::Integer;
+            if (u == L"FLOAT" || u == L"NUMBER" || u == L"DECIMAL")
+                return InputType::Float;
+            if (u == L"LETTERS" || u == L"ALPHA")
+                return InputType::Letters;
+            if (u == L"ALPHANUMERIC" || u == L"ALNUM")
+                return InputType::Alphanumeric;
+            if (u == L"HEX" || u == L"HEXADECIMAL")
+                return InputType::Hex;
+            if (u == L"EMAIL")
+                return InputType::Email;
+            if (u == L"CUSTOM")
+                return InputType::Custom;
+            return InputType::Any; // "any" or unrecognised
+        }
+    } // anonymous namespace
 
     void ParseInputBoxOptions(JSContext *ctx, JSValueConst obj, InputBoxOptions &options, const std::wstring &baseDir)
     {
@@ -63,6 +84,14 @@ namespace PropertyParser
         GetBoolProp(ctx, obj, "password", options.password);
         GetIntProp(ctx, obj, "maxLength", options.maxLength);
         GetBoolProp(ctx, obj, "multiline", options.multiline);
+
+        std::wstring inputTypeStr = GetStringProp(ctx, obj, "inputType");
+        if (!inputTypeStr.empty())
+            options.inputType = ParseInputType(inputTypeStr);
+
+        std::wstring allowedChars = GetStringProp(ctx, obj, "allowedChars");
+        if (!allowedChars.empty())
+            options.allowedChars = allowedChars;
 
         std::wstring fontPath = GetStringProp(ctx, obj, "fontPath");
         if (!fontPath.empty())
@@ -125,6 +154,7 @@ namespace PropertyParser
         GetEventCallbackProp(ctx, obj, "onEnter", options.onEnterCallbackId);
         GetEventCallbackProp(ctx, obj, "onFocus", options.onFocusCallbackId);
         GetEventCallbackProp(ctx, obj, "onBlur", options.onBlurCallbackId);
+        GetEventCallbackProp(ctx, obj, "onInvalidInput", options.onInvalidInputCallbackId);
     }
 
     void ApplyInputBoxOptions(InputBoxElement *element, const InputBoxOptions &options)
@@ -147,6 +177,8 @@ namespace PropertyParser
         element->SetPasswordMode(options.password);
         element->SetMaxLength(options.maxLength);
         element->SetMultiline(options.multiline);
+        element->SetInputType(options.inputType);
+        element->SetAllowedChars(options.allowedChars);
         if (!options.fontPath.empty())
             element->SetFontPath(options.fontPath);
 
@@ -172,6 +204,7 @@ namespace PropertyParser
         element->m_OnEnterCallbackId = options.onEnterCallbackId;
         element->m_OnFocusCallbackId = options.onFocusCallbackId;
         element->m_OnBlurCallbackId = options.onBlurCallbackId;
+        element->m_OnInvalidInputCallbackId = options.onInvalidInputCallbackId;
     }
 
     void PreFillInputBoxOptions(InputBoxOptions &options, InputBoxElement *element)
@@ -190,6 +223,8 @@ namespace PropertyParser
         options.password = element->IsPasswordMode();
         options.maxLength = element->GetMaxLength();
         options.multiline = element->IsMultiline();
+        options.inputType = element->GetInputType();
+        options.allowedChars = element->GetAllowedChars();
         options.hasFillColor = element->HasFillColor();
         options.fillColor = element->GetFillColor();
         options.fillAlpha = element->GetFillAlpha();
@@ -204,5 +239,6 @@ namespace PropertyParser
         options.onEnterCallbackId = element->m_OnEnterCallbackId;
         options.onFocusCallbackId = element->m_OnFocusCallbackId;
         options.onBlurCallbackId = element->m_OnBlurCallbackId;
+        options.onInvalidInputCallbackId = element->m_OnInvalidInputCallbackId;
     }
 }

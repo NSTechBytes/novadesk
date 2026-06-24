@@ -23,6 +23,7 @@
 #include "../../../render/LineElement.h"
 #include "../../../render/RoundLineElement.h"
 #include "../../../render/TextElement.h"
+#include "../../../render/InputBoxElement.h"
 
 namespace PropertyParser
 {
@@ -237,6 +238,8 @@ namespace PropertyParser
         bool password = false;
         int maxLength = 0;
         bool multiline = false;
+        InputType inputType = InputType::Any;
+        std::wstring allowedChars; // used when inputType == Custom
 
         // Border (solid only)
         float borderWidth = 1.0f;
@@ -252,6 +255,7 @@ namespace PropertyParser
         int onEnterCallbackId = -1;
         int onFocusCallbackId = -1;
         int onBlurCallbackId = -1;
+        int onInvalidInputCallbackId = -1; // fired when a typed char is rejected by inputType
     };
 
     struct BarOptions : public ElementOptions
