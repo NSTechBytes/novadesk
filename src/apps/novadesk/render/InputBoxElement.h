@@ -57,6 +57,7 @@ public:
     {
         m_FontColor = color;
         m_FontAlpha = alpha;
+        m_FontGradient.type = GRADIENT_NONE;
     }
     void SetFontWeight(int weight) { m_FontWeight = weight; }
     void SetItalic(bool italic) { m_Italic = italic; }
@@ -78,19 +79,29 @@ public:
     {
         m_PlaceholderColor = color;
         m_PlaceholderAlpha = alpha;
+        m_PlaceholderGradient.type = GRADIENT_NONE;
     }
+    COLORREF GetPlaceholderColor() const { return m_PlaceholderColor; }
+    BYTE GetPlaceholderAlpha() const { return m_PlaceholderAlpha; }
 
     // Caret / selection colors
     void SetCaretColor(COLORREF color, BYTE alpha)
     {
         m_CaretColor = color;
         m_CaretAlpha = alpha;
+        m_CaretGradient.type = GRADIENT_NONE;
     }
+    COLORREF GetCaretColor() const { return m_CaretColor; }
+    BYTE GetCaretAlpha() const { return m_CaretAlpha; }
+
     void SetSelectionColor(COLORREF color, BYTE alpha)
     {
         m_SelectionColor = color;
         m_SelectionAlpha = alpha;
+        m_SelectionGradient.type = GRADIENT_NONE;
     }
+    COLORREF GetSelectionColor() const { return m_SelectionColor; }
+    BYTE GetSelectionAlpha() const { return m_SelectionAlpha; }
 
     // Fill color
     void SetFillColor(COLORREF color, BYTE alpha)
@@ -98,10 +109,12 @@ public:
         m_FillColor = color;
         m_FillAlpha = alpha;
         m_HasFillColor = true;
+        m_FillGradient.type = GRADIENT_NONE;
     }
     void ClearFillColor()
     {
         m_HasFillColor = false;
+        m_FillGradient.type = GRADIENT_NONE;
     }
     bool HasFillColor() const { return m_HasFillColor; }
     COLORREF GetFillColor() const { return m_FillColor; }
@@ -112,6 +125,7 @@ public:
     {
         m_BorderColor = color;
         m_BorderAlpha = alpha;
+        m_BorderGradient.type = GRADIENT_NONE;
     }
     void SetBorderWidth(float width) { m_BorderWidth = width; }
     void SetBorderRadius(float radius) { m_BorderRadius = radius; }
@@ -125,14 +139,38 @@ public:
         m_BorderFocusColor = color;
         m_BorderFocusAlpha = alpha;
         m_HasBorderFocusColor = true;
+        m_BorderFocusGradient.type = GRADIENT_NONE;
     }
     void ClearBorderFocusColor()
     {
         m_HasBorderFocusColor = false;
+        m_BorderFocusGradient.type = GRADIENT_NONE;
     }
     bool HasBorderFocusColor() const { return m_HasBorderFocusColor; }
     COLORREF GetBorderFocusColor() const { return m_BorderFocusColor; }
     BYTE GetBorderFocusAlpha() const { return m_BorderFocusAlpha; }
+
+    // Gradients Setters & Getters
+    void SetFillGradient(const GradientInfo &gradient) { m_FillGradient = gradient; m_HasFillColor = (gradient.type != GRADIENT_NONE); }
+    const GradientInfo &GetFillGradient() const { return m_FillGradient; }
+
+    void SetBorderGradient(const GradientInfo &gradient) { m_BorderGradient = gradient; }
+    const GradientInfo &GetBorderGradient() const { return m_BorderGradient; }
+
+    void SetBorderFocusGradient(const GradientInfo &gradient) { m_BorderFocusGradient = gradient; m_HasBorderFocusColor = (gradient.type != GRADIENT_NONE); }
+    const GradientInfo &GetBorderFocusGradient() const { return m_BorderFocusGradient; }
+
+    void SetFontGradient(const GradientInfo &gradient) { m_FontGradient = gradient; }
+    const GradientInfo &GetFontGradient() const { return m_FontGradient; }
+
+    void SetPlaceholderGradient(const GradientInfo &gradient) { m_PlaceholderGradient = gradient; }
+    const GradientInfo &GetPlaceholderGradient() const { return m_PlaceholderGradient; }
+
+    void SetCaretGradient(const GradientInfo &gradient) { m_CaretGradient = gradient; }
+    const GradientInfo &GetCaretGradient() const { return m_CaretGradient; }
+
+    void SetSelectionGradient(const GradientInfo &gradient) { m_SelectionGradient = gradient; }
+    const GradientInfo &GetSelectionGradient() const { return m_SelectionGradient; }
 
     // Password masking (reserved for future; off by default)
     void SetPasswordMode(bool enabled) { m_Password = enabled; }
@@ -245,6 +283,15 @@ private:
     bool m_HasBorderFocusColor = false;
     COLORREF m_BorderFocusColor = RGB(0, 0, 0);
     BYTE m_BorderFocusAlpha = 255;
+
+    // Gradients
+    GradientInfo m_FillGradient;
+    GradientInfo m_BorderGradient;
+    GradientInfo m_BorderFocusGradient;
+    GradientInfo m_FontGradient;
+    GradientInfo m_PlaceholderGradient;
+    GradientInfo m_CaretGradient;
+    GradientInfo m_SelectionGradient;
 
     bool m_Password = false;
     int m_MaxLength = 0;

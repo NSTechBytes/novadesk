@@ -76,12 +76,16 @@ GfxRect InputBoxElement::GetBounds()
 
 int InputBoxElement::GetAutoWidth()
 {
-    return GetWidth();
+    // Return the raw stored width (no padding, no recursion).
+    // Element::GetWidth() adds padding on top of this value.
+    return m_Width;
 }
 
 int InputBoxElement::GetAutoHeight()
 {
-    return GetHeight();
+    // Return the raw stored height (no padding, no recursion).
+    // Element::GetHeight() adds padding on top of this value.
+    return m_Height;
 }
 
 bool InputBoxElement::HitTest(int x, int y)
@@ -841,20 +845,14 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
     RenderBackground(context);
     RenderBevel(context);
 
-    // Draw the custom Fill Color if defined
-    if (m_HasFillColor && m_FillAlpha > 0)
+    // Draw the custom Fill Color if defined (or Fill Gradient)
+    if ((m_HasFillColor && m_FillAlpha > 0) || m_FillGradient.type != GRADIENT_NONE)
     {
         D2D1_RECT_F fillRect = D2D1::RectF((float)m_X, (float)m_Y,
                                             (float)(m_X + GetWidth()), (float)(m_Y + GetHeight()));
 
-        D2D1_COLOR_F col = D2D1::ColorF(
-            GetRValue(m_FillColor) / 255.0f,
-            GetGValue(m_FillColor) / 255.0f,
-            GetBValue(m_FillColor) / 255.0f,
-            m_FillAlpha / 255.0f);
-
-        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> fillBrush;
-        if (SUCCEEDED(context->CreateSolidColorBrush(col, fillBrush.GetAddressOf())) && fillBrush)
+        Microsoft::WRL::ComPtr<ID2D1Brush> fillBrush;
+        if (Direct2D::CreateBrushFromGradientOrColor(context, fillRect, &m_FillGradient, m_FillColor, m_FillAlpha / 255.0f, fillBrush.GetAddressOf()) && fillBrush)
         {
             if (m_BorderRadius > 0.0f)
             {
@@ -868,33 +866,37 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
         }
     }
 
-    // Solid border
+    // Border (solid or gradient)
     COLORREF activeColor = m_BorderColor;
     BYTE activeAlpha = m_BorderAlpha;
-    if (m_Focused && m_HasBorderFocusColor)
+    const GradientInfo *activeGradient = &m_BorderGradient;
+    if (m_Focused && (m_HasBorderFocusColor || m_BorderFocusGradient.type != GRADIENT_NONE))
     {
-        activeColor = m_BorderFocusColor;
-        activeAlpha = m_BorderFocusAlpha;
+        if (m_HasBorderFocusColor)
+        {
+            activeColor = m_BorderFocusColor;
+            activeAlpha = m_BorderFocusAlpha;
+        }
+        activeGradient = &m_BorderFocusGradient;
     }
 
-    if (m_BorderWidth > 0.0f && activeAlpha > 0)
+    if (m_BorderWidth > 0.0f && (activeAlpha > 0 || activeGradient->type != GRADIENT_NONE))
     {
-        D2D1_ROUNDED_RECT borderRect;
-        borderRect.rect = D2D1::RectF((float)m_X, (float)m_Y,
+        D2D1_RECT_F borderRectF = D2D1::RectF((float)m_X, (float)m_Y,
                                        (float)(m_X + GetWidth()), (float)(m_Y + GetHeight()));
-        borderRect.radiusX = m_BorderRadius;
-        borderRect.radiusY = m_BorderRadius;
 
-        D2D1_COLOR_F col = D2D1::ColorF(
-            GetRValue(activeColor) / 255.0f,
-            GetGValue(activeColor) / 255.0f,
-            GetBValue(activeColor) / 255.0f,
-            activeAlpha / 255.0f);
-
-        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> borderBrush;
-        if (SUCCEEDED(context->CreateSolidColorBrush(col, borderBrush.GetAddressOf())) && borderBrush)
+        Microsoft::WRL::ComPtr<ID2D1Brush> borderBrush;
+        if (Direct2D::CreateBrushFromGradientOrColor(context, borderRectF, activeGradient, activeColor, activeAlpha / 255.0f, borderBrush.GetAddressOf()) && borderBrush)
         {
-            context->DrawRoundedRectangle(borderRect, borderBrush.Get(), m_BorderWidth, nullptr);
+            if (m_BorderRadius > 0.0f)
+            {
+                D2D1_ROUNDED_RECT borderRect = D2D1::RoundedRect(borderRectF, m_BorderRadius, m_BorderRadius);
+                context->DrawRoundedRectangle(borderRect, borderBrush.Get(), m_BorderWidth, nullptr);
+            }
+            else
+            {
+                context->DrawRectangle(borderRectF, borderBrush.Get(), m_BorderWidth, nullptr);
+            }
         }
     }
 
@@ -949,13 +951,8 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
                         std::vector<DWRITE_HIT_TEST_METRICS> metrics(actualCount);
                         layout->HitTestTextRange(s, e - s, 0.0f, 0.0f, metrics.data(), actualCount, &actualCount);
 
-                        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> selBrush;
-                        D2D1_COLOR_F col = D2D1::ColorF(
-                            GetRValue(m_SelectionColor) / 255.0f,
-                            GetGValue(m_SelectionColor) / 255.0f,
-                            GetBValue(m_SelectionColor) / 255.0f,
-                            m_SelectionAlpha / 255.0f);
-                        if (SUCCEEDED(context->CreateSolidColorBrush(col, selBrush.GetAddressOf())) && selBrush)
+                        Microsoft::WRL::ComPtr<ID2D1Brush> selBrush;
+                        if (Direct2D::CreateBrushFromGradientOrColor(context, content, &m_SelectionGradient, m_SelectionColor, m_SelectionAlpha / 255.0f, selBrush.GetAddressOf()) && selBrush)
                         {
                             for (UINT32 i = 0; i < actualCount; ++i)
                             {
@@ -974,13 +971,10 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
             // Text brush (placeholder color when empty)
             COLORREF color = showingPlaceholder ? m_PlaceholderColor : m_FontColor;
             BYTE alpha = showingPlaceholder ? m_PlaceholderAlpha : m_FontAlpha;
-            Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> textBrush;
-            D2D1_COLOR_F col = D2D1::ColorF(
-                GetRValue(color) / 255.0f,
-                GetGValue(color) / 255.0f,
-                GetBValue(color) / 255.0f,
-                alpha / 255.0f);
-            if (SUCCEEDED(context->CreateSolidColorBrush(col, textBrush.GetAddressOf())) && textBrush)
+            const GradientInfo *textGrad = showingPlaceholder ? &m_PlaceholderGradient : &m_FontGradient;
+
+            Microsoft::WRL::ComPtr<ID2D1Brush> textBrush;
+            if (Direct2D::CreateBrushFromGradientOrColor(context, content, textGrad, color, alpha / 255.0f, textBrush.GetAddressOf()) && textBrush)
             {
                 context->SetTextAntialiasMode(m_AntiAlias ? D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE : D2D1_TEXT_ANTIALIAS_MODE_ALIASED);
                 context->DrawTextLayout(D2D1::Point2F(content.left - (m_Multiline ? 0.0f : m_ScrollOffset), content.top - (m_Multiline ? m_ScrollOffset : 0.0f)),
@@ -1025,15 +1019,10 @@ void InputBoxElement::Render(ID2D1DeviceContext *context)
         }
         float caretW = 1.5f;
 
-        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> caretBrush;
-        D2D1_COLOR_F col = D2D1::ColorF(
-            GetRValue(m_CaretColor) / 255.0f,
-            GetGValue(m_CaretColor) / 255.0f,
-            GetBValue(m_CaretColor) / 255.0f,
-            m_CaretAlpha / 255.0f);
-        if (SUCCEEDED(context->CreateSolidColorBrush(col, caretBrush.GetAddressOf())) && caretBrush)
+        D2D1_RECT_F caretRect = D2D1::RectF(caretX, caretY, caretX + caretW, caretY + caretH);
+        Microsoft::WRL::ComPtr<ID2D1Brush> caretBrush;
+        if (Direct2D::CreateBrushFromGradientOrColor(context, caretRect, &m_CaretGradient, m_CaretColor, m_CaretAlpha / 255.0f, caretBrush.GetAddressOf()) && caretBrush)
         {
-            D2D1_RECT_F caretRect = D2D1::RectF(caretX, caretY, caretX + caretW, caretY + caretH);
             context->FillRectangle(caretRect, caretBrush.Get());
         }
     }

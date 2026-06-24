@@ -250,6 +250,15 @@ namespace PropertyParser
         COLORREF borderFocusColor = RGB(0, 0, 0);
         BYTE borderFocusColorAlpha = 255;
 
+        // Gradients
+        GradientInfo fontGradient;
+        GradientInfo placeholderGradient;
+        GradientInfo caretGradient;
+        GradientInfo selectionGradient;
+        GradientInfo fillGradient;
+        GradientInfo borderGradient;
+        GradientInfo borderFocusGradient;
+
         // JS callback ids (resolved via GetEventCallbackProp).
         int onTextChangeCallbackId = -1;
         int onEnterCallbackId = -1;

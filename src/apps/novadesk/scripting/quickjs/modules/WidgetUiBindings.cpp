@@ -76,6 +76,37 @@ namespace novadesk::scripting::quickjs
             return widget;
         }
 
+        std::wstring ToGradientOrRGBAString(const GradientInfo &gradient, COLORREF color, BYTE alpha)
+        {
+            if (gradient.type == GRADIENT_NONE || gradient.stops.empty())
+            {
+                return ColorUtil::ToRGBAString(color, alpha);
+            }
+
+            std::wstring result;
+            if (gradient.type == GRADIENT_LINEAR)
+            {
+                wchar_t buf[64];
+                swprintf_s(buf, L"linearGradient(%.1f", gradient.angle);
+                result = buf;
+            }
+            else if (gradient.type == GRADIENT_RADIAL)
+            {
+                result = L"radialGradient(" + gradient.shape;
+            }
+            else
+            {
+                return ColorUtil::ToRGBAString(color, alpha);
+            }
+
+            for (const auto &stop : gradient.stops)
+            {
+                result += L", " + ColorUtil::ToRGBAString(stop.color, stop.alpha);
+            }
+            result += L")";
+            return result;
+        }
+
         JSValue ThrowTypeError(JSContext *ctx, const char *method, const char *usage)
         {
             return JS_ThrowTypeError(ctx, "%s: %s", method, usage);
@@ -1876,8 +1907,14 @@ namespace novadesk::scripting::quickjs
                     return JS_NewString(ctx, Utils::ToString(input->GetFontFace()).c_str());
                 if (prop == "fontSize")
                     return JS_NewInt32(ctx, input->GetFontSize());
-                if (prop == "fontColor")
-                    return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(input->GetFontColor(), input->GetFontAlpha())).c_str());
+                if (prop == "fontColor" || prop == "textColor")
+                    return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetFontGradient(), input->GetFontColor(), input->GetFontAlpha())).c_str());
+                if (prop == "placeholderColor")
+                    return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetPlaceholderGradient(), input->GetPlaceholderColor(), input->GetPlaceholderAlpha())).c_str());
+                if (prop == "caretColor")
+                    return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetCaretGradient(), input->GetCaretColor(), input->GetCaretAlpha())).c_str());
+                if (prop == "selectionColor")
+                    return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetSelectionGradient(), input->GetSelectionColor(), input->GetSelectionAlpha())).c_str());
                 if (prop == "password")
                     return JS_NewBool(ctx, input->IsPasswordMode() ? 1 : 0);
                 if (prop == "maxLength")
@@ -1903,21 +1940,21 @@ namespace novadesk::scripting::quickjs
                 if (prop == "allowedChars")
                     return JS_NewString(ctx, Utils::ToString(input->GetAllowedChars()).c_str());
                 if (prop == "borderColor")
-                    return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(input->GetBorderColor(), input->GetBorderAlpha())).c_str());
+                    return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetBorderGradient(), input->GetBorderColor(), input->GetBorderAlpha())).c_str());
                 if (prop == "borderWidth")
                     return JS_NewInt32(ctx, (int)input->GetBorderWidth());
                 if (prop == "borderRadius")
                     return JS_NewInt32(ctx, (int)input->GetBorderRadius());
                 if (prop == "fillColor")
                 {
-                    if (input->HasFillColor())
-                        return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(input->GetFillColor(), input->GetFillAlpha())).c_str());
+                    if (input->HasFillColor() || input->GetFillGradient().type != GRADIENT_NONE)
+                        return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetFillGradient(), input->GetFillColor(), input->GetFillAlpha())).c_str());
                     return JS_UNDEFINED;
                 }
                 if (prop == "borderFocusColor")
                 {
-                    if (input->HasBorderFocusColor())
-                        return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(input->GetBorderFocusColor(), input->GetBorderFocusAlpha())).c_str());
+                    if (input->HasBorderFocusColor() || input->GetBorderFocusGradient().type != GRADIENT_NONE)
+                        return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetBorderFocusGradient(), input->GetBorderFocusColor(), input->GetBorderFocusAlpha())).c_str());
                     return JS_UNDEFINED;
                 }
             }

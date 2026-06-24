@@ -97,11 +97,44 @@ namespace PropertyParser
         if (!fontPath.empty())
             options.fontPath = PathUtils::ResolvePath(fontPath, baseDir);
 
-        ParseColorAlphaProp(ctx, obj, "fontColor", options.fontColor, options.fontAlpha);
-        ParseColorAlphaProp(ctx, obj, "textColor", options.fontColor, options.fontAlpha);
-        ParseColorAlphaProp(ctx, obj, "placeholderColor", options.placeholderColor, options.placeholderAlpha);
-        ParseColorAlphaProp(ctx, obj, "caretColor", options.caretColor, options.caretAlpha);
-        ParseColorAlphaProp(ctx, obj, "selectionColor", options.selectionColor, options.selectionAlpha);
+        {
+            std::wstring fontStr = GetStringProp(ctx, obj, "fontColor");
+            if (fontStr.empty())
+                fontStr = GetStringProp(ctx, obj, "textColor");
+            if (!fontStr.empty())
+            {
+                bool hasColor = false;
+                ParseGradientOrColor(fontStr, options.fontColor, options.fontAlpha, options.fontGradient, hasColor);
+            }
+        }
+
+        {
+            std::wstring phStr = GetStringProp(ctx, obj, "placeholderColor");
+            if (!phStr.empty())
+            {
+                bool hasColor = false;
+                ParseGradientOrColor(phStr, options.placeholderColor, options.placeholderAlpha, options.placeholderGradient, hasColor);
+            }
+        }
+
+        {
+            std::wstring caretStr = GetStringProp(ctx, obj, "caretColor");
+            if (!caretStr.empty())
+            {
+                bool hasColor = false;
+                ParseGradientOrColor(caretStr, options.caretColor, options.caretAlpha, options.caretGradient, hasColor);
+            }
+        }
+
+        {
+            std::wstring selStr = GetStringProp(ctx, obj, "selectionColor");
+            if (!selStr.empty())
+            {
+                bool hasColor = false;
+                ParseGradientOrColor(selStr, options.selectionColor, options.selectionAlpha, options.selectionGradient, hasColor);
+            }
+        }
+
         {
             std::wstring fillStr = GetStringProp(ctx, obj, "fillColor");
             if (!fillStr.empty())
@@ -111,10 +144,13 @@ namespace PropertyParser
                 if (lower == L"none" || lower == L"transparent")
                 {
                     options.hasFillColor = false;
+                    options.fillGradient.type = GRADIENT_NONE;
                 }
-                else if (ColorUtil::ParseRGBA(fillStr, options.fillColor, options.fillAlpha))
+                else
                 {
-                    options.hasFillColor = true;
+                    bool hasColor = false;
+                    ParseGradientOrColor(fillStr, options.fillColor, options.fillAlpha, options.fillGradient, hasColor);
+                    options.hasFillColor = hasColor;
                 }
             }
         }
@@ -130,7 +166,16 @@ namespace PropertyParser
         int borderWidth = 0;
         if (GetIntProp(ctx, obj, "borderWidth", borderWidth))
             options.borderWidth = static_cast<float>(borderWidth);
-        ParseColorAlphaProp(ctx, obj, "borderColor", options.borderColor, options.borderColorAlpha);
+
+        {
+            std::wstring borderStr = GetStringProp(ctx, obj, "borderColor");
+            if (!borderStr.empty())
+            {
+                bool hasColor = false;
+                ParseGradientOrColor(borderStr, options.borderColor, options.borderColorAlpha, options.borderGradient, hasColor);
+            }
+        }
+
         {
             std::wstring focusStr = GetStringProp(ctx, obj, "borderFocusColor");
             if (!focusStr.empty())
@@ -140,10 +185,13 @@ namespace PropertyParser
                 if (lower == L"none" || lower == L"transparent")
                 {
                     options.hasBorderFocusColor = false;
+                    options.borderFocusGradient.type = GRADIENT_NONE;
                 }
-                else if (ColorUtil::ParseRGBA(focusStr, options.borderFocusColor, options.borderFocusColorAlpha))
+                else
                 {
-                    options.hasBorderFocusColor = true;
+                    bool hasColor = false;
+                    ParseGradientOrColor(focusStr, options.borderFocusColor, options.borderFocusColorAlpha, options.borderFocusGradient, hasColor);
+                    options.hasBorderFocusColor = hasColor;
                 }
             }
         }
@@ -182,20 +230,47 @@ namespace PropertyParser
         if (!options.fontPath.empty())
             element->SetFontPath(options.fontPath);
 
-        element->SetFontColor(options.fontColor, options.fontAlpha);
+        if (options.fontGradient.type != GRADIENT_NONE)
+            element->SetFontGradient(options.fontGradient);
+        else
+            element->SetFontColor(options.fontColor, options.fontAlpha);
+
         element->SetPlaceholder(options.placeholder);
-        element->SetPlaceholderColor(options.placeholderColor, options.placeholderAlpha);
-        element->SetCaretColor(options.caretColor, options.caretAlpha);
-        element->SetSelectionColor(options.selectionColor, options.selectionAlpha);
-        if (options.hasFillColor)
+
+        if (options.placeholderGradient.type != GRADIENT_NONE)
+            element->SetPlaceholderGradient(options.placeholderGradient);
+        else
+            element->SetPlaceholderColor(options.placeholderColor, options.placeholderAlpha);
+
+        if (options.caretGradient.type != GRADIENT_NONE)
+            element->SetCaretGradient(options.caretGradient);
+        else
+            element->SetCaretColor(options.caretColor, options.caretAlpha);
+
+        if (options.selectionGradient.type != GRADIENT_NONE)
+            element->SetSelectionGradient(options.selectionGradient);
+        else
+            element->SetSelectionColor(options.selectionColor, options.selectionAlpha);
+
+        if (options.fillGradient.type != GRADIENT_NONE)
+            element->SetFillGradient(options.fillGradient);
+        else if (options.hasFillColor)
             element->SetFillColor(options.fillColor, options.fillAlpha);
         else
             element->ClearFillColor();
+
         element->SetTextAlign(options.textAlign);
         element->SetBorderWidth(options.borderWidth);
         element->SetBorderRadius(options.borderRadius);
-        element->SetBorderColor(options.borderColor, options.borderColorAlpha);
-        if (options.hasBorderFocusColor)
+
+        if (options.borderGradient.type != GRADIENT_NONE)
+            element->SetBorderGradient(options.borderGradient);
+        else
+            element->SetBorderColor(options.borderColor, options.borderColorAlpha);
+
+        if (options.borderFocusGradient.type != GRADIENT_NONE)
+            element->SetBorderFocusGradient(options.borderFocusGradient);
+        else if (options.hasBorderFocusColor)
             element->SetBorderFocusColor(options.borderFocusColor, options.borderFocusColorAlpha);
         else
             element->ClearBorderFocusColor();
@@ -211,6 +286,7 @@ namespace PropertyParser
     {
         if (!element)
             return;
+        PreFillElementOptions(options, element);
         options.text = element->GetText();
         options.placeholder = element->GetPlaceholder();
         options.fontFace = element->GetFontFace();
@@ -235,6 +311,15 @@ namespace PropertyParser
         options.hasBorderFocusColor = element->HasBorderFocusColor();
         options.borderFocusColor = element->GetBorderFocusColor();
         options.borderFocusColorAlpha = element->GetBorderFocusAlpha();
+
+        // Gradients
+        options.fontGradient = element->GetFontGradient();
+        options.placeholderGradient = element->GetPlaceholderGradient();
+        options.caretGradient = element->GetCaretGradient();
+        options.selectionGradient = element->GetSelectionGradient();
+        options.fillGradient = element->GetFillGradient();
+        options.borderGradient = element->GetBorderGradient();
+        options.borderFocusGradient = element->GetBorderFocusGradient();
         options.onTextChangeCallbackId = element->m_OnTextChangeCallbackId;
         options.onEnterCallbackId = element->m_OnEnterCallbackId;
         options.onFocusCallbackId = element->m_OnFocusCallbackId;

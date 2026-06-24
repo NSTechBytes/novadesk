@@ -53,7 +53,7 @@ ui.addInputBox({
     selectionColor: "rgba(81, 188, 254, 0.4)",
     // backgroundColor: "rgba(45, 45, 50, 1)",
     // borderRadius: 80,
-    // multiline:true,
+    multiline:true,
     borderFocusColor: "rgba(81, 188, 254, 1)",
     padding: 10,
     align: "left",
