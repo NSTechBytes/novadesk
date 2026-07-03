@@ -42,13 +42,24 @@ namespace PropertyParser
         std::wstring bg = GetStringProp(ctx, obj, "backgroundColor");
         if (!bg.empty())
         {
-            COLORREF c = RGB(0, 0, 0);
-            BYTE a = 255;
-            if (ColorUtil::ParseRGBA(bg, c, a))
-            {
-                options.shape.fillColor = c;
-                options.shape.fillAlpha = a;
-            }
+            ParseGradientOrColor(
+                bg,
+                options.shape.solidColor,
+                options.shape.solidAlpha,
+                options.shape.solidGradient,
+                options.shape.hasSolidColor);
+        }
+
+        std::wstring fill = GetStringProp(ctx, obj, "fillColor");
+        if (!fill.empty())
+        {
+            bool hasFill = false;
+            ParseGradientOrColor(
+                fill,
+                options.shape.fillColor,
+                options.shape.fillAlpha,
+                options.shape.fillGradient,
+                hasFill);
         }
 
         std::wstring borderColor = GetStringProp(ctx, obj, "borderColor");
