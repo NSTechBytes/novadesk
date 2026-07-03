@@ -862,7 +862,9 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
 
             Element *cursorElement = mouseActionElement ? mouseActionElement : hitElement;
-            if (cursorElement && (cursorElement->HasMouseAction() || cursorElement->GetMouseEventCursor()))
+            if (cursorElement &&
+                cursorElement->GetMouseEventCursor() &&
+                (cursorElement->HasMouseAction() || !cursorElement->GetMouseEventCursorName().empty()))
             {
                 HCURSOR cursor = widget->m_CursorManager.GetCursorForElement(cursorElement);
                 if (cursor)
