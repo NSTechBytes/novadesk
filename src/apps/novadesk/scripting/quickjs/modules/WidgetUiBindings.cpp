@@ -1691,7 +1691,10 @@ namespace novadesk::scripting::quickjs
                 }
                 if (prop == "fillColor" && shape->HasFill())
                 {
-                    const std::wstring c = ColorUtil::ToRGBAString(shape->GetFillColor(), shape->GetFillAlpha());
+                    const std::wstring c = ToGradientOrRGBAString(
+                        shape->GetFillGradient(),
+                        shape->GetFillColor(),
+                        shape->GetFillAlpha());
                     return JS_NewString(ctx, Utils::ToString(c).c_str());
                 }
 
