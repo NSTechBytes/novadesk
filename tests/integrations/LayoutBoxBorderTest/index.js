@@ -68,6 +68,15 @@ const dottedTest = new widgetWindow({
   show: true
 });
 
+const dashedTest = new widgetWindow({
+  id: "dashedTest",
+  width: 600,
+  height: 580,
+  backgroundColor: "rgba(240, 240, 240, 1.0)",
+  script: "./dashed.ui.js",
+  show: true
+});
+
 const doubleTest = new widgetWindow({
   id: "doubleTest",
   width: 410,

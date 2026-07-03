@@ -1816,11 +1816,13 @@ namespace novadesk::scripting::quickjs
                             switch (s)
                             {
                             case ElementLayoutBox::BorderStyle::None: return "none";
+                            case ElementLayoutBox::BorderStyle::Hidden: return "hidden";
                             case ElementLayoutBox::BorderStyle::Inset: return "inset";
                             case ElementLayoutBox::BorderStyle::Outset: return "outset";
                             case ElementLayoutBox::BorderStyle::Groove: return "groove";
                             case ElementLayoutBox::BorderStyle::Ridge: return "ridge";
                             case ElementLayoutBox::BorderStyle::Dotted: return "dotted";
+                            case ElementLayoutBox::BorderStyle::Dashed: return "dashed";
                             case ElementLayoutBox::BorderStyle::Double: return "double";
                             default: return "solid";
                             }
