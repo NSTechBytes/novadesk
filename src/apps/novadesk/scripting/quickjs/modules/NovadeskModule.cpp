@@ -119,6 +119,8 @@ namespace novadesk::scripting::quickjs
             bool hasThrow = false;
         };
 
+        std::wstring GetVersionProperty(const std::wstring &propertyName);
+
         class ToastHandler final : public WinToastLib::IWinToastHandler
         {
         public:
@@ -243,10 +245,21 @@ namespace novadesk::scripting::quickjs
             if (instance->isInitialized())
                 return true;
 
-            std::wstring appName = L"Novadesk";
-            std::wstring companyName = L"OfficialNovadesk";
-            std::wstring productName = L"Novadesk";
+            std::wstring appName = GetVersionProperty(L"FileDescription");
+            std::wstring companyName = GetVersionProperty(L"CompanyName");
+            std::wstring productName = GetVersionProperty(L"ProductName");
+            std::wstring productVersion = GetVersionProperty(L"ProductVersion");
             std::wstring aumi;
+            if (appName.empty())
+                appName = productName;
+            if (appName.empty())
+                appName = L"Novadesk";
+            if (companyName.empty())
+                companyName = L"OfficialNovadesk";
+            if (productName.empty())
+                productName = appName;
+            if (productVersion.empty())
+                productVersion = Utils::ToWString(std::string(NOVADESK_VERSION));
 
             if (JS_IsObject(options))
             {
@@ -270,7 +283,7 @@ namespace novadesk::scripting::quickjs
 
             if (aumi.empty())
             {
-                aumi = WinToastLib::WinToast::configureAUMI(companyName, productName, L"", Utils::ToWString(std::string(NOVADESK_VERSION)));
+                aumi = WinToastLib::WinToast::configureAUMI(companyName, productName, L"", productVersion);
             }
 
             instance->setAppName(appName);
