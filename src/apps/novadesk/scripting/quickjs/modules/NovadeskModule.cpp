@@ -1862,6 +1862,8 @@ namespace novadesk::scripting::quickjs
                 templ.setScenario(ParseToastScenario(scenario));
             if (expiration > 0)
                 templ.setExpiration(expiration);
+            if (JS_IsObject(options) && !input)
+                AddToastActions(ctx, options, templ);
             if (input)
                 templ.addInput();
 
@@ -1887,9 +1889,6 @@ namespace novadesk::scripting::quickjs
                 else if (!audio.empty())
                     templ.setAudioPath(ParseToastAudioSystemFile(audio));
             }
-
-            if (JS_IsObject(options))
-                AddToastActions(ctx, options, templ);
 
             WinToastLib::WinToast::WinToastError error = WinToastLib::WinToast::NoError;
             auto *handler = new ToastHandler(callbacks);
