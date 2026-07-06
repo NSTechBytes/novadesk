@@ -15,7 +15,24 @@ const id = toast.show({
   title: "Novadesk Toast",
   message: "Toast API is available from the novadesk module.",
   duration: "short",
-  actions: ["Open", "Dismiss"]
+  actions: ["Open", "Dismiss"],
+  onActivated: (event) => {
+    console.log("toast activated:", event.toastId);
+  },
+  onAction: (event) => {
+    if (event.actionIndex === 0) {
+      console.log("toast action: open");
+    } else if (event.actionIndex === 1) {
+      console.log("toast action: dismiss");
+    }
+    console.log("toast action:", event.toastId, event.actionIndex);
+  },
+  onDismissed: (event) => {
+    console.log("toast dismissed:", event.toastId, event.reason);
+  },
+  onFailed: (event) => {
+    console.log("toast failed:", event.toastId);
+  }
 });
 
 console.log("toast id:", id);

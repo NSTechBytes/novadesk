@@ -8,6 +8,7 @@
 #include "NovadeskModule.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cwctype>
 #include <map>
 #include <unordered_map>
@@ -121,33 +122,96 @@ namespace novadesk::scripting::quickjs
 
         std::wstring GetVersionProperty(const std::wstring &propertyName);
 
+        struct ToastCallbackIds
+        {
+            int activated = -1;
+            int action = -1;
+            int input = -1;
+            int dismissed = -1;
+            int failed = -1;
+        };
+
         class ToastHandler final : public WinToastLib::IWinToastHandler
         {
         public:
+            explicit ToastHandler(const ToastCallbackIds &callbacks)
+                : m_Callbacks(callbacks)
+            {
+            }
+
+            void SetToastId(INT64 toastId)
+            {
+                m_ToastId.store(toastId);
+            }
+
             void toastActivated() const override
             {
                 Logging::Log(LogLevel::Info, L"[novadesk.toast] activated");
+                Dispatch(m_Callbacks.activated, "activated");
             }
 
             void toastActivated(int actionIndex) const override
             {
                 Logging::Log(LogLevel::Info, L"[novadesk.toast] action activated: %d", actionIndex);
+                JSEngine::ToastEventData data{};
+                data.toastId = m_ToastId.load();
+                data.type = "action";
+                data.actionIndex = actionIndex;
+                JSEngine::DispatchToastEventAsync(m_Callbacks.action, data);
             }
 
             void toastActivated(std::wstring response) const override
             {
                 Logging::Log(LogLevel::Info, L"[novadesk.toast] input submitted: %s", response.c_str());
+                JSEngine::ToastEventData data{};
+                data.toastId = m_ToastId.load();
+                data.type = "input";
+                data.input = response;
+                JSEngine::DispatchToastEventAsync(m_Callbacks.input, data);
             }
 
             void toastDismissed(WinToastDismissalReason state) const override
             {
                 Logging::Log(LogLevel::Info, L"[novadesk.toast] dismissed: %d", static_cast<int>(state));
+                JSEngine::ToastEventData data{};
+                data.toastId = m_ToastId.load();
+                data.type = "dismissed";
+                data.dismissalReason = DismissalReasonToString(state);
+                JSEngine::DispatchToastEventAsync(m_Callbacks.dismissed, data);
             }
 
             void toastFailed() const override
             {
                 Logging::Log(LogLevel::Warn, L"[novadesk.toast] failed");
+                Dispatch(m_Callbacks.failed, "failed");
             }
+
+        private:
+            static std::string DismissalReasonToString(WinToastDismissalReason state)
+            {
+                switch (state)
+                {
+                case WinToastLib::IWinToastHandler::UserCanceled:
+                    return "userCanceled";
+                case WinToastLib::IWinToastHandler::ApplicationHidden:
+                    return "applicationHidden";
+                case WinToastLib::IWinToastHandler::TimedOut:
+                    return "timedOut";
+                default:
+                    return "unknown";
+                }
+            }
+
+            void Dispatch(int callbackId, const std::string &type) const
+            {
+                JSEngine::ToastEventData data{};
+                data.toastId = m_ToastId.load();
+                data.type = type;
+                JSEngine::DispatchToastEventAsync(callbackId, data);
+            }
+
+            ToastCallbackIds m_Callbacks;
+            std::atomic<INT64> m_ToastId = 0;
         };
 
         std::wstring JsValueToWString(JSContext *ctx, JSValueConst value)
@@ -1688,6 +1752,31 @@ namespace novadesk::scripting::quickjs
             return true;
         }
 
+        void RegisterToastCallbackProp(JSContext *ctx, JSValueConst options, const char *name, int &callbackId)
+        {
+            if (callbackId > 0)
+                return;
+            JSValue value = JS_GetPropertyStr(ctx, options, name);
+            if (JS_IsFunction(ctx, value))
+                callbackId = JSEngine::RegisterToastCallback(ctx, value);
+            JS_FreeValue(ctx, value);
+        }
+
+        ToastCallbackIds ParseToastCallbacks(JSContext *ctx, JSValueConst options)
+        {
+            ToastCallbackIds callbacks{};
+            RegisterToastCallbackProp(ctx, options, "onActivated", callbacks.activated);
+            RegisterToastCallbackProp(ctx, options, "onActivate", callbacks.activated);
+            RegisterToastCallbackProp(ctx, options, "onClick", callbacks.activated);
+            RegisterToastCallbackProp(ctx, options, "onAction", callbacks.action);
+            RegisterToastCallbackProp(ctx, options, "onInput", callbacks.input);
+            RegisterToastCallbackProp(ctx, options, "onDismissed", callbacks.dismissed);
+            RegisterToastCallbackProp(ctx, options, "onDismiss", callbacks.dismissed);
+            RegisterToastCallbackProp(ctx, options, "onFailed", callbacks.failed);
+            RegisterToastCallbackProp(ctx, options, "onFail", callbacks.failed);
+            return callbacks;
+        }
+
         JSValue JsToastShow(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
             if (argc < 1)
@@ -1712,10 +1801,12 @@ namespace novadesk::scripting::quickjs
             bool loop = false;
             bool input = false;
             int64_t expiration = 0;
+            ToastCallbackIds callbacks{};
 
             if (JS_IsObject(argv[0]) && !JS_IsArray(argv[0]))
             {
                 options = argv[0];
+                callbacks = ParseToastCallbacks(ctx, options);
                 GetObjectString(ctx, options, "title", title);
                 GetObjectString(ctx, options, "message", message);
                 if (message.empty())
@@ -1801,12 +1892,14 @@ namespace novadesk::scripting::quickjs
                 AddToastActions(ctx, options, templ);
 
             WinToastLib::WinToast::WinToastError error = WinToastLib::WinToast::NoError;
-            INT64 id = WinToastLib::WinToast::instance()->showToast(templ, new ToastHandler(), &error);
+            auto *handler = new ToastHandler(callbacks);
+            INT64 id = WinToastLib::WinToast::instance()->showToast(templ, handler, &error);
             if (id < 0)
             {
                 SetToastError(WinToastLib::WinToast::strerror(error));
                 return JS_NULL;
             }
+            handler->SetToastId(id);
 
             SetToastError(L"");
             return JS_NewInt64(ctx, id);
