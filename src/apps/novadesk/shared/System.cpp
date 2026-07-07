@@ -1151,23 +1151,23 @@ namespace novadesk::shared::system
         std::wstring lowerButtons = opts.buttons;
         std::transform(lowerButtons.begin(), lowerButtons.end(), lowerButtons.begin(), ::towlower);
 
-        if (lowerButtons == L"okcancel")
+        if (lowerButtons == L"ok-cancel" || lowerButtons == L"okcancel")
         {
             flags |= MB_OKCANCEL;
         }
-        else if (lowerButtons == L"yesno")
+        else if (lowerButtons == L"yes-no" || lowerButtons == L"yesno")
         {
             flags |= MB_YESNO;
         }
-        else if (lowerButtons == L"yesnocancel")
+        else if (lowerButtons == L"yes-no-cancel" || lowerButtons == L"yesnocancel")
         {
             flags |= MB_YESNOCANCEL;
         }
-        else if (lowerButtons == L"retrycancel")
+        else if (lowerButtons == L"retry-cancel" || lowerButtons == L"retrycancel")
         {
             flags |= MB_RETRYCANCEL;
         }
-        else if (lowerButtons == L"abortretryignore")
+        else if (lowerButtons == L"abort-retry-ignore" || lowerButtons == L"abortretryignore")
         {
             flags |= MB_ABORTRETRYIGNORE;
         }
@@ -1201,7 +1201,7 @@ namespace novadesk::shared::system
             return "ok";
         }
     }
-    
+
     // *****************************************************************************
     // Network Metrics
     // *****************************************************************************

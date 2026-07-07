@@ -41,7 +41,7 @@ testDialog(
         title: "Warning",
         message: "This is a warning dialog.\nChoose OK or Cancel.",
         type: "warning",
-        buttons: "okcancel"
+        buttons: "ok-cancel"
     }
 );
 
@@ -63,7 +63,7 @@ testDialog(
         title: "Confirm",
         message: "Do you want to proceed with this action?",
         type: "question",
-        buttons: "yesno"
+        buttons: "yes-no"
     }
 );
 
@@ -77,7 +77,7 @@ testDialog(
         title: "Save Changes",
         message: "Would you like to save your changes?",
         type: "question",
-        buttons: "yesnocancel"
+        buttons: "yes-no-cancel"
     }
 );
 
@@ -88,7 +88,7 @@ testDialog(
         title: "Connection Failed",
         message: "Unable to connect to the server.\nWould you like to retry?",
         type: "error",
-        buttons: "retrycancel"
+        buttons: "retry-cancel"
     }
 );
 
@@ -99,7 +99,7 @@ testDialog(
         title: "Critical Error",
         message: "A critical error occurred.\nChoose how to proceed.",
         type: "error",
-        buttons: "abortretryignore"
+        buttons: "abort-retry-ignore"
     }
 );
 
@@ -179,12 +179,12 @@ testDialog(
 
 // Test 14: Mixed case button names
 testDialog(
-    "Mixed Case - Buttons 'YesNo'",
+    "Mixed Case - Buttons 'Yes-No'",
     {
         title: "Case Test",
-        message: "Testing case insensitivity for 'YesNo' buttons",
+        message: "Testing case insensitivity for 'Yes-No' buttons",
         type: "question",
-        buttons: "YesNo"
+        buttons: "Yes-No"
     }
 );
 

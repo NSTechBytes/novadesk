@@ -156,7 +156,7 @@ namespace novadesk::shared::system
         std::wstring title;
         std::wstring message;
         std::wstring type;    // "info" | "warning" | "error" | "question"
-        std::wstring buttons; // "ok" | "okcancel" | "yesno" | "yesnocancel" | "retrycancel" | "abortretryignore"
+        std::wstring buttons; // "ok" | "ok-cancel" | "yes-no" | "yes-no-cancel" | "retry-cancel" | "abort-retry-ignore"
         HWND         parent = nullptr; // Optional owner window
     };
 
