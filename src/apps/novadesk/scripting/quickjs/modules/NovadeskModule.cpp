@@ -1904,6 +1904,39 @@ namespace novadesk::scripting::quickjs
             return JS_NewInt64(ctx, id);
         }
 
+        JSValue JsDialogShow(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1 || !JS_IsObject(argv[0]))
+            {
+                return JS_ThrowTypeError(ctx, "dialog.show(options) requires an options object");
+            }
+
+            JSValueConst options = argv[0];
+            novadesk::shared::system::MessageBoxOptions opts;
+
+            // Extract properties from the options object
+            GetObjectString(ctx, options, "title", opts.title);
+            GetObjectString(ctx, options, "message", opts.message);
+            GetObjectString(ctx, options, "type", opts.type);
+            GetObjectString(ctx, options, "buttons", opts.buttons);
+
+            // Default to "info" and "ok" if not specified
+            if (opts.type.empty())
+            {
+                opts.type = L"info";
+            }
+            if (opts.buttons.empty())
+            {
+                opts.buttons = L"ok";
+            }
+
+            // Call the native message box
+            std::string result = novadesk::shared::system::ShowMessageBox(opts);
+
+            // Return the result as a JS string
+            return JS_NewString(ctx, result.c_str());
+        }
+
         int InitAppExport(JSContext *ctx, JSModuleDef *m)
         {
             JSValue app = JS_NewObject(ctx);
@@ -1945,6 +1978,10 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, toast, "isInitialized", JS_NewCFunction(ctx, JsToastIsInitialized, "isInitialized", 0));
             JS_SetPropertyStr(ctx, toast, "getLastError", JS_NewCFunction(ctx, JsToastGetLastError, "getLastError", 0));
             JS_SetModuleExport(ctx, m, "toast", toast);
+
+            JSValue dialog = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, dialog, "show", JS_NewCFunction(ctx, JsDialogShow, "show", 1));
+            JS_SetModuleExport(ctx, m, "dialog", dialog);
 
             return 0;
         }
@@ -1994,6 +2031,10 @@ namespace novadesk::scripting::quickjs
             return nullptr;
         }
         if (JS_AddModuleExport(ctx, m, "toast") < 0)
+        {
+            return nullptr;
+        }
+        if (JS_AddModuleExport(ctx, m, "dialog") < 0)
         {
             return nullptr;
         }

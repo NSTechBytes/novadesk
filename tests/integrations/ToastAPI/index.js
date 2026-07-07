@@ -44,7 +44,9 @@ const inputId = toast.show({
   title: "Novadesk Toast Input",
   message: "Type a reply and press Send.",
   duration: "long",
-  input: true,
+  // input: true,
+  scenario: "incomingCall",
+  audio:"call",
   actions: ["Send"],
   onInput: (event) => {
     console.log("toast input:", event.toastId, event.input);

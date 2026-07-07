@@ -151,4 +151,16 @@ namespace novadesk::shared::system
     bool GetSystemUptime(UptimeStats &outStats);
     std::string FormatUptime(const UptimeStats &stats, const std::string &format);
 
+    struct MessageBoxOptions
+    {
+        std::wstring title;
+        std::wstring message;
+        std::wstring type;    // "info" | "warning" | "error" | "question"
+        std::wstring buttons; // "ok" | "okcancel" | "yesno" | "yesnocancel" | "retrycancel" | "abortretryignore"
+        HWND         parent = nullptr; // Optional owner window
+    };
+
+    // Returns the button label string: "ok", "cancel", "yes", "no", "retry", "abort", "ignore"
+    std::string ShowMessageBox(const MessageBoxOptions &opts);
+
 } // namespace novadesk::shared::system
