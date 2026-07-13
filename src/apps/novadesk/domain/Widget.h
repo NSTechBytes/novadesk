@@ -199,6 +199,7 @@ public:
     void EndUpdate();
 
     void Redraw();
+    void OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer);
 
     Element* FindElementById(const std::wstring& id);
     static std::vector<Widget *> &GetAllWidgets();

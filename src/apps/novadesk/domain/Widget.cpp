@@ -669,6 +669,22 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
     switch (message)
     {
+    case WM_USER + 500:
+    {
+        std::wstring*         pUrl    = reinterpret_cast<std::wstring*>(wParam);
+        std::vector<BYTE>*    pBuffer = reinterpret_cast<std::vector<BYTE>*>(lParam);
+        if (pUrl && pBuffer)
+        {
+            if (widget)
+            {
+                widget->OnImageDownloaded(*pUrl, *pBuffer);
+            }
+            delete pUrl;
+            delete pBuffer;
+        }
+        return 0;
+    }
+
     case WM_SETFOCUS:
         if (widget)
             JSEngine::TriggerWidgetEvent(widget, "focus");
@@ -2411,6 +2427,24 @@ void Widget::Redraw()
     }
 }
 
+void Widget::OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer)
+{
+    bool updated = false;
+    for (Element *element : m_Elements)
+    {
+        if (element)
+        {
+            element->OnImageDownloaded(url, buffer);
+            updated = true;
+        }
+    }
+
+    if (updated)
+    {
+        Redraw();
+    }
+}
+
 void Widget::ReleaseRenderSurface()
 {
     if (m_hRenderMemDc && m_hRenderOldBitmap)
@@ -2441,6 +2475,14 @@ void Widget::UpdateLayeredWindowContent()
 {
     if (!m_hWnd)
         return;
+
+    for (Element *element : m_Elements)
+    {
+        if (element)
+        {
+            element->SetOwnerHWND(m_hWnd);
+        }
+    }
 
     int calcW = m_Options.width;
     int calcH = m_Options.height;

@@ -22,6 +22,9 @@ public:
     virtual int GetAutoWidth() override;
     virtual int GetAutoHeight() override;
 
+    virtual void OnOwnerHWNDSet() override;
+    virtual void OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer) override;
+
     bool IsLoaded() const { return m_RotatorImage.IsLoaded(); }
     void UpdateImage(const std::wstring &path) { m_RotatorImage.SetPath(path); }
 

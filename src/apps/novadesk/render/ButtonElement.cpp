@@ -177,3 +177,13 @@ bool ButtonElement::HitTest(int x, int y)
     
     return alpha > 0;
 }
+
+void ButtonElement::OnOwnerHWNDSet()
+{
+    m_ButtonImage.SetOwnerHWND(m_OwnerHWND);
+}
+
+void ButtonElement::OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer)
+{
+    m_ButtonImage.OnImageDownloaded(url, buffer);
+}

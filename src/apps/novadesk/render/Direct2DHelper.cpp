@@ -226,6 +226,44 @@ namespace Direct2D
     {
         if (!g_pWICFactory) return false;
 
+        // Check for resource path
+        if (path.length() >= 6 && _wcsnicmp(path.c_str(), L"res://", 6) == 0)
+        {
+            std::wstring resPath = path.substr(6);
+            std::wstring resType = L"PNG";
+            std::wstring resName;
+
+            size_t slash = resPath.find(L'/');
+            if (slash != std::wstring::npos)
+            {
+                resType = resPath.substr(0, slash);
+                resName = resPath.substr(slash + 1);
+            }
+            else
+            {
+                resName = resPath;
+            }
+
+            // Check if name is numeric
+            bool isNumeric = true;
+            for (wchar_t c : resName)
+            {
+                if (!iswdigit(c))
+                {
+                    isNumeric = false;
+                    break;
+                }
+            }
+
+            LPCWSTR nameParam = resName.c_str();
+            if (isNumeric && !resName.empty())
+            {
+                nameParam = MAKEINTRESOURCEW(_wtoi(resName.c_str()));
+            }
+
+            return LoadWICBitmapFromResource(GetModuleHandleW(NULL), nameParam, resType.c_str(), wicBitmap);
+        }
+
         // Check if it's a URL using PathUtils
         if (PathUtils::IsURL(path))
         {
@@ -422,7 +460,7 @@ namespace Direct2D
         WinHttpCloseHandle(hConnect);
         WinHttpCloseHandle(hSession);
 
-        Logging::Log(LogLevel::Info, L"[novadesk] Downloaded %d bytes from URL: %s", dwDownloaded, url.c_str());
+        // Logging::Log(LogLevel::Info, L"[novadesk] Downloaded %d bytes from URL: %s", dwDownloaded, url.c_str());
         return buffer.size() > 0;
     }
 
@@ -573,5 +611,79 @@ namespace Direct2D
             r.left + (width / 2.0f) + (half_area * cos_axis * std::cos(base_radians)),
             r.top + (height / 2.0f) + (half_area * cos_axis * std::sin(base_radians))
         );
+    }
+
+    bool LoadWICBitmapFromResource(HMODULE hModule, LPCWSTR resourceName, LPCWSTR resourceType, IWICBitmap** wicBitmap)
+    {
+        if (!g_pWICFactory) return false;
+
+        HRSRC hResInfo = FindResourceW(hModule, resourceName, resourceType);
+        if (!hResInfo)
+        {
+            Logging::Log(LogLevel::Error, L"[novadesk] FindResourceW failed");
+            return false;
+        }
+
+        DWORD cbResource = SizeofResource(hModule, hResInfo);
+        HGLOBAL hResData = LoadResource(hModule, hResInfo);
+        if (!hResData) return false;
+
+        LPVOID pResourceData = LockResource(hResData);
+        if (!pResourceData) return false;
+
+        ComPtr<IWICStream> pStream;
+        HRESULT hr = g_pWICFactory->CreateStream(pStream.GetAddressOf());
+        if (FAILED(hr)) return false;
+
+        hr = pStream->InitializeFromMemory(static_cast<BYTE*>(pResourceData), cbResource);
+        if (FAILED(hr)) return false;
+
+        ComPtr<IWICBitmapDecoder> pDecoder;
+        hr = g_pWICFactory->CreateDecoderFromStream(pStream.Get(), nullptr, WICDecodeMetadataCacheOnLoad, pDecoder.GetAddressOf());
+        if (FAILED(hr)) return false;
+
+        ComPtr<IWICBitmapFrameDecode> pFrame;
+        hr = pDecoder->GetFrame(0, pFrame.GetAddressOf());
+        if (FAILED(hr)) return false;
+
+        ComPtr<IWICFormatConverter> pConverter;
+        hr = g_pWICFactory->CreateFormatConverter(pConverter.GetAddressOf());
+        if (FAILED(hr)) return false;
+
+        hr = pConverter->Initialize(pFrame.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeMedianCut);
+        if (FAILED(hr)) return false;
+
+        hr = g_pWICFactory->CreateBitmapFromSource(pConverter.Get(), WICBitmapCacheOnLoad, wicBitmap);
+        return SUCCEEDED(hr);
+    }
+
+    bool LoadWICBitmapFromMemory(const BYTE* data, DWORD size, IWICBitmap** wicBitmap)
+    {
+        if (!g_pWICFactory || !data || size == 0) return false;
+
+        ComPtr<IWICStream> pStream;
+        HRESULT hr = g_pWICFactory->CreateStream(pStream.GetAddressOf());
+        if (FAILED(hr)) return false;
+
+        hr = pStream->InitializeFromMemory(const_cast<BYTE*>(data), size);
+        if (FAILED(hr)) return false;
+
+        ComPtr<IWICBitmapDecoder> pDecoder;
+        hr = g_pWICFactory->CreateDecoderFromStream(pStream.Get(), nullptr, WICDecodeMetadataCacheOnLoad, pDecoder.GetAddressOf());
+        if (FAILED(hr)) return false;
+
+        ComPtr<IWICBitmapFrameDecode> pFrame;
+        hr = pDecoder->GetFrame(0, pFrame.GetAddressOf());
+        if (FAILED(hr)) return false;
+
+        ComPtr<IWICFormatConverter> pConverter;
+        hr = g_pWICFactory->CreateFormatConverter(pConverter.GetAddressOf());
+        if (FAILED(hr)) return false;
+
+        hr = pConverter->Initialize(pFrame.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeMedianCut);
+        if (FAILED(hr)) return false;
+
+        hr = g_pWICFactory->CreateBitmapFromSource(pConverter.Get(), WICBitmapCacheOnLoad, wicBitmap);
+        return SUCCEEDED(hr);
     }
 }

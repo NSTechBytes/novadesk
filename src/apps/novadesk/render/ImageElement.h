@@ -33,6 +33,9 @@ public:
     virtual int GetAutoWidth() override;
     virtual int GetAutoHeight() override;
 
+    virtual void OnOwnerHWNDSet() override;
+    virtual void OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer) override;
+
     // Returns true if image loaded successfully
     bool IsLoaded() const { return m_GeneralImage.IsLoaded(); }
 
