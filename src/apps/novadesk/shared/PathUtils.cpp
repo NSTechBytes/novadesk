@@ -407,4 +407,26 @@ namespace PathUtils {
         const std::wstring absScriptPath = ResolvePath(scriptPath, defaultBaseDir);
         return GetParentDir(absScriptPath);
     }
+
+    /*
+    ** Check if a path is a URL (starts with http:// or https://)
+    */
+    bool IsURL(const std::wstring& path)
+    {
+        if (path.length() < 7) return false;
+        
+        // Check for http:// or https://
+        std::wstring prefix = path.substr(0, 7);
+        for (auto& c : prefix)
+        {
+            c = (wchar_t)::towlower(c);
+        }
+        
+        if (prefix == L"http://" || (path.length() >= 8 && path.substr(0, 8) == L"https://"))
+        {
+            return true;
+        }
+        
+        return false;
+    }
 }

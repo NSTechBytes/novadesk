@@ -92,9 +92,13 @@ namespace PropertyParser
         options.path = GetStringProp(ctx, obj, "path");
         if (!options.path.empty())
         {
-            options.path = PathUtils::ResolvePath(options.path, baseDir);
-            std::error_code ec;
-            const bool exists = std::filesystem::exists(std::filesystem::path(options.path), ec);
+            // Don't resolve URLs as local paths
+            if (!PathUtils::IsURL(options.path))
+            {
+                options.path = PathUtils::ResolvePath(options.path, baseDir);
+                std::error_code ec;
+                const bool exists = std::filesystem::exists(std::filesystem::path(options.path), ec);
+            }
         }
 
         std::wstring aspect = GetStringProp(ctx, obj, "preserveAspectRatio");
@@ -129,7 +133,15 @@ namespace PropertyParser
         std::wstring buttonImageName = GetStringProp(ctx, obj, "buttonImageName");
         if (!buttonImageName.empty())
         {
-            options.buttonImageName = PathUtils::ResolvePath(buttonImageName, baseDir);
+            // Don't resolve URLs as local paths
+            if (!PathUtils::IsURL(buttonImageName))
+            {
+                options.buttonImageName = PathUtils::ResolvePath(buttonImageName, baseDir);
+            }
+            else
+            {
+                options.buttonImageName = buttonImageName;
+            }
         }
 
         GetEventCallbackProp(ctx, obj, "buttonAction", options.onLeftMouseUpCallbackId);
@@ -162,7 +174,15 @@ namespace PropertyParser
         std::wstring bitmapImageName = GetStringProp(ctx, obj, "bitmapImageName");
         if (!bitmapImageName.empty())
         {
-            options.bitmapImageName = PathUtils::ResolvePath(bitmapImageName, baseDir);
+            // Don't resolve URLs as local paths
+            if (!PathUtils::IsURL(bitmapImageName))
+            {
+                options.bitmapImageName = PathUtils::ResolvePath(bitmapImageName, baseDir);
+            }
+            else
+            {
+                options.bitmapImageName = bitmapImageName;
+            }
         }
 
         GetIntProp(ctx, obj, "bitmapFrames", options.bitmapFrames);
@@ -212,7 +232,15 @@ namespace PropertyParser
         std::wstring rotatorImageName = GetStringProp(ctx, obj, "rotatorImageName");
         if (!rotatorImageName.empty())
         {
-            options.rotatorImageName = PathUtils::ResolvePath(rotatorImageName, baseDir);
+            // Don't resolve URLs as local paths
+            if (!PathUtils::IsURL(rotatorImageName))
+            {
+                options.rotatorImageName = PathUtils::ResolvePath(rotatorImageName, baseDir);
+            }
+            else
+            {
+                options.rotatorImageName = rotatorImageName;
+            }
         }
 
         { float tmp = static_cast<float>(options.offsetX); if (GetFloatProp(ctx, obj, "offsetX", tmp)) options.offsetX = static_cast<double>(tmp); }

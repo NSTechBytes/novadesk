@@ -41,4 +41,5 @@ namespace PathUtils {
     std::wstring NormalizePath(const std::wstring& path);
     std::wstring ResolvePath(const std::wstring& path, const std::wstring& baseDir = L"");
     std::wstring GetScriptBaseDir(const std::wstring& scriptPath, const std::wstring& defaultBaseDir);
+    bool IsURL(const std::wstring& path);
 }
