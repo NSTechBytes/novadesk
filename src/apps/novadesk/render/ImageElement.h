@@ -55,8 +55,10 @@ public:
     void ClearImageCrop() { m_GeneralImage.ClearImageCrop(); }
     void SetScaleMargins(float left, float top, float right, float bottom);
     void ClearScaleMargins() { m_HasScaleMargins = false; }
+    void SetFallbackPath(const std::wstring &path) { m_GeneralImage.SetFallbackPath(path); }
 
     const std::wstring &GetImagePath() const { return m_GeneralImage.GetPath(); }
+    const std::wstring &GetFallbackPath() const { return m_GeneralImage.GetFallbackPath(); }
     ImageAspectRatio GetPreserveAspectRatio() const { return m_PreserveAspectRatio; }
     bool HasImageTint() const { return m_GeneralImage.HasImageTint(); }
     COLORREF GetImageTint() const { return m_GeneralImage.GetImageTint(); }

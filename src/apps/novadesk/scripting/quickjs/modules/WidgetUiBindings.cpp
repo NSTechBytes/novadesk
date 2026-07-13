@@ -114,6 +114,15 @@ namespace novadesk::scripting::quickjs
 
         JSValue GetGeneralImagePropertyValue(JSContext *ctx, Element *element, const std::string &prop)
         {
+            if (prop == "fallbackPath")
+            {
+                std::wstring val;
+                if (auto *img = dynamic_cast<ImageElement *>(element)) val = img->GetFallbackPath();
+                else if (auto *btn = dynamic_cast<ButtonElement *>(element)) val = btn->GetFallbackPath();
+                else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) val = bmp->GetFallbackPath();
+                else if (auto *rot = dynamic_cast<RotatorElement *>(element)) val = rot->GetFallbackPath();
+                return JS_NewString(ctx, Utils::ToString(val).c_str());
+            }
             if (prop == "grayscale")
             {
                 bool val = false;

@@ -7,6 +7,7 @@ ui.beginUpdate();
 ui.addImage({
     id: "basic-image",
     path: "https://picsum.photos/200/300",
+    fallbackPath:"../assets/pic.png",
     x: 20,
     y: 20,
     width: 120,

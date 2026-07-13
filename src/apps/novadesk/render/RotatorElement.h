@@ -43,8 +43,10 @@ public:
     void SetColorMatrix(const float *matrix) { m_RotatorImage.SetColorMatrix(matrix); }
     void SetUseExifOrientation(bool enabled) { m_RotatorImage.SetUseExifOrientation(enabled); }
     void SetImageFlip(ImageFlipMode flip) { m_RotatorImage.SetImageFlip(flip); }
+    void SetFallbackPath(const std::wstring &path) { m_RotatorImage.SetFallbackPath(path); }
 
     const std::wstring &GetImagePath() const { return m_RotatorImage.GetPath(); }
+    const std::wstring &GetFallbackPath() const { return m_RotatorImage.GetFallbackPath(); }
     double GetValue() const { return m_Value; }
     double GetOffsetX() const { return m_OffsetX; }
     double GetOffsetY() const { return m_OffsetY; }

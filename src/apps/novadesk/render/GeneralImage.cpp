@@ -46,10 +46,36 @@ void GeneralImage::ReloadWICBitmap()
     }
 }
 
+void GeneralImage::SetFallbackPath(const std::wstring &path)
+{
+    if (m_FallbackPath == path)
+        return;
+    m_FallbackPath = path;
+    if (m_IsFallbackShowing)
+    {
+        LoadFallbackFromResource();
+    }
+}
+
 void GeneralImage::LoadFallbackFromResource()
 {
     m_pWICBitmap.Reset();
     ResetBitmapCache();
+
+    if (!m_FallbackPath.empty())
+    {
+        const bool ok = Direct2D::LoadWICBitmapFromFile(m_FallbackPath, m_pWICBitmap.ReleaseAndGetAddressOf(), m_UseExifOrientation);
+        if (ok)
+        {
+            m_IsFallbackShowing = true;
+            return;
+        }
+        else
+        {
+            Logging::Log(LogLevel::Error, L"[novadesk] failed to load custom fallback image: %s", m_FallbackPath.c_str());
+        }
+    }
+
     const bool ok = Direct2D::LoadWICBitmapFromResource(
         GetModuleHandleW(NULL),
         MAKEINTRESOURCEW(IDR_FALLBACK_IMAGE),

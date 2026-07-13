@@ -42,6 +42,9 @@ public:
     void SetPath(const std::wstring &path);
     const std::wstring &GetPath() const { return m_ImagePath; }
 
+    void SetFallbackPath(const std::wstring &path);
+    const std::wstring &GetFallbackPath() const { return m_FallbackPath; }
+
     void EnsureBitmap(ID2D1DeviceContext *context);
     bool IsLoaded() const { return m_D2DBitmap != nullptr; }
     ID2D1Bitmap *GetBitmap() const { return m_D2DBitmap.Get(); }
@@ -100,6 +103,7 @@ private:
 private:
     std::wstring m_ImagePath;
     std::wstring m_LoadedPath;
+    std::wstring m_FallbackPath;
     HWND m_OwnerHWND = nullptr;
     bool m_IsFallbackShowing = false;       // true while showing the embedded fallback image
     std::vector<BYTE> m_DownloadedBuffer;   // in-memory buffer for async downloads
