@@ -352,7 +352,7 @@ namespace JSEngine
 
         bool ExecuteScriptFile(const std::wstring &finalScriptPath)
         {
-            const std::string script = FileUtils::ReadFileContent(finalScriptPath);
+            const std::string script = FileUtils::ReadFileOrUrlContent(finalScriptPath);
             if (script.empty())
             {
                 Logging::Log(LogLevel::Error, L"Failed to load script: %s", finalScriptPath.c_str());
@@ -1338,6 +1338,11 @@ namespace JSEngine
             }
 
             // Respect explicit custom script paths first.
+            if (PathUtils::IsURL(scriptPath))
+            {
+                return scriptPath;
+            }
+
             if (!PathUtils::IsPathRelative(scriptPath))
             {
                 return PathUtils::NormalizePath(scriptPath);
@@ -2061,7 +2066,11 @@ namespace JSEngine
         }
 
         std::wstring scriptPath = rawScriptPath;
-        if (PathUtils::IsPathRelative(scriptPath))
+        if (PathUtils::IsURL(scriptPath))
+        {
+            // Keep remote UI script URLs unchanged.
+        }
+        else if (PathUtils::IsPathRelative(scriptPath))
         {
             scriptPath = PathUtils::ResolvePath(scriptPath, GetEntryScriptDir());
         }

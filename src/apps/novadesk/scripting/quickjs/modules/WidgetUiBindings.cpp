@@ -2061,7 +2061,11 @@ namespace novadesk::scripting::quickjs
 
             std::wstring absPath;
             std::wstring baseDir;
-            if (PathUtils::IsPathRelative(scriptPath))
+            if (PathUtils::IsURL(scriptPath))
+            {
+                absPath = scriptPath;
+            }
+            else if (PathUtils::IsPathRelative(scriptPath))
             {
                 baseDir = PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir());
                 absPath = PathUtils::ResolvePath(
@@ -2077,9 +2081,10 @@ namespace novadesk::scripting::quickjs
             // Ensure stale ipcRenderer listeners from prior UI instances are detached.
             JSEngine::ClearUiIpcForScript(absPath);
 
-            const std::string scriptSource = FileUtils::ReadFileContent(absPath);
+            const std::string scriptSource = FileUtils::ReadFileOrUrlContent(absPath);
             if (scriptSource.empty())
             {
+                Logging::Log(LogLevel::Error, L"[novadesk] Failed to load widget ui script: %s", absPath.c_str());
                 return false;
             }
 
