@@ -12,6 +12,7 @@
 #include "../../../shared/PathUtils.h"
 #include "../../../shared/Utils.h"
 #include "../engine/JSEngine.h"
+#include "../../../render/FontDownloader.h"
 #include <filesystem>
 #include <cmath>
 #include <algorithm>
@@ -136,6 +137,12 @@ namespace PropertyParser
             options.fontPath = PathUtils::ResolvePath(fontPath, baseDir);
         }
 
+        std::wstring fontUrl = GetStringProp(ctx, obj, "fontUrl");
+        if (!fontUrl.empty())
+        {
+            options.fontUrl = fontUrl;
+        }
+
         std::wstring style = GetStringProp(ctx, obj, "fontStyle");
         if (!style.empty())
             options.italic = (style == L"italic");
@@ -195,8 +202,24 @@ namespace PropertyParser
         element->SetItalic(options.italic);
         element->SetTextAlign(options.textAlign);
         element->SetClip(options.clip);
-        if (!options.fontPath.empty())
+        element->SetFontUrl(options.fontUrl);
+        if (!options.fontUrl.empty())
+        {
+            std::wstring cachedDir = FontDownloader::GetCachedDir(options.fontUrl);
+            if (!cachedDir.empty())
+            {
+                element->SetFontPath(cachedDir);
+            }
+            else
+            {
+                element->SetFontPath(L"");
+                FontDownloader::RequestAsync(options.fontUrl, element->GetOwnerHWND(), element->GetId());
+            }
+        }
+        else if (!options.fontPath.empty())
+        {
             element->SetFontPath(options.fontPath);
+        }
         element->SetShadows(options.shadows);
         element->SetFontGradient(options.fontGradient);
         element->SetLetterSpacing(options.letterSpacing);
@@ -226,6 +249,7 @@ namespace PropertyParser
         options.textAlign = element->GetTextAlign();
         options.clip = element->GettextClip();
         options.fontPath = element->GetFontPath();
+        options.fontUrl = element->GetFontUrl();
         options.shadows = element->GetShadows();
         options.fontGradient = element->GetFontGradient();
         options.letterSpacing = element->GetLetterSpacing();

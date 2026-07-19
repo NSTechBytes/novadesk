@@ -43,6 +43,7 @@
 #include "WidgetContextMenuHelper.h"
 #include "InputBoxContextMenuHelper.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
+#include "InputBoxElement.h"
 #include "../shared/PathUtils.h"
 
 #define WIDGET_CLASS_NAME L"NovadeskWidget"
@@ -2442,6 +2443,29 @@ void Widget::OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>&
     if (updated)
     {
         Redraw();
+    }
+}
+
+void Widget::SetElementFontPath(const std::wstring& elementId, const std::wstring& fontDir)
+{
+    Element* element = FindElementById(elementId);
+    if (!element)
+        return;
+
+    TextElement* textElem = dynamic_cast<TextElement*>(element);
+    if (textElem)
+    {
+        textElem->SetFontPath(fontDir);
+        Redraw();
+        return;
+    }
+
+    InputBoxElement* inputElem = dynamic_cast<InputBoxElement*>(element);
+    if (inputElem)
+    {
+        inputElem->SetFontPath(fontDir);
+        Redraw();
+        return;
     }
 }
 

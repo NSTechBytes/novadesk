@@ -1205,6 +1205,8 @@ namespace novadesk::scripting::quickjs
                     return JS_NewFloat64(ctx, t->GetLetterSpacing());
                 if (prop == "fontPath")
                     return JS_NewString(ctx, Utils::ToString(t->GetFontPath()).c_str());
+                if (prop == "fontUrl")
+                    return JS_NewString(ctx, Utils::ToString(t->GetFontUrl()).c_str());
                 if (prop == "textAlign")
                 {
                     const char *alStr = "left-top";
@@ -1953,6 +1955,10 @@ namespace novadesk::scripting::quickjs
                 }
                 if (prop == "allowedChars")
                     return JS_NewString(ctx, Utils::ToString(input->GetAllowedChars()).c_str());
+                if (prop == "fontPath")
+                    return JS_NewString(ctx, Utils::ToString(input->GetFontPath()).c_str());
+                if (prop == "fontUrl")
+                    return JS_NewString(ctx, Utils::ToString(input->GetFontUrl()).c_str());
                 if (prop == "borderColor")
                     return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetBorderGradient(), input->GetBorderColor(), input->GetBorderAlpha())).c_str());
                 if (prop == "borderWidth")

@@ -11,6 +11,7 @@
 #include "../../../shared/PathUtils.h"
 #include "../../../shared/Utils.h"
 #include "../../../render/InputBoxElement.h"
+#include "../../../render/FontDownloader.h"
 
 namespace PropertyParser
 {
@@ -96,6 +97,10 @@ namespace PropertyParser
         std::wstring fontPath = GetStringProp(ctx, obj, "fontPath");
         if (!fontPath.empty())
             options.fontPath = PathUtils::ResolvePath(fontPath, baseDir);
+
+        std::wstring fontUrl = GetStringProp(ctx, obj, "fontUrl");
+        if (!fontUrl.empty())
+            options.fontUrl = fontUrl;
 
         {
             std::wstring fontStr = GetStringProp(ctx, obj, "fontColor");
@@ -227,8 +232,24 @@ namespace PropertyParser
         element->SetMultiline(options.multiline);
         element->SetInputType(options.inputType);
         element->SetAllowedChars(options.allowedChars);
-        if (!options.fontPath.empty())
+        element->SetFontUrl(options.fontUrl);
+        if (!options.fontUrl.empty())
+        {
+            std::wstring cachedDir = FontDownloader::GetCachedDir(options.fontUrl);
+            if (!cachedDir.empty())
+            {
+                element->SetFontPath(cachedDir);
+            }
+            else
+            {
+                element->SetFontPath(L"");
+                FontDownloader::RequestAsync(options.fontUrl, element->GetOwnerHWND(), element->GetId());
+            }
+        }
+        else if (!options.fontPath.empty())
+        {
             element->SetFontPath(options.fontPath);
+        }
 
         if (options.fontGradient.type != GRADIENT_NONE)
             element->SetFontGradient(options.fontGradient);
@@ -296,6 +317,8 @@ namespace PropertyParser
         options.fontWeight = element->GetFontWeight();
         options.italic = element->IsItalic();
         options.textAlign = element->GetTextAlign();
+        options.fontPath = element->GetFontPath();
+        options.fontUrl = element->GetFontUrl();
         options.password = element->IsPasswordMode();
         options.maxLength = element->GetMaxLength();
         options.multiline = element->IsMultiline();
