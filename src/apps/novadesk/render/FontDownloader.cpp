@@ -11,9 +11,9 @@
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "../domain/Widget.h"
 
-// woff2 / brotli vendored decode API
-#include "woff2/include/woff2/decode.h"
-#include "woff2/include/woff2/output.h"
+// woff2 / brotli vendored decode API (sources live in src/third_party/woff2)
+#include "woff2/decode.h"
+#include "woff2/output.h"
 
 #include <windows.h>
 #include <shlobj.h>        // SHGetFolderPathW

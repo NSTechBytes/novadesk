@@ -62,7 +62,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_UNICODE;UNICODE;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>.;domain;domain\animation;shared;render;render\woff2\include;render\woff2\brotli\include;scripting\quickjs;scripting\quickjs\parser;..\..\third_party\quick-js;..\..\third_party\json;..\..\third_party\nanosvg;..\..\third_party\WinToast\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;domain;domain\animation;shared;render;..\..\third_party\woff2\include;..\..\third_party\woff2\brotli\include;scripting\quickjs;scripting\quickjs\parser;..\..\third_party\quick-js;..\..\third_party\json;..\..\third_party\nanosvg;..\..\third_party\WinToast\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -94,7 +94,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_UNICODE;UNICODE;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>.;domain;domain\animation;shared;render;render\woff2\include;render\woff2\brotli\include;scripting\quickjs;scripting\quickjs\parser;..\..\third_party\quick-js;..\..\third_party\json;..\..\third_party\nanosvg;..\..\third_party\WinToast\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;domain;domain\animation;shared;render;..\..\third_party\woff2\include;..\..\third_party\woff2\brotli\include;scripting\quickjs;scripting\quickjs\parser;..\..\third_party\quick-js;..\..\third_party\json;..\..\third_party\nanosvg;..\..\third_party\WinToast\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <AdditionalOptions>/wd4146 /wd4703 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
@@ -122,27 +122,27 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="render\FontDownloader.cpp" />
-    <ClCompile Include="render\woff2\font.cc" />
-    <ClCompile Include="render\woff2\glyph.cc" />
-    <ClCompile Include="render\woff2\normalize.cc" />
-    <ClCompile Include="render\woff2\table_tags.cc" />
-    <ClCompile Include="render\woff2\transform.cc" />
-    <ClCompile Include="render\woff2\variable_length.cc" />
-    <ClCompile Include="render\woff2\woff2_common.cc" />
-    <ClCompile Include="render\woff2\woff2_dec.cc" />
-    <ClCompile Include="render\woff2\woff2_out.cc" />
-    <ClCompile Include="render\woff2\brotli\common\constants.c" />
-    <ClCompile Include="render\woff2\brotli\common\context.c" />
-    <ClCompile Include="render\woff2\brotli\common\dictionary.c" />
-    <ClCompile Include="render\woff2\brotli\common\platform.c" />
-    <ClCompile Include="render\woff2\brotli\common\shared_dictionary.c" />
-    <ClCompile Include="render\woff2\brotli\common\transform.c" />
-    <ClCompile Include="render\woff2\brotli\dec\bit_reader.c" />
-    <ClCompile Include="render\woff2\brotli\dec\decode.c" />
-    <ClCompile Include="render\woff2\brotli\dec\huffman.c" />
-    <ClCompile Include="render\woff2\brotli\dec\prefix.c" />
-    <ClCompile Include="render\woff2\brotli\dec\state.c" />
-    <ClCompile Include="render\woff2\brotli\dec\static_init.c" />
+    <ClCompile Include="..\..\third_party\woff2\font.cc" />
+    <ClCompile Include="..\..\third_party\woff2\glyph.cc" />
+    <ClCompile Include="..\..\third_party\woff2\normalize.cc" />
+    <ClCompile Include="..\..\third_party\woff2\table_tags.cc" />
+    <ClCompile Include="..\..\third_party\woff2\transform.cc" />
+    <ClCompile Include="..\..\third_party\woff2\variable_length.cc" />
+    <ClCompile Include="..\..\third_party\woff2\woff2_common.cc" />
+    <ClCompile Include="..\..\third_party\woff2\woff2_dec.cc" />
+    <ClCompile Include="..\..\third_party\woff2\woff2_out.cc" />
+    <ClCompile Include="..\..\third_party\woff2\brotli\common\constants.c" />
+    <ClCompile Include="..\..\third_party\woff2\brotli\common\context.c" />
+    <ClCompile Include="..\..\third_party\woff2\brotli\common\dictionary.c" />
+    <ClCompile Include="..\..\third_party\woff2\brotli\common\platform.c" />
+    <ClCompile Include="..\..\third_party\woff2\brotli\common\shared_dictionary.c" />
+    <ClCompile Include="..\..\third_party\woff2\brotli\common\transform.c" />
+    <ClCompile Include="..\..\third_party\woff2\brotli\dec\bit_reader.c" />
+    <ClCompile Include="..\..\third_party\woff2\brotli\dec\decode.c" />
+    <ClCompile Include="..\..\third_party\woff2\brotli\dec\huffman.c" />
+    <ClCompile Include="..\..\third_party\woff2\brotli\dec\prefix.c" />
+    <ClCompile Include="..\..\third_party\woff2\brotli\dec\state.c" />
+    <ClCompile Include="..\..\third_party\woff2\brotli\dec\static_init.c" />
     <ClCompile Include="domain\DesktopManager.cpp" />
     <ClCompile Include="domain\InputBoxContextMenuHelper.cpp" />
     <ClCompile Include="domain\Novadesk.cpp" />
