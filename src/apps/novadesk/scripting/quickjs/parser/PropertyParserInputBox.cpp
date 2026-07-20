@@ -98,9 +98,7 @@ namespace PropertyParser
         if (!fontPath.empty())
             options.fontPath = PathUtils::ResolvePath(fontPath, baseDir);
 
-        std::wstring fontUrl = GetStringProp(ctx, obj, "fontUrl");
-        if (!fontUrl.empty())
-            options.fontUrl = fontUrl;
+
 
         {
             std::wstring fontStr = GetStringProp(ctx, obj, "fontColor");
@@ -232,23 +230,29 @@ namespace PropertyParser
         element->SetMultiline(options.multiline);
         element->SetInputType(options.inputType);
         element->SetAllowedChars(options.allowedChars);
-        element->SetFontUrl(options.fontUrl);
-        if (!options.fontUrl.empty())
+        if (!options.fontPath.empty())
         {
-            std::wstring cachedDir = FontDownloader::GetCachedDir(options.fontUrl);
-            if (!cachedDir.empty())
+            if (PathUtils::IsURL(options.fontPath))
             {
-                element->SetFontPath(cachedDir);
+                std::wstring cachedDir = FontDownloader::GetCachedDir(options.fontPath);
+                if (!cachedDir.empty())
+                {
+                    element->SetFontPath(cachedDir);
+                }
+                else
+                {
+                    element->SetFontPath(L"");
+                    FontDownloader::RequestAsync(options.fontPath, element->GetOwnerHWND(), element->GetId());
+                }
             }
             else
             {
-                element->SetFontPath(L"");
-                FontDownloader::RequestAsync(options.fontUrl, element->GetOwnerHWND(), element->GetId());
+                element->SetFontPath(options.fontPath);
             }
         }
-        else if (!options.fontPath.empty())
+        else
         {
-            element->SetFontPath(options.fontPath);
+            element->SetFontPath(L"");
         }
 
         if (options.fontGradient.type != GRADIENT_NONE)
@@ -318,7 +322,7 @@ namespace PropertyParser
         options.italic = element->IsItalic();
         options.textAlign = element->GetTextAlign();
         options.fontPath = element->GetFontPath();
-        options.fontUrl = element->GetFontUrl();
+
         options.password = element->IsPasswordMode();
         options.maxLength = element->GetMaxLength();
         options.multiline = element->IsMultiline();

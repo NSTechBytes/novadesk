@@ -137,11 +137,7 @@ namespace PropertyParser
             options.fontPath = PathUtils::ResolvePath(fontPath, baseDir);
         }
 
-        std::wstring fontUrl = GetStringProp(ctx, obj, "fontUrl");
-        if (!fontUrl.empty())
-        {
-            options.fontUrl = fontUrl;
-        }
+
 
         std::wstring style = GetStringProp(ctx, obj, "fontStyle");
         if (!style.empty())
@@ -202,23 +198,29 @@ namespace PropertyParser
         element->SetItalic(options.italic);
         element->SetTextAlign(options.textAlign);
         element->SetClip(options.clip);
-        element->SetFontUrl(options.fontUrl);
-        if (!options.fontUrl.empty())
+        if (!options.fontPath.empty())
         {
-            std::wstring cachedDir = FontDownloader::GetCachedDir(options.fontUrl);
-            if (!cachedDir.empty())
+            if (PathUtils::IsURL(options.fontPath))
             {
-                element->SetFontPath(cachedDir);
+                std::wstring cachedDir = FontDownloader::GetCachedDir(options.fontPath);
+                if (!cachedDir.empty())
+                {
+                    element->SetFontPath(cachedDir);
+                }
+                else
+                {
+                    element->SetFontPath(L"");
+                    FontDownloader::RequestAsync(options.fontPath, element->GetOwnerHWND(), element->GetId());
+                }
             }
             else
             {
-                element->SetFontPath(L"");
-                FontDownloader::RequestAsync(options.fontUrl, element->GetOwnerHWND(), element->GetId());
+                element->SetFontPath(options.fontPath);
             }
         }
-        else if (!options.fontPath.empty())
+        else
         {
-            element->SetFontPath(options.fontPath);
+            element->SetFontPath(L"");
         }
         element->SetShadows(options.shadows);
         element->SetFontGradient(options.fontGradient);
@@ -249,7 +251,7 @@ namespace PropertyParser
         options.textAlign = element->GetTextAlign();
         options.clip = element->GettextClip();
         options.fontPath = element->GetFontPath();
-        options.fontUrl = element->GetFontUrl();
+
         options.shadows = element->GetShadows();
         options.fontGradient = element->GetFontGradient();
         options.letterSpacing = element->GetLetterSpacing();

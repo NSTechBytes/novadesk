@@ -197,7 +197,6 @@ namespace PropertyParser
         TextAlignment textAlign = TEXT_ALIGN_LEFT_TOP;
         TextClip clip = TEXT_CLIP_NONE;
         std::wstring fontPath;
-        std::wstring fontUrl;
         std::vector<TextShadow> shadows;
         GradientInfo fontGradient;
         float letterSpacing = 0.0f;
@@ -225,7 +224,6 @@ namespace PropertyParser
         bool italic = false;
         TextAlignment textAlign = TEXT_ALIGN_LEFT_CENTER;
         std::wstring fontPath;
-        std::wstring fontUrl;
 
         COLORREF placeholderColor = RGB(150, 150, 150);
         BYTE placeholderAlpha = 255;
