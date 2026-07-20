@@ -5,16 +5,16 @@
 // Test cases:
 //   1. Text element renders with a Google Fonts WOFF2 URL  (Orbitron)
 //   2. InputBox element renders with a Google Fonts WOFF2 URL (Exo 2)
-//   3. A second Text element with the *same* URL hits disk cache
-//      and resolves faster than the first download.
+//   3. A second Text element with the *same* URL hits the in-memory cache
+//      and resolves immediately without downloading again.
 //   4. An invalid URL is handled gracefully (element still renders,
 //      fontPath stays empty, no crash).
 //
 // Detection strategy:
 //   After a successful async download, FontDownloader calls
-//   element->SetFontPath(cachedDir) on the main thread.
+//   element->SetFontPath(url) on the main thread.
 //   We read that back via ui.getElementProperty(id, "fontPath").
-//   A non-empty fontPath means the font was downloaded and applied.
+//   A non-empty fontPath means the font was downloaded and loaded.
 // ============================================================
 
 // --------------- helpers ---------------

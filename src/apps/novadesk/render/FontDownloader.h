@@ -13,29 +13,31 @@
 /*
 ** FontDownloader provides async font downloading from URLs (http/https).
 ** Supports .ttf, .otf, and .woff2 (auto-converted to TTF) formats.
-** Downloaded fonts are cached permanently in %LOCALAPPDATA%\Novadesk\FontCache\.
+** Downloaded fonts are registered and loaded entirely in-memory using
+** IDWriteInMemoryFontFileLoader (re-downloaded every application launch).
 **
 ** Usage:
-**   // If already cached, returns path immediately (synchronous, no I/O miss):
+**   // If already downloaded in memory, returns url immediately:
 **   std::wstring path = FontDownloader::GetCachedDir(url);
 **
-**   // If not cached, start async download; widget is updated and redrawn when ready:
+**   // If not yet downloaded, start async download:
 **   FontDownloader::RequestAsync(url, widgetHwnd, elementId);
 */
 namespace FontDownloader
 {
     /*
-    ** Returns the directory containing the cached font for `url`,
-    ** or an empty string if not yet cached.
+    ** Returns `url` if the font is already downloaded and loaded in-memory,
+    ** or an empty string if not yet loaded.
     ** Safe to call from any thread.
     */
     std::wstring GetCachedDir(const std::wstring &url);
 
     /*
     ** Starts an asynchronous font download for `url`.
-    ** On completion, posts WM_NOVADESK_DISPATCH to `widgetHwnd` which causes
-    ** the engine to call SetElementFontPath(elementId, cachedDir) + Redraw().
-    ** If url is already cached or in-progress, this is a no-op.
+    ** On completion, registers the in-memory font with FontManager,
+    ** then posts WM_NOVADESK_DISPATCH to `widgetHwnd` which causes
+    ** the engine to call SetElementFontPath(elementId, url) + Redraw().
+    ** If url is already downloading or loaded, this is a no-op.
     */
     void RequestAsync(const std::wstring &url, HWND widgetHwnd, const std::wstring &elementId);
 
@@ -47,13 +49,7 @@ namespace FontDownloader
     {
         HWND widgetHwnd;
         std::wstring elementId;
-        std::wstring cachedDir;   // empty on failure
+        std::wstring cachedDir;   // holds the URL on success, empty on failure
     };
     void DispatchFontReady(void *payload);
-
-    /*
-    ** Returns the per-user font cache directory path.
-    ** %LOCALAPPDATA%\Novadesk\FontCache\
-    */
-    std::wstring CacheDir();
 }

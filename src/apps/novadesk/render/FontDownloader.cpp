@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "FontDownloader.h"
+#include "FontManager.h"
 #include "../shared/Logging.h"
 #include "../shared/System.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
@@ -30,81 +31,10 @@ namespace FontDownloader
     namespace
     {
         // -----------------------------------------------------------------------
-        // Cache directory helpers
+        // In-progress tracking to avoid double-downloads (keyed by URL)
         // -----------------------------------------------------------------------
-
-        std::wstring g_CacheDir;
-        std::once_flag g_CacheDirFlag;
-
-        std::wstring BuildCacheDir()
-        {
-            wchar_t localApp[MAX_PATH] = {};
-            if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, localApp)))
-            {
-                std::wstring path = std::wstring(localApp) + L"\\Novadesk\\FontCache\\";
-                std::error_code ec;
-                std::filesystem::create_directories(path, ec);
-                return path;
-            }
-            // Fallback to temp
-            wchar_t tmp[MAX_PATH] = {};
-            GetTempPathW(MAX_PATH, tmp);
-            std::wstring path = std::wstring(tmp) + L"NovadeskFontCache\\";
-            std::error_code ec;
-            std::filesystem::create_directories(path, ec);
-            return path;
-        }
-
-        // -----------------------------------------------------------------------
-        // URL → cache path helpers
-        // -----------------------------------------------------------------------
-
-        std::wstring UrlToCacheSubdir(const std::wstring &url)
-        {
-            // Lowercase for consistent hashing
-            std::wstring lower = url;
-            std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
-
-            // Simple FNV-1a hash on wide characters
-            uint64_t hash = 14695981039346656037ULL;
-            for (wchar_t c : lower)
-            {
-                hash ^= static_cast<uint64_t>(c);
-                hash *= 1099511628211ULL;
-            }
-
-            wchar_t buf[32];
-            swprintf_s(buf, L"%016llx", hash);
-            return CacheDir() + buf + L"\\";
-        }
-
-        std::wstring UrlToCacheFilePath(const std::wstring &url)
-        {
-            std::wstring subdir = UrlToCacheSubdir(url);
-
-            // Determine extension from URL
-            std::wstring ext = L".ttf";
-            std::wstring::size_type qpos = url.find(L'?');
-            std::wstring urlNoQuery = (qpos != std::wstring::npos) ? url.substr(0, qpos) : url;
-            std::wstring::size_type dotpos = urlNoQuery.rfind(L'.');
-            if (dotpos != std::wstring::npos)
-            {
-                std::wstring rawExt = urlNoQuery.substr(dotpos);
-                std::transform(rawExt.begin(), rawExt.end(), rawExt.begin(), ::towlower);
-                if (rawExt == L".woff2")
-                    ext = L".ttf";
-                else if (rawExt == L".otf" || rawExt == L".ttf" || rawExt == L".ttc")
-                    ext = rawExt;
-            }
-            return subdir + L"font" + ext;
-        }
-
-        // -----------------------------------------------------------------------
-        // In-progress tracking to avoid double-downloads
-        // -----------------------------------------------------------------------
-
         std::mutex g_InProgressMutex;
-        std::set<std::wstring> g_InProgress; // keyed by subdirectory path
+        std::set<std::wstring> g_InProgress;
 
         // -----------------------------------------------------------------------
         // WOFF2 detection and conversion
@@ -186,32 +116,22 @@ namespace FontDownloader
     // Public API
     // -----------------------------------------------------------------------
 
-    std::wstring CacheDir()
-    {
-        std::call_once(g_CacheDirFlag, []() { g_CacheDir = BuildCacheDir(); });
-        return g_CacheDir;
-    }
-
     std::wstring GetCachedDir(const std::wstring &url)
     {
-        std::wstring filepath = UrlToCacheFilePath(url);
-        if (std::filesystem::exists(filepath))
-            return UrlToCacheSubdir(url);
+        if (FontManager::HasMemoryFont(url))
+            return url;
         return L"";
     }
 
     void RequestAsync(const std::wstring &url, HWND widgetHwnd, const std::wstring &elementId)
     {
-        std::wstring subdir = UrlToCacheSubdir(url);
-        std::wstring filepath = UrlToCacheFilePath(url);
-
         // Check cache again inside lock to avoid race conditions
         {
             std::lock_guard<std::mutex> lk(g_InProgressMutex);
-            if (std::filesystem::exists(filepath))
+            if (FontManager::HasMemoryFont(url))
             {
-                // Already cached — dispatch immediately
-                auto *payload = new FontReadyPayload{widgetHwnd, elementId, subdir};
+                // Already downloaded — dispatch immediately
+                auto *payload = new FontReadyPayload{widgetHwnd, elementId, url};
                 HWND msgWnd = JSEngine::GetMessageWindow();
                 if (msgWnd)
                 {
@@ -227,19 +147,19 @@ namespace FontDownloader
             }
 
             // Check if already in-progress
-            if (g_InProgress.count(subdir))
+            if (g_InProgress.count(url))
             {
                 Logging::Log(LogLevel::Debug, L"FontDownloader: '%s' is already downloading", url.c_str());
                 return;
             }
 
-            g_InProgress.insert(subdir);
+            g_InProgress.insert(url);
         }
 
         Logging::Log(LogLevel::Info, L"FontDownloader: Starting async download of '%s'", url.c_str());
 
         // Capture everything needed by value
-        std::thread([url, subdir, filepath, widgetHwnd, elementId]()
+        std::thread([url, widgetHwnd, elementId]()
         {
             std::wstring cachedDir;
 
@@ -266,23 +186,9 @@ namespace FontDownloader
 
                 if (ok)
                 {
-                    // Create sub-directory if it doesn't exist
-                    std::error_code ec;
-                    std::filesystem::create_directories(subdir, ec);
-
-                    // Write to cache
-                    std::ofstream f(std::filesystem::path(filepath), std::ios::binary | std::ios::trunc);
-                    if (f.is_open())
-                    {
-                        f.write(rawData.data(), static_cast<std::streamsize>(rawData.size()));
-                        f.close();
-                        Logging::Log(LogLevel::Info, L"FontDownloader: Cached font at '%s'", filepath.c_str());
-                        cachedDir = subdir;
-                    }
-                    else
-                    {
-                        Logging::Log(LogLevel::Error, L"FontDownloader: Could not write cache file '%s'", filepath.c_str());
-                    }
+                    // Register the font data in memory
+                    FontManager::AddMemoryFont(url, rawData);
+                    cachedDir = url;
                 }
             }
             else
@@ -292,7 +198,7 @@ namespace FontDownloader
 
             {
                 std::lock_guard<std::mutex> lk(g_InProgressMutex);
-                g_InProgress.erase(subdir);
+                g_InProgress.erase(url);
             }
 
             // Post result back to main thread
