@@ -2,8 +2,8 @@ import { app, widgetWindow } from "novadesk";
 
 console.log("=== OnlineFontTest Integration ===");
 
-// Open the UI window that will run all font-download assertions.
-const win = new widgetWindow({
+// Keep a reference on globalThis to prevent garbage collection of the window.
+globalThis.win = new widgetWindow({
   id: "OnlineFontTestWindow",
   x: 200,
   y: 150,
@@ -14,10 +14,21 @@ const win = new widgetWindow({
   show: true
 });
 
+globalThis.win.on("close", function () {
+  app.exit();
+});
+
 console.log("[PASS] widgetWindow created: OnlineFontTestWindow");
 
-// Give the async download up to 15 s to complete, then signal the UI to
-// perform its post-download assertions and exit.
+// Give the async downloads up to 10 s to complete, then signal the UI to
+// perform its post-download assertions.
 setTimeout(() => {
+  console.log("[INFO] Triggering font assertions check via IPC...");
   ipcMain.send("font:test:check");
-}, 15000);
+}, 10000);
+
+// Close app 2 s after the check triggers
+setTimeout(() => {
+  console.log("[INFO] OnlineFontTest exiting...");
+  app.exit();
+}, 12000);

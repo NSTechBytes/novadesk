@@ -1537,6 +1537,12 @@ void Widget::AddText(const PropertyParser::TextOptions &options)
                                            options.text, options.fontFace, options.fontSize, options.fontColor, options.alpha,
                                            options.fontWeight, options.italic, options.textAlign, options.clip, options.fontPath);
 
+    // Set the owner HWND before applying options so that any async font download
+    // request captures the correct widget HWND (element->GetOwnerHWND() would
+    // otherwise return nullptr before the first Redraw / UpdateLayeredWindowContent).
+    if (m_hWnd)
+        element->SetOwnerHWND(m_hWnd);
+
     // Logging::Log(LogLevel::Debug, L"Widget::AddText: Created TextElement id='%s', text='%s', x=%d, y=%d", element->GetId().c_str(), element->GetText().c_str(), element->GetX(), element->GetY());
 
     PropertyParser::ApplyTextOptions(element, options); // Changed from ApplyElementOptions
@@ -1769,6 +1775,12 @@ void Widget::AddInputBox(const PropertyParser::InputBoxOptions &options)
     }
 
     InputBoxElement *element = new InputBoxElement(options.id, options.x, options.y, options.width, options.height);
+
+    // Set the owner HWND before applying options so that any async font download
+    // request captures the correct widget HWND.
+    if (m_hWnd)
+        element->SetOwnerHWND(m_hWnd);
+
     PropertyParser::ApplyInputBoxOptions(element, options);
 
     m_Elements.push_back(element);

@@ -21,10 +21,11 @@
 #include <filesystem>
 #include <fstream>
 #include <mutex>
-#include <set>
 #include <string>
 #include <algorithm>
 #include <functional>
+#include <unordered_map>
+#include <vector>
 
 namespace FontDownloader
 {
@@ -32,9 +33,15 @@ namespace FontDownloader
     {
         // -----------------------------------------------------------------------
         // In-progress tracking to avoid double-downloads (keyed by URL)
+        // Tracks all pending element/widget requests for a given URL while downloading.
         // -----------------------------------------------------------------------
+        struct PendingRequest
+        {
+            HWND widgetHwnd;
+            std::wstring elementId;
+        };
         std::mutex g_InProgressMutex;
-        std::set<std::wstring> g_InProgress;
+        std::unordered_map<std::wstring, std::vector<PendingRequest>> g_InProgress;
 
         // -----------------------------------------------------------------------
         // WOFF2 detection and conversion
@@ -147,19 +154,22 @@ namespace FontDownloader
             }
 
             // Check if already in-progress
-            if (g_InProgress.count(url))
+            auto it = g_InProgress.find(url);
+            if (it != g_InProgress.end())
             {
-                Logging::Log(LogLevel::Debug, L"FontDownloader: '%s' is already downloading", url.c_str());
+                Logging::Log(LogLevel::Debug, L"FontDownloader: '%s' is already downloading; queueing request for element '%s'", url.c_str(), elementId.c_str());
+                it->second.push_back(PendingRequest{widgetHwnd, elementId});
                 return;
             }
 
-            g_InProgress.insert(url);
+            // Add the first request and start the download
+            g_InProgress[url].push_back(PendingRequest{widgetHwnd, elementId});
         }
 
         Logging::Log(LogLevel::Info, L"FontDownloader: Starting async download of '%s'", url.c_str());
 
         // Capture everything needed by value
-        std::thread([url, widgetHwnd, elementId]()
+        std::thread([url]()
         {
             std::wstring cachedDir;
 
@@ -196,21 +206,30 @@ namespace FontDownloader
                 Logging::Log(LogLevel::Error, L"FontDownloader: Download failed for '%s'", url.c_str());
             }
 
+            std::vector<PendingRequest> pending;
             {
                 std::lock_guard<std::mutex> lk(g_InProgressMutex);
-                g_InProgress.erase(url);
+                auto it = g_InProgress.find(url);
+                if (it != g_InProgress.end())
+                {
+                    pending = std::move(it->second);
+                    g_InProgress.erase(it);
+                }
             }
 
-            // Post result back to main thread
+            // Post results back to main thread for all pending requests
             HWND msgWnd = JSEngine::GetMessageWindow();
             if (msgWnd)
             {
-                auto *payload = new FontReadyPayload{widgetHwnd, elementId, cachedDir};
-                if (!PostMessageW(msgWnd, JSEngine::WM_NOVADESK_DISPATCH,
-                                  reinterpret_cast<WPARAM>(&DispatchFontReady),
-                                  reinterpret_cast<LPARAM>(payload)))
+                for (const auto &req : pending)
                 {
-                    delete payload;
+                    auto *payload = new FontReadyPayload{req.widgetHwnd, req.elementId, cachedDir};
+                    if (!PostMessageW(msgWnd, JSEngine::WM_NOVADESK_DISPATCH,
+                                      reinterpret_cast<WPARAM>(&DispatchFontReady),
+                                      reinterpret_cast<LPARAM>(payload)))
+                    {
+                        delete payload;
+                    }
                 }
             }
         }).detach();
