@@ -112,7 +112,7 @@ void ButtonElement::Render(ID2D1DeviceContext *context)
             
             context->SetTransform(currentTransform);
 
-            Logging::Log(LogLevel::Info, L"Button Render Success: id=%s, frame=%d, dest=[%.1f, %.1f]", m_Id.c_str(), frameIndex, destW, destH);
+            //Logging::Log(LogLevel::Info, L"Button Render Success: id=%s, frame=%d, dest=[%.1f, %.1f]", m_Id.c_str(), frameIndex, destW, destH);
         }
         else
         {
