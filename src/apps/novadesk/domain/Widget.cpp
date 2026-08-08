@@ -2115,7 +2115,8 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx, JS
                 &cfg.paddingLeft,
                 &cfg.paddingTop,
                 &cfg.paddingRight,
-                &cfg.paddingBottom);
+                &cfg.paddingBottom,
+                &cfg.flexDirection);
         }
         else
         {

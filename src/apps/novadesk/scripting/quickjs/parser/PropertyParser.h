@@ -84,7 +84,8 @@ namespace PropertyParser
         const int *paddingLeft = nullptr,
         const int *paddingTop = nullptr,
         const int *paddingRight = nullptr,
-        const int *paddingBottom = nullptr);
+        const int *paddingBottom = nullptr,
+        const std::wstring *flexDirection = nullptr);
     void PreFillAreaGraphOptions(AreaGraphOptions &options, AreaGraphElement *element);
     void PreFillInputBoxOptions(InputBoxOptions &options, InputBoxElement *element);
 
