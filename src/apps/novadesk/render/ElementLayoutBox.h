@@ -7,6 +7,8 @@
  
 #pragma once
 
+#include <algorithm>
+
 #include "BoxBorderPaint.h"
 #include "ShapeElement.h"
 
@@ -72,6 +74,10 @@ public:
     void SetBoxShadows(const std::vector<BoxShadow> &shadows) { m_BoxShadows = shadows; }
     const std::vector<BoxShadow> &GetBoxShadows() const { return m_BoxShadows; }
 
+    // Element-scoped backdrop-filter blur radius, in DIPs.
+    void SetBackdropFilterBlur(float radius) { m_BackdropFilterBlur = (std::max)(0.0f, radius); }
+    float GetBackdropFilterBlur() const { return m_BackdropFilterBlur; }
+
     void SetBorderStyle(BorderStyle top, BorderStyle right, BorderStyle bottom, BorderStyle left)
     {
         m_BorderStyleTop = top;
@@ -100,6 +106,7 @@ public:
     int GetLayoutGap() const { return m_LayoutGap; }
 
 private:
+    void RenderBackdropFilter(ID2D1DeviceContext *context, const D2D1_ROUNDED_RECT &rect);
     void RenderSingleShadow(ID2D1DeviceContext *context, const D2D1_ROUNDED_RECT &baseRect, const BoxShadow &shadow);
     void RenderListMarker(ID2D1DeviceContext *context);
     void RenderTextMarker(ID2D1DeviceContext *context, const std::wstring &text,
@@ -110,6 +117,7 @@ private:
     float m_RadiusX = 0.0f;
     float m_RadiusY = 0.0f;
     std::vector<BoxShadow> m_BoxShadows;
+    float m_BackdropFilterBlur = 0.0f;
     BorderStyle m_BorderStyleTop = BorderStyle::Solid;
     BorderStyle m_BorderStyleRight = BorderStyle::Solid;
     BorderStyle m_BorderStyleBottom = BorderStyle::Solid;

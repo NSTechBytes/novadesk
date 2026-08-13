@@ -413,6 +413,7 @@ namespace PropertyParser
         std::vector<LayoutBoxShadowOptions> boxShadows;
         bool hasBoxShadowError = false;
         std::wstring boxShadowError;
+        float backdropFilterBlur = 0.0f;
 
         std::wstring direction = L"ltr";
         std::wstring flexDirection = L"row";

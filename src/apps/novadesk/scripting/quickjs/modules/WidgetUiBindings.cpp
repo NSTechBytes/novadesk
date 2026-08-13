@@ -1865,6 +1865,8 @@ namespace novadesk::scripting::quickjs
                         }
                         return arr;
                     }
+                    if (prop == "backdropFilter")
+                        return JS_NewFloat64(ctx, layoutPrefill.backdropFilterBlur);
                 }
 
                 if (auto *pathShape = dynamic_cast<PathShape *>(shape))

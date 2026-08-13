@@ -246,6 +246,21 @@ namespace PropertyParser
         }
         JS_FreeValue(ctx, shadowV);
 
+        auto parseBackdropFilter = [&](JSValueConst value) -> bool
+        {
+            double numericRadius = 0.0;
+            if (JS_ToFloat64(ctx, &numericRadius, value) == 0)
+            {
+                options.backdropFilterBlur = static_cast<float>((std::max)(0.0, numericRadius));
+                return true;
+            }
+            return false;
+        };
+        JSValue backdropFilterV = JS_GetPropertyStr(ctx, obj, "backdropFilter");
+        if (!JS_IsUndefined(backdropFilterV) && !JS_IsNull(backdropFilterV))
+            parseBackdropFilter(backdropFilterV);
+        JS_FreeValue(ctx, backdropFilterV);
+
         options.direction = GetStringProp(ctx, obj, "direction");
         if (options.direction.empty())
         {
@@ -396,6 +411,11 @@ namespace PropertyParser
         JSValue stylePadding = JS_GetPropertyStr(ctx, obj, "style");
         if (JS_IsObject(stylePadding))
         {
+            JSValue styleBackdropFilterV = JS_GetPropertyStr(ctx, stylePadding, "backdropFilter");
+            if (!JS_IsUndefined(styleBackdropFilterV) && !JS_IsNull(styleBackdropFilterV))
+                parseBackdropFilter(styleBackdropFilterV);
+            JS_FreeValue(ctx, styleBackdropFilterV);
+
             int padX = 0;
             int padY = 0;
             if (GetIntProp(ctx, stylePadding, "padding", pad))
@@ -502,6 +522,7 @@ namespace PropertyParser
             shadows.push_back(outShadow);
         }
         element->SetBoxShadows(shadows);
+        element->SetBackdropFilterBlur(options.backdropFilterBlur);
 
         // Apply padding values to the element
         // Logging::Log(LogLevel::Debug, L"[PADDING] ApplyLayoutBoxOptions: Setting padding L=%d, T=%d, R=%d, B=%d on element '%s'",
@@ -553,6 +574,7 @@ namespace PropertyParser
             outShadow.inset = shadow.inset;
             options.boxShadows.push_back(outShadow);
         }
+        options.backdropFilterBlur = element->GetBackdropFilterBlur();
 
         options.direction = direction ? *direction : L"ltr";
         options.flexDirection = flexDirection ? *flexDirection : element->GetLayoutDirection();

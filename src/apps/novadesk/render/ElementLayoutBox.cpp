@@ -168,6 +168,18 @@ GfxRect ElementLayoutBox::GetBackgroundBounds()
 
 void ElementLayoutBox::Render(ID2D1DeviceContext* context)
 {
+    D2D1_ROUNDED_RECT rect;
+    const int totalWidth = GetWidth();
+    const int totalHeight = GetHeight();
+    rect.rect = D2D1::RectF(
+        (float)m_X,
+        (float)m_Y,
+        (float)(m_X + totalWidth),
+        (float)(m_Y + totalHeight));
+    rect.radiusX = m_RadiusX;
+    rect.radiusY = m_RadiusY;
+    RenderBackdropFilter(context, rect);
+
     D2D1_MATRIX_3X2_F originalTransform;
     ApplyRenderTransform(context, originalTransform);
     context->SetAntialiasMode(m_AntiAlias ? D2D1_ANTIALIAS_MODE_PER_PRIMITIVE : D2D1_ANTIALIAS_MODE_ALIASED);
@@ -175,23 +187,6 @@ void ElementLayoutBox::Render(ID2D1DeviceContext* context)
     Microsoft::WRL::ComPtr<ID2D1Brush> fillBrush;
     TryCreateStrokeBrush(context, strokeBrush);
     TryCreateFillBrush(context, fillBrush);
-    D2D1_ROUNDED_RECT rect;
-    
-    // Use Element::GetWidth() and GetHeight() which handle auto-sizing and padding
-    const int totalWidth = GetWidth();
-    const int totalHeight = GetHeight();
-    
-    // Logging::Log(LogLevel::Debug, L"[AUTO-SIZE] Render '%s': WDefined=%d HDefined=%d, total W=%d H=%d (includes padding L=%d T=%d R=%d B=%d)",
-    //     m_Id.c_str(), m_WDefined, m_HDefined, totalWidth, totalHeight,
-    //     m_PaddingLeft, m_PaddingTop, m_PaddingRight, m_PaddingBottom);
-    
-    rect.rect = D2D1::RectF(
-        (float)m_X, 
-        (float)m_Y, 
-        (float)(m_X + totalWidth), 
-        (float)(m_Y + totalHeight));
-    rect.radiusX = m_RadiusX;
-    rect.radiusY = m_RadiusY;
     for (const auto& shadow : m_BoxShadows)
     {
         if (!shadow.inset)
@@ -238,6 +233,82 @@ void ElementLayoutBox::Render(ID2D1DeviceContext* context)
     
     RenderBevel(context);
     RestoreRenderTransform(context, originalTransform);
+}
+
+void ElementLayoutBox::RenderBackdropFilter(ID2D1DeviceContext *context, const D2D1_ROUNDED_RECT &rect)
+{
+    if (!context || m_BackdropFilterBlur <= 0.0f)
+        return;
+
+    // Direct2D documents the blur extent as three times the standard
+    // deviation. Include that margin in the snapshot so the filter does not
+    // produce a clipped edge inside the rounded box.
+    const float blurExtent = std::ceil(m_BackdropFilterBlur * 3.0f);
+    const D2D1_SIZE_U targetSize = context->GetPixelSize();
+    if (targetSize.width == 0 || targetSize.height == 0)
+        return;
+
+    FLOAT dpiX = 96.0f;
+    FLOAT dpiY = 96.0f;
+    context->GetDpi(&dpiX, &dpiY);
+    const float pxToDipX = 96.0f / dpiX;
+    const float pxToDipY = 96.0f / dpiY;
+    const float dipToPxX = dpiX / 96.0f;
+    const float dipToPxY = dpiY / 96.0f;
+
+    const LONG left = (std::max)(0L, static_cast<LONG>(std::floor((rect.rect.left - blurExtent) * dipToPxX)));
+    const LONG top = (std::max)(0L, static_cast<LONG>(std::floor((rect.rect.top - blurExtent) * dipToPxY)));
+    const LONG right = (std::min)(static_cast<LONG>(targetSize.width), static_cast<LONG>(std::ceil((rect.rect.right + blurExtent) * dipToPxX)));
+    const LONG bottom = (std::min)(static_cast<LONG>(targetSize.height), static_cast<LONG>(std::ceil((rect.rect.bottom + blurExtent) * dipToPxY)));
+    if (right <= left || bottom <= top)
+        return;
+
+    const D2D1_SIZE_F snapshotSize = D2D1::SizeF(
+        (right - left) * pxToDipX,
+        (bottom - top) * pxToDipY);
+    Microsoft::WRL::ComPtr<ID2D1BitmapRenderTarget> snapshotTarget;
+    if (FAILED(context->CreateCompatibleRenderTarget(snapshotSize, &snapshotTarget)))
+        return;
+
+    Microsoft::WRL::ComPtr<ID2D1Bitmap> snapshot;
+    if (FAILED(snapshotTarget->GetBitmap(&snapshot)))
+        return;
+
+    const D2D1_RECT_U sourceRect = D2D1::RectU(left, top, right, bottom);
+    if (FAILED(snapshot->CopyFromRenderTarget(nullptr, context, &sourceRect)))
+        return;
+
+    Microsoft::WRL::ComPtr<ID2D1Effect> blur;
+    if (FAILED(context->CreateEffect(CLSID_D2D1GaussianBlur, &blur)))
+        return;
+    blur->SetInput(0, snapshot.Get());
+    blur->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, m_BackdropFilterBlur);
+    blur->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE, D2D1_BORDER_MODE_HARD);
+
+    Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> clip;
+    ID2D1Factory1 *factory = Direct2D::GetFactory();
+    if (!factory || FAILED(factory->CreateRoundedRectangleGeometry(rect, &clip)))
+        return;
+
+    const D2D1_LAYER_PARAMETERS1 layer = D2D1::LayerParameters1(
+        rect.rect,
+        clip.Get(),
+        D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+        D2D1::Matrix3x2F::Identity(),
+        1.0f,
+        nullptr,
+        D2D1_LAYER_OPTIONS1_NONE);
+    context->PushLayer(layer, nullptr);
+    const D2D1_POINT_2F imageOffset = D2D1::Point2F(
+        left * pxToDipX,
+        top * pxToDipY);
+    context->DrawImage(
+        blur.Get(),
+        &imageOffset,
+        nullptr,
+        D2D1_INTERPOLATION_MODE_LINEAR,
+        D2D1_COMPOSITE_MODE_SOURCE_OVER);
+    context->PopLayer();
 }
 
 void ElementLayoutBox::RenderSingleShadow(ID2D1DeviceContext* context, const D2D1_ROUNDED_RECT& baseRect, const BoxShadow& shadow)
