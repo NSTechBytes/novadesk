@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <utility>
 #include "Direct2DHelper.h"
 #include "ImageElement.h"
 #include "TextElement.h"
@@ -728,16 +729,21 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     {
     case WM_USER + 500:
     {
-        std::wstring*         pUrl    = reinterpret_cast<std::wstring*>(wParam);
-        std::vector<BYTE>*    pBuffer = reinterpret_cast<std::vector<BYTE>*>(lParam);
-        if (pUrl && pBuffer)
+        std::wstring* pUrl = reinterpret_cast<std::wstring*>(wParam);
+        AsyncImageResult* result = reinterpret_cast<AsyncImageResult*>(lParam);
+        if (pUrl && result)
         {
             if (widget)
             {
-                widget->OnImageDownloaded(*pUrl, *pBuffer);
+                if (widget->m_Options.backgroundImage == *pUrl && result->decodedImage.IsValid())
+                {
+                    widget->m_BackgroundImage.OnImageDecoded(*pUrl, std::move(result->decodedImage));
+                    widget->Redraw();
+                }
+                widget->OnImageDownloaded(*pUrl, result->encodedBytes);
             }
             delete pUrl;
-            delete pBuffer;
+            delete result;
         }
         return 0;
     }
@@ -2500,7 +2506,7 @@ void Widget::Redraw()
 void Widget::OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer)
 {
     bool updated = false;
-    if (m_Options.backgroundImage == url)
+    if (m_Options.backgroundImage == url && !m_BackgroundImage.IsLoaded())
     {
         m_BackgroundImage.OnImageDownloaded(url, buffer);
         updated = true;

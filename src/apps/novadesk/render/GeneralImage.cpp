@@ -16,6 +16,42 @@
 #include <cstring>
 #include <d2d1effects.h>
 #include <thread>
+#include <utility>
+
+namespace
+{
+    bool DecodeImageBytes(const std::vector<BYTE>& bytes, DecodedImageData& out)
+    {
+        if (bytes.empty()) return false;
+        const HRESULT comHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        const bool uninitialize = SUCCEEDED(comHr);
+        Microsoft::WRL::ComPtr<IWICImagingFactory> factory;
+        HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.GetAddressOf()));
+        if (SUCCEEDED(hr))
+        {
+            Microsoft::WRL::ComPtr<IWICStream> stream;
+            Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder;
+            Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
+            Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
+            hr = factory->CreateStream(stream.GetAddressOf());
+            if (SUCCEEDED(hr)) hr = stream->InitializeFromMemory(const_cast<BYTE*>(bytes.data()), static_cast<DWORD>(bytes.size()));
+            if (SUCCEEDED(hr)) hr = factory->CreateDecoderFromStream(stream.Get(), nullptr, WICDecodeMetadataCacheOnLoad, decoder.GetAddressOf());
+            if (SUCCEEDED(hr)) hr = decoder->GetFrame(0, frame.GetAddressOf());
+            if (SUCCEEDED(hr)) hr = factory->CreateFormatConverter(converter.GetAddressOf());
+            if (SUCCEEDED(hr)) hr = converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeMedianCut);
+            if (SUCCEEDED(hr)) hr = converter->GetSize(&out.width, &out.height);
+            out.stride = out.width * 4;
+            if (SUCCEEDED(hr) && out.height > 0 && out.stride / 4 == out.width)
+            {
+                const size_t byteCount = static_cast<size_t>(out.stride) * out.height;
+                out.pixels.resize(byteCount);
+                hr = converter->CopyPixels(nullptr, out.stride, static_cast<UINT>(byteCount), out.pixels.data());
+            }
+        }
+        if (uninitialize) CoUninitialize();
+        return SUCCEEDED(hr) && out.IsValid();
+    }
+}
 
 GeneralImage::GeneralImage()
 {
@@ -94,6 +130,7 @@ void GeneralImage::SetPath(const std::wstring &path)
     m_LoadedPath = path;
     m_IsFallbackShowing = false;
     m_DownloadedBuffer.clear();
+    m_DecodedImage = {};
     ResetBitmapCache();
 
     if (PathUtils::IsURL(path))
@@ -125,39 +162,56 @@ void GeneralImage::EnsureBitmap(ID2D1DeviceContext *context)
     if (!m_D2DBitmap)
     {
         bool ok = false;
-        if (!m_DownloadedBuffer.empty())
+        if (m_DecodedImage.IsValid())
         {
-            // Real image downloaded asynchronously — decode from memory buffer
+            const HRESULT hr = context->CreateBitmap(
+                D2D1::SizeU(m_DecodedImage.width, m_DecodedImage.height),
+                m_DecodedImage.pixels.data(), m_DecodedImage.stride,
+                D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)),
+                m_D2DBitmap.ReleaseAndGetAddressOf());
+            ok = SUCCEEDED(hr);
+            if (ok)
+            {
+                // Direct2D owns the render copy now. Do not retain a second
+                // full-resolution CPU copy of large online background images.
+                m_DecodedImage = {};
+            }
+        }
+        else if (m_pWICBitmap)
+        {
+            // The source was decoded when it was loaded/downloaded. Reuse it
+            // across target recreation instead of decoding the same bytes again.
+            const HRESULT hr = context->CreateBitmapFromWicBitmap(
+                m_pWICBitmap.Get(),
+                m_D2DBitmap.ReleaseAndGetAddressOf());
+            ok = SUCCEEDED(hr);
+            if (!ok && m_IsFallbackShowing)
+            {
+                // Reload the fallback source if it became invalid with a lost target.
+                LoadFallbackFromResource();
+                if (m_pWICBitmap)
+                {
+                    const HRESULT reloadHr = context->CreateBitmapFromWicBitmap(
+                        m_pWICBitmap.Get(),
+                        m_D2DBitmap.ReleaseAndGetAddressOf());
+                    ok = SUCCEEDED(reloadHr);
+                }
+            }
+        }
+        else if (!m_DownloadedBuffer.empty())
+        {
+            // This is only reached if the initial asynchronous decode failed or
+            // the WIC source was explicitly released.
             ok = Direct2D::LoadWICBitmapFromMemory(
                 m_DownloadedBuffer.data(),
                 static_cast<DWORD>(m_DownloadedBuffer.size()),
                 m_pWICBitmap.ReleaseAndGetAddressOf());
             if (ok)
             {
-                HRESULT hr = context->CreateBitmapFromWicBitmap(
+                const HRESULT hr = context->CreateBitmapFromWicBitmap(
                     m_pWICBitmap.Get(),
                     m_D2DBitmap.ReleaseAndGetAddressOf());
                 ok = SUCCEEDED(hr);
-            }
-        }
-        else if (m_IsFallbackShowing && m_pWICBitmap)
-        {
-            // Fallback already decoded from embedded resource — just wrap it in a D2D bitmap
-            HRESULT hr = context->CreateBitmapFromWicBitmap(
-                m_pWICBitmap.Get(),
-                m_D2DBitmap.ReleaseAndGetAddressOf());
-            ok = SUCCEEDED(hr);
-            if (!ok)
-            {
-                // WIC bitmap stale (e.g. device lost) — re-decode from resource
-                LoadFallbackFromResource();
-                if (m_pWICBitmap)
-                {
-                    hr = context->CreateBitmapFromWicBitmap(
-                        m_pWICBitmap.Get(),
-                        m_D2DBitmap.ReleaseAndGetAddressOf());
-                    ok = SUCCEEDED(hr);
-                }
             }
         }
         else if (!m_LoadedPath.empty() && !PathUtils::IsURL(m_LoadedPath))
@@ -195,20 +249,20 @@ void GeneralImage::StartAsyncDownload(const std::wstring& url)
     if (!hWnd) return;
 
     std::thread([hWnd, url]() {
-        std::vector<BYTE>* pBuffer = new std::vector<BYTE>();
-        if (Direct2D::DownloadImageFromURL(url, *pBuffer) && !pBuffer->empty())
+        AsyncImageResult* result = new AsyncImageResult();
+        if (Direct2D::DownloadImageFromURL(url, result->encodedBytes) && !result->encodedBytes.empty())
         {
+            DecodeImageBytes(result->encodedBytes, result->decodedImage);
             std::wstring* pUrl = new std::wstring(url);
-            // wParam = url string, lParam = buffer
-            if (!PostMessageW(hWnd, WM_USER + 500, (WPARAM)pUrl, (LPARAM)pBuffer))
+            if (!PostMessageW(hWnd, WM_USER + 500, (WPARAM)pUrl, (LPARAM)result))
             {
                 delete pUrl;
-                delete pBuffer;
+                delete result;
             }
         }
         else
         {
-            delete pBuffer;
+            delete result;
         }
     }).detach();
 }
@@ -230,6 +284,23 @@ void GeneralImage::OnImageDownloaded(const std::wstring& url, const std::vector<
         static_cast<DWORD>(m_DownloadedBuffer.size()),
         m_pWICBitmap.ReleaseAndGetAddressOf());
 
+    // The decoded WIC bitmap is retained for redraws and device recreation, so
+    // successful downloads no longer need to keep both compressed and decoded
+    // image representations in memory.
+    if (m_pWICBitmap)
+        m_DownloadedBuffer.clear();
+
+    ResetBitmapCache();
+}
+
+void GeneralImage::OnImageDecoded(const std::wstring& url, DecodedImageData&& image)
+{
+    if (m_ImagePath != url || !image.IsValid()) return;
+    m_DownloadedBuffer.clear();
+    m_pWICBitmap.Reset();
+    m_DecodedImage = std::move(image);
+    m_IsFallbackShowing = false;
+    m_LoadedPath = url;
     ResetBitmapCache();
 }
 

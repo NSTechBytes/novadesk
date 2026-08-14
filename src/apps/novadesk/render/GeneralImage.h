@@ -34,6 +34,22 @@ enum ImageCropOrigin
     IMAGE_CROP_ORIGIN_CENTER = 4
 };
 
+struct DecodedImageData
+{
+    UINT width = 0;
+    UINT height = 0;
+    UINT stride = 0;
+    std::vector<BYTE> pixels;
+
+    bool IsValid() const { return width > 0 && height > 0 && stride >= width * 4 && !pixels.empty(); }
+};
+
+struct AsyncImageResult
+{
+    std::vector<BYTE> encodedBytes;
+    DecodedImageData decodedImage;
+};
+
 class GeneralImage
 {
 public:
@@ -93,6 +109,7 @@ public:
 
     void SetOwnerHWND(HWND hWnd);
     void OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer);
+    void OnImageDecoded(const std::wstring& url, DecodedImageData&& image);
 
 private:
     void ReloadWICBitmap();
@@ -107,6 +124,7 @@ private:
     HWND m_OwnerHWND = nullptr;
     bool m_IsFallbackShowing = false;       // true while showing the embedded fallback image
     std::vector<BYTE> m_DownloadedBuffer;   // in-memory buffer for async downloads
+    DecodedImageData m_DecodedImage;
     Microsoft::WRL::ComPtr<ID2D1Bitmap> m_D2DBitmap;
     Microsoft::WRL::ComPtr<IWICBitmap> m_pWICBitmap;
     ID2D1RenderTarget *m_pLastTarget = nullptr;
