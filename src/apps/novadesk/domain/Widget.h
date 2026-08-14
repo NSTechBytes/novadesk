@@ -95,8 +95,8 @@ struct WidgetOptions
     GradientInfo bgGradient;
     std::wstring backgroundImage;
     std::wstring backgroundImageFallback;
-    BackgroundImageSize backgroundSize;
-    std::wstring backgroundPosition = L"center";
+    BackgroundImageSize backgroundImageSize;
+    std::wstring backgroundImagePosition = L"center";
     bool draggable = true;
     bool clickThrough = false;
     bool keepOnScreen = false;

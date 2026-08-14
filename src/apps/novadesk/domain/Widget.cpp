@@ -558,11 +558,11 @@ void Widget::SetBackgroundImage(const std::wstring &path, const BackgroundImageS
             resolved = PathUtils::NormalizePath(resolved);
     }
     const bool imageChanged = m_Options.backgroundImage != resolved;
-    if (!imageChanged && m_Options.backgroundSize == size && m_Options.backgroundPosition == position)
+    if (!imageChanged && m_Options.backgroundImageSize == size && m_Options.backgroundImagePosition == position)
         return;
     m_Options.backgroundImage = resolved;
-    m_Options.backgroundSize = size;
-    m_Options.backgroundPosition = position;
+    m_Options.backgroundImageSize = size;
+    m_Options.backgroundImagePosition = position;
     if (imageChanged)
         m_BackgroundImage.SetPath(resolved);
     Redraw();
@@ -2751,33 +2751,33 @@ void Widget::UpdateLayeredWindowContent()
                     if (imageSize.width > 0.0f && imageSize.height > 0.0f)
                     {
                         D2D1_RECT_F dst = backRect;
-                        if (m_Options.backgroundSize.type == BackgroundImageSize::Type::Explicit)
+                        if (m_Options.backgroundImageSize.type == BackgroundImageSize::Type::Explicit)
                         {
-                            const float drawW = m_Options.backgroundSize.hasWidth
-                                ? m_Options.backgroundSize.width
-                                : m_Options.backgroundSize.height * imageSize.width / imageSize.height;
-                            const float drawH = m_Options.backgroundSize.hasHeight
-                                ? m_Options.backgroundSize.height
-                                : m_Options.backgroundSize.width * imageSize.height / imageSize.width;
+                            const float drawW = m_Options.backgroundImageSize.hasWidth
+                                ? m_Options.backgroundImageSize.width
+                                : m_Options.backgroundImageSize.height * imageSize.width / imageSize.height;
+                            const float drawH = m_Options.backgroundImageSize.hasHeight
+                                ? m_Options.backgroundImageSize.height
+                                : m_Options.backgroundImageSize.width * imageSize.height / imageSize.width;
                             float x = 0.0f, y = 0.0f;
-                            if (m_Options.backgroundPosition.find(L"right") != std::wstring::npos) x = w - drawW;
-                            else if (m_Options.backgroundPosition.find(L"left") == std::wstring::npos) x = (w - drawW) * 0.5f;
-                            if (m_Options.backgroundPosition.find(L"bottom") != std::wstring::npos) y = h - drawH;
-                            else if (m_Options.backgroundPosition.find(L"top") == std::wstring::npos) y = (h - drawH) * 0.5f;
+                            if (m_Options.backgroundImagePosition.find(L"right") != std::wstring::npos) x = w - drawW;
+                            else if (m_Options.backgroundImagePosition.find(L"left") == std::wstring::npos) x = (w - drawW) * 0.5f;
+                            if (m_Options.backgroundImagePosition.find(L"bottom") != std::wstring::npos) y = h - drawH;
+                            else if (m_Options.backgroundImagePosition.find(L"top") == std::wstring::npos) y = (h - drawH) * 0.5f;
                             dst = D2D1::RectF(x, y, x + drawW, y + drawH);
                         }
-                        else if (m_Options.backgroundSize.type != BackgroundImageSize::Type::Stretch)
+                        else if (m_Options.backgroundImageSize.type != BackgroundImageSize::Type::Stretch)
                         {
-                            const float scale = m_Options.backgroundSize.type == BackgroundImageSize::Type::Contain
+                            const float scale = m_Options.backgroundImageSize.type == BackgroundImageSize::Type::Contain
                                 ? (std::min)(static_cast<float>(w) / imageSize.width, static_cast<float>(h) / imageSize.height)
                                 : (std::max)(static_cast<float>(w) / imageSize.width, static_cast<float>(h) / imageSize.height);
                             const float drawW = imageSize.width * scale;
                             const float drawH = imageSize.height * scale;
                             float x = 0.0f, y = 0.0f;
-                            if (m_Options.backgroundPosition.find(L"right") != std::wstring::npos) x = w - drawW;
-                            else if (m_Options.backgroundPosition.find(L"left") == std::wstring::npos) x = (w - drawW) * 0.5f;
-                            if (m_Options.backgroundPosition.find(L"bottom") != std::wstring::npos) y = h - drawH;
-                            else if (m_Options.backgroundPosition.find(L"top") == std::wstring::npos) y = (h - drawH) * 0.5f;
+                            if (m_Options.backgroundImagePosition.find(L"right") != std::wstring::npos) x = w - drawW;
+                            else if (m_Options.backgroundImagePosition.find(L"left") == std::wstring::npos) x = (w - drawW) * 0.5f;
+                            if (m_Options.backgroundImagePosition.find(L"bottom") != std::wstring::npos) y = h - drawH;
+                            else if (m_Options.backgroundImagePosition.find(L"top") == std::wstring::npos) y = (h - drawH) * 0.5f;
                             dst = D2D1::RectF(x, y, x + drawW, y + drawH);
                         }
                         m_pContext->PushAxisAlignedClip(backRect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);

@@ -2371,25 +2371,25 @@ namespace novadesk::scripting::quickjs
             options.backgroundImage = parsed.backgroundImage;
         if (parsed.hasBackgroundImageFallback)
             options.backgroundImageFallback = parsed.backgroundImageFallback;
-        if (parsed.hasBackgroundSize)
+        if (parsed.hasBackgroundImageSize)
         {
-            if (parsed.backgroundSizeIsExplicit)
+            if (parsed.backgroundImageSizeIsExplicit)
             {
-                options.backgroundSize.type = BackgroundImageSize::Type::Explicit;
-                options.backgroundSize.width = parsed.backgroundSizeWidth;
-                options.backgroundSize.height = parsed.backgroundSizeHeight;
-                options.backgroundSize.hasWidth = parsed.backgroundSizeHasWidth;
-                options.backgroundSize.hasHeight = parsed.backgroundSizeHasHeight;
+                options.backgroundImageSize.type = BackgroundImageSize::Type::Explicit;
+                options.backgroundImageSize.width = parsed.backgroundImageSizeWidth;
+                options.backgroundImageSize.height = parsed.backgroundImageSizeHeight;
+                options.backgroundImageSize.hasWidth = parsed.backgroundImageSizeHasWidth;
+                options.backgroundImageSize.hasHeight = parsed.backgroundImageSizeHasHeight;
             }
-            else if (parsed.backgroundSize == L"contain")
-                options.backgroundSize.type = BackgroundImageSize::Type::Contain;
-            else if (parsed.backgroundSize == L"stretch")
-                options.backgroundSize.type = BackgroundImageSize::Type::Stretch;
+            else if (parsed.backgroundImageSize == L"contain")
+                options.backgroundImageSize.type = BackgroundImageSize::Type::Contain;
+            else if (parsed.backgroundImageSize == L"stretch")
+                options.backgroundImageSize.type = BackgroundImageSize::Type::Stretch;
             else
-                options.backgroundSize.type = BackgroundImageSize::Type::Cover;
+                options.backgroundImageSize.type = BackgroundImageSize::Type::Cover;
         }
-        if (parsed.hasBackgroundPosition)
-            options.backgroundPosition = parsed.backgroundPosition;
+        if (parsed.hasBackgroundImagePosition)
+            options.backgroundImagePosition = parsed.backgroundImagePosition;
         if (parsed.hasWindowOpacity)
             options.windowOpacity = parsed.windowOpacity;
         if (parsed.hasZPos)

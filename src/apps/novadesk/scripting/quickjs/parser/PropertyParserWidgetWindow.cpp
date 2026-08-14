@@ -131,27 +131,27 @@ namespace novadesk::scripting::quickjs::parser
         }
         JS_FreeValue(ctx, backgroundImageFallbackV);
 
-        JSValue backgroundSizeV = JS_GetPropertyStr(ctx, options, "backgroundSize");
-        if (JS_IsString(backgroundSizeV))
+        JSValue backgroundImageSizeV = JS_GetPropertyStr(ctx, options, "backgroundImageSize");
+        if (JS_IsString(backgroundImageSizeV))
         {
-            const char *value = JS_ToCString(ctx, backgroundSizeV);
+            const char *value = JS_ToCString(ctx, backgroundImageSizeV);
             if (value)
             {
-                std::wstring backgroundSize = Utils::ToWString(value);
-                std::transform(backgroundSize.begin(), backgroundSize.end(), backgroundSize.begin(), ::towlower);
-                if (backgroundSize == L"cover" || backgroundSize == L"contain" || backgroundSize == L"stretch")
+                std::wstring backgroundImageSize = Utils::ToWString(value);
+                std::transform(backgroundImageSize.begin(), backgroundImageSize.end(), backgroundImageSize.begin(), ::towlower);
+                if (backgroundImageSize == L"cover" || backgroundImageSize == L"contain" || backgroundImageSize == L"stretch")
                 {
-                    out.backgroundSize = backgroundSize;
-                    out.backgroundSizeIsExplicit = false;
-                    out.hasBackgroundSize = true;
+                    out.backgroundImageSize = backgroundImageSize;
+                    out.backgroundImageSizeIsExplicit = false;
+                    out.hasBackgroundImageSize = true;
                 }
                 JS_FreeCString(ctx, value);
             }
         }
-        else if (JS_IsObject(backgroundSizeV))
+        else if (JS_IsObject(backgroundImageSizeV))
         {
-            JSValue widthV = JS_GetPropertyStr(ctx, backgroundSizeV, "width");
-            JSValue heightV = JS_GetPropertyStr(ctx, backgroundSizeV, "height");
+            JSValue widthV = JS_GetPropertyStr(ctx, backgroundImageSizeV, "width");
+            JSValue heightV = JS_GetPropertyStr(ctx, backgroundImageSizeV, "height");
             double width = 0.0, height = 0.0;
             const bool widthProvided = !JS_IsUndefined(widthV);
             const bool heightProvided = !JS_IsUndefined(heightV);
@@ -161,22 +161,22 @@ namespace novadesk::scripting::quickjs::parser
             JS_FreeValue(ctx, heightV);
             if ((!widthProvided || hasWidth) && (!heightProvided || hasHeight) && (hasWidth || hasHeight))
             {
-                out.backgroundSizeIsExplicit = true;
-                out.backgroundSizeWidth = static_cast<float>(width);
-                out.backgroundSizeHeight = static_cast<float>(height);
-                out.backgroundSizeHasWidth = hasWidth;
-                out.backgroundSizeHasHeight = hasHeight;
-                out.hasBackgroundSize = true;
+                out.backgroundImageSizeIsExplicit = true;
+                out.backgroundImageSizeWidth = static_cast<float>(width);
+                out.backgroundImageSizeHeight = static_cast<float>(height);
+                out.backgroundImageSizeHasWidth = hasWidth;
+                out.backgroundImageSizeHasHeight = hasHeight;
+                out.hasBackgroundImageSize = true;
             }
         }
-        JS_FreeValue(ctx, backgroundSizeV);
-        std::wstring backgroundPosition = PropertyParser::Js::GetStringProp(ctx, options, "backgroundPosition");
-        std::transform(backgroundPosition.begin(), backgroundPosition.end(), backgroundPosition.begin(), ::towlower);
+        JS_FreeValue(ctx, backgroundImageSizeV);
+        std::wstring backgroundImagePosition = PropertyParser::Js::GetStringProp(ctx, options, "backgroundImagePosition");
+        std::transform(backgroundImagePosition.begin(), backgroundImagePosition.end(), backgroundImagePosition.begin(), ::towlower);
         static const std::vector<std::wstring> positions = { L"top-left", L"top", L"top-right", L"left", L"center", L"right", L"bottom-left", L"bottom", L"bottom-right" };
-        if (std::find(positions.begin(), positions.end(), backgroundPosition) != positions.end())
+        if (std::find(positions.begin(), positions.end(), backgroundImagePosition) != positions.end())
         {
-            out.backgroundPosition = backgroundPosition;
-            out.hasBackgroundPosition = true;
+            out.backgroundImagePosition = backgroundImagePosition;
+            out.hasBackgroundImagePosition = true;
         }
 
         JSValue opacityVal = JS_GetPropertyStr(ctx, options, "opacity");

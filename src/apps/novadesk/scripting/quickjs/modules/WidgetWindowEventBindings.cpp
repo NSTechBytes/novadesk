@@ -113,30 +113,30 @@ namespace novadesk::scripting::quickjs
                 widget->SetBackgroundColor(parsed.backgroundColor);
             if (parsed.hasBackgroundImageFallback)
                 widget->SetBackgroundImageFallback(parsed.backgroundImageFallback);
-            if (parsed.hasBackgroundImage || parsed.hasBackgroundSize || parsed.hasBackgroundPosition)
+            if (parsed.hasBackgroundImage || parsed.hasBackgroundImageSize || parsed.hasBackgroundImagePosition)
             {
                 const WidgetOptions &current = widget->GetOptions();
-                BackgroundImageSize size = current.backgroundSize;
-                if (parsed.hasBackgroundSize)
+                BackgroundImageSize size = current.backgroundImageSize;
+                if (parsed.hasBackgroundImageSize)
                 {
-                    if (parsed.backgroundSizeIsExplicit)
+                    if (parsed.backgroundImageSizeIsExplicit)
                     {
                         size.type = BackgroundImageSize::Type::Explicit;
-                        size.width = parsed.backgroundSizeWidth;
-                        size.height = parsed.backgroundSizeHeight;
-                        size.hasWidth = parsed.backgroundSizeHasWidth;
-                        size.hasHeight = parsed.backgroundSizeHasHeight;
+                        size.width = parsed.backgroundImageSizeWidth;
+                        size.height = parsed.backgroundImageSizeHeight;
+                        size.hasWidth = parsed.backgroundImageSizeHasWidth;
+                        size.hasHeight = parsed.backgroundImageSizeHasHeight;
                     }
                     else
                     {
-                        size.type = parsed.backgroundSize == L"contain" ? BackgroundImageSize::Type::Contain :
-                            parsed.backgroundSize == L"stretch" ? BackgroundImageSize::Type::Stretch : BackgroundImageSize::Type::Cover;
+                        size.type = parsed.backgroundImageSize == L"contain" ? BackgroundImageSize::Type::Contain :
+                            parsed.backgroundImageSize == L"stretch" ? BackgroundImageSize::Type::Stretch : BackgroundImageSize::Type::Cover;
                     }
                 }
                 widget->SetBackgroundImage(
                     parsed.hasBackgroundImage ? parsed.backgroundImage : current.backgroundImage,
                     size,
-                    parsed.hasBackgroundPosition ? parsed.backgroundPosition : current.backgroundPosition);
+                    parsed.hasBackgroundImagePosition ? parsed.backgroundImagePosition : current.backgroundImagePosition);
             }
             if (parsed.hasWindowOpacity)
                 widget->SetWindowOpacity(parsed.windowOpacity);
@@ -212,22 +212,22 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, out, "backgroundColor", JS_NewString(ctx, Utils::ToString(o.backgroundColor).c_str()));
             JS_SetPropertyStr(ctx, out, "backgroundImage", JS_NewString(ctx, Utils::ToString(o.backgroundImage).c_str()));
             JS_SetPropertyStr(ctx, out, "backgroundImageFallback", JS_NewString(ctx, Utils::ToString(o.backgroundImageFallback).c_str()));
-            if (o.backgroundSize.type == BackgroundImageSize::Type::Explicit)
+            if (o.backgroundImageSize.type == BackgroundImageSize::Type::Explicit)
             {
                 JSValue size = JS_NewObject(ctx);
-                if (o.backgroundSize.hasWidth)
-                    JS_SetPropertyStr(ctx, size, "width", JS_NewFloat64(ctx, o.backgroundSize.width));
-                if (o.backgroundSize.hasHeight)
-                    JS_SetPropertyStr(ctx, size, "height", JS_NewFloat64(ctx, o.backgroundSize.height));
-                JS_SetPropertyStr(ctx, out, "backgroundSize", size);
+                if (o.backgroundImageSize.hasWidth)
+                    JS_SetPropertyStr(ctx, size, "width", JS_NewFloat64(ctx, o.backgroundImageSize.width));
+                if (o.backgroundImageSize.hasHeight)
+                    JS_SetPropertyStr(ctx, size, "height", JS_NewFloat64(ctx, o.backgroundImageSize.height));
+                JS_SetPropertyStr(ctx, out, "backgroundImageSize", size);
             }
             else
             {
-                const char *size = o.backgroundSize.type == BackgroundImageSize::Type::Contain ? "contain" :
-                    o.backgroundSize.type == BackgroundImageSize::Type::Stretch ? "stretch" : "cover";
-                JS_SetPropertyStr(ctx, out, "backgroundSize", JS_NewString(ctx, size));
+                const char *size = o.backgroundImageSize.type == BackgroundImageSize::Type::Contain ? "contain" :
+                    o.backgroundImageSize.type == BackgroundImageSize::Type::Stretch ? "stretch" : "cover";
+                JS_SetPropertyStr(ctx, out, "backgroundImageSize", JS_NewString(ctx, size));
             }
-            JS_SetPropertyStr(ctx, out, "backgroundPosition", JS_NewString(ctx, Utils::ToString(o.backgroundPosition).c_str()));
+            JS_SetPropertyStr(ctx, out, "backgroundImagePosition", JS_NewString(ctx, Utils::ToString(o.backgroundImagePosition).c_str()));
             JS_SetPropertyStr(ctx, out, "zPos", JS_NewInt32(ctx, static_cast<int>(o.zPos)));
             JS_SetPropertyStr(ctx, out, "script", JS_NewString(ctx, Utils::ToString(o.scriptPath).c_str()));
             return out;
