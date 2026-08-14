@@ -9,6 +9,9 @@
 #include "../shared/Logging.h"
 #include "Direct2DHelper.h"
 #include <algorithm>
+#include <cmath>
+#include <d2d1effects.h>
+#include <d2d1effects_2.h>
 
 Element::Element(ElementType type, const std::wstring& id, int x, int y, int width, int height)
     : m_Type(type), m_Id(id), m_X(x), m_Y(y)
@@ -189,6 +192,7 @@ void Element::ClearContainerItems()
 ** Render the background of the element.
 */
 void Element::RenderBackground(ID2D1DeviceContext* context) {
+    RenderBackdropFilter(context);
     if (!m_HasSolidColor) return;
 
     context->SetAntialiasMode(m_AntiAlias ? D2D1_ANTIALIAS_MODE_PER_PRIMITIVE : D2D1_ANTIALIAS_MODE_ALIASED);
@@ -327,4 +331,48 @@ void Element::ApplyRenderTransform(ID2D1DeviceContext* context, D2D1_MATRIX_3X2_
 void Element::RestoreRenderTransform(ID2D1DeviceContext* context, const D2D1_MATRIX_3X2_F& originalTransform) {
     if (!context) return;
     context->SetTransform(originalTransform);
+}
+bool BackdropFilter::IsActive() const
+{
+    return blur > 0.0f || brightness != 1.0f || contrast != 1.0f ||
+        grayscale > 0.0f || saturate != 1.0f || sepia > 0.0f ||
+        hueRotate != 0.0f || invert > 0.0f || opacity != 1.0f;
+}
+
+void Element::RenderBackdropFilter(ID2D1DeviceContext* context)
+{
+    if (!context || !m_BackdropFilter.IsActive()) return;
+    const GfxRect bounds = GetBackgroundBounds();
+    const float pad = std::ceil(m_BackdropFilter.blur * 3.0f);
+    const D2D1_SIZE_U canvas = context->GetPixelSize();
+    if (!canvas.width || !canvas.height) return;
+    const LONG l = (std::max)(0L, static_cast<LONG>(std::floor(bounds.X - pad)));
+    const LONG t = (std::max)(0L, static_cast<LONG>(std::floor(bounds.Y - pad)));
+    const LONG r = (std::min)(static_cast<LONG>(canvas.width), static_cast<LONG>(std::ceil(bounds.X + bounds.Width + pad)));
+    const LONG b = (std::min)(static_cast<LONG>(canvas.height), static_cast<LONG>(std::ceil(bounds.Y + bounds.Height + pad)));
+    if (r <= l || b <= t) return;
+    Microsoft::WRL::ComPtr<ID2D1BitmapRenderTarget> target;
+    if (FAILED(context->CreateCompatibleRenderTarget(D2D1::SizeF(r - l, b - t), &target))) return;
+    Microsoft::WRL::ComPtr<ID2D1Bitmap> bitmap;
+    if (FAILED(target->GetBitmap(&bitmap))) return;
+    const D2D1_RECT_U source = D2D1::RectU(l, t, r, b);
+    if (FAILED(bitmap->CopyFromRenderTarget(nullptr, context, &source))) return;
+    ID2D1Image* image = bitmap.Get();
+    std::vector<Microsoft::WRL::ComPtr<ID2D1Effect>> effects;
+    std::vector<Microsoft::WRL::ComPtr<ID2D1Image>> outputs;
+    auto add = [&](REFCLSID id, auto set) {
+        Microsoft::WRL::ComPtr<ID2D1Effect> effect; Microsoft::WRL::ComPtr<ID2D1Image> output;
+        if (FAILED(context->CreateEffect(id, &effect))) return false;
+        effect->SetInput(0, image); set(effect.Get()); effect->GetOutput(&output);
+        image = output.Get(); effects.push_back(effect); outputs.push_back(output); return true;
+    };
+    if (m_BackdropFilter.blur > 0 && !add(CLSID_D2D1GaussianBlur, [&](ID2D1Effect* e) { e->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, m_BackdropFilter.blur); e->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE, D2D1_BORDER_MODE_HARD); })) return;
+    if (m_BackdropFilter.saturate != 1 && !add(CLSID_D2D1Saturation, [&](ID2D1Effect* e) { e->SetValue(D2D1_SATURATION_PROP_SATURATION, m_BackdropFilter.saturate); })) return;
+    if (m_BackdropFilter.hueRotate != 0 && !add(CLSID_D2D1HueRotation, [&](ID2D1Effect* e) { e->SetValue(D2D1_HUEROTATION_PROP_ANGLE, m_BackdropFilter.hueRotate); })) return;
+    if (m_BackdropFilter.opacity != 1 && !add(CLSID_D2D1Opacity, [&](ID2D1Effect* e) { e->SetValue(D2D1_OPACITY_PROP_OPACITY, m_BackdropFilter.opacity); })) return;
+    const D2D1_RECT_F clip = D2D1::RectF((FLOAT)bounds.X, (FLOAT)bounds.Y, (FLOAT)(bounds.X + bounds.Width), (FLOAT)(bounds.Y + bounds.Height));
+    context->PushAxisAlignedClip(clip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    const D2D1_POINT_2F offset = D2D1::Point2F((FLOAT)l, (FLOAT)t);
+    context->DrawImage(image, &offset, nullptr, D2D1_INTERPOLATION_MODE_LINEAR, D2D1_COMPOSITE_MODE_SOURCE_OVER);
+    context->PopAxisAlignedClip();
 }

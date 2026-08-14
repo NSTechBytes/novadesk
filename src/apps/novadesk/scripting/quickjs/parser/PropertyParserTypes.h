@@ -94,6 +94,7 @@ namespace PropertyParser
         int tooltipMaxHeight = 0;
         bool tooltipBalloon = false;
         bool tooltipDisabled = false;
+        BackdropFilter backdropFilter;
     };
 
     struct GeneralImageOptions : public ElementOptions
@@ -413,7 +414,6 @@ namespace PropertyParser
         std::vector<LayoutBoxShadowOptions> boxShadows;
         bool hasBoxShadowError = false;
         std::wstring boxShadowError;
-        ElementLayoutBox::BackdropFilter backdropFilter;
 
         std::wstring direction = L"ltr";
         std::wstring flexDirection = L"row";

@@ -250,7 +250,7 @@ namespace PropertyParser
         {
             if (!JS_IsObject(value) || JS_IsArray(value))
                 return false;
-            auto &filter = options.backdropFilter;
+            auto &filter = options.shape.backdropFilter;
             GetFloatProp(ctx, value, "blur", filter.blur);
             GetFloatProp(ctx, value, "brightness", filter.brightness);
             GetFloatProp(ctx, value, "contrast", filter.contrast);
@@ -537,7 +537,6 @@ namespace PropertyParser
             shadows.push_back(outShadow);
         }
         element->SetBoxShadows(shadows);
-        element->SetBackdropFilter(options.backdropFilter);
 
         // Apply padding values to the element
         // Logging::Log(LogLevel::Debug, L"[PADDING] ApplyLayoutBoxOptions: Setting padding L=%d, T=%d, R=%d, B=%d on element '%s'",
@@ -589,7 +588,6 @@ namespace PropertyParser
             outShadow.inset = shadow.inset;
             options.boxShadows.push_back(outShadow);
         }
-        options.backdropFilter = element->GetBackdropFilter();
 
         options.direction = direction ? *direction : L"ltr";
         options.flexDirection = flexDirection ? *flexDirection : element->GetLayoutDirection();

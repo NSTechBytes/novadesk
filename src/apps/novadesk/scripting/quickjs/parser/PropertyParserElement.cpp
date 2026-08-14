@@ -161,6 +161,31 @@ namespace PropertyParser
         GetIntProp(ctx, obj, "tooltipMaxHeight", options.tooltipMaxHeight);
         GetBoolProp(ctx, obj, "tooltipBalloon", options.tooltipBalloon);
         GetBoolProp(ctx, obj, "tooltipDisabled", options.tooltipDisabled);
+
+        JSValue backdropFilterV = JS_GetPropertyStr(ctx, obj, "backdropFilter");
+        if (JS_IsObject(backdropFilterV) && !JS_IsArray(backdropFilterV))
+        {
+            auto &filter = options.backdropFilter;
+            GetFloatProp(ctx, backdropFilterV, "blur", filter.blur);
+            GetFloatProp(ctx, backdropFilterV, "brightness", filter.brightness);
+            GetFloatProp(ctx, backdropFilterV, "contrast", filter.contrast);
+            GetFloatProp(ctx, backdropFilterV, "greyScale", filter.grayscale);
+            GetFloatProp(ctx, backdropFilterV, "grayscale", filter.grayscale);
+            GetFloatProp(ctx, backdropFilterV, "saturate", filter.saturate);
+            GetFloatProp(ctx, backdropFilterV, "sepia", filter.sepia);
+            GetFloatProp(ctx, backdropFilterV, "hueRotate", filter.hueRotate);
+            GetFloatProp(ctx, backdropFilterV, "invert", filter.invert);
+            GetFloatProp(ctx, backdropFilterV, "opacity", filter.opacity);
+            filter.blur = (std::max)(0.0f, filter.blur);
+            filter.brightness = (std::max)(0.0f, filter.brightness);
+            filter.contrast = (std::max)(0.0f, filter.contrast);
+            filter.grayscale = (std::clamp)(filter.grayscale, 0.0f, 1.0f);
+            filter.saturate = (std::max)(0.0f, filter.saturate);
+            filter.sepia = (std::clamp)(filter.sepia, 0.0f, 1.0f);
+            filter.invert = (std::clamp)(filter.invert, 0.0f, 1.0f);
+            filter.opacity = (std::clamp)(filter.opacity, 0.0f, 1.0f);
+        }
+        JS_FreeValue(ctx, backdropFilterV);
     }
     void ApplyElementOptions(Element *element, const ElementOptions &options)
     {
@@ -180,6 +205,7 @@ namespace PropertyParser
         element->SetCursorsDir(options.cursorsDir);
         element->SetCornerRadius(options.solidColorRadius);
         element->SetPadding(options.paddingLeft, options.paddingTop, options.paddingRight, options.paddingBottom);
+        element->SetBackdropFilter(options.backdropFilter);
 
         if (options.solidGradient.type != GRADIENT_NONE)
         {
@@ -290,6 +316,7 @@ namespace PropertyParser
         options.hasPixelHitTest = true;
         options.pixelHitTest = element->GetPixelHitTest();
         options.solidColorRadius = element->GetCornerRadius();
+        options.backdropFilter = element->GetBackdropFilter();
 
         options.paddingLeft = element->GetPaddingLeft();
         options.paddingTop = element->GetPaddingTop();

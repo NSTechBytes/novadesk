@@ -83,9 +83,26 @@ enum TextCase {
     TEXT_CASE_SENTENCE
 };
 
+struct BackdropFilter
+{
+    float blur = 0.0f;
+    float brightness = 1.0f;
+    float contrast = 1.0f;
+    float grayscale = 0.0f;
+    float saturate = 1.0f;
+    float sepia = 0.0f;
+    float hueRotate = 0.0f;
+    float invert = 0.0f;
+    float opacity = 1.0f;
+
+    bool IsActive() const;
+};
+
 class Element
 {
 public:
+    void SetBackdropFilter(const BackdropFilter &filter) { m_BackdropFilter = filter; }
+    const BackdropFilter &GetBackdropFilter() const { return m_BackdropFilter; }
     Element(ElementType type, const std::wstring& id, int x, int y, int width, int height);
     virtual ~Element() {}
 
@@ -278,6 +295,7 @@ public:
     bool m_IsMouseOver = false;
 
 protected:
+    BackdropFilter m_BackdropFilter;
     ElementType m_Type;
     std::wstring m_Id;
     int m_X, m_Y;
@@ -337,6 +355,7 @@ protected:
     bool m_ToolTipDisabled = false;
 
     void RenderBackground(ID2D1DeviceContext* context);
+    void RenderBackdropFilter(ID2D1DeviceContext* context);
     void RenderBevel(ID2D1DeviceContext* context);
     void ApplyRenderTransform(ID2D1DeviceContext* context, D2D1_MATRIX_3X2_F& originalTransform);
     void RestoreRenderTransform(ID2D1DeviceContext* context, const D2D1_MATRIX_3X2_F& originalTransform);

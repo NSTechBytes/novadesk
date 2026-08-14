@@ -15,21 +15,6 @@
 class ElementLayoutBox : public ShapeElement
 {
 public:
-    struct BackdropFilter
-    {
-        float blur = 0.0f;
-        float brightness = 1.0f;
-        float contrast = 1.0f;
-        float grayscale = 0.0f;
-        float saturate = 1.0f;
-        float sepia = 0.0f;
-        float hueRotate = 0.0f;
-        float invert = 0.0f;
-        float opacity = 1.0f;
-
-        bool IsActive() const;
-    };
-
     enum class DisplayType
     {
         Flex,
@@ -89,9 +74,6 @@ public:
     void SetBoxShadows(const std::vector<BoxShadow> &shadows) { m_BoxShadows = shadows; }
     const std::vector<BoxShadow> &GetBoxShadows() const { return m_BoxShadows; }
 
-    // Element-scoped CSS-style filter values. blur uses DIPs; amounts use 0-1.
-    void SetBackdropFilter(const BackdropFilter &filter) { m_BackdropFilter = filter; }
-    const BackdropFilter &GetBackdropFilter() const { return m_BackdropFilter; }
 
     void SetBorderStyle(BorderStyle top, BorderStyle right, BorderStyle bottom, BorderStyle left)
     {
@@ -121,7 +103,6 @@ public:
     int GetLayoutGap() const { return m_LayoutGap; }
 
 private:
-    void RenderBackdropFilter(ID2D1DeviceContext *context, const D2D1_ROUNDED_RECT &rect);
     void RenderSingleShadow(ID2D1DeviceContext *context, const D2D1_ROUNDED_RECT &baseRect, const BoxShadow &shadow);
     void RenderListMarker(ID2D1DeviceContext *context);
     void RenderTextMarker(ID2D1DeviceContext *context, const std::wstring &text,
@@ -132,7 +113,6 @@ private:
     float m_RadiusX = 0.0f;
     float m_RadiusY = 0.0f;
     std::vector<BoxShadow> m_BoxShadows;
-    BackdropFilter m_BackdropFilter;
     BorderStyle m_BorderStyleTop = BorderStyle::Solid;
     BorderStyle m_BorderStyleRight = BorderStyle::Solid;
     BorderStyle m_BorderStyleBottom = BorderStyle::Solid;
