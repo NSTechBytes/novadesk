@@ -601,6 +601,9 @@ namespace novadesk::scripting::quickjs::parser
         bool backgroundImageSizeHasHeight = false;
         std::wstring backgroundImageSize = L"cover";
         bool hasBackgroundImageSize = false;
+        bool backgroundImagePositionIsExplicit = false;
+        float backgroundImagePositionX = 0.0f;
+        float backgroundImagePositionY = 0.0f;
         std::wstring backgroundImagePosition = L"center";
         bool hasBackgroundImagePosition = false;
         BYTE windowOpacity = 255;

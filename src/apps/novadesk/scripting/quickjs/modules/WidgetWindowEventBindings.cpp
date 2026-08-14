@@ -117,6 +117,7 @@ namespace novadesk::scripting::quickjs
             {
                 const WidgetOptions &current = widget->GetOptions();
                 BackgroundImageSize size = current.backgroundImageSize;
+                BackgroundImagePosition position = current.backgroundImagePosition;
                 if (parsed.hasBackgroundImageSize)
                 {
                     if (parsed.backgroundImageSizeIsExplicit)
@@ -133,10 +134,24 @@ namespace novadesk::scripting::quickjs
                             parsed.backgroundImageSize == L"stretch" ? BackgroundImageSize::Type::Stretch : BackgroundImageSize::Type::Cover;
                     }
                 }
+                if (parsed.hasBackgroundImagePosition)
+                {
+                    if (parsed.backgroundImagePositionIsExplicit)
+                    {
+                        position.type = BackgroundImagePosition::Type::Explicit;
+                        position.x = parsed.backgroundImagePositionX;
+                        position.y = parsed.backgroundImagePositionY;
+                    }
+                    else
+                    {
+                        position.type = BackgroundImagePosition::Type::Keyword;
+                        position.keyword = parsed.backgroundImagePosition;
+                    }
+                }
                 widget->SetBackgroundImage(
                     parsed.hasBackgroundImage ? parsed.backgroundImage : current.backgroundImage,
                     size,
-                    parsed.hasBackgroundImagePosition ? parsed.backgroundImagePosition : current.backgroundImagePosition);
+                    position);
             }
             if (parsed.hasWindowOpacity)
                 widget->SetWindowOpacity(parsed.windowOpacity);
@@ -227,7 +242,17 @@ namespace novadesk::scripting::quickjs
                     o.backgroundImageSize.type == BackgroundImageSize::Type::Stretch ? "stretch" : "cover";
                 JS_SetPropertyStr(ctx, out, "backgroundImageSize", JS_NewString(ctx, size));
             }
-            JS_SetPropertyStr(ctx, out, "backgroundImagePosition", JS_NewString(ctx, Utils::ToString(o.backgroundImagePosition).c_str()));
+            if (o.backgroundImagePosition.type == BackgroundImagePosition::Type::Explicit)
+            {
+                JSValue position = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, position, "x", JS_NewFloat64(ctx, o.backgroundImagePosition.x));
+                JS_SetPropertyStr(ctx, position, "y", JS_NewFloat64(ctx, o.backgroundImagePosition.y));
+                JS_SetPropertyStr(ctx, out, "backgroundImagePosition", position);
+            }
+            else
+            {
+                JS_SetPropertyStr(ctx, out, "backgroundImagePosition", JS_NewString(ctx, Utils::ToString(o.backgroundImagePosition.keyword).c_str()));
+            }
             JS_SetPropertyStr(ctx, out, "zPos", JS_NewInt32(ctx, static_cast<int>(o.zPos)));
             JS_SetPropertyStr(ctx, out, "script", JS_NewString(ctx, Utils::ToString(o.scriptPath).c_str()));
             return out;

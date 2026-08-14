@@ -2389,7 +2389,19 @@ namespace novadesk::scripting::quickjs
                 options.backgroundImageSize.type = BackgroundImageSize::Type::Cover;
         }
         if (parsed.hasBackgroundImagePosition)
-            options.backgroundImagePosition = parsed.backgroundImagePosition;
+        {
+            if (parsed.backgroundImagePositionIsExplicit)
+            {
+                options.backgroundImagePosition.type = BackgroundImagePosition::Type::Explicit;
+                options.backgroundImagePosition.x = parsed.backgroundImagePositionX;
+                options.backgroundImagePosition.y = parsed.backgroundImagePositionY;
+            }
+            else
+            {
+                options.backgroundImagePosition.type = BackgroundImagePosition::Type::Keyword;
+                options.backgroundImagePosition.keyword = parsed.backgroundImagePosition;
+            }
+        }
         if (parsed.hasWindowOpacity)
             options.windowOpacity = parsed.windowOpacity;
         if (parsed.hasZPos)

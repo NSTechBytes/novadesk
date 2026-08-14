@@ -547,7 +547,7 @@ void Widget::SetBackgroundColor(const std::wstring &colorStr)
     }
 }
 
-void Widget::SetBackgroundImage(const std::wstring &path, const BackgroundImageSize &size, const std::wstring &position)
+void Widget::SetBackgroundImage(const std::wstring &path, const BackgroundImageSize &size, const BackgroundImagePosition &position)
 {
     std::wstring resolved = path;
     if (!resolved.empty())
@@ -2751,6 +2751,20 @@ void Widget::UpdateLayeredWindowContent()
                     if (imageSize.width > 0.0f && imageSize.height > 0.0f)
                     {
                         D2D1_RECT_F dst = backRect;
+                        const auto positionImage = [this, w, h](float drawW, float drawH)
+                        {
+                            if (m_Options.backgroundImagePosition.type == BackgroundImagePosition::Type::Explicit)
+                                return D2D1::RectF(m_Options.backgroundImagePosition.x, m_Options.backgroundImagePosition.y,
+                                    m_Options.backgroundImagePosition.x + drawW, m_Options.backgroundImagePosition.y + drawH);
+
+                            float x = 0.0f, y = 0.0f;
+                            const std::wstring &position = m_Options.backgroundImagePosition.keyword;
+                            if (position.find(L"right") != std::wstring::npos) x = w - drawW;
+                            else if (position.find(L"left") == std::wstring::npos) x = (w - drawW) * 0.5f;
+                            if (position.find(L"bottom") != std::wstring::npos) y = h - drawH;
+                            else if (position.find(L"top") == std::wstring::npos) y = (h - drawH) * 0.5f;
+                            return D2D1::RectF(x, y, x + drawW, y + drawH);
+                        };
                         if (m_Options.backgroundImageSize.type == BackgroundImageSize::Type::Explicit)
                         {
                             const float drawW = m_Options.backgroundImageSize.hasWidth
@@ -2759,12 +2773,7 @@ void Widget::UpdateLayeredWindowContent()
                             const float drawH = m_Options.backgroundImageSize.hasHeight
                                 ? m_Options.backgroundImageSize.height
                                 : m_Options.backgroundImageSize.width * imageSize.height / imageSize.width;
-                            float x = 0.0f, y = 0.0f;
-                            if (m_Options.backgroundImagePosition.find(L"right") != std::wstring::npos) x = w - drawW;
-                            else if (m_Options.backgroundImagePosition.find(L"left") == std::wstring::npos) x = (w - drawW) * 0.5f;
-                            if (m_Options.backgroundImagePosition.find(L"bottom") != std::wstring::npos) y = h - drawH;
-                            else if (m_Options.backgroundImagePosition.find(L"top") == std::wstring::npos) y = (h - drawH) * 0.5f;
-                            dst = D2D1::RectF(x, y, x + drawW, y + drawH);
+                            dst = positionImage(drawW, drawH);
                         }
                         else if (m_Options.backgroundImageSize.type != BackgroundImageSize::Type::Stretch)
                         {
@@ -2773,12 +2782,7 @@ void Widget::UpdateLayeredWindowContent()
                                 : (std::max)(static_cast<float>(w) / imageSize.width, static_cast<float>(h) / imageSize.height);
                             const float drawW = imageSize.width * scale;
                             const float drawH = imageSize.height * scale;
-                            float x = 0.0f, y = 0.0f;
-                            if (m_Options.backgroundImagePosition.find(L"right") != std::wstring::npos) x = w - drawW;
-                            else if (m_Options.backgroundImagePosition.find(L"left") == std::wstring::npos) x = (w - drawW) * 0.5f;
-                            if (m_Options.backgroundImagePosition.find(L"bottom") != std::wstring::npos) y = h - drawH;
-                            else if (m_Options.backgroundImagePosition.find(L"top") == std::wstring::npos) y = (h - drawH) * 0.5f;
-                            dst = D2D1::RectF(x, y, x + drawW, y + drawH);
+                            dst = positionImage(drawW, drawH);
                         }
                         m_pContext->PushAxisAlignedClip(backRect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
                         m_pContext->DrawBitmap(background, &dst, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);

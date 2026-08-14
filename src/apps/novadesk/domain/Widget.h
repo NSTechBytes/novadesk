@@ -80,6 +80,26 @@ struct BackgroundImageSize
     bool operator!=(const BackgroundImageSize &other) const { return !(*this == other); }
 };
 
+struct BackgroundImagePosition
+{
+    enum class Type
+    {
+        Keyword,
+        Explicit
+    };
+
+    Type type = Type::Keyword;
+    std::wstring keyword = L"center";
+    float x = 0.0f;
+    float y = 0.0f;
+
+    bool operator==(const BackgroundImagePosition &other) const
+    {
+        return type == other.type && keyword == other.keyword && x == other.x && y == other.y;
+    }
+    bool operator!=(const BackgroundImagePosition &other) const { return !(*this == other); }
+};
+
 struct WidgetOptions
 {
     std::wstring id;
@@ -96,7 +116,7 @@ struct WidgetOptions
     std::wstring backgroundImage;
     std::wstring backgroundImageFallback;
     BackgroundImageSize backgroundImageSize;
-    std::wstring backgroundImagePosition = L"center";
+    BackgroundImagePosition backgroundImagePosition;
     bool draggable = true;
     bool clickThrough = false;
     bool keepOnScreen = false;
@@ -182,7 +202,7 @@ public:
     void SetWindowPosition(int x, int y, int w, int h);
     void SetWindowOpacity(BYTE opacity);
     void SetBackgroundColor(const std::wstring& colorStr);
-    void SetBackgroundImage(const std::wstring& path, const BackgroundImageSize& size, const std::wstring& position = L"center");
+    void SetBackgroundImage(const std::wstring& path, const BackgroundImageSize& size, const BackgroundImagePosition& position);
     void SetBackgroundImageFallback(const std::wstring& path);
     void SetDraggable(bool enable);
     void SetClickThrough(bool enable);

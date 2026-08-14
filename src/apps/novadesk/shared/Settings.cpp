@@ -141,7 +141,17 @@ void Settings::SaveWidget(const std::wstring& id, const WidgetOptions& options)
             options.backgroundImageSize.type == BackgroundImageSize::Type::Stretch ? "stretch" : "cover";
         widgetData["backgroundimagesize"] = size;
     }
-    widgetData["backgroundimageposition"] = Utils::ToString(options.backgroundImagePosition);
+    if (options.backgroundImagePosition.type == BackgroundImagePosition::Type::Explicit)
+    {
+        widgetData["backgroundimageposition"] = {
+            { "x", options.backgroundImagePosition.x },
+            { "y", options.backgroundImagePosition.y }
+        };
+    }
+    else
+    {
+        widgetData["backgroundimageposition"] = Utils::ToString(options.backgroundImagePosition.keyword);
+    }
     
     std::string zPosStr = "normal";
     switch(options.zPos) {
@@ -217,7 +227,25 @@ bool Settings::LoadWidget(const std::wstring& id, WidgetOptions& outOptions)
                 }
             }
         }
-        if (w.contains("backgroundimageposition") && w["backgroundimageposition"].is_string()) outOptions.backgroundImagePosition = Utils::ToWString(w["backgroundimageposition"].get<std::string>());
+        if (w.contains("backgroundimageposition"))
+        {
+            if (w["backgroundimageposition"].is_string())
+            {
+                outOptions.backgroundImagePosition.type = BackgroundImagePosition::Type::Keyword;
+                outOptions.backgroundImagePosition.keyword = Utils::ToWString(w["backgroundimageposition"].get<std::string>());
+            }
+            else if (w["backgroundimageposition"].is_object())
+            {
+                const json &position = w["backgroundimageposition"];
+                if (position.contains("x") && position["x"].is_number() &&
+                    position.contains("y") && position["y"].is_number())
+                {
+                    outOptions.backgroundImagePosition.type = BackgroundImagePosition::Type::Explicit;
+                    outOptions.backgroundImagePosition.x = position["x"].get<float>();
+                    outOptions.backgroundImagePosition.y = position["y"].get<float>();
+                }
+            }
+        }
         
         if (w.contains("zpos")) {
             std::string z = w["zpos"];
