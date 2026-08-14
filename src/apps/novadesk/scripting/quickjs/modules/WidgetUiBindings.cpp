@@ -2367,6 +2367,29 @@ namespace novadesk::scripting::quickjs
             options.bgAlpha = parsed.bgAlpha;
             options.bgGradient = parsed.bgGradient;
         }
+        if (parsed.hasBackgroundImage)
+            options.backgroundImage = parsed.backgroundImage;
+        if (parsed.hasBackgroundImageFallback)
+            options.backgroundImageFallback = parsed.backgroundImageFallback;
+        if (parsed.hasBackgroundSize)
+        {
+            if (parsed.backgroundSizeIsExplicit)
+            {
+                options.backgroundSize.type = BackgroundImageSize::Type::Explicit;
+                options.backgroundSize.width = parsed.backgroundSizeWidth;
+                options.backgroundSize.height = parsed.backgroundSizeHeight;
+                options.backgroundSize.hasWidth = parsed.backgroundSizeHasWidth;
+                options.backgroundSize.hasHeight = parsed.backgroundSizeHasHeight;
+            }
+            else if (parsed.backgroundSize == L"contain")
+                options.backgroundSize.type = BackgroundImageSize::Type::Contain;
+            else if (parsed.backgroundSize == L"stretch")
+                options.backgroundSize.type = BackgroundImageSize::Type::Stretch;
+            else
+                options.backgroundSize.type = BackgroundImageSize::Type::Cover;
+        }
+        if (parsed.hasBackgroundPosition)
+            options.backgroundPosition = parsed.backgroundPosition;
         if (parsed.hasWindowOpacity)
             options.windowOpacity = parsed.windowOpacity;
         if (parsed.hasZPos)

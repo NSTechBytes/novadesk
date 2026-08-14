@@ -126,6 +126,22 @@ void Settings::SaveWidget(const std::wstring& id, const WidgetOptions& options)
     widgetData["x"] = options.x;
     widgetData["y"] = options.y;
     widgetData["windowopacity"] = options.windowOpacity;
+    widgetData["backgroundimage"] = Utils::ToString(options.backgroundImage);
+    widgetData["backgroundimagefallback"] = Utils::ToString(options.backgroundImageFallback);
+    if (options.backgroundSize.type == BackgroundImageSize::Type::Explicit)
+    {
+        json size;
+        if (options.backgroundSize.hasWidth) size["width"] = options.backgroundSize.width;
+        if (options.backgroundSize.hasHeight) size["height"] = options.backgroundSize.height;
+        widgetData["backgroundsize"] = size;
+    }
+    else
+    {
+        const char *size = options.backgroundSize.type == BackgroundImageSize::Type::Contain ? "contain" :
+            options.backgroundSize.type == BackgroundImageSize::Type::Stretch ? "stretch" : "cover";
+        widgetData["backgroundsize"] = size;
+    }
+    widgetData["backgroundposition"] = Utils::ToString(options.backgroundPosition);
     
     std::string zPosStr = "normal";
     switch(options.zPos) {
@@ -176,6 +192,32 @@ bool Settings::LoadWidget(const std::wstring& id, WidgetOptions& outOptions)
         if (w.contains("x")) outOptions.x = w["x"];
         if (w.contains("y")) outOptions.y = w["y"];
         if (w.contains("windowopacity")) outOptions.windowOpacity = w["windowopacity"];
+        if (w.contains("backgroundimage") && w["backgroundimage"].is_string()) outOptions.backgroundImage = Utils::ToWString(w["backgroundimage"].get<std::string>());
+        if (w.contains("backgroundimagefallback") && w["backgroundimagefallback"].is_string()) outOptions.backgroundImageFallback = Utils::ToWString(w["backgroundimagefallback"].get<std::string>());
+        if (w.contains("backgroundsize"))
+        {
+            if (w["backgroundsize"].is_string())
+            {
+                const std::string size = w["backgroundsize"].get<std::string>();
+                outOptions.backgroundSize.type = size == "contain" ? BackgroundImageSize::Type::Contain :
+                    size == "stretch" ? BackgroundImageSize::Type::Stretch : BackgroundImageSize::Type::Cover;
+            }
+            else if (w["backgroundsize"].is_object())
+            {
+                const json &size = w["backgroundsize"];
+                const bool hasWidth = size.contains("width") && size["width"].is_number() && size["width"].get<float>() > 0.0f;
+                const bool hasHeight = size.contains("height") && size["height"].is_number() && size["height"].get<float>() > 0.0f;
+                if (hasWidth || hasHeight)
+                {
+                    outOptions.backgroundSize.type = BackgroundImageSize::Type::Explicit;
+                    outOptions.backgroundSize.hasWidth = hasWidth;
+                    outOptions.backgroundSize.hasHeight = hasHeight;
+                    outOptions.backgroundSize.width = hasWidth ? size["width"].get<float>() : 0.0f;
+                    outOptions.backgroundSize.height = hasHeight ? size["height"].get<float>() : 0.0f;
+                }
+            }
+        }
+        if (w.contains("backgroundposition") && w["backgroundposition"].is_string()) outOptions.backgroundPosition = Utils::ToWString(w["backgroundposition"].get<std::string>());
         
         if (w.contains("zpos")) {
             std::string z = w["zpos"];

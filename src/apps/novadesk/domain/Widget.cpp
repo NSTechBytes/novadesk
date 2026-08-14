@@ -89,6 +89,20 @@ void Widget::ClearAllWidgets()
 Widget::Widget(const WidgetOptions &options)
     : m_hWnd(nullptr), m_Options(options), m_WindowZPosition(options.zPos), m_IsBatchUpdating(false)
 {
+    if (!m_Options.backgroundImageFallback.empty())
+    {
+        if (PathUtils::IsPathRelative(m_Options.backgroundImageFallback))
+            m_Options.backgroundImageFallback = PathUtils::ResolvePath(m_Options.backgroundImageFallback, PathUtils::GetScriptBaseDir(m_Options.scriptPath, JSEngine::GetEntryScriptDir()));
+        else
+            m_Options.backgroundImageFallback = PathUtils::NormalizePath(m_Options.backgroundImageFallback);
+        m_BackgroundImage.SetFallbackPath(m_Options.backgroundImageFallback);
+    }
+    if (!m_Options.backgroundImage.empty())
+    {
+        if (PathUtils::IsPathRelative(m_Options.backgroundImage))
+            m_Options.backgroundImage = PathUtils::ResolvePath(m_Options.backgroundImage, PathUtils::GetScriptBaseDir(m_Options.scriptPath, JSEngine::GetEntryScriptDir()));
+        m_BackgroundImage.SetPath(m_Options.backgroundImage);
+    }
 }
 
 /*
@@ -531,6 +545,48 @@ void Widget::SetBackgroundColor(const std::wstring &colorStr)
             Settings::SaveWidget(m_Options.id, m_Options);
         }
     }
+}
+
+void Widget::SetBackgroundImage(const std::wstring &path, const BackgroundImageSize &size, const std::wstring &position)
+{
+    std::wstring resolved = path;
+    if (!resolved.empty())
+    {
+        if (PathUtils::IsPathRelative(resolved))
+            resolved = PathUtils::ResolvePath(resolved, PathUtils::GetScriptBaseDir(m_Options.scriptPath, JSEngine::GetEntryScriptDir()));
+        else if (!PathUtils::IsURL(resolved))
+            resolved = PathUtils::NormalizePath(resolved);
+    }
+    const bool imageChanged = m_Options.backgroundImage != resolved;
+    if (!imageChanged && m_Options.backgroundSize == size && m_Options.backgroundPosition == position)
+        return;
+    m_Options.backgroundImage = resolved;
+    m_Options.backgroundSize = size;
+    m_Options.backgroundPosition = position;
+    if (imageChanged)
+        m_BackgroundImage.SetPath(resolved);
+    Redraw();
+    Settings::SaveWidget(m_Options.id, m_Options);
+}
+
+void Widget::SetBackgroundImageFallback(const std::wstring &path)
+{
+    std::wstring resolved = path;
+    if (!resolved.empty())
+    {
+        if (PathUtils::IsPathRelative(resolved))
+            resolved = PathUtils::ResolvePath(resolved, PathUtils::GetScriptBaseDir(m_Options.scriptPath, JSEngine::GetEntryScriptDir()));
+        else
+            resolved = PathUtils::NormalizePath(resolved);
+    }
+
+    if (m_Options.backgroundImageFallback == resolved)
+        return;
+
+    m_Options.backgroundImageFallback = resolved;
+    m_BackgroundImage.SetFallbackPath(resolved);
+    Redraw();
+    Settings::SaveWidget(m_Options.id, m_Options);
 }
 
 /*
@@ -2444,6 +2500,11 @@ void Widget::Redraw()
 void Widget::OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer)
 {
     bool updated = false;
+    if (m_Options.backgroundImage == url)
+    {
+        m_BackgroundImage.OnImageDownloaded(url, buffer);
+        updated = true;
+    }
     for (Element *element : m_Elements)
     {
         if (element)
@@ -2512,6 +2573,8 @@ void Widget::UpdateLayeredWindowContent()
 {
     if (!m_hWnd)
         return;
+
+    m_BackgroundImage.SetOwnerHWND(m_hWnd);
 
     for (Element *element : m_Elements)
     {
@@ -2677,6 +2740,51 @@ void Widget::UpdateLayeredWindowContent()
             if (pBackBrush)
             {
                 m_pContext->FillRectangle(backRect, pBackBrush.Get());
+            }
+
+            if (!m_Options.backgroundImage.empty())
+            {
+                m_BackgroundImage.EnsureBitmap(m_pContext.Get());
+                if (ID2D1Bitmap *background = m_BackgroundImage.GetBitmap())
+                {
+                    const D2D1_SIZE_F imageSize = background->GetSize();
+                    if (imageSize.width > 0.0f && imageSize.height > 0.0f)
+                    {
+                        D2D1_RECT_F dst = backRect;
+                        if (m_Options.backgroundSize.type == BackgroundImageSize::Type::Explicit)
+                        {
+                            const float drawW = m_Options.backgroundSize.hasWidth
+                                ? m_Options.backgroundSize.width
+                                : m_Options.backgroundSize.height * imageSize.width / imageSize.height;
+                            const float drawH = m_Options.backgroundSize.hasHeight
+                                ? m_Options.backgroundSize.height
+                                : m_Options.backgroundSize.width * imageSize.height / imageSize.width;
+                            float x = 0.0f, y = 0.0f;
+                            if (m_Options.backgroundPosition.find(L"right") != std::wstring::npos) x = w - drawW;
+                            else if (m_Options.backgroundPosition.find(L"left") == std::wstring::npos) x = (w - drawW) * 0.5f;
+                            if (m_Options.backgroundPosition.find(L"bottom") != std::wstring::npos) y = h - drawH;
+                            else if (m_Options.backgroundPosition.find(L"top") == std::wstring::npos) y = (h - drawH) * 0.5f;
+                            dst = D2D1::RectF(x, y, x + drawW, y + drawH);
+                        }
+                        else if (m_Options.backgroundSize.type != BackgroundImageSize::Type::Stretch)
+                        {
+                            const float scale = m_Options.backgroundSize.type == BackgroundImageSize::Type::Contain
+                                ? (std::min)(static_cast<float>(w) / imageSize.width, static_cast<float>(h) / imageSize.height)
+                                : (std::max)(static_cast<float>(w) / imageSize.width, static_cast<float>(h) / imageSize.height);
+                            const float drawW = imageSize.width * scale;
+                            const float drawH = imageSize.height * scale;
+                            float x = 0.0f, y = 0.0f;
+                            if (m_Options.backgroundPosition.find(L"right") != std::wstring::npos) x = w - drawW;
+                            else if (m_Options.backgroundPosition.find(L"left") == std::wstring::npos) x = (w - drawW) * 0.5f;
+                            if (m_Options.backgroundPosition.find(L"bottom") != std::wstring::npos) y = h - drawH;
+                            else if (m_Options.backgroundPosition.find(L"top") == std::wstring::npos) y = (h - drawH) * 0.5f;
+                            dst = D2D1::RectF(x, y, x + drawW, y + drawH);
+                        }
+                        m_pContext->PushAxisAlignedClip(backRect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+                        m_pContext->DrawBitmap(background, &dst, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+                        m_pContext->PopAxisAlignedClip();
+                    }
+                }
             }
 
             // Advance the caret blink phase for the focused input box.

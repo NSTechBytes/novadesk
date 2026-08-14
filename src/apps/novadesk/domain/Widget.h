@@ -19,6 +19,7 @@
 #include "../render/Element.h"
 #include "../render/TextElement.h"
 #include "../render/ImageElement.h"
+#include "../render/GeneralImage.h"
 #include "../render/BitmapElement.h"
 #include "../render/RotatorElement.h"
 #include "../render/ElementLayoutBox.h"
@@ -55,6 +56,30 @@ namespace PropertyParser {
 
 #include "MenuItem.h"
 
+struct BackgroundImageSize
+{
+    enum class Type
+    {
+        Cover,
+        Contain,
+        Stretch,
+        Explicit
+    };
+
+    Type type = Type::Cover;
+    float width = 0.0f;
+    float height = 0.0f;
+    bool hasWidth = false;
+    bool hasHeight = false;
+
+    bool operator==(const BackgroundImageSize &other) const
+    {
+        return type == other.type && width == other.width && height == other.height &&
+            hasWidth == other.hasWidth && hasHeight == other.hasHeight;
+    }
+    bool operator!=(const BackgroundImageSize &other) const { return !(*this == other); }
+};
+
 struct WidgetOptions
 {
     std::wstring id;
@@ -68,6 +93,10 @@ struct WidgetOptions
     BYTE windowOpacity = 255;  // Overall window opacity (0-255)
     COLORREF color = RGB(255, 255, 255);
     GradientInfo bgGradient;
+    std::wstring backgroundImage;
+    std::wstring backgroundImageFallback;
+    BackgroundImageSize backgroundSize;
+    std::wstring backgroundPosition = L"center";
     bool draggable = true;
     bool clickThrough = false;
     bool keepOnScreen = false;
@@ -153,6 +182,8 @@ public:
     void SetWindowPosition(int x, int y, int w, int h);
     void SetWindowOpacity(BYTE opacity);
     void SetBackgroundColor(const std::wstring& colorStr);
+    void SetBackgroundImage(const std::wstring& path, const BackgroundImageSize& size, const std::wstring& position = L"center");
+    void SetBackgroundImageFallback(const std::wstring& path);
     void SetDraggable(bool enable);
     void SetClickThrough(bool enable);
     void SetKeepOnScreen(bool enable);
@@ -309,6 +340,7 @@ private:
     
     // Rendering
     Microsoft::WRL::ComPtr<ID2D1DeviceContext> m_pContext;
+    GeneralImage m_BackgroundImage;
     HDC m_hRenderMemDc = nullptr;
     HBITMAP m_hRenderBitmap = nullptr;
     HBITMAP m_hRenderOldBitmap = nullptr;
