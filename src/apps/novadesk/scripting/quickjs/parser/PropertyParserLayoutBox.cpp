@@ -248,13 +248,28 @@ namespace PropertyParser
 
         auto parseBackdropFilter = [&](JSValueConst value) -> bool
         {
-            double numericRadius = 0.0;
-            if (JS_ToFloat64(ctx, &numericRadius, value) == 0)
-            {
-                options.backdropFilterBlur = static_cast<float>((std::max)(0.0, numericRadius));
-                return true;
-            }
-            return false;
+            if (!JS_IsObject(value) || JS_IsArray(value))
+                return false;
+            auto &filter = options.backdropFilter;
+            GetFloatProp(ctx, value, "blur", filter.blur);
+            GetFloatProp(ctx, value, "brightness", filter.brightness);
+            GetFloatProp(ctx, value, "contrast", filter.contrast);
+            GetFloatProp(ctx, value, "greyScale", filter.grayscale);
+            GetFloatProp(ctx, value, "grayscale", filter.grayscale);
+            GetFloatProp(ctx, value, "saturate", filter.saturate);
+            GetFloatProp(ctx, value, "sepia", filter.sepia);
+            GetFloatProp(ctx, value, "hueRotate", filter.hueRotate);
+            GetFloatProp(ctx, value, "invert", filter.invert);
+            GetFloatProp(ctx, value, "opacity", filter.opacity);
+            filter.blur = (std::max)(0.0f, filter.blur);
+            filter.brightness = (std::max)(0.0f, filter.brightness);
+            filter.contrast = (std::max)(0.0f, filter.contrast);
+            filter.grayscale = (std::clamp)(filter.grayscale, 0.0f, 1.0f);
+            filter.saturate = (std::max)(0.0f, filter.saturate);
+            filter.sepia = (std::clamp)(filter.sepia, 0.0f, 1.0f);
+            filter.invert = (std::clamp)(filter.invert, 0.0f, 1.0f);
+            filter.opacity = (std::clamp)(filter.opacity, 0.0f, 1.0f);
+            return true;
         };
         JSValue backdropFilterV = JS_GetPropertyStr(ctx, obj, "backdropFilter");
         if (!JS_IsUndefined(backdropFilterV) && !JS_IsNull(backdropFilterV))
@@ -522,7 +537,7 @@ namespace PropertyParser
             shadows.push_back(outShadow);
         }
         element->SetBoxShadows(shadows);
-        element->SetBackdropFilterBlur(options.backdropFilterBlur);
+        element->SetBackdropFilter(options.backdropFilter);
 
         // Apply padding values to the element
         // Logging::Log(LogLevel::Debug, L"[PADDING] ApplyLayoutBoxOptions: Setting padding L=%d, T=%d, R=%d, B=%d on element '%s'",
@@ -574,7 +589,7 @@ namespace PropertyParser
             outShadow.inset = shadow.inset;
             options.boxShadows.push_back(outShadow);
         }
-        options.backdropFilterBlur = element->GetBackdropFilterBlur();
+        options.backdropFilter = element->GetBackdropFilter();
 
         options.direction = direction ? *direction : L"ltr";
         options.flexDirection = flexDirection ? *flexDirection : element->GetLayoutDirection();

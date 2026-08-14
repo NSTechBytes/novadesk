@@ -12,11 +12,19 @@
 #include <algorithm>
 #include <cmath>
 #include <d2d1effects.h>
+#include <d2d1effects_2.h>
 #include <vector>
 
 ElementLayoutBox::ElementLayoutBox(const std::wstring& id, int x, int y, int width, int height)
     : ShapeElement(id, x, y, width, height, ELEMENT_LAYOUT_BOX)
 {
+}
+
+bool ElementLayoutBox::BackdropFilter::IsActive() const
+{
+    return blur > 0.0f || brightness != 1.0f || contrast != 1.0f ||
+        grayscale > 0.0f || saturate != 1.0f || sepia > 0.0f ||
+        hueRotate != 0.0f || invert > 0.0f || opacity != 1.0f;
 }
 
 int ElementLayoutBox::GetAutoWidth()
@@ -237,13 +245,13 @@ void ElementLayoutBox::Render(ID2D1DeviceContext* context)
 
 void ElementLayoutBox::RenderBackdropFilter(ID2D1DeviceContext *context, const D2D1_ROUNDED_RECT &rect)
 {
-    if (!context || m_BackdropFilterBlur <= 0.0f)
+    if (!context || !m_BackdropFilter.IsActive())
         return;
 
     // Direct2D documents the blur extent as three times the standard
     // deviation. Include that margin in the snapshot so the filter does not
     // produce a clipped edge inside the rounded box.
-    const float blurExtent = std::ceil(m_BackdropFilterBlur * 3.0f);
+    const float blurExtent = std::ceil(m_BackdropFilter.blur * 3.0f);
     const D2D1_SIZE_U targetSize = context->GetPixelSize();
     if (targetSize.width == 0 || targetSize.height == 0)
         return;
@@ -278,12 +286,65 @@ void ElementLayoutBox::RenderBackdropFilter(ID2D1DeviceContext *context, const D
     if (FAILED(snapshot->CopyFromRenderTarget(nullptr, context, &sourceRect)))
         return;
 
-    Microsoft::WRL::ComPtr<ID2D1Effect> blur;
-    if (FAILED(context->CreateEffect(CLSID_D2D1GaussianBlur, &blur)))
-        return;
-    blur->SetInput(0, snapshot.Get());
-    blur->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, m_BackdropFilterBlur);
-    blur->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE, D2D1_BORDER_MODE_HARD);
+    ID2D1Image *filteredImage = snapshot.Get();
+    std::vector<Microsoft::WRL::ComPtr<ID2D1Effect>> effects;
+    std::vector<Microsoft::WRL::ComPtr<ID2D1Image>> effectOutputs;
+    auto appendEffect = [&](REFCLSID clsid, auto configure) -> bool
+    {
+        Microsoft::WRL::ComPtr<ID2D1Effect> effect;
+        Microsoft::WRL::ComPtr<ID2D1Image> output;
+        if (FAILED(context->CreateEffect(clsid, &effect)))
+            return false;
+        effect->SetInput(0, filteredImage);
+        configure(effect.Get());
+        effect->GetOutput(&output);
+        filteredImage = output.Get();
+        effects.push_back(effect);
+        effectOutputs.push_back(output);
+        return true;
+    };
+    auto blendWithOriginal = [&](REFCLSID clsid, float amount) -> bool
+    {
+        Microsoft::WRL::ComPtr<ID2D1Effect> adjustment;
+        Microsoft::WRL::ComPtr<ID2D1Effect> crossFade;
+        Microsoft::WRL::ComPtr<ID2D1Image> output;
+        if (FAILED(context->CreateEffect(clsid, &adjustment)) ||
+            FAILED(context->CreateEffect(CLSID_D2D1CrossFade, &crossFade)))
+            return false;
+        adjustment->SetInput(0, filteredImage);
+        crossFade->SetInput(0, filteredImage);
+        crossFade->SetInputEffect(1, adjustment.Get());
+        crossFade->SetValue(D2D1_CROSSFADE_PROP_WEIGHT, amount);
+        crossFade->GetOutput(&output);
+        filteredImage = output.Get();
+        effects.push_back(adjustment);
+        effects.push_back(crossFade);
+        effectOutputs.push_back(output);
+        return true;
+    };
+
+    if (m_BackdropFilter.blur > 0.0f && !appendEffect(CLSID_D2D1GaussianBlur, [&](ID2D1Effect *effect)
+        {
+            effect->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, m_BackdropFilter.blur);
+            effect->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE, D2D1_BORDER_MODE_HARD);
+        })) return;
+    if (m_BackdropFilter.brightness != 1.0f && !appendEffect(CLSID_D2D1ColorMatrix, [&](ID2D1Effect *effect)
+        {
+            const float value = m_BackdropFilter.brightness;
+            effect->SetValue(D2D1_COLORMATRIX_PROP_COLOR_MATRIX, D2D1::Matrix5x4F(
+                value, 0, 0, 0,  0, value, 0, 0,  0, 0, value, 0,  0, 0, 0, 1,  0, 0, 0, 0));
+        })) return;
+    if (m_BackdropFilter.contrast != 1.0f && !appendEffect(CLSID_D2D1Contrast, [&](ID2D1Effect *effect)
+        { effect->SetValue(D2D1_CONTRAST_PROP_CONTRAST, (std::clamp)(m_BackdropFilter.contrast - 1.0f, -1.0f, 1.0f)); })) return;
+    if (m_BackdropFilter.grayscale > 0.0f && !blendWithOriginal(CLSID_D2D1Grayscale, m_BackdropFilter.grayscale)) return;
+    if (m_BackdropFilter.saturate != 1.0f && !appendEffect(CLSID_D2D1Saturation, [&](ID2D1Effect *effect)
+        { effect->SetValue(D2D1_SATURATION_PROP_SATURATION, m_BackdropFilter.saturate); })) return;
+    if (m_BackdropFilter.sepia > 0.0f && !blendWithOriginal(CLSID_D2D1Sepia, m_BackdropFilter.sepia)) return;
+    if (m_BackdropFilter.hueRotate != 0.0f && !appendEffect(CLSID_D2D1HueRotation, [&](ID2D1Effect *effect)
+        { effect->SetValue(D2D1_HUEROTATION_PROP_ANGLE, m_BackdropFilter.hueRotate); })) return;
+    if (m_BackdropFilter.invert > 0.0f && !blendWithOriginal(CLSID_D2D1Invert, m_BackdropFilter.invert)) return;
+    if (m_BackdropFilter.opacity != 1.0f && !appendEffect(CLSID_D2D1Opacity, [&](ID2D1Effect *effect)
+        { effect->SetValue(D2D1_OPACITY_PROP_OPACITY, m_BackdropFilter.opacity); })) return;
 
     Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> clip;
     ID2D1Factory1 *factory = Direct2D::GetFactory();
@@ -303,7 +364,7 @@ void ElementLayoutBox::RenderBackdropFilter(ID2D1DeviceContext *context, const D
         left * pxToDipX,
         top * pxToDipY);
     context->DrawImage(
-        blur.Get(),
+        filteredImage,
         &imageOffset,
         nullptr,
         D2D1_INTERPOLATION_MODE_LINEAR,

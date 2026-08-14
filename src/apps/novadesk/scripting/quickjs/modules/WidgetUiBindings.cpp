@@ -1866,7 +1866,20 @@ namespace novadesk::scripting::quickjs
                         return arr;
                     }
                     if (prop == "backdropFilter")
-                        return JS_NewFloat64(ctx, layoutPrefill.backdropFilterBlur);
+                    {
+                        const auto &filter = layoutPrefill.backdropFilter;
+                        JSValue result = JS_NewObject(ctx);
+                        JS_SetPropertyStr(ctx, result, "blur", JS_NewFloat64(ctx, filter.blur));
+                        JS_SetPropertyStr(ctx, result, "brightness", JS_NewFloat64(ctx, filter.brightness));
+                        JS_SetPropertyStr(ctx, result, "contrast", JS_NewFloat64(ctx, filter.contrast));
+                        JS_SetPropertyStr(ctx, result, "greyScale", JS_NewFloat64(ctx, filter.grayscale));
+                        JS_SetPropertyStr(ctx, result, "saturate", JS_NewFloat64(ctx, filter.saturate));
+                        JS_SetPropertyStr(ctx, result, "sepia", JS_NewFloat64(ctx, filter.sepia));
+                        JS_SetPropertyStr(ctx, result, "hueRotate", JS_NewFloat64(ctx, filter.hueRotate));
+                        JS_SetPropertyStr(ctx, result, "invert", JS_NewFloat64(ctx, filter.invert));
+                        JS_SetPropertyStr(ctx, result, "opacity", JS_NewFloat64(ctx, filter.opacity));
+                        return result;
+                    }
                 }
 
                 if (auto *pathShape = dynamic_cast<PathShape *>(shape))

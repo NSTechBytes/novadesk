@@ -126,7 +126,10 @@
     <ClCompile Include="..\..\third_party\woff2\glyph.cc" />
     <ClCompile Include="..\..\third_party\woff2\normalize.cc" />
     <ClCompile Include="..\..\third_party\woff2\table_tags.cc" />
-    <ClCompile Include="..\..\third_party\woff2\transform.cc" />
+    <ClCompile Include="..\..\third_party\woff2\transform.cc">
+      <!-- Avoid colliding with brotli/common/transform.c in $(IntDir). -->
+      <ObjectFileName>$(IntDir)woff2_transform.obj</ObjectFileName>
+    </ClCompile>
     <ClCompile Include="..\..\third_party\woff2\variable_length.cc" />
     <ClCompile Include="..\..\third_party\woff2\woff2_common.cc" />
     <ClCompile Include="..\..\third_party\woff2\woff2_dec.cc" />

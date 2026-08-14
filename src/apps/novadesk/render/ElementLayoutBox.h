@@ -15,6 +15,21 @@
 class ElementLayoutBox : public ShapeElement
 {
 public:
+    struct BackdropFilter
+    {
+        float blur = 0.0f;
+        float brightness = 1.0f;
+        float contrast = 1.0f;
+        float grayscale = 0.0f;
+        float saturate = 1.0f;
+        float sepia = 0.0f;
+        float hueRotate = 0.0f;
+        float invert = 0.0f;
+        float opacity = 1.0f;
+
+        bool IsActive() const;
+    };
+
     enum class DisplayType
     {
         Flex,
@@ -74,9 +89,9 @@ public:
     void SetBoxShadows(const std::vector<BoxShadow> &shadows) { m_BoxShadows = shadows; }
     const std::vector<BoxShadow> &GetBoxShadows() const { return m_BoxShadows; }
 
-    // Element-scoped backdrop-filter blur radius, in DIPs.
-    void SetBackdropFilterBlur(float radius) { m_BackdropFilterBlur = (std::max)(0.0f, radius); }
-    float GetBackdropFilterBlur() const { return m_BackdropFilterBlur; }
+    // Element-scoped CSS-style filter values. blur uses DIPs; amounts use 0-1.
+    void SetBackdropFilter(const BackdropFilter &filter) { m_BackdropFilter = filter; }
+    const BackdropFilter &GetBackdropFilter() const { return m_BackdropFilter; }
 
     void SetBorderStyle(BorderStyle top, BorderStyle right, BorderStyle bottom, BorderStyle left)
     {
@@ -117,7 +132,7 @@ private:
     float m_RadiusX = 0.0f;
     float m_RadiusY = 0.0f;
     std::vector<BoxShadow> m_BoxShadows;
-    float m_BackdropFilterBlur = 0.0f;
+    BackdropFilter m_BackdropFilter;
     BorderStyle m_BorderStyleTop = BorderStyle::Solid;
     BorderStyle m_BorderStyleRight = BorderStyle::Solid;
     BorderStyle m_BorderStyleBottom = BorderStyle::Solid;
