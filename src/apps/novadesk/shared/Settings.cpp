@@ -126,32 +126,6 @@ void Settings::SaveWidget(const std::wstring& id, const WidgetOptions& options)
     widgetData["x"] = options.x;
     widgetData["y"] = options.y;
     widgetData["windowopacity"] = options.windowOpacity;
-    widgetData["backgroundimage"] = Utils::ToString(options.backgroundImage);
-    widgetData["backgroundimagefallback"] = Utils::ToString(options.backgroundImageFallback);
-    if (options.backgroundImageSize.type == BackgroundImageSize::Type::Explicit)
-    {
-        json size;
-        if (options.backgroundImageSize.hasWidth) size["width"] = options.backgroundImageSize.width;
-        if (options.backgroundImageSize.hasHeight) size["height"] = options.backgroundImageSize.height;
-        widgetData["backgroundimagesize"] = size;
-    }
-    else
-    {
-        const char *size = options.backgroundImageSize.type == BackgroundImageSize::Type::Contain ? "contain" :
-            options.backgroundImageSize.type == BackgroundImageSize::Type::Stretch ? "stretch" : "cover";
-        widgetData["backgroundimagesize"] = size;
-    }
-    if (options.backgroundImagePosition.type == BackgroundImagePosition::Type::Explicit)
-    {
-        widgetData["backgroundimageposition"] = {
-            { "x", options.backgroundImagePosition.x },
-            { "y", options.backgroundImagePosition.y }
-        };
-    }
-    else
-    {
-        widgetData["backgroundimageposition"] = Utils::ToString(options.backgroundImagePosition.keyword);
-    }
     
     std::string zPosStr = "normal";
     switch(options.zPos) {
@@ -202,50 +176,6 @@ bool Settings::LoadWidget(const std::wstring& id, WidgetOptions& outOptions)
         if (w.contains("x")) outOptions.x = w["x"];
         if (w.contains("y")) outOptions.y = w["y"];
         if (w.contains("windowopacity")) outOptions.windowOpacity = w["windowopacity"];
-        if (w.contains("backgroundimage") && w["backgroundimage"].is_string()) outOptions.backgroundImage = Utils::ToWString(w["backgroundimage"].get<std::string>());
-        if (w.contains("backgroundimagefallback") && w["backgroundimagefallback"].is_string()) outOptions.backgroundImageFallback = Utils::ToWString(w["backgroundimagefallback"].get<std::string>());
-        if (w.contains("backgroundimagesize"))
-        {
-            if (w["backgroundimagesize"].is_string())
-            {
-                const std::string size = w["backgroundimagesize"].get<std::string>();
-                outOptions.backgroundImageSize.type = size == "contain" ? BackgroundImageSize::Type::Contain :
-                    size == "stretch" ? BackgroundImageSize::Type::Stretch : BackgroundImageSize::Type::Cover;
-            }
-            else if (w["backgroundimagesize"].is_object())
-            {
-                const json &size = w["backgroundimagesize"];
-                const bool hasWidth = size.contains("width") && size["width"].is_number() && size["width"].get<float>() > 0.0f;
-                const bool hasHeight = size.contains("height") && size["height"].is_number() && size["height"].get<float>() > 0.0f;
-                if (hasWidth || hasHeight)
-                {
-                    outOptions.backgroundImageSize.type = BackgroundImageSize::Type::Explicit;
-                    outOptions.backgroundImageSize.hasWidth = hasWidth;
-                    outOptions.backgroundImageSize.hasHeight = hasHeight;
-                    outOptions.backgroundImageSize.width = hasWidth ? size["width"].get<float>() : 0.0f;
-                    outOptions.backgroundImageSize.height = hasHeight ? size["height"].get<float>() : 0.0f;
-                }
-            }
-        }
-        if (w.contains("backgroundimageposition"))
-        {
-            if (w["backgroundimageposition"].is_string())
-            {
-                outOptions.backgroundImagePosition.type = BackgroundImagePosition::Type::Keyword;
-                outOptions.backgroundImagePosition.keyword = Utils::ToWString(w["backgroundimageposition"].get<std::string>());
-            }
-            else if (w["backgroundimageposition"].is_object())
-            {
-                const json &position = w["backgroundimageposition"];
-                if (position.contains("x") && position["x"].is_number() &&
-                    position.contains("y") && position["y"].is_number())
-                {
-                    outOptions.backgroundImagePosition.type = BackgroundImagePosition::Type::Explicit;
-                    outOptions.backgroundImagePosition.x = position["x"].get<float>();
-                    outOptions.backgroundImagePosition.y = position["y"].get<float>();
-                }
-            }
-        }
         
         if (w.contains("zpos")) {
             std::string z = w["zpos"];
