@@ -10,6 +10,10 @@ const win = new widgetWindow({
   height: 400,
   backgroundColor: "black",
   script: "./image.ui.js",
-  show: true
+  show: true,
+  backgroundImage: "https://images.unsplash.com/photo-1511497584788-876760111969",
+   backgroundImageFallback: "C:\\Users\\nasirshahbaz\\OneDrive\\Desktop\\Screenshot 2026-05-14 181227.png",
+  backgroundSize: "contain",
+  backgroundPosition: "left"
 });
 
