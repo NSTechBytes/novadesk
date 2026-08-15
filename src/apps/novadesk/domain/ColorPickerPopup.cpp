@@ -184,7 +184,7 @@ void ColorPickerPopup::Show()
     const int workLeft = static_cast<int>(mi.rcWork.left);
     const int workRight = static_cast<int>(mi.rcWork.right);
     x = (std::max)(workLeft, (std::min)(x, workRight - W));
-    m_hWnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, L"NovadeskColorPickerPopup", L"", WS_POPUP | WS_BORDER, x, y, W, H, m_Widget->GetWindow(), nullptr, GetModuleHandleW(nullptr), this);
+    m_hWnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, L"NovadeskColorPickerPopup", L"", WS_POPUP | WS_BORDER | WS_CLIPCHILDREN, x, y, W, H, m_Widget->GetWindow(), nullptr, GetModuleHandleW(nullptr), this);
     ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
 }
 void ColorPickerPopup::Close()
@@ -222,7 +222,8 @@ void ColorPickerPopup::SetRGB(COLORREF c, bool n)
     if (m_hWnd)
     {
         SyncEdits();
-        InvalidateRect(m_hWnd, nullptr, FALSE);
+        RECT colorRegion{0, 0, W, 250};
+        InvalidateRect(m_hWnd, &colorRegion, FALSE);
     }
     if (n)
         Notify();
@@ -235,7 +236,8 @@ void ColorPickerPopup::SetHSV(float h, float s, float v, bool n)
     if (m_hWnd)
     {
         SyncEdits();
-        InvalidateRect(m_hWnd, nullptr, FALSE);
+        RECT colorRegion{0, 0, W, 250};
+        InvalidateRect(m_hWnd, &colorRegion, FALSE);
     }
     if (n)
         Notify();
