@@ -309,6 +309,19 @@ void ColorPickerPopup::Paint(HDC targetDc)
         MoveToEx(dc, 120 + x, HUEY, nullptr);
         LineTo(dc, 120 + x, HUEY + 18);
     }
+    // Hue selector: a high-contrast ring with the selected hue at its center.
+    const int hueSelectorX = 120 + static_cast<int>(m_H * 179.0f);
+    const int hueSelectorY = HUEY + 9;
+    HGDIOBJ hueOuterBrush = SelectObject(dc, GetStockObject(WHITE_BRUSH));
+    SetDCPenColor(dc, RGB(0, 0, 0));
+    Ellipse(dc, hueSelectorX - 10, hueSelectorY - 10, hueSelectorX + 10, hueSelectorY + 10);
+    HBRUSH hueFill = CreateSolidBrush(HsvToColor(m_H, 1.0f, 1.0f));
+    HGDIOBJ hueInnerBrush = SelectObject(dc, hueFill);
+    SetDCPenColor(dc, RGB(255, 255, 255));
+    Ellipse(dc, hueSelectorX - 8, hueSelectorY - 8, hueSelectorX + 8, hueSelectorY + 8);
+    SelectObject(dc, hueInnerBrush);
+    DeleteObject(hueFill);
+    SelectObject(dc, hueOuterBrush);
     COLORREF c = HSV();
     HBRUSH br = CreateSolidBrush(c);
     RECT sw{58, 201, 102, 245};
@@ -415,11 +428,13 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
         {
             m_dragSV = true;
             SetCapture(m_hWnd);
+            SetHSV(m_H, x / static_cast<float>(SV_WIDTH - 1), 1 - y / static_cast<float>(SV_HEIGHT - 1));
         }
         else if (x >= 120 && x < 300 && y >= HUEY && y < HUEY + 20)
         {
             m_dragHue = true;
             SetCapture(m_hWnd);
+            SetHSV((x - 120) / 179.0f, m_S, m_V);
         }
         else if (x < 45 && y >= 200 && y < 245)
         {
