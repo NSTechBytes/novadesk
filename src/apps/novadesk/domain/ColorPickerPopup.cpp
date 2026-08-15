@@ -1,13 +1,11 @@
 #include "ColorPickerPopup.h"
 #include "Widget.h"
 #include "../render/ColorPickerElement.h"
+#include "../render/Direct2DHelper.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include <algorithm>
 #include <cmath>
 #include <vector>
-#include <gdiplus.h>
-
-#pragma comment(lib, "gdiplus.lib")
 
 #pragma warning(push)
 #pragma warning(disable: 4244)
@@ -76,34 +74,21 @@ namespace
                (static_cast<DWORD>(GetGValue(color)) << 8) |
                static_cast<DWORD>(GetBValue(color));
     }
-    bool EnsureGdiplus()
+    void DrawSmoothEllipse(ID2D1RenderTarget* target, float x, float y, float width, float height, COLORREF fill, COLORREF outline, float outlineWidth = 1.0f)
     {
-        static const ULONG_PTR token = []()
-        {
-            Gdiplus::GdiplusStartupInput startupInput;
-            ULONG_PTR startupToken = 0;
-            return Gdiplus::GdiplusStartup(&startupToken, &startupInput, nullptr) == Gdiplus::Ok ? startupToken : ULONG_PTR{};
-        }();
-        return token != 0;
-    }
-    Gdiplus::Color ToGdiplusColor(COLORREF color)
-    {
-        return Gdiplus::Color(255, GetRValue(color), GetGValue(color), GetBValue(color));
-    }
-    void DrawSmoothEllipse(HDC dc, float x, float y, float width, float height, COLORREF fill, COLORREF outline, float outlineWidth = 1.0f)
-    {
-        if (!EnsureGdiplus()) return;
-        Gdiplus::Graphics graphics(dc);
-        graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        Gdiplus::SolidBrush fillBrush(ToGdiplusColor(fill));
-        graphics.FillEllipse(&fillBrush, x, y, width, height);
+        if (!target) return;
+        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> fillBrush;
+        if (!Direct2D::CreateSolidBrush(target, fill, 1.0f, fillBrush.GetAddressOf())) return;
+        const D2D1_ELLIPSE ellipse = D2D1::Ellipse(D2D1::Point2F(x + width / 2.0f, y + height / 2.0f), width / 2.0f, height / 2.0f);
+        target->FillEllipse(ellipse, fillBrush.Get());
         if (outlineWidth > 0.0f)
         {
-            Gdiplus::Pen outlinePen(ToGdiplusColor(outline), outlineWidth);
-            graphics.DrawEllipse(&outlinePen, x, y, width, height);
+            Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> outlineBrush;
+            if (Direct2D::CreateSolidBrush(target, outline, 1.0f, outlineBrush.GetAddressOf()))
+                target->DrawEllipse(ellipse, outlineBrush.Get(), outlineWidth);
         }
     }
-    void DrawEyedropperSvg(HDC dc, int left, int top, int size)
+    void DrawEyedropperSvg(ID2D1RenderTarget* target, int left, int top, int size)
     {
         // This is the supplied Vaadin SVG path, parsed by the same NanoSVG
         // library used by Novadesk's PathShape renderer.
@@ -116,20 +101,23 @@ namespace
         }();
         if (!image) return;
 
-        if (!EnsureGdiplus()) return;
+        ID2D1Factory1* factory = Direct2D::GetFactory();
+        if (!target || !factory) return;
         const float scale = size / 16.0f;
-        Gdiplus::Graphics graphics(dc);
-        graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        Gdiplus::GraphicsPath iconPath(Gdiplus::FillModeWinding);
+        Microsoft::WRL::ComPtr<ID2D1PathGeometry> iconPath;
+        if (FAILED(factory->CreatePathGeometry(iconPath.GetAddressOf()))) return;
+        Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
+        if (FAILED(iconPath->Open(sink.GetAddressOf()))) return;
+        sink->SetFillMode(D2D1_FILL_MODE_WINDING);
         for (NSVGshape* shape = image->shapes; shape; shape = shape->next)
         {
             for (NSVGpath* path = shape->paths; path; path = path->next)
             {
                 if (path->npts < 2) continue;
                 float* points = path->pts;
-                iconPath.StartFigure();
                 float currentX = left + points[0] * scale;
                 float currentY = top + points[1] * scale;
+                sink->BeginFigure(D2D1::Point2F(currentX, currentY), D2D1_FIGURE_BEGIN_FILLED);
                 for (int i = 0; i < path->npts - 1; i += 3)
                 {
                     float* point = &points[i * 2];
@@ -139,15 +127,17 @@ namespace
                     const float control2Y = top + point[5] * scale;
                     const float endX = left + point[6] * scale;
                     const float endY = top + point[7] * scale;
-                    iconPath.AddBezier(currentX, currentY, control1X, control1Y, control2X, control2Y, endX, endY);
+                    sink->AddBezier(D2D1::BezierSegment(D2D1::Point2F(control1X, control1Y), D2D1::Point2F(control2X, control2Y), D2D1::Point2F(endX, endY)));
                     currentX = endX;
                     currentY = endY;
                 }
-                if (path->closed) iconPath.CloseFigure();
+                sink->EndFigure(path->closed ? D2D1_FIGURE_END_CLOSED : D2D1_FIGURE_END_OPEN);
             }
         }
-        Gdiplus::SolidBrush iconBrush(Gdiplus::Color(255, 68, 68, 68));
-        graphics.FillPath(&iconBrush, &iconPath);
+        if (FAILED(sink->Close())) return;
+        Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> iconBrush;
+        if (Direct2D::CreateSolidBrush(target, RGB(68, 68, 68), 1.0f, iconBrush.GetAddressOf()))
+            target->FillGeometry(iconPath.Get(), iconBrush.Get());
     }
 }
 ColorPickerPopup::ColorPickerPopup(Widget *w, ColorPickerElement *p) : m_Widget(w), m_Picker(p) { SetRGB(p->GetColor(), false); }
@@ -344,18 +334,40 @@ void ColorPickerPopup::Paint(HDC targetDc)
         MoveToEx(dc, 120 + x, HUEY, nullptr);
         LineTo(dc, 120 + x, HUEY + 18);
     }
+
+    // Bind a Direct2D DC render target to the same back buffer. It provides
+    // antialiased vector rendering without changing the popup's GDI controls.
+    Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> vectorTarget;
+    if (ID2D1Factory1* factory = Direct2D::GetFactory())
+    {
+        const D2D1_RENDER_TARGET_PROPERTIES properties = D2D1::RenderTargetProperties(
+            D2D1_RENDER_TARGET_TYPE_DEFAULT,
+            D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE),
+            0.0f, 0.0f, D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE);
+        if (SUCCEEDED(factory->CreateDCRenderTarget(&properties, vectorTarget.GetAddressOf())) &&
+            SUCCEEDED(vectorTarget->BindDC(dc, &rc)))
+        {
+            vectorTarget->BeginDraw();
+        }
+        else
+        {
+            vectorTarget.Reset();
+        }
+    }
     // Hue selector: a high-contrast ring with the selected hue at its center.
     const int hueSelectorX = 120 + static_cast<int>(m_H * 179.0f);
     const int hueSelectorY = HUEY + 9;
-    DrawSmoothEllipse(dc, hueSelectorX - 10.0f, hueSelectorY - 10.0f, 20.0f, 20.0f, RGB(255, 255, 255), RGB(0, 0, 0));
-    DrawSmoothEllipse(dc, hueSelectorX - 8.0f, hueSelectorY - 8.0f, 16.0f, 16.0f, HsvToColor(m_H, 1.0f, 1.0f), RGB(255, 255, 255));
+    DrawSmoothEllipse(vectorTarget.Get(), hueSelectorX - 10.0f, hueSelectorY - 10.0f, 20.0f, 20.0f, RGB(255, 255, 255), RGB(0, 0, 0));
+    DrawSmoothEllipse(vectorTarget.Get(), hueSelectorX - 8.0f, hueSelectorY - 8.0f, 16.0f, 16.0f, HsvToColor(m_H, 1.0f, 1.0f), RGB(255, 255, 255));
     COLORREF c = HSV();
     RECT sw{58, 201, 102, 245};
-    DrawSmoothEllipse(dc, static_cast<float>(sw.left), static_cast<float>(sw.top), static_cast<float>(sw.right - sw.left), static_cast<float>(sw.bottom - sw.top), c, c, 0.0f);
+    DrawSmoothEllipse(vectorTarget.Get(), static_cast<float>(sw.left), static_cast<float>(sw.top), static_cast<float>(sw.right - sw.left), static_cast<float>(sw.bottom - sw.top), c, c, 0.0f);
     const float saturationValueX = m_S * (SV_WIDTH - 1.0f);
     const float saturationValueY = (1.0f - m_V) * (SV_HEIGHT - 1.0f);
-    DrawSmoothEllipse(dc, saturationValueX - 8.0f, saturationValueY - 8.0f, 16.0f, 16.0f, RGB(255, 255, 255), RGB(0, 0, 0));
-    DrawEyedropperSvg(dc, 19, 213, 20);
+    DrawSmoothEllipse(vectorTarget.Get(), saturationValueX - 8.0f, saturationValueY - 8.0f, 16.0f, 16.0f, RGB(255, 255, 255), RGB(0, 0, 0));
+    DrawEyedropperSvg(vectorTarget.Get(), 19, 213, 20);
+    if (vectorTarget)
+        vectorTarget->EndDraw();
     // Keep the format selector visually lightweight: it is not a blue or
     // permanently highlighted button. Hover only darkens its neutral text.
     const COLORREF modeColor = m_FormatHover ? RGB(68, 68, 68) : RGB(0, 0, 0);
