@@ -31,4 +31,5 @@ private:
     bool m_WidgetNeedsRedraw = false;
     bool m_HexMode = false;
     int m_EditingControl = 0;
+    bool m_FormatHover = false;
 };

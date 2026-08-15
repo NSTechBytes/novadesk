@@ -320,26 +320,20 @@ void ColorPickerPopup::Paint(HDC targetDc)
     Ellipse(dc, static_cast<int>(m_S * (SV_WIDTH - 1)) - 8, static_cast<int>((1 - m_V) * (SV_HEIGHT - 1)) - 8,
             static_cast<int>(m_S * (SV_WIDTH - 1)) + 8, static_cast<int>((1 - m_V) * (SV_HEIGHT - 1)) + 8);
     DrawEyedropperSvg(dc, 19, 213, 20);
-    if (!m_HexMode)
-    {
-        TextOutW(dc, 65, 314, L"R", 1);
-        TextOutW(dc, 150, 314, L"G", 1);
-        TextOutW(dc, 235, 314, L"B", 1);
-        MoveToEx(dc, 272, 317, nullptr); LineTo(dc, 275, 314);
-        MoveToEx(dc, 275, 314, nullptr); LineTo(dc, 278, 317);
-        MoveToEx(dc, 272, 324, nullptr); LineTo(dc, 275, 327);
-        MoveToEx(dc, 275, 327, nullptr); LineTo(dc, 278, 324);
-    }
-    else
-    {
-        SetDCPenColor(dc, RGB(0, 0, 0));
-        RoundRect(dc, 32, MODEY, 308, MODEBOTTOM, 5, 5);
-        TextOutW(dc, 134, 313, L"HEX", 3);
-        MoveToEx(dc, 272, 317, nullptr); LineTo(dc, 275, 314);
-        MoveToEx(dc, 275, 314, nullptr); LineTo(dc, 278, 317);
-        MoveToEx(dc, 272, 324, nullptr); LineTo(dc, 275, 327);
-        MoveToEx(dc, 275, 327, nullptr); LineTo(dc, 278, 324);
-    }
+    // Keep the format selector visually lightweight: it is not a blue or
+    // permanently highlighted button. Hover only darkens its neutral text.
+    const COLORREF modeColor = m_FormatHover ? RGB(68, 68, 68) : RGB(0, 0, 0);
+    const COLORREF oldTextColor = SetTextColor(dc, modeColor);
+    const int oldBackgroundMode = SetBkMode(dc, TRANSPARENT);
+    const int modeTextLeft = m_HexMode ? 134 : 132;
+    TextOutW(dc, modeTextLeft, 313, m_HexMode ? L"HEX" : L"RGB", 3);
+    SetDCPenColor(dc, modeColor);
+    MoveToEx(dc, 272, 317, nullptr); LineTo(dc, 275, 314);
+    MoveToEx(dc, 275, 314, nullptr); LineTo(dc, 278, 317);
+    MoveToEx(dc, 272, 324, nullptr); LineTo(dc, 275, 327);
+    MoveToEx(dc, 275, 327, nullptr); LineTo(dc, 278, 324);
+    SetBkMode(dc, oldBackgroundMode);
+    SetTextColor(dc, oldTextColor);
 
     BitBlt(targetDc, 0, 0, clientWidth, clientHeight, dc, 0, 0, SRCCOPY);
     if (oldFont) SelectObject(dc, oldFont);
@@ -434,8 +428,19 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
         }
         return 0;
     }
-    if (m == WM_MOUSEMOVE && (m_dragSV || m_dragHue || m_eye))
+    if (m == WM_MOUSEMOVE)
     {
+        const int x = LOWORD(l), y = HIWORD(l);
+        const bool formatHover = x >= 32 && x <= 308 && y >= MODEY && y <= MODEBOTTOM;
+        if (formatHover != m_FormatHover)
+        {
+            m_FormatHover = formatHover;
+            InvalidateRect(m_hWnd, nullptr, FALSE);
+        }
+        TRACKMOUSEEVENT tracking{sizeof(TRACKMOUSEEVENT), TME_LEAVE, m_hWnd, 0};
+        TrackMouseEvent(&tracking);
+        if (!(m_dragSV || m_dragHue || m_eye)) return 0;
+
         POINT p;
         GetCursorPos(&p);
         if (m_eye)
@@ -453,6 +458,26 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
                 SetHSV((p.x - 120) / 180.f, m_S, m_V);
         }
         return 0;
+    }
+    if (m == WM_MOUSELEAVE)
+    {
+        if (m_FormatHover)
+        {
+            m_FormatHover = false;
+            InvalidateRect(m_hWnd, nullptr, FALSE);
+        }
+        return 0;
+    }
+    if (m == WM_SETCURSOR && LOWORD(l) == HTCLIENT)
+    {
+        POINT cursor{};
+        GetCursorPos(&cursor);
+        ScreenToClient(m_hWnd, &cursor);
+        if (cursor.x >= 32 && cursor.x <= 308 && cursor.y >= MODEY && cursor.y <= MODEBOTTOM)
+        {
+            SetCursor(LoadCursor(nullptr, IDC_HAND));
+            return TRUE;
+        }
     }
     if (m == WM_LBUTTONUP)
     {
