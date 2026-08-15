@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <memory>
 #include <d2d1_1.h>
 #include <wrl/client.h>
 #include "DesktopManager.h"
@@ -31,6 +32,7 @@
 #include "../render/CursorManager.h"
 #include "../render/FlexLayoutEngine.h"
 #include "../render/InputBoxElement.h"
+#include "../render/ColorPickerElement.h"
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -38,6 +40,7 @@
 
 // Forward declarations
 class WidgetLayoutHelper;
+class ColorPickerPopup;
 
 namespace PropertyParser {
     struct ImageOptions;
@@ -52,6 +55,7 @@ namespace PropertyParser {
     struct ShapeOptions;
     struct AreaGraphOptions;
     struct InputBoxOptions;
+    struct ColorPickerOptions;
 }
 
 #include "MenuItem.h"
@@ -231,6 +235,7 @@ public:
     void AddAreaGraph(const PropertyParser::AreaGraphOptions& options);
     void AddLayoutBox(const PropertyParser::ShapeOptions& options);
     void AddInputBox(const PropertyParser::InputBoxOptions& options);
+    void AddColorPicker(const PropertyParser::ColorPickerOptions& options);
 
     void SetElementProperties(const std::wstring& id, JSContext* ctx, JSValueConst options);
     void SetGroupProperties(const std::wstring& group, JSContext* ctx, JSValueConst options);
@@ -351,6 +356,7 @@ private:
 
     // Input box focus state
     InputBoxElement* m_FocusedInputBox = nullptr;
+    std::unique_ptr<ColorPickerPopup> m_ColorPickerPopup;
 
     void ApplyToolbarStyle();
     void ApplyToolbarIcon();

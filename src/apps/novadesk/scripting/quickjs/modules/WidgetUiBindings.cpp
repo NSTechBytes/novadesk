@@ -29,6 +29,7 @@
 #include "../../render/TextElement.h"
 #include "../../render/ElementLayoutBox.h"
 #include "../../render/InputBoxElement.h"
+#include "../../render/ColorPickerElement.h"
 #include "../../shared/FileUtils.h"
 #include "../../shared/Logging.h"
 #include "../../shared/PathUtils.h"
@@ -280,6 +281,17 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
+        JSValue JsWidgetAddColorPicker(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_UNDEFINED;
+            if (argc < 1 || !JS_IsObject(argv[0])) return ThrowTypeError(ctx, "addColorPicker", "expected options object");
+            PropertyParser::ColorPickerOptions options;
+            PropertyParser::ParseColorPickerOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
+            widget->AddColorPicker(options);
+            return JS_UNDEFINED;
+        }
+
         JSValue JsWidgetAddBar(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -462,6 +474,8 @@ namespace novadesk::scripting::quickjs
                 return JsWidgetAddButton(ctx, thisVal, 1, argvLocal);
             if (type == L"inputbox")
                 return JsWidgetAddInputBox(ctx, thisVal, 1, argvLocal);
+            if (type == L"colorpicker")
+                return JsWidgetAddColorPicker(ctx, thisVal, 1, argvLocal);
             if (type == L"bitmap")
                 return JsWidgetAddBitmap(ctx, thisVal, 1, argvLocal);
             if (type == L"rotator")
@@ -985,6 +999,13 @@ namespace novadesk::scripting::quickjs
                 PropertyParser::ParseInputBoxOptions(ctx, argv[1], options, baseDir);
                 PropertyParser::ApplyInputBoxOptions(input, options);
             }
+            else if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+            {
+                PropertyParser::ColorPickerOptions options;
+                PropertyParser::PreFillColorPickerOptions(options, picker);
+                PropertyParser::ParseColorPickerOptions(ctx, argv[1], options, baseDir);
+                PropertyParser::ApplyColorPickerOptions(picker, options);
+            }
 
             widget->Redraw();
             return JS_UNDEFINED;
@@ -1068,6 +1089,15 @@ namespace novadesk::scripting::quickjs
 
             if (prop == "id")
                 return JS_NewString(ctx, Utils::ToString(element->GetId()).c_str());
+            if (prop == "color")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                {
+                    wchar_t value[8]; const COLORREF color = picker->GetColor();
+                    swprintf_s(value, L"#%02X%02X%02X", GetRValue(color), GetGValue(color), GetBValue(color));
+                    return JS_NewString(ctx, Utils::ToString(value).c_str());
+                }
+            }
             if (prop == "contentX")
                 return JS_NewInt32(ctx, contentBounds.X);
             if (prop == "contentY")
@@ -2067,6 +2097,7 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("addButton", 1, JsWidgetAddButton),
             JS_CFUNC_DEF("addText", 1, JsWidgetAddText),
             JS_CFUNC_DEF("addInputBox", 1, JsWidgetAddInputBox),
+            JS_CFUNC_DEF("addColorPicker", 1, JsWidgetAddColorPicker),
             JS_CFUNC_DEF("addBar", 1, JsWidgetAddBar),
             JS_CFUNC_DEF("addLine", 1, JsWidgetAddLine),
             JS_CFUNC_DEF("addHistogram", 1, JsWidgetAddHistogram),

@@ -15,6 +15,9 @@
 #include "WidgetLayoutHelper.h"
 #include <vector>
 #include <windowsx.h>
+#include <commdlg.h>
+
+#pragma comment(lib, "comdlg32.lib")
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -43,6 +46,7 @@
 #include "BitmapElement.h"
 #include "WidgetContextMenuHelper.h"
 #include "InputBoxContextMenuHelper.h"
+#include "ColorPickerPopup.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "InputBoxElement.h"
 #include "../shared/PathUtils.h"
@@ -1851,6 +1855,17 @@ void Widget::AddInputBox(const PropertyParser::InputBoxOptions &options)
     Redraw();
 }
 
+void Widget::AddColorPicker(const PropertyParser::ColorPickerOptions &options)
+{
+    if (options.id.empty()) return;
+    if (FindElementById(options.id)) RemoveElements(options.id);
+    auto *element = new ColorPickerElement(options.id, options.x, options.y, options.width > 0 ? options.width : 32, options.height > 0 ? options.height : 32);
+    PropertyParser::ApplyColorPickerOptions(element, options);
+    m_Elements.push_back(element);
+    UpdateContainerForElement(element, options.containerId);
+    Redraw();
+}
+
 bool Widget::BuildCombinedShapeGeometry(PathShape *target, const PropertyParser::ShapeOptions &options)
 {
     if (!target)
@@ -3502,6 +3517,14 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
         // Input box focus + caret placement on click.
         InputBoxElement* inputElem = dynamic_cast<InputBoxElement*>(hitElement);
+        ColorPickerElement* colorPicker = dynamic_cast<ColorPickerElement*>(hitElement);
+        if (colorPicker)
+        {
+            if (m_ColorPickerPopup) m_ColorPickerPopup->Close();
+            m_ColorPickerPopup = std::make_unique<ColorPickerPopup>(this, colorPicker);
+            m_ColorPickerPopup->Show();
+            handled = true;
+        }
         if (inputElem)
         {
             if (m_FocusedInputBox && m_FocusedInputBox != inputElem)

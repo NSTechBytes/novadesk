@@ -24,6 +24,7 @@
 #include "../../../render/RoundLineElement.h"
 #include "../../../render/TextElement.h"
 #include "../../../render/InputBoxElement.h"
+#include "../../../render/ColorPickerElement.h"
 
 namespace PropertyParser
 {
@@ -267,6 +268,12 @@ namespace PropertyParser
         int onFocusCallbackId = -1;
         int onBlurCallbackId = -1;
         int onInvalidInputCallbackId = -1; // fired when a typed char is rejected by inputType
+    };
+
+    struct ColorPickerOptions : public ElementOptions
+    {
+        COLORREF color = RGB(0, 0, 0);
+        int onChangeCallbackId = -1;
     };
 
     struct BarOptions : public ElementOptions

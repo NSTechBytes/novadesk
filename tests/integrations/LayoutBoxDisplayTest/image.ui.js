@@ -34,4 +34,14 @@ ui.addLayoutBox({
     backgroundColorRadius: 20,
 })
 
+ui.addColorPicker({
+  id: "accent",
+  x: 20,
+  y: 20,
+  width: 32,
+  height: 32,
+  color: "#1b1b1b",
+  onChange: (hexColor) => {}
+});
+
 ui.endUpdate();

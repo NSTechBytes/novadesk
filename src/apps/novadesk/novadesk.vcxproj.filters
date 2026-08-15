@@ -150,6 +150,8 @@
     <ClCompile Include="render\InputBoxElement.cpp">
       <Filter>render</Filter>
     </ClCompile>
+    <ClCompile Include="domain\ColorPickerPopup.cpp"><Filter>domain</Filter></ClCompile>
+    <ClCompile Include="render\ColorPickerElement.cpp"><Filter>render</Filter></ClCompile>
     <ClCompile Include="render\Tooltip.cpp">
       <Filter>render</Filter>
     </ClCompile>
@@ -204,6 +206,7 @@
     <ClCompile Include="scripting\quickjs\parser\PropertyParserInputBox.cpp">
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserColorPicker.cpp"><Filter>scripting\quickjs\parser</Filter></ClCompile>
     <ClCompile Include="scripting\quickjs\parser\PropertyParserWidgetWindow.cpp">
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
@@ -353,6 +356,8 @@
     <ClInclude Include="render\InputBoxElement.h">
       <Filter>render</Filter>
     </ClInclude>
+    <ClInclude Include="domain\ColorPickerPopup.h"><Filter>domain</Filter></ClInclude>
+    <ClInclude Include="render\ColorPickerElement.h"><Filter>render</Filter></ClInclude>
     <ClInclude Include="render\Tooltip.h">
       <Filter>render</Filter>
     </ClInclude>
