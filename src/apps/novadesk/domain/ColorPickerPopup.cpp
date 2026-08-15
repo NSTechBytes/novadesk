@@ -5,6 +5,9 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include <gdiplus.h>
+
+#pragma comment(lib, "gdiplus.lib")
 
 #pragma warning(push)
 #pragma warning(disable: 4244)
@@ -73,6 +76,33 @@ namespace
                (static_cast<DWORD>(GetGValue(color)) << 8) |
                static_cast<DWORD>(GetBValue(color));
     }
+    bool EnsureGdiplus()
+    {
+        static const ULONG_PTR token = []()
+        {
+            Gdiplus::GdiplusStartupInput startupInput;
+            ULONG_PTR startupToken = 0;
+            return Gdiplus::GdiplusStartup(&startupToken, &startupInput, nullptr) == Gdiplus::Ok ? startupToken : ULONG_PTR{};
+        }();
+        return token != 0;
+    }
+    Gdiplus::Color ToGdiplusColor(COLORREF color)
+    {
+        return Gdiplus::Color(255, GetRValue(color), GetGValue(color), GetBValue(color));
+    }
+    void DrawSmoothEllipse(HDC dc, float x, float y, float width, float height, COLORREF fill, COLORREF outline, float outlineWidth = 1.0f)
+    {
+        if (!EnsureGdiplus()) return;
+        Gdiplus::Graphics graphics(dc);
+        graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        Gdiplus::SolidBrush fillBrush(ToGdiplusColor(fill));
+        graphics.FillEllipse(&fillBrush, x, y, width, height);
+        if (outlineWidth > 0.0f)
+        {
+            Gdiplus::Pen outlinePen(ToGdiplusColor(outline), outlineWidth);
+            graphics.DrawEllipse(&outlinePen, x, y, width, height);
+        }
+    }
     void DrawEyedropperSvg(HDC dc, int left, int top, int size)
     {
         // This is the supplied Vaadin SVG path, parsed by the same NanoSVG
@@ -86,35 +116,38 @@ namespace
         }();
         if (!image) return;
 
+        if (!EnsureGdiplus()) return;
         const float scale = size / 16.0f;
-        const int originalFillMode = SetPolyFillMode(dc, WINDING);
-        HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(DC_BRUSH));
-        SetDCBrushColor(dc, RGB(68, 68, 68));
-        BeginPath(dc);
+        Gdiplus::Graphics graphics(dc);
+        graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        Gdiplus::GraphicsPath iconPath(Gdiplus::FillModeWinding);
         for (NSVGshape* shape = image->shapes; shape; shape = shape->next)
         {
             for (NSVGpath* path = shape->paths; path; path = path->next)
             {
                 if (path->npts < 2) continue;
                 float* points = path->pts;
-                MoveToEx(dc, left + static_cast<int>(std::lround(points[0] * scale)), top + static_cast<int>(std::lround(points[1] * scale)), nullptr);
+                iconPath.StartFigure();
+                float currentX = left + points[0] * scale;
+                float currentY = top + points[1] * scale;
                 for (int i = 0; i < path->npts - 1; i += 3)
                 {
                     float* point = &points[i * 2];
-                    POINT bezier[3] = {
-                        {left + static_cast<int>(std::lround(point[2] * scale)), top + static_cast<int>(std::lround(point[3] * scale))},
-                        {left + static_cast<int>(std::lround(point[4] * scale)), top + static_cast<int>(std::lround(point[5] * scale))},
-                        {left + static_cast<int>(std::lround(point[6] * scale)), top + static_cast<int>(std::lround(point[7] * scale))}
-                    };
-                    PolyBezierTo(dc, bezier, 3);
+                    const float control1X = left + point[2] * scale;
+                    const float control1Y = top + point[3] * scale;
+                    const float control2X = left + point[4] * scale;
+                    const float control2Y = top + point[5] * scale;
+                    const float endX = left + point[6] * scale;
+                    const float endY = top + point[7] * scale;
+                    iconPath.AddBezier(currentX, currentY, control1X, control1Y, control2X, control2Y, endX, endY);
+                    currentX = endX;
+                    currentY = endY;
                 }
-                if (path->closed) CloseFigure(dc);
+                if (path->closed) iconPath.CloseFigure();
             }
         }
-        EndPath(dc);
-        FillPath(dc);
-        SelectObject(dc, oldBrush);
-        SetPolyFillMode(dc, originalFillMode);
+        Gdiplus::SolidBrush iconBrush(Gdiplus::Color(255, 68, 68, 68));
+        graphics.FillPath(&iconBrush, &iconPath);
     }
 }
 ColorPickerPopup::ColorPickerPopup(Widget *w, ColorPickerElement *p) : m_Widget(w), m_Picker(p) { SetRGB(p->GetColor(), false); }
@@ -312,26 +345,14 @@ void ColorPickerPopup::Paint(HDC targetDc)
     // Hue selector: a high-contrast ring with the selected hue at its center.
     const int hueSelectorX = 120 + static_cast<int>(m_H * 179.0f);
     const int hueSelectorY = HUEY + 9;
-    HGDIOBJ hueOuterBrush = SelectObject(dc, GetStockObject(WHITE_BRUSH));
-    SetDCPenColor(dc, RGB(0, 0, 0));
-    Ellipse(dc, hueSelectorX - 10, hueSelectorY - 10, hueSelectorX + 10, hueSelectorY + 10);
-    HBRUSH hueFill = CreateSolidBrush(HsvToColor(m_H, 1.0f, 1.0f));
-    HGDIOBJ hueInnerBrush = SelectObject(dc, hueFill);
-    SetDCPenColor(dc, RGB(255, 255, 255));
-    Ellipse(dc, hueSelectorX - 8, hueSelectorY - 8, hueSelectorX + 8, hueSelectorY + 8);
-    SelectObject(dc, hueInnerBrush);
-    DeleteObject(hueFill);
-    SelectObject(dc, hueOuterBrush);
+    DrawSmoothEllipse(dc, hueSelectorX - 10.0f, hueSelectorY - 10.0f, 20.0f, 20.0f, RGB(255, 255, 255), RGB(0, 0, 0));
+    DrawSmoothEllipse(dc, hueSelectorX - 8.0f, hueSelectorY - 8.0f, 16.0f, 16.0f, HsvToColor(m_H, 1.0f, 1.0f), RGB(255, 255, 255));
     COLORREF c = HSV();
-    HBRUSH br = CreateSolidBrush(c);
     RECT sw{58, 201, 102, 245};
-    HGDIOBJ oldBrush = SelectObject(dc, br);
-    Ellipse(dc, sw.left, sw.top, sw.right, sw.bottom);
-    SelectObject(dc, oldBrush);
-    DeleteObject(br);
-    SetDCPenColor(dc, RGB(0, 0, 0));
-    Ellipse(dc, static_cast<int>(m_S * (SV_WIDTH - 1)) - 8, static_cast<int>((1 - m_V) * (SV_HEIGHT - 1)) - 8,
-            static_cast<int>(m_S * (SV_WIDTH - 1)) + 8, static_cast<int>((1 - m_V) * (SV_HEIGHT - 1)) + 8);
+    DrawSmoothEllipse(dc, static_cast<float>(sw.left), static_cast<float>(sw.top), static_cast<float>(sw.right - sw.left), static_cast<float>(sw.bottom - sw.top), c, c, 0.0f);
+    const float saturationValueX = m_S * (SV_WIDTH - 1.0f);
+    const float saturationValueY = (1.0f - m_V) * (SV_HEIGHT - 1.0f);
+    DrawSmoothEllipse(dc, saturationValueX - 8.0f, saturationValueY - 8.0f, 16.0f, 16.0f, RGB(255, 255, 255), RGB(0, 0, 0));
     DrawEyedropperSvg(dc, 19, 213, 20);
     // Keep the format selector visually lightweight: it is not a blue or
     // permanently highlighted button. Hover only darkens its neutral text.
