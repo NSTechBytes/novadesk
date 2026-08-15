@@ -15,7 +15,7 @@ namespace
 {
     // The top HSV surface intentionally spans the popup width, matching the
     // compact browser-style picker layout.
-    constexpr int W = 320, H = 346, SV_WIDTH = 320, SV_HEIGHT = 190, HUEY = 212, EDITY = 253;
+    constexpr int W = 320, H = 346, SV_WIDTH = 320, SV_HEIGHT = 190, HUEY = 212, EDITY = 253, MODEY = 303, MODEBOTTOM = 338;
     float Clamp(float v) { return (std::max)(0.f, (std::min)(1.f, v)); }
     COLORREF HsvToColor(float hue, float saturation, float value)
     {
@@ -42,6 +42,27 @@ namespace
             value = value * 10 + (*ch - L'0');
             if (value > 255) return false;
         }
+        return true;
+    }
+    bool TryParseHexColor(const wchar_t* text, COLORREF& color)
+    {
+        if (!text) return false;
+        if (*text == L'#') ++text;
+        if (wcslen(text) != 6) return false;
+        auto digit = [](wchar_t value) -> int
+        {
+            if (value >= L'0' && value <= L'9') return value - L'0';
+            if (value >= L'a' && value <= L'f') return value - L'a' + 10;
+            if (value >= L'A' && value <= L'F') return value - L'A' + 10;
+            return -1;
+        };
+        int values[6];
+        for (int i = 0; i < 6; ++i)
+        {
+            values[i] = digit(text[i]);
+            if (values[i] < 0) return false;
+        }
+        color = RGB(values[0] * 16 + values[1], values[2] * 16 + values[3], values[4] * 16 + values[5]);
         return true;
     }
     DWORD ColorRefToDibPixel(COLORREF color)
@@ -141,6 +162,11 @@ void ColorPickerPopup::Close()
         DestroyWindow(m_hWnd);
         m_hWnd = nullptr;
     }
+    if (m_Font)
+    {
+        DeleteObject(m_Font);
+        m_Font = nullptr;
+    }
 }
 COLORREF ColorPickerPopup::HSV() const
 {
@@ -193,7 +219,20 @@ void ColorPickerPopup::SyncEdits()
     SetWindowTextW(m_G, t);
     swprintf_s(t, L"%u", GetBValue(c));
     SetWindowTextW(m_B, t);
+    swprintf_s(t, L"#%02X%02X%02X", GetRValue(c), GetGValue(c), GetBValue(c));
+    SetWindowTextW(m_Hex, t);
     m_sync = false;
+}
+void ColorPickerPopup::SetHexMode(bool enabled)
+{
+    if (m_HexMode == enabled) return;
+    m_HexMode = enabled;
+    ShowWindow(m_R, enabled ? SW_HIDE : SW_SHOW);
+    ShowWindow(m_G, enabled ? SW_HIDE : SW_SHOW);
+    ShowWindow(m_B, enabled ? SW_HIDE : SW_SHOW);
+    ShowWindow(m_Hex, enabled ? SW_SHOW : SW_HIDE);
+    SyncEdits();
+    InvalidateRect(m_hWnd, nullptr, FALSE);
 }
 void ColorPickerPopup::Notify()
 {
@@ -236,6 +275,7 @@ void ColorPickerPopup::Paint(HDC targetDc)
         return;
     }
     HGDIOBJ oldBitmap = SelectObject(dc, bitmap);
+    HGDIOBJ oldFont = m_Font ? SelectObject(dc, m_Font) : nullptr;
 
     RECT rc{0, 0, clientWidth, clientHeight};
     FillRect(dc, &rc, (HBRUSH)GetStockObject(WHITE_BRUSH));
@@ -267,11 +307,29 @@ void ColorPickerPopup::Paint(HDC targetDc)
     Ellipse(dc, static_cast<int>(m_S * (SV_WIDTH - 1)) - 8, static_cast<int>((1 - m_V) * (SV_HEIGHT - 1)) - 8,
             static_cast<int>(m_S * (SV_WIDTH - 1)) + 8, static_cast<int>((1 - m_V) * (SV_HEIGHT - 1)) + 8);
     DrawEyedropperSvg(dc, 19, 213, 20);
-    TextOutW(dc, 65, 314, L"R", 1);
-    TextOutW(dc, 150, 314, L"G", 1);
-    TextOutW(dc, 235, 314, L"B", 1);
+    if (!m_HexMode)
+    {
+        TextOutW(dc, 65, 314, L"R", 1);
+        TextOutW(dc, 150, 314, L"G", 1);
+        TextOutW(dc, 235, 314, L"B", 1);
+        MoveToEx(dc, 272, 317, nullptr); LineTo(dc, 275, 314);
+        MoveToEx(dc, 275, 314, nullptr); LineTo(dc, 278, 317);
+        MoveToEx(dc, 272, 324, nullptr); LineTo(dc, 275, 327);
+        MoveToEx(dc, 275, 327, nullptr); LineTo(dc, 278, 324);
+    }
+    else
+    {
+        SetDCPenColor(dc, RGB(0, 0, 0));
+        RoundRect(dc, 32, MODEY, 308, MODEBOTTOM, 5, 5);
+        TextOutW(dc, 134, 313, L"HEX", 3);
+        MoveToEx(dc, 272, 317, nullptr); LineTo(dc, 275, 314);
+        MoveToEx(dc, 275, 314, nullptr); LineTo(dc, 278, 317);
+        MoveToEx(dc, 272, 324, nullptr); LineTo(dc, 275, 327);
+        MoveToEx(dc, 275, 327, nullptr); LineTo(dc, 278, 324);
+    }
 
     BitBlt(targetDc, 0, 0, clientWidth, clientHeight, dc, 0, 0, SRCCOPY);
+    if (oldFont) SelectObject(dc, oldFont);
     SelectObject(dc, oldBitmap);
     DeleteObject(bitmap);
     DeleteDC(dc);
@@ -304,9 +362,20 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
 {
     if (m == WM_CREATE)
     {
+        m_Font = CreateFontW(-16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
         m_R = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_NUMBER, 33, EDITY, 72, 44, m_hWnd, (HMENU)1, 0, 0);
         m_G = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_NUMBER, 115, EDITY, 72, 44, m_hWnd, (HMENU)2, 0, 0);
         m_B = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_NUMBER, 197, EDITY, 72, 44, m_hWnd, (HMENU)3, 0, 0);
+        m_Hex = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_BORDER | ES_AUTOHSCROLL, 33, EDITY, 234, 44, m_hWnd, (HMENU)4, 0, 0);
+        if (m_Font)
+        {
+            SendMessageW(m_R, WM_SETFONT, reinterpret_cast<WPARAM>(m_Font), TRUE);
+            SendMessageW(m_G, WM_SETFONT, reinterpret_cast<WPARAM>(m_Font), TRUE);
+            SendMessageW(m_B, WM_SETFONT, reinterpret_cast<WPARAM>(m_Font), TRUE);
+            SendMessageW(m_Hex, WM_SETFONT, reinterpret_cast<WPARAM>(m_Font), TRUE);
+        }
+        ShowWindow(m_Hex, SW_HIDE);
         SyncEdits();
         return 0;
     }
@@ -325,7 +394,11 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
     if (m == WM_LBUTTONDOWN)
     {
         int x = LOWORD(l), y = HIWORD(l);
-        if (x >= 0 && x < SV_WIDTH && y >= 0 && y < SV_HEIGHT)
+        if (x >= 32 && x <= 308 && y >= MODEY && y <= MODEBOTTOM)
+        {
+            SetHexMode(!m_HexMode);
+        }
+        else if (x >= 0 && x < SV_WIDTH && y >= 0 && y < SV_HEIGHT)
         {
             m_dragSV = true;
             SetCapture(m_hWnd);
@@ -371,6 +444,14 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
     }
     if (m == WM_COMMAND && !m_sync && HIWORD(w) == EN_CHANGE)
     {
+        if (LOWORD(w) == 4)
+        {
+            wchar_t hex[16];
+            GetWindowTextW(m_Hex, hex, 16);
+            COLORREF color;
+            if (TryParseHexColor(hex, color)) SetRGB(color);
+            return 0;
+        }
         wchar_t a[8], b[8], c[8];
         GetWindowTextW(m_R, a, 8);
         GetWindowTextW(m_G, b, 8);
