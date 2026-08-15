@@ -214,14 +214,26 @@ void ColorPickerPopup::SyncEdits()
     m_sync = true;
     COLORREF c = HSV();
     wchar_t t[8];
-    swprintf_s(t, L"%u", GetRValue(c));
-    SetWindowTextW(m_R, t);
-    swprintf_s(t, L"%u", GetGValue(c));
-    SetWindowTextW(m_G, t);
-    swprintf_s(t, L"%u", GetBValue(c));
-    SetWindowTextW(m_B, t);
-    swprintf_s(t, L"#%02X%02X%02X", GetRValue(c), GetGValue(c), GetBValue(c));
-    SetWindowTextW(m_Hex, t);
+    if (m_EditingControl != 1)
+    {
+        swprintf_s(t, L"%u", GetRValue(c));
+        SetWindowTextW(m_R, t);
+    }
+    if (m_EditingControl != 2)
+    {
+        swprintf_s(t, L"%u", GetGValue(c));
+        SetWindowTextW(m_G, t);
+    }
+    if (m_EditingControl != 3)
+    {
+        swprintf_s(t, L"%u", GetBValue(c));
+        SetWindowTextW(m_B, t);
+    }
+    if (m_EditingControl != 4)
+    {
+        swprintf_s(t, L"#%02X%02X%02X", GetRValue(c), GetGValue(c), GetBValue(c));
+        SetWindowTextW(m_Hex, t);
+    }
     m_sync = false;
 }
 void ColorPickerPopup::SetHexMode(bool enabled)
@@ -456,7 +468,12 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
             wchar_t hex[16];
             GetWindowTextW(m_Hex, hex, 16);
             COLORREF color;
-            if (TryParseHexColor(hex, color)) SetRGB(color);
+            if (TryParseHexColor(hex, color))
+            {
+                m_EditingControl = 4;
+                SetRGB(color);
+                m_EditingControl = 0;
+            }
             return 0;
         }
         wchar_t a[8], b[8], c[8];
@@ -465,7 +482,11 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
         GetWindowTextW(m_B, c, 8);
         int r = _wtoi(a), g = _wtoi(b), bb = _wtoi(c);
         if (IsRgbTextValid(a) && IsRgbTextValid(b) && IsRgbTextValid(c))
+        {
+            m_EditingControl = LOWORD(w);
             SetRGB(RGB(r, g, bb));
+            m_EditingControl = 0;
+        }
         return 0;
     }
     if (m == WM_KEYDOWN && w == VK_ESCAPE)
