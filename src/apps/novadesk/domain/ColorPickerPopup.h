@@ -19,10 +19,12 @@ private:
     void SetRGB(COLORREF color, bool notify = true);
     void SyncEdits();
     void Notify();
+    void FlushWidgetRedraw();
     COLORREF HSV() const;
     Widget* m_Widget; ColorPickerElement* m_Picker; HWND m_hWnd = nullptr;
     HWND m_R = nullptr, m_G = nullptr, m_B = nullptr;
     float m_H = 0, m_S = 0, m_V = 0; bool m_dragSV = false, m_dragHue = false, m_eye = false, m_sync = false;
     float m_SaturationValueHue = -1.0f;
     std::vector<DWORD> m_SaturationValuePixels;
+    bool m_WidgetNeedsRedraw = false;
 };

@@ -107,7 +107,9 @@ void ColorPickerPopup::Show()
         wc.hInstance = GetModuleHandleW(nullptr);
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         wc.lpszClassName = L"NovadeskColorPickerPopup";
-        wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
+        // WM_PAINT presents a fully rendered back buffer, so Windows must not
+        // erase the client area with a separate white frame first.
+        wc.hbrBackground = nullptr;
         atom = RegisterClassW(&wc);
     }
     if (m_hWnd)
@@ -132,6 +134,7 @@ void ColorPickerPopup::Show()
 }
 void ColorPickerPopup::Close()
 {
+    FlushWidgetRedraw();
     if (m_hWnd)
     {
         ReleaseCapture();
@@ -195,7 +198,10 @@ void ColorPickerPopup::SyncEdits()
 void ColorPickerPopup::Notify()
 {
     m_Picker->SetColor(HSV());
-    m_Widget->Redraw();
+    // UpdateLayeredWindowContent redraws the complete layered widget. Calling
+    // it for every mouse-move sample makes the widget visibly flicker, so the
+    // swatch is committed once an interaction is complete or the popup closes.
+    m_WidgetNeedsRedraw = true;
     if (m_Picker->m_OnChangeCallbackId != -1)
     {
         wchar_t s[8];
@@ -204,9 +210,34 @@ void ColorPickerPopup::Notify()
         JSEngine::CallEventCallbackWithText(m_Picker->m_OnChangeCallbackId, m_Widget, s);
     }
 }
-void ColorPickerPopup::Paint(HDC dc)
+void ColorPickerPopup::FlushWidgetRedraw()
 {
-    RECT rc{0, 0, W, H};
+    if (!m_WidgetNeedsRedraw) return;
+    m_Widget->Redraw();
+    m_WidgetNeedsRedraw = false;
+}
+void ColorPickerPopup::Paint(HDC targetDc)
+{
+    RECT clientRect{};
+    GetClientRect(m_hWnd, &clientRect);
+    const int clientWidth = clientRect.right - clientRect.left;
+    const int clientHeight = clientRect.bottom - clientRect.top;
+    if (clientWidth <= 0 || clientHeight <= 0) return;
+
+    // Render the complete popup into memory, then copy one finished frame to
+    // the screen. Direct GDI drawing first clears white and then draws each
+    // control, which is visible as flicker during high-frequency color input.
+    HDC dc = CreateCompatibleDC(targetDc);
+    if (!dc) return;
+    HBITMAP bitmap = CreateCompatibleBitmap(targetDc, clientWidth, clientHeight);
+    if (!bitmap)
+    {
+        DeleteDC(dc);
+        return;
+    }
+    HGDIOBJ oldBitmap = SelectObject(dc, bitmap);
+
+    RECT rc{0, 0, clientWidth, clientHeight};
     FillRect(dc, &rc, (HBRUSH)GetStockObject(WHITE_BRUSH));
     EnsureSaturationValueBitmap();
     BITMAPINFO bitmapInfo{};
@@ -239,6 +270,11 @@ void ColorPickerPopup::Paint(HDC dc)
     TextOutW(dc, 65, 314, L"R", 1);
     TextOutW(dc, 150, 314, L"G", 1);
     TextOutW(dc, 235, 314, L"B", 1);
+
+    BitBlt(targetDc, 0, 0, clientWidth, clientHeight, dc, 0, 0, SRCCOPY);
+    SelectObject(dc, oldBitmap);
+    DeleteObject(bitmap);
+    DeleteDC(dc);
 }
 void ColorPickerPopup::EnsureSaturationValueBitmap()
 {
@@ -273,6 +309,10 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
         m_B = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_NUMBER, 197, EDITY, 72, 44, m_hWnd, (HMENU)3, 0, 0);
         SyncEdits();
         return 0;
+    }
+    if (m == WM_ERASEBKGND)
+    {
+        return 1;
     }
     if (m == WM_PAINT)
     {
@@ -326,6 +366,7 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
     {
         m_dragSV = m_dragHue = m_eye = false;
         ReleaseCapture();
+        FlushWidgetRedraw();
         return 0;
     }
     if (m == WM_COMMAND && !m_sync && HIWORD(w) == EN_CHANGE)
