@@ -16,6 +16,7 @@ namespace
     // The top HSV surface intentionally spans the popup width, matching the
     // compact browser-style picker layout.
     constexpr int W = 320, H = 346, SV_WIDTH = 320, SV_HEIGHT = 190, HUEY = 212, EDITY = 253, MODEY = 303, MODEBOTTOM = 338;
+    constexpr int INPUT_HEIGHT = 30, RGB_INPUT_WIDTH = 72, HEX_INPUT_WIDTH = 234;
     float Clamp(float v) { return (std::max)(0.f, (std::min)(1.f, v)); }
     COLORREF HsvToColor(float hue, float saturation, float value)
     {
@@ -364,10 +365,12 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
     {
         m_Font = CreateFontW(-16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-        m_R = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_NUMBER, 33, EDITY, 72, 44, m_hWnd, (HMENU)1, 0, 0);
-        m_G = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_NUMBER, 115, EDITY, 72, 44, m_hWnd, (HMENU)2, 0, 0);
-        m_B = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_NUMBER, 197, EDITY, 72, 44, m_hWnd, (HMENU)3, 0, 0);
-        m_Hex = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_BORDER | ES_AUTOHSCROLL, 33, EDITY, 234, 44, m_hWnd, (HMENU)4, 0, 0);
+        const DWORD rgbInputStyle = WS_CHILD | WS_VISIBLE | WS_BORDER | ES_NUMBER | ES_CENTER;
+        const DWORD hexInputStyle = WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_CENTER;
+        m_R = CreateWindowW(L"EDIT", L"", rgbInputStyle, 33, EDITY, RGB_INPUT_WIDTH, INPUT_HEIGHT, m_hWnd, (HMENU)1, 0, 0);
+        m_G = CreateWindowW(L"EDIT", L"", rgbInputStyle, 115, EDITY, RGB_INPUT_WIDTH, INPUT_HEIGHT, m_hWnd, (HMENU)2, 0, 0);
+        m_B = CreateWindowW(L"EDIT", L"", rgbInputStyle, 197, EDITY, RGB_INPUT_WIDTH, INPUT_HEIGHT, m_hWnd, (HMENU)3, 0, 0);
+        m_Hex = CreateWindowW(L"EDIT", L"", hexInputStyle, 33, EDITY, HEX_INPUT_WIDTH, INPUT_HEIGHT, m_hWnd, (HMENU)4, 0, 0);
         if (m_Font)
         {
             SendMessageW(m_R, WM_SETFONT, reinterpret_cast<WPARAM>(m_Font), TRUE);
@@ -375,6 +378,10 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
             SendMessageW(m_B, WM_SETFONT, reinterpret_cast<WPARAM>(m_Font), TRUE);
             SendMessageW(m_Hex, WM_SETFONT, reinterpret_cast<WPARAM>(m_Font), TRUE);
         }
+        SendMessageW(m_R, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(0, 0));
+        SendMessageW(m_G, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(0, 0));
+        SendMessageW(m_B, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(0, 0));
+        SendMessageW(m_Hex, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(0, 0));
         ShowWindow(m_Hex, SW_HIDE);
         SyncEdits();
         return 0;
@@ -468,6 +475,11 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
     }
     if (m == WM_KILLFOCUS)
     {
+        // Clicking an EDIT child transfers focus away from the popup HWND, but
+        // it is still interaction inside this popup and must not close it.
+        HWND nextFocus = reinterpret_cast<HWND>(w);
+        if (nextFocus == m_hWnd || (nextFocus && IsChild(m_hWnd, nextFocus)))
+            return 0;
         Close();
         return 0;
     }
