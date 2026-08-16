@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
  
 #include "ColorPickerPopup.h"
+#include "DesktopManager.h"
 #include "Widget.h"
 #include "../render/ColorPickerElement.h"
 #include "../render/Direct2DHelper.h"
@@ -27,6 +28,7 @@ namespace
     constexpr int INPUT_HEIGHT = 30, RGB_INPUT_WIDTH = 72, HEX_INPUT_WIDTH = 234;
     constexpr int MAGNIFIER_SIZE = 124, MAGNIFIER_BORDER = 0, MAGNIFIER_SOURCE_SIZE = 15;
     constexpr UINT_PTR EYEDROPPER_TIMER = 1;
+    constexpr UINT_PTR SHOW_DESKTOP_TIMER = 2;
     constexpr UINT OUTSIDE_CLICK_MESSAGE = WM_APP + 0x41;
     HHOOK g_OutsideClickHook = nullptr;
     ColorPickerPopup* g_OutsideClickPopup = nullptr;
@@ -223,6 +225,8 @@ void ColorPickerPopup::Show()
     {
         SetWindowPos(m_hWnd, HWND_TOPMOST, x, y, W, H, SWP_NOACTIVATE | SWP_SHOWWINDOW);
         InstallOutsideClickHook();
+        m_ShowDesktopWasActive = System::GetShowDesktop();
+        SetTimer(m_hWnd, SHOW_DESKTOP_TIMER, 100, nullptr);
     }
 }
 
@@ -231,7 +235,10 @@ void ColorPickerPopup::Close()
     FlushWidgetRedraw();
     RemoveOutsideClickHook();
     if (m_hWnd)
+    {
         KillTimer(m_hWnd, EYEDROPPER_TIMER);
+        KillTimer(m_hWnd, SHOW_DESKTOP_TIMER);
+    }
     HideEyedropperMagnifier();
     if (m_hWnd)
     {
@@ -799,6 +806,17 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
             else
                 SetHSV((p.x - 120) / 180.f, m_S, m_V);
         }
+        return 0;
+    }
+    if (m == WM_TIMER && w == SHOW_DESKTOP_TIMER)
+    {
+        const bool isShowingDesktop = System::GetShowDesktop();
+        if (isShowingDesktop && !m_ShowDesktopWasActive)
+        {
+            Close();
+            return 0;
+        }
+        m_ShowDesktopWasActive = isShowingDesktop;
         return 0;
     }
     if (m == WM_TIMER && w == EYEDROPPER_TIMER && m_eye)
