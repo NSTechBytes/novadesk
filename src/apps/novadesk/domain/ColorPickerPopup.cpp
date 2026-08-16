@@ -231,6 +231,15 @@ void ColorPickerPopup::Show()
         InstallOutsideClickHook();
         m_ShowDesktopWasActive = System::GetShowDesktop();
         SetTimer(m_hWnd, SHOW_DESKTOP_TIMER, 100, nullptr);
+        m_Canceled = false;
+        m_OriginalColor = HSV();
+        if (m_Picker && m_Picker->m_OnOpenCallbackId != -1)
+        {
+            wchar_t s[8];
+            COLORREF c = HSV();
+            swprintf_s(s, L"#%02X%02X%02X", GetRValue(c), GetGValue(c), GetBValue(c));
+            JSEngine::CallEventCallbackWithText(m_Picker->m_OnOpenCallbackId, m_Widget, s);
+        }
     }
     else
     {
@@ -240,6 +249,13 @@ void ColorPickerPopup::Show()
 
 void ColorPickerPopup::Close()
 {
+    if (m_hWnd && !m_Canceled && m_Picker && m_Picker->m_OnCloseCallbackId != -1)
+    {
+        wchar_t s[8];
+        COLORREF c = HSV();
+        swprintf_s(s, L"#%02X%02X%02X", GetRValue(c), GetGValue(c), GetBValue(c));
+        JSEngine::CallEventCallbackWithText(m_Picker->m_OnCloseCallbackId, m_Widget, s);
+    }
     FlushWidgetRedraw();
     RemoveOutsideClickHook();
     if (m_hWnd)
@@ -407,6 +423,8 @@ void ColorPickerPopup::UpdateEyedropperSample(POINT screenPosition)
 
 void ColorPickerPopup::ApplyEyedropperSelection(POINT screenPosition)
 {
+    COLORREF pickedColor = CLR_INVALID;
+
     // If the cursor is directly over the popup's own SV gradient, map mathematically
     if (m_hWnd)
     {
@@ -416,26 +434,36 @@ void ColorPickerPopup::ApplyEyedropperSelection(POINT screenPosition)
         {
             const float s = Clamp(localPt.x / static_cast<float>(SV_WIDTH - 1));
             const float v = Clamp(1.0f - localPt.y / static_cast<float>(SV_HEIGHT - 1));
+            pickedColor = HsvToColor(m_H, s, v);
             SetHSV(m_H, s, v, true);
-            return;
         }
         else if (localPt.x >= 120 && localPt.x < 300 && localPt.y >= HUEY && localPt.y < HUEY + 20)
         {
             const float h = Clamp((localPt.x - 120) / 179.0f);
+            pickedColor = HsvToColor(h, m_S, m_V);
             SetHSV(h, m_S, m_V, true);
-            return;
         }
     }
 
-    HDC screenDc = GetDC(nullptr);
-    if (screenDc)
+    if (pickedColor == CLR_INVALID)
     {
-        COLORREF sampledColor = GetPixel(screenDc, screenPosition.x, screenPosition.y);
-        ReleaseDC(nullptr, screenDc);
-        if (sampledColor != CLR_INVALID)
+        HDC screenDc = GetDC(nullptr);
+        if (screenDc)
         {
-            SetRGB(sampledColor, true);
+            pickedColor = GetPixel(screenDc, screenPosition.x, screenPosition.y);
+            ReleaseDC(nullptr, screenDc);
+            if (pickedColor != CLR_INVALID)
+            {
+                SetRGB(pickedColor, true);
+            }
         }
+    }
+
+    if (pickedColor != CLR_INVALID && m_Picker && m_Picker->m_OnEyedropperPickCallbackId != -1)
+    {
+        wchar_t s[8];
+        swprintf_s(s, L"#%02X%02X%02X", GetRValue(pickedColor), GetGValue(pickedColor), GetBValue(pickedColor));
+        JSEngine::CallEventCallbackWithText(m_Picker->m_OnEyedropperPickCallbackId, m_Widget, s);
     }
 }
 
@@ -829,6 +857,10 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
             GetCursorPos(&cursor);
             UpdateEyedropperSample(cursor);
             SetTimer(m_hWnd, EYEDROPPER_TIMER, 16, nullptr);
+            if (m_Picker && m_Picker->m_OnEyedropperOpenCallbackId != -1)
+            {
+                JSEngine::CallEventCallback(m_Picker->m_OnEyedropperOpenCallbackId, m_Widget);
+            }
         }
         return 0;
     }
@@ -957,6 +989,26 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
     }
     if (m == WM_KEYDOWN && w == VK_ESCAPE)
     {
+        if (m_eye)
+        {
+            m_eye = false;
+            m_eyeAwaitingFirstRelease = false;
+            KillTimer(m_hWnd, EYEDROPPER_TIMER);
+            HideEyedropperMagnifier();
+            ReleaseCapture();
+            SetForegroundWindow(m_hWnd);
+            SetFocus(m_hWnd);
+            return 0;
+        }
+        m_Canceled = true;
+        if (m_Picker && m_Picker->m_OnCancelCallbackId != -1)
+        {
+            wchar_t s[8];
+            swprintf_s(s, L"#%02X%02X%02X", GetRValue(m_OriginalColor), GetGValue(m_OriginalColor), GetBValue(m_OriginalColor));
+            JSEngine::CallEventCallbackWithText(m_Picker->m_OnCancelCallbackId, m_Widget, s);
+        }
+        SetRGB(m_OriginalColor, false);
+        m_WidgetNeedsRedraw = true;
         Close();
         return 0;
     }

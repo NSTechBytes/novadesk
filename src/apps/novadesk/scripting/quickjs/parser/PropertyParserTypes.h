@@ -274,6 +274,11 @@ namespace PropertyParser
     {
         COLORREF color = RGB(0, 0, 0);
         int onChangeCallbackId = -1;
+        int onOpenCallbackId = -1;
+        int onCloseCallbackId = -1;
+        int onCancelCallbackId = -1;
+        int onEyedropperOpenCallbackId = -1;
+        int onEyedropperPickCallbackId = -1;
     };
 
     struct BarOptions : public ElementOptions

@@ -61,6 +61,8 @@ private:
     bool m_IgnoreEyedropperFocusLoss = false;
     POINT m_LastSampledPos = {-1, -1};
     COLORREF m_LastSampledColor = CLR_INVALID;
+    COLORREF m_OriginalColor = RGB(0, 0, 0);
+    bool m_Canceled = false;
     // Keep the state that existed when this popup opened.  GetShowDesktop()
     // is global state and can remain true briefly after the desktop restores;
     // the popup must only react to a new Show Desktop transition.
