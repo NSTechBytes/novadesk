@@ -42,7 +42,12 @@ ui.addColorPicker({
   height: 32,
   color: "#1b1b1b",
   tooltipText: "Accent Color",
-  onChange: (hexColor) => {}
+  onOpen: (color) => { console.log("onOpen:", color); },
+  onClose: (color) => { console.log("onClose:", color); },
+  onCancel: (originalColor) => { console.log("onCancel (original):", originalColor); },
+  onEyedropperOpen: () => { console.log("onEyedropperOpen"); },
+  onEyedropperPick: (color) => { console.log("onEyedropperPick:", color); },
+  onChange: (color) => { console.log("onChange:", color); },
 });
 
 ui.endUpdate();

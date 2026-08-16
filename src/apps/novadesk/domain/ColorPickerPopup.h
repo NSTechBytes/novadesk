@@ -58,6 +58,8 @@ private:
     int m_EditingControl = 0;
     bool m_FormatHover = false;
     bool m_IgnoreEyedropperFocusLoss = false;
+    POINT m_LastSampledPos = {-1, -1};
+    COLORREF m_LastSampledColor = CLR_INVALID;
     // Keep the state that existed when this popup opened.  GetShowDesktop()
     // is global state and can remain true briefly after the desktop restores;
     // the popup must only react to a new Show Desktop transition.

@@ -330,14 +330,22 @@ void ColorPickerPopup::ShowEyedropperMagnifier(POINT screenPosition)
 
     MONITORINFO monitorInfo{sizeof(monitorInfo)};
     GetMonitorInfoW(MonitorFromPoint(screenPosition, MONITOR_DEFAULTTONEAREST), &monitorInfo);
-    int left = screenPosition.x + 24;
-    int top = screenPosition.y + 24;
     const int workLeft = static_cast<int>(monitorInfo.rcWork.left);
     const int workTop = static_cast<int>(monitorInfo.rcWork.top);
     const int workRight = static_cast<int>(monitorInfo.rcWork.right);
     const int workBottom = static_cast<int>(monitorInfo.rcWork.bottom);
+
+    int left = screenPosition.x + 20;
+    int top = screenPosition.y + 20;
+
+    if (left + MAGNIFIER_SIZE > workRight)
+        left = screenPosition.x - MAGNIFIER_SIZE - 20;
+    if (top + MAGNIFIER_SIZE > workBottom)
+        top = screenPosition.y - MAGNIFIER_SIZE - 20;
+
     left = (std::max)(workLeft, (std::min)(left, workRight - MAGNIFIER_SIZE));
     top = (std::max)(workTop, (std::min)(top, workBottom - MAGNIFIER_SIZE));
+
     UINT positionFlags = SWP_NOACTIVATE;
     if (!IsWindowVisible(m_Magnifier))
         positionFlags |= SWP_SHOWWINDOW;
@@ -364,12 +372,54 @@ void ColorPickerPopup::HideEyedropperMagnifier()
 
 void ColorPickerPopup::UpdateEyedropperSample(POINT screenPosition)
 {
-    // Ensure the persistent destination bitmap exists before the first sample.
     ShowEyedropperMagnifier(screenPosition);
+
+    const bool posChanged = (screenPosition.x != m_LastSampledPos.x || screenPosition.y != m_LastSampledPos.y);
+    m_LastSampledPos = screenPosition;
+
+    COLORREF sampledColor = CLR_INVALID;
+
+    // If the cursor is directly over the popup's own SV gradient, map mathematically to avoid RGB quantization hue loop
+    if (m_hWnd)
+    {
+        POINT localPt = screenPosition;
+        ScreenToClient(m_hWnd, &localPt);
+        if (localPt.x >= 0 && localPt.x < SV_WIDTH && localPt.y >= 0 && localPt.y < SV_HEIGHT)
+        {
+            const float s = Clamp(localPt.x / static_cast<float>(SV_WIDTH - 1));
+            const float v = Clamp(1.0f - localPt.y / static_cast<float>(SV_HEIGHT - 1));
+            sampledColor = HsvToColor(m_H, s, v);
+            if (sampledColor != m_LastSampledColor)
+            {
+                m_LastSampledColor = sampledColor;
+                SetHSV(m_H, s, v);
+            }
+        }
+        else if (localPt.x >= 120 && localPt.x < 300 && localPt.y >= HUEY && localPt.y < HUEY + 20)
+        {
+            const float h = Clamp((localPt.x - 120) / 179.0f);
+            sampledColor = HsvToColor(h, m_S, m_V);
+            if (sampledColor != m_LastSampledColor)
+            {
+                m_LastSampledColor = sampledColor;
+                SetHSV(h, m_S, m_V);
+            }
+        }
+    }
+
     HDC screenDc = GetDC(nullptr);
     if (screenDc)
     {
-        SetRGB(GetPixel(screenDc, screenPosition.x, screenPosition.y));
+        if (sampledColor == CLR_INVALID)
+        {
+            sampledColor = GetPixel(screenDc, screenPosition.x, screenPosition.y);
+            if (sampledColor != CLR_INVALID && sampledColor != m_LastSampledColor)
+            {
+                m_LastSampledColor = sampledColor;
+                SetRGB(sampledColor);
+            }
+        }
+
         if (m_MagnifierFrameDc)
         {
             RECT frame{0, 0, MAGNIFIER_SIZE, MAGNIFIER_SIZE};
@@ -416,14 +466,15 @@ void ColorPickerPopup::SetRGB(COLORREF c, bool n)
     float r = GetRValue(c) / 255.f, g = GetGValue(c) / 255.f, b = GetBValue(c) / 255.f, mx = (std::max)(r, (std::max)(g, b)), mn = (std::min)(r, (std::min)(g, b)), d = mx - mn;
     m_V = mx;
     m_S = mx ? d / mx : 0;
-    if (!d)
-        m_H = 0;
-    else if (mx == r)
-        m_H = std::fmod((g - b) / d + 6, 6) / 6;
-    else if (mx == g)
-        m_H = ((b - r) / d + 2) / 6;
-    else
-        m_H = ((r - g) / d + 4) / 6;
+    if (d >= 0.015f)
+    {
+        if (mx == r)
+            m_H = std::fmod((g - b) / d + 6, 6) / 6;
+        else if (mx == g)
+            m_H = ((b - r) / d + 2) / 6;
+        else
+            m_H = ((r - g) / d + 4) / 6;
+    }
     if (m_hWnd)
     {
         SyncEdits();
@@ -778,6 +829,8 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
             m_eye = true;
             m_eyeAwaitingFirstRelease = true;
             m_IgnoreEyedropperFocusLoss = false;
+            m_LastSampledPos = {-1, -1};
+            m_LastSampledColor = CLR_INVALID;
             SetCapture(m_hWnd);
             POINT cursor{};
             GetCursorPos(&cursor);
@@ -804,8 +857,7 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
         GetCursorPos(&p);
         if (m_eye)
         {
-            // Sampling is timer-driven so high-frequency paint work cannot
-            // cause WM_MOUSEMOVE coalescing to leave the magnifier behind.
+            UpdateEyedropperSample(p);
         }
         else
         {
