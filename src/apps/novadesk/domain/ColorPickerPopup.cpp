@@ -27,6 +27,9 @@ namespace
     constexpr int INPUT_HEIGHT = 30, RGB_INPUT_WIDTH = 72, HEX_INPUT_WIDTH = 234;
     constexpr int MAGNIFIER_SIZE = 124, MAGNIFIER_BORDER = 0, MAGNIFIER_SOURCE_SIZE = 15;
     constexpr UINT_PTR EYEDROPPER_TIMER = 1;
+    constexpr UINT OUTSIDE_CLICK_MESSAGE = WM_APP + 0x41;
+    HHOOK g_OutsideClickHook = nullptr;
+    ColorPickerPopup* g_OutsideClickPopup = nullptr;
     float Clamp(float v) { return (std::max)(0.f, (std::min)(1.f, v)); }
 
     COLORREF HsvToColor(float hue, float saturation, float value)
@@ -216,12 +219,17 @@ void ColorPickerPopup::Show()
     const int workRight = static_cast<int>(mi.rcWork.right);
     x = (std::max)(workLeft, (std::min)(x, workRight - W));
     m_hWnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, L"NovadeskColorPickerPopup", L"", WS_POPUP | WS_BORDER | WS_CLIPCHILDREN, x, y, W, H, m_Widget->GetWindow(), nullptr, GetModuleHandleW(nullptr), this);
-    ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
+    if (m_hWnd)
+    {
+        SetWindowPos(m_hWnd, HWND_TOPMOST, x, y, W, H, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        InstallOutsideClickHook();
+    }
 }
 
 void ColorPickerPopup::Close()
 {
     FlushWidgetRedraw();
+    RemoveOutsideClickHook();
     if (m_hWnd)
         KillTimer(m_hWnd, EYEDROPPER_TIMER);
     HideEyedropperMagnifier();
@@ -236,6 +244,29 @@ void ColorPickerPopup::Close()
         DeleteObject(m_Font);
         m_Font = nullptr;
     }
+}
+
+void ColorPickerPopup::InstallOutsideClickHook()
+{
+    if (g_OutsideClickPopup == this && g_OutsideClickHook) return;
+    if (g_OutsideClickHook)
+    {
+        UnhookWindowsHookEx(g_OutsideClickHook);
+        g_OutsideClickHook = nullptr;
+        g_OutsideClickPopup = nullptr;
+    }
+    g_OutsideClickPopup = this;
+    g_OutsideClickHook = SetWindowsHookExW(WH_MOUSE_LL, OutsideClickMouseHook, GetModuleHandleW(nullptr), 0);
+    if (!g_OutsideClickHook)
+        g_OutsideClickPopup = nullptr;
+}
+
+void ColorPickerPopup::RemoveOutsideClickHook()
+{
+    if (g_OutsideClickPopup != this) return;
+    if (g_OutsideClickHook) UnhookWindowsHookEx(g_OutsideClickHook);
+    g_OutsideClickHook = nullptr;
+    g_OutsideClickPopup = nullptr;
 }
 
 void ColorPickerPopup::ShowEyedropperMagnifier(POINT screenPosition)
@@ -587,6 +618,27 @@ void ColorPickerPopup::EnsureSaturationValueBitmap()
     m_SaturationValueHue = m_H;
 }
 
+LRESULT CALLBACK ColorPickerPopup::OutsideClickMouseHook(int code, WPARAM message, LPARAM data)
+{
+    if (code == HC_ACTION && message == WM_LBUTTONDOWN && g_OutsideClickPopup && !g_OutsideClickPopup->m_eye)
+    {
+        const auto* mouse = reinterpret_cast<const MSLLHOOKSTRUCT*>(data);
+        HWND clickedWindow = WindowFromPoint(mouse->pt);
+        bool isInsidePicker = false;
+        for (HWND window = clickedWindow; window; window = GetParent(window))
+        {
+            if (window == g_OutsideClickPopup->m_hWnd || window == g_OutsideClickPopup->m_Magnifier)
+            {
+                isInsidePicker = true;
+                break;
+            }
+        }
+        if (!isInsidePicker && g_OutsideClickPopup->m_hWnd)
+            PostMessageW(g_OutsideClickPopup->m_hWnd, OUTSIDE_CLICK_MESSAGE, 0, 0);
+    }
+    return CallNextHookEx(g_OutsideClickHook, code, message, data);
+}
+
 LRESULT CALLBACK ColorPickerPopup::WndProc(HWND h, UINT m, WPARAM w, LPARAM l)
 {
     auto *p = (ColorPickerPopup *)GetWindowLongPtrW(h, GWLP_USERDATA);
@@ -626,6 +678,11 @@ LRESULT CALLBACK ColorPickerPopup::MagnifierWndProc(HWND h, UINT m, WPARAM w, LP
 
 LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
 {
+    if (m == OUTSIDE_CLICK_MESSAGE && !m_eye)
+    {
+        Close();
+        return 0;
+    }
     if (m == WM_CREATE)
     {
         m_Font = CreateFontW(-16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
@@ -674,6 +731,7 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
             UpdateEyedropperSample(cursor);
             m_eye = false;
             m_eyeAwaitingFirstRelease = false;
+            m_IgnoreEyedropperFocusLoss = true;
             KillTimer(m_hWnd, EYEDROPPER_TIMER);
             HideEyedropperMagnifier();
             ReleaseCapture();
@@ -703,6 +761,7 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
         {
             m_eye = true;
             m_eyeAwaitingFirstRelease = true;
+            m_IgnoreEyedropperFocusLoss = false;
             SetCapture(m_hWnd);
             POINT cursor{};
             GetCursorPos(&cursor);
@@ -820,8 +879,9 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
     {
         // A confirmation click happens outside the popup. Keep the picker
         // visible instead of treating that eyedropper click as a close action.
-        if (m_eye)
+        if (m_eye || m_IgnoreEyedropperFocusLoss)
         {
+            m_IgnoreEyedropperFocusLoss = false;
             return 0;
         }
         // Clicking an EDIT child transfers focus away from the popup HWND, but

@@ -22,6 +22,7 @@ public:
 private:
     static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
     static LRESULT CALLBACK MagnifierWndProc(HWND, UINT, WPARAM, LPARAM);
+    static LRESULT CALLBACK OutsideClickMouseHook(int, WPARAM, LPARAM);
     LRESULT Handle(UINT, WPARAM, LPARAM);
     
     void Paint(HDC);
@@ -36,6 +37,8 @@ private:
     void HideEyedropperMagnifier();
     void PaintEyedropperMagnifier(HDC);
     void UpdateEyedropperSample(POINT screenPosition);
+    void InstallOutsideClickHook();
+    void RemoveOutsideClickHook();
     COLORREF HSV() const;
     Widget *m_Widget;
     ColorPickerElement *m_Picker;
@@ -54,4 +57,5 @@ private:
     bool m_HexMode = false;
     int m_EditingControl = 0;
     bool m_FormatHover = false;
+    bool m_IgnoreEyedropperFocusLoss = false;
 };
