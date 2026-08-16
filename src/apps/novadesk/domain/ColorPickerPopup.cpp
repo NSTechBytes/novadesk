@@ -374,52 +374,11 @@ void ColorPickerPopup::UpdateEyedropperSample(POINT screenPosition)
 {
     ShowEyedropperMagnifier(screenPosition);
 
-    const bool posChanged = (screenPosition.x != m_LastSampledPos.x || screenPosition.y != m_LastSampledPos.y);
     m_LastSampledPos = screenPosition;
-
-    COLORREF sampledColor = CLR_INVALID;
-
-    // If the cursor is directly over the popup's own SV gradient, map mathematically to avoid RGB quantization hue loop
-    if (m_hWnd)
-    {
-        POINT localPt = screenPosition;
-        ScreenToClient(m_hWnd, &localPt);
-        if (localPt.x >= 0 && localPt.x < SV_WIDTH && localPt.y >= 0 && localPt.y < SV_HEIGHT)
-        {
-            const float s = Clamp(localPt.x / static_cast<float>(SV_WIDTH - 1));
-            const float v = Clamp(1.0f - localPt.y / static_cast<float>(SV_HEIGHT - 1));
-            sampledColor = HsvToColor(m_H, s, v);
-            if (sampledColor != m_LastSampledColor)
-            {
-                m_LastSampledColor = sampledColor;
-                SetHSV(m_H, s, v);
-            }
-        }
-        else if (localPt.x >= 120 && localPt.x < 300 && localPt.y >= HUEY && localPt.y < HUEY + 20)
-        {
-            const float h = Clamp((localPt.x - 120) / 179.0f);
-            sampledColor = HsvToColor(h, m_S, m_V);
-            if (sampledColor != m_LastSampledColor)
-            {
-                m_LastSampledColor = sampledColor;
-                SetHSV(h, m_S, m_V);
-            }
-        }
-    }
 
     HDC screenDc = GetDC(nullptr);
     if (screenDc)
     {
-        if (sampledColor == CLR_INVALID)
-        {
-            sampledColor = GetPixel(screenDc, screenPosition.x, screenPosition.y);
-            if (sampledColor != CLR_INVALID && sampledColor != m_LastSampledColor)
-            {
-                m_LastSampledColor = sampledColor;
-                SetRGB(sampledColor);
-            }
-        }
-
         if (m_MagnifierFrameDc)
         {
             RECT frame{0, 0, MAGNIFIER_SIZE, MAGNIFIER_SIZE};
@@ -444,6 +403,40 @@ void ColorPickerPopup::UpdateEyedropperSample(POINT screenPosition)
     }
     if (m_Magnifier)
         InvalidateRect(m_Magnifier, nullptr, FALSE);
+}
+
+void ColorPickerPopup::ApplyEyedropperSelection(POINT screenPosition)
+{
+    // If the cursor is directly over the popup's own SV gradient, map mathematically
+    if (m_hWnd)
+    {
+        POINT localPt = screenPosition;
+        ScreenToClient(m_hWnd, &localPt);
+        if (localPt.x >= 0 && localPt.x < SV_WIDTH && localPt.y >= 0 && localPt.y < SV_HEIGHT)
+        {
+            const float s = Clamp(localPt.x / static_cast<float>(SV_WIDTH - 1));
+            const float v = Clamp(1.0f - localPt.y / static_cast<float>(SV_HEIGHT - 1));
+            SetHSV(m_H, s, v, true);
+            return;
+        }
+        else if (localPt.x >= 120 && localPt.x < 300 && localPt.y >= HUEY && localPt.y < HUEY + 20)
+        {
+            const float h = Clamp((localPt.x - 120) / 179.0f);
+            SetHSV(h, m_S, m_V, true);
+            return;
+        }
+    }
+
+    HDC screenDc = GetDC(nullptr);
+    if (screenDc)
+    {
+        COLORREF sampledColor = GetPixel(screenDc, screenPosition.x, screenPosition.y);
+        ReleaseDC(nullptr, screenDc);
+        if (sampledColor != CLR_INVALID)
+        {
+            SetRGB(sampledColor, true);
+        }
+    }
 }
 
 void ColorPickerPopup::PaintEyedropperMagnifier(HDC dc)
@@ -795,7 +788,7 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
         {
             POINT cursor{};
             GetCursorPos(&cursor);
-            UpdateEyedropperSample(cursor);
+            ApplyEyedropperSelection(cursor);
             m_eye = false;
             m_eyeAwaitingFirstRelease = false;
             m_IgnoreEyedropperFocusLoss = true;
@@ -914,10 +907,23 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
             m_eyeAwaitingFirstRelease = false;
             return 0;
         }
-        m_dragSV = m_dragHue = m_eye = false;
+        if (m_eye)
+        {
+            POINT cursor{};
+            GetCursorPos(&cursor);
+            ApplyEyedropperSelection(cursor);
+            m_eye = false;
+            m_IgnoreEyedropperFocusLoss = true;
+            KillTimer(m_hWnd, EYEDROPPER_TIMER);
+            HideEyedropperMagnifier();
+            ReleaseCapture();
+            SetForegroundWindow(m_hWnd);
+            SetFocus(m_hWnd);
+            FlushWidgetRedraw();
+            return 0;
+        }
+        m_dragSV = m_dragHue = false;
         ReleaseCapture();
-        KillTimer(m_hWnd, EYEDROPPER_TIMER);
-        HideEyedropperMagnifier();
         FlushWidgetRedraw();
         return 0;
     }

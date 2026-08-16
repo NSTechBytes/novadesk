@@ -37,6 +37,7 @@ private:
     void HideEyedropperMagnifier();
     void PaintEyedropperMagnifier(HDC);
     void UpdateEyedropperSample(POINT screenPosition);
+    void ApplyEyedropperSelection(POINT screenPosition);
     void InstallOutsideClickHook();
     void RemoveOutsideClickHook();
     COLORREF HSV() const;
