@@ -26,6 +26,7 @@ public:
     void Destroy();
     
     bool IsActive() const { return m_ActiveToolTipHWnd != nullptr; }
+    HWND GetActiveHWnd() const { return m_ActiveToolTipHWnd; }
 
 private:
     HWND m_ParentHWnd = nullptr;

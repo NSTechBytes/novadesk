@@ -27,12 +27,12 @@ bool Tooltip::Initialize(HWND parentHWnd, HINSTANCE hInstance)
     m_ToolTipHWnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED, TOOLTIPS_CLASSW, nullptr,
         WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-        nullptr, nullptr, hInstance, nullptr);
+        m_ParentHWnd, nullptr, hInstance, nullptr);
 
     m_ToolTipBalloonHWnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED, TOOLTIPS_CLASSW, nullptr,
         WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP | TTS_BALLOON,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-        nullptr, nullptr, hInstance, nullptr);
+        m_ParentHWnd, nullptr, hInstance, nullptr);
 
     InitializeToolTip(m_ToolTipHWnd);
     InitializeToolTip(m_ToolTipBalloonHWnd);
@@ -80,7 +80,7 @@ void Tooltip::InitializeToolTip(HWND hwnd)
 
     SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
 
-    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
 void Tooltip::Update(Element* element)
@@ -129,7 +129,11 @@ void Tooltip::Update(Element* element)
         if (m_ActiveToolTipHWnd != targetTT || !visible)
         {
             activated = SendMessageW(targetTT, TTM_TRACKACTIVATE, TRUE, (LPARAM)&ti);
-            ShowWindow(targetTT, SW_SHOWNA);
+            SetWindowPos(targetTT, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        }
+        else
+        {
+            SetWindowPos(targetTT, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
         }
 
         m_ActiveToolTipHWnd = targetTT;
@@ -179,6 +183,7 @@ void Tooltip::Move()
                 if (now - m_PendingMoveTime > 50)
                 {
                     SendMessageW(m_ActiveToolTipHWnd, TTM_TRACKPOSITION, 0, MAKELPARAM(pt.x + 20, pt.y + 20));
+                    SetWindowPos(m_ActiveToolTipHWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
                     m_LastPos = pt;
                     m_IsMovePending = false;
                 }

@@ -412,6 +412,16 @@ void Widget::ChangeZPos(ZPOSITION zPos, bool all)
 
     SetWindowPos(m_hWnd, winPos, 0, 0, 0, 0, ZPOS_FLAGS);
 
+    // If a tooltip is active and we just asserted topmost, re-assert the tooltip above us
+    if (winPos == HWND_TOPMOST && m_Tooltip.IsActive())
+    {
+        HWND activeTooltip = m_Tooltip.GetActiveHWnd();
+        if (activeTooltip)
+        {
+            SetWindowPos(activeTooltip, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        }
+    }
+
     // Save Z-Pos state only if it actually changed
     if (changed)
     {
@@ -1055,7 +1065,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         {
             if (wParam == TIMER_TOPMOST)
             {
-                if (widget->m_WindowZPosition == ZPOSITION_ONTOPMOST && !Widget::IsMenuActive())
+                if (widget->m_WindowZPosition == ZPOSITION_ONTOPMOST && !Widget::IsMenuActive() && !widget->m_Tooltip.IsActive())
                 {
                     widget->ChangeZPos(ZPOSITION_ONTOPMOST);
                 }
@@ -1254,6 +1264,15 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             {
                 widget->m_Options.width = wp->cx;
                 widget->m_Options.height = wp->cy;
+            }
+            // If Z-order changed and a tooltip is active, re-assert tooltip above this widget
+            if (!(wp->flags & SWP_NOZORDER) && widget->m_Tooltip.IsActive())
+            {
+                HWND activeTooltip = widget->m_Tooltip.GetActiveHWnd();
+                if (activeTooltip)
+                {
+                    SetWindowPos(activeTooltip, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                }
             }
         }
         return 0;
