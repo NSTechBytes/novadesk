@@ -41,6 +41,7 @@ ui.addColorPicker({
   width: 32,
   height: 32,
   color: "#1b1b1b",
+  tooltipText: "Accent Color",
   onChange: (hexColor) => {}
 });
 

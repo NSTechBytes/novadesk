@@ -99,10 +99,27 @@ bool ShowInputBoxContextMenu(Widget &widget, InputBoxElement *inputElem,
     POINT screenPt = { clientX, clientY };
     ClientToScreen(hWnd, &screenPt);
 
-    SetForegroundWindow(hWnd);
-    const int cmd = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_BOTTOMALIGN | TPM_LEFTALIGN,
+    Widget::SetMenuActive(true);
+
+    HWND foregroundWindow = GetForegroundWindow();
+    if (foregroundWindow && foregroundWindow != hWnd)
+    {
+        const DWORD foregroundThreadID = GetWindowThreadProcessId(foregroundWindow, nullptr);
+        const DWORD currentThreadID = GetCurrentThreadId();
+        AttachThreadInput(currentThreadID, foregroundThreadID, TRUE);
+        SetForegroundWindow(hWnd);
+        AttachThreadInput(currentThreadID, foregroundThreadID, FALSE);
+    }
+    else
+    {
+        SetForegroundWindow(hWnd);
+    }
+
+    const int cmd = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_LEFTALIGN,
                                    screenPt.x, screenPt.y, 0, hWnd, NULL);
     DestroyMenu(hMenu);
+
+    Widget::SetMenuActive(false);
 
     // Execute command─
     if (cmd != 0)

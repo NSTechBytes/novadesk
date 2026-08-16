@@ -205,6 +205,7 @@ void ColorPickerPopup::Show()
     }
     if (m_hWnd)
     {
+        BringWindowToTop(m_hWnd);
         SetForegroundWindow(m_hWnd);
         return;
     }
@@ -220,13 +221,20 @@ void ColorPickerPopup::Show()
     const int workLeft = static_cast<int>(mi.rcWork.left);
     const int workRight = static_cast<int>(mi.rcWork.right);
     x = (std::max)(workLeft, (std::min)(x, workRight - W));
+    Widget::IncrementColorPickerCount();
     m_hWnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, L"NovadeskColorPickerPopup", L"", WS_POPUP | WS_BORDER | WS_CLIPCHILDREN, x, y, W, H, m_Widget->GetWindow(), nullptr, GetModuleHandleW(nullptr), this);
     if (m_hWnd)
     {
-        SetWindowPos(m_hWnd, HWND_TOPMOST, x, y, W, H, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        SetWindowPos(m_hWnd, HWND_TOPMOST, x, y, W, H, SWP_SHOWWINDOW);
+        BringWindowToTop(m_hWnd);
+        SetForegroundWindow(m_hWnd);
         InstallOutsideClickHook();
         m_ShowDesktopWasActive = System::GetShowDesktop();
         SetTimer(m_hWnd, SHOW_DESKTOP_TIMER, 100, nullptr);
+    }
+    else
+    {
+        Widget::DecrementColorPickerCount();
     }
 }
 
@@ -242,6 +250,7 @@ void ColorPickerPopup::Close()
     HideEyedropperMagnifier();
     if (m_hWnd)
     {
+        Widget::DecrementColorPickerCount();
         ReleaseCapture();
         DestroyWindow(m_hWnd);
         m_hWnd = nullptr;

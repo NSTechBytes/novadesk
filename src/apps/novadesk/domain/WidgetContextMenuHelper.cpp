@@ -91,9 +91,26 @@ namespace WidgetContextMenuHelper
             AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hAppMenu, appTitle.c_str());
         }
 
-        SetForegroundWindow(hWnd);
-        const int cmd = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hWnd, NULL);
+        Widget::SetMenuActive(true);
+
+        HWND foregroundWindow = GetForegroundWindow();
+        if (foregroundWindow && foregroundWindow != hWnd)
+        {
+            const DWORD foregroundThreadID = GetWindowThreadProcessId(foregroundWindow, nullptr);
+            const DWORD currentThreadID = GetCurrentThreadId();
+            AttachThreadInput(currentThreadID, foregroundThreadID, TRUE);
+            SetForegroundWindow(hWnd);
+            AttachThreadInput(currentThreadID, foregroundThreadID, FALSE);
+        }
+        else
+        {
+            SetForegroundWindow(hWnd);
+        }
+
+        const int cmd = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_LEFTALIGN, pt.x, pt.y, 0, hWnd, NULL);
         DestroyMenu(hMenu);
+
+        Widget::SetMenuActive(false);
         return cmd;
     }
 

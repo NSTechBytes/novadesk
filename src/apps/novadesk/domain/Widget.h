@@ -217,6 +217,13 @@ public:
     void SetToolbarTitle(const std::wstring& title);
     void SetSkipCloseEventOnDestroy(bool skip) { m_SkipCloseEventOnDestroy = skip; }
 
+    static bool s_IsMenuActive;
+    static int s_ActiveColorPickerCount;
+    static bool IsMenuActive() { return s_IsMenuActive || s_ActiveColorPickerCount > 0; }
+    static void SetMenuActive(bool active) { s_IsMenuActive = active; }
+    static void IncrementColorPickerCount() { s_ActiveColorPickerCount++; }
+    static void DecrementColorPickerCount() { if (s_ActiveColorPickerCount > 0) s_ActiveColorPickerCount--; }
+
     const WidgetOptions& GetOptions() const { return m_Options; }
     HWND GetWindow() const { return m_hWnd; }
     ZPOSITION GetWindowZPosition() const { return m_WindowZPosition; }

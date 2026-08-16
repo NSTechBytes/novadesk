@@ -62,6 +62,9 @@
 
 extern std::vector<Widget *> widgets; // Defined in Novadesk.cpp
 
+bool Widget::s_IsMenuActive = false;
+int Widget::s_ActiveColorPickerCount = 0;
+
 /*
 ** Check if a widget pointer is valid (exists in the global widgets list).
 */
@@ -333,6 +336,9 @@ std::wstring Widget::GetTitle() const
 */
 void Widget::ChangeZPos(ZPOSITION zPos, bool all)
 {
+    if (Widget::IsMenuActive())
+        return;
+
     ZPOSITION oldZPos = m_WindowZPosition;
     HWND winPos = HWND_NOTOPMOST;
 
@@ -792,7 +798,10 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // Bring widget to front when clicked (for normal)
             if (widget->m_WindowZPosition != ZPOSITION_ONDESKTOP && widget->m_WindowZPosition != ZPOSITION_ONBOTTOM)
             {
-                widget->ChangeSingleZPos(widget->m_WindowZPosition);
+                if (!Widget::IsMenuActive())
+                {
+                    widget->ChangeSingleZPos(widget->m_WindowZPosition);
+                }
             }
 
             // Don't start widget drag if we're selecting text or an input box is focused
@@ -1046,7 +1055,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         {
             if (wParam == TIMER_TOPMOST)
             {
-                if (widget->m_WindowZPosition == ZPOSITION_ONTOPMOST)
+                if (widget->m_WindowZPosition == ZPOSITION_ONTOPMOST && !Widget::IsMenuActive())
                 {
                     widget->ChangeZPos(ZPOSITION_ONTOPMOST);
                 }
