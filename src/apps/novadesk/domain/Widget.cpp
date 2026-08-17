@@ -906,6 +906,11 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         return 0;
 
     case WM_SETCURSOR:
+        if (widget && widget->IsColorPickerEyedropperActive())
+        {
+            SetCursor(LoadCursor(nullptr, IDC_ARROW));
+            return TRUE;
+        }
         if (LOWORD(lParam) == HTCLIENT && widget)
         {
             POINT pt;
@@ -1891,6 +1896,87 @@ void Widget::AddColorPicker(const PropertyParser::ColorPickerOptions &options)
     PropertyParser::ApplyColorPickerOptions(element, options);
     m_Elements.push_back(element);
     UpdateContainerForElement(element, options.containerId);
+    Redraw();
+}
+
+void Widget::OpenColorPicker(ColorPickerElement* colorPicker)
+{
+    if (!colorPicker)
+        return;
+    if (m_ColorPickerPopup)
+        m_ColorPickerPopup->Close();
+    m_ColorPickerPopup = std::make_unique<ColorPickerPopup>(this, colorPicker);
+    m_ColorPickerPopup->Show();
+}
+
+void Widget::CloseColorPicker()
+{
+    if (m_ColorPickerPopup)
+    {
+        m_ColorPickerPopup->Close();
+        m_ColorPickerPopup.reset();
+    }
+}
+
+bool Widget::IsColorPickerOpen(const ColorPickerElement* colorPicker) const
+{
+    if (!m_ColorPickerPopup || !m_ColorPickerPopup->IsOpen())
+        return false;
+    if (colorPicker)
+        return m_ColorPickerPopup->GetPickerElement() == colorPicker;
+    return true;
+}
+
+bool Widget::IsColorPickerEyedropperActive() const
+{
+    return m_ColorPickerPopup && m_ColorPickerPopup->IsEyedropperActive();
+}
+
+void Widget::OpenColorPickerEyedropper(ColorPickerElement* colorPicker)
+{
+    if (colorPicker && (!m_ColorPickerPopup || m_ColorPickerPopup->GetPickerElement() != colorPicker))
+    {
+        OpenColorPicker(colorPicker);
+    }
+    if (m_ColorPickerPopup)
+    {
+        m_ColorPickerPopup->StartEyedropper();
+    }
+}
+
+void Widget::FocusInputBox(InputBoxElement* inputElem)
+{
+    if (!inputElem)
+        return;
+    if (m_FocusedInputBox && m_FocusedInputBox != inputElem)
+    {
+        if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
+            JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
+        m_FocusedInputBox->SetFocus(false);
+        KillTimer(m_hWnd, TIMER_CARET);
+    }
+    if (!inputElem->IsFocused())
+    {
+        inputElem->SetFocus(true);
+        SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
+        if (inputElem->m_OnFocusCallbackId != -1)
+            JSEngine::CallEventCallback(inputElem->m_OnFocusCallbackId, this, nullptr);
+    }
+    m_FocusedInputBox = inputElem;
+    Redraw();
+}
+
+void Widget::BlurInputBox(InputBoxElement* inputElem)
+{
+    if (!m_FocusedInputBox)
+        return;
+    if (inputElem && m_FocusedInputBox != inputElem)
+        return;
+    if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
+        JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
+    m_FocusedInputBox->SetFocus(false);
+    KillTimer(m_hWnd, TIMER_CARET);
+    m_FocusedInputBox = nullptr;
     Redraw();
 }
 

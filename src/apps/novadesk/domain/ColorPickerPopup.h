@@ -18,6 +18,9 @@ public:
     void Show();
     void Close();
     bool IsOpen() const { return m_hWnd != nullptr; }
+    bool IsEyedropperActive() const { return m_eye; }
+    void StartEyedropper();
+    ColorPickerElement *GetPickerElement() const { return m_Picker; }
 
 private:
     static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);

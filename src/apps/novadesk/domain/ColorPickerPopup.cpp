@@ -278,6 +278,27 @@ void ColorPickerPopup::Close()
     }
 }
 
+void ColorPickerPopup::StartEyedropper()
+{
+    if (!m_hWnd)
+        return;
+    m_eye = true;
+    m_eyeAwaitingFirstRelease = false;
+    m_IgnoreEyedropperFocusLoss = false;
+    m_LastSampledPos = {-1, -1};
+    m_LastSampledColor = CLR_INVALID;
+    SetCapture(m_hWnd);
+    SetCursor(LoadCursor(nullptr, IDC_ARROW));
+    POINT cursor{};
+    GetCursorPos(&cursor);
+    UpdateEyedropperSample(cursor);
+    SetTimer(m_hWnd, EYEDROPPER_TIMER, 16, nullptr);
+    if (m_Picker && m_Picker->m_OnEyedropperOpenCallbackId != -1)
+    {
+        JSEngine::CallEventCallback(m_Picker->m_OnEyedropperOpenCallbackId, m_Widget);
+    }
+}
+
 void ColorPickerPopup::InstallOutsideClickHook()
 {
     if (g_OutsideClickPopup == this && g_OutsideClickHook) return;
@@ -310,12 +331,13 @@ void ColorPickerPopup::ShowEyedropperMagnifier(POINT screenPosition)
         windowClass.lpfnWndProc = MagnifierWndProc;
         windowClass.hInstance = GetModuleHandleW(nullptr);
         windowClass.lpszClassName = L"NovadeskColorPickerMagnifier";
+        windowClass.hCursor = LoadCursor(nullptr, IDC_ARROW);
         windowClass.hbrBackground = nullptr;
         atom = RegisterClassW(&windowClass);
     }
     if (!m_Magnifier)
     {
-        m_Magnifier = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE,
+        m_Magnifier = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT,
                                       L"NovadeskColorPickerMagnifier", L"", WS_POPUP,
                                       0, 0, MAGNIFIER_SIZE, MAGNIFIER_SIZE, m_hWnd, nullptr, GetModuleHandleW(nullptr), this);
     }
@@ -751,6 +773,13 @@ LRESULT CALLBACK ColorPickerPopup::MagnifierWndProc(HWND h, UINT m, WPARAM w, LP
         return DefWindowProcW(h, m, w, l);
     if (m == WM_ERASEBKGND)
         return 1;
+    if (m == WM_NCHITTEST)
+        return HTTRANSPARENT;
+    if (m == WM_SETCURSOR)
+    {
+        SetCursor(LoadCursor(nullptr, IDC_ARROW));
+        return TRUE;
+    }
     if (m == WM_MOUSEACTIVATE)
         return MA_NOACTIVATE;
     if (m == WM_PAINT)
@@ -853,6 +882,7 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
             m_LastSampledPos = {-1, -1};
             m_LastSampledColor = CLR_INVALID;
             SetCapture(m_hWnd);
+            SetCursor(LoadCursor(nullptr, IDC_ARROW));
             POINT cursor{};
             GetCursorPos(&cursor);
             UpdateEyedropperSample(cursor);
@@ -921,15 +951,23 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
         }
         return 0;
     }
-    if (m == WM_SETCURSOR && LOWORD(l) == HTCLIENT)
+    if (m == WM_SETCURSOR)
     {
-        POINT cursor{};
-        GetCursorPos(&cursor);
-        ScreenToClient(m_hWnd, &cursor);
-        if (cursor.x >= 32 && cursor.x <= 308 && cursor.y >= MODEY && cursor.y <= MODEBOTTOM)
+        if (m_eye)
         {
-            SetCursor(LoadCursor(nullptr, IDC_HAND));
+            SetCursor(LoadCursor(nullptr, IDC_ARROW));
             return TRUE;
+        }
+        if (LOWORD(l) == HTCLIENT)
+        {
+            POINT cursor{};
+            GetCursorPos(&cursor);
+            ScreenToClient(m_hWnd, &cursor);
+            if (cursor.x >= 32 && cursor.x <= 308 && cursor.y >= MODEY && cursor.y <= MODEBOTTOM)
+            {
+                SetCursor(LoadCursor(nullptr, IDC_HAND));
+                return TRUE;
+            }
         }
     }
     if (m == WM_LBUTTONUP)

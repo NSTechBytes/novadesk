@@ -257,6 +257,14 @@ public:
 
     InputBoxElement* GetFocusedInputBox() const { return m_FocusedInputBox; }
     void SetFocusedInputBox(InputBoxElement* inputElem) { m_FocusedInputBox = inputElem; }
+    void FocusInputBox(InputBoxElement* inputElem);
+    void BlurInputBox(InputBoxElement* inputElem = nullptr);
+
+    void OpenColorPicker(ColorPickerElement* colorPicker);
+    void CloseColorPicker();
+    bool IsColorPickerOpen(const ColorPickerElement* colorPicker = nullptr) const;
+    bool IsColorPickerEyedropperActive() const;
+    void OpenColorPickerEyedropper(ColorPickerElement* colorPicker = nullptr);
 
     void BeginUpdate();
     void EndUpdate();

@@ -856,7 +856,6 @@ namespace novadesk::scripting::quickjs
             widget->EndUpdate();
             return JS_UNDEFINED;
         }
-
         JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -998,6 +997,24 @@ namespace novadesk::scripting::quickjs
                 PropertyParser::PreFillInputBoxOptions(options, input);
                 PropertyParser::ParseInputBoxOptions(ctx, argv[1], options, baseDir);
                 PropertyParser::ApplyInputBoxOptions(input, options);
+                if (JS_IsObject(argv[1]))
+                {
+                    JSValue focusedVal = JS_GetPropertyStr(ctx, argv[1], "focused");
+                    if (!JS_IsUndefined(focusedVal))
+                    {
+                        bool focused = JS_ToBool(ctx, focusedVal) == 1;
+                        if (focused) widget->FocusInputBox(input);
+                        else widget->BlurInputBox(input);
+                    }
+                    JS_FreeValue(ctx, focusedVal);
+
+                    JSValue selectAllVal = JS_GetPropertyStr(ctx, argv[1], "selectAll");
+                    if (JS_ToBool(ctx, selectAllVal) == 1)
+                    {
+                        input->SelectAll();
+                    }
+                    JS_FreeValue(ctx, selectAllVal);
+                }
             }
             else if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
             {
@@ -1005,6 +1022,19 @@ namespace novadesk::scripting::quickjs
                 PropertyParser::PreFillColorPickerOptions(options, picker);
                 PropertyParser::ParseColorPickerOptions(ctx, argv[1], options, baseDir);
                 PropertyParser::ApplyColorPickerOptions(picker, options);
+                if (JS_IsObject(argv[1]))
+                {
+                    JSValue openVal = JS_GetPropertyStr(ctx, argv[1], "isOpen");
+                    if (JS_IsUndefined(openVal))
+                        openVal = JS_GetPropertyStr(ctx, argv[1], "open");
+                    if (!JS_IsUndefined(openVal))
+                    {
+                        bool open = JS_ToBool(ctx, openVal) == 1;
+                        if (open) widget->OpenColorPicker(picker);
+                        else if (widget->IsColorPickerOpen(picker)) widget->CloseColorPicker();
+                    }
+                    JS_FreeValue(ctx, openVal);
+                }
             }
 
             widget->Redraw();
@@ -1096,6 +1126,13 @@ namespace novadesk::scripting::quickjs
                     wchar_t value[8]; const COLORREF color = picker->GetColor();
                     swprintf_s(value, L"#%02X%02X%02X", GetRValue(color), GetGValue(color), GetBValue(color));
                     return JS_NewString(ctx, Utils::ToString(value).c_str());
+                }
+            }
+            if (prop == "isOpen")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                {
+                    return JS_NewBool(ctx, widget->IsColorPickerOpen(picker) ? 1 : 0);
                 }
             }
             if (prop == "contentX")
@@ -1993,6 +2030,14 @@ namespace novadesk::scripting::quickjs
                     return JS_NewString(ctx, Utils::ToString(input->GetPlaceholder()).c_str());
                 if (prop == "focused")
                     return JS_NewBool(ctx, input->IsFocused() ? 1 : 0);
+                if (prop == "selectedText")
+                    return JS_NewString(ctx, Utils::ToString(input->GetSelectedText()).c_str());
+                if (prop == "hasSelection")
+                    return JS_NewBool(ctx, input->HasSelection() ? 1 : 0);
+                if (prop == "canUndo")
+                    return JS_NewBool(ctx, input->CanUndo() ? 1 : 0);
+                if (prop == "canRedo")
+                    return JS_NewBool(ctx, input->CanRedo() ? 1 : 0);
                 if (prop == "fontFace")
                     return JS_NewString(ctx, Utils::ToString(input->GetFontFace()).c_str());
                 if (prop == "fontSize")
@@ -2087,6 +2132,363 @@ namespace novadesk::scripting::quickjs
             return GetElementPropertyValue(ctx, widget, element, prop);
         }
 
+        // -------------------------------------------------------------
+        // ColorPicker Element Methods
+        // -------------------------------------------------------------
+
+        JSValue JsWidgetOpenColorPicker(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc < 1) return ThrowTypeError(ctx, "openColorPicker", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8) return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *picker = dynamic_cast<ColorPickerElement *>(elem);
+            if (!picker) return JS_NewBool(ctx, 0);
+            widget->OpenColorPicker(picker);
+            return JS_NewBool(ctx, 1);
+        }
+
+        JSValue JsWidgetCloseColorPicker(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            widget->CloseColorPicker();
+            return JS_NewBool(ctx, 1);
+        }
+
+        JSValue JsWidgetIsColorPickerOpen(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
+            {
+                const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+                if (!idUtf8) return JS_EXCEPTION;
+                std::wstring id = Utils::ToWString(idUtf8);
+                JS_FreeCString(ctx, idUtf8);
+                Element *elem = widget->FindElementById(id);
+                auto *picker = dynamic_cast<ColorPickerElement *>(elem);
+                return JS_NewBool(ctx, widget->IsColorPickerOpen(picker) ? 1 : 0);
+            }
+            return JS_NewBool(ctx, widget->IsColorPickerOpen() ? 1 : 0);
+        }
+
+        JSValue JsWidgetSetColorPickerColor(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc < 2) return ThrowTypeError(ctx, "setColorPickerColor", "expected (id, color)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            const char *colorUtf8 = JS_ToCString(ctx, argv[1]);
+            if (!idUtf8 || !colorUtf8)
+            {
+                if (idUtf8) JS_FreeCString(ctx, idUtf8);
+                if (colorUtf8) JS_FreeCString(ctx, colorUtf8);
+                return JS_EXCEPTION;
+            }
+            std::wstring id = Utils::ToWString(idUtf8);
+            std::wstring colorStr = Utils::ToWString(colorUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            JS_FreeCString(ctx, colorUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *picker = dynamic_cast<ColorPickerElement *>(elem);
+            if (!picker) return JS_NewBool(ctx, 0);
+            COLORREF c = picker->GetColor();
+            BYTE a = 255;
+            ColorUtil::ParseRGBA(colorStr, c, a);
+            picker->SetColor(c);
+            widget->Redraw();
+            return JS_NewBool(ctx, 1);
+        }
+
+        JSValue JsWidgetGetColorPickerColor(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NULL;
+            if (argc < 1) return ThrowTypeError(ctx, "getColorPickerColor", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8) return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *picker = dynamic_cast<ColorPickerElement *>(elem);
+            if (!picker) return JS_NULL;
+            wchar_t value[8];
+            const COLORREF color = picker->GetColor();
+            swprintf_s(value, L"#%02X%02X%02X", GetRValue(color), GetGValue(color), GetBValue(color));
+            return JS_NewString(ctx, Utils::ToString(value).c_str());
+        }
+
+        JSValue JsWidgetOpenColorPickerEyedropper(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            ColorPickerElement *picker = nullptr;
+            if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
+            {
+                const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+                if (!idUtf8) return JS_EXCEPTION;
+                std::wstring id = Utils::ToWString(idUtf8);
+                JS_FreeCString(ctx, idUtf8);
+                Element *elem = widget->FindElementById(id);
+                picker = dynamic_cast<ColorPickerElement *>(elem);
+            }
+            widget->OpenColorPickerEyedropper(picker);
+            return JS_NewBool(ctx, 1);
+        }
+
+        // -------------------------------------------------------------
+        // InputBox Element Methods
+        // -------------------------------------------------------------
+
+        JSValue JsWidgetFocusInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc < 1) return ThrowTypeError(ctx, "focusInputBox", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8) return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *input = dynamic_cast<InputBoxElement *>(elem);
+            if (!input) return JS_NewBool(ctx, 0);
+            widget->FocusInputBox(input);
+            return JS_NewBool(ctx, 1);
+        }
+
+        JSValue JsWidgetBlurInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            InputBoxElement *input = nullptr;
+            if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
+            {
+                const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+                if (!idUtf8) return JS_EXCEPTION;
+                std::wstring id = Utils::ToWString(idUtf8);
+                JS_FreeCString(ctx, idUtf8);
+                Element *elem = widget->FindElementById(id);
+                input = dynamic_cast<InputBoxElement *>(elem);
+            }
+            widget->BlurInputBox(input);
+            return JS_NewBool(ctx, 1);
+        }
+
+        JSValue JsWidgetIsInputBoxFocused(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc < 1) return ThrowTypeError(ctx, "isInputBoxFocused", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8) return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *input = dynamic_cast<InputBoxElement *>(elem);
+            if (!input) return JS_NewBool(ctx, 0);
+            return JS_NewBool(ctx, input->IsFocused() ? 1 : 0);
+        }
+
+        JSValue JsWidgetSetInputBoxText(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc < 2) return ThrowTypeError(ctx, "setInputBoxText", "expected (id, text)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            const char *textUtf8 = JS_ToCString(ctx, argv[1]);
+            if (!idUtf8 || !textUtf8)
+            {
+                if (idUtf8) JS_FreeCString(ctx, idUtf8);
+                if (textUtf8) JS_FreeCString(ctx, textUtf8);
+                return JS_EXCEPTION;
+            }
+            std::wstring id = Utils::ToWString(idUtf8);
+            std::wstring text = Utils::ToWString(textUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            JS_FreeCString(ctx, textUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *input = dynamic_cast<InputBoxElement *>(elem);
+            if (!input) return JS_NewBool(ctx, 0);
+            input->SetText(text);
+            widget->Redraw();
+            return JS_NewBool(ctx, 1);
+        }
+
+        JSValue JsWidgetGetInputBoxText(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NULL;
+            if (argc < 1) return ThrowTypeError(ctx, "getInputBoxText", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8) return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *input = dynamic_cast<InputBoxElement *>(elem);
+            if (!input) return JS_NULL;
+            return JS_NewString(ctx, Utils::ToString(input->GetText()).c_str());
+        }
+
+        JSValue JsWidgetClearInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc < 1) return ThrowTypeError(ctx, "clearInputBox", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8) return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *input = dynamic_cast<InputBoxElement *>(elem);
+            if (!input) return JS_NewBool(ctx, 0);
+            input->SetText(L"");
+            widget->Redraw();
+            return JS_NewBool(ctx, 1);
+        }
+
+        JSValue JsWidgetSelectInputBoxText(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc < 1) return ThrowTypeError(ctx, "selectInputBoxText", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8) return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *input = dynamic_cast<InputBoxElement *>(elem);
+            if (!input) return JS_NewBool(ctx, 0);
+            input->SelectAll();
+            widget->Redraw();
+            return JS_NewBool(ctx, 1);
+        }
+
+        JSValue JsWidgetClearInputBoxSelection(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc < 1) return ThrowTypeError(ctx, "clearInputBoxSelection", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8) return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *input = dynamic_cast<InputBoxElement *>(elem);
+            if (!input) return JS_NewBool(ctx, 0);
+            input->ClearSelection();
+            widget->Redraw();
+            return JS_NewBool(ctx, 1);
+        }
+
+        JSValue JsWidgetGetInputBoxSelectedText(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NULL;
+            if (argc < 1) return ThrowTypeError(ctx, "getInputBoxSelectedText", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8) return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *input = dynamic_cast<InputBoxElement *>(elem);
+            if (!input) return JS_NULL;
+            return JS_NewString(ctx, Utils::ToString(input->GetSelectedText()).c_str());
+        }
+
+        JSValue JsWidgetReplaceInputBoxSelection(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc < 2) return ThrowTypeError(ctx, "replaceInputBoxSelection", "expected (id, text)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            const char *textUtf8 = JS_ToCString(ctx, argv[1]);
+            if (!idUtf8 || !textUtf8)
+            {
+                if (idUtf8) JS_FreeCString(ctx, idUtf8);
+                if (textUtf8) JS_FreeCString(ctx, textUtf8);
+                return JS_EXCEPTION;
+            }
+            std::wstring id = Utils::ToWString(idUtf8);
+            std::wstring text = Utils::ToWString(textUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            JS_FreeCString(ctx, textUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *input = dynamic_cast<InputBoxElement *>(elem);
+            if (!input) return JS_NewBool(ctx, 0);
+            input->ReplaceSelection(text);
+            widget->Redraw();
+            return JS_NewBool(ctx, 1);
+        }
+
+        JSValue JsWidgetUndoInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc < 1) return ThrowTypeError(ctx, "undoInputBox", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8) return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *input = dynamic_cast<InputBoxElement *>(elem);
+            if (!input) return JS_NewBool(ctx, 0);
+            bool res = input->Undo();
+            if (res) widget->Redraw();
+            return JS_NewBool(ctx, res ? 1 : 0);
+        }
+
+        JSValue JsWidgetRedoInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc < 1) return ThrowTypeError(ctx, "redoInputBox", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8) return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *input = dynamic_cast<InputBoxElement *>(elem);
+            if (!input) return JS_NewBool(ctx, 0);
+            bool res = input->Redo();
+            if (res) widget->Redraw();
+            return JS_NewBool(ctx, res ? 1 : 0);
+        }
+
+        JSValue JsWidgetCanUndoInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc < 1) return ThrowTypeError(ctx, "canUndoInputBox", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8) return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *input = dynamic_cast<InputBoxElement *>(elem);
+            if (!input) return JS_NewBool(ctx, 0);
+            return JS_NewBool(ctx, input->CanUndo() ? 1 : 0);
+        }
+
+        JSValue JsWidgetCanRedoInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget) return JS_NewBool(ctx, 0);
+            if (argc < 1) return ThrowTypeError(ctx, "canRedoInputBox", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8) return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *elem = widget->FindElementById(id);
+            auto *input = dynamic_cast<InputBoxElement *>(elem);
+            if (!input) return JS_NewBool(ctx, 0);
+            return JS_NewBool(ctx, input->CanRedo() ? 1 : 0);
+        }
+
         void JsWidgetFinalizer(JSRuntime *, JSValue)
         {
             // Native widget lifetime is owned by Novadesk's global widget list.
@@ -2120,6 +2522,30 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("removeElementsByGroup", 1, JsWidgetRemoveElementsByGroup),
             JS_CFUNC_DEF("beginUpdate", 0, JsWidgetBeginUpdate),
             JS_CFUNC_DEF("endUpdate", 0, JsWidgetEndUpdate),
+
+            // ColorPicker
+            JS_CFUNC_DEF("openColorPicker", 1, JsWidgetOpenColorPicker),
+            JS_CFUNC_DEF("closeColorPicker", 0, JsWidgetCloseColorPicker),
+            JS_CFUNC_DEF("isColorPickerOpen", 1, JsWidgetIsColorPickerOpen),
+            JS_CFUNC_DEF("setColorPickerColor", 2, JsWidgetSetColorPickerColor),
+            JS_CFUNC_DEF("getColorPickerColor", 1, JsWidgetGetColorPickerColor),
+            JS_CFUNC_DEF("openColorPickerEyedropper", 1, JsWidgetOpenColorPickerEyedropper),
+
+            // InputBox
+            JS_CFUNC_DEF("focusInputBox", 1, JsWidgetFocusInputBox),
+            JS_CFUNC_DEF("blurInputBox", 1, JsWidgetBlurInputBox),
+            JS_CFUNC_DEF("isInputBoxFocused", 1, JsWidgetIsInputBoxFocused),
+            JS_CFUNC_DEF("setInputBoxText", 2, JsWidgetSetInputBoxText),
+            JS_CFUNC_DEF("getInputBoxText", 1, JsWidgetGetInputBoxText),
+            JS_CFUNC_DEF("clearInputBox", 1, JsWidgetClearInputBox),
+            JS_CFUNC_DEF("selectInputBoxText", 1, JsWidgetSelectInputBoxText),
+            JS_CFUNC_DEF("clearInputBoxSelection", 1, JsWidgetClearInputBoxSelection),
+            JS_CFUNC_DEF("getInputBoxSelectedText", 1, JsWidgetGetInputBoxSelectedText),
+            JS_CFUNC_DEF("replaceInputBoxSelection", 2, JsWidgetReplaceInputBoxSelection),
+            JS_CFUNC_DEF("undoInputBox", 1, JsWidgetUndoInputBox),
+            JS_CFUNC_DEF("redoInputBox", 1, JsWidgetRedoInputBox),
+            JS_CFUNC_DEF("canUndoInputBox", 1, JsWidgetCanUndoInputBox),
+            JS_CFUNC_DEF("canRedoInputBox", 1, JsWidgetCanRedoInputBox),
         };
 
         bool RunWidgetUiScriptImpl(JSContext *ctx, Widget *widget, const std::wstring &scriptPath)
