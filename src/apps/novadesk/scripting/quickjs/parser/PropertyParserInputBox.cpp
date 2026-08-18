@@ -104,6 +104,8 @@ namespace PropertyParser
             std::wstring fontStr = GetStringProp(ctx, obj, "fontColor");
             if (fontStr.empty())
                 fontStr = GetStringProp(ctx, obj, "textColor");
+            if (fontStr.empty())
+                fontStr = GetStringProp(ctx, obj, "color");
             if (!fontStr.empty())
             {
                 bool hasColor = false;
@@ -140,6 +142,10 @@ namespace PropertyParser
 
         {
             std::wstring fillStr = GetStringProp(ctx, obj, "fillColor");
+            if (fillStr.empty())
+                fillStr = GetStringProp(ctx, obj, "backgroundColor");
+            if (fillStr.empty())
+                fillStr = GetStringProp(ctx, obj, "bgColor");
             if (!fillStr.empty())
             {
                 std::wstring lower = fillStr;

@@ -1135,6 +1135,96 @@ namespace novadesk::scripting::quickjs
                     return JS_NewBool(ctx, widget->IsColorPickerOpen(picker) ? 1 : 0);
                 }
             }
+            // ── ColorPicker swatch properties ─────────────────────────────────
+            if (prop == "borderRadius")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                    return JS_NewFloat64(ctx, picker->m_BorderRadius);
+            }
+            if (prop == "borderWidth")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                    return JS_NewFloat64(ctx, picker->m_BorderWidth);
+            }
+            if (prop == "borderColor")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                {
+                    const std::wstring s = ColorUtil::ToRGBAString(picker->m_BorderColor, picker->m_BorderAlpha);
+                    return JS_NewString(ctx, Utils::ToString(s).c_str());
+                }
+            }
+            if (prop == "opacity")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                    return JS_NewFloat64(ctx, picker->m_Opacity);
+            }
+            if (prop == "shape")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                    return JS_NewString(ctx, picker->m_CircleShape ? "circle" : "rectangle");
+            }
+            // ── ColorPicker popup appearance ──────────────────────────────────
+            if (prop == "popupBackground")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                {
+                    const std::wstring s = ColorUtil::ToRGBAString(picker->m_PopupBackground, picker->m_PopupBackgroundAlpha);
+                    return JS_NewString(ctx, Utils::ToString(s).c_str());
+                }
+            }
+            if (prop == "popupAccentColor")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                {
+                    const std::wstring s = ColorUtil::ToRGBAString(picker->m_PopupAccentColor, picker->m_PopupAccentAlpha);
+                    return JS_NewString(ctx, Utils::ToString(s).c_str());
+                }
+            }
+            if (prop == "popupBorderColor")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                {
+                    const std::wstring s = ColorUtil::ToRGBAString(picker->m_PopupBorderColor, picker->m_PopupBorderAlpha);
+                    return JS_NewString(ctx, Utils::ToString(s).c_str());
+                }
+            }
+            if (prop == "popupInputBackground" || prop == "popupInputBgColor")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                {
+                    const COLORREF bg = picker->m_HasPopupInputBackground ? picker->m_PopupInputBackground : picker->m_PopupBackground;
+                    const BYTE alpha = picker->m_HasPopupInputBackground ? picker->m_PopupInputBackgroundAlpha : picker->m_PopupBackgroundAlpha;
+                    const std::wstring s = ColorUtil::ToRGBAString(bg, alpha);
+                    return JS_NewString(ctx, Utils::ToString(s).c_str());
+                }
+            }
+            if (prop == "popupInputColor" || prop == "popupInputTextColor")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                {
+                    const COLORREF c = picker->m_HasPopupInputColor ? picker->m_PopupInputColor : picker->m_PopupAccentColor;
+                    const BYTE alpha = picker->m_HasPopupInputColor ? picker->m_PopupInputColorAlpha : picker->m_PopupAccentAlpha;
+                    const std::wstring s = ColorUtil::ToRGBAString(c, alpha);
+                    return JS_NewString(ctx, Utils::ToString(s).c_str());
+                }
+            }
+            // ── ColorPicker popup behavior ────────────────────────────────────
+            if (prop == "showEyedropper")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                    return JS_NewBool(ctx, picker->m_ShowEyedropper ? 1 : 0);
+            }
+            if (prop == "showFormatToggle")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                    return JS_NewBool(ctx, picker->m_ShowFormatToggle ? 1 : 0);
+            }
+            if (prop == "defaultMode")
+            {
+                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                    return JS_NewString(ctx, picker->m_DefaultHexMode ? "hex" : "rgb");
+            }
             if (prop == "contentX")
                 return JS_NewInt32(ctx, contentBounds.X);
             if (prop == "contentY")
@@ -2042,7 +2132,7 @@ namespace novadesk::scripting::quickjs
                     return JS_NewString(ctx, Utils::ToString(input->GetFontFace()).c_str());
                 if (prop == "fontSize")
                     return JS_NewInt32(ctx, input->GetFontSize());
-                if (prop == "fontColor" || prop == "textColor")
+                if (prop == "fontColor" || prop == "textColor" || prop == "color")
                     return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetFontGradient(), input->GetFontColor(), input->GetFontAlpha())).c_str());
                 if (prop == "placeholderColor")
                     return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetPlaceholderGradient(), input->GetPlaceholderColor(), input->GetPlaceholderAlpha())).c_str());
@@ -2083,7 +2173,7 @@ namespace novadesk::scripting::quickjs
                     return JS_NewInt32(ctx, (int)input->GetBorderWidth());
                 if (prop == "borderRadius")
                     return JS_NewInt32(ctx, (int)input->GetBorderRadius());
-                if (prop == "fillColor")
+                if (prop == "fillColor" || prop == "backgroundColor" || prop == "bgColor")
                 {
                     if (input->HasFillColor() || input->GetFillGradient().type != GRADIENT_NONE)
                         return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetFillGradient(), input->GetFillColor(), input->GetFillAlpha())).c_str());

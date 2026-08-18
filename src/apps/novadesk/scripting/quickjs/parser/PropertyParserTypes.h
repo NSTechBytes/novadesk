@@ -272,11 +272,41 @@ namespace PropertyParser
 
     struct ColorPickerOptions : public ElementOptions
     {
+        // color
         COLORREF color = RGB(0, 0, 0);
-        int onChangeCallbackId = -1;
-        int onOpenCallbackId = -1;
-        int onCloseCallbackId = -1;
-        int onCancelCallbackId = -1;
+
+        // swatch styling
+        float    borderRadius    = 0.0f;
+        float    borderWidth     = 0.0f;
+        COLORREF borderColor     = RGB(0, 0, 0);
+        BYTE     borderAlpha     = 255;
+        float    opacity         = 1.0f;
+        bool     circleShape     = false;
+
+        // popup appearance
+        COLORREF popupBackground          = RGB(255, 255, 255);
+        BYTE     popupBackgroundAlpha     = 255;
+        COLORREF popupAccentColor         = RGB(0, 0, 0);
+        BYTE     popupAccentAlpha         = 255;
+        COLORREF popupBorderColor         = RGB(0, 0, 0);
+        BYTE     popupBorderAlpha         = 255;
+        COLORREF popupInputBackground      = RGB(255, 255, 255);
+        BYTE     popupInputBackgroundAlpha = 255;
+        bool     hasPopupInputBackground  = false;
+        COLORREF popupInputColor          = RGB(0, 0, 0);
+        BYTE     popupInputColorAlpha     = 255;
+        bool     hasPopupInputColor       = false;
+
+        // popup behavior
+        bool showEyedropper   = true;
+        bool showFormatToggle = true;
+        bool defaultHexMode   = false;
+
+        // callbacks
+        int onChangeCallbackId       = -1;
+        int onOpenCallbackId         = -1;
+        int onCloseCallbackId        = -1;
+        int onCancelCallbackId       = -1;
         int onEyedropperOpenCallbackId = -1;
         int onEyedropperPickCallbackId = -1;
     };

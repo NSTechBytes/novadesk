@@ -233,6 +233,9 @@ void ColorPickerPopup::Show()
         SetTimer(m_hWnd, SHOW_DESKTOP_TIMER, 100, nullptr);
         m_Canceled = false;
         m_OriginalColor = HSV();
+        // Apply the element's preferred input mode immediately after opening.
+        if (m_Picker && m_Picker->m_DefaultHexMode != m_HexMode)
+            SetHexMode(m_Picker->m_DefaultHexMode);
         if (m_Picker && m_Picker->m_OnOpenCallbackId != -1)
         {
             wchar_t s[8];
@@ -275,6 +278,12 @@ void ColorPickerPopup::Close()
     {
         DeleteObject(m_Font);
         m_Font = nullptr;
+    }
+    if (m_InputBgBrush)
+    {
+        DeleteObject(m_InputBgBrush);
+        m_InputBgBrush = nullptr;
+        m_CachedInputBgColor = CLR_INVALID;
     }
 }
 
@@ -614,14 +623,17 @@ void ColorPickerPopup::Paint(HDC targetDc)
 {
     RECT clientRect{};
     GetClientRect(m_hWnd, &clientRect);
-    const int clientWidth = clientRect.right - clientRect.left;
+    const int clientWidth  = clientRect.right  - clientRect.left;
     const int clientHeight = clientRect.bottom - clientRect.top;
     if (clientWidth <= 0 || clientHeight <= 0)
         return;
 
-    // Render the complete popup into memory, then copy one finished frame to
-    // the screen. Direct GDI drawing first clears white and then draws each
-    // control, which is visible as flicker during high-frequency color input.
+    // Read customisation from the picker element (with safe defaults).
+    const COLORREF bgColor     = m_Picker ? m_Picker->m_PopupBackground  : RGB(255, 255, 255);
+    const COLORREF accentColor = m_Picker ? m_Picker->m_PopupAccentColor : RGB(0, 0, 0);
+    const bool showEyedropper  = !m_Picker || m_Picker->m_ShowEyedropper;
+    const bool showFormat      = !m_Picker || m_Picker->m_ShowFormatToggle;
+
     HDC dc = CreateCompatibleDC(targetDc);
     if (!dc)
         return;
@@ -632,20 +644,27 @@ void ColorPickerPopup::Paint(HDC targetDc)
         return;
     }
     HGDIOBJ oldBitmap = SelectObject(dc, bitmap);
-    HGDIOBJ oldFont = m_Font ? SelectObject(dc, m_Font) : nullptr;
+    HGDIOBJ oldFont   = m_Font ? SelectObject(dc, m_Font) : nullptr;
 
+    // ── Background ──────────────────────────────────────────────────
     RECT rc{0, 0, clientWidth, clientHeight};
-    FillRect(dc, &rc, (HBRUSH)GetStockObject(WHITE_BRUSH));
+    HBRUSH bgBrush = CreateSolidBrush(bgColor);
+    FillRect(dc, &rc, bgBrush);
+    DeleteObject(bgBrush);
+
+    // ── Saturation / Value gradient surface ─────────────────────────
     EnsureSaturationValueBitmap();
     BITMAPINFO bitmapInfo{};
-    bitmapInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bitmapInfo.bmiHeader.biWidth = SV_WIDTH;
-    bitmapInfo.bmiHeader.biHeight = -SV_HEIGHT;
-    bitmapInfo.bmiHeader.biPlanes = 1;
-    bitmapInfo.bmiHeader.biBitCount = 32;
+    bitmapInfo.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+    bitmapInfo.bmiHeader.biWidth       = SV_WIDTH;
+    bitmapInfo.bmiHeader.biHeight      = -SV_HEIGHT;
+    bitmapInfo.bmiHeader.biPlanes      = 1;
+    bitmapInfo.bmiHeader.biBitCount    = 32;
     bitmapInfo.bmiHeader.biCompression = BI_RGB;
-    StretchDIBits(dc, 0, 0, SV_WIDTH, SV_HEIGHT, 0, 0, SV_WIDTH, SV_HEIGHT, m_SaturationValuePixels.data(), &bitmapInfo, DIB_RGB_COLORS, SRCCOPY);
+    StretchDIBits(dc, 0, 0, SV_WIDTH, SV_HEIGHT, 0, 0, SV_WIDTH, SV_HEIGHT,
+                  m_SaturationValuePixels.data(), &bitmapInfo, DIB_RGB_COLORS, SRCCOPY);
 
+    // ── Hue gradient strip ──────────────────────────────────────────
     SelectObject(dc, GetStockObject(DC_PEN));
     for (int x = 0; x < 180; x++)
     {
@@ -654,8 +673,7 @@ void ColorPickerPopup::Paint(HDC targetDc)
         LineTo(dc, 120 + x, HUEY + 18);
     }
 
-    // Bind a Direct2D DC render target to the same back buffer. It provides
-    // antialiased vector rendering without changing the popup's GDI controls.
+    // ── Direct2D vector layer (antialiased selectors, swatch, icon) ─
     Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> vectorTarget;
     if (ID2D1Factory1 *factory = Direct2D::GetFactory())
     {
@@ -673,38 +691,49 @@ void ColorPickerPopup::Paint(HDC targetDc)
             vectorTarget.Reset();
         }
     }
-    // Hue selector: a high-contrast ring with the selected hue at its center.
+    // Hue selector ring
     const int hueSelectorX = 120 + static_cast<int>(m_H * 179.0f);
     const int hueSelectorY = HUEY + 9;
     DrawSmoothEllipse(vectorTarget.Get(), hueSelectorX - 10.0f, hueSelectorY - 10.0f, 20.0f, 20.0f, RGB(255, 255, 255), RGB(0, 0, 0));
-    DrawSmoothEllipse(vectorTarget.Get(), hueSelectorX - 8.0f, hueSelectorY - 8.0f, 16.0f, 16.0f, HsvToColor(m_H, 1.0f, 1.0f), RGB(255, 255, 255));
+    DrawSmoothEllipse(vectorTarget.Get(), hueSelectorX -  8.0f, hueSelectorY -  8.0f, 16.0f, 16.0f, HsvToColor(m_H, 1.0f, 1.0f), RGB(255, 255, 255));
+    // Current-color swatch circle
     COLORREF c = HSV();
     RECT sw{58, 201, 102, 245};
-    DrawSmoothEllipse(vectorTarget.Get(), static_cast<float>(sw.left), static_cast<float>(sw.top), static_cast<float>(sw.right - sw.left), static_cast<float>(sw.bottom - sw.top), c, c, 0.0f);
-    const float saturationValueX = m_S * (SV_WIDTH - 1.0f);
+    DrawSmoothEllipse(vectorTarget.Get(),
+                      static_cast<float>(sw.left), static_cast<float>(sw.top),
+                      static_cast<float>(sw.right - sw.left), static_cast<float>(sw.bottom - sw.top),
+                      c, c, 0.0f);
+    // SV selector ring
+    const float saturationValueX = m_S * (SV_WIDTH  - 1.0f);
     const float saturationValueY = (1.0f - m_V) * (SV_HEIGHT - 1.0f);
     DrawSmoothEllipse(vectorTarget.Get(), saturationValueX - 8.0f, saturationValueY - 8.0f, 16.0f, 16.0f, RGB(255, 255, 255), RGB(0, 0, 0));
-    DrawEyedropperSvg(vectorTarget.Get(), 19, 213, 20);
+    // Eyedropper icon
+    if (showEyedropper)
+        DrawEyedropperSvg(vectorTarget.Get(), 19, 213, 20);
     if (vectorTarget)
         vectorTarget->EndDraw();
-    // Keep the format selector visually lightweight: it is not a blue or
-    // permanently highlighted button. Hover only darkens its neutral text.
-    const COLORREF modeColor = m_FormatHover ? RGB(68, 68, 68) : RGB(0, 0, 0);
-    const COLORREF oldTextColor = SetTextColor(dc, modeColor);
-    const int oldBackgroundMode = SetBkMode(dc, TRANSPARENT);
-    const int modeTextLeft = m_HexMode ? 134 : 132;
-    TextOutW(dc, modeTextLeft, 313, m_HexMode ? L"HEX" : L"RGB", 3);
-    SetDCPenColor(dc, modeColor);
-    MoveToEx(dc, 272, 317, nullptr);
-    LineTo(dc, 275, 314);
-    MoveToEx(dc, 275, 314, nullptr);
-    LineTo(dc, 278, 317);
-    MoveToEx(dc, 272, 324, nullptr);
-    LineTo(dc, 275, 327);
-    MoveToEx(dc, 275, 327, nullptr);
-    LineTo(dc, 278, 324);
-    SetBkMode(dc, oldBackgroundMode);
-    SetTextColor(dc, oldTextColor);
+
+    // ── Format toggle label (HEX / RGB) ─────────────────────────────
+    if (showFormat)
+    {
+        // Hover state darkens towards accent; idle shows a lighter tone.
+        const COLORREF hoverAccent = RGB(
+            static_cast<BYTE>(GetRValue(accentColor) * 0.7f),
+            static_cast<BYTE>(GetGValue(accentColor) * 0.7f),
+            static_cast<BYTE>(GetBValue(accentColor) * 0.7f));
+        const COLORREF modeColor = m_FormatHover ? hoverAccent : accentColor;
+        const COLORREF oldTextColor   = SetTextColor(dc, modeColor);
+        const int      oldBackMode    = SetBkMode(dc, TRANSPARENT);
+        const int modeTextLeft = m_HexMode ? 134 : 132;
+        TextOutW(dc, modeTextLeft, 313, m_HexMode ? L"HEX" : L"RGB", 3);
+        SetDCPenColor(dc, modeColor);
+        MoveToEx(dc, 272, 317, nullptr); LineTo(dc, 275, 314);
+        MoveToEx(dc, 275, 314, nullptr); LineTo(dc, 278, 317);
+        MoveToEx(dc, 272, 324, nullptr); LineTo(dc, 275, 327);
+        MoveToEx(dc, 275, 327, nullptr); LineTo(dc, 278, 324);
+        SetBkMode(dc, oldBackMode);
+        SetTextColor(dc, oldTextColor);
+    }
 
     BitBlt(targetDc, 0, 0, clientWidth, clientHeight, dc, 0, 0, SRCCOPY);
     if (oldFont)
@@ -825,6 +854,34 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
         SyncEdits();
         return 0;
     }
+    if (m == WM_CTLCOLOREDIT || m == WM_CTLCOLORSTATIC)
+    {
+        HDC editDc = reinterpret_cast<HDC>(w);
+        COLORREF bg = RGB(255, 255, 255);
+        COLORREF text = RGB(0, 0, 0);
+        if (m_Picker)
+        {
+            if (m_Picker->m_HasPopupInputBackground)
+                bg = m_Picker->m_PopupInputBackground;
+            else if (m_Picker->m_PopupBackground != RGB(255, 255, 255))
+                bg = m_Picker->m_PopupBackground;
+
+            if (m_Picker->m_HasPopupInputColor)
+                text = m_Picker->m_PopupInputColor;
+            else if (m_Picker->m_PopupAccentColor != RGB(0, 0, 0))
+                text = m_Picker->m_PopupAccentColor;
+        }
+        SetTextColor(editDc, text);
+        SetBkColor(editDc, bg);
+        if (!m_InputBgBrush || m_CachedInputBgColor != bg)
+        {
+            if (m_InputBgBrush)
+                DeleteObject(m_InputBgBrush);
+            m_InputBgBrush = CreateSolidBrush(bg);
+            m_CachedInputBgColor = bg;
+        }
+        return reinterpret_cast<LRESULT>(m_InputBgBrush);
+    }
     if (m == WM_ERASEBKGND)
     {
         return 1;
@@ -860,7 +917,9 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
         int x = LOWORD(l), y = HIWORD(l);
         if (x >= 32 && x <= 308 && y >= MODEY && y <= MODEBOTTOM)
         {
-            SetHexMode(!m_HexMode);
+            // Only toggle format if showFormatToggle is enabled
+            if (!m_Picker || m_Picker->m_ShowFormatToggle)
+                SetHexMode(!m_HexMode);
         }
         else if (x >= 0 && x < SV_WIDTH && y >= 0 && y < SV_HEIGHT)
         {
@@ -874,7 +933,7 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l)
             SetCapture(m_hWnd);
             SetHSV((x - 120) / 179.0f, m_S, m_V);
         }
-        else if (x < 45 && y >= 200 && y < 245)
+        else if (x < 45 && y >= 200 && y < 245 && (!m_Picker || m_Picker->m_ShowEyedropper))
         {
             m_eye = true;
             m_eyeAwaitingFirstRelease = true;

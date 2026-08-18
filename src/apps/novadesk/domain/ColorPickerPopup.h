@@ -53,6 +53,8 @@ private:
     HBITMAP m_MagnifierFrameBitmap = nullptr;
     HGDIOBJ m_MagnifierFrameOldBitmap = nullptr;
     HFONT m_Font = nullptr;
+    HBRUSH m_InputBgBrush = nullptr;
+    COLORREF m_CachedInputBgColor = CLR_INVALID;
     float m_H = 0, m_S = 0, m_V = 0;
     bool m_dragSV = false, m_dragHue = false, m_eye = false, m_eyeAwaitingFirstRelease = false, m_sync = false;
     float m_SaturationValueHue = -1.0f;
