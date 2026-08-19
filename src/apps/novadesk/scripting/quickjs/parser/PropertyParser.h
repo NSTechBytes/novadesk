@@ -46,6 +46,7 @@ namespace PropertyParser
     void ParseShapeOptions(JSContext *ctx, JSValueConst obj, ShapeOptions &options, const std::wstring &baseDir = L"");
     void ParseLayoutBoxOptions(JSContext *ctx, JSValueConst obj, LayoutBoxOptions &options, const std::wstring &baseDir = L"");
     void ParseAnimationOptions(JSContext *ctx, JSValueConst obj, AnimationOptions &options);
+    void ParseWindowAnimationOptions(JSContext *ctx, JSValueConst obj, WindowAnimationOptions &options);
     void ParseAreaGraphOptions(JSContext *ctx, JSValueConst obj, AreaGraphOptions &options, const std::wstring &baseDir = L"");
     void ParseInputBoxOptions(JSContext *ctx, JSValueConst obj, InputBoxOptions &options, const std::wstring &baseDir = L"");
     void ParseColorPickerOptions(JSContext *ctx, JSValueConst obj, ColorPickerOptions &options, const std::wstring &baseDir = L"");

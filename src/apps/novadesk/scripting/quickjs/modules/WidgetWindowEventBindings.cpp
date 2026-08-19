@@ -680,7 +680,135 @@ namespace novadesk::scripting::quickjs
             return JS_DupValue(ctx, thisVal);
         }
 
+        static Widget::WindowAnimationTarget BuildWindowAnimationTarget(const PropertyParser::WindowAnimationOptions &options, bool from)
+        {
+            Widget::WindowAnimationTarget target{};
+            if (from)
+            {
+                target.hasX = options.fromHasX;
+                target.x = options.fromX;
+                target.hasY = options.fromHasY;
+                target.y = options.fromY;
+                target.hasWidth = options.fromHasWidth;
+                target.width = options.fromWidth;
+                target.hasHeight = options.fromHasHeight;
+                target.height = options.fromHeight;
+                target.hasOpacity = options.fromHasOpacity;
+                target.opacity = options.fromOpacity;
+                target.hasBackgroundColor = options.fromHasBackgroundColor;
+                target.bgColorR = options.fromBgColorR;
+                target.bgColorG = options.fromBgColorG;
+                target.bgColorB = options.fromBgColorB;
+                target.bgAlpha = options.fromBgAlpha;
+            }
+            else
+            {
+                target.hasX = options.hasX;
+                target.x = options.x;
+                target.hasY = options.hasY;
+                target.y = options.y;
+                target.hasWidth = options.hasWidth;
+                target.width = options.width;
+                target.hasHeight = options.hasHeight;
+                target.height = options.height;
+                target.hasOpacity = options.hasOpacity;
+                target.opacity = options.opacity;
+                target.hasBackgroundColor = options.hasBackgroundColor;
+                target.bgColorR = options.bgColorR;
+                target.bgColorG = options.bgColorG;
+                target.bgColorB = options.bgColorB;
+                target.bgAlpha = options.bgAlpha;
+            }
+            return target;
+        }
+
+        static std::vector<Widget::WindowAnimationKeyframe> BuildWindowKeyframes(const PropertyParser::WindowAnimationOptions &options)
+        {
+            std::vector<Widget::WindowAnimationKeyframe> keyframes;
+            keyframes.reserve(options.keyframes.size());
+            for (const auto &kf : options.keyframes)
+            {
+                Widget::WindowAnimationKeyframe item{};
+                item.offset = kf.offset;
+                item.easing = kf.easing;
+                item.values.hasX = kf.hasX;
+                item.values.x = kf.x;
+                item.values.hasY = kf.hasY;
+                item.values.y = kf.y;
+                item.values.hasWidth = kf.hasWidth;
+                item.values.width = kf.width;
+                item.values.hasHeight = kf.hasHeight;
+                item.values.height = kf.height;
+                item.values.hasOpacity = kf.hasOpacity;
+                item.values.opacity = kf.opacity;
+                item.values.hasBackgroundColor = kf.hasBackgroundColor;
+                item.values.bgColorR = kf.bgColorR;
+                item.values.bgColorG = kf.bgColorG;
+                item.values.bgColorB = kf.bgColorB;
+                item.values.bgAlpha = kf.bgAlpha;
+                keyframes.push_back(std::move(item));
+            }
+            return keyframes;
+        }
+
+        JSValue JsWidgetWindowAnimate(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_UNDEFINED;
+            if (argc < 1 || !JS_IsObject(argv[0]))
+                return ThrowTypeError(ctx, "animate", "expected options object");
+
+            PropertyParser::WindowAnimationOptions options;
+            PropertyParser::ParseWindowAnimationOptions(ctx, argv[0], options);
+
+            if (!options.HasAnyToProps())
+                return ThrowTypeError(ctx, "animate", "to or keyframes must include at least one supported property");
+
+            if (options.iterationCountInvalid)
+                return ThrowTypeError(ctx, "animate", "iterationCount must be at least 1 or 'infinite'");
+
+            if (options.keyframesInvalid)
+            {
+                const std::string msg = Utils::ToString(options.keyframesError.empty() ? L"invalid keyframes" : options.keyframesError);
+                return ThrowTypeError(ctx, "animate", msg.c_str());
+            }
+
+            if (options.tweenInvalid)
+            {
+                const std::string msg = Utils::ToString(options.tweenError.empty() ? L"invalid from/to" : options.tweenError);
+                return ThrowTypeError(ctx, "animate", msg.c_str());
+            }
+
+            int iterationCount = options.iterationCount;
+            if (options.iterationInfinite)
+                iterationCount = -1;
+
+            if (options.hasKeyframes)
+            {
+                const std::vector<Widget::WindowAnimationKeyframe> keyframes = BuildWindowKeyframes(options);
+                widget->StartWindowKeyframeAnimation(keyframes, options.duration, options.easing, iterationCount);
+                return JS_DupValue(ctx, thisVal);
+            }
+
+            const Widget::WindowAnimationTarget to = BuildWindowAnimationTarget(options, false);
+            const Widget::WindowAnimationTarget from = BuildWindowAnimationTarget(options, true);
+            widget->StartWindowAnimation(to, from, options.duration, options.easing, iterationCount);
+            return JS_DupValue(ctx, thisVal);
+        }
+
+        JSValue JsWidgetWindowStopAnimation(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_UNDEFINED;
+            widget->StopWindowAnimations();
+            return JS_DupValue(ctx, thisVal);
+        }
+
         const JSCFunctionListEntry kWidgetWindowEventFuncs[] = {
+            JS_CFUNC_DEF("animate", 1, JsWidgetWindowAnimate),
+            JS_CFUNC_DEF("stopAnimation", 0, JsWidgetWindowStopAnimation),
             JS_CFUNC_DEF("setProperties", 1, JsWidgetWindowSetProperties),
             JS_CFUNC_DEF("getProperties", 0, JsWidgetWindowGetProperties),
             JS_CFUNC_DEF("close", 0, JsWidgetWindowClose),

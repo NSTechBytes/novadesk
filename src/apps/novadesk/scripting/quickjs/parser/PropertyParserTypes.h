@@ -596,6 +596,97 @@ namespace PropertyParser
             return !hasKeyframes;
         }
     };
+
+    struct WindowAnimationKeyframeOptions
+    {
+        float offset = 0.0f;
+        bool hasOffset = false;
+        std::wstring easing;
+        bool hasX = false;
+        bool hasY = false;
+        bool hasWidth = false;
+        bool hasHeight = false;
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        bool hasOpacity = false;
+        float opacity = 1.0f; // 0.0 to 1.0
+        bool hasBackgroundColor = false;
+        float bgColorR = 0.0f;
+        float bgColorG = 0.0f;
+        float bgColorB = 0.0f;
+        float bgAlpha = 255.0f;
+
+        bool HasAnyProps() const
+        {
+            return hasX || hasY || hasWidth || hasHeight || hasOpacity || hasBackgroundColor;
+        }
+    };
+
+    struct WindowAnimationOptions
+    {
+        int duration = 250;
+        std::wstring easing = L"linear";
+        int iterationCount = 1;
+        bool iterationInfinite = false;
+        bool hasIterationCount = false;
+        bool iterationCountInvalid = false;
+        bool hasKeyframes = false;
+        bool keyframesInvalid = false;
+        std::wstring keyframesError;
+        bool tweenInvalid = false;
+        std::wstring tweenError;
+        std::vector<WindowAnimationKeyframeOptions> keyframes;
+
+        // 'to' properties
+        bool hasX = false;
+        bool hasY = false;
+        bool hasWidth = false;
+        bool hasHeight = false;
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        bool hasOpacity = false;
+        float opacity = 1.0f;
+        bool hasBackgroundColor = false;
+        float bgColorR = 0.0f;
+        float bgColorG = 0.0f;
+        float bgColorB = 0.0f;
+        float bgAlpha = 255.0f;
+
+        // 'from' properties
+        bool fromHasX = false;
+        bool fromHasY = false;
+        bool fromHasWidth = false;
+        bool fromHasHeight = false;
+        float fromX = 0.0f;
+        float fromY = 0.0f;
+        float fromWidth = 0.0f;
+        float fromHeight = 0.0f;
+        bool fromHasOpacity = false;
+        float fromOpacity = 1.0f;
+        bool fromHasBackgroundColor = false;
+        float fromBgColorR = 0.0f;
+        float fromBgColorG = 0.0f;
+        float fromBgColorB = 0.0f;
+        float fromBgAlpha = 255.0f;
+
+        bool HasAnyToProps() const
+        {
+            if (hasKeyframes)
+            {
+                for (const WindowAnimationKeyframeOptions &kf : keyframes)
+                {
+                    if (kf.HasAnyProps())
+                        return true;
+                }
+                return false;
+            }
+            return hasX || hasY || hasWidth || hasHeight || hasOpacity || hasBackgroundColor;
+        }
+    };
 } // namespace PropertyParser
 
 namespace novadesk::scripting::quickjs::parser

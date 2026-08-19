@@ -186,6 +186,37 @@ public:
         AnimationTarget values;
     };
 
+    struct WindowAnimationTarget
+    {
+        bool hasX = false;
+        bool hasY = false;
+        bool hasWidth = false;
+        bool hasHeight = false;
+        bool hasOpacity = false;
+        bool hasBackgroundColor = false;
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        float opacity = 1.0f;
+        float bgColorR = 0.0f;
+        float bgColorG = 0.0f;
+        float bgColorB = 0.0f;
+        float bgAlpha = 255.0f;
+
+        bool HasAnyProps() const
+        {
+            return hasX || hasY || hasWidth || hasHeight || hasOpacity || hasBackgroundColor;
+        }
+    };
+
+    struct WindowAnimationKeyframe
+    {
+        float offset = 0.0f;
+        std::wstring easing;
+        WindowAnimationTarget values;
+    };
+
     Widget(const WidgetOptions& options);
 
     ~Widget();
@@ -282,6 +313,9 @@ public:
     void ReflowLayout(const std::wstring &id);
     void StartElementAnimation(const std::wstring &id, const AnimationTarget &to, const AnimationTarget &from, int durationMs, const std::wstring &easing, int iterationCount);
     void StartElementKeyframeAnimation(const std::wstring &id, const std::vector<AnimationKeyframe> &keyframes, int durationMs, const std::wstring &easing, int iterationCount);
+    void StartWindowAnimation(const WindowAnimationTarget &to, const WindowAnimationTarget &from, int durationMs, const std::wstring &easing, int iterationCount);
+    void StartWindowKeyframeAnimation(const std::vector<WindowAnimationKeyframe> &keyframes, int durationMs, const std::wstring &easing, int iterationCount);
+    void StopWindowAnimations();
     static Widget* GetWidgetFromHWND(HWND hWnd);
     void SetElementFontPath(const std::wstring& elementId, const std::wstring& fontDir);
 
@@ -342,7 +376,23 @@ private:
         AnimationTarget to;
     };
 
+    struct WindowAnimation
+    {
+        std::wstring easing = L"linear";
+        DWORD startTick = 0;
+        int durationMs = 250;
+        int iterationCount = 1;
+        int completedIterations = 0;
+        bool useKeyframes = false;
+        std::vector<float> keyframeOffsets;
+        std::vector<std::wstring> keyframeEasings;
+        std::vector<WindowAnimationTarget> resolvedStops;
+        WindowAnimationTarget from;
+        WindowAnimationTarget to;
+    };
+
     std::vector<ElementAnimation> m_Animations;
+    std::vector<WindowAnimation> m_WindowAnimations;
     Element* m_MouseOverElement = nullptr;
     Element* m_TooltipElement = nullptr;
     int m_IsBatchUpdating = 0;

@@ -2798,7 +2798,6 @@ namespace novadesk::scripting::quickjs
             InitWidgetWindowEventBindings(g_widgetWindowClassId);
 
             JSValue proto = JS_NewObject(ctx);
-            JS_SetPropertyFunctionList(ctx, proto, kWidgetProtoFuncs, sizeof(kWidgetProtoFuncs) / sizeof(kWidgetProtoFuncs[0]));
             AttachWidgetWindowEventMethods(ctx, proto);
             JS_SetClassProto(ctx, g_widgetWindowClassId, proto);
             g_widgetWindowClassRuntime = rt;

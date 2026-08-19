@@ -118,6 +118,16 @@ Widget::Widget(const WidgetOptions &options)
 */
 Widget::~Widget()
 {
+    if (m_hWnd)
+    {
+        KillTimer(m_hWnd, WidgetAnimationHelper::kTimerId);
+        KillTimer(m_hWnd, TIMER_TOPMOST);
+        KillTimer(m_hWnd, TIMER_CARET);
+        KillTimer(m_hWnd, TIMER_CTRL_OVERRIDE);
+        SetWindowLongPtr(m_hWnd, GWLP_USERDATA, 0);
+    }
+    WidgetAnimationHelper::ClearAllAnimations(*this);
+
     if (!m_SkipCloseEventOnDestroy)
     {
         JSEngine::TriggerWidgetEvent(this, "close");
@@ -128,7 +138,9 @@ Widget::~Widget()
 
     if (m_hWnd)
     {
-        DestroyWindow(m_hWnd);
+        HWND hWnd = m_hWnd;
+        m_hWnd = nullptr;
+        DestroyWindow(hWnd);
     }
     JSEngine::TriggerWidgetEvent(this, "closed");
 
@@ -2183,6 +2195,21 @@ void Widget::StartElementAnimation(const std::wstring &id, const AnimationTarget
 void Widget::StartElementKeyframeAnimation(const std::wstring &id, const std::vector<AnimationKeyframe> &keyframes, int durationMs, const std::wstring &easing, int iterationCount)
 {
     WidgetAnimationHelper::StartElementKeyframeAnimation(*this, id, keyframes, durationMs, easing, iterationCount);
+}
+
+void Widget::StartWindowAnimation(const WindowAnimationTarget &to, const WindowAnimationTarget &from, int durationMs, const std::wstring &easing, int iterationCount)
+{
+    WidgetAnimationHelper::StartWindowAnimation(*this, to, from, durationMs, easing, iterationCount);
+}
+
+void Widget::StartWindowKeyframeAnimation(const std::vector<WindowAnimationKeyframe> &keyframes, int durationMs, const std::wstring &easing, int iterationCount)
+{
+    WidgetAnimationHelper::StartWindowKeyframeAnimation(*this, keyframes, durationMs, easing, iterationCount);
+}
+
+void Widget::StopWindowAnimations()
+{
+    WidgetAnimationHelper::StopWindowAnimations(*this);
 }
 
 bool Widget::IsLayoutContainer(const std::wstring &id) const
