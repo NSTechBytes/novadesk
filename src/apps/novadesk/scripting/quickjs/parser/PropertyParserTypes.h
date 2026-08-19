@@ -497,10 +497,16 @@ namespace PropertyParser
         float fontColorB = 0.0f;
         float fontAlpha = 255.0f;
 
+        bool hasXExpr = false;
+        std::wstring xExpr;
+        bool hasYExpr = false;
+        std::wstring yExpr;
+
         bool HasAnyProps() const
         {
             return hasX || hasY || hasWidth || hasHeight || hasRotate ||
-                   hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor;
+                   hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor ||
+                   hasXExpr || hasYExpr;
         }
 
         bool HasTextProps() const
@@ -534,6 +540,10 @@ namespace PropertyParser
         float width = 0.0f;
         float height = 0.0f;
         float rotate = 0.0f;
+        bool hasXExpr = false;
+        std::wstring xExpr;
+        bool hasYExpr = false;
+        std::wstring yExpr;
         bool fromHasX = false;
         bool fromHasY = false;
         bool fromHasWidth = false;
@@ -544,6 +554,10 @@ namespace PropertyParser
         float fromWidth = 0.0f;
         float fromHeight = 0.0f;
         float fromRotate = 0.0f;
+        bool fromHasXExpr = false;
+        std::wstring fromXExpr;
+        bool fromHasYExpr = false;
+        std::wstring fromYExpr;
         bool hasFontSize = false;
         bool hasFontWeight = false;
         bool hasLetterSpacing = false;
@@ -578,7 +592,7 @@ namespace PropertyParser
                 }
                 return false;
             }
-            return hasX || hasY || hasWidth || hasHeight || hasRotate;
+            return hasX || hasY || hasWidth || hasHeight || hasRotate || hasXExpr || hasYExpr;
         }
 
         bool HasAnyTextToProps() const

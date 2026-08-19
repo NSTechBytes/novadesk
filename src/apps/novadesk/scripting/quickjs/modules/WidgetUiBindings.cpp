@@ -8,6 +8,7 @@
 #include "WidgetUiBindings.h"
 
 #include <algorithm>
+#include <cwctype>
 #include <string>
 #include <vector>
 
@@ -636,7 +637,101 @@ namespace novadesk::scripting::quickjs
             return CreateTypedElementObject(ctx, argv[0], typeName);
         }
 
-        Widget::AnimationTarget BuildAnimationTargetFromOptions(const PropertyParser::AnimationOptions &options, bool useFrom)
+        // ── Widget-Relative Position Resolver ──────────────────────────────────
+        // Keywords resolve against the widget canvas (0,0 = top-left of widget).
+        // widgetW/widgetH = widget dimensions; elemW/elemH = element dimensions.
+
+        static std::wstring ParseElemKeywordAndOffset(const std::wstring &expr, float &outOffset)
+        {
+            outOffset = 0.0f;
+            auto ltrim = [](std::wstring &s) { s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](wchar_t c) { return !::iswspace(c); })); };
+            auto rtrim = [](std::wstring &s) { s.erase(std::find_if(s.rbegin(), s.rend(), [](wchar_t c) { return !::iswspace(c); }).base(), s.end()); };
+            std::wstring lower = expr;
+            ltrim(lower); rtrim(lower);
+            std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
+
+            size_t plusPos  = lower.rfind(L'+');
+            size_t minusPos = lower.rfind(L'-');
+            size_t opPos = std::wstring::npos;
+            bool negate = false;
+            if (plusPos != std::wstring::npos && (minusPos == std::wstring::npos || plusPos > minusPos))
+                opPos = plusPos;
+            else if (minusPos != std::wstring::npos && minusPos > 0)
+            { opPos = minusPos; negate = true; }
+
+            std::wstring keyword = lower;
+            if (opPos != std::wstring::npos && opPos > 0)
+            {
+                std::wstring numPart = lower.substr(opPos + 1);
+                ltrim(numPart); rtrim(numPart);
+                bool isNum = !numPart.empty() && std::all_of(numPart.begin(), numPart.end(), [](wchar_t c) { return ::iswdigit(c) || c == L'.' || c == L'-'; });
+                if (isNum)
+                {
+                    try { outOffset = std::stof(numPart) * (negate ? -1.0f : 1.0f); } catch (...) {}
+                    keyword = lower.substr(0, opPos);
+                    rtrim(keyword);
+                }
+            }
+            return keyword;
+        }
+
+        static float ResolveElemXKeyword(const std::wstring &kw, int widgetW, int elemW, float offset)
+        {
+            if (kw == L"left")             return offset;
+            if (kw == L"right")            return static_cast<float>(widgetW - elemW) + offset;
+            if (kw == L"center" || kw == L"middle")
+                return static_cast<float>((widgetW - elemW) / 2) + offset;
+            if (kw == L"offscreen-left")   return static_cast<float>(-elemW) + offset;
+            if (kw == L"offscreen-right")  return static_cast<float>(widgetW) + offset;
+            return offset;
+        }
+
+        static float ResolveElemYKeyword(const std::wstring &kw, int widgetH, int elemH, float offset)
+        {
+            if (kw == L"top")              return offset;
+            if (kw == L"bottom")           return static_cast<float>(widgetH - elemH) + offset;
+            if (kw == L"center" || kw == L"middle")
+                return static_cast<float>((widgetH - elemH) / 2) + offset;
+            if (kw == L"offscreen-top")    return static_cast<float>(-elemH) + offset;
+            if (kw == L"offscreen-bottom") return static_cast<float>(widgetH) + offset;
+            return offset;
+        }
+
+        static void ResolveElemTargetExpressions(
+            Widget::AnimationTarget &target,
+            const Widget &widget,
+            Element *element,
+            bool hasXExpr, const std::wstring &xExpr,
+            bool hasYExpr, const std::wstring &yExpr)
+        {
+            const int wW = widget.GetOptions().width;
+            const int wH = widget.GetOptions().height;
+            const int eW = element ? element->GetWidth()  : 0;
+            const int eH = element ? element->GetHeight() : 0;
+
+            if (hasXExpr && !xExpr.empty())
+            {
+                float offset = 0.0f;
+                const std::wstring kw = ParseElemKeywordAndOffset(xExpr, offset);
+                target.hasX = true;
+                target.x = ResolveElemXKeyword(kw, wW, eW, offset);
+            }
+            if (hasYExpr && !yExpr.empty())
+            {
+                float offset = 0.0f;
+                const std::wstring kw = ParseElemKeywordAndOffset(yExpr, offset);
+                target.hasY = true;
+                target.y = ResolveElemYKeyword(kw, wH, eH, offset);
+            }
+        }
+
+        // ── Animation Target Builders ───────────────────────────────────────────
+
+        Widget::AnimationTarget BuildAnimationTargetFromOptions(
+            const PropertyParser::AnimationOptions &options,
+            bool useFrom,
+            const Widget *widget,
+            Element *element)
         {
             Widget::AnimationTarget target{};
             if (useFrom)
@@ -665,10 +760,21 @@ namespace novadesk::scripting::quickjs
                 target.height = options.height;
                 target.rotate = options.rotate;
             }
+
+            if (widget && element)
+            {
+                if (useFrom)
+                    ResolveElemTargetExpressions(target, *widget, element, options.fromHasXExpr, options.fromXExpr, options.fromHasYExpr, options.fromYExpr);
+                else
+                    ResolveElemTargetExpressions(target, *widget, element, options.hasXExpr, options.xExpr, options.hasYExpr, options.yExpr);
+            }
             return target;
         }
 
-        Widget::AnimationTarget BuildAnimationTargetFromKeyframe(const PropertyParser::AnimationKeyframeOptions &kf)
+        Widget::AnimationTarget BuildAnimationTargetFromKeyframe(
+            const PropertyParser::AnimationKeyframeOptions &kf,
+            const Widget *widget,
+            Element *element)
         {
             Widget::AnimationTarget target{};
             target.hasX = kf.hasX;
@@ -692,10 +798,18 @@ namespace novadesk::scripting::quickjs
             target.fontColorG = kf.fontColorG;
             target.fontColorB = kf.fontColorB;
             target.fontAlpha = kf.fontAlpha;
+
+            if (widget && element)
+            {
+                ResolveElemTargetExpressions(target, *widget, element, kf.hasXExpr, kf.xExpr, kf.hasYExpr, kf.yExpr);
+            }
             return target;
         }
 
-        std::vector<Widget::AnimationKeyframe> BuildKeyframesFromOptions(const PropertyParser::AnimationOptions &options)
+        std::vector<Widget::AnimationKeyframe> BuildKeyframesFromOptions(
+            const PropertyParser::AnimationOptions &options,
+            const Widget *widget,
+            Element *element)
         {
             std::vector<Widget::AnimationKeyframe> keyframes;
             keyframes.reserve(options.keyframes.size());
@@ -704,7 +818,7 @@ namespace novadesk::scripting::quickjs
                 Widget::AnimationKeyframe entry{};
                 entry.offset = kf.offset;
                 entry.easing = kf.easing;
-                entry.values = BuildAnimationTargetFromKeyframe(kf);
+                entry.values = BuildAnimationTargetFromKeyframe(kf, widget, element);
                 keyframes.push_back(entry);
             }
             return keyframes;
@@ -754,13 +868,13 @@ namespace novadesk::scripting::quickjs
 
             if (options.hasKeyframes)
             {
-                const std::vector<Widget::AnimationKeyframe> keyframes = BuildKeyframesFromOptions(options);
+                const std::vector<Widget::AnimationKeyframe> keyframes = BuildKeyframesFromOptions(options, widget, element);
                 widget->StartElementKeyframeAnimation(options.id, keyframes, options.duration, options.easing, iterationCount);
                 return JS_UNDEFINED;
             }
 
-            const Widget::AnimationTarget to = BuildAnimationTargetFromOptions(options, false);
-            const Widget::AnimationTarget from = BuildAnimationTargetFromOptions(options, true);
+            const Widget::AnimationTarget to = BuildAnimationTargetFromOptions(options, false, widget, element);
+            const Widget::AnimationTarget from = BuildAnimationTargetFromOptions(options, true, widget, element);
             widget->StartElementAnimation(options.id, to, from, options.duration, options.easing, iterationCount);
             return JS_UNDEFINED;
         }

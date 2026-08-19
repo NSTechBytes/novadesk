@@ -43,11 +43,47 @@ namespace PropertyParser
         bool &hasHeight,
         float &height,
         bool &hasRotate,
-        float &rotate)
+        float &rotate,
+        bool &hasXExpr,
+        std::wstring &xExpr,
+        bool &hasYExpr,
+        std::wstring &yExpr)
     {
-        hasX = GetFloatProp(ctx, obj, "x", x);
-        hasY = GetFloatProp(ctx, obj, "y", y);
-        hasWidth = GetFloatProp(ctx, obj, "width", width);
+        // x — numeric or string keyword
+        JSValue xVal = JS_GetPropertyStr(ctx, obj, "x");
+        if (!JS_IsException(xVal) && !JS_IsUndefined(xVal) && !JS_IsNull(xVal))
+        {
+            if (JS_IsString(xVal))
+            {
+                const char *str = JS_ToCString(ctx, xVal);
+                if (str) { xExpr = Utils::ToWString(str); hasXExpr = !xExpr.empty(); JS_FreeCString(ctx, str); }
+            }
+            else
+            {
+                double d = 0;
+                if (JS_ToFloat64(ctx, &d, xVal) >= 0) { x = static_cast<float>(d); hasX = true; }
+            }
+        }
+        JS_FreeValue(ctx, xVal);
+
+        // y — numeric or string keyword
+        JSValue yVal = JS_GetPropertyStr(ctx, obj, "y");
+        if (!JS_IsException(yVal) && !JS_IsUndefined(yVal) && !JS_IsNull(yVal))
+        {
+            if (JS_IsString(yVal))
+            {
+                const char *str = JS_ToCString(ctx, yVal);
+                if (str) { yExpr = Utils::ToWString(str); hasYExpr = !yExpr.empty(); JS_FreeCString(ctx, str); }
+            }
+            else
+            {
+                double d = 0;
+                if (JS_ToFloat64(ctx, &d, yVal) >= 0) { y = static_cast<float>(d); hasY = true; }
+            }
+        }
+        JS_FreeValue(ctx, yVal);
+
+        hasWidth  = GetFloatProp(ctx, obj, "width",  width);
         hasHeight = GetFloatProp(ctx, obj, "height", height);
         hasRotate = GetFloatProp(ctx, obj, "rotate", rotate);
     }
@@ -75,10 +111,58 @@ namespace PropertyParser
         float &fontColorR,
         float &fontColorG,
         float &fontColorB,
-        float &fontAlpha)
+        float &fontAlpha,
+        bool &hasXExpr,
+        std::wstring &xExpr,
+        bool &hasYExpr,
+        std::wstring &yExpr)
     {
-        hasX = GetFloatProp(ctx, obj, "x", x);
-        hasY = GetFloatProp(ctx, obj, "y", y);
+        // Parse x — supports numeric or string keyword
+        JSValue xVal = JS_GetPropertyStr(ctx, obj, "x");
+        if (!JS_IsException(xVal) && !JS_IsUndefined(xVal) && !JS_IsNull(xVal))
+        {
+            if (JS_IsString(xVal))
+            {
+                const char *str = JS_ToCString(ctx, xVal);
+                if (str)
+                {
+                    xExpr = Utils::ToWString(str);
+                    hasXExpr = !xExpr.empty();
+                    JS_FreeCString(ctx, str);
+                }
+            }
+            else
+            {
+                double d = 0;
+                if (JS_ToFloat64(ctx, &d, xVal) >= 0)
+                { x = static_cast<float>(d); hasX = true; }
+            }
+        }
+        JS_FreeValue(ctx, xVal);
+
+        // Parse y — supports numeric or string keyword
+        JSValue yVal = JS_GetPropertyStr(ctx, obj, "y");
+        if (!JS_IsException(yVal) && !JS_IsUndefined(yVal) && !JS_IsNull(yVal))
+        {
+            if (JS_IsString(yVal))
+            {
+                const char *str = JS_ToCString(ctx, yVal);
+                if (str)
+                {
+                    yExpr = Utils::ToWString(str);
+                    hasYExpr = !yExpr.empty();
+                    JS_FreeCString(ctx, str);
+                }
+            }
+            else
+            {
+                double d = 0;
+                if (JS_ToFloat64(ctx, &d, yVal) >= 0)
+                { y = static_cast<float>(d); hasY = true; }
+            }
+        }
+        JS_FreeValue(ctx, yVal);
+
         hasWidth = GetFloatProp(ctx, obj, "width", width);
         hasHeight = GetFloatProp(ctx, obj, "height", height);
         hasRotate = GetFloatProp(ctx, obj, "rotate", rotate);
@@ -184,7 +268,11 @@ namespace PropertyParser
             kf.fontColorR,
             kf.fontColorG,
             kf.fontColorB,
-            kf.fontAlpha);
+            kf.fontAlpha,
+            kf.hasXExpr,
+            kf.xExpr,
+            kf.hasYExpr,
+            kf.yExpr);
 
         std::wstring easing = GetStringProp(ctx, obj, "easing");
         if (!easing.empty())
@@ -432,7 +520,11 @@ namespace PropertyParser
                     options.hasHeight,
                     options.height,
                     options.hasRotate,
-                    options.rotate);
+                    options.rotate,
+                    options.hasXExpr,
+                    options.xExpr,
+                    options.hasYExpr,
+                    options.yExpr);
             }
         }
         JS_FreeValue(ctx, toVal);
@@ -460,7 +552,11 @@ namespace PropertyParser
                     options.fromHasHeight,
                     options.fromHeight,
                     options.fromHasRotate,
-                    options.fromRotate);
+                    options.fromRotate,
+                    options.fromHasXExpr,
+                    options.fromXExpr,
+                    options.fromHasYExpr,
+                    options.fromYExpr);
             }
         }
         JS_FreeValue(ctx, fromVal);
