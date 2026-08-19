@@ -618,9 +618,18 @@ namespace PropertyParser
         float bgColorB = 0.0f;
         float bgAlpha = 255.0f;
 
+        bool hasXExpr = false;
+        std::wstring xExpr;
+        bool hasYExpr = false;
+        std::wstring yExpr;
+        bool hasPosition = false;
+        std::wstring position;
+        float offsetX = 0.0f;
+        float offsetY = 0.0f;
+
         bool HasAnyProps() const
         {
-            return hasX || hasY || hasWidth || hasHeight || hasOpacity || hasBackgroundColor;
+            return hasX || hasY || hasWidth || hasHeight || hasOpacity || hasBackgroundColor || hasXExpr || hasYExpr || hasPosition;
         }
     };
 
@@ -656,6 +665,15 @@ namespace PropertyParser
         float bgColorB = 0.0f;
         float bgAlpha = 255.0f;
 
+        bool hasXExpr = false;
+        std::wstring xExpr;
+        bool hasYExpr = false;
+        std::wstring yExpr;
+        bool hasPosition = false;
+        std::wstring position;
+        float offsetX = 0.0f;
+        float offsetY = 0.0f;
+
         // 'from' properties
         bool fromHasX = false;
         bool fromHasY = false;
@@ -673,6 +691,15 @@ namespace PropertyParser
         float fromBgColorB = 0.0f;
         float fromBgAlpha = 255.0f;
 
+        bool fromHasXExpr = false;
+        std::wstring fromXExpr;
+        bool fromHasYExpr = false;
+        std::wstring fromYExpr;
+        bool fromHasPosition = false;
+        std::wstring fromPosition;
+        float fromOffsetX = 0.0f;
+        float fromOffsetY = 0.0f;
+
         bool HasAnyToProps() const
         {
             if (hasKeyframes)
@@ -684,7 +711,7 @@ namespace PropertyParser
                 }
                 return false;
             }
-            return hasX || hasY || hasWidth || hasHeight || hasOpacity || hasBackgroundColor;
+            return hasX || hasY || hasWidth || hasHeight || hasOpacity || hasBackgroundColor || hasXExpr || hasYExpr || hasPosition;
         }
     };
 } // namespace PropertyParser

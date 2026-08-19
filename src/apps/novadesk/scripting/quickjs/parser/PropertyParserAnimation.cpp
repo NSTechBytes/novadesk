@@ -474,10 +474,64 @@ namespace PropertyParser
         bool &hasWidth, float &width,
         bool &hasHeight, float &height,
         bool &hasOpacity, float &opacity,
-        bool &hasBgColor, float &bgR, float &bgG, float &bgB, float &bgA)
+        bool &hasBgColor, float &bgR, float &bgG, float &bgB, float &bgA,
+        bool &hasXExpr, std::wstring &xExpr,
+        bool &hasYExpr, std::wstring &yExpr,
+        bool &hasPosition, std::wstring &position,
+        float &offsetX, float &offsetY)
     {
-        hasX = GetFloatProp(ctx, obj, "x", x);
-        hasY = GetFloatProp(ctx, obj, "y", y);
+        // Parse x
+        JSValue xVal = JS_GetPropertyStr(ctx, obj, "x");
+        if (!JS_IsException(xVal) && !JS_IsUndefined(xVal) && !JS_IsNull(xVal))
+        {
+            if (JS_IsString(xVal))
+            {
+                const char *str = JS_ToCString(ctx, xVal);
+                if (str)
+                {
+                    xExpr = Utils::ToWString(str);
+                    hasXExpr = !xExpr.empty();
+                    JS_FreeCString(ctx, str);
+                }
+            }
+            else
+            {
+                double d = 0;
+                if (JS_ToFloat64(ctx, &d, xVal) >= 0)
+                {
+                    x = static_cast<float>(d);
+                    hasX = true;
+                }
+            }
+        }
+        JS_FreeValue(ctx, xVal);
+
+        // Parse y
+        JSValue yVal = JS_GetPropertyStr(ctx, obj, "y");
+        if (!JS_IsException(yVal) && !JS_IsUndefined(yVal) && !JS_IsNull(yVal))
+        {
+            if (JS_IsString(yVal))
+            {
+                const char *str = JS_ToCString(ctx, yVal);
+                if (str)
+                {
+                    yExpr = Utils::ToWString(str);
+                    hasYExpr = !yExpr.empty();
+                    JS_FreeCString(ctx, str);
+                }
+            }
+            else
+            {
+                double d = 0;
+                if (JS_ToFloat64(ctx, &d, yVal) >= 0)
+                {
+                    y = static_cast<float>(d);
+                    hasY = true;
+                }
+            }
+        }
+        JS_FreeValue(ctx, yVal);
+
         hasWidth = GetFloatProp(ctx, obj, "width", width);
         if (!hasWidth) hasWidth = GetFloatProp(ctx, obj, "w", width);
         hasHeight = GetFloatProp(ctx, obj, "height", height);
@@ -509,6 +563,14 @@ namespace PropertyParser
                 bgA = static_cast<float>(a);
             }
         }
+
+        position = GetStringProp(ctx, obj, "position");
+        if (position.empty())
+            position = GetStringProp(ctx, obj, "align");
+        hasPosition = !position.empty();
+
+        GetFloatProp(ctx, obj, "offsetX", offsetX);
+        GetFloatProp(ctx, obj, "offsetY", offsetY);
     }
 
     static void ParseWindowAnimationKeyframeValues(JSContext *ctx, JSValueConst obj, WindowAnimationKeyframeOptions &kf)
@@ -530,7 +592,15 @@ namespace PropertyParser
             kf.bgColorR,
             kf.bgColorG,
             kf.bgColorB,
-            kf.bgAlpha);
+            kf.bgAlpha,
+            kf.hasXExpr,
+            kf.xExpr,
+            kf.hasYExpr,
+            kf.yExpr,
+            kf.hasPosition,
+            kf.position,
+            kf.offsetX,
+            kf.offsetY);
 
         std::wstring easing = GetStringProp(ctx, obj, "easing");
         if (!easing.empty())
@@ -774,7 +844,15 @@ namespace PropertyParser
                 options.bgColorR,
                 options.bgColorG,
                 options.bgColorB,
-                options.bgAlpha);
+                options.bgAlpha,
+                options.hasXExpr,
+                options.xExpr,
+                options.hasYExpr,
+                options.yExpr,
+                options.hasPosition,
+                options.position,
+                options.offsetX,
+                options.offsetY);
         }
         JS_FreeValue(ctx, toVal);
 
@@ -798,7 +876,15 @@ namespace PropertyParser
                 options.fromBgColorR,
                 options.fromBgColorG,
                 options.fromBgColorB,
-                options.fromBgAlpha);
+                options.fromBgAlpha,
+                options.fromHasXExpr,
+                options.fromXExpr,
+                options.fromHasYExpr,
+                options.fromYExpr,
+                options.fromHasPosition,
+                options.fromPosition,
+                options.fromOffsetX,
+                options.fromOffsetY);
         }
         JS_FreeValue(ctx, fromVal);
     }

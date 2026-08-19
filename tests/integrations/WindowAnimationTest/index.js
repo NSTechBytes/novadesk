@@ -126,11 +126,70 @@ setTimeout(() => {
   }
 }, 2600);
 
-// Step 8: Clean up & exit
+// Step 8: Screen anchor keyword tests
+setTimeout(() => {
+  console.log("=== Testing Screen Anchor Keywords ===");
+
+  // Slide to bottom-right corner with offset
+  win.animate({
+    duration: 500,
+    easing: "ease-in-out",
+    to: { position: "bottom-right", offsetX: -20, offsetY: -20 }
+  });
+  pass("position: bottom-right with offset accepted");
+}, 3000);
+
+setTimeout(() => {
+  // Animate from offscreen-bottom to bottom
+  win.animate({
+    duration: 400,
+    easing: "ease-out",
+    from: { y: "offscreen-bottom" },
+    to: { y: "bottom - 20" }
+  });
+  pass("y: offscreen-bottom -> bottom-20 accepted");
+}, 3700);
+
+setTimeout(() => {
+  // Animate to screen center
+  win.animate({
+    duration: 300,
+    easing: "ease",
+    to: { x: "center", y: "center" }
+  });
+  pass("x: center, y: center accepted");
+}, 4300);
+
+setTimeout(() => {
+  // Slide in from left offscreen to left edge
+  win.animate({
+    duration: 350,
+    easing: "ease-out",
+    from: { x: "offscreen-left" },
+    to: { x: "left + 20" }
+  });
+  pass("x: offscreen-left -> left+20 accepted");
+}, 4800);
+
+setTimeout(() => {
+  // Keyframe with screen anchors
+  win.animate({
+    duration: 800,
+    easing: "linear",
+    keyframes: [
+      { offset: 0.0, x: "left + 20", y: "top + 20" },
+      { offset: 0.5, x: "right - 20", y: "top + 20" },
+      { offset: 1.0, x: "right - 20", y: "bottom - 20" }
+    ]
+  });
+  pass("Keyframes with screen anchor keywords accepted");
+}, 5300);
+
+// Step 9: Clean up & exit
 setTimeout(() => {
   console.log("==================================================");
   console.log("=== All WindowAnimation Tests Completed ===");
   console.log("==================================================");
   win.destroy();
   app.exit();
-}, 3000);
+}, 6500);

@@ -8,6 +8,7 @@
 #include "WidgetWindowEventBindings.h"
 
 #include <algorithm>
+#include <cwctype>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -680,7 +681,178 @@ namespace novadesk::scripting::quickjs
             return JS_DupValue(ctx, thisVal);
         }
 
-        static Widget::WindowAnimationTarget BuildWindowAnimationTarget(const PropertyParser::WindowAnimationOptions &options, bool from)
+        // ── Screen Position Resolver ─────────────────────────────────────────
+
+        struct ScreenArea
+        {
+            int left = 0;
+            int top = 0;
+            int right = 0;
+            int bottom = 0;
+            int width() const { return right - left; }
+            int height() const { return bottom - top; }
+        };
+
+        static ScreenArea GetWorkAreaForWidget(HWND hWnd)
+        {
+            ScreenArea area{};
+            RECT wa{};
+            if (hWnd)
+            {
+                HMONITOR hMon = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+                if (hMon)
+                {
+                    MONITORINFO mi{};
+                    mi.cbSize = sizeof(mi);
+                    if (GetMonitorInfo(hMon, &mi))
+                    {
+                        area.left   = mi.rcWork.left;
+                        area.top    = mi.rcWork.top;
+                        area.right  = mi.rcWork.right;
+                        area.bottom = mi.rcWork.bottom;
+                        return area;
+                    }
+                }
+            }
+            // Fallback to primary work area
+            SystemParametersInfo(SPI_GETWORKAREA, 0, &wa, 0);
+            area.left   = wa.left;
+            area.top    = wa.top;
+            area.right  = wa.right;
+            area.bottom = wa.bottom;
+            return area;
+        }
+
+        // Parse optional trailing offset: "keyword + N" or "keyword - N"
+        // Returns the base keyword (lowercased, trimmed) and the numeric offset.
+        static std::wstring ParseKeywordAndOffset(const std::wstring &expr, float &outOffset)
+        {
+            outOffset = 0.0f;
+            std::wstring trimmed = expr;
+            // trim leading/trailing spaces
+            auto ltrim = [](std::wstring &s) { s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](wchar_t c) { return !::iswspace(c); })); };
+            auto rtrim = [](std::wstring &s) { s.erase(std::find_if(s.rbegin(), s.rend(), [](wchar_t c) { return !::iswspace(c); }).base(), s.end()); };
+            ltrim(trimmed);
+            rtrim(trimmed);
+
+            // Convert to lowercase
+            std::wstring lower = trimmed;
+            std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
+
+            // Look for last '+' or '-' that isn't part of the keyword
+            // Scan from right for a trailing numeric offset
+            size_t plusPos  = lower.rfind(L'+');
+            size_t minusPos = lower.rfind(L'-');
+            size_t opPos = std::wstring::npos;
+            bool negate = false;
+
+            if (plusPos != std::wstring::npos && (minusPos == std::wstring::npos || plusPos > minusPos))
+                opPos = plusPos;
+            else if (minusPos != std::wstring::npos && minusPos > 0)
+            { opPos = minusPos; negate = true; }
+
+            std::wstring keyword = lower;
+            if (opPos != std::wstring::npos && opPos > 0)
+            {
+                std::wstring numPart = lower.substr(opPos + 1);
+                ltrim(numPart);
+                rtrim(numPart);
+                bool isNum = !numPart.empty() && std::all_of(numPart.begin(), numPart.end(), [](wchar_t c) { return ::iswdigit(c) || c == L'.' || c == L'-'; });
+                if (isNum)
+                {
+                    try { outOffset = std::stof(numPart) * (negate ? -1.0f : 1.0f); } catch (...) {}
+                    keyword = lower.substr(0, opPos);
+                    rtrim(keyword);
+                }
+            }
+            return keyword;
+        }
+
+        // Resolve composite position preset (e.g. "bottom-right") into x/y keywords.
+        static bool ResolvePositionPreset(const std::wstring &pos, std::wstring &xKeyword, std::wstring &yKeyword)
+        {
+            std::wstring lower = pos;
+            std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
+
+            if (lower == L"top-left"     || lower == L"topleft")     { yKeyword = L"top";    xKeyword = L"left";   return true; }
+            if (lower == L"top-center"   || lower == L"top")         { yKeyword = L"top";    xKeyword = L"center"; return true; }
+            if (lower == L"top-right"    || lower == L"topright")    { yKeyword = L"top";    xKeyword = L"right";  return true; }
+            if (lower == L"center-left"  || lower == L"left")        { yKeyword = L"center"; xKeyword = L"left";   return true; }
+            if (lower == L"center"       || lower == L"middle")      { yKeyword = L"center"; xKeyword = L"center"; return true; }
+            if (lower == L"center-right" || lower == L"right")       { yKeyword = L"center"; xKeyword = L"right";  return true; }
+            if (lower == L"bottom-left"  || lower == L"bottomleft")  { yKeyword = L"bottom"; xKeyword = L"left";   return true; }
+            if (lower == L"bottom-center"|| lower == L"bottom")      { yKeyword = L"bottom"; xKeyword = L"center"; return true; }
+            if (lower == L"bottom-right" || lower == L"bottomright") { yKeyword = L"bottom"; xKeyword = L"right";  return true; }
+            return false;
+        }
+
+        static float ResolveXKeyword(const std::wstring &keyword, const ScreenArea &wa, int winW, float offset)
+        {
+            if (keyword == L"left")            return static_cast<float>(wa.left) + offset;
+            if (keyword == L"right")           return static_cast<float>(wa.right - winW) + offset;
+            if (keyword == L"center" || keyword == L"middle")
+                return static_cast<float>(wa.left + (wa.width() - winW) / 2) + offset;
+            if (keyword == L"offscreen-left")  return static_cast<float>(wa.left - winW) + offset;
+            if (keyword == L"offscreen-right") return static_cast<float>(wa.right) + offset;
+            return offset; // unknown keyword: use offset as-is
+        }
+
+        static float ResolveYKeyword(const std::wstring &keyword, const ScreenArea &wa, int winH, float offset)
+        {
+            if (keyword == L"top")             return static_cast<float>(wa.top) + offset;
+            if (keyword == L"bottom")          return static_cast<float>(wa.bottom - winH) + offset;
+            if (keyword == L"center" || keyword == L"middle")
+                return static_cast<float>(wa.top + (wa.height() - winH) / 2) + offset;
+            if (keyword == L"offscreen-top")   return static_cast<float>(wa.top - winH) + offset;
+            if (keyword == L"offscreen-bottom")return static_cast<float>(wa.bottom) + offset;
+            return offset;
+        }
+
+        // Resolve string expressions and position presets into concrete x/y on a target.
+        static void ResolveWindowTargetExpressions(
+            Widget::WindowAnimationTarget &target,
+            const ScreenArea &wa,
+            int winW, int winH,
+            bool hasXExpr, const std::wstring &xExpr,
+            bool hasYExpr, const std::wstring &yExpr,
+            bool hasPosition, const std::wstring &position,
+            float offsetX, float offsetY)
+        {
+            if (hasPosition && !position.empty())
+            {
+                std::wstring xKw, yKw;
+                if (ResolvePositionPreset(position, xKw, yKw))
+                {
+                    target.hasX = true;
+                    target.x = ResolveXKeyword(xKw, wa, winW, offsetX);
+                    target.hasY = true;
+                    target.y = ResolveYKeyword(yKw, wa, winH, offsetY);
+                }
+            }
+
+            if (hasXExpr && !xExpr.empty())
+            {
+                float exprOffset = 0.0f;
+                const std::wstring kw = ParseKeywordAndOffset(xExpr, exprOffset);
+                target.hasX = true;
+                target.x = ResolveXKeyword(kw, wa, winW, exprOffset + offsetX);
+            }
+
+            if (hasYExpr && !yExpr.empty())
+            {
+                float exprOffset = 0.0f;
+                const std::wstring kw = ParseKeywordAndOffset(yExpr, exprOffset);
+                target.hasY = true;
+                target.y = ResolveYKeyword(kw, wa, winH, exprOffset + offsetY);
+            }
+        }
+
+        // ── Target Builders ─────────────────────────────────────────────────
+
+        static Widget::WindowAnimationTarget BuildWindowAnimationTarget(
+            const PropertyParser::WindowAnimationOptions &options,
+            bool from,
+            const Widget *widget)
         {
             Widget::WindowAnimationTarget target{};
             if (from)
@@ -719,11 +891,45 @@ namespace novadesk::scripting::quickjs
                 target.bgColorB = options.bgColorB;
                 target.bgAlpha = options.bgAlpha;
             }
+
+            // Resolve string expressions
+            if (widget)
+            {
+                const ScreenArea wa = GetWorkAreaForWidget(widget->GetWindow());
+                const int winW = options.hasWidth  ? static_cast<int>(from ? options.fromWidth  : options.width)  : widget->GetOptions().width;
+                const int winH = options.hasHeight ? static_cast<int>(from ? options.fromHeight : options.height) : widget->GetOptions().height;
+
+                if (from)
+                {
+                    ResolveWindowTargetExpressions(
+                        target, wa, winW, winH,
+                        options.fromHasXExpr, options.fromXExpr,
+                        options.fromHasYExpr, options.fromYExpr,
+                        options.fromHasPosition, options.fromPosition,
+                        options.fromOffsetX, options.fromOffsetY);
+                }
+                else
+                {
+                    ResolveWindowTargetExpressions(
+                        target, wa, winW, winH,
+                        options.hasXExpr, options.xExpr,
+                        options.hasYExpr, options.yExpr,
+                        options.hasPosition, options.position,
+                        options.offsetX, options.offsetY);
+                }
+            }
+
             return target;
         }
 
-        static std::vector<Widget::WindowAnimationKeyframe> BuildWindowKeyframes(const PropertyParser::WindowAnimationOptions &options)
+        static std::vector<Widget::WindowAnimationKeyframe> BuildWindowKeyframes(
+            const PropertyParser::WindowAnimationOptions &options,
+            const Widget *widget)
         {
+            ScreenArea wa{};
+            if (widget)
+                wa = GetWorkAreaForWidget(widget->GetWindow());
+
             std::vector<Widget::WindowAnimationKeyframe> keyframes;
             keyframes.reserve(options.keyframes.size());
             for (const auto &kf : options.keyframes)
@@ -746,10 +952,25 @@ namespace novadesk::scripting::quickjs
                 item.values.bgColorG = kf.bgColorG;
                 item.values.bgColorB = kf.bgColorB;
                 item.values.bgAlpha = kf.bgAlpha;
+
+                // Resolve string expressions for this keyframe
+                if (widget)
+                {
+                    const int winW = kf.hasWidth  ? static_cast<int>(kf.width)  : widget->GetOptions().width;
+                    const int winH = kf.hasHeight ? static_cast<int>(kf.height) : widget->GetOptions().height;
+                    ResolveWindowTargetExpressions(
+                        item.values, wa, winW, winH,
+                        kf.hasXExpr, kf.xExpr,
+                        kf.hasYExpr, kf.yExpr,
+                        kf.hasPosition, kf.position,
+                        kf.offsetX, kf.offsetY);
+                }
+
                 keyframes.push_back(std::move(item));
             }
             return keyframes;
         }
+
 
         JSValue JsWidgetWindowAnimate(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
@@ -786,13 +1007,13 @@ namespace novadesk::scripting::quickjs
 
             if (options.hasKeyframes)
             {
-                const std::vector<Widget::WindowAnimationKeyframe> keyframes = BuildWindowKeyframes(options);
+                const std::vector<Widget::WindowAnimationKeyframe> keyframes = BuildWindowKeyframes(options, widget);
                 widget->StartWindowKeyframeAnimation(keyframes, options.duration, options.easing, iterationCount);
                 return JS_DupValue(ctx, thisVal);
             }
 
-            const Widget::WindowAnimationTarget to = BuildWindowAnimationTarget(options, false);
-            const Widget::WindowAnimationTarget from = BuildWindowAnimationTarget(options, true);
+            const Widget::WindowAnimationTarget to = BuildWindowAnimationTarget(options, false, widget);
+            const Widget::WindowAnimationTarget from = BuildWindowAnimationTarget(options, true, widget);
             widget->StartWindowAnimation(to, from, options.duration, options.easing, iterationCount);
             return JS_DupValue(ctx, thisVal);
         }
