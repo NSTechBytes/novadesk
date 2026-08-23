@@ -370,6 +370,38 @@ static void LoadWindowIcons(HINSTANCE hInstance)
     }
 }
 
+static void DestroyOwnedIcon(HICON &icon)
+{
+    if (icon)
+    {
+        DestroyIcon(icon);
+        icon = nullptr;
+    }
+}
+
+static void DeleteOwnedFont(HFONT &font)
+{
+    if (font)
+    {
+        DeleteObject(font);
+        font = nullptr;
+    }
+}
+
+static void DestroyWindowIcons()
+{
+    DestroyOwnedIcon(g_windowIconLarge);
+    DestroyOwnedIcon(g_windowIconSmall);
+}
+
+static void DeleteManageFonts()
+{
+    DeleteOwnedFont(g_buttonFont);
+    DeleteOwnedFont(g_aboutTitleFont);
+    DeleteOwnedFont(g_aboutSectionFont);
+    DeleteOwnedFont(g_aboutBodyFont);
+}
+
 static void LogLine(const std::wstring &line)
 {
     OutputDebugStringW((line + L"\n").c_str());
@@ -1265,7 +1297,9 @@ static void AddTrayIcon(HWND hWnd)
     g_tray.uID = 1;
     g_tray.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     g_tray.uCallbackMessage = kTrayMessage;
-    g_tray.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_MANAGE_NOVADESK));
+    g_tray.hIcon = static_cast<HICON>(
+        LoadImageW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_MANAGE_NOVADESK), IMAGE_ICON,
+                   GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0));
     wcscpy_s(g_tray.szTip, L"Manage Novadesk");
 
     Shell_NotifyIconW(NIM_ADD, &g_tray);
@@ -2723,36 +2757,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         KillTimer(hWnd, kAutoUpdateTimerId);
         KillTimer(hWnd, kStartupSyncTimerId);
         KillTimer(hWnd, kProcessMonitorTimerId);
-        if (g_windowIconLarge)
-        {
-            DestroyIcon(g_windowIconLarge);
-            g_windowIconLarge = nullptr;
-        }
-        if (g_windowIconSmall)
-        {
-            DestroyIcon(g_windowIconSmall);
-            g_windowIconSmall = nullptr;
-        }
-        if (g_buttonFont)
-        {
-            DeleteObject(g_buttonFont);
-            g_buttonFont = nullptr;
-        }
-        if (g_aboutTitleFont)
-        {
-            DeleteObject(g_aboutTitleFont);
-            g_aboutTitleFont = nullptr;
-        }
-        if (g_aboutSectionFont)
-        {
-            DeleteObject(g_aboutSectionFont);
-            g_aboutSectionFont = nullptr;
-        }
-        if (g_aboutBodyFont)
-        {
-            DeleteObject(g_aboutBodyFont);
-            g_aboutBodyFont = nullptr;
-        }
+        DeleteManageFonts();
         if (g_aboutLogoBitmap)
         {
             DeleteObject(g_aboutLogoBitmap);
@@ -2866,7 +2871,16 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.lpszClassName = className;
-    RegisterClassExW(&wc);
+    ATOM windowClassAtom = RegisterClassExW(&wc);
+    if (!windowClassAtom)
+    {
+        DestroyWindowIcons();
+        if (instanceMutex)
+        {
+            CloseHandle(instanceMutex);
+        }
+        return 0;
+    }
 
     const DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
     RECT wr{0, 0, kWindowWidth, kWindowHeight};
@@ -2886,7 +2900,15 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
                                 nullptr, nullptr, hInstance, nullptr);
 
     if (!hWnd)
+    {
+        UnregisterClassW(className, hInstance);
+        DestroyWindowIcons();
+        if (instanceMutex)
+        {
+            CloseHandle(instanceMutex);
+        }
         return 0;
+    }
 
     ShowWindow(hWnd, SW_HIDE);
     UpdateWindow(hWnd);
@@ -2901,5 +2923,7 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance,
     {
         CloseHandle(instanceMutex);
     }
+    UnregisterClassW(className, hInstance);
+    DestroyWindowIcons();
     return (int)msg.wParam;
 }
