@@ -235,6 +235,7 @@ namespace FontManager
 
     Microsoft::WRL::ComPtr<DirectoryFontCollectionLoader> g_pLoader;
     std::map<std::wstring, Microsoft::WRL::ComPtr<IDWriteFontCollection>> g_CollectionCache;
+    std::mutex g_CollectionCacheMutex;
 
     bool Initialize()
     {
@@ -277,11 +278,14 @@ namespace FontManager
             g_pInMemoryLoader.Reset();
         }
 
-        if (g_pLoader) {
-            Direct2D::GetWriteFactory()->UnregisterFontCollectionLoader(g_pLoader.Get());
-            g_pLoader = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(g_CollectionCacheMutex);
+            if (g_pLoader) {
+                Direct2D::GetWriteFactory()->UnregisterFontCollectionLoader(g_pLoader.Get());
+                g_pLoader = nullptr;
+            }
+            g_CollectionCache.clear();
         }
-        g_CollectionCache.clear();
 
         {
             std::lock_guard<std::mutex> lock(g_MemoryFontsMutex);
@@ -296,12 +300,14 @@ namespace FontManager
             key = PathUtils::ResolvePath(directoryPath, PathUtils::GetExeDir());
         }
 
+        // Keep lookup and insertion together so concurrent callers cannot
+        // mutate the cache at the same time or create duplicate collections.
+        std::lock_guard<std::mutex> lock(g_CollectionCacheMutex);
         auto it = g_CollectionCache.find(key);
         if (it != g_CollectionCache.end()) {
             return it->second;
         }
 
-        // Create new collection
         Microsoft::WRL::ComPtr<IDWriteFontCollection> pCollection;
         HRESULT hr = Direct2D::GetWriteFactory()->CreateCustomFontCollection(
             g_pLoader.Get(),
