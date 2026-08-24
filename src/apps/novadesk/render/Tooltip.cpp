@@ -91,7 +91,7 @@ void Tooltip::Update(Element* element)
         HWND targetTT = element->GetToolTipBalloon() ? m_ToolTipBalloonHWnd : m_ToolTipHWnd;
         if (!targetTT) return;
 
-        m_ActiveToolTipHWnd = targetTT;
+        HWND previousTT = m_ActiveToolTipHWnd;
 
         TOOLINFOW ti = { 0 };
         ti.cbSize = m_ToolInfoSize;
@@ -99,7 +99,7 @@ void Tooltip::Update(Element* element)
         ti.uId = 0;
 
         ti.lpszText = (LPWSTR)element->GetToolTipText().c_str();
-        SendMessageW(m_ActiveToolTipHWnd, TTM_UPDATETIPTEXTW, 0, (LPARAM)&ti);
+        SendMessageW(targetTT, TTM_UPDATETIPTEXTW, 0, (LPARAM)&ti);
 
         HICON hIcon = nullptr;
         std::wstring tipIcon = element->GetToolTipIcon();
@@ -108,10 +108,10 @@ void Tooltip::Update(Element* element)
         else if (tipIcon == L"error") hIcon = (HICON)TTI_ERROR;
         else if (tipIcon == L"warning") hIcon = (HICON)TTI_WARNING;
 
-        SendMessageW(m_ActiveToolTipHWnd, TTM_SETTITLEW, (WPARAM)hIcon, (LPARAM)element->GetToolTipTitle().c_str());
+        SendMessageW(targetTT, TTM_SETTITLEW, (WPARAM)hIcon, (LPARAM)element->GetToolTipTitle().c_str());
 
         int maxWidth = element->GetToolTipMaxWidth() > 0 ? element->GetToolTipMaxWidth() : 1000;
-        SendMessageW(m_ActiveToolTipHWnd, TTM_SETMAXTIPWIDTH, 0, maxWidth);
+        SendMessageW(targetTT, TTM_SETMAXTIPWIDTH, 0, maxWidth);
 
         POINT pt;
         if (GetCursorPos(&pt))
@@ -124,11 +124,13 @@ void Tooltip::Update(Element* element)
 
         BOOL visible = IsWindowVisible(targetTT);
 
-        LRESULT activated = 0;
-
-        if (m_ActiveToolTipHWnd != targetTT || !visible)
+        if (previousTT != targetTT || !visible)
         {
-            activated = SendMessageW(targetTT, TTM_TRACKACTIVATE, TRUE, (LPARAM)&ti);
+            if (previousTT && previousTT != targetTT)
+            {
+                SendMessageW(previousTT, TTM_TRACKACTIVATE, FALSE, (LPARAM)&ti);
+            }
+            SendMessageW(targetTT, TTM_TRACKACTIVATE, TRUE, (LPARAM)&ti);
             SetWindowPos(targetTT, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
         }
         else
