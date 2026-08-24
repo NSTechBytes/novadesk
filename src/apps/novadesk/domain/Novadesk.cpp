@@ -23,6 +23,7 @@
 #include <commctrl.h>
 #include "Direct2DHelper.h"
 #include "FontManager.h"
+#include "../render/FontDownloader.h"
 #include "../shared/Logging.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "../scripting/quickjs/modules/NovadeskModule.h"
@@ -698,6 +699,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             return TRUE;
         }
         case WM_DESTROY:
+            // Font workers post to this window.  Join them before its handle
+            // becomes invalid during destruction.
+            FontDownloader::Shutdown();
+            JSEngine::SetMessageWindow(nullptr);
             if (g_trayMouseHook)
             {
                 UnhookWindowsHookEx(g_trayMouseHook);

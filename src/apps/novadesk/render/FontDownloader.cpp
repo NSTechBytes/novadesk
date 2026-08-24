@@ -22,6 +22,7 @@
 #include <fstream>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <algorithm>
 #include <functional>
 #include <unordered_map>
@@ -42,6 +43,8 @@ namespace FontDownloader
         };
         std::mutex g_InProgressMutex;
         std::unordered_map<std::wstring, std::vector<PendingRequest>> g_InProgress;
+        std::vector<std::thread> g_DownloadThreads;
+        bool g_ShuttingDown = false;
 
         // -----------------------------------------------------------------------
         // WOFF2 detection and conversion
@@ -135,6 +138,9 @@ namespace FontDownloader
         // Check cache again inside lock to avoid race conditions
         {
             std::lock_guard<std::mutex> lk(g_InProgressMutex);
+            if (g_ShuttingDown)
+                return;
+
             if (FontManager::HasMemoryFont(url))
             {
                 // Already downloaded — dispatch immediately
@@ -171,8 +177,13 @@ namespace FontDownloader
 
         Logging::Log(LogLevel::Info, L"FontDownloader: Starting async download of '%s'", url.c_str());
 
-        // Capture everything needed by value
-        std::thread([url]()
+        // Keep workers joinable so shutdown can complete before the message
+        // window they use is destroyed.
+        std::lock_guard<std::mutex> lk(g_InProgressMutex);
+        if (g_ShuttingDown)
+            return;
+
+        g_DownloadThreads.emplace_back([url]()
         {
             std::wstring cachedDir;
 
@@ -218,6 +229,9 @@ namespace FontDownloader
                     pending = std::move(it->second);
                     g_InProgress.erase(it);
                 }
+
+                if (g_ShuttingDown)
+                    return;
             }
 
             // Post results back to main thread for all pending requests
@@ -235,7 +249,26 @@ namespace FontDownloader
                     }
                 }
             }
-        }).detach();
+        });
+    }
+
+    void Shutdown()
+    {
+        std::vector<std::thread> threads;
+        {
+            std::lock_guard<std::mutex> lk(g_InProgressMutex);
+            g_ShuttingDown = true;
+            threads.swap(g_DownloadThreads);
+        }
+
+        for (std::thread &thread : threads)
+        {
+            if (thread.joinable())
+                thread.join();
+        }
+
+        std::lock_guard<std::mutex> lk(g_InProgressMutex);
+        g_InProgress.clear();
     }
 
     void DispatchFontReady(void *payload)

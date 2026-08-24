@@ -41,6 +41,10 @@ namespace FontDownloader
     */
     void RequestAsync(const std::wstring &url, HWND widgetHwnd, const std::wstring &elementId);
 
+    // Stops accepting work and joins all active downloads before the engine
+    // message window is destroyed.
+    void Shutdown();
+
     /*
     ** Dispatch callback — called on the main thread from the JS engine dispatcher.
     ** payload must be a FontReadyPayload* allocated with new.

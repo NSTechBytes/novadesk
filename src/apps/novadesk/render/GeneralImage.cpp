@@ -64,6 +64,11 @@ GeneralImage::GeneralImage()
     };
 }
 
+GeneralImage::~GeneralImage()
+{
+    ShutdownAsyncDownloads();
+}
+
 void GeneralImage::ResetBitmapCache()
 {
     m_D2DBitmap.Reset();
@@ -248,11 +253,21 @@ void GeneralImage::StartAsyncDownload(const std::wstring& url)
     HWND hWnd = m_OwnerHWND;
     if (!hWnd) return;
 
-    std::thread([hWnd, url]() {
+    std::lock_guard<std::mutex> lock(m_AsyncDownloadMutex);
+    if (m_AsyncDownloadsShutdown)
+        return;
+
+    m_AsyncDownloadThreads.emplace_back([this, hWnd, url]() {
         AsyncImageResult* result = new AsyncImageResult();
         if (Direct2D::DownloadImageFromURL(url, result->encodedBytes) && !result->encodedBytes.empty())
         {
             DecodeImageBytes(result->encodedBytes, result->decodedImage);
+            if (IsAsyncDownloadShutdown())
+            {
+                delete result;
+                return;
+            }
+
             std::wstring* pUrl = new std::wstring(url);
             if (!PostMessageW(hWnd, WM_USER + 500, (WPARAM)pUrl, (LPARAM)result))
             {
@@ -264,7 +279,29 @@ void GeneralImage::StartAsyncDownload(const std::wstring& url)
         {
             delete result;
         }
-    }).detach();
+    });
+}
+
+bool GeneralImage::IsAsyncDownloadShutdown()
+{
+    std::lock_guard<std::mutex> lock(m_AsyncDownloadMutex);
+    return m_AsyncDownloadsShutdown;
+}
+
+void GeneralImage::ShutdownAsyncDownloads()
+{
+    std::vector<std::thread> threads;
+    {
+        std::lock_guard<std::mutex> lock(m_AsyncDownloadMutex);
+        m_AsyncDownloadsShutdown = true;
+        threads.swap(m_AsyncDownloadThreads);
+    }
+
+    for (std::thread &thread : threads)
+    {
+        if (thread.joinable())
+            thread.join();
+    }
 }
 
 void GeneralImage::OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer)

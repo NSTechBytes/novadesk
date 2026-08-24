@@ -9,7 +9,9 @@
 #define __NOVADESK_GENERAL_IMAGE_H__
 
 #include <array>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <windows.h>
@@ -54,6 +56,7 @@ class GeneralImage
 {
 public:
     GeneralImage();
+    ~GeneralImage();
 
     void SetPath(const std::wstring &path);
     const std::wstring &GetPath() const { return m_ImagePath; }
@@ -108,6 +111,7 @@ public:
     int GetAutoHeight() const;
 
     void SetOwnerHWND(HWND hWnd);
+    void ShutdownAsyncDownloads();
     void OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer);
     void OnImageDecoded(const std::wstring& url, DecodedImageData&& image);
 
@@ -115,6 +119,7 @@ private:
     void ReloadWICBitmap();
     void ResetBitmapCache();
     void StartAsyncDownload(const std::wstring& url);
+    bool IsAsyncDownloadShutdown();
     void LoadFallbackFromResource();
 
 private:
@@ -122,6 +127,9 @@ private:
     std::wstring m_LoadedPath;
     std::wstring m_FallbackPath;
     HWND m_OwnerHWND = nullptr;
+    std::mutex m_AsyncDownloadMutex;
+    std::vector<std::thread> m_AsyncDownloadThreads;
+    bool m_AsyncDownloadsShutdown = false;
     bool m_IsFallbackShowing = false;       // true while showing the embedded fallback image
     std::vector<BYTE> m_DownloadedBuffer;   // in-memory buffer for async downloads
     DecodedImageData m_DecodedImage;

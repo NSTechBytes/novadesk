@@ -344,7 +344,7 @@ protected:
     // Transformation properties
     float m_Rotate = 0.0f;
     bool m_HasTransformMatrix = false;
-    float m_TransformMatrix[6];
+    float m_TransformMatrix[6] = {1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f};
 
     // Tooltip properties
     std::wstring m_ToolTipText;

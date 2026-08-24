@@ -134,19 +134,32 @@ Widget::~Widget()
     DestroyToolbarIcon();
     ReleaseRenderSurface();
 
-    if (m_hWnd)
-    {
-        HWND hWnd = m_hWnd;
-        m_hWnd = nullptr;
-        DestroyWindow(hWnd);
-    }
+    // Stop background-image workers before their target HWND can disappear.
+    m_BackgroundImage.ShutdownAsyncDownloads();
 
-    // Clean up elements
+    // Element-owned GeneralImage instances join their workers on destruction.
+    // Do this while the widget HWND is still valid.
     for (auto *element : m_Elements)
     {
         delete element;
     }
     m_Elements.clear();
+
+    if (m_hWnd)
+    {
+        // Successful workers posted heap-owned payloads.  WM_DESTROY would
+        // otherwise discard these queued messages without releasing them.
+        MSG message = {};
+        while (PeekMessageW(&message, m_hWnd, WM_USER + 500, WM_USER + 500, PM_REMOVE))
+        {
+            delete reinterpret_cast<std::wstring *>(message.wParam);
+            delete reinterpret_cast<AsyncImageResult *>(message.lParam);
+        }
+
+        HWND hWnd = m_hWnd;
+        m_hWnd = nullptr;
+        DestroyWindow(hWnd);
+    }
 }
 
 /*
