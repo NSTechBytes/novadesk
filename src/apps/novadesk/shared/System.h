@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include <cstddef>
 #include <vector>
 #include <string>
 #include <cstdint>
@@ -134,6 +135,9 @@ namespace novadesk::shared::system
     std::wstring GetEnv(const std::wstring &name);
     std::vector<std::pair<std::wstring, std::wstring>> GetAllEnv();
     bool Execute(const std::wstring &target, const std::wstring &parameters = L"", const std::wstring &workingDir = L"", int show = SW_SHOWNORMAL);
+    // WebFetch rejects responses larger than this limit to prevent unbounded
+    // memory use from HTTP responses and local/file:// reads.
+    constexpr size_t kWebFetchMaxResponseBytes = 64u * 1024u * 1024u;
     bool WebFetch(const std::wstring &url, std::string &outData);
 
     bool RegistryReadData(const std::wstring &fullPath, const std::wstring &valueName, RegistryValue &outValue);

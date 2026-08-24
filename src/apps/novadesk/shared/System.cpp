@@ -1671,6 +1671,18 @@ namespace novadesk::shared::system
             return false;
         }
 
+        const auto appendResponseData = [&outData, &url](const char *data, size_t size) -> bool
+        {
+            if (size > kWebFetchMaxResponseBytes - outData.size())
+            {
+                Logging::Log(LogLevel::Error, L"WebFetch: Response from '%s' exceeds the %zu-byte limit", url.c_str(), kWebFetchMaxResponseBytes);
+                outData.clear();
+                return false;
+            }
+            outData.append(data, size);
+            return true;
+        };
+
         const bool isHttp = (url.rfind(L"http://", 0) == 0 || url.rfind(L"https://", 0) == 0);
         if (!isHttp)
         {
@@ -1689,8 +1701,14 @@ namespace novadesk::shared::system
             {
                 return false;
             }
-            outData.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
-            return true;
+
+            char buffer[4096];
+            while (f.read(buffer, sizeof(buffer)) || f.gcount() > 0)
+            {
+                if (!appendResponseData(buffer, static_cast<size_t>(f.gcount())))
+                    return false;
+            }
+            return !f.bad();
         }
 
         HINTERNET hInternet = InternetOpenW(L"Novadesk WebFetch", INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, 0);
@@ -1712,14 +1730,29 @@ namespace novadesk::shared::system
         }
 
         char buffer[4096];
-        DWORD bytesRead = 0;
-        while (InternetReadFile(hUrl, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0)
+        bool readSucceeded = true;
+        while (true)
         {
-            outData.append(buffer, bytesRead);
+            DWORD bytesRead = 0;
+            if (!InternetReadFile(hUrl, buffer, sizeof(buffer), &bytesRead))
+            {
+                readSucceeded = false;
+                break;
+            }
+            if (bytesRead == 0)
+                break;
+
+            if (!appendResponseData(buffer, bytesRead))
+            {
+                readSucceeded = false;
+                break;
+            }
         }
 
         InternetCloseHandle(hUrl);
         InternetCloseHandle(hInternet);
-        return true;
+        if (!readSucceeded)
+            outData.clear();
+        return readSucceeded;
     }
 } // namespace novadesk::shared::system    
