@@ -49,10 +49,19 @@ namespace novadesk::scripting::quickjs
         {
             if (!widget)
                 return false;
+
+            if (!skipCloseEvent)
+            {
+                JSEngine::TriggerWidgetEvent(widget, "close");
+                if (!Widget::IsValid(widget))
+                    return true;
+            }
+
             auto it = std::find(widgets.begin(), widgets.end(), widget);
             if (it == widgets.end())
                 return false;
-            widget->SetSkipCloseEventOnDestroy(skipCloseEvent);
+            JSEngine::ClearWidgetEventListeners(widget);
+            JSEngine::UnregisterWidgetOwner(widget);
             widgets.erase(it);
             delete widget;
             return true;

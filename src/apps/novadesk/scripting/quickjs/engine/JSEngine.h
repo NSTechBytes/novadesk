@@ -48,6 +48,7 @@ namespace JSEngine
     std::wstring GetCurrentScriptDir();
     std::wstring GetCurrentScriptPath();
     void RegisterWidgetOwner(Widget *widget, const std::wstring &scriptPath);
+    void UnregisterWidgetOwner(Widget *widget);
     void RegisterTrayOwner(int trayId, const std::wstring &scriptPath);
     void UnregisterTrayOwner(int trayId);
     void Reload();
@@ -66,6 +67,7 @@ namespace JSEngine
     void OnWidgetContextCommand(const std::wstring &widgetId, int commandId);
 
     void TriggerWidgetEvent(Widget *widget, const char *eventName, const MouseEventData *data = nullptr);
+    void ClearWidgetEventListeners(Widget *widget);
     void CallEventCallback(int callbackId, Widget *widget = nullptr, const MouseEventData *data = nullptr);
     void CallEventCallbackWithText(int callbackId, Widget *widget, const std::wstring &text);
     int RegisterEventCallback(JSContext *ctx, JSValueConst fn);

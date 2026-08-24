@@ -1522,6 +1522,13 @@ namespace JSEngine
         g_widgetOwners[widget] = scriptPath;
     }
 
+    void UnregisterWidgetOwner(Widget *widget)
+    {
+        if (!widget)
+            return;
+        g_widgetOwners.erase(widget);
+    }
+
     void RegisterTrayOwner(int trayId, const std::wstring &scriptPath)
     {
         if (trayId <= 0)
@@ -1797,6 +1804,13 @@ namespace JSEngine
         {
             CallEventCallback(callbackId, widget, data);
         }
+    }
+
+    void ClearWidgetEventListeners(Widget *widget)
+    {
+        if (!widget)
+            return;
+        g_widgetEventListeners.erase(widget);
     }
 
     void CallEventCallback(int callbackId, Widget *widget, const MouseEventData *data)

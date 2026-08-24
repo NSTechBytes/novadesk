@@ -128,10 +128,8 @@ Widget::~Widget()
     }
     WidgetAnimationHelper::ClearAllAnimations(*this);
 
-    if (!m_SkipCloseEventOnDestroy)
-    {
-        JSEngine::TriggerWidgetEvent(this, "close");
-    }
+    JSEngine::ClearWidgetEventListeners(this);
+    JSEngine::UnregisterWidgetOwner(this);
 
     DestroyToolbarIcon();
     ReleaseRenderSurface();
@@ -142,7 +140,6 @@ Widget::~Widget()
         m_hWnd = nullptr;
         DestroyWindow(hWnd);
     }
-    JSEngine::TriggerWidgetEvent(this, "closed");
 
     // Clean up elements
     for (auto *element : m_Elements)
@@ -1332,12 +1329,18 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         if (widget)
         {
             // Native close (taskbar/titlebar/system menu) must follow the same
-            // lifecycle as widget.close(): remove from registry and delete widget
-            // so "close"/"closed" events are triggered from the destructor.
+            // lifecycle as widget.close(): fire "close" while the widget is
+            // still valid, then re-check because the callback may destroy it.
+            JSEngine::TriggerWidgetEvent(widget, "close");
+            if (!Widget::IsValid(widget))
+                return 0;
+
             auto it = std::find(widgets.begin(), widgets.end(), widget);
             if (it != widgets.end())
                 widgets.erase(it);
 
+            JSEngine::ClearWidgetEventListeners(widget);
+            JSEngine::UnregisterWidgetOwner(widget);
             SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
             delete widget;
             return 0;
