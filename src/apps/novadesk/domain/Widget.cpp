@@ -2465,6 +2465,36 @@ void Widget::SetGroupProperties(const std::wstring &group, JSContext *ctx, JSVal
     }
 }
 
+void Widget::ClearElementReferences(Element *element)
+{
+    if (!element)
+        return;
+
+    if (element == m_MouseOverElement)
+        m_MouseOverElement = nullptr;
+    if (element == m_TooltipElement)
+        m_TooltipElement = nullptr;
+    if (element == m_FocusedInputBox)
+    {
+        m_FocusedInputBox->SetFocus(false);
+        m_FocusedInputBox = nullptr;
+        if (m_hWnd)
+            KillTimer(m_hWnd, TIMER_CARET);
+    }
+    if (element == m_TextSelectionElement)
+    {
+        m_TextSelectionElement->ClearTextSelection();
+        m_TextSelectionElement = nullptr;
+    }
+    if (element == m_DragElement)
+    {
+        m_DragElement = nullptr;
+        m_IsElementDragging = false;
+        if (m_hWnd && GetCapture() == m_hWnd && !m_IsDragging)
+            ReleaseCapture();
+    }
+}
+
 void Widget::RemoveElementsByGroup(const std::wstring &group)
 {
     if (group.empty())
@@ -2476,10 +2506,7 @@ void Widget::RemoveElementsByGroup(const std::wstring &group)
         Element *element = *it;
         if (element && element->GetGroupId() == group)
         {
-            if (element == m_MouseOverElement)
-                m_MouseOverElement = nullptr;
-            if (element == m_TooltipElement)
-                m_TooltipElement = nullptr;
+            ClearElementReferences(element);
             
             if (PathShape *path = dynamic_cast<PathShape *>(element))
             {
@@ -2526,6 +2553,7 @@ bool Widget::RemoveElements(const std::wstring &id)
     {
         for (auto *el : m_Elements)
         {
+            ClearElementReferences(el);
             if (PathShape *path = dynamic_cast<PathShape *>(el))
             {
                 ReleaseCombinedConsumes(path);
@@ -2559,10 +2587,7 @@ bool Widget::RemoveElements(const std::wstring &id)
         Element *element = *it;
         if (element && element->GetId() == id)
         {
-            if (element == m_MouseOverElement)
-                m_MouseOverElement = nullptr;
-            if (element == m_TooltipElement)
-                m_TooltipElement = nullptr;
+            ClearElementReferences(element);
             
             if (PathShape *path = dynamic_cast<PathShape *>(element))
             {
@@ -2615,10 +2640,7 @@ void Widget::RemoveElements(const std::vector<std::wstring> &ids)
         {
             if ((*it)->GetId() == id)
             {
-                if (*it == m_MouseOverElement)
-                    m_MouseOverElement = nullptr;
-                if (*it == m_TooltipElement)
-                    m_TooltipElement = nullptr;
+                ClearElementReferences(*it);
                 if (PathShape *path = dynamic_cast<PathShape *>(*it))
                 {
                     ReleaseCombinedConsumes(path);

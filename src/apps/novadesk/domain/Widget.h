@@ -335,6 +335,7 @@ private:
     void ReleaseCombinedConsumes(class PathShape* target);
     void ApplyParsedPropertiesToElement(Element* element, JSContext* ctx, JSValueConst options);
     void UpdateContainerForElement(Element* element, const std::wstring& newContainerId);
+    void ClearElementReferences(Element *element);
     bool WouldCreateContainerCycle(Element* element, Element* container) const;
     void ApplyLayoutForContainer(Element *container);
     void RenderContainerChildren(Element* container);
