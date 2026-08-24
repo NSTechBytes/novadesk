@@ -264,22 +264,36 @@ namespace Utils
         return out;
     }
 
-    std::vector<std::wstring> SplitByComma(const std::wstring &s)
+    bool TrySplitByComma(const std::wstring &s, std::vector<std::wstring> &parts)
     {
-        std::vector<std::wstring> parts;
+        parts.clear();
         int depth = 0;
         size_t last = 0;
         for (size_t i = 0; i < s.length(); i++)
         {
             if (s[i] == L'(')
+            {
                 depth++;
+            }
             else if (s[i] == L')')
+            {
+                if (depth == 0)
+                {
+                    parts.clear();
+                    return false;
+                }
                 depth--;
+            }
             else if (s[i] == L',' && depth == 0)
             {
                 parts.push_back(s.substr(last, i - last));
                 last = i + 1;
             }
+        }
+        if (depth != 0)
+        {
+            parts.clear();
+            return false;
         }
         parts.push_back(s.substr(last));
         for (auto &p : parts)
@@ -287,6 +301,13 @@ namespace Utils
             p.erase(0, p.find_first_not_of(L' '));
             p.erase(p.find_last_not_of(L' ') + 1);
         }
+        return true;
+    }
+
+    std::vector<std::wstring> SplitByComma(const std::wstring &s)
+    {
+        std::vector<std::wstring> parts;
+        TrySplitByComma(s, parts);
         return parts;
     }
 

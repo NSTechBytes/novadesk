@@ -19,30 +19,14 @@ namespace PropertyParser
 {
 namespace Js
 {
+        bool TrySplitByComma(const std::wstring &s, std::vector<std::wstring> &parts)
+        {
+            return ::Utils::TrySplitByComma(s, parts);
+        }
+
         std::vector<std::wstring> SplitByComma(const std::wstring &s)
         {
-            std::vector<std::wstring> parts;
-            int depth = 0;
-            size_t last = 0;
-            for (size_t i = 0; i < s.length(); i++)
-            {
-                if (s[i] == L'(')
-                    depth++;
-                else if (s[i] == L')')
-                    depth--;
-                else if (s[i] == L',' && depth == 0)
-                {
-                    parts.push_back(s.substr(last, i - last));
-                    last = i + 1;
-                }
-            }
-            parts.push_back(s.substr(last));
-            for (auto &p : parts)
-            {
-                p.erase(0, p.find_first_not_of(L' '));
-                p.erase(p.find_last_not_of(L' ') + 1);
-            }
-            return parts;
+            return ::Utils::SplitByComma(s);
         }
 
         JSValue GetGlobalProperty(JSContext *ctx, const char *key)

@@ -23,6 +23,7 @@ namespace PropertyParser
 {
     namespace Js
     {
+        bool TrySplitByComma(const std::wstring &s, std::vector<std::wstring> &parts);
         std::vector<std::wstring> SplitByComma(const std::wstring &s);
         JSValue GetGlobalProperty(JSContext *ctx, const char *key);
 

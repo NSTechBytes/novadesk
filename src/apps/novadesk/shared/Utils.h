@@ -19,6 +19,7 @@ namespace Utils {
     std::string ToString(const std::wstring& wstr);
     std::wstring TrimUpper(const std::wstring& s);
 
+    bool TrySplitByComma(const std::wstring& s, std::vector<std::wstring>& parts);
     std::vector<std::wstring> SplitByComma(const std::wstring& s);
     bool ExtractFileIconToIco(const std::wstring& filePath, const std::wstring& outIcoPath, int size = 48);
 }

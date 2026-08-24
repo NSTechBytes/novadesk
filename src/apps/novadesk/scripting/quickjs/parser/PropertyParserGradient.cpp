@@ -40,8 +40,8 @@ namespace PropertyParser
             return false;
 
         std::wstring content = s.substr(start, end - start);
-        std::vector<std::wstring> parts = SplitByComma(content);
-        if (parts.empty())
+        std::vector<std::wstring> parts;
+        if (!TrySplitByComma(content, parts) || parts.empty())
             return false;
 
         int colorStartIndex = 0;
