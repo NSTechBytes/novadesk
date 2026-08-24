@@ -51,6 +51,7 @@ namespace JSEngine
         std::wstring g_currentScriptPath;
         std::vector<std::wstring> g_loadedScriptPaths;
         std::vector<JSValue> g_eventCallbacks;
+        std::vector<std::wstring> g_eventCallbackOwners;
         std::unordered_map<Widget *, std::unordered_map<std::string, std::vector<int>>> g_widgetEventListeners;
         std::unordered_map<std::wstring, std::unordered_map<int, JSValue>> g_widgetContextMenuCallbacks;
         struct TrayCommandCallback
@@ -193,6 +194,8 @@ namespace JSEngine
             }
             g_eventCallbacks.clear();
             g_eventCallbacks.push_back(JS_UNDEFINED);
+            g_eventCallbackOwners.clear();
+            g_eventCallbackOwners.push_back(L"");
             ClearWidgetEventListeners();
             ClearAllWidgetContextMenuCallbacks();
             ClearAllTrayCommandCallbacksInternal();
@@ -947,6 +950,19 @@ namespace JSEngine
             g_widgetEventListeners.clear();
         }
 
+        void ClearEventCallbacksForScript(const std::wstring &scriptPath)
+        {
+            for (size_t i = 1; i < g_eventCallbacks.size(); ++i)
+            {
+                if (i < g_eventCallbackOwners.size() && g_eventCallbackOwners[i] == scriptPath)
+                {
+                    JS_FreeValue(g_context, g_eventCallbacks[i]);
+                    g_eventCallbacks[i] = JS_UNDEFINED;
+                    g_eventCallbackOwners[i].clear();
+                }
+            }
+        }
+
         void ClearAllWidgetContextMenuCallbacks()
         {
             if (!g_context)
@@ -1316,6 +1332,8 @@ namespace JSEngine
             RegisterConsoleBindings(g_context);
             g_eventCallbacks.clear();
             g_eventCallbacks.push_back(JS_UNDEFINED); // callback id 0 is invalid
+            g_eventCallbackOwners.clear();
+            g_eventCallbackOwners.push_back(L"");
             ClearCallbacks(g_mainIpcListeners);
             ClearCallbacks(g_uiIpcListeners);
             ClearChannelMap(g_mainIpcChannelListeners);
@@ -1456,6 +1474,8 @@ namespace JSEngine
         }
         g_eventCallbacks.clear();
         g_eventCallbacks.push_back(JS_UNDEFINED);
+        g_eventCallbackOwners.clear();
+        g_eventCallbackOwners.push_back(L"");
         ClearCallbacks(g_mainIpcListeners);
         ClearCallbacks(g_uiIpcListeners);
         ClearChannelMap(g_mainIpcChannelListeners);
@@ -1588,6 +1608,7 @@ namespace JSEngine
         DestroyWidgetsForScript(resolved);
         ClearTraysForScript(resolved);
         ClearTimersForScript(resolved);
+        ClearEventCallbacksForScript(resolved);
         ClearIpcListenersForScript(g_mainIpcListeners, resolved);
         ClearIpcListenersForScript(g_uiIpcListeners, resolved);
         ClearIpcChannelListenersForScript(g_mainIpcChannelListeners, resolved);
@@ -1616,6 +1637,7 @@ namespace JSEngine
         DestroyWidgetsForScript(resolved);
         ClearTraysForScript(resolved);
         ClearTimersForScript(resolved);
+        ClearEventCallbacksForScript(resolved);
         ClearIpcListenersForScript(g_mainIpcListeners, resolved);
         ClearIpcListenersForScript(g_uiIpcListeners, resolved);
         ClearIpcChannelListenersForScript(g_mainIpcChannelListeners, resolved);
@@ -1925,6 +1947,7 @@ namespace JSEngine
         }
 
         g_eventCallbacks.push_back(JS_DupValue(g_context, fn));
+        g_eventCallbackOwners.push_back(g_currentScriptPath);
         return static_cast<int>(g_eventCallbacks.size() - 1);
     }
 
