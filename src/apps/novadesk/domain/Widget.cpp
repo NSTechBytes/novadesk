@@ -1101,7 +1101,19 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             {
                 // Blink the focused input box caret.
                 if (widget->m_FocusedInputBox)
-                    widget->Redraw();
+                {
+                    const auto focused = static_cast<Element *>(widget->m_FocusedInputBox);
+                    const bool isTracked = std::find(widget->m_Elements.begin(), widget->m_Elements.end(), focused) != widget->m_Elements.end();
+                    if (isTracked)
+                    {
+                        widget->Redraw();
+                    }
+                    else
+                    {
+                        widget->m_FocusedInputBox = nullptr;
+                        KillTimer(hWnd, TIMER_CARET);
+                    }
+                }
             }
             else if (wParam == TIMER_CTRL_OVERRIDE)
             {
@@ -2993,7 +3005,20 @@ void Widget::UpdateLayeredWindowContent()
 
             // Advance the caret blink phase for the focused input box.
             if (m_FocusedInputBox)
-                m_FocusedInputBox->UpdateBlink();
+            {
+                const auto focused = static_cast<Element *>(m_FocusedInputBox);
+                const bool isTracked = std::find(m_Elements.begin(), m_Elements.end(), focused) != m_Elements.end();
+                if (isTracked)
+                {
+                    m_FocusedInputBox->UpdateBlink();
+                }
+                else
+                {
+                    m_FocusedInputBox = nullptr;
+                    if (m_hWnd)
+                        KillTimer(m_hWnd, TIMER_CARET);
+                }
+            }
 
             // Draw Elements
             for (Element *element : m_Elements)
