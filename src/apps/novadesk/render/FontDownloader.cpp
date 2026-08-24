@@ -142,9 +142,12 @@ namespace FontDownloader
                 HWND msgWnd = JSEngine::GetMessageWindow();
                 if (msgWnd)
                 {
-                    PostMessageW(msgWnd, JSEngine::WM_NOVADESK_DISPATCH,
-                                 reinterpret_cast<WPARAM>(&DispatchFontReady),
-                                 reinterpret_cast<LPARAM>(payload));
+                    if (!PostMessageW(msgWnd, JSEngine::WM_NOVADESK_DISPATCH,
+                                      reinterpret_cast<WPARAM>(&DispatchFontReady),
+                                      reinterpret_cast<LPARAM>(payload)))
+                    {
+                        delete payload;
+                    }
                 }
                 else
                 {
