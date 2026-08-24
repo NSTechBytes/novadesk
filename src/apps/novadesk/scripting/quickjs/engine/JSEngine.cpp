@@ -245,6 +245,9 @@ namespace JSEngine
                                  allWidgets.end());
                 for (auto *w : toDelete)
                 {
+                    // Remove the pointer-keyed listener entry before the
+                    // widget storage can be released.
+                    g_widgetEventListeners.erase(w);
                     g_widgetOwners.erase(w);
                     delete w;
                 }
