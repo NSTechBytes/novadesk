@@ -1534,10 +1534,13 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_DESTROY:
         if (widget)
         {
-            KillTimer(hWnd, TIMER_CTRL_OVERRIDE);
             auto it = std::find(widgets.begin(), widgets.end(), widget);
             if (it != widgets.end())
                 widgets.erase(it);
+
+            SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
+            widget->m_hWnd = nullptr;
+            delete widget;
         }
         return 0;
     default:
