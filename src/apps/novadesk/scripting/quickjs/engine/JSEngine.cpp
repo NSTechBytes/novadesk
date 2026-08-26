@@ -1026,12 +1026,15 @@ namespace JSEngine
                     KillTimer(g_messageWindow, kv.first);
                 }
             }
-            for (auto &kv : g_timers)
+            if (g_context)
             {
-                JS_FreeValue(g_context, kv.second.callback);
-                for (JSValue &a : kv.second.args)
+                for (auto &kv : g_timers)
                 {
-                    JS_FreeValue(g_context, a);
+                    JS_FreeValue(g_context, kv.second.callback);
+                    for (JSValue &a : kv.second.args)
+                    {
+                        JS_FreeValue(g_context, a);
+                    }
                 }
             }
             g_timers.clear();
