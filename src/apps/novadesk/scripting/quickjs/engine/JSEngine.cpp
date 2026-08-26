@@ -24,6 +24,7 @@
 #include "../../shared/Utils.h"
 #include "../../domain/Novadesk.h"
 #include "../modules/ModuleSystem.h"
+#include "../modules/SystemModule.h"
 #include "../modules/WidgetUiBindings.h"
 
 namespace JSEngine
@@ -207,6 +208,8 @@ namespace JSEngine
             ClearHandlerMap(g_mainIpcHandlers);
             g_widgetOwners.clear();
             g_trayOwners.clear();
+
+            novadesk::scripting::quickjs::ClearWebFetchRequests(g_context);
 
             if (g_context)
             {
@@ -1622,6 +1625,7 @@ namespace JSEngine
         ClearIpcChannelListenersForScript(g_mainIpcChannelListeners, resolved);
         ClearIpcChannelListenersForScript(g_uiIpcChannelListeners, resolved);
         ClearIpcHandlersForScript(g_mainIpcHandlers, resolved);
+        novadesk::scripting::quickjs::ClearWebFetchRequestsForScript(resolved);
         g_loadedScriptPaths = next;
         g_staleScripts.insert(resolved);
         g_scriptEvalRevisions.erase(resolved);
@@ -1651,6 +1655,7 @@ namespace JSEngine
         ClearIpcChannelListenersForScript(g_mainIpcChannelListeners, resolved);
         ClearIpcChannelListenersForScript(g_uiIpcChannelListeners, resolved);
         ClearIpcHandlersForScript(g_mainIpcHandlers, resolved);
+        novadesk::scripting::quickjs::ClearWebFetchRequestsForScript(resolved);
         if (!EnsureRuntime())
             return false;
         return ExecuteScriptFile(resolved);

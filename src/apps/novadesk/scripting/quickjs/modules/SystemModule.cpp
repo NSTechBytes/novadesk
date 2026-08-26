@@ -37,6 +37,7 @@ namespace novadesk::scripting::quickjs
             JSContext *ctx = nullptr;
             JSValue resolve = JS_UNDEFINED;
             JSValue reject = JS_UNDEFINED;
+            std::wstring owner;
             bool ok = false;
             std::string data;
             std::string error;
@@ -801,6 +802,7 @@ namespace novadesk::scripting::quickjs
             req->ctx = ctx;
             req->resolve = JS_DupValue(ctx, funcs[0]);
             req->reject = JS_DupValue(ctx, funcs[1]);
+            req->owner = JSEngine::GetCurrentScriptPath();
 
             JS_FreeValue(ctx, funcs[0]);
             JS_FreeValue(ctx, funcs[1]);
@@ -1088,5 +1090,53 @@ namespace novadesk::scripting::quickjs
         if (JS_AddModuleExport(ctx, m, "webFetch") < 0)
             return nullptr;
         return m;
+    }
+
+    void ClearWebFetchRequests(JSContext *ctx)
+    {
+        std::lock_guard<std::mutex> lock(g_webFetchMutex);
+        for (auto it = g_webFetchRequests.begin(); it != g_webFetchRequests.end();)
+        {
+            if (!ctx || it->second->ctx == ctx)
+            {
+                if (it->second->ctx)
+                {
+                    JS_FreeValue(it->second->ctx, it->second->resolve);
+                    JS_FreeValue(it->second->ctx, it->second->reject);
+                    it->second->resolve = JS_UNDEFINED;
+                    it->second->reject = JS_UNDEFINED;
+                    it->second->ctx = nullptr;
+                }
+                it = g_webFetchRequests.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+
+    void ClearWebFetchRequestsForScript(const std::wstring &scriptPath)
+    {
+        std::lock_guard<std::mutex> lock(g_webFetchMutex);
+        for (auto it = g_webFetchRequests.begin(); it != g_webFetchRequests.end();)
+        {
+            if (it->second->owner == scriptPath)
+            {
+                if (it->second->ctx)
+                {
+                    JS_FreeValue(it->second->ctx, it->second->resolve);
+                    JS_FreeValue(it->second->ctx, it->second->reject);
+                    it->second->resolve = JS_UNDEFINED;
+                    it->second->reject = JS_UNDEFINED;
+                    it->second->ctx = nullptr;
+                }
+                it = g_webFetchRequests.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
     }
 } // namespace novadesk::scripting::quickjs
