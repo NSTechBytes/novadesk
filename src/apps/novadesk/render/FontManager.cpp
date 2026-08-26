@@ -236,6 +236,7 @@ namespace FontManager
     Microsoft::WRL::ComPtr<DirectoryFontCollectionLoader> g_pLoader;
     std::map<std::wstring, Microsoft::WRL::ComPtr<IDWriteFontCollection>> g_CollectionCache;
     std::mutex g_CollectionCacheMutex;
+    constexpr size_t kMaxCollectionCacheSize = 64;
 
     bool Initialize()
     {
@@ -333,6 +334,10 @@ namespace FontManager
 
         if (SUCCEEDED(hr)) {
             Logging::Log(LogLevel::Info, L"FontManager: Created custom font collection for '%s'", key.c_str());
+            if (g_CollectionCache.size() >= kMaxCollectionCacheSize) {
+                Logging::Log(LogLevel::Warn, L"FontManager: Collection cache full (%zu entries), clearing", g_CollectionCache.size());
+                g_CollectionCache.clear();
+            }
             g_CollectionCache[key] = pCollection;
             return pCollection;
         } else {
