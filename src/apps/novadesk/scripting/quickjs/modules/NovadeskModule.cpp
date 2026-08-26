@@ -663,8 +663,25 @@ namespace novadesk::scripting::quickjs
             JSValue value = JS_GetPropertyStr(call->ctx, *obj, name);
             if (JS_IsException(value))
             {
+                JSValue exc = JS_GetException(call->ctx);
+                if (JS_IsObject(exc))
+                {
+                    JSValue msgV = JS_GetPropertyStr(call->ctx, exc, "message");
+                    if (!JS_IsUndefined(msgV) && !JS_IsNull(msgV))
+                    {
+                        const char *msg = JS_ToCString(call->ctx, msgV);
+                        if (msg)
+                        {
+                            call->throwMessage = msg;
+                            JS_FreeCString(call->ctx, msg);
+                        }
+                        JS_FreeValue(call->ctx, msgV);
+                    }
+                }
+                JS_FreeValue(call->ctx, exc);
+                if (call->throwMessage.empty())
+                    call->throwMessage = "GetProperty failed";
                 call->hasThrow = true;
-                call->throwMessage = "GetProperty failed";
                 return 0;
             }
 
@@ -750,8 +767,25 @@ namespace novadesk::scripting::quickjs
 
             if (JS_IsException(ret))
             {
+                JSValue exc = JS_GetException(call->ctx);
+                if (JS_IsObject(exc))
+                {
+                    JSValue msgV = JS_GetPropertyStr(call->ctx, exc, "message");
+                    if (!JS_IsUndefined(msgV) && !JS_IsNull(msgV))
+                    {
+                        const char *msg = JS_ToCString(call->ctx, msgV);
+                        if (msg)
+                        {
+                            call->throwMessage = msg;
+                            JS_FreeCString(call->ctx, msg);
+                        }
+                        JS_FreeValue(call->ctx, msgV);
+                    }
+                }
+                JS_FreeValue(call->ctx, exc);
+                if (call->throwMessage.empty())
+                    call->throwMessage = "JsCallFunction failed";
                 call->hasThrow = true;
-                call->throwMessage = "JsCallFunction failed";
                 return;
             }
 
