@@ -1375,8 +1375,6 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (it != widgets.end())
                 widgets.erase(it);
 
-            JSEngine::ClearWidgetEventListeners(widget);
-            JSEngine::UnregisterWidgetOwner(widget);
             SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
             delete widget;
             return 0;

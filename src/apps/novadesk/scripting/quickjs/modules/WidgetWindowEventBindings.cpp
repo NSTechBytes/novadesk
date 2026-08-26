@@ -60,8 +60,6 @@ namespace novadesk::scripting::quickjs
             auto it = std::find(widgets.begin(), widgets.end(), widget);
             if (it == widgets.end())
                 return false;
-            JSEngine::ClearWidgetEventListeners(widget);
-            JSEngine::UnregisterWidgetOwner(widget);
             widgets.erase(it);
             delete widget;
             return true;
