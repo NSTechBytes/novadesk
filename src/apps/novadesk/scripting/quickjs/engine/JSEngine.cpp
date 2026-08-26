@@ -505,7 +505,12 @@ namespace JSEngine
 
             int32_t delay = 0;
             if (argc > 1)
-                JS_ToInt32(ctx, &delay, argv[1]);
+            {
+                if (JS_ToInt32(ctx, &delay, argv[1]) != 0)
+                {
+                    return JS_EXCEPTION;
+                }
+            }
             if (delay < 0)
                 delay = 0;
 
