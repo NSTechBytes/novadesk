@@ -94,8 +94,10 @@ void Widget::ClearAllWidgets()
 ** Construct a new Widget with the specified options.
 ** Options include size, position, colors, z-order, and behavior flags.
 */
+static std::atomic<uint64_t> s_NextInstanceId{1};
+
 Widget::Widget(const WidgetOptions &options)
-    : m_hWnd(nullptr), m_Options(options), m_WindowZPosition(options.zPos), m_IsBatchUpdating(false)
+    : m_hWnd(nullptr), m_Options(options), m_WindowZPosition(options.zPos), m_IsBatchUpdating(false), m_InstanceId(s_NextInstanceId++)
 {
     if (!m_Options.backgroundImageFallback.empty())
     {

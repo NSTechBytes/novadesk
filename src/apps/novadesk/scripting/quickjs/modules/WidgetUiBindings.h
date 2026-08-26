@@ -14,6 +14,12 @@ class Widget;
 
 namespace novadesk::scripting::quickjs
 {
+    struct WidgetWrapper
+    {
+        Widget *widget = nullptr;
+        uint64_t instanceId = 0;
+    };
+
     void SetWidgetUiDebug(bool debug);
     JSClassID EnsureWidgetWindowClass(JSContext *ctx);
     JSValue JsWidgetWindowCtor(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv);

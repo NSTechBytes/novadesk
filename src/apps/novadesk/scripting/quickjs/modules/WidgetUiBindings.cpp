@@ -57,15 +57,19 @@ namespace novadesk::scripting::quickjs
         Widget *GetWidget(JSContext *ctx, JSValueConst thisVal)
         {
             (void)ctx;
-            Widget *widget = static_cast<Widget *>(JS_GetOpaque(thisVal, g_widgetWindowClassId));
-            return Widget::IsValid(widget) ? widget : nullptr;
+            WidgetWrapper *wrapper = static_cast<WidgetWrapper *>(JS_GetOpaque(thisVal, g_widgetWindowClassId));
+            if (!wrapper || !wrapper->widget || wrapper->widget->GetInstanceId() != wrapper->instanceId)
+                return nullptr;
+            return Widget::IsValid(wrapper->widget) ? wrapper->widget : nullptr;
         }
 
         Widget *GetUiWidget(JSContext *ctx, JSValueConst thisVal)
         {
             (void)ctx;
-            Widget *widget = static_cast<Widget *>(JS_GetOpaque(thisVal, g_widgetUiClassId));
-            return Widget::IsValid(widget) ? widget : nullptr;
+            WidgetWrapper *wrapper = static_cast<WidgetWrapper *>(JS_GetOpaque(thisVal, g_widgetUiClassId));
+            if (!wrapper || !wrapper->widget || wrapper->widget->GetInstanceId() != wrapper->instanceId)
+                return nullptr;
+            return Widget::IsValid(wrapper->widget) ? wrapper->widget : nullptr;
         }
 
         Widget *GetAnyWidget(JSContext *ctx, JSValueConst thisVal)
@@ -2693,9 +2697,14 @@ namespace novadesk::scripting::quickjs
             return JS_NewBool(ctx, input->CanRedo() ? 1 : 0);
         }
 
-        void JsWidgetFinalizer(JSRuntime *, JSValue)
+        void JsWidgetFinalizer(JSRuntime *, JSValue val)
         {
-            // Native widget lifetime is owned by Novadesk's global widget list.
+            WidgetWrapper *wrapper = static_cast<WidgetWrapper *>(JS_GetOpaque(val, g_widgetWindowClassId));
+            if (!wrapper)
+            {
+                wrapper = static_cast<WidgetWrapper *>(JS_GetOpaque(val, g_widgetUiClassId));
+            }
+            delete wrapper;
         }
 
         const JSCFunctionListEntry kWidgetProtoFuncs[] = {
@@ -2807,6 +2816,7 @@ namespace novadesk::scripting::quickjs
             {
                 JSClassDef uiCls{};
                 uiCls.class_name = "WidgetUiBridge";
+                uiCls.finalizer = JsWidgetFinalizer;
                 JS_NewClass(rt, g_widgetUiClassId, &uiCls);
                 JSValue uiProto = JS_NewObject(ctx);
                 JS_SetPropertyFunctionList(ctx, uiProto, kWidgetProtoFuncs, sizeof(kWidgetProtoFuncs) / sizeof(kWidgetProtoFuncs[0]));
@@ -2817,7 +2827,7 @@ namespace novadesk::scripting::quickjs
             JSValue uiObj = JS_NewObjectClass(ctx, g_widgetUiClassId);
             if (JS_IsException(uiObj))
                 return false;
-            JS_SetOpaque(uiObj, widget);
+            JS_SetOpaque(uiObj, new WidgetWrapper{widget, widget->GetInstanceId()});
 
             JSValue global = JS_GetGlobalObject(ctx);
             JSValue ipcObj = JSEngine::CreateUiIpcObject(ctx);
@@ -3115,7 +3125,7 @@ namespace novadesk::scripting::quickjs
         JSValue obj = JS_NewObjectClass(ctx, EnsureWidgetWindowClass(ctx));
         if (JS_IsException(obj))
             return obj;
-        JS_SetOpaque(obj, widget);
+        JS_SetOpaque(obj, new WidgetWrapper{widget, widget->GetInstanceId()});
 
         if (!options.scriptPath.empty())
         {

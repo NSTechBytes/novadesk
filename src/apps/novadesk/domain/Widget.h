@@ -255,6 +255,7 @@ public:
     static void DecrementColorPickerCount() { if (s_ActiveColorPickerCount > 0) s_ActiveColorPickerCount--; }
 
     const WidgetOptions& GetOptions() const { return m_Options; }
+    uint64_t GetInstanceId() const { return m_InstanceId; }
     HWND GetWindow() const { return m_hWnd; }
     ZPOSITION GetWindowZPosition() const { return m_WindowZPosition; }
     ID2D1DeviceContext* GetDeviceContext() const { return m_pContext.Get(); }
@@ -417,6 +418,8 @@ private:
 
     // Text Selection State
     TextElement* m_TextSelectionElement = nullptr;
+
+    uint64_t m_InstanceId = 0;
 
     // Input box focus state
     InputBoxElement* m_FocusedInputBox = nullptr;

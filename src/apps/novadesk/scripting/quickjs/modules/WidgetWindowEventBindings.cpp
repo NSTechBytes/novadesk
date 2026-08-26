@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
  
 #include "WidgetWindowEventBindings.h"
+#include "WidgetUiBindings.h"
 
 #include <algorithm>
 #include <cwctype>
@@ -36,13 +37,18 @@ namespace novadesk::scripting::quickjs
         Widget *GetWidget(JSContext *ctx, JSValueConst thisVal)
         {
             (void)ctx;
-            Widget *widget = static_cast<Widget *>(JS_GetOpaque(thisVal, g_widgetWindowClassId));
-            return Widget::IsValid(widget) ? widget : nullptr;
+            WidgetWrapper *wrapper = static_cast<WidgetWrapper *>(JS_GetOpaque(thisVal, g_widgetWindowClassId));
+            if (!wrapper || !wrapper->widget || wrapper->widget->GetInstanceId() != wrapper->instanceId)
+                return nullptr;
+            return Widget::IsValid(wrapper->widget) ? wrapper->widget : nullptr;
         }
 
         Widget *GetWidgetRaw(JSValueConst thisVal)
         {
-            return static_cast<Widget *>(JS_GetOpaque(thisVal, g_widgetWindowClassId));
+            WidgetWrapper *wrapper = static_cast<WidgetWrapper *>(JS_GetOpaque(thisVal, g_widgetWindowClassId));
+            if (!wrapper || !wrapper->widget || wrapper->widget->GetInstanceId() != wrapper->instanceId)
+                return nullptr;
+            return wrapper->widget;
         }
 
         bool DestroyWidgetInstance(Widget *widget, bool skipCloseEvent)
