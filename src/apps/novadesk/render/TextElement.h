@@ -13,6 +13,8 @@
 #include <windows.h>
 #include <vector>
 #include <optional>
+#include <wincodec.h>
+#include <wrl/client.h>
 
 struct TextSegmentStyle
 {
@@ -74,43 +76,49 @@ public:
     {
         m_Text = text;
         ParseInlineStyles();
+        InvalidateHitTestCache();
     }
     void SetFontFace(const std::wstring &font)
     {
         m_FontFace = font;
         ParseInlineStyles();
+        InvalidateHitTestCache();
     }
     void SetFontSize(int size)
     {
         m_FontSize = size;
         ParseInlineStyles();
+        InvalidateHitTestCache();
     }
     void SetFontColor(COLORREF color, BYTE alpha)
     {
         m_FontColor = color;
         m_Alpha = alpha;
         ParseInlineStyles();
+        InvalidateHitTestCache();
     }
     void SetFontWeight(int weight)
     {
         m_FontWeight = weight;
         ParseInlineStyles();
+        InvalidateHitTestCache();
     }
     void SetItalic(bool italic)
     {
         m_Italic = italic;
         ParseInlineStyles();
+        InvalidateHitTestCache();
     }
-    void SetTextAlign(TextAlignment align) { m_TextAlign = align; }
-    void SetClip(TextClip clip) { m_textClip = clip; }
-    void SetFontPath(const std::wstring &path) { m_FontPath = path; }
+    void SetTextAlign(TextAlignment align) { m_TextAlign = align; InvalidateHitTestCache(); }
+    void SetClip(TextClip clip) { m_textClip = clip; InvalidateHitTestCache(); }
+    void SetFontPath(const std::wstring &path) { m_FontPath = path; InvalidateHitTestCache(); }
 
-    void SetShadows(const std::vector<TextShadow> &shadows) { m_Shadows = shadows; }
-    void SetFontGradient(const GradientInfo &gradient) { m_FontGradient = gradient; }
-    void SetLetterSpacing(float spacing) { m_LetterSpacing = spacing; }
-    void SetUnderline(bool underline) { m_UnderLine = underline; }
-    void SetStrikethrough(bool strikethrough) { m_StrikeThrough = strikethrough; }
-    void SetTextCase(TextCase textCase) { m_TextCase = textCase; }
+    void SetShadows(const std::vector<TextShadow> &shadows) { m_Shadows = shadows; InvalidateHitTestCache(); }
+    void SetFontGradient(const GradientInfo &gradient) { m_FontGradient = gradient; InvalidateHitTestCache(); }
+    void SetLetterSpacing(float spacing) { m_LetterSpacing = spacing; InvalidateHitTestCache(); }
+    void SetUnderline(bool underline) { m_UnderLine = underline; InvalidateHitTestCache(); }
+    void SetStrikethrough(bool strikethrough) { m_StrikeThrough = strikethrough; InvalidateHitTestCache(); }
+    void SetTextCase(TextCase textCase) { m_TextCase = textCase; InvalidateHitTestCache(); }
     void SetTextSelection(bool selectable) { m_TextSelection = selectable; }
     void SetSelectionBackgroundColor(COLORREF color, BYTE alpha) 
     { 
@@ -169,6 +177,7 @@ public:
 
 private:
     void ParseInlineStyles();
+    void InvalidateHitTestCache();
     UINT32 HitTestTextPosition(int x, int y);
     void FindWordBoundaries(UINT32 position, UINT32& wordStart, UINT32& wordEnd);
 
@@ -198,6 +207,14 @@ private:
     bool m_HasSelectionTextColor = false;            // Whether custom text color is set
 
     std::vector<TextSegment> m_Segments;
+
+    // Hit test cache
+    Microsoft::WRL::ComPtr<IWICBitmap> m_HitTestBitmap;
+    float m_HitTestCachedW = 0;
+    float m_HitTestCachedH = 0;
+    bool m_HitTestCachedAntiAlias = false;
+    uint32_t m_HitTestCacheGeneration = 0;
+    uint32_t m_HitTestBuiltGeneration = 0;
 
     // Text selection state
     bool m_IsSelecting = false;

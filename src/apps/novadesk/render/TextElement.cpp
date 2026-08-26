@@ -139,27 +139,24 @@ namespace
         }
     }
 
-    bool HitTestRenderedTextAlpha(IDWriteTextLayout *layout, float relX, float relY, float layoutW, float layoutH, bool antiAlias)
+    // Builds a WIC bitmap of the rendered text layout. Returns null on failure.
+    Microsoft::WRL::ComPtr<IWICBitmap> BuildHitTestBitmap(IDWriteTextLayout *layout, float layoutW, float layoutH, bool antiAlias)
     {
         if (!layout)
-            return false;
-        if (relX < 0.0f || relY < 0.0f)
-            return false;
+            return nullptr;
 
         const UINT bitmapW = (UINT)(std::max)(1.0f, std::ceil(layoutW));
         const UINT bitmapH = (UINT)(std::max)(1.0f, std::ceil(layoutH));
-        if ((UINT)relX >= bitmapW || (UINT)relY >= bitmapH)
-            return false;
 
         IWICImagingFactory *wicFactory = Direct2D::GetWICFactory();
         ID2D1Factory1 *d2dFactory = Direct2D::GetFactory();
         if (!wicFactory || !d2dFactory)
-            return false;
+            return nullptr;
 
         Microsoft::WRL::ComPtr<IWICBitmap> wicBitmap;
         HRESULT hr = wicFactory->CreateBitmap(bitmapW, bitmapH, GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad, wicBitmap.GetAddressOf());
         if (FAILED(hr))
-            return false;
+            return nullptr;
 
         D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
             D2D1_RENDER_TARGET_TYPE_SOFTWARE,
@@ -170,12 +167,12 @@ namespace
         Microsoft::WRL::ComPtr<ID2D1RenderTarget> renderTarget;
         hr = d2dFactory->CreateWicBitmapRenderTarget(wicBitmap.Get(), props, renderTarget.GetAddressOf());
         if (FAILED(hr))
-            return false;
+            return nullptr;
 
         Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush;
         hr = renderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), brush.GetAddressOf());
         if (FAILED(hr))
-            return false;
+            return nullptr;
 
         renderTarget->BeginDraw();
         renderTarget->Clear(D2D1::ColorF(0, 0.0f));
@@ -183,13 +180,22 @@ namespace
         renderTarget->DrawTextLayout(D2D1::Point2F(0.0f, 0.0f), layout, brush.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
         hr = renderTarget->EndDraw();
         if (FAILED(hr))
+            return nullptr;
+
+        return wicBitmap;
+    }
+
+    // Samples a single pixel alpha from a pre-rendered WIC bitmap.
+    bool SampleHitTestPixel(IWICBitmap *bitmap, float relX, float relY, bool antiAlias)
+    {
+        if (!bitmap)
             return false;
 
         const INT pixelX = (INT)relX;
         const INT pixelY = (INT)relY;
         WICRect rect = {pixelX, pixelY, 1, 1};
         BYTE pixel[4] = {};
-        hr = wicBitmap->CopyPixels(&rect, 4, 4, pixel);
+        HRESULT hr = bitmap->CopyPixels(&rect, 4, 4, pixel);
         if (FAILED(hr))
             return false;
 
@@ -208,6 +214,12 @@ TextElement::TextElement(const std::wstring &id, int x, int y, int w, int h,
       m_TextAlign(textAlign), m_textClip(clip), m_FontPath(fontPath)
 {
     ParseInlineStyles();
+}
+
+void TextElement::InvalidateHitTestCache()
+{
+    m_HitTestBitmap.Reset();
+    m_HitTestCacheGeneration++;
 }
 
 void TextElement::Render(ID2D1DeviceContext *context)
@@ -787,7 +799,21 @@ bool TextElement::HitTest(int x, int y)
     if (!isInside)
         return false;
 
-    return HitTestRenderedTextAlpha(pLayout.Get(), relX, relY, layoutW, layoutH, m_AntiAlias);
+    // Use cached bitmap if still valid, otherwise rebuild
+    bool cacheValid = m_HitTestBitmap &&
+        m_HitTestBuiltGeneration == m_HitTestCacheGeneration &&
+        m_HitTestCachedW == layoutW &&
+        m_HitTestCachedH == layoutH &&
+        m_HitTestCachedAntiAlias == m_AntiAlias;
+    if (!cacheValid)
+    {
+        m_HitTestBitmap = BuildHitTestBitmap(pLayout.Get(), layoutW, layoutH, m_AntiAlias);
+        m_HitTestCachedW = layoutW;
+        m_HitTestCachedH = layoutH;
+        m_HitTestCachedAntiAlias = m_AntiAlias;
+        m_HitTestBuiltGeneration = m_HitTestCacheGeneration;
+    }
+    return SampleHitTestPixel(m_HitTestBitmap.Get(), relX, relY, m_AntiAlias);
 }
 
 std::wstring TextElement::GetProcessedText() const
