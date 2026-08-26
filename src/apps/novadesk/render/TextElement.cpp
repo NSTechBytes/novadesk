@@ -1014,13 +1014,13 @@ void TextElement::ParseInlineStyles()
             if (same)
             {
                 m_Segments.back().length++;
-                m_Segments.back().text += m_Text[i];
+                m_Segments.back().text += c;
                 continue;
             }
         }
 
         TextSegment seg;
-        seg.text = m_Text[i];
+        seg.text = c;
         seg.style = currentStyle;
         seg.startPos = currentPos;
         seg.length = 1;
