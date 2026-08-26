@@ -177,8 +177,23 @@ void GeneralImage::EnsureBitmap(ID2D1DeviceContext *context)
             ok = SUCCEEDED(hr);
             if (ok)
             {
-                // Direct2D owns the render copy now. Do not retain a second
-                // full-resolution CPU copy of large online background images.
+                // Convert the raw pixels into a device-independent WIC bitmap
+                // so the image can be recreated after a D2D device loss, then
+                // release the raw pixel buffer to avoid keeping two CPU copies.
+                IWICImagingFactory* wicFactory = Direct2D::GetWICFactory();
+                if (wicFactory)
+                {
+                    Microsoft::WRL::ComPtr<IWICBitmap> wicBitmap;
+                    HRESULT wicHr = wicFactory->CreateBitmapFromMemory(
+                        m_DecodedImage.width, m_DecodedImage.height,
+                        GUID_WICPixelFormat32bppPBGRA,
+                        m_DecodedImage.stride,
+                        static_cast<UINT>(m_DecodedImage.pixels.size()),
+                        m_DecodedImage.pixels.data(),
+                        wicBitmap.GetAddressOf());
+                    if (SUCCEEDED(wicHr))
+                        m_pWICBitmap = std::move(wicBitmap);
+                }
                 m_DecodedImage = {};
             }
         }
