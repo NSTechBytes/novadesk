@@ -4,7 +4,7 @@
  * License; either version 2 of the License, or (at your option) any later
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
- 
+
 #include "SystemModule.h"
 
 #include <chrono>
@@ -45,65 +45,69 @@ namespace novadesk::scripting::quickjs
 
         std::mutex g_webFetchMutex;
         std::unordered_map<uint64_t, std::unique_ptr<WebFetchRequest>> g_webFetchRequests;
+    } // close anonymous namespace
 
-        void DispatchWebFetchResult(void *payload)
+    void DispatchWebFetchResult(void *payload)
+    {
+        std::unique_ptr<uint64_t> requestId(static_cast<uint64_t *>(payload));
+        if (!requestId)
         {
-            std::unique_ptr<uint64_t> requestId(static_cast<uint64_t *>(payload));
-            if (!requestId)
+            return;
+        }
+
+        std::unique_ptr<WebFetchRequest> req;
+        {
+            std::lock_guard<std::mutex> lock(g_webFetchMutex);
+            auto it = g_webFetchRequests.find(*requestId);
+            if (it == g_webFetchRequests.end())
             {
                 return;
             }
+            req = std::move(it->second);
+            g_webFetchRequests.erase(it);
+        }
 
-            std::unique_ptr<WebFetchRequest> req;
+        if (!req || !req->ctx)
+        {
+            return;
+        }
+
+        JSValue arg = req->ok
+                          ? JS_NewStringLen(req->ctx, req->data.data(), req->data.size())
+                          : JS_NewString(req->ctx, req->error.empty() ? "webFetch failed" : req->error.c_str());
+        JSValue fn = req->ok ? req->resolve : req->reject;
+        JSValue ret = JS_Call(req->ctx, fn, JS_UNDEFINED, 1, &arg);
+        JS_FreeValue(req->ctx, arg);
+        if (JS_IsException(ret))
+        {
+            JS_FreeValue(req->ctx, JS_GetException(req->ctx));
+        }
+        else
+        {
+            JS_FreeValue(req->ctx, ret);
+        }
+
+        JS_FreeValue(req->ctx, req->resolve);
+        JS_FreeValue(req->ctx, req->reject);
+
+        JSRuntime *runtime = JS_GetRuntime(req->ctx);
+        JSContext *jobCtx = nullptr;
+        while (runtime && JS_IsJobPending(runtime))
+        {
+            int err = JS_ExecutePendingJob(runtime, &jobCtx);
+            if (err < 0)
             {
-                std::lock_guard<std::mutex> lock(g_webFetchMutex);
-                auto it = g_webFetchRequests.find(*requestId);
-                if (it == g_webFetchRequests.end())
+                if (jobCtx)
                 {
-                    return;
+                    JS_FreeValue(jobCtx, JS_GetException(jobCtx));
                 }
-                req = std::move(it->second);
-                g_webFetchRequests.erase(it);
-            }
-
-            if (!req || !req->ctx)
-            {
-                return;
-            }
-
-            JSValue arg = req->ok
-                              ? JS_NewStringLen(req->ctx, req->data.data(), req->data.size())
-                              : JS_NewString(req->ctx, req->error.empty() ? "webFetch failed" : req->error.c_str());
-            JSValue fn = req->ok ? req->resolve : req->reject;
-            JSValue ret = JS_Call(req->ctx, fn, JS_UNDEFINED, 1, &arg);
-            JS_FreeValue(req->ctx, arg);
-            if (JS_IsException(ret))
-            {
-                JS_FreeValue(req->ctx, JS_GetException(req->ctx));
-            }
-            else
-            {
-                JS_FreeValue(req->ctx, ret);
-            }
-
-            JS_FreeValue(req->ctx, req->resolve);
-            JS_FreeValue(req->ctx, req->reject);
-
-            JSRuntime *runtime = JS_GetRuntime(req->ctx);
-            JSContext *jobCtx = nullptr;
-            while (runtime && JS_IsJobPending(runtime))
-            {
-                int err = JS_ExecutePendingJob(runtime, &jobCtx);
-                if (err < 0)
-                {
-                    if (jobCtx)
-                    {
-                        JS_FreeValue(jobCtx, JS_GetException(jobCtx));
-                    }
-                    break;
-                }
+                break;
             }
         }
+    }
+
+    namespace
+    { // reopen anonymous namespace
 
         bool ReadNetworkCached(shared::system::NetworkStats &out)
         {
@@ -395,7 +399,6 @@ namespace novadesk::scripting::quickjs
             return out;
         }
 
-
         JSValue JsFileIconExtractIcon(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
             if (argc < 2)
@@ -507,7 +510,6 @@ namespace novadesk::scripting::quickjs
             shared::system::AudioStopSound();
             return JS_NewBool(ctx, 1);
         }
-
 
         JSValue JsRegistryReadData(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
@@ -853,7 +855,7 @@ namespace novadesk::scripting::quickjs
                             if (!PostMessageW(
                                     hwnd,
                                     JSEngine::WM_NOVADESK_DISPATCH,
-                                    reinterpret_cast<WPARAM>(&DispatchWebFetchResult),
+                                    JSEngine::DISPATCH_WEBFETCH,
                                     reinterpret_cast<LPARAM>(payload)))
                             {
                                 delete payload;

@@ -13,6 +13,7 @@
 namespace novadesk::scripting::quickjs
 {
     JSModuleDef *EnsureSystemModule(JSContext *ctx, const char *moduleName);
+    void DispatchWebFetchResult(void *payload);
     void ClearWebFetchRequests(JSContext *ctx = nullptr);
     void ClearWebFetchRequestsForScript(const std::wstring &scriptPath);
 }

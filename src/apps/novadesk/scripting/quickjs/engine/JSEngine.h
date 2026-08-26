@@ -87,4 +87,11 @@ namespace JSEngine
     JSValue CreateUiIpcObject(JSContext *ctx);
 
     static const UINT WM_NOVADESK_DISPATCH = WM_USER + 101;
+
+    enum DispatchType : WPARAM
+    {
+        DISPATCH_TOAST = 1,
+        DISPATCH_WEBFETCH = 2,
+        DISPATCH_FONT_READY = 3,
+    };
 } // namespace JSEngine

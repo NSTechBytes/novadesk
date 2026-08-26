@@ -17,6 +17,7 @@
 #include <algorithm>
 
 #include "../../domain/Widget.h"
+#include "../../render/FontDownloader.h"
 #include "../../shared/FileUtils.h"
 #include "../../shared/Logging.h"
 #include "../../shared/PathUtils.h"
@@ -1712,11 +1713,19 @@ namespace JSEngine
     {
         if (message == WM_NOVADESK_DISPATCH)
         {
-            using DispatchFn = void (*)(void *);
-            DispatchFn fn = reinterpret_cast<DispatchFn>(wParam);
-            if (fn)
+            switch (wParam)
             {
-                fn(reinterpret_cast<void *>(lParam));
+            case DISPATCH_TOAST:
+                DispatchToastPayload(reinterpret_cast<ToastDispatchPayload *>(lParam));
+                break;
+            case DISPATCH_WEBFETCH:
+                novadesk::scripting::quickjs::DispatchWebFetchResult(reinterpret_cast<void *>(lParam));
+                break;
+            case DISPATCH_FONT_READY:
+                FontDownloader::DispatchFontReady(reinterpret_cast<void *>(lParam));
+                break;
+            default:
+                break;
             }
         }
     }
@@ -1987,7 +1996,7 @@ namespace JSEngine
             if (PostMessageW(
                     g_messageWindow,
                     WM_NOVADESK_DISPATCH,
-                    reinterpret_cast<WPARAM>(&DispatchToastPayload),
+                    DISPATCH_TOAST,
                     reinterpret_cast<LPARAM>(payload)))
             {
                 return;

@@ -149,7 +149,7 @@ namespace FontDownloader
                 if (msgWnd)
                 {
                     if (!PostMessageW(msgWnd, JSEngine::WM_NOVADESK_DISPATCH,
-                                      reinterpret_cast<WPARAM>(&DispatchFontReady),
+                                      JSEngine::DISPATCH_FONT_READY,
                                       reinterpret_cast<LPARAM>(payload)))
                     {
                         delete payload;
@@ -242,7 +242,7 @@ namespace FontDownloader
                 {
                     auto *payload = new FontReadyPayload{req.widgetHwnd, req.elementId, cachedDir};
                     if (!PostMessageW(msgWnd, JSEngine::WM_NOVADESK_DISPATCH,
-                                      reinterpret_cast<WPARAM>(&DispatchFontReady),
+                                      JSEngine::DISPATCH_FONT_READY,
                                       reinterpret_cast<LPARAM>(payload)))
                     {
                         delete payload;
