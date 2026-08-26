@@ -12,6 +12,7 @@
 #include <deque>
 #include <cwctype>
 #include <map>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
@@ -90,6 +91,7 @@ namespace novadesk::scripting::quickjs
             JSValue exportObject = JS_UNDEFINED;
         };
 
+        std::recursive_mutex g_addonMutex;
         std::map<std::wstring, AddonInfo> g_loadedAddons;
         std::unordered_map<int, std::wstring> g_addonPathById;
         int g_nextAddonId = 1;
@@ -367,22 +369,29 @@ namespace novadesk::scripting::quickjs
 
         static JSValue AddonRegisteredFunctionBridge(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv, int magic)
         {
-            auto it = g_registeredAddonFunctions.find(magic);
-            if (it == g_registeredAddonFunctions.end() || !it->second.fn)
+            int (*fn)(novadesk_context) = nullptr;
+            AddonInfo *addon = nullptr;
             {
-                return JS_UNDEFINED;
+                std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
+                auto it = g_registeredAddonFunctions.find(magic);
+                if (it == g_registeredAddonFunctions.end() || !it->second.fn)
+                {
+                    return JS_UNDEFINED;
+                }
+                fn = it->second.fn;
+                addon = it->second.addon;
             }
 
             AddonCallContext call{};
             call.ctx = ctx;
-            call.addon = it->second.addon;
+            call.addon = addon;
             call.args.reserve(argc);
             for (int i = 0; i < argc; ++i)
             {
                 call.args.push_back(JS_DupValue(ctx, argv[i]));
             }
 
-            it->second.fn(reinterpret_cast<novadesk_context>(&call));
+            fn(reinterpret_cast<novadesk_context>(&call));
 
             for (JSValue &v : call.args)
             {
@@ -507,6 +516,7 @@ namespace novadesk::scripting::quickjs
             auto *call = reinterpret_cast<AddonCallContext *>(c);
             if (!call || call->stack.empty() || !name || !func)
                 return;
+            std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
             const int id = g_nextAddonRegisteredFnId++;
             g_registeredAddonFunctions[id] = AddonRegisteredFunction{func, call->addon};
             if (call->addon)
@@ -821,6 +831,7 @@ namespace novadesk::scripting::quickjs
 
         bool UnloadAddonById(int addonId)
         {
+            std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
             auto pit = g_addonPathById.find(addonId);
             if (pit == g_addonPathById.end())
             {
@@ -872,6 +883,7 @@ namespace novadesk::scripting::quickjs
 
         void UnloadAllAddonsInternal()
         {
+            std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
             std::vector<int> addonIds;
             addonIds.reserve(g_addonPathById.size());
             for (const auto &kv : g_addonPathById)
@@ -1506,6 +1518,8 @@ namespace novadesk::scripting::quickjs
             {
                 addonPath = PathUtils::NormalizePath(addonPath);
             }
+
+            std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
 
             auto it = g_loadedAddons.find(addonPath);
             if (it != g_loadedAddons.end())
