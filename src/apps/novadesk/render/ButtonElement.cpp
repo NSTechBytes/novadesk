@@ -139,8 +139,8 @@ bool ButtonElement::HitTest(int x, int y)
     float contentX = static_cast<float>(m_X + m_PaddingLeft);
     float contentY = static_cast<float>(m_Y + m_PaddingTop);
     
-    float width = static_cast<float>(GetWidth());
-    float height = static_cast<float>(GetHeight());
+    float width = static_cast<float>(GetWidth() - m_PaddingLeft - m_PaddingRight);
+    float height = static_cast<float>(GetHeight() - m_PaddingTop - m_PaddingBottom);
 
     int autoW = GetAutoWidth();
     int autoH = GetAutoHeight();
