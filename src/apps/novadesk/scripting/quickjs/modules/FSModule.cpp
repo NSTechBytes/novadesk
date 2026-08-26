@@ -9,7 +9,6 @@
 
 #include <filesystem>
 #include <fstream>
-#include <cstring>
 #include <string>
 
 #include "../../shared/PathUtils.h"
@@ -57,14 +56,15 @@ namespace novadesk::scripting::quickjs
             const std::wstring path = ResolveFsPath(ctx, argv[0]);
             if (path.empty())
                 return JS_ThrowTypeError(ctx, "invalid path");
-            const char *data = JS_ToCString(ctx, argv[1]);
+            size_t len = 0;
+            const char *data = JS_ToCStringLen(ctx, &len, argv[1]);
             if (!data)
                 return JS_EXCEPTION;
             const bool append = (argc > 2) ? (JS_ToBool(ctx, argv[2]) != 0) : false;
             std::ofstream out(fs::path(path), std::ios::binary | (append ? std::ios::app : std::ios::trunc));
             bool ok = out.is_open();
             if (ok)
-                out.write(data, static_cast<std::streamsize>(std::strlen(data)));
+                out.write(data, static_cast<std::streamsize>(len));
             JS_FreeCString(ctx, data);
             return JS_NewBool(ctx, ok ? 1 : 0);
         }
