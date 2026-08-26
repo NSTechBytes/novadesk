@@ -429,12 +429,14 @@ namespace Direct2D
         // Read data
         DWORD dwDownloaded = 0;
         BYTE tempBuffer[4096];
+        bool downloadError = false;
         
         do
         {
             dwSize = 0;
             if (!WinHttpQueryDataAvailable(hRequest, &dwSize))
             {
+                downloadError = true;
                 break;
             }
             
@@ -444,6 +446,7 @@ namespace Direct2D
             DWORD dwRead = 0;
             if (!WinHttpReadData(hRequest, tempBuffer, (std::min)((DWORD)sizeof(tempBuffer), dwSize), &dwRead))
             {
+                downloadError = true;
                 break;
             }
             
@@ -459,6 +462,13 @@ namespace Direct2D
         WinHttpCloseHandle(hRequest);
         WinHttpCloseHandle(hConnect);
         WinHttpCloseHandle(hSession);
+
+        if (downloadError)
+        {
+            Logging::Log(LogLevel::Error, L"[novadesk] download interrupted after %d bytes from URL: %s", dwDownloaded, url.c_str());
+            buffer.clear();
+            return false;
+        }
 
         // Logging::Log(LogLevel::Info, L"[novadesk] Downloaded %d bytes from URL: %s", dwDownloaded, url.c_str());
         return buffer.size() > 0;
