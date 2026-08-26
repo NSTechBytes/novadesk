@@ -802,10 +802,21 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (widget->m_FocusedInputBox)
             {
                 KillTimer(hWnd, TIMER_CARET);
-                if (widget->m_FocusedInputBox->m_OnBlurCallbackId != -1)
-                    JSEngine::CallEventCallback(widget->m_FocusedInputBox->m_OnBlurCallbackId, widget, nullptr);
-                widget->m_FocusedInputBox->SetFocus(false);
-                widget->m_FocusedInputBox = nullptr;
+                InputBoxElement *focusedInput = widget->m_FocusedInputBox;
+                const auto focusedElement = static_cast<Element *>(focusedInput);
+                const bool isTracked = std::find(widget->m_Elements.begin(), widget->m_Elements.end(), focusedElement) != widget->m_Elements.end();
+                if (isTracked)
+                {
+                    const int onBlurCallbackId = focusedInput->m_OnBlurCallbackId;
+                    if (onBlurCallbackId != -1)
+                        JSEngine::CallEventCallback(onBlurCallbackId, widget, nullptr);
+
+                    const bool stillTracked = std::find(widget->m_Elements.begin(), widget->m_Elements.end(), focusedElement) != widget->m_Elements.end();
+                    if (widget->m_FocusedInputBox == focusedInput && stillTracked)
+                        focusedInput->SetFocus(false);
+                }
+                if (widget->m_FocusedInputBox == focusedInput)
+                    widget->m_FocusedInputBox = nullptr;
                 widget->Redraw();
             }
             JSEngine::TriggerWidgetEvent(widget, "unFocus");
