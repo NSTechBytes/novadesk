@@ -536,17 +536,15 @@ bool GeneralImage::BuildProcessedImage(ID2D1DeviceContext *context, Microsoft::W
         {
             memcpy(&matrix, m_ColorMatrix.data(), sizeof(float) * 20);
         }
-        else
+        else if (m_HasImageTint)
         {
-            if (m_HasImageTint)
-            {
-                matrix.m[0][0] = GetRValue(m_ImageTint) / 255.0f;
-                matrix.m[1][1] = GetGValue(m_ImageTint) / 255.0f;
-                matrix.m[2][2] = GetBValue(m_ImageTint) / 255.0f;
-                matrix.m[3][3] = m_ImageTintAlpha / 255.0f;
-            }
-            matrix.m[3][3] *= (m_ImageAlpha / 255.0f);
+            matrix.m[0][0] = GetRValue(m_ImageTint) / 255.0f;
+            matrix.m[1][1] = GetGValue(m_ImageTint) / 255.0f;
+            matrix.m[2][2] = GetBValue(m_ImageTint) / 255.0f;
+            matrix.m[3][3] = m_ImageTintAlpha / 255.0f;
         }
+        // Apply global image alpha unconditionally, regardless of color matrix
+        matrix.m[3][3] *= (m_ImageAlpha / 255.0f);
 
         colorEffect->SetInput(0, current.Get());
         colorEffect->SetValue(D2D1_COLORMATRIX_PROP_COLOR_MATRIX, matrix);
