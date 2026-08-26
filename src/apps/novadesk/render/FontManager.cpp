@@ -93,7 +93,7 @@ namespace FontManager
     };
 
     // Forward declarations of registry helpers
-    std::vector<uint8_t> GetMemoryFont(const std::wstring& url);
+    const std::vector<uint8_t>& GetMemoryFont(const std::wstring& url);
 
     extern Microsoft::WRL::ComPtr<IDWriteInMemoryFontFileLoader> g_pInMemoryLoader;
     extern std::mutex g_MemoryFontsMutex;
@@ -105,7 +105,7 @@ namespace FontManager
         InMemoryFontFileEnumerator(IDWriteFactory* factory, const std::wstring& url)
             : m_RefCount(1), m_pFactory(factory), m_Url(url), m_CurrentIndex(-1)
         {
-            std::vector<uint8_t> buffer = GetMemoryFont(url);
+            const auto& buffer = GetMemoryFont(url);
             if (!buffer.empty()) {
                 Microsoft::WRL::ComPtr<IDWriteFactory5> factory5;
                 HRESULT hr = factory->QueryInterface(IID_PPV_ARGS(&factory5));
@@ -350,14 +350,15 @@ namespace FontManager
         Logging::Log(LogLevel::Info, L"FontManager: Registered memory font for '%s' (%zu bytes)", url.c_str(), g_MemoryFonts[url].size());
     }
 
-    std::vector<uint8_t> GetMemoryFont(const std::wstring& url)
+    const std::vector<uint8_t>& GetMemoryFont(const std::wstring& url)
     {
         std::lock_guard<std::mutex> lock(g_MemoryFontsMutex);
         auto it = g_MemoryFonts.find(url);
         if (it != g_MemoryFonts.end()) {
             return it->second;
         }
-        return {};
+        static const std::vector<uint8_t> s_Empty;
+        return s_Empty;
     }
 
     bool HasMemoryFont(const std::wstring& url)
