@@ -1160,7 +1160,11 @@ namespace novadesk::scripting::quickjs
             JSValue parsed = JS_ParseJSON(ctx, text.c_str(), text.size(), Utils::ToString(storagePath).c_str());
             if (JS_IsException(parsed) || !JS_IsObject(parsed))
             {
-                if (!JS_IsException(parsed))
+                if (JS_IsException(parsed))
+                {
+                    JS_FreeValue(ctx, JS_GetException(ctx));
+                }
+                else
                 {
                     JS_FreeValue(ctx, parsed);
                 }
@@ -1176,6 +1180,7 @@ namespace novadesk::scripting::quickjs
             JS_FreeValue(ctx, indent);
             if (JS_IsException(serialized))
             {
+                JS_FreeValue(ctx, JS_GetException(ctx));
                 return false;
             }
 
