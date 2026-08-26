@@ -81,7 +81,8 @@ namespace
 
         if (clip == TEXT_CLIP_ELLIPSIS)
         {
-            if (SUCCEEDED(Direct2D::GetWriteFactory()->CreateEllipsisTrimmingSign(textFormat, ellipsis.GetAddressOf())))
+            auto *writeFactory = Direct2D::GetWriteFactory();
+            if (writeFactory && SUCCEEDED(writeFactory->CreateEllipsisTrimmingSign(textFormat, ellipsis.GetAddressOf())))
             {
                 textFormat->SetTrimming(&trimming, ellipsis.Get());
             }
@@ -251,8 +252,15 @@ void TextElement::Render(ID2D1DeviceContext *context)
         }
     }
 
+    auto *writeFactory = Direct2D::GetWriteFactory();
+    if (!writeFactory)
+    {
+        RestoreRenderTransform(context, originalTransform);
+        return;
+    }
+
     Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
-    HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
+    HRESULT hr = writeFactory->CreateTextFormat(
         fontFace.c_str(),
         pCollection.Get(),
         (DWRITE_FONT_WEIGHT)m_FontWeight,
@@ -303,7 +311,7 @@ void TextElement::Render(ID2D1DeviceContext *context)
         // Always create a text layout for rendering if we have letter spacing or shadows
         std::wstring processedText = GetProcessedText();
         Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
-        hr = Direct2D::GetWriteFactory()->CreateTextLayout(
+        hr = writeFactory->CreateTextLayout(
             processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
             layoutW, layoutH, pLayout.GetAddressOf());
 
@@ -465,7 +473,7 @@ void TextElement::Render(ID2D1DeviceContext *context)
                     {
                         // Create a new layout to apply custom color to selected range
                         Microsoft::WRL::ComPtr<IDWriteTextLayout> pCustomLayout;
-                        hr = Direct2D::GetWriteFactory()->CreateTextLayout(
+                        hr = writeFactory->CreateTextLayout(
                             processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
                             layoutW, layoutH, pCustomLayout.GetAddressOf());
                         
@@ -545,8 +553,12 @@ int TextElement::GetAutoWidth()
         }
     }
 
+    auto *writeFactory = Direct2D::GetWriteFactory();
+    if (!writeFactory)
+        return 0;
+
     Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
-    HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
+    HRESULT hr = writeFactory->CreateTextFormat(
         fontFace.c_str(), pCollection.Get(),
         (DWRITE_FONT_WEIGHT)m_FontWeight,
         m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
@@ -559,7 +571,7 @@ int TextElement::GetAutoWidth()
 
     std::wstring processedText = GetProcessedText();
     Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
-    hr = Direct2D::GetWriteFactory()->CreateTextLayout(
+    hr = writeFactory->CreateTextLayout(
         processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
         10000.0f, 10000.0f, pLayout.GetAddressOf());
     if (FAILED(hr))
@@ -603,8 +615,12 @@ int TextElement::GetAutoHeight()
         }
     }
 
+    auto *writeFactory = Direct2D::GetWriteFactory();
+    if (!writeFactory)
+        return 0;
+
     Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
-    HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
+    HRESULT hr = writeFactory->CreateTextFormat(
         fontFace.c_str(), pCollection.Get(),
         (DWRITE_FONT_WEIGHT)m_FontWeight,
         m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
@@ -638,7 +654,7 @@ int TextElement::GetAutoHeight()
     }
 
     Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
-    hr = Direct2D::GetWriteFactory()->CreateTextLayout(
+    hr = writeFactory->CreateTextLayout(
         processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
         maxWidth, 10000.0f, pLayout.GetAddressOf());
     if (FAILED(hr))
@@ -723,8 +739,12 @@ bool TextElement::HitTest(int x, int y)
         }
     }
 
+    auto *writeFactory = Direct2D::GetWriteFactory();
+    if (!writeFactory)
+        return false;
+
     Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
-    HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
+    HRESULT hr = writeFactory->CreateTextFormat(
         fontFace.c_str(), pCollection.Get(),
         (DWRITE_FONT_WEIGHT)m_FontWeight,
         m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
@@ -748,7 +768,7 @@ bool TextElement::HitTest(int x, int y)
     if (processedText.empty())
         return false;
     Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
-    hr = Direct2D::GetWriteFactory()->CreateTextLayout(
+    hr = writeFactory->CreateTextLayout(
         processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
         layoutW, layoutH, pLayout.GetAddressOf());
     if (FAILED(hr))
@@ -1029,8 +1049,12 @@ UINT32 TextElement::HitTestTextPosition(int x, int y)
         }
     }
 
+    auto *writeFactory = Direct2D::GetWriteFactory();
+    if (!writeFactory)
+        return 0;
+
     Microsoft::WRL::ComPtr<IDWriteTextFormat> pTextFormat;
-    HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
+    HRESULT hr = writeFactory->CreateTextFormat(
         fontFace.c_str(), pCollection.Get(),
         (DWRITE_FONT_WEIGHT)m_FontWeight,
         m_Italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
@@ -1055,7 +1079,7 @@ UINT32 TextElement::HitTestTextPosition(int x, int y)
         return 0;
 
     Microsoft::WRL::ComPtr<IDWriteTextLayout> pLayout;
-    hr = Direct2D::GetWriteFactory()->CreateTextLayout(
+    hr = writeFactory->CreateTextLayout(
         processedText.c_str(), (UINT32)processedText.length(), pTextFormat.Get(),
         layoutW, layoutH, pLayout.GetAddressOf());
     if (FAILED(hr))

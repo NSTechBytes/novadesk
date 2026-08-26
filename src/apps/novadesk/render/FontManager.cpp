@@ -239,8 +239,13 @@ namespace FontManager
 
     bool Initialize()
     {
+        auto *writeFactory = Direct2D::GetWriteFactory();
+        if (!writeFactory) {
+            Logging::Log(LogLevel::Error, L"FontManager: DirectWrite factory is null");
+            return false;
+        }
         g_pLoader = new DirectoryFontCollectionLoader();
-        HRESULT hr = Direct2D::GetWriteFactory()->RegisterFontCollectionLoader(g_pLoader.Get());
+        HRESULT hr = writeFactory->RegisterFontCollectionLoader(g_pLoader.Get());
         if (FAILED(hr)) {
             Logging::Log(LogLevel::Error, L"FontManager: Failed to register font collection loader (0x%08X)", hr);
             return false;
@@ -248,7 +253,7 @@ namespace FontManager
 
         // Try to query IDWriteFactory5 to initialize the in-memory loader
         Microsoft::WRL::ComPtr<IDWriteFactory5> factory5;
-        if (SUCCEEDED(Direct2D::GetWriteFactory()->QueryInterface(IID_PPV_ARGS(&factory5)))) {
+        if (SUCCEEDED(writeFactory->QueryInterface(IID_PPV_ARGS(&factory5)))) {
             hr = factory5->CreateInMemoryFontFileLoader(&g_pInMemoryLoader);
             if (SUCCEEDED(hr)) {
                 hr = factory5->RegisterFontFileLoader(g_pInMemoryLoader.Get());
@@ -270,10 +275,13 @@ namespace FontManager
 
     void Cleanup()
     {
+        auto *writeFactory = Direct2D::GetWriteFactory();
         if (g_pInMemoryLoader) {
-            Microsoft::WRL::ComPtr<IDWriteFactory5> factory5;
-            if (SUCCEEDED(Direct2D::GetWriteFactory()->QueryInterface(IID_PPV_ARGS(&factory5)))) {
-                factory5->UnregisterFontFileLoader(g_pInMemoryLoader.Get());
+            if (writeFactory) {
+                Microsoft::WRL::ComPtr<IDWriteFactory5> factory5;
+                if (SUCCEEDED(writeFactory->QueryInterface(IID_PPV_ARGS(&factory5)))) {
+                    factory5->UnregisterFontFileLoader(g_pInMemoryLoader.Get());
+                }
             }
             g_pInMemoryLoader.Reset();
         }
@@ -281,7 +289,9 @@ namespace FontManager
         {
             std::lock_guard<std::mutex> lock(g_CollectionCacheMutex);
             if (g_pLoader) {
-                Direct2D::GetWriteFactory()->UnregisterFontCollectionLoader(g_pLoader.Get());
+                if (writeFactory) {
+                    writeFactory->UnregisterFontCollectionLoader(g_pLoader.Get());
+                }
                 g_pLoader = nullptr;
             }
             g_CollectionCache.clear();
@@ -308,8 +318,13 @@ namespace FontManager
             return it->second;
         }
 
+        auto *writeFactory = Direct2D::GetWriteFactory();
+        if (!writeFactory) {
+            return nullptr;
+        }
+
         Microsoft::WRL::ComPtr<IDWriteFontCollection> pCollection;
-        HRESULT hr = Direct2D::GetWriteFactory()->CreateCustomFontCollection(
+        HRESULT hr = writeFactory->CreateCustomFontCollection(
             g_pLoader.Get(),
             key.c_str(),
             (UINT32)(key.length() * sizeof(wchar_t)),
