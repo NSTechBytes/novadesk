@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <deque>
 #include <cwctype>
 #include <map>
 #include <unordered_map>
@@ -115,7 +116,7 @@ namespace novadesk::scripting::quickjs
             AddonInfo *addon = nullptr;
             std::vector<JSValue> args;
             std::vector<JSValue> stack;
-            std::vector<std::string> tempStrings;
+            std::deque<std::string> tempStrings;
             std::string throwMessage;
             bool hasThrow = false;
         };
