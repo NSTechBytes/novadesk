@@ -130,6 +130,8 @@ private:
     std::mutex m_AsyncDownloadMutex;
     std::vector<std::thread> m_AsyncDownloadThreads;
     bool m_AsyncDownloadsShutdown = false;
+
+    mutable std::recursive_mutex m_ImageStateMutex;
     bool m_IsFallbackShowing = false;       // true while showing the embedded fallback image
     std::vector<BYTE> m_DownloadedBuffer;   // in-memory buffer for async downloads
     DecodedImageData m_DecodedImage;

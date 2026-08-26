@@ -100,6 +100,7 @@ void GeneralImage::SetFallbackPath(const std::wstring &path)
 
 void GeneralImage::LoadFallbackFromResource()
 {
+    std::lock_guard<std::recursive_mutex> lock(m_ImageStateMutex);
     m_pWICBitmap.Reset();
     ResetBitmapCache();
 
@@ -166,6 +167,7 @@ void GeneralImage::EnsureBitmap(ID2D1DeviceContext *context)
 
     if (!m_D2DBitmap)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_ImageStateMutex);
         bool ok = false;
         if (m_DecodedImage.IsValid())
         {
@@ -324,6 +326,8 @@ void GeneralImage::OnImageDownloaded(const std::wstring& url, const std::vector<
     if (m_ImagePath != url || buffer.empty())
         return;
 
+    std::lock_guard<std::recursive_mutex> lock(m_ImageStateMutex);
+
     // Store the buffer so EnsureBitmap can create the D2D resource on the render thread
     m_DownloadedBuffer = buffer;
     m_IsFallbackShowing = false;
@@ -348,6 +352,8 @@ void GeneralImage::OnImageDownloaded(const std::wstring& url, const std::vector<
 void GeneralImage::OnImageDecoded(const std::wstring& url, DecodedImageData&& image)
 {
     if (m_ImagePath != url || !image.IsValid()) return;
+
+    std::lock_guard<std::recursive_mutex> lock(m_ImageStateMutex);
     m_DownloadedBuffer.clear();
     m_pWICBitmap.Reset();
     m_DecodedImage = std::move(image);
