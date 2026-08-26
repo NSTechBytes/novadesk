@@ -1862,21 +1862,6 @@ namespace JSEngine
         }
 
         JSValue arg = JS_NewObject(g_context);
-        JS_SetPropertyStr(g_context, arg, "__clientX", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "__clientY", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "__screenX", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "__screenY", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "__offsetX", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "__offsetY", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "__offsetXPercent", JS_NewInt32(g_context, 0));
-        JS_SetPropertyStr(g_context, arg, "__offsetYPercent", JS_NewInt32(g_context, 0));
-        if (widget)
-        {
-            JS_SetPropertyStr(g_context, arg, "widgetId",
-                              JS_NewString(g_context, Utils::ToString(widget->GetOptions().id).c_str()));
-        }
-
-        int argc = 1;
         if (data)
         {
             JS_SetPropertyStr(g_context, arg, "__clientX", JS_NewInt32(g_context, data->clientX));
@@ -1888,6 +1873,25 @@ namespace JSEngine
             JS_SetPropertyStr(g_context, arg, "__offsetXPercent", JS_NewInt32(g_context, data->offsetXPercent));
             JS_SetPropertyStr(g_context, arg, "__offsetYPercent", JS_NewInt32(g_context, data->offsetYPercent));
         }
+        else
+        {
+            JS_SetPropertyStr(g_context, arg, "__clientX", JS_NewInt32(g_context, 0));
+            JS_SetPropertyStr(g_context, arg, "__clientY", JS_NewInt32(g_context, 0));
+            JS_SetPropertyStr(g_context, arg, "__screenX", JS_NewInt32(g_context, 0));
+            JS_SetPropertyStr(g_context, arg, "__screenY", JS_NewInt32(g_context, 0));
+            JS_SetPropertyStr(g_context, arg, "__offsetX", JS_NewInt32(g_context, 0));
+            JS_SetPropertyStr(g_context, arg, "__offsetY", JS_NewInt32(g_context, 0));
+            JS_SetPropertyStr(g_context, arg, "__offsetXPercent", JS_NewInt32(g_context, 0));
+            JS_SetPropertyStr(g_context, arg, "__offsetYPercent", JS_NewInt32(g_context, 0));
+        }
+
+        if (widget)
+        {
+            JS_SetPropertyStr(g_context, arg, "widgetId",
+                              JS_NewString(g_context, Utils::ToString(widget->GetOptions().id).c_str()));
+        }
+
+        int argc = 1;
 
         JSValue argv[1] = {arg};
         const std::wstring ownerScriptPath = GetWidgetOwnerScriptPath(widget);
