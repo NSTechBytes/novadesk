@@ -1895,6 +1895,7 @@ namespace novadesk::scripting::quickjs
             INT64 id = WinToastLib::WinToast::instance()->showToast(templ, handler, &error);
             if (id < 0)
             {
+                delete handler;
                 SetToastError(WinToastLib::WinToast::strerror(error));
                 return JS_NULL;
             }
