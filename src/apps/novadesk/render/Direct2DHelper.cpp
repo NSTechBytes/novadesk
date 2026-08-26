@@ -87,6 +87,7 @@ namespace Direct2D
     bool Initialize()
     {
         HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        bool comInitialized = SUCCEEDED(hr);
         if (FAILED(hr) && hr != RPC_E_CHANGED_MODE)
         {
             Logging::Log(LogLevel::Error, L"Failed to initialize COM (0x%08X)", hr);
@@ -97,6 +98,7 @@ namespace Direct2D
         if (FAILED(hr))
         {
             Logging::Log(LogLevel::Error, L"Failed to create D2D1Factory (0x%08X)", hr);
+            if (comInitialized) CoUninitialize();
             return false;
         }
 
@@ -104,6 +106,7 @@ namespace Direct2D
         if (FAILED(hr))
         {
             Logging::Log(LogLevel::Error, L"Failed to create DWriteFactory (0x%08X)", hr);
+            if (comInitialized) CoUninitialize();
             return false;
         }
 
@@ -111,6 +114,7 @@ namespace Direct2D
         if (FAILED(hr))
         {
             Logging::Log(LogLevel::Error, L"Failed to create WICImagingFactory (0x%08X)", hr);
+            if (comInitialized) CoUninitialize();
             return false;
         }
 
