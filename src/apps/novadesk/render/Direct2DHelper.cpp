@@ -582,6 +582,9 @@ namespace Direct2D
 
     bool LoadBitmapFromFile(ID2D1RenderTarget* context, const std::wstring& path, ID2D1Bitmap** bitmap, IWICBitmap** wicBitmap, bool useExifOrientation)
     {
+        if (bitmap) *bitmap = nullptr;
+        if (wicBitmap) *wicBitmap = nullptr;
+
         if (!context || !g_pWICFactory) return false;
 
         ComPtr<IWICBitmap> pWICBitmap;
