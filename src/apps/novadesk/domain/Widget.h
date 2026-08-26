@@ -221,6 +221,9 @@ public:
 
     ~Widget();
 
+    Widget(const Widget&) = delete;
+    Widget& operator=(const Widget&) = delete;
+
     bool Create();
 
     void Show();
