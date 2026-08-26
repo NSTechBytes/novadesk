@@ -409,7 +409,7 @@ void Widget::ChangeZPos(ZPOSITION zPos, bool all)
                 {
                     if (GetWindowLongPtr(prev, GWL_EXSTYLE) & WS_EX_TOPMOST)
                     {
-                        if (SetWindowPos(m_hWnd, prev, 0, 0, 0, 0, ZPOS_FLAGS))
+                        if (m_hWnd && SetWindowPos(m_hWnd, prev, 0, 0, 0, 0, ZPOS_FLAGS))
                         {
                             goto timer_check;
                         }
@@ -432,15 +432,18 @@ void Widget::ChangeZPos(ZPOSITION zPos, bool all)
         break;
     }
 
-    SetWindowPos(m_hWnd, winPos, 0, 0, 0, 0, ZPOS_FLAGS);
-
-    // If a tooltip is active and we just asserted topmost, re-assert the tooltip above us
-    if (winPos == HWND_TOPMOST && m_Tooltip.IsActive())
+    if (m_hWnd)
     {
-        HWND activeTooltip = m_Tooltip.GetActiveHWnd();
-        if (activeTooltip)
+        SetWindowPos(m_hWnd, winPos, 0, 0, 0, 0, ZPOS_FLAGS);
+
+        // If a tooltip is active and we just asserted topmost, re-assert the tooltip above us
+        if (winPos == HWND_TOPMOST && m_Tooltip.IsActive())
         {
-            SetWindowPos(activeTooltip, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            HWND activeTooltip = m_Tooltip.GetActiveHWnd();
+            if (activeTooltip)
+            {
+                SetWindowPos(activeTooltip, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            }
         }
     }
 
@@ -451,13 +454,16 @@ void Widget::ChangeZPos(ZPOSITION zPos, bool all)
     }
 
 timer_check:
-    if (oldZPos == ZPOSITION_ONTOPMOST && m_WindowZPosition != ZPOSITION_ONTOPMOST)
+    if (m_hWnd)
     {
-        KillTimer(m_hWnd, TIMER_TOPMOST);
-    }
-    else if (oldZPos != ZPOSITION_ONTOPMOST && m_WindowZPosition == ZPOSITION_ONTOPMOST)
-    {
-        SetTimer(m_hWnd, TIMER_TOPMOST, 500, nullptr);
+        if (oldZPos == ZPOSITION_ONTOPMOST && m_WindowZPosition != ZPOSITION_ONTOPMOST)
+        {
+            KillTimer(m_hWnd, TIMER_TOPMOST);
+        }
+        else if (oldZPos != ZPOSITION_ONTOPMOST && m_WindowZPosition == ZPOSITION_ONTOPMOST)
+        {
+            SetTimer(m_hWnd, TIMER_TOPMOST, 500, nullptr);
+        }
     }
 }
 
@@ -470,8 +476,11 @@ void Widget::ChangeSingleZPos(ZPOSITION zPos, bool all)
     if (zPos == ZPOSITION_NORMAL && (!all || System::GetShowDesktop()))
     {
         m_WindowZPosition = zPos;
-        SetWindowPos(m_hWnd, System::GetBackmostTopWindow(), 0, 0, 0, 0, ZPOS_FLAGS);
-        BringWindowToTop(m_hWnd);
+        if (m_hWnd)
+        {
+            SetWindowPos(m_hWnd, System::GetBackmostTopWindow(), 0, 0, 0, 0, ZPOS_FLAGS);
+            BringWindowToTop(m_hWnd);
+        }
     }
     else
     {
@@ -514,7 +523,8 @@ void Widget::SetWindowPosition(int x, int y, int w, int h)
         m_Options.x = x;
         m_Options.y = y;
 
-        SetWindowPos(m_hWnd, NULL, x, y, m_Options.width, m_Options.height, SWP_NOZORDER | SWP_NOACTIVATE);
+        if (m_hWnd)
+            SetWindowPos(m_hWnd, NULL, x, y, m_Options.width, m_Options.height, SWP_NOZORDER | SWP_NOACTIVATE);
 
         if (sizeProvided)
         {
@@ -645,13 +655,24 @@ void Widget::SetDraggable(bool enable)
 }
 
 /*
-** Enable/disable snap-to-edges.
+** Enable/disable click-through.
 */
-void Widget::SetSnapEdges(bool enable)
+void Widget::SetClickThrough(bool enable)
 {
-    if (m_Options.snapEdges != enable)
+    if (m_Options.clickThrough != enable)
     {
-        m_Options.snapEdges = enable;
+        m_Options.clickThrough = enable;
+
+        if (m_hWnd)
+        {
+            LONG exStyle = GetWindowLong(m_hWnd, GWL_EXSTYLE);
+            if (enable)
+                exStyle |= WS_EX_TRANSPARENT;
+            else
+                exStyle &= ~WS_EX_TRANSPARENT;
+
+            SetWindowLong(m_hWnd, GWL_EXSTYLE, exStyle);
+        }
         Settings::SaveWidget(m_Options.id, m_Options);
     }
 }
@@ -669,22 +690,13 @@ void Widget::SetKeepOnScreen(bool enable)
 }
 
 /*
-** Enable/disable click-through.
+** Enable/disable snap-to-edges.
 */
-
-void Widget::SetClickThrough(bool enable)
+void Widget::SetSnapEdges(bool enable)
 {
-    if (m_Options.clickThrough != enable)
+    if (m_Options.snapEdges != enable)
     {
-        m_Options.clickThrough = enable;
-
-        LONG exStyle = GetWindowLong(m_hWnd, GWL_EXSTYLE);
-        if (enable)
-            exStyle |= WS_EX_TRANSPARENT;
-        else
-            exStyle &= ~WS_EX_TRANSPARENT;
-
-        SetWindowLong(m_hWnd, GWL_EXSTYLE, exStyle);
+        m_Options.snapEdges = enable;
         Settings::SaveWidget(m_Options.id, m_Options);
     }
 }
@@ -2002,12 +2014,14 @@ void Widget::FocusInputBox(InputBoxElement* inputElem)
         if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
             JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
         m_FocusedInputBox->SetFocus(false);
-        KillTimer(m_hWnd, TIMER_CARET);
+        if (m_hWnd)
+            KillTimer(m_hWnd, TIMER_CARET);
     }
     if (!inputElem->IsFocused())
     {
         inputElem->SetFocus(true);
-        SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
+        if (m_hWnd)
+            SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
         if (inputElem->m_OnFocusCallbackId != -1)
             JSEngine::CallEventCallback(inputElem->m_OnFocusCallbackId, this, nullptr);
     }
@@ -2024,7 +2038,8 @@ void Widget::BlurInputBox(InputBoxElement* inputElem)
     if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
         JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
     m_FocusedInputBox->SetFocus(false);
-    KillTimer(m_hWnd, TIMER_CARET);
+    if (m_hWnd)
+        KillTimer(m_hWnd, TIMER_CARET);
     m_FocusedInputBox = nullptr;
     Redraw();
 }
