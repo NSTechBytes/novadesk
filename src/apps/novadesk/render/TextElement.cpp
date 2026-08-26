@@ -417,7 +417,6 @@ void TextElement::Render(ID2D1DeviceContext *context)
             // Draw text selection highlight FIRST (before text) if enabled and active
             if (m_TextSelection && HasTextSelection())
             {
-                std::wstring processedText = GetProcessedText();
                 UINT32 textLength = (UINT32)processedText.length();
                 
                 if (m_SelectionStart < textLength && m_SelectionEnd <= textLength && m_SelectionStart < m_SelectionEnd)
@@ -466,7 +465,6 @@ void TextElement::Render(ID2D1DeviceContext *context)
             if (m_TextSelection && HasTextSelection() && m_HasSelectionTextColor)
             {
                 // If we have custom selection text color, we need special rendering
-                std::wstring processedText = GetProcessedText();
                 UINT32 textLength = (UINT32)processedText.length();
                 
                 if (m_SelectionStart < textLength && m_SelectionEnd <= textLength && m_SelectionStart < m_SelectionEnd)
