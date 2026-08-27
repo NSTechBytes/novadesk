@@ -162,8 +162,15 @@ namespace JSEngine
 
         void DestroyAllWidgets()
         {
-            std::vector<Widget *> copy = Widget::GetAllWidgets();
-            Widget::ClearAllWidgets();
+            std::vector<Widget *> copy;
+            {
+                std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
+                copy = Widget::GetAllWidgets();
+                Widget::GetAllWidgets().clear();
+            }
+            // Lock released before delete: the destructor calls DestroyWindow
+            // which dispatches WM_DESTROY synchronously; holding the lock there
+            // would deadlock.
             for (auto w : copy)
             {
                 delete w;
@@ -229,34 +236,39 @@ namespace JSEngine
         void DestroyWidgetsForScript(const std::wstring &scriptPath)
         {
             std::vector<Widget *> toDelete;
-            auto &all = Widget::GetAllWidgets();
-            for (auto *w : all)
             {
-                auto it = g_widgetOwners.find(w);
-                if (it != g_widgetOwners.end() && it->second == scriptPath)
+                std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
+                auto &all = Widget::GetAllWidgets();
+                for (auto *w : all)
                 {
-                    toDelete.push_back(w);
+                    auto it = g_widgetOwners.find(w);
+                    if (it != g_widgetOwners.end() && it->second == scriptPath)
+                    {
+                        toDelete.push_back(w);
+                    }
+                }
+                if (!toDelete.empty())
+                {
+                    std::unordered_set<Widget *> toDeleteSet;
+                    toDeleteSet.reserve(toDelete.size());
+                    for (auto *w : toDelete)
+                        toDeleteSet.insert(w);
+                    all.erase(std::remove_if(all.begin(), all.end(),
+                                                    [&](Widget *w)
+                                                    { return toDeleteSet.find(w) != toDeleteSet.end(); }),
+                                     all.end());
                 }
             }
-            if (!toDelete.empty())
+            // Lock released before delete: the destructor calls DestroyWindow
+            // which dispatches WM_DESTROY synchronously; holding the lock there
+            // would deadlock.
+            for (auto *w : toDelete)
             {
-                auto &allWidgets = Widget::GetAllWidgets();
-                std::unordered_set<Widget *> toDeleteSet;
-                toDeleteSet.reserve(toDelete.size());
-                for (auto *w : toDelete)
-                    toDeleteSet.insert(w);
-                allWidgets.erase(std::remove_if(allWidgets.begin(), allWidgets.end(),
-                                                [&](Widget *w)
-                                                { return toDeleteSet.find(w) != toDeleteSet.end(); }),
-                                 allWidgets.end());
-                for (auto *w : toDelete)
-                {
-                    // Remove the pointer-keyed listener entry before the
-                    // widget storage can be released.
-                    g_widgetEventListeners.erase(w);
-                    g_widgetOwners.erase(w);
-                    delete w;
-                }
+                // Remove the pointer-keyed listener entry before the
+                // widget storage can be released.
+                g_widgetEventListeners.erase(w);
+                g_widgetOwners.erase(w);
+                delete w;
             }
         }
 

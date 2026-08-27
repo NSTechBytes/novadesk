@@ -63,10 +63,16 @@ namespace novadesk::scripting::quickjs
                     return true;
             }
 
-            auto it = std::find(widgets.begin(), widgets.end(), widget);
-            if (it == widgets.end())
-                return false;
-            widgets.erase(it);
+            {
+                std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
+                auto it = std::find(widgets.begin(), widgets.end(), widget);
+                if (it == widgets.end())
+                    return false;
+                widgets.erase(it);
+            }
+            // Lock released before delete: the destructor calls DestroyWindow
+            // which dispatches WM_DESTROY synchronously; holding the lock there
+            // would deadlock.
             delete widget;
             return true;
         }

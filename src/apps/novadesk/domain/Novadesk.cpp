@@ -886,8 +886,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
     // Cleanup
-    std::vector<Widget *> widgetsCopy = widgets;
-    widgets.clear();
+    std::vector<Widget *> widgetsCopy;
+    {
+        std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
+        widgetsCopy = widgets;
+        widgets.clear();
+    }
+    // Lock released before delete: the destructor calls DestroyWindow
+    // which dispatches WM_DESTROY synchronously; holding the lock there
+    // would deadlock.
     for (auto w : widgetsCopy)
         delete w;
 

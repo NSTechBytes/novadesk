@@ -14,6 +14,7 @@
 #include <vector>
 #include <unordered_map>
 #include <memory>
+#include <mutex>
 #include <d2d1_1.h>
 #include <wrl/client.h>
 #include "DesktopManager.h"
@@ -250,6 +251,7 @@ public:
     void SetToolbarIcon(const std::wstring& path);
     void SetToolbarTitle(const std::wstring& title);
 
+    static std::mutex s_WidgetMutex;
     static bool s_IsMenuActive;
     static int s_ActiveColorPickerCount;
     static bool IsMenuActive() { return s_IsMenuActive || s_ActiveColorPickerCount > 0; }

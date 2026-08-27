@@ -26,6 +26,7 @@ bool System::c_ShowDesktop = false;
 // Internal helper for GetBackmostTopWindow
 static Widget *FindWidget(HWND hWnd)
 {
+    std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
     for (auto w : widgets)
     {
         if (w->GetWindow() == hWnd)
@@ -230,6 +231,7 @@ bool System::CheckDesktopState(HWND desktopIconsHostWindow)
 
 static BOOL CALLBACK EnumWidgetsProc(HWND hwnd, LPARAM lParam)
 {
+    // FindWidget acquires s_WidgetMutex internally.
     std::vector<Widget *> *windowsInZOrder = (std::vector<Widget *> *)lParam;
     Widget *widget = FindWidget(hwnd);
     if (widget)

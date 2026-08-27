@@ -2942,20 +2942,27 @@ namespace novadesk::scripting::quickjs
 
         if (!options.id.empty())
         {
-            auto existingIt = std::find_if(
-                widgets.begin(),
-                widgets.end(),
-                [&](Widget *existing)
-                {
-                    return existing && existing->GetOptions().id == options.id;
-                });
-
-            if (existingIt != widgets.end())
+            Widget *existing = nullptr;
             {
-                Widget *existing = *existingIt;
-                widgets.erase(existingIt);
-                delete existing;
+                std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
+                auto existingIt = std::find_if(
+                    widgets.begin(),
+                    widgets.end(),
+                    [&](Widget *w)
+                    {
+                        return w && w->GetOptions().id == options.id;
+                    });
+
+                if (existingIt != widgets.end())
+                {
+                    existing = *existingIt;
+                    widgets.erase(existingIt);
+                }
             }
+            // Lock released before delete: the destructor calls DestroyWindow
+            // which dispatches WM_DESTROY synchronously; holding the lock there
+            // would deadlock.
+            delete existing;
         }
 
         if (!options.id.empty())
@@ -3114,7 +3121,10 @@ namespace novadesk::scripting::quickjs
         {
             widget->Show();
         }
-        widgets.push_back(widget);
+        {
+            std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
+            widgets.push_back(widget);
+        }
         JSEngine::RegisterWidgetOwner(widget, JSEngine::GetCurrentScriptPath());
 
         if (g_widgetUiDebug)

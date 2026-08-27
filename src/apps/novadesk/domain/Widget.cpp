@@ -62,6 +62,7 @@
 
 extern std::vector<Widget *> widgets; // Defined in Novadesk.cpp
 
+std::mutex Widget::s_WidgetMutex;
 bool Widget::s_IsMenuActive = false;
 int Widget::s_ActiveColorPickerCount = 0;
 
@@ -72,6 +73,7 @@ bool Widget::IsValid(Widget *pWidget)
 {
     if (!pWidget)
         return false;
+    std::lock_guard<std::mutex> lock(s_WidgetMutex);
     for (auto *w : widgets)
     {
         if (w == pWidget)
@@ -87,6 +89,7 @@ std::vector<Widget *> &Widget::GetAllWidgets()
 
 void Widget::ClearAllWidgets()
 {
+    std::lock_guard<std::mutex> lock(s_WidgetMutex);
     widgets.clear();
 }
 
@@ -758,6 +761,7 @@ void Widget::ApplyToolbarTitle()
 */
 Widget *Widget::GetWidgetFromHWND(HWND hWnd)
 {
+    std::lock_guard<std::mutex> lock(s_WidgetMutex);
     for (auto w : widgets)
     {
         if (w->m_hWnd == hWnd)
@@ -1211,37 +1215,40 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     }
 
                     // Snap to other widgets
-                    for (Widget *w : widgets)
                     {
-                        if (w == widget)
-                            continue;
-                        RECT otherRect;
-                        GetWindowRect(w->GetWindow(), &otherRect);
-
-                        // Vertical overlap -> Snap horizontally
-                        if (wp->y < otherRect.bottom + SNAP_DISTANCE && wp->y + widget->m_Options.height > otherRect.top - SNAP_DISTANCE)
+                        std::lock_guard<std::mutex> lock(s_WidgetMutex);
+                        for (Widget *w : widgets)
                         {
-                            if (abs(wp->x - otherRect.left) < SNAP_DISTANCE)
-                                wp->x = otherRect.left;
-                            if (abs(wp->x - otherRect.right) < SNAP_DISTANCE)
-                                wp->x = otherRect.right;
-                            if (abs(wp->x + widget->m_Options.width - otherRect.left) < SNAP_DISTANCE)
-                                wp->x = otherRect.left - widget->m_Options.width;
-                            if (abs(wp->x + widget->m_Options.width - otherRect.right) < SNAP_DISTANCE)
-                                wp->x = otherRect.right - widget->m_Options.width;
-                        }
+                            if (w == widget)
+                                continue;
+                            RECT otherRect;
+                            GetWindowRect(w->GetWindow(), &otherRect);
 
-                        // Horizontal overlap -> Snap vertically
-                        if (wp->x < otherRect.right + SNAP_DISTANCE && wp->x + widget->m_Options.width > otherRect.left - SNAP_DISTANCE)
-                        {
-                            if (abs(wp->y - otherRect.top) < SNAP_DISTANCE)
-                                wp->y = otherRect.top;
-                            if (abs(wp->y - otherRect.bottom) < SNAP_DISTANCE)
-                                wp->y = otherRect.bottom;
-                            if (abs(wp->y + widget->m_Options.height - otherRect.top) < SNAP_DISTANCE)
-                                wp->y = otherRect.top - widget->m_Options.height;
-                            if (abs(wp->y + widget->m_Options.height - otherRect.bottom) < SNAP_DISTANCE)
-                                wp->y = otherRect.bottom - widget->m_Options.height;
+                            // Vertical overlap -> Snap horizontally
+                            if (wp->y < otherRect.bottom + SNAP_DISTANCE && wp->y + widget->m_Options.height > otherRect.top - SNAP_DISTANCE)
+                            {
+                                if (abs(wp->x - otherRect.left) < SNAP_DISTANCE)
+                                    wp->x = otherRect.left;
+                                if (abs(wp->x - otherRect.right) < SNAP_DISTANCE)
+                                    wp->x = otherRect.right;
+                                if (abs(wp->x + widget->m_Options.width - otherRect.left) < SNAP_DISTANCE)
+                                    wp->x = otherRect.left - widget->m_Options.width;
+                                if (abs(wp->x + widget->m_Options.width - otherRect.right) < SNAP_DISTANCE)
+                                    wp->x = otherRect.right - widget->m_Options.width;
+                            }
+
+                            // Horizontal overlap -> Snap vertically
+                            if (wp->x < otherRect.right + SNAP_DISTANCE && wp->x + widget->m_Options.width > otherRect.left - SNAP_DISTANCE)
+                            {
+                                if (abs(wp->y - otherRect.top) < SNAP_DISTANCE)
+                                    wp->y = otherRect.top;
+                                if (abs(wp->y - otherRect.bottom) < SNAP_DISTANCE)
+                                    wp->y = otherRect.bottom;
+                                if (abs(wp->y + widget->m_Options.height - otherRect.top) < SNAP_DISTANCE)
+                                    wp->y = otherRect.top - widget->m_Options.height;
+                                if (abs(wp->y + widget->m_Options.height - otherRect.bottom) < SNAP_DISTANCE)
+                                    wp->y = otherRect.bottom - widget->m_Options.height;
+                            }
                         }
                     }
 
@@ -1385,10 +1392,15 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             if (!Widget::IsValid(widget))
                 return 0;
 
-            auto it = std::find(widgets.begin(), widgets.end(), widget);
-            if (it != widgets.end())
-                widgets.erase(it);
-
+            {
+                std::lock_guard<std::mutex> lock(s_WidgetMutex);
+                auto it = std::find(widgets.begin(), widgets.end(), widget);
+                if (it != widgets.end())
+                    widgets.erase(it);
+            }
+            // Lock released before delete: the destructor calls DestroyWindow
+            // which dispatches WM_DESTROY synchronously; holding the lock there
+            // would deadlock.
             SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
             delete widget;
             return 0;
@@ -1534,16 +1546,15 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         return DefWindowProc(hWnd, message, wParam, lParam);
 
     case WM_DESTROY:
-        if (widget)
-        {
-            auto it = std::find(widgets.begin(), widgets.end(), widget);
-            if (it != widgets.end())
-                widgets.erase(it);
-
-            SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
-            widget->m_hWnd = nullptr;
-            delete widget;
-        }
+        // WM_DESTROY is dispatched synchronously by DestroyWindow(), which is
+        // called from the Widget destructor. The widget is already being
+        // destroyed — we must NOT delete it again here (double-free) and we
+        // must NOT try to lock s_WidgetMutex (deadlock: the caller may already
+        // hold it).
+        //
+        // Widget removal from the global vector is handled by WM_CLOSE or the
+        // JS close() path, both of which erase before calling delete.
+        SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
         return 0;
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
