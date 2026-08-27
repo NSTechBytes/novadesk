@@ -129,6 +129,7 @@ Widget::~Widget()
         KillTimer(m_hWnd, TIMER_TOPMOST);
         KillTimer(m_hWnd, TIMER_CARET);
         KillTimer(m_hWnd, TIMER_CTRL_OVERRIDE);
+        KillTimer(m_hWnd, TIMER_TOOLTIP);
         SetWindowLongPtr(m_hWnd, GWLP_USERDATA, 0);
     }
     WidgetAnimationHelper::ClearAllAnimations(*this);
