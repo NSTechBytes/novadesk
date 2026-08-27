@@ -292,12 +292,16 @@ void Element::RenderBevel(ID2D1DeviceContext* context) {
         }
         else
         {
-            for (int i = 0; i < m_BevelWidth; i++) {
-                float alpha = (m_BevelAlpha / 255.0f) * (1.0f - (float)i / m_BevelWidth);
-                Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> fadeBrush;
-                Direct2D::CreateSolidBrush(context, m_BevelColor, alpha, fadeBrush.GetAddressOf());
-                D2D1_RECT_F r = D2D1::RectF(rect.left + i, rect.top + i, rect.right - i, rect.bottom - i);
-                context->DrawRectangle(r, fadeBrush.Get(), 1.0f);
+            Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> fadeBrush;
+            Direct2D::CreateSolidBrush(context, m_BevelColor, 1.0f, fadeBrush.GetAddressOf());
+            if (fadeBrush)
+            {
+                for (int i = 0; i < m_BevelWidth; i++) {
+                    float alpha = (m_BevelAlpha / 255.0f) * (1.0f - (float)i / m_BevelWidth);
+                    fadeBrush->SetOpacity(alpha);
+                    D2D1_RECT_F r = D2D1::RectF(rect.left + i, rect.top + i, rect.right - i, rect.bottom - i);
+                    context->DrawRectangle(r, fadeBrush.Get(), 1.0f);
+                }
             }
         }
         break;
