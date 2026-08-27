@@ -357,6 +357,10 @@ private:
         Element*& outMouseActionElement,
         Element*& outToolTipElement);
 
+    bool IsTrackedElement(Element* el) const;
+    static bool SearchContainerItems(Element* el, const std::vector<Element*>& items);
+    void StampInteractiveBounds(Element* element, int offsetX, int offsetY, BYTE* pvBits, int surfW, int surfH);
+
 private:
     std::wstring m_Id;
     std::wstring m_Name;

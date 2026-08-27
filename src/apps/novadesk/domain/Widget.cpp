@@ -3084,62 +3084,12 @@ void Widget::UpdateLayeredWindowContent()
     // pixels are fully transparent in the layered window surface.
     if (pvBits)
     {
-        auto stampRectAlpha = [&](int left, int top, int right, int bottom)
-        {
-            left = (std::max)(0, left);
-            top = (std::max)(0, top);
-            right = (std::min)(w, right);
-            bottom = (std::min)(h, bottom);
-            if (left >= right || top >= bottom)
-                return;
-
-            BYTE *pixels = static_cast<BYTE *>(pvBits);
-            for (int yy = top; yy < bottom; ++yy)
-            {
-                BYTE *row = pixels + static_cast<size_t>(yy) * static_cast<size_t>(w) * 4;
-                for (int xx = left; xx < right; ++xx)
-                {
-                    BYTE &alpha = row[static_cast<size_t>(xx) * 4 + 3];
-                    if (alpha == 0)
-                    {
-                        alpha = 1;
-                    }
-                }
-            }
-        };
-
-        std::function<void(Element *, int, int)> stampInteractiveBounds;
-        stampInteractiveBounds = [&](Element *element, int offsetX, int offsetY)
-        {
-            if (!element || !element->IsVisible())
-                return;
-
-            GfxRect bounds = element->GetBounds();
-            const int absLeft = offsetX + bounds.X;
-            const int absTop = offsetY + bounds.Y;
-            const int absRight = absLeft + bounds.Width;
-            const int absBottom = absTop + bounds.Height;
-
-            if (element->HasMouseAction() && !element->GetPixelHitTest())
-            {
-                stampRectAlpha(absLeft, absTop, absRight, absBottom);
-            }
-
-            if (element->IsContainer())
-            {
-                for (Element *child : element->GetContainerItems())
-                {
-                    stampInteractiveBounds(child, absLeft, absTop);
-                }
-            }
-        };
-
         for (auto &uptr : m_Elements)
         {
             Element *element = uptr.get();
             if (element->IsContained())
                 continue;
-            stampInteractiveBounds(element, 0, 0);
+            StampInteractiveBounds(element, 0, 0, static_cast<BYTE *>(pvBits), w, h);
         }
     }
 
@@ -3185,6 +3135,91 @@ Element *Widget::FindElementById(const std::wstring &id)
 }
 
 /*
+** Check whether an element is tracked in this widget's element list,
+** searching recursively into containers.
+*/
+bool Widget::SearchContainerItems(Element *el, const std::vector<Element *> &items)
+{
+    for (Element *item : items)
+    {
+        if (item == el)
+            return true;
+        if (item && item->IsContainer())
+        {
+            if (SearchContainerItems(el, item->GetContainerItems()))
+                return true;
+        }
+    }
+    return false;
+}
+
+bool Widget::IsTrackedElement(Element *el) const
+{
+    if (!el)
+        return false;
+    for (const auto &uptr : m_Elements)
+    {
+        Element *root = uptr.get();
+        if (root == el)
+            return true;
+        if (root->IsContainer())
+        {
+            if (SearchContainerItems(el, root->GetContainerItems()))
+                return true;
+        }
+    }
+    return false;
+}
+
+/*
+** Stamp a 1-alpha pixel in interactive element bounds so the layered
+** window keeps those areas mouse-reachable even when visually transparent.
+*/
+void Widget::StampInteractiveBounds(Element *element, int offsetX, int offsetY, BYTE *pvBits, int surfW, int surfH)
+{
+    if (!element || !element->IsVisible())
+        return;
+
+    GfxRect bounds = element->GetBounds();
+    const int absLeft = offsetX + bounds.X;
+    const int absTop = offsetY + bounds.Y;
+    const int absRight = absLeft + bounds.Width;
+    const int absBottom = absTop + bounds.Height;
+
+    if (element->HasMouseAction() && !element->GetPixelHitTest())
+    {
+        int left = (std::max)(0, absLeft);
+        int top = (std::max)(0, absTop);
+        int right = (std::min)(surfW, absRight);
+        int bottom = (std::min)(surfH, absBottom);
+        if (left < right && top < bottom)
+        {
+            BYTE *pixels = static_cast<BYTE *>(pvBits);
+            for (int yy = top; yy < bottom; ++yy)
+            {
+                BYTE *row = pixels + static_cast<size_t>(yy) * static_cast<size_t>(surfW) * 4;
+                for (int xx = left; xx < right; ++xx)
+                {
+                    BYTE &alpha = row[static_cast<size_t>(xx) * 4 + 3];
+                    if (alpha == 0)
+                    {
+                        alpha = 1;
+                    }
+                }
+            }
+        }
+    }
+
+    if (element->IsContainer())
+    {
+        for (Element *child : element->GetContainerItems())
+        {
+            StampInteractiveBounds(child, absLeft, absTop, pvBits, surfW, surfH);
+        }
+    }
+}
+
+/*
 ** Handle mouse messages and dispatch to elements.
 ** Returns true if the message was handled by an element, false otherwise.
 */
@@ -3195,35 +3230,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     int y = GET_Y_LPARAM(lParam);
     bool justEnteredWidget = false;
 
-    std::function<bool(Element *)> isTrackedElement = [&](Element *el) -> bool
-    {
-        if (!el)
-            return false;
-        
-        // Search in top-level elements
-        for (auto &uptr : m_Elements) {
-            Element* root = uptr.get();
-            if (root == el) return true;
-            
-            // If it's a container, search recursively
-            if (root->IsContainer()) {
-                const auto& items = root->GetContainerItems();
-                std::function<bool(const std::vector<Element*>&)> searchInItems = [&](const std::vector<Element*>& subItems) -> bool {
-                    for (Element* item : subItems) {
-                        if (item == el) return true;
-                        if (item && item->IsContainer()) {
-                            if (searchInItems(item->GetContainerItems())) return true;
-                        }
-                    }
-                    return false;
-                };
-                if (searchInItems(items)) return true;
-            }
-        }
-        return false;
-    };
-
-    if (!isTrackedElement(m_DragElement))
+    if (!IsTrackedElement(m_DragElement))
     {
         m_DragElement = nullptr;
         m_IsElementDragging = false;
@@ -3454,7 +3461,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
         if (hoverElement != m_MouseOverElement)
         {
-            if (m_MouseOverElement && isTrackedElement(m_MouseOverElement))
+            if (m_MouseOverElement && IsTrackedElement(m_MouseOverElement))
             {
                 m_MouseOverElement->m_IsMouseOver = false;
                 int leaveId = m_MouseOverElement->m_OnMouseLeaveCallbackId;
@@ -3465,10 +3472,10 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 }
 
                 // If callback cleared the elements or deleted hoverElement/actionElement, handle it
-                if (!isTrackedElement(hoverElement)) hoverElement = nullptr;
-                if (!isTrackedElement(actionElement)) actionElement = nullptr;
-                if (!isTrackedElement(mouseActionElement)) mouseActionElement = nullptr;
-                if (!isTrackedElement(toolTipElement)) toolTipElement = nullptr;
+                if (!IsTrackedElement(hoverElement)) hoverElement = nullptr;
+                if (!IsTrackedElement(actionElement)) actionElement = nullptr;
+                if (!IsTrackedElement(mouseActionElement)) mouseActionElement = nullptr;
+                if (!IsTrackedElement(toolTipElement)) toolTipElement = nullptr;
 
                 if (m_Elements.empty())
                 {
@@ -3478,7 +3485,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 }
             }
 
-            if (hoverElement && isTrackedElement(hoverElement))
+            if (hoverElement && IsTrackedElement(hoverElement))
             {
                 hoverElement->m_IsMouseOver = true;
                 int overId = hoverElement->m_OnMouseOverCallbackId;
@@ -3489,10 +3496,10 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 }
 
                 // Re-verify after callback
-                if (!isTrackedElement(hoverElement)) hoverElement = nullptr;
-                if (!isTrackedElement(actionElement)) actionElement = nullptr;
-                if (!isTrackedElement(mouseActionElement)) mouseActionElement = nullptr;
-                if (!isTrackedElement(toolTipElement)) toolTipElement = nullptr;
+                if (!IsTrackedElement(hoverElement)) hoverElement = nullptr;
+                if (!IsTrackedElement(actionElement)) actionElement = nullptr;
+                if (!IsTrackedElement(mouseActionElement)) mouseActionElement = nullptr;
+                if (!IsTrackedElement(toolTipElement)) toolTipElement = nullptr;
 
                 if (m_Elements.empty())
                 {
@@ -3557,7 +3564,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             }
             JSEngine::TriggerWidgetEvent(this, "mouseLeave", &leaveEventData);
         }
-        if (m_MouseOverElement && isTrackedElement(m_MouseOverElement))
+        if (m_MouseOverElement && IsTrackedElement(m_MouseOverElement))
         {
             m_MouseOverElement->m_IsMouseOver = false;
             int leaveId = m_MouseOverElement->m_OnMouseLeaveCallbackId;
@@ -3599,7 +3606,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     }
 
     // Dispatch Actions
-    if (actionElement && isTrackedElement(actionElement))
+    if (actionElement && IsTrackedElement(actionElement))
     {
         int actionId = -1;
 
@@ -3825,14 +3832,14 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         // Handle text selection dragging
         if (m_TextSelectionElement && m_TextSelectionElement->GetTextSelection())
         {
-            if (hitElement == m_TextSelectionElement || isTrackedElement(m_TextSelectionElement))
+            if (hitElement == m_TextSelectionElement || IsTrackedElement(m_TextSelectionElement))
             {
                 m_TextSelectionElement->HandleTextSelectionMouseMove(x, y);
                 needRedraw = true;
             }
         }
 
-        if (m_IsElementDragging && isTrackedElement(m_DragElement))
+        if (m_IsElementDragging && IsTrackedElement(m_DragElement))
         {
             if (m_DragElement->m_OnDragCallbackId != -1)
             {
@@ -3862,7 +3869,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             m_FocusedInputBox->HandleMouseUp();
         }
 
-        if (m_IsElementDragging && isTrackedElement(m_DragElement))
+        if (m_IsElementDragging && IsTrackedElement(m_DragElement))
         {
             if (m_DragElement->m_OnDragEndCallbackId != -1)
             {
