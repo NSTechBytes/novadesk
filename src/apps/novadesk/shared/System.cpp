@@ -1297,17 +1297,16 @@ namespace novadesk::shared::system
 
         if (cpuCount > 0)
         {
-            auto *ppi = new PROCESSOR_POWER_INFORMATION_LOCAL[cpuCount];
+            std::vector<PROCESSOR_POWER_INFORMATION_LOCAL> ppi(cpuCount);
             if (CallNtPowerInformation(
                     ProcessorInformation,
                     nullptr,
                     0,
-                    ppi,
+                    ppi.data(),
                     sizeof(PROCESSOR_POWER_INFORMATION_LOCAL) * cpuCount) == 0)
             {
                 outStatus.mhz = static_cast<double>(ppi[0].CurrentMhz);
             }
-            delete[] ppi;
         }
 
         outStatus.hz = outStatus.mhz * 1000000.0;
