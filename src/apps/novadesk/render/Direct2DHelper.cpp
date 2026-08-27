@@ -21,6 +21,7 @@ namespace Direct2D
     ComPtr<ID2D1Factory1> g_pD2DFactory;
     ComPtr<IDWriteFactory1> g_pDWriteFactory;
     ComPtr<IWICImagingFactory> g_pWICFactory;
+    bool g_comInitialized = false;
 
     namespace
     {
@@ -87,7 +88,7 @@ namespace Direct2D
     bool Initialize()
     {
         HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-        bool comInitialized = SUCCEEDED(hr);
+        g_comInitialized = SUCCEEDED(hr);
         if (FAILED(hr) && hr != RPC_E_CHANGED_MODE)
         {
             Logging::Log(LogLevel::Error, L"Failed to initialize COM (0x%08X)", hr);
@@ -98,7 +99,7 @@ namespace Direct2D
         if (FAILED(hr))
         {
             Logging::Log(LogLevel::Error, L"Failed to create D2D1Factory (0x%08X)", hr);
-            if (comInitialized) CoUninitialize();
+            if (g_comInitialized) { CoUninitialize(); g_comInitialized = false; }
             return false;
         }
 
@@ -106,7 +107,7 @@ namespace Direct2D
         if (FAILED(hr))
         {
             Logging::Log(LogLevel::Error, L"Failed to create DWriteFactory (0x%08X)", hr);
-            if (comInitialized) CoUninitialize();
+            if (g_comInitialized) { CoUninitialize(); g_comInitialized = false; }
             return false;
         }
 
@@ -114,7 +115,7 @@ namespace Direct2D
         if (FAILED(hr))
         {
             Logging::Log(LogLevel::Error, L"Failed to create WICImagingFactory (0x%08X)", hr);
-            if (comInitialized) CoUninitialize();
+            if (g_comInitialized) { CoUninitialize(); g_comInitialized = false; }
             return false;
         }
 
@@ -126,7 +127,11 @@ namespace Direct2D
         g_pWICFactory.Reset();
         g_pDWriteFactory.Reset();
         g_pD2DFactory.Reset();
-        CoUninitialize();
+        if (g_comInitialized)
+        {
+            CoUninitialize();
+            g_comInitialized = false;
+        }
     }
 
     ID2D1Factory1* GetFactory() { return g_pD2DFactory.Get(); }
