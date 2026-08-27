@@ -15,6 +15,7 @@
 #include <vector>
 #include <filesystem>
 #include <algorithm>
+#include <mutex>
 
 #include "../../domain/Widget.h"
 #include "../../render/FontDownloader.h"
@@ -44,6 +45,7 @@ namespace JSEngine
         void ClearCallbacks(std::vector<IpcListener> &list);
         void ClearChannelMap(std::unordered_map<std::string, std::vector<IpcListener>> &map);
         void ClearHandlerMap(std::unordered_map<std::string, IpcHandler> &map);
+        std::recursive_mutex g_engineMutex;
         HWND g_messageWindow = nullptr;
         JSRuntime *g_runtime = nullptr;
         JSContext *g_context = nullptr;
@@ -1400,16 +1402,19 @@ namespace JSEngine
 
     void ClearAllTrayCommandCallbacks()
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         ClearAllTrayCommandCallbacksInternal();
     }
 
     void ClearAllTrayEventCallbacks()
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         ClearAllTrayEventCallbacksInternal();
     }
 
     void ClearUiIpcForScript(const std::wstring &scriptPath)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (scriptPath.empty() || !g_context)
             return;
         ClearIpcListenersForScript(g_uiIpcListeners, scriptPath);
@@ -1418,12 +1423,14 @@ namespace JSEngine
 
     void InitializeJavaScriptAPI(duk_context *ctx)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         (void)ctx;
         EnsureRuntime();
     }
 
     bool LoadAndExecuteScript(duk_context *ctx, const std::wstring &scriptPath)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         std::vector<std::wstring> list;
         list.push_back(scriptPath);
         return LoadAndExecuteScripts(ctx, list);
@@ -1431,6 +1438,7 @@ namespace JSEngine
 
     bool LoadAndExecuteScripts(duk_context *ctx, const std::vector<std::wstring> &scriptPaths)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         (void)ctx;
         const bool isDefaultLoad = scriptPaths.empty();
         // Only perform a full reset if we are loading the default set or explicitly requested via an empty stale check.
@@ -1533,6 +1541,7 @@ namespace JSEngine
 
     std::wstring GetEntryScriptDir()
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (g_lastScriptPath.empty())
         {
             return PathUtils::GetWidgetsDir();
@@ -1542,16 +1551,19 @@ namespace JSEngine
 
     std::wstring GetCurrentScriptDir()
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         return g_currentScriptDir;
     }
 
     std::wstring GetCurrentScriptPath()
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         return g_currentScriptPath;
     }
 
     void RegisterWidgetOwner(Widget *widget, const std::wstring &scriptPath)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!widget)
             return;
         g_widgetOwners[widget] = scriptPath;
@@ -1559,6 +1571,7 @@ namespace JSEngine
 
     void UnregisterWidgetOwner(Widget *widget)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!widget)
             return;
         g_widgetOwners.erase(widget);
@@ -1566,6 +1579,7 @@ namespace JSEngine
 
     void RegisterTrayOwner(int trayId, const std::wstring &scriptPath)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (trayId <= 0)
             return;
         g_trayOwners[trayId] = scriptPath;
@@ -1573,11 +1587,13 @@ namespace JSEngine
 
     void UnregisterTrayOwner(int trayId)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         g_trayOwners.erase(trayId);
     }
 
     void Reload()
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!g_loadedScriptPaths.empty())
         {
             LoadAndExecuteScripts(nullptr, g_loadedScriptPaths);
@@ -1590,6 +1606,7 @@ namespace JSEngine
 
     bool AddScript(const std::wstring &scriptPath)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         const std::wstring resolved = ResolveEntryScript(scriptPath);
         for (const auto &p : g_loadedScriptPaths)
         {
@@ -1609,6 +1626,7 @@ namespace JSEngine
 
     bool RemoveScript(const std::wstring &scriptPath)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         const std::wstring resolved = ResolveEntryScript(scriptPath);
         std::vector<std::wstring> next;
         for (const auto &p : g_loadedScriptPaths)
@@ -1638,6 +1656,7 @@ namespace JSEngine
 
     bool RefreshScript(const std::wstring &scriptPath)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         const std::wstring resolved = ResolveEntryScript(scriptPath);
         bool found = false;
         for (const auto &p : g_loadedScriptPaths)
@@ -1667,11 +1686,13 @@ namespace JSEngine
 
     std::vector<std::wstring> GetLoadedScripts()
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         return g_loadedScriptPaths;
     }
 
     void OnTimer(UINT_PTR id)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         auto it = g_timers.find(id);
         if (it == g_timers.end())
             return;
@@ -1714,6 +1735,7 @@ namespace JSEngine
 
     void OnMessage(UINT message, WPARAM wParam, LPARAM lParam)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (message == WM_NOVADESK_DISPATCH)
         {
             switch (wParam)
@@ -1735,16 +1757,19 @@ namespace JSEngine
 
     void SetMessageWindow(HWND hWnd)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         g_messageWindow = hWnd;
     }
 
     HWND GetMessageWindow()
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         return g_messageWindow;
     }
 
     void OnTrayCommand(int commandId)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         auto it = g_trayCommandCallbacks.find(commandId);
         if (it == g_trayCommandCallbacks.end())
             return;
@@ -1774,6 +1799,7 @@ namespace JSEngine
 
     void DispatchTrayEvent(int trayId, const std::string &eventName)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!g_context)
             return;
         auto it = g_trayEventCallbacks.find(trayId);
@@ -1805,6 +1831,7 @@ namespace JSEngine
 
     void OnWidgetContextCommand(const std::wstring &widgetId, int commandId)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         auto wit = g_widgetContextMenuCallbacks.find(widgetId);
         if (wit == g_widgetContextMenuCallbacks.end())
             return;
@@ -1829,6 +1856,7 @@ namespace JSEngine
 
     void TriggerWidgetEvent(Widget *widget, const char *eventName, const MouseEventData *data)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!widget || !eventName || !*eventName)
         {
             return;
@@ -1855,6 +1883,7 @@ namespace JSEngine
 
     void ClearWidgetEventListeners(Widget *widget)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!widget)
             return;
         g_widgetEventListeners.erase(widget);
@@ -1862,6 +1891,7 @@ namespace JSEngine
 
     void CallEventCallback(int callbackId, Widget *widget, const MouseEventData *data)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!g_context || callbackId <= 0 || callbackId >= static_cast<int>(g_eventCallbacks.size()))
         {
             return;
@@ -1922,6 +1952,7 @@ namespace JSEngine
 
     void CallEventCallbackWithText(int callbackId, Widget *widget, const std::wstring &text)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!g_context || callbackId <= 0 || callbackId >= static_cast<int>(g_eventCallbacks.size()))
         {
             return;
@@ -1962,6 +1993,7 @@ namespace JSEngine
 
     int RegisterEventCallback(JSContext *ctx, JSValueConst fn)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!ctx || !JS_IsFunction(ctx, fn))
         {
             return -1;
@@ -1987,6 +2019,7 @@ namespace JSEngine
 
     void DispatchToastEventAsync(int callbackId, const ToastEventData &data)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (callbackId <= 0)
             return;
 
@@ -2011,6 +2044,7 @@ namespace JSEngine
 
     bool RegisterWidgetEventListener(JSContext *ctx, Widget *widget, const std::string &eventName, JSValueConst fn)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!widget || eventName.empty())
         {
             return false;
@@ -2028,6 +2062,7 @@ namespace JSEngine
 
     bool RegisterWidgetContextMenuCallback(JSContext *ctx, const std::wstring &widgetId, int commandId, JSValueConst fn)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!ctx || ctx != g_context || widgetId.empty() || commandId <= 0 || !JS_IsFunction(ctx, fn))
         {
             return false;
@@ -2045,6 +2080,7 @@ namespace JSEngine
 
     void ClearWidgetContextMenuCallbacks(const std::wstring &widgetId)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         auto it = g_widgetContextMenuCallbacks.find(widgetId);
         if (it == g_widgetContextMenuCallbacks.end())
             return;
@@ -2057,6 +2093,7 @@ namespace JSEngine
 
     bool RegisterTrayCommandCallback(JSContext *ctx, int trayId, int commandId, JSValueConst fn)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!ctx || ctx != g_context || commandId <= 0 || !JS_IsFunction(ctx, fn))
         {
             return false;
@@ -2075,6 +2112,7 @@ namespace JSEngine
 
     void ClearTrayCommandCallbacks(int trayId)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!g_context)
             return;
         std::vector<int> toErase;
@@ -2094,6 +2132,7 @@ namespace JSEngine
 
     bool RegisterTrayEventCallback(JSContext *ctx, int trayId, const std::string &eventName, JSValueConst fn)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!ctx || ctx != g_context || eventName.empty() || !JS_IsFunction(ctx, fn))
         {
             return false;
@@ -2104,6 +2143,7 @@ namespace JSEngine
 
     void ClearTrayEventCallbacks(int trayId)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!g_context)
             return;
         auto it = g_trayEventCallbacks.find(trayId);
@@ -2121,6 +2161,7 @@ namespace JSEngine
 
     bool ExecuteWidgetScript(Widget *widget)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!widget || !g_context)
         {
             return false;
@@ -2153,6 +2194,7 @@ namespace JSEngine
 
     JSValue CreateUiIpcObject(JSContext *ctx)
     {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         return CreateUiIpcObjectImpl(ctx);
     }
 } // namespace JSEngine
