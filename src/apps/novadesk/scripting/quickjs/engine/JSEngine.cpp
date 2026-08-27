@@ -1717,6 +1717,8 @@ namespace JSEngine
     void OnTimer(UINT_PTR id)
     {
         std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
+        if (!g_context)
+            return;
         auto it = g_timers.find(id);
         if (it == g_timers.end())
             return;
@@ -1794,6 +1796,8 @@ namespace JSEngine
     void OnTrayCommand(int commandId)
     {
         std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
+        if (!g_context)
+            return;
         auto it = g_trayCommandCallbacks.find(commandId);
         if (it == g_trayCommandCallbacks.end())
             return;
