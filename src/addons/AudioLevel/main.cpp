@@ -425,10 +425,11 @@ namespace
                     if (isFloat)
                     {
                         const float *in = reinterpret_cast<const float *>(data);
+                        const int ch = m_channels;
                         for (UINT32 i = 0; i < frames; ++i)
                         {
                             const float l = in[i * m_pwfx->nChannels + 0];
-                            const float r = (m_pwfx->nChannels > 1) ? in[i * m_pwfx->nChannels + 1] : l;
+                            const float r = (ch > 1) ? in[i * m_pwfx->nChannels + 1] : l;
                             sumSq[0] += l * l;
                             sumSq[1] += r * r;
                             peak[0] = std::max(peak[0], std::fabs(l));
@@ -439,10 +440,11 @@ namespace
                     else
                     {
                         const int16_t *in = reinterpret_cast<const int16_t *>(data);
+                        const int ch = m_channels;
                         for (UINT32 i = 0; i < frames; ++i)
                         {
                             const float l = static_cast<float>(in[i * m_pwfx->nChannels + 0]) / 32768.0f;
-                            const float r = (m_pwfx->nChannels > 1)
+                            const float r = (ch > 1)
                                                 ? static_cast<float>(in[i * m_pwfx->nChannels + 1]) / 32768.0f
                                                 : l;
                             sumSq[0] += l * l;
