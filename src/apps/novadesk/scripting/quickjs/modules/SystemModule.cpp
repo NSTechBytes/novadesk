@@ -14,6 +14,8 @@
 #include <thread>
 #include <unordered_map>
 #include <mutex>
+#include <algorithm>
+#include <sstream>
 
 #include "../../shared/System.h"
 #include "../../shared/Utils.h"
@@ -768,6 +770,114 @@ namespace novadesk::scripting::quickjs
             return JS_NewBool(ctx, ok ? 1 : 0);
         }
 
+        // Validate that a URL is safe to fetch: only http/https schemes, no private/loopback IPs.
+        bool IsAllowedWebFetchUrl(const std::wstring &url)
+        {
+            // Must start with http:// or https://
+            std::wstring lower = url;
+            std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
+
+            if (lower.rfind(L"http://", 0) != 0 && lower.rfind(L"https://", 0) != 0)
+                return false;
+
+            // Extract host from the URL for SSRF checks.
+            // Format: http(s)://host[:port]/...
+            size_t schemeEnd = lower.find(L"://");
+            if (schemeEnd == std::wstring::npos)
+                return false;
+            size_t hostStart = schemeEnd + 3;
+            size_t hostEnd = lower.find(L'/', hostStart);
+            if (hostEnd == std::wstring::npos)
+                hostEnd = lower.length();
+
+            std::wstring host = lower.substr(hostStart, hostEnd - hostStart);
+
+            // Strip port if present
+            size_t colonPos = host.rfind(L':');
+            if (colonPos != std::wstring::npos)
+                host = host.substr(0, colonPos);
+
+            // Reject IPv6 bracket notation and IPv6 loopback
+            if (host.size() >= 2 && host.front() == L'[' && host.back() == L']')
+                host = host.substr(1, host.size() - 2);
+            if (host == L"::1" || host == L"0:0:0:0:0:0:0:1" ||
+                host == L"0000:0000:0000:0000:0000:0000:0000:0001")
+                return false;
+
+            // Reject localhost
+            if (host == L"localhost")
+                return false;
+
+            // Parse IPv4 if the host looks like a numeric address
+            auto isDigit = [](wchar_t c) -> bool { return c >= L'0' && c <= L'9'; };
+            size_t dotCount = 0;
+            for (wchar_t c : host)
+            {
+                if (c == L'.')
+                    dotCount++;
+                else if (!isDigit(c) && c != L'x' && c != L'X')
+                {
+                    dotCount = 0;
+                    break;
+                }
+            }
+
+            if (dotCount == 3)
+            {
+                // Likely IPv4 — parse octets
+                int octets[4] = {0, 0, 0, 0};
+                int idx = 0;
+                std::wistringstream iss(host);
+                std::wstring token;
+                while (std::getline(iss, token, L'.') && idx < 4)
+                {
+                    // Handle hex/octal prefixed numbers (e.g. 0x7f) as decimal for safety
+                    if (token.size() > 1 && (token[0] == L'0' && (token[1] == L'x' || token[1] == L'X')))
+                    {
+                        // Reject obfuscated hex addresses to be safe
+                        return false;
+                    }
+                    try
+                    {
+                        int val = std::stoi(std::string(token.begin(), token.end()));
+                        if (val < 0 || val > 255)
+                            return false;
+                        octets[idx++] = val;
+                    }
+                    catch (...)
+                    {
+                        return false;
+                    }
+                }
+                if (idx != 4)
+                    return false;
+
+                // 127.0.0.0/8
+                if (octets[0] == 127)
+                    return false;
+                // 10.0.0.0/8
+                if (octets[0] == 10)
+                    return false;
+                // 172.16.0.0/12
+                if (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31)
+                    return false;
+                // 192.168.0.0/16
+                if (octets[0] == 192 && octets[1] == 168)
+                    return false;
+                // 169.254.0.0/16 (link-local / AWS metadata)
+                if (octets[0] == 169 && octets[1] == 254)
+                    return false;
+                // 0.0.0.0/8
+                if (octets[0] == 0)
+                    return false;
+            }
+            // Non-numeric hostnames pass (e.g. api.example.com).
+            // They could resolve to private IPs at DNS level, but that requires
+            // a more sophisticated resolver-level block which is outside this scope.
+
+            return true;
+        }
+
         JSValue JsWebFetch(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
         {
             if (argc < 1)
@@ -782,10 +892,14 @@ namespace novadesk::scripting::quickjs
                 return JS_ThrowTypeError(ctx, "webFetch invalid url/path");
             if (PathUtils::IsPathRelative(pathOrUrl) &&
                 pathOrUrl.rfind(L"http://", 0) != 0 &&
-                pathOrUrl.rfind(L"https://", 0) != 0 &&
-                pathOrUrl.rfind(L"file://", 0) != 0)
+                pathOrUrl.rfind(L"https://", 0) != 0)
             {
                 pathOrUrl = PathUtils::ResolvePath(pathOrUrl, JSEngine::GetEntryScriptDir());
+            }
+
+            if (!IsAllowedWebFetchUrl(pathOrUrl))
+            {
+                return JS_ThrowTypeError(ctx, "webFetch: only http and https URLs are allowed; file:// and internal/private network addresses are blocked");
             }
 
             JSValue funcs[2] = {JS_UNDEFINED, JS_UNDEFINED};
