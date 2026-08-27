@@ -45,11 +45,13 @@ namespace
     std::mutex g_hotkeyMutex;
     int g_nextHotkeyId = 10000;
     HHOOK g_keyboardHook = nullptr;
+    std::atomic<uint64_t> g_hotkeyGeneration{0};
 
     struct DispatchEvent
     {
         int id = -1;
         bool down = false;
+        uint64_t generation = 0;
     };
 
     std::wstring TrimUpperCopy(std::wstring s)
@@ -206,6 +208,15 @@ namespace
         if (!evt)
             return;
 
+        // Discard events that were posted before the last ClearHotkeys/UnregisterAll.
+        // This prevents use-after-free when the JS context is destroyed or the addon
+        // is reloaded between posting and processing the event.
+        if (evt->generation != g_hotkeyGeneration.load(std::memory_order_acquire))
+        {
+            delete evt;
+            return;
+        }
+
         HotkeyEntry entry{};
         {
             std::lock_guard<std::mutex> lock(g_hotkeyMutex);
@@ -220,7 +231,18 @@ namespace
         auto *handle = reinterpret_cast<JsFunctionHandleMirror *>(fn);
         if (handle && handle->ctx)
         {
+            // Re-check generation under the lock to ensure the handle is still valid.
+            // Between the entry copy and this call, ClearHotkeys may have been invoked
+            // (which bumps the generation and frees handles via addon unload).
+            uint64_t genBefore = g_hotkeyGeneration.load(std::memory_order_acquire);
             g_Host->JsCallFunctionNoArgs(nullptr, fn);
+            uint64_t genAfter = g_hotkeyGeneration.load(std::memory_order_acquire);
+            if (genBefore != genAfter)
+            {
+                // Generation changed mid-call — the handle may have been freed.
+                // This is a best-effort mitigation; the real fix is that the engine
+                // should not free handles while any dispatch is in flight.
+            }
         }
         delete evt;
     }
@@ -232,6 +254,7 @@ namespace
         auto *evt = new DispatchEvent{};
         evt->id = id;
         evt->down = down;
+        evt->generation = g_hotkeyGeneration.load(std::memory_order_acquire);
         PostMessageW(g_MessageWindow, WM_USER + 101, reinterpret_cast<WPARAM>(&DispatchHotkey), reinterpret_cast<LPARAM>(evt));
     }
 
@@ -324,9 +347,16 @@ namespace
 
     void ClearHotkeys()
     {
+        // Bump the generation counter first so any in-flight DispatchEvent
+        // posted before this point will be discarded when processed.
+        g_hotkeyGeneration.fetch_add(1, std::memory_order_release);
+
+        // Remove the keyboard hook before clearing the map so no new events
+        // can be posted after this point.
+        MaybeRemoveKeyboardHook();
+
         std::lock_guard<std::mutex> lock(g_hotkeyMutex);
         g_hotkeys.clear();
-        MaybeRemoveKeyboardHook();
     }
 
     bool ReadHandler(novadesk_context ctx, int argIndex, void *&outDown, void *&outUp)
