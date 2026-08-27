@@ -268,6 +268,18 @@ namespace JSEngine
                 // widget storage can be released.
                 g_widgetEventListeners.erase(w);
                 g_widgetOwners.erase(w);
+
+                // Free context-menu JSValue callbacks keyed by widget ID.
+                auto cmIt = g_widgetContextMenuCallbacks.find(w->GetOptions().id);
+                if (cmIt != g_widgetContextMenuCallbacks.end())
+                {
+                    for (auto &kv : cmIt->second)
+                    {
+                        JS_FreeValue(g_context, kv.second);
+                    }
+                    g_widgetContextMenuCallbacks.erase(cmIt);
+                }
+
                 delete w;
             }
         }
