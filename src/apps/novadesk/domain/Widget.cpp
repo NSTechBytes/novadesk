@@ -144,10 +144,6 @@ Widget::~Widget()
 
     // Element-owned GeneralImage instances join their workers on destruction.
     // Do this while the widget HWND is still valid.
-    for (auto *element : m_Elements)
-    {
-        delete element;
-    }
     m_Elements.clear();
 
     if (m_hWnd)
@@ -822,14 +818,16 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 KillTimer(hWnd, TIMER_CARET);
                 InputBoxElement *focusedInput = widget->m_FocusedInputBox;
                 const auto focusedElement = static_cast<Element *>(focusedInput);
-                const bool isTracked = std::find(widget->m_Elements.begin(), widget->m_Elements.end(), focusedElement) != widget->m_Elements.end();
+                const bool isTracked = std::find_if(widget->m_Elements.begin(), widget->m_Elements.end(),
+                    [&](const auto &u) { return u.get() == focusedElement; }) != widget->m_Elements.end();
                 if (isTracked)
                 {
                     const int onBlurCallbackId = focusedInput->m_OnBlurCallbackId;
                     if (onBlurCallbackId != -1)
                         JSEngine::CallEventCallback(onBlurCallbackId, widget, nullptr);
 
-                    const bool stillTracked = std::find(widget->m_Elements.begin(), widget->m_Elements.end(), focusedElement) != widget->m_Elements.end();
+                    const bool stillTracked = std::find_if(widget->m_Elements.begin(), widget->m_Elements.end(),
+                        [&](const auto &u) { return u.get() == focusedElement; }) != widget->m_Elements.end();
                     if (widget->m_FocusedInputBox == focusedInput && stillTracked)
                         focusedInput->SetFocus(false);
                 }
@@ -974,8 +972,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             
             for (auto it = widget->m_Elements.rbegin(); it != widget->m_Elements.rend(); ++it)
             {
-                Element *candidate = *it;
-                if (!candidate || !candidate->IsVisible())
+                Element *candidate = it->get();
+                if (!candidate->IsVisible())
                     continue;
                 if (candidate->IsContained())
                     continue;
@@ -1132,7 +1130,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 if (widget->m_FocusedInputBox)
                 {
                     const auto focused = static_cast<Element *>(widget->m_FocusedInputBox);
-                    const bool isTracked = std::find(widget->m_Elements.begin(), widget->m_Elements.end(), focused) != widget->m_Elements.end();
+                    const bool isTracked = std::find_if(widget->m_Elements.begin(), widget->m_Elements.end(),
+                        [&](const auto &u) { return u.get() == focused; }) != widget->m_Elements.end();
                     if (isTracked)
                     {
                         widget->Redraw();
@@ -1607,7 +1606,7 @@ void Widget::AddImage(const PropertyParser::ImageOptions &options)
         element->SetImageTint(options.imageTint, options.imageTintAlpha);
     }
 
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1633,7 +1632,7 @@ void Widget::AddButton(const PropertyParser::ButtonOptions &options)
 
     PropertyParser::ApplyButtonOptions(element, options);
 
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1659,7 +1658,7 @@ void Widget::AddBitmap(const PropertyParser::BitmapOptions &options)
 
     PropertyParser::ApplyBitmapOptions(element, options);
 
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1686,7 +1685,7 @@ void Widget::AddRotator(const PropertyParser::RotatorOptions &options)
 
     PropertyParser::ApplyRotatorOptions(element, options);
 
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1723,7 +1722,7 @@ void Widget::AddText(const PropertyParser::TextOptions &options)
 
     PropertyParser::ApplyTextOptions(element, options); // Changed from ApplyElementOptions
 
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1749,7 +1748,7 @@ void Widget::AddBar(const PropertyParser::BarOptions &options)
 
     PropertyParser::ApplyBarOptions(element, options); // Changed from ApplyElementOptions
 
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1774,7 +1773,7 @@ void Widget::AddLine(const PropertyParser::LineOptions &options)
     LineElement *element = new LineElement(options.id, options.x, options.y, options.width, options.height);
     PropertyParser::ApplyLineOptions(element, options);
 
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1799,7 +1798,7 @@ void Widget::AddHistogram(const PropertyParser::HistogramOptions &options)
     HistogramElement *element = new HistogramElement(options.id, options.x, options.y, options.width, options.height);
     PropertyParser::ApplyHistogramOptions(element, options);
 
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1825,7 +1824,7 @@ void Widget::AddRoundLine(const PropertyParser::RoundLineOptions &options)
 
     PropertyParser::ApplyRoundLineOptions(element, options);
 
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1886,7 +1885,7 @@ void Widget::AddShape(const PropertyParser::ShapeOptions &options)
         BuildCombinedShapeGeometry(path, options);
     }
 
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1911,7 +1910,7 @@ void Widget::AddAreaGraph(const PropertyParser::AreaGraphOptions &options)
     AreaGraphElement *element = new AreaGraphElement(options.id, options.x, options.y, options.width, options.height);
     PropertyParser::ApplyAreaGraphOptions(element, options);
 
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1932,7 +1931,7 @@ void Widget::AddLayoutBox(const PropertyParser::ShapeOptions &options)
 
     ElementLayoutBox *element = new ElementLayoutBox(options.id, options.x, options.y, options.width, options.height);
     PropertyParser::ApplyShapeOptions(element, options);
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
     Redraw();
 }
@@ -1959,7 +1958,7 @@ void Widget::AddInputBox(const PropertyParser::InputBoxOptions &options)
 
     PropertyParser::ApplyInputBoxOptions(element, options);
 
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1971,7 +1970,7 @@ void Widget::AddColorPicker(const PropertyParser::ColorPickerOptions &options)
     if (FindElementById(options.id)) RemoveElements(options.id);
     auto *element = new ColorPickerElement(options.id, options.x, options.y, options.width > 0 ? options.width : 32, options.height > 0 ? options.height : 32);
     PropertyParser::ApplyColorPickerOptions(element, options);
-    m_Elements.push_back(element);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     UpdateContainerForElement(element, options.containerId);
     Redraw();
 }
@@ -2501,10 +2500,9 @@ void Widget::SetGroupProperties(const std::wstring &group, JSContext *ctx, JSVal
         return;
 
     bool changed = false;
-    for (Element *element : m_Elements)
+    for (auto &uptr : m_Elements)
     {
-        if (!element)
-            continue;
+        Element *element = uptr.get();
         if (element->GetGroupId() != group)
             continue;
         ApplyParsedPropertiesToElement(element, ctx, options);
@@ -2555,8 +2553,8 @@ void Widget::RemoveElementsByGroup(const std::wstring &group)
     bool changed = false;
     for (auto it = m_Elements.begin(); it != m_Elements.end(); )
     {
-        Element *element = *it;
-        if (element && element->GetGroupId() == group)
+        Element *element = it->get();
+        if (element->GetGroupId() == group)
         {
             ClearElementReferences(element);
             
@@ -2569,17 +2567,13 @@ void Widget::RemoveElementsByGroup(const std::wstring &group)
             {
                 for (Element *child : element->GetContainerItems())
                 {
-                    if (child)
-                    {
-                        child->SetContainer(nullptr);
-                        child->SetContainerId(L"");
-                    }
+                    child->SetContainer(nullptr);
+                    child->SetContainerId(L"");
                 }
                 element->ClearContainerItems();
             }
             
             UpdateContainerForElement(element, L"");
-            delete element;
             it = m_Elements.erase(it);
             changed = true;
         }
@@ -2603,26 +2597,24 @@ bool Widget::RemoveElements(const std::wstring &id)
 {
     if (id.empty())
     {
-        for (auto *el : m_Elements)
+        for (auto &uptr : m_Elements)
         {
+            Element *el = uptr.get();
             ClearElementReferences(el);
             if (PathShape *path = dynamic_cast<PathShape *>(el))
             {
                 ReleaseCombinedConsumes(path);
             }
-            if (el && el->IsContainer())
+            if (el->IsContainer())
             {
                 for (Element *child : el->GetContainerItems())
                 {
-                    if (!child)
-                        continue;
                     child->SetContainer(nullptr);
                     child->SetContainerId(L"");
                 }
                 el->ClearContainerItems();
             }
             UpdateContainerForElement(el, L"");
-            delete el;
         }
         m_Elements.clear();
         m_LayoutConfigs.clear();
@@ -2636,8 +2628,8 @@ bool Widget::RemoveElements(const std::wstring &id)
     bool changed = false;
     for (auto it = m_Elements.begin(); it != m_Elements.end(); )
     {
-        Element *element = *it;
-        if (element && element->GetId() == id)
+        Element *element = it->get();
+        if (element->GetId() == id)
         {
             ClearElementReferences(element);
             
@@ -2650,11 +2642,8 @@ bool Widget::RemoveElements(const std::wstring &id)
             {
                 for (Element *child : element->GetContainerItems())
                 {
-                    if (child)
-                    {
-                        child->SetContainer(nullptr);
-                        child->SetContainerId(L"");
-                    }
+                    child->SetContainer(nullptr);
+                    child->SetContainerId(L"");
                 }
                 element->ClearContainerItems();
             }
@@ -2662,7 +2651,6 @@ bool Widget::RemoveElements(const std::wstring &id)
             UpdateContainerForElement(element, L"");
             m_LayoutConfigs.erase(id);
             WidgetAnimationHelper::RemoveAnimationsForElement(*this, id);
-            delete element;
             it = m_Elements.erase(it);
             changed = true;
         }
@@ -2690,28 +2678,26 @@ void Widget::RemoveElements(const std::vector<std::wstring> &ids)
     {
         for (auto it = m_Elements.begin(); it != m_Elements.end(); ++it)
         {
-            if ((*it)->GetId() == id)
+            Element *element = it->get();
+            if (element->GetId() == id)
             {
-                ClearElementReferences(*it);
-                if (PathShape *path = dynamic_cast<PathShape *>(*it))
+                ClearElementReferences(element);
+                if (PathShape *path = dynamic_cast<PathShape *>(element))
                 {
                     ReleaseCombinedConsumes(path);
                 }
-                if (*it && (*it)->IsContainer())
+                if (element->IsContainer())
                 {
-                    for (Element *child : (*it)->GetContainerItems())
+                    for (Element *child : element->GetContainerItems())
                     {
-                        if (!child)
-                            continue;
                         child->SetContainer(nullptr);
                         child->SetContainerId(L"");
                     }
-                    (*it)->ClearContainerItems();
+                    element->ClearContainerItems();
                 }
-                UpdateContainerForElement(*it, L"");
+                UpdateContainerForElement(element, L"");
                 m_LayoutConfigs.erase(id);
                 WidgetAnimationHelper::RemoveAnimationsForElement(*this, id);
-                delete *it;
                 m_Elements.erase(it);
                 changed = true;
                 break;
@@ -2757,13 +2743,11 @@ void Widget::OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>&
         m_BackgroundImage.OnImageDownloaded(url, buffer);
         updated = true;
     }
-    for (Element *element : m_Elements)
+    for (auto &uptr : m_Elements)
     {
-        if (element)
-        {
-            element->OnImageDownloaded(url, buffer);
-            updated = true;
-        }
+        Element *element = uptr.get();
+        element->OnImageDownloaded(url, buffer);
+        updated = true;
     }
 
     if (updated)
@@ -2828,12 +2812,9 @@ void Widget::UpdateLayeredWindowContent()
 
     m_BackgroundImage.SetOwnerHWND(m_hWnd);
 
-    for (Element *element : m_Elements)
+    for (auto &uptr : m_Elements)
     {
-        if (element)
-        {
-            element->SetOwnerHWND(m_hWnd);
-        }
+        uptr->SetOwnerHWND(m_hWnd);
     }
 
     int calcW = m_Options.width;
@@ -2846,9 +2827,10 @@ void Widget::UpdateLayeredWindowContent()
     {
         int maxX = 0;
         int maxY = 0;
-        for (Element *element : m_Elements)
+        for (auto &uptr : m_Elements)
         {
-            if (!element || element->IsContained())
+            Element *element = uptr.get();
+            if (element->IsContained())
                 continue;
             GfxRect bounds = element->GetBounds();
             maxX = (std::max)(maxX, bounds.X + bounds.Width);
@@ -3047,7 +3029,8 @@ void Widget::UpdateLayeredWindowContent()
             if (m_FocusedInputBox)
             {
                 const auto focused = static_cast<Element *>(m_FocusedInputBox);
-                const bool isTracked = std::find(m_Elements.begin(), m_Elements.end(), focused) != m_Elements.end();
+                const bool isTracked = std::find_if(m_Elements.begin(), m_Elements.end(),
+                    [&](const auto &u) { return u.get() == focused; }) != m_Elements.end();
                 if (isTracked)
                 {
                     m_FocusedInputBox->UpdateBlink();
@@ -3061,8 +3044,9 @@ void Widget::UpdateLayeredWindowContent()
             }
 
             // Draw Elements
-            for (Element *element : m_Elements)
+            for (auto &uptr : m_Elements)
             {
+                Element *element = uptr.get();
                 if (!element->IsVisible())
                     continue;
                 if (element->IsContained())
@@ -3149,9 +3133,10 @@ void Widget::UpdateLayeredWindowContent()
             }
         };
 
-        for (Element *element : m_Elements)
+        for (auto &uptr : m_Elements)
         {
-            if (!element || element->IsContained())
+            Element *element = uptr.get();
+            if (element->IsContained())
                 continue;
             stampInteractiveBounds(element, 0, 0);
         }
@@ -3190,10 +3175,10 @@ void Widget::UpdateLayeredWindowContent()
 */
 Element *Widget::FindElementById(const std::wstring &id)
 {
-    for (auto *element : m_Elements)
+    for (auto &uptr : m_Elements)
     {
-        if (element->GetId() == id)
-            return element;
+        if (uptr->GetId() == id)
+            return uptr.get();
     }
     return nullptr;
 }
@@ -3215,11 +3200,12 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             return false;
         
         // Search in top-level elements
-        for (Element* root : m_Elements) {
+        for (auto &uptr : m_Elements) {
+            Element* root = uptr.get();
             if (root == el) return true;
             
             // If it's a container, search recursively
-            if (root && root->IsContainer()) {
+            if (root->IsContainer()) {
                 const auto& items = root->GetContainerItems();
                 std::function<bool(const std::vector<Element*>&)> searchInItems = [&](const std::vector<Element*>& subItems) -> bool {
                     for (Element* item : subItems) {
@@ -3310,9 +3296,10 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         if (message == WM_LBUTTONDOWN) isDown = true;
         if (message == WM_LBUTTONUP) isDown = false;
         
-        for (Element *el : m_Elements)
+        for (auto &uptr : m_Elements)
         {
-            if (el && el->GetType() == ELEMENT_BUTTON)
+            Element *el = uptr.get();
+            if (el->GetType() == ELEMENT_BUTTON)
             {
                 ButtonElement* btn = static_cast<ButtonElement*>(el);
                 ButtonState newState = BUTTON_STATE_NORMAL;
@@ -3410,9 +3397,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
     for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it)
     {
-        Element *el = *it;
-        if (!el)
-            continue;
+        Element *el = it->get();
         if (!el->IsVisible())
             continue;
         if (el->IsContained())
