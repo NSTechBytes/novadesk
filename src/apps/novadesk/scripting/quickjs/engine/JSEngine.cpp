@@ -286,7 +286,7 @@ namespace JSEngine
 
         void ClearTimersForScript(const std::wstring &scriptPath)
         {
-            if (!g_messageWindow)
+            if (!g_messageWindow || !g_context)
                 return;
             for (auto it = g_timers.begin(); it != g_timers.end();)
             {
