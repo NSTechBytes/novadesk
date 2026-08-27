@@ -21,6 +21,8 @@ namespace novadesk::scripting::quickjs
     {
         namespace fs = std::filesystem;
 
+        constexpr size_t kFsReadFileMaxBytes = 64u * 1024u * 1024u; // 64 MB
+
         std::wstring ResolveFsPath(JSContext *ctx, JSValueConst v)
         {
             const char *s = JS_ToCString(ctx, v);
@@ -42,10 +44,16 @@ namespace novadesk::scripting::quickjs
             const std::wstring path = ResolveFsPath(ctx, argv[0]);
             if (path.empty())
                 return JS_ThrowTypeError(ctx, "invalid path");
+            std::error_code ec;
+            auto fileSize = fs::file_size(fs::path(path), ec);
+            if (ec || fileSize > kFsReadFileMaxBytes)
+                return JS_ThrowTypeError(ctx, "fs.readFile: file too large (max 64 MB)");
             std::ifstream in(fs::path(path), std::ios::binary);
             if (!in.is_open())
                 return JS_NULL;
-            std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            std::string data;
+            data.resize(static_cast<size_t>(fileSize));
+            in.read(data.data(), static_cast<std::streamsize>(fileSize));
             return JS_NewStringLen(ctx, data.data(), data.size());
         }
 
