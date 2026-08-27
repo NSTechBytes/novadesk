@@ -13,6 +13,7 @@
 #include <d2d1_1.h>
 #include <string>
 #include <vector>
+#include <wrl/client.h>
 
 // Helper macros for color extraction from COLORREF (0x00BBGGRR)
 #ifndef GetRValue
@@ -345,6 +346,12 @@ protected:
     float m_Rotate = 0.0f;
     bool m_HasTransformMatrix = false;
     float m_TransformMatrix[6] = {1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f};
+
+    // Backdrop filter cache — avoids per-frame GPU surface reallocation.
+    BackdropFilter m_BackdropFilterCache;
+    GfxRect        m_BackdropFilterBounds{};
+    Microsoft::WRL::ComPtr<ID2D1BitmapRenderTarget> m_BackdropFilterTarget;
+    Microsoft::WRL::ComPtr<ID2D1Bitmap>              m_BackdropFilterBitmap;
 
     // Tooltip properties
     std::wstring m_ToolTipText;
