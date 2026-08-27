@@ -1677,7 +1677,7 @@ namespace novadesk::shared::system
 
         const auto appendResponseData = [&outData, &url](const char *data, size_t size) -> bool
         {
-            if (size > kWebFetchMaxResponseBytes - outData.size())
+            if (outData.size() >= kWebFetchMaxResponseBytes || size > kWebFetchMaxResponseBytes - outData.size())
             {
                 Logging::Log(LogLevel::Error, L"WebFetch: Response from '%s' exceeds the %zu-byte limit", url.c_str(), kWebFetchMaxResponseBytes);
                 outData.clear();
