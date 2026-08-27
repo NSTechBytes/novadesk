@@ -73,13 +73,15 @@ void ShapeElement::UpdateStrokeStyle(ID2D1DeviceContext* context)
             m_StrokeStyle = nullptr;
         }
 
-        ID2D1Factory* factory = nullptr;
-        context->GetFactory(&factory);
-        ID2D1Factory1* factory1 = nullptr;
+        Microsoft::WRL::ComPtr<ID2D1Factory> factory;
+        context->GetFactory(factory.GetAddressOf());
+        Microsoft::WRL::ComPtr<ID2D1Factory1> factory1;
 
         if (factory) {
-            factory->QueryInterface(&factory1);
-            factory->Release();
+            HRESULT hrQI = factory.As(&factory1);
+            if (FAILED(hrQI)) {
+                Logging::Log(LogLevel::Error, L"ShapeElement: QueryInterface ID2D1Factory1 failed (0x%08X)", hrQI);
+            }
         }
 
         if (factory1) {
@@ -93,14 +95,15 @@ void ShapeElement::UpdateStrokeStyle(ID2D1DeviceContext* context)
             props.dashOffset = m_StrokeDashOffset;
             props.transformType = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
 
-            factory1->CreateStrokeStyle(
+            HRESULT hrCreate = factory1->CreateStrokeStyle(
                 props,
                 m_StrokeDashes.data(),
                 (UINT32)m_StrokeDashes.size(),
                 &m_StrokeStyle
             );
-
-            factory1->Release();
+            if (FAILED(hrCreate)) {
+                Logging::Log(LogLevel::Error, L"ShapeElement: CreateStrokeStyle failed (0x%08X)", hrCreate);
+            }
         }
         m_UpdateStrokeStyle = false;
     }
@@ -128,12 +131,15 @@ void ShapeElement::EnsureStrokeStyle()
     props.dashOffset = m_StrokeDashOffset;
     props.transformType = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
 
-    factory->CreateStrokeStyle(
+    HRESULT hr = factory->CreateStrokeStyle(
         props,
         m_StrokeDashes.data(),
         (UINT32)m_StrokeDashes.size(),
         &m_StrokeStyle
     );
+    if (FAILED(hr)) {
+        Logging::Log(LogLevel::Error, L"ShapeElement: CreateStrokeStyle failed (0x%08X)", hr);
+    }
 
     m_UpdateStrokeStyle = false;
 }
