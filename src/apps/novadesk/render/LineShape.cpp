@@ -47,7 +47,7 @@ bool LineShape::HitTestLocal(const D2D1_POINT_2F& point)
 
     EnsureStrokeStyle();
     BOOL hit = FALSE;
-    if (SUCCEEDED(geometry->StrokeContainsPoint(point, m_StrokeWidth, m_StrokeStyle, nullptr, &hit)) && hit) {
+    if (SUCCEEDED(geometry->StrokeContainsPoint(point, m_StrokeWidth, m_StrokeStyle.Get(), nullptr, &hit)) && hit) {
         return true;
     }
 
@@ -92,7 +92,7 @@ void LineShape::Render(ID2D1DeviceContext* context)
     
     if (pStrokeBrush) {
         UpdateStrokeStyle(context);
-        context->DrawLine(start, end, pStrokeBrush.Get(), m_StrokeWidth, m_StrokeStyle);
+        context->DrawLine(start, end, pStrokeBrush.Get(), m_StrokeWidth, m_StrokeStyle.Get());
     }
     RenderBevel(context);
     RestoreRenderTransform(context, originalTransform);

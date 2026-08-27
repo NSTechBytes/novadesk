@@ -132,7 +132,7 @@ bool ElementLayoutBox::HitTestLocal(const D2D1_POINT_2F& point)
     {
         EnsureStrokeStyle();
         hit = FALSE;
-        if (SUCCEEDED(geometry->StrokeContainsPoint(point, m_StrokeWidth, m_StrokeStyle, nullptr, &hit)) && hit)
+        if (SUCCEEDED(geometry->StrokeContainsPoint(point, m_StrokeWidth, m_StrokeStyle.Get(), nullptr, &hit)) && hit)
             return true;
     }
     return false;

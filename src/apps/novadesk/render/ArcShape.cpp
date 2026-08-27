@@ -108,7 +108,7 @@ bool ArcShape::HitTestLocal(const D2D1_POINT_2F& point)
     if (m_HasStroke && m_StrokeWidth > 0.0f && m_StrokeAlpha > 0) {
         EnsureStrokeStyle();
         hit = FALSE;
-        if (SUCCEEDED(geometry->StrokeContainsPoint(point, m_StrokeWidth, m_StrokeStyle, nullptr, &hit)) && hit) {
+        if (SUCCEEDED(geometry->StrokeContainsPoint(point, m_StrokeWidth, m_StrokeStyle.Get(), nullptr, &hit)) && hit) {
             geometry->Release();
             return true;
         }
@@ -160,7 +160,7 @@ void ArcShape::Render(ID2D1DeviceContext* context)
         }
         if (pStrokeBrush) {
             UpdateStrokeStyle(context);
-            context->DrawGeometry(geometry.Get(), pStrokeBrush.Get(), m_StrokeWidth, m_StrokeStyle);
+            context->DrawGeometry(geometry.Get(), pStrokeBrush.Get(), m_StrokeWidth, m_StrokeStyle.Get());
         }
     }
 

@@ -134,7 +134,7 @@ protected:
     std::vector<float> m_StrokeDashes;
 
     bool m_UpdateStrokeStyle = false;
-    ID2D1StrokeStyle1* m_StrokeStyle = nullptr;
+    Microsoft::WRL::ComPtr<ID2D1StrokeStyle1> m_StrokeStyle;
     int m_CombineConsumerCount = 0;
 
     void CreateBrush(ID2D1DeviceContext* context, ID2D1Brush** ppBrush, bool isStroke);

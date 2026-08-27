@@ -19,10 +19,6 @@ ShapeElement::ShapeElement(const std::wstring& id, int x, int y, int width, int 
 
 ShapeElement::~ShapeElement()
 {
-    if (m_StrokeStyle) {
-        m_StrokeStyle->Release();
-        m_StrokeStyle = nullptr;
-    }
 }
 
 GfxRect ShapeElement::GetBackgroundBounds()
@@ -68,10 +64,7 @@ bool ShapeElement::TryCreateFillBrush(ID2D1DeviceContext* context, Microsoft::WR
 void ShapeElement::UpdateStrokeStyle(ID2D1DeviceContext* context)
 {
     if (m_UpdateStrokeStyle || !m_StrokeStyle) {
-        if (m_StrokeStyle) {
-            m_StrokeStyle->Release();
-            m_StrokeStyle = nullptr;
-        }
+        m_StrokeStyle.Reset();
 
         Microsoft::WRL::ComPtr<ID2D1Factory> factory;
         context->GetFactory(factory.GetAddressOf());
@@ -99,10 +92,11 @@ void ShapeElement::UpdateStrokeStyle(ID2D1DeviceContext* context)
                 props,
                 m_StrokeDashes.data(),
                 (UINT32)m_StrokeDashes.size(),
-                &m_StrokeStyle
+                m_StrokeStyle.GetAddressOf()
             );
             if (FAILED(hrCreate)) {
                 Logging::Log(LogLevel::Error, L"ShapeElement: CreateStrokeStyle failed (0x%08X)", hrCreate);
+                return;
             }
         }
         m_UpdateStrokeStyle = false;
@@ -113,10 +107,7 @@ void ShapeElement::EnsureStrokeStyle()
 {
     if (!m_UpdateStrokeStyle && m_StrokeStyle) return;
 
-    if (m_StrokeStyle) {
-        m_StrokeStyle->Release();
-        m_StrokeStyle = nullptr;
-    }
+    m_StrokeStyle.Reset();
 
     ID2D1Factory1* factory = Direct2D::GetFactory();
     if (!factory) return;
@@ -135,10 +126,11 @@ void ShapeElement::EnsureStrokeStyle()
         props,
         m_StrokeDashes.data(),
         (UINT32)m_StrokeDashes.size(),
-        &m_StrokeStyle
+        m_StrokeStyle.GetAddressOf()
     );
     if (FAILED(hr)) {
         Logging::Log(LogLevel::Error, L"ShapeElement: CreateStrokeStyle failed (0x%08X)", hr);
+        return;
     }
 
     m_UpdateStrokeStyle = false;
