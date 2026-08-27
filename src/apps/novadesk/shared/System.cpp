@@ -72,6 +72,7 @@ namespace novadesk::shared::system
     // *********************************************
     //  CPU Metrics
 
+    std::mutex g_cpuMutex;
     ULONGLONG g_lastIdleTime = 0;
     ULONGLONG g_lastKernelTime = 0;
     ULONGLONG g_lastUserTime = 0;
@@ -80,6 +81,7 @@ namespace novadesk::shared::system
     // *********************************************
     //  Network Metrics
 
+    std::mutex g_networkMutex;
     ULONGLONG g_lastTotalIn = 0;
     ULONGLONG g_lastTotalOut = 0;
     std::chrono::steady_clock::time_point g_lastNetworkSample = std::chrono::steady_clock::time_point::min();
@@ -287,6 +289,7 @@ namespace novadesk::shared::system
 
     bool GetCpuStats(CpuStats &outStats)
     {
+        std::lock_guard<std::mutex> lock(g_cpuMutex);
         FILETIME idleFt{}, kernelFt{}, userFt{};
         if (!GetSystemTimes(&idleFt, &kernelFt, &userFt))
         {
@@ -1208,6 +1211,7 @@ namespace novadesk::shared::system
 
     bool GetNetworkStats(NetworkStats &outStats)
     {
+        std::lock_guard<std::mutex> lock(g_networkMutex);
         ULONG size = 0;
         if (GetIfTable(nullptr, &size, FALSE) != ERROR_INSUFFICIENT_BUFFER)
         {
