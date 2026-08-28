@@ -100,7 +100,6 @@ void FlexLayoutEngine::ApplyLayout(Element* container, const FlexLayoutConfig& c
         std::transform(align.begin(), align.end(), align.begin(), ::towlower);
 
         int crossPos = 0;
-        bool shouldStretch = false;
 
         if (isHorizontal)
         {
@@ -123,7 +122,6 @@ void FlexLayoutEngine::ApplyLayout(Element* container, const FlexLayoutConfig& c
                 // CSS Spec: For flex items, both "stretch" and "normal" behave identically
                 // They stretch items to fill the cross axis
                 crossPos = 0;
-                shouldStretch = true;
                 if (innerH > 0)
                 {
                     childH = innerH;
@@ -162,7 +160,6 @@ void FlexLayoutEngine::ApplyLayout(Element* container, const FlexLayoutConfig& c
                 // CSS Spec: For flex items, both "stretch" and "normal" behave identically
                 // They stretch items to fill the cross axis
                 crossPos = 0;
-                shouldStretch = true;
                 if (innerW > 0)
                 {
                     childW = innerW;
