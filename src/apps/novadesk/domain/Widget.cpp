@@ -1181,8 +1181,9 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         {
                             if (w == widget)
                                 continue;
-                            RECT otherRect;
-                            GetWindowRect(w->GetWindow(), &otherRect);
+                            RECT otherRect = { w->m_Options.x, w->m_Options.y,
+                                w->m_Options.x + w->m_Options.width,
+                                w->m_Options.y + w->m_Options.height };
 
                             // Vertical overlap -> Snap horizontally
                             if (wp->y < otherRect.bottom + SNAP_DISTANCE && wp->y + widget->m_Options.height > otherRect.top - SNAP_DISTANCE)
@@ -1596,6 +1597,7 @@ void Widget::AddButton(const PropertyParser::ButtonOptions &options)
     PropertyParser::ApplyButtonOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_Buttons.push_back(element);
     if (!element->GetId().empty())
         m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
@@ -1650,8 +1652,8 @@ void Widget::AddRotator(const PropertyParser::RotatorOptions &options)
 
     RotatorElement *element = new RotatorElement(options.id, options.x, options.y, options.rotatorImageName);
 
-    PropertyParser::ApplyRotatorOptions(element, options);    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_Buttons.push_back(element);
+    PropertyParser::ApplyRotatorOptions(element, options);
+    m_Elements.push_back(std::unique_ptr<Element>(element));
     if (!element->GetId().empty())
         m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
