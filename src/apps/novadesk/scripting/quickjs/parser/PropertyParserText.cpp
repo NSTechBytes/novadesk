@@ -13,6 +13,7 @@
 #include "../../../shared/Utils.h"
 #include "../engine/JSEngine.h"
 #include "../../../render/FontDownloader.h"
+#include "../../../domain/Widget.h"
 #include <filesystem>
 #include <cmath>
 #include <algorithm>
@@ -210,7 +211,9 @@ namespace PropertyParser
                 else
                 {
                     element->SetFontPath(L"");
-                    FontDownloader::RequestAsync(options.fontPath, element->GetOwnerHWND(), element->GetId());
+                    Widget *fontWidget = Widget::GetWidgetFromHWND(element->GetOwnerHWND());
+                    if (fontWidget)
+                        FontDownloader::RequestAsync(options.fontPath, fontWidget->GetInstanceId(), element->GetId());
                 }
             }
             else

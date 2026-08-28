@@ -12,6 +12,7 @@
 #include "../../../shared/Utils.h"
 #include "../../../render/InputBoxElement.h"
 #include "../../../render/FontDownloader.h"
+#include "../../../domain/Widget.h"
 
 namespace PropertyParser
 {
@@ -248,7 +249,9 @@ namespace PropertyParser
                 else
                 {
                     element->SetFontPath(L"");
-                    FontDownloader::RequestAsync(options.fontPath, element->GetOwnerHWND(), element->GetId());
+                    Widget *fontWidget = Widget::GetWidgetFromHWND(element->GetOwnerHWND());
+                    if (fontWidget)
+                        FontDownloader::RequestAsync(options.fontPath, fontWidget->GetInstanceId(), element->GetId());
                 }
             }
             else

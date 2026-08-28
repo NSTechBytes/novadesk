@@ -323,6 +323,7 @@ public:
     void StartWindowKeyframeAnimation(const std::vector<WindowAnimationKeyframe> &keyframes, int durationMs, const std::wstring &easing, int iterationCount);
     void StopWindowAnimations();
     static Widget* GetWidgetFromHWND(HWND hWnd);
+    static Widget* GetWidgetFromInstanceId(uint64_t instanceId);
     void SetElementFontPath(const std::wstring& elementId, const std::wstring& fontDir);
 
     friend class WidgetAnimationHelper;

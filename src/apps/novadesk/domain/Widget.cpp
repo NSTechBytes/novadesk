@@ -766,6 +766,17 @@ Widget *Widget::GetWidgetFromHWND(HWND hWnd)
     return nullptr;
 }
 
+Widget *Widget::GetWidgetFromInstanceId(uint64_t instanceId)
+{
+    std::lock_guard<std::mutex> lock(s_WidgetMutex);
+    for (auto w : widgets)
+    {
+        if (w->m_InstanceId == instanceId)
+            return w;
+    }
+    return nullptr;
+}
+
 /*
 ** Window procedure for handling widget window messages.
 ** Handles painting, mouse input, dragging, and z-order management.

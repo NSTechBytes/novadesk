@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <windows.h>
 
@@ -21,7 +22,7 @@
 **   std::wstring path = FontDownloader::GetCachedDir(url);
 **
 **   // If not yet downloaded, start async download:
-**   FontDownloader::RequestAsync(url, widgetHwnd, elementId);
+**   FontDownloader::RequestAsync(url, widgetInstanceId, elementId);
 */
 namespace FontDownloader
 {
@@ -35,11 +36,11 @@ namespace FontDownloader
     /*
     ** Starts an asynchronous font download for `url`.
     ** On completion, registers the in-memory font with FontManager,
-    ** then posts WM_NOVADESK_DISPATCH to `widgetHwnd` which causes
+    ** then posts WM_NOVADESK_DISPATCH back to the main thread which causes
     ** the engine to call SetElementFontPath(elementId, url) + Redraw().
     ** If url is already downloading or loaded, this is a no-op.
     */
-    void RequestAsync(const std::wstring &url, HWND widgetHwnd, const std::wstring &elementId);
+    void RequestAsync(const std::wstring &url, uint64_t widgetInstanceId, const std::wstring &elementId);
 
     // Stops accepting work and joins all active downloads before the engine
     // message window is destroyed.
@@ -51,9 +52,9 @@ namespace FontDownloader
     */
     struct FontReadyPayload
     {
-        HWND widgetHwnd;
+        uint64_t widgetInstanceId;   // stable across HWND reuse
         std::wstring elementId;
-        std::wstring cachedDir;   // holds the URL on success, empty on failure
+        std::wstring cachedDir;      // holds the URL on success, empty on failure
     };
     void DispatchFontReady(void *payload);
 }

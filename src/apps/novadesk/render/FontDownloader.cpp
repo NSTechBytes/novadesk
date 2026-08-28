@@ -38,7 +38,7 @@ namespace FontDownloader
         // -----------------------------------------------------------------------
         struct PendingRequest
         {
-            HWND widgetHwnd;
+            uint64_t widgetInstanceId;
             std::wstring elementId;
         };
         std::mutex g_InProgressMutex;
@@ -105,8 +105,10 @@ namespace FontDownloader
                 return;
             }
 
-            // Find the widget by HWND and update the element
-            Widget *widget = Widget::GetWidgetFromHWND(payload->widgetHwnd);
+            // Find the widget by stable instance ID (HWNDs can be reused by Windows
+            // after a window is destroyed, so HWND-based lookup risks applying the
+            // font to a completely unrelated widget).
+            Widget *widget = Widget::GetWidgetFromInstanceId(payload->widgetInstanceId);
             if (!widget)
             {
                 Logging::Log(LogLevel::Warn, L"FontDownloader: Widget no longer exists, discarding font for '%s'",
@@ -133,7 +135,7 @@ namespace FontDownloader
         return L"";
     }
 
-    void RequestAsync(const std::wstring &url, HWND widgetHwnd, const std::wstring &elementId)
+    void RequestAsync(const std::wstring &url, uint64_t widgetInstanceId, const std::wstring &elementId)
     {
         // Check cache again inside lock to avoid race conditions
         {
@@ -144,7 +146,7 @@ namespace FontDownloader
             if (FontManager::HasMemoryFont(url))
             {
                 // Already downloaded — dispatch immediately
-                auto *payload = new FontReadyPayload{widgetHwnd, elementId, url};
+                auto *payload = new FontReadyPayload{widgetInstanceId, elementId, url};
                 HWND msgWnd = JSEngine::GetMessageWindow();
                 if (msgWnd)
                 {
@@ -167,12 +169,12 @@ namespace FontDownloader
             if (it != g_InProgress.end())
             {
                 Logging::Log(LogLevel::Debug, L"FontDownloader: '%s' is already downloading; queueing request for element '%s'", url.c_str(), elementId.c_str());
-                it->second.push_back(PendingRequest{widgetHwnd, elementId});
+                it->second.push_back(PendingRequest{widgetInstanceId, elementId});
                 return;
             }
 
             // Add the first request and start the download
-            g_InProgress[url].push_back(PendingRequest{widgetHwnd, elementId});
+            g_InProgress[url].push_back(PendingRequest{widgetInstanceId, elementId});
         }
 
         Logging::Log(LogLevel::Info, L"FontDownloader: Starting async download of '%s'", url.c_str());
@@ -240,7 +242,7 @@ namespace FontDownloader
             {
                 for (const auto &req : pending)
                 {
-                    auto *payload = new FontReadyPayload{req.widgetHwnd, req.elementId, cachedDir};
+                    auto *payload = new FontReadyPayload{req.widgetInstanceId, req.elementId, cachedDir};
                     if (!PostMessageW(msgWnd, JSEngine::WM_NOVADESK_DISPATCH,
                                       JSEngine::DISPATCH_FONT_READY,
                                       reinterpret_cast<LPARAM>(payload)))
