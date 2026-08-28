@@ -88,7 +88,10 @@ namespace Direct2D
     bool Initialize()
     {
         HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-        g_comInitialized = SUCCEEDED(hr);
+        // Only mark COM as owned when we genuinely initialized it (S_OK).
+        // RPC_E_CHANGED_MODE means COM was already initialized in a different
+        // apartment model — we can use it, but must not call CoUninitialize.
+        g_comInitialized = (hr == S_OK);
         if (FAILED(hr) && hr != RPC_E_CHANGED_MODE)
         {
             Logging::Log(LogLevel::Error, L"Failed to initialize COM (0x%08X)", hr);
