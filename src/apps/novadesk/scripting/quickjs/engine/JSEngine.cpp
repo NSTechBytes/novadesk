@@ -95,6 +95,8 @@ namespace JSEngine
         std::unordered_map<std::string, std::vector<IpcListener>> g_uiIpcChannelListeners;
         std::unordered_map<std::string, IpcHandler> g_mainIpcHandlers;
         std::unordered_map<Widget *, std::wstring> g_widgetOwners;
+        // Reverse index: widget ID → script path (maintained alongside g_widgetOwners)
+        std::unordered_map<std::wstring, std::wstring> g_widgetIdToOwner;
         std::unordered_map<int, std::wstring> g_trayOwners;
         std::unordered_set<std::wstring> g_staleScripts;
         std::unordered_map<std::wstring, int> g_scriptEvalRevisions;
@@ -157,19 +159,8 @@ namespace JSEngine
                 return L"";
             }
 
-            for (const auto &entry : g_widgetOwners)
-            {
-                Widget *widget = entry.first;
-                if (!widget)
-                {
-                    continue;
-                }
-                if (widget->GetOptions().id == widgetId)
-                {
-                    return entry.second;
-                }
-            }
-            return L"";
+            auto it = g_widgetIdToOwner.find(widgetId);
+            return (it != g_widgetIdToOwner.end()) ? it->second : L"";
         }
 
         void DestroyAllWidgets()
@@ -188,6 +179,7 @@ namespace JSEngine
                 delete w;
             }
             g_widgetOwners.clear();
+            g_widgetIdToOwner.clear();
             g_staleScripts.clear();
         }
 
@@ -229,6 +221,7 @@ namespace JSEngine
             ClearChannelMap(g_uiIpcChannelListeners);
             ClearHandlerMap(g_mainIpcHandlers);
             g_widgetOwners.clear();
+            g_widgetIdToOwner.clear();
             g_trayOwners.clear();
 
             novadesk::scripting::quickjs::ClearWebFetchRequests(g_context);
@@ -295,6 +288,7 @@ namespace JSEngine
                 // Remove the pointer-keyed listener entry before the
                 // widget storage can be released.
                 g_widgetEventListeners.erase(w);
+                g_widgetIdToOwner.erase(w->GetOptions().id);
                 g_widgetOwners.erase(w);
 
                 // Free context-menu JSValue callbacks keyed by widget ID.
@@ -1631,6 +1625,7 @@ namespace JSEngine
         if (!widget)
             return;
         g_widgetOwners[widget] = scriptPath;
+        g_widgetIdToOwner[widget->GetOptions().id] = scriptPath;
     }
 
     void UnregisterWidgetOwner(Widget *widget)
@@ -1638,6 +1633,7 @@ namespace JSEngine
         std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
         if (!widget)
             return;
+        g_widgetIdToOwner.erase(widget->GetOptions().id);
         g_widgetOwners.erase(widget);
     }
 
