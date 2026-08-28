@@ -231,18 +231,18 @@ namespace
         auto *handle = reinterpret_cast<JsFunctionHandleMirror *>(fn);
         if (handle && handle->ctx)
         {
-            // Re-check generation under the lock to ensure the handle is still valid.
-            // Between the entry copy and this call, ClearHotkeys may have been invoked
-            // (which bumps the generation and frees handles via addon unload).
-            uint64_t genBefore = g_hotkeyGeneration.load(std::memory_order_acquire);
-            g_Host->JsCallFunctionNoArgs(nullptr, fn);
-            uint64_t genAfter = g_hotkeyGeneration.load(std::memory_order_acquire);
-            if (genBefore != genAfter)
+            // Re-check generation right before calling to ensure the handle
+            // is still valid.  Between the entry copy and this point,
+            // ClearHotkeys may have bumped the generation and freed handles
+            // via addon unload.
+            uint64_t genNow = g_hotkeyGeneration.load(std::memory_order_acquire);
+            if (genNow != evt->generation)
             {
-                // Generation changed mid-call — the handle may have been freed.
-                // This is a best-effort mitigation; the real fix is that the engine
-                // should not free handles while any dispatch is in flight.
+                // Generation changed — handle is stale, skip the call.
+                delete evt;
+                return;
             }
+            g_Host->JsCallFunctionNoArgs(nullptr, fn);
         }
         delete evt;
     }
@@ -351,12 +351,33 @@ namespace
         // posted before this point will be discarded when processed.
         g_hotkeyGeneration.fetch_add(1, std::memory_order_release);
 
-        // Remove the keyboard hook before clearing the map so no new events
-        // can be posted after this point.
-        MaybeRemoveKeyboardHook();
+        // Unhook the keyboard hook directly.  MaybeRemoveKeyboardHook() is
+        // a no-op here because g_hotkeys is not yet empty.  We must unhook
+        // before the addon DLL is unloaded — otherwise the hook proc becomes
+        // a dangling function pointer on the next keyboard event.
+        if (g_keyboardHook)
+        {
+            UnhookWindowsHookEx(g_keyboardHook);
+            g_keyboardHook = nullptr;
+        }
 
-        std::lock_guard<std::mutex> lock(g_hotkeyMutex);
-        g_hotkeys.clear();
+        {
+            std::lock_guard<std::mutex> lock(g_hotkeyMutex);
+            g_hotkeys.clear();
+        }
+
+        // Drain any pending WM_USER+101 messages that were posted by the
+        // hook before it was removed.  Without this, the host's WndProc
+        // would call through &DispatchHotkey (a function pointer inside the
+        // now-unloaded DLL) when processing these stale messages.
+        if (g_MessageWindow)
+        {
+            MSG msg;
+            while (PeekMessageW(&msg, g_MessageWindow, WM_USER + 101, WM_USER + 101, PM_REMOVE))
+            {
+                delete reinterpret_cast<DispatchEvent *>(msg.lParam);
+            }
+        }
     }
 
     bool ReadHandler(novadesk_context ctx, int argIndex, void *&outDown, void *&outUp)
