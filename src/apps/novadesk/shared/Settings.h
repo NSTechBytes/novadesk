@@ -23,6 +23,7 @@ public:
     static bool LoadWidget(const std::wstring& id, WidgetOptions& outOptions);
     static void ApplyGlobalSettings();
     static void Save();
+    static void Flush();  // force pending writes to disk immediately
     static std::wstring GetSettingsPath();
     static std::wstring GetLogPath();
     static bool IsFirstRun();
@@ -35,6 +36,7 @@ private:
     static json s_Data;
     static bool s_Dirty;
     static bool s_IsFirstRun;
+    static DWORD s_LastSaveTick;  // for debounce
 };
 
 #endif

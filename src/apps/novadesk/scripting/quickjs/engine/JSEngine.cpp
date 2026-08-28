@@ -18,6 +18,7 @@
 #include <mutex>
 
 #include "../../domain/Widget.h"
+#include "../../shared/Settings.h"
 #include "../../render/FontDownloader.h"
 #include "../../shared/FileUtils.h"
 #include "../../shared/Logging.h"
@@ -177,6 +178,7 @@ namespace JSEngine
             g_widgetOwners.clear();
             g_widgetIdToOwner.clear();
             g_staleScripts.clear();
+            Settings::Flush();  // flush any debounced widget saves to disk
         }
 
         void DestroyAllTrays()
