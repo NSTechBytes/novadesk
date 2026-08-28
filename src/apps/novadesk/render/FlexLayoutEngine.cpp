@@ -88,6 +88,9 @@ void FlexLayoutEngine::ApplyLayout(Element* container, const FlexLayoutConfig& c
         orderedItems.assign(items.begin(), items.end());
     }
 
+    std::wstring align = config.align;
+    std::transform(align.begin(), align.end(), align.begin(), ::towlower);
+
     int cursor = mainStart;
     for (Element* child : orderedItems)
     {
@@ -95,9 +98,6 @@ void FlexLayoutEngine::ApplyLayout(Element* container, const FlexLayoutConfig& c
 
         int childW = child->GetWidth();
         int childH = child->GetHeight();
-
-        std::wstring align = config.align;
-        std::transform(align.begin(), align.end(), align.begin(), ::towlower);
 
         int crossPos = 0;
 
