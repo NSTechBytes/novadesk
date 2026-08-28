@@ -54,10 +54,7 @@
 #define WIDGET_CLASS_NAME L"NovadeskWidget"
 #define ZPOS_FLAGS (SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOSENDCHANGING)
 #define SNAP_DISTANCE 10
-#define TIMER_TOPMOST 2
-#define TIMER_TOOLTIP 3
-#define TIMER_CTRL_OVERRIDE 4
-#define TIMER_CARET 5
+
 
 
 extern std::vector<Widget *> widgets; // Defined in Novadesk.cpp

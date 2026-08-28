@@ -462,6 +462,7 @@ private:
     static const UINT_PTR TIMER_TOPMOST = 2;
     static const UINT_PTR TIMER_TOOLTIP = 3;
     static const UINT_PTR TIMER_CTRL_OVERRIDE = 4;
+    static const UINT_PTR TIMER_CARET = 5;
     static const UINT_PTR TIMER_ANIMATION = 6;
 };
 
