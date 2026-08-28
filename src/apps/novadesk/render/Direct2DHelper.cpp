@@ -438,7 +438,9 @@ namespace Direct2D
             return false;
         }
 
-        // Read data
+        // Read data — cap at 50 MB to prevent memory exhaustion from
+        // malicious or accidentally huge payloads.
+        static const DWORD MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
         DWORD dwDownloaded = 0;
         BYTE tempBuffer[4096];
         bool downloadError = false;
@@ -454,6 +456,13 @@ namespace Direct2D
             
             if (dwSize == 0)
                 break;
+                
+            if (dwDownloaded + dwSize > MAX_DOWNLOAD_BYTES)
+            {
+                Logging::Log(LogLevel::Error, L"[novadesk] Download exceeded %lu byte limit from URL: %s", MAX_DOWNLOAD_BYTES, url.c_str());
+                downloadError = true;
+                break;
+            }
                 
             DWORD dwRead = 0;
             if (!WinHttpReadData(hRequest, tempBuffer, (std::min)((DWORD)sizeof(tempBuffer), dwSize), &dwRead))
