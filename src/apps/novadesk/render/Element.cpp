@@ -23,6 +23,20 @@ Element::Element(ElementType type, const std::wstring& id, int x, int y, int wid
     m_ToolTipDisabled = false;
 }
 
+Element::~Element()
+{
+    // Defensively remove self from parent container to prevent dangling
+    // pointers.  Normally the Widget removal path calls
+    // UpdateContainerForElement() before erasing, which clears this link.
+    // This covers the case where an element is destroyed without going
+    // through that path.
+    if (m_ContainerElement)
+    {
+        m_ContainerElement->RemoveContainerItem(this);
+        m_ContainerElement = nullptr;
+    }
+}
+
 /*
 ** Get the width of the element.
 */

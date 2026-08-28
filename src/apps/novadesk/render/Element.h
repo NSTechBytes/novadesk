@@ -106,7 +106,7 @@ public:
     void SetBackdropFilter(const BackdropFilter &filter) { m_BackdropFilter = filter; }
     const BackdropFilter &GetBackdropFilter() const { return m_BackdropFilter; }
     Element(ElementType type, const std::wstring& id, int x, int y, int width, int height);
-    virtual ~Element() {}
+    virtual ~Element();
 
     virtual void Render(ID2D1DeviceContext* context) = 0;
 
