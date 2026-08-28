@@ -99,6 +99,18 @@ namespace JSEngine
         std::unordered_set<std::wstring> g_staleScripts;
         std::unordered_map<std::wstring, int> g_scriptEvalRevisions;
 
+        // Cached atoms for high-frequency event property names — avoids
+        // per-event string→atom hash lookups in CallEventCallback.
+        JSAtom g_atom_clientX       = JS_ATOM_NULL;
+        JSAtom g_atom_clientY       = JS_ATOM_NULL;
+        JSAtom g_atom_screenX       = JS_ATOM_NULL;
+        JSAtom g_atom_screenY       = JS_ATOM_NULL;
+        JSAtom g_atom_offsetX       = JS_ATOM_NULL;
+        JSAtom g_atom_offsetY       = JS_ATOM_NULL;
+        JSAtom g_atom_offsetXPercent = JS_ATOM_NULL;
+        JSAtom g_atom_offsetYPercent = JS_ATOM_NULL;
+        JSAtom g_atom_widgetId      = JS_ATOM_NULL;
+
         class ScriptExecutionScope
         {
         public:
@@ -223,6 +235,22 @@ namespace JSEngine
 
             if (g_context)
             {
+                // Free cached event-property atoms before context destruction.
+                JS_FreeAtom(g_context, g_atom_clientX);
+                JS_FreeAtom(g_context, g_atom_clientY);
+                JS_FreeAtom(g_context, g_atom_screenX);
+                JS_FreeAtom(g_context, g_atom_screenY);
+                JS_FreeAtom(g_context, g_atom_offsetX);
+                JS_FreeAtom(g_context, g_atom_offsetY);
+                JS_FreeAtom(g_context, g_atom_offsetXPercent);
+                JS_FreeAtom(g_context, g_atom_offsetYPercent);
+                JS_FreeAtom(g_context, g_atom_widgetId);
+                g_atom_clientX = g_atom_clientY = JS_ATOM_NULL;
+                g_atom_screenX = g_atom_screenY = JS_ATOM_NULL;
+                g_atom_offsetX = g_atom_offsetY = JS_ATOM_NULL;
+                g_atom_offsetXPercent = g_atom_offsetYPercent = JS_ATOM_NULL;
+                g_atom_widgetId = JS_ATOM_NULL;
+
                 JS_FreeContext(g_context);
                 g_context = nullptr;
             }
@@ -1380,6 +1408,18 @@ namespace JSEngine
             ClearChannelMap(g_mainIpcChannelListeners);
             ClearChannelMap(g_uiIpcChannelListeners);
             ClearHandlerMap(g_mainIpcHandlers);
+
+            // Pre-create atoms for high-frequency event properties.
+            g_atom_clientX        = JS_NewAtom(g_context, "__clientX");
+            g_atom_clientY        = JS_NewAtom(g_context, "__clientY");
+            g_atom_screenX        = JS_NewAtom(g_context, "__screenX");
+            g_atom_screenY        = JS_NewAtom(g_context, "__screenY");
+            g_atom_offsetX        = JS_NewAtom(g_context, "__offsetX");
+            g_atom_offsetY        = JS_NewAtom(g_context, "__offsetY");
+            g_atom_offsetXPercent = JS_NewAtom(g_context, "__offsetXPercent");
+            g_atom_offsetYPercent = JS_NewAtom(g_context, "__offsetYPercent");
+            g_atom_widgetId       = JS_NewAtom(g_context, "widgetId");
+
             return true;
         }
 
@@ -1934,30 +1974,30 @@ namespace JSEngine
         JSValue arg = JS_NewObject(g_context);
         if (data)
         {
-            JS_SetPropertyStr(g_context, arg, "__clientX", JS_NewInt32(g_context, data->clientX));
-            JS_SetPropertyStr(g_context, arg, "__clientY", JS_NewInt32(g_context, data->clientY));
-            JS_SetPropertyStr(g_context, arg, "__screenX", JS_NewInt32(g_context, data->screenX));
-            JS_SetPropertyStr(g_context, arg, "__screenY", JS_NewInt32(g_context, data->screenY));
-            JS_SetPropertyStr(g_context, arg, "__offsetX", JS_NewInt32(g_context, data->offsetX));
-            JS_SetPropertyStr(g_context, arg, "__offsetY", JS_NewInt32(g_context, data->offsetY));
-            JS_SetPropertyStr(g_context, arg, "__offsetXPercent", JS_NewInt32(g_context, data->offsetXPercent));
-            JS_SetPropertyStr(g_context, arg, "__offsetYPercent", JS_NewInt32(g_context, data->offsetYPercent));
+            JS_SetProperty(g_context, arg, g_atom_clientX,        JS_NewInt32(g_context, data->clientX));
+            JS_SetProperty(g_context, arg, g_atom_clientY,        JS_NewInt32(g_context, data->clientY));
+            JS_SetProperty(g_context, arg, g_atom_screenX,        JS_NewInt32(g_context, data->screenX));
+            JS_SetProperty(g_context, arg, g_atom_screenY,        JS_NewInt32(g_context, data->screenY));
+            JS_SetProperty(g_context, arg, g_atom_offsetX,        JS_NewInt32(g_context, data->offsetX));
+            JS_SetProperty(g_context, arg, g_atom_offsetY,        JS_NewInt32(g_context, data->offsetY));
+            JS_SetProperty(g_context, arg, g_atom_offsetXPercent, JS_NewInt32(g_context, data->offsetXPercent));
+            JS_SetProperty(g_context, arg, g_atom_offsetYPercent, JS_NewInt32(g_context, data->offsetYPercent));
         }
         else
         {
-            JS_SetPropertyStr(g_context, arg, "__clientX", JS_NewInt32(g_context, 0));
-            JS_SetPropertyStr(g_context, arg, "__clientY", JS_NewInt32(g_context, 0));
-            JS_SetPropertyStr(g_context, arg, "__screenX", JS_NewInt32(g_context, 0));
-            JS_SetPropertyStr(g_context, arg, "__screenY", JS_NewInt32(g_context, 0));
-            JS_SetPropertyStr(g_context, arg, "__offsetX", JS_NewInt32(g_context, 0));
-            JS_SetPropertyStr(g_context, arg, "__offsetY", JS_NewInt32(g_context, 0));
-            JS_SetPropertyStr(g_context, arg, "__offsetXPercent", JS_NewInt32(g_context, 0));
-            JS_SetPropertyStr(g_context, arg, "__offsetYPercent", JS_NewInt32(g_context, 0));
+            JS_SetProperty(g_context, arg, g_atom_clientX,        JS_NewInt32(g_context, 0));
+            JS_SetProperty(g_context, arg, g_atom_clientY,        JS_NewInt32(g_context, 0));
+            JS_SetProperty(g_context, arg, g_atom_screenX,        JS_NewInt32(g_context, 0));
+            JS_SetProperty(g_context, arg, g_atom_screenY,        JS_NewInt32(g_context, 0));
+            JS_SetProperty(g_context, arg, g_atom_offsetX,        JS_NewInt32(g_context, 0));
+            JS_SetProperty(g_context, arg, g_atom_offsetY,        JS_NewInt32(g_context, 0));
+            JS_SetProperty(g_context, arg, g_atom_offsetXPercent, JS_NewInt32(g_context, 0));
+            JS_SetProperty(g_context, arg, g_atom_offsetYPercent, JS_NewInt32(g_context, 0));
         }
 
         if (widget)
         {
-            JS_SetPropertyStr(g_context, arg, "widgetId",
+            JS_SetProperty(g_context, arg, g_atom_widgetId,
                               JS_NewString(g_context, Utils::ToString(widget->GetOptions().id).c_str()));
         }
 
