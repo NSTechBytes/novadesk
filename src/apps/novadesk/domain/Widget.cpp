@@ -170,26 +170,23 @@ Widget::~Widget()
 */
 bool Widget::Register()
 {
-    static bool registered = false;
-    if (registered)
-        return true;
-
-    HINSTANCE hInstance = GetModuleHandle(nullptr);
-
-    WNDCLASSEXW wcex = {sizeof(WNDCLASSEX)};
-    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
-    wcex.lpfnWndProc = WndProc;
-    wcex.hInstance = hInstance;
-    wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground = nullptr; // We'll paint it ourselves
-    wcex.lpszClassName = WIDGET_CLASS_NAME;
-
-    if (RegisterClassExW(&wcex))
+    static std::once_flag s_Flag;
+    static bool s_Registered = false;
+    std::call_once(s_Flag, []()
     {
-        registered = true;
-        return true;
-    }
-    return false;
+        HINSTANCE hInstance = GetModuleHandle(nullptr);
+
+        WNDCLASSEXW wcex = {sizeof(WNDCLASSEX)};
+        wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
+        wcex.lpfnWndProc = WndProc;
+        wcex.hInstance = hInstance;
+        wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
+        wcex.hbrBackground = nullptr; // We'll paint it ourselves
+        wcex.lpszClassName = WIDGET_CLASS_NAME;
+
+        s_Registered = (RegisterClassExW(&wcex) != 0);
+    });
+    return s_Registered;
 }
 
 /*
