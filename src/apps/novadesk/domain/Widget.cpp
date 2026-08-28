@@ -146,6 +146,7 @@ Widget::~Widget()
     // Element-owned GeneralImage instances join their workers on destruction.
     // Do this while the widget HWND is still valid.
     m_Elements.clear();
+    m_ElementIndex.clear();
 
     if (m_hWnd)
     {
@@ -1566,6 +1567,8 @@ void Widget::AddImage(const PropertyParser::ImageOptions &options)
     }
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1592,6 +1595,8 @@ void Widget::AddButton(const PropertyParser::ButtonOptions &options)
     PropertyParser::ApplyButtonOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1618,6 +1623,8 @@ void Widget::AddBitmap(const PropertyParser::BitmapOptions &options)
     PropertyParser::ApplyBitmapOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1645,6 +1652,8 @@ void Widget::AddRotator(const PropertyParser::RotatorOptions &options)
     PropertyParser::ApplyRotatorOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1682,6 +1691,8 @@ void Widget::AddText(const PropertyParser::TextOptions &options)
     PropertyParser::ApplyTextOptions(element, options); // Changed from ApplyElementOptions
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1708,6 +1719,8 @@ void Widget::AddBar(const PropertyParser::BarOptions &options)
     PropertyParser::ApplyBarOptions(element, options); // Changed from ApplyElementOptions
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1733,6 +1746,8 @@ void Widget::AddLine(const PropertyParser::LineOptions &options)
     PropertyParser::ApplyLineOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1758,6 +1773,8 @@ void Widget::AddHistogram(const PropertyParser::HistogramOptions &options)
     PropertyParser::ApplyHistogramOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1784,6 +1801,8 @@ void Widget::AddRoundLine(const PropertyParser::RoundLineOptions &options)
     PropertyParser::ApplyRoundLineOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1845,6 +1864,8 @@ void Widget::AddShape(const PropertyParser::ShapeOptions &options)
     }
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1870,6 +1891,8 @@ void Widget::AddAreaGraph(const PropertyParser::AreaGraphOptions &options)
     PropertyParser::ApplyAreaGraphOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1891,6 +1914,8 @@ void Widget::AddLayoutBox(const PropertyParser::ShapeOptions &options)
     ElementLayoutBox *element = new ElementLayoutBox(options.id, options.x, options.y, options.width, options.height);
     PropertyParser::ApplyShapeOptions(element, options);
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
     Redraw();
 }
@@ -1918,6 +1943,8 @@ void Widget::AddInputBox(const PropertyParser::InputBoxOptions &options)
     PropertyParser::ApplyInputBoxOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
@@ -1930,6 +1957,8 @@ void Widget::AddColorPicker(const PropertyParser::ColorPickerOptions &options)
     auto *element = new ColorPickerElement(options.id, options.x, options.y, options.width > 0 ? options.width : 32, options.height > 0 ? options.height : 32);
     PropertyParser::ApplyColorPickerOptions(element, options);
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    if (!element->GetId().empty())
+        m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
     Redraw();
 }
@@ -2533,6 +2562,8 @@ void Widget::RemoveElementsByGroup(const std::wstring &group)
             }
             
             UpdateContainerForElement(element, L"");
+            if (!element->GetId().empty())
+                m_ElementIndex.erase(element->GetId());
             it = m_Elements.erase(it);
             changed = true;
         }
@@ -2576,6 +2607,7 @@ bool Widget::RemoveElements(const std::wstring &id)
             UpdateContainerForElement(el, L"");
         }
         m_Elements.clear();
+        m_ElementIndex.clear();
         m_LayoutConfigs.clear();
         WidgetAnimationHelper::ClearAllAnimations(*this);
         m_MouseOverElement = nullptr;
@@ -2610,6 +2642,7 @@ bool Widget::RemoveElements(const std::wstring &id)
             UpdateContainerForElement(element, L"");
             m_LayoutConfigs.erase(id);
             WidgetAnimationHelper::RemoveAnimationsForElement(*this, id);
+            m_ElementIndex.erase(id);
             it = m_Elements.erase(it);
             changed = true;
         }
@@ -2657,6 +2690,7 @@ void Widget::RemoveElements(const std::vector<std::wstring> &ids)
                 UpdateContainerForElement(element, L"");
                 m_LayoutConfigs.erase(id);
                 WidgetAnimationHelper::RemoveAnimationsForElement(*this, id);
+                m_ElementIndex.erase(id);
                 m_Elements.erase(it);
                 changed = true;
                 break;
@@ -3084,10 +3118,17 @@ void Widget::UpdateLayeredWindowContent()
 */
 Element *Widget::FindElementById(const std::wstring &id)
 {
-    for (auto &uptr : m_Elements)
+    if (id.empty())
+        return nullptr;
+    auto it = m_ElementIndex.find(id);
+    if (it != m_ElementIndex.end())
     {
-        if (uptr->GetId() == id)
-            return uptr.get();
+        Element *el = it->second;
+        if (el && IsTrackedElement(el))
+            return el;
+        // Stale entry — element was removed without going through
+        // the normal removal path.  Clean up lazily.
+        m_ElementIndex.erase(it);
     }
     return nullptr;
 }

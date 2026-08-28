@@ -369,6 +369,7 @@ private:
     Tooltip m_Tooltip;
     ZPOSITION m_WindowZPosition;
     std::vector<std::unique_ptr<Element>> m_Elements;
+    std::unordered_map<std::wstring, Element*> m_ElementIndex;
     std::unordered_map<std::wstring, LayoutConfig> m_LayoutConfigs;
     struct ElementAnimation
     {
