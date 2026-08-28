@@ -24,7 +24,10 @@ namespace
     {
         if (bytes.empty()) return false;
         const HRESULT comHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-        const bool uninitialize = SUCCEEDED(comHr);
+        // Only call CoUninitialize when we genuinely initialized COM (S_OK).
+        // RPC_E_CHANGED_MODE means COM was already initialized in a different
+        // apartment model — calling CoUninitialize there would corrupt COM state.
+        const bool uninitialize = (comHr == S_OK);
         Microsoft::WRL::ComPtr<IWICImagingFactory> factory;
         HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.GetAddressOf()));
         if (SUCCEEDED(hr))

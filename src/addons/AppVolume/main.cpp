@@ -61,7 +61,10 @@ namespace
         ComInit() { hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED); }
         ~ComInit()
         {
-            if (SUCCEEDED(hr))
+            // Only call CoUninitialize when we genuinely initialized COM (S_OK).
+            // RPC_E_CHANGED_MODE means COM was already initialized in a different
+            // apartment model — calling CoUninitialize there corrupts COM state.
+            if (hr == S_OK)
                 CoUninitialize();
         }
         bool Ok() const { return SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE; }
