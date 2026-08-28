@@ -82,9 +82,18 @@ bool Widget::IsValid(Widget *pWidget)
     return false;
 }
 
-std::vector<Widget *> &Widget::GetAllWidgets()
+std::vector<Widget *> Widget::GetAllWidgets()
 {
-    return widgets;
+    std::lock_guard<std::mutex> lock(s_WidgetMutex);
+    return widgets;  // returns a snapshot copy
+}
+
+void Widget::RemoveWidget(Widget *widget)
+{
+    std::lock_guard<std::mutex> lock(s_WidgetMutex);
+    auto it = std::find(widgets.begin(), widgets.end(), widget);
+    if (it != widgets.end())
+        widgets.erase(it);
 }
 
 void Widget::ClearAllWidgets()

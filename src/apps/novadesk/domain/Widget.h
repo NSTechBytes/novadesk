@@ -310,7 +310,8 @@ public:
     void OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer);
 
     Element* FindElementById(const std::wstring& id);
-    static std::vector<Widget *> &GetAllWidgets();
+    static std::vector<Widget *> GetAllWidgets();  // returns a snapshot (thread-safe)
+    static void RemoveWidget(Widget *widget);       // thread-safe removal
     static void ClearAllWidgets();
     static bool IsValid(Widget* pWidget);
     void SetLayoutConfig(const std::wstring &id, const LayoutConfig &config);

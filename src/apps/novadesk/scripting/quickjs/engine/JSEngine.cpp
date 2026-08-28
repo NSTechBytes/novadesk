@@ -165,12 +165,8 @@ namespace JSEngine
 
         void DestroyAllWidgets()
         {
-            std::vector<Widget *> copy;
-            {
-                std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
-                copy = Widget::GetAllWidgets();
-                Widget::GetAllWidgets().clear();
-            }
+            std::vector<Widget *> copy = Widget::GetAllWidgets();  // thread-safe snapshot
+            Widget::ClearAllWidgets();  // thread-safe clear
             // Lock released before delete: the destructor calls DestroyWindow
             // which dispatches WM_DESTROY synchronously; holding the lock there
             // would deadlock.
@@ -256,29 +252,21 @@ namespace JSEngine
 
         void DestroyWidgetsForScript(const std::wstring &scriptPath)
         {
+            // Get a snapshot — GetAllWidgets() is now thread-safe.
+            std::vector<Widget *> copy = Widget::GetAllWidgets();
             std::vector<Widget *> toDelete;
+            for (auto *w : copy)
             {
-                std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
-                auto &all = Widget::GetAllWidgets();
-                for (auto *w : all)
+                auto it = g_widgetOwners.find(w);
+                if (it != g_widgetOwners.end() && it->second == scriptPath)
                 {
-                    auto it = g_widgetOwners.find(w);
-                    if (it != g_widgetOwners.end() && it->second == scriptPath)
-                    {
-                        toDelete.push_back(w);
-                    }
+                    toDelete.push_back(w);
                 }
-                if (!toDelete.empty())
-                {
-                    std::unordered_set<Widget *> toDeleteSet;
-                    toDeleteSet.reserve(toDelete.size());
-                    for (auto *w : toDelete)
-                        toDeleteSet.insert(w);
-                    all.erase(std::remove_if(all.begin(), all.end(),
-                                                    [&](Widget *w)
-                                                    { return toDeleteSet.find(w) != toDeleteSet.end(); }),
-                                     all.end());
-                }
+            }
+            // Remove each widget from the global list (thread-safe).
+            for (auto *w : toDelete)
+            {
+                Widget::RemoveWidget(w);
             }
             // Lock released before delete: the destructor calls DestroyWindow
             // which dispatches WM_DESTROY synchronously; holding the lock there
