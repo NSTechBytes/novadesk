@@ -218,24 +218,21 @@ namespace novadesk::scripting::quickjs
         JSModuleDef *m = JS_NewCModule(ctx, moduleName, FsModuleInit);
         if (!m)
             return nullptr;
-        if (JS_AddModuleExport(ctx, m, "readFile") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "writeFile") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "exists") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "mkdir") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "readdir") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "unlink") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "rename") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "copyFile") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "stat") < 0)
-            return nullptr;
+        // Register all exports. Failures here are extremely rare
+        // (OOM for the export name string). The module is already
+        // registered with the context by JS_NewCModule, so returning
+        // nullptr on partial failure would orphan it — the caller has
+        // no handle to finalize it. Always return the module so it
+        // is cleaned up normally when the context is destroyed.
+        JS_AddModuleExport(ctx, m, "readFile");
+        JS_AddModuleExport(ctx, m, "writeFile");
+        JS_AddModuleExport(ctx, m, "exists");
+        JS_AddModuleExport(ctx, m, "mkdir");
+        JS_AddModuleExport(ctx, m, "readdir");
+        JS_AddModuleExport(ctx, m, "unlink");
+        JS_AddModuleExport(ctx, m, "rename");
+        JS_AddModuleExport(ctx, m, "copyFile");
+        JS_AddModuleExport(ctx, m, "stat");
         return m;
     }
 } // namespace novadesk::scripting::quickjs

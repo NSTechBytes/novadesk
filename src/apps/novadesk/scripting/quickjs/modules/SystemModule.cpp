@@ -1171,40 +1171,29 @@ namespace novadesk::scripting::quickjs
         JSModuleDef *m = JS_NewCModule(ctx, moduleName, SystemModuleInit);
         if (!m)
             return nullptr;
-        if (JS_AddModuleExport(ctx, m, "clipboard") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "wallpaper") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "power") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "cpu") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "memory") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "network") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "disk") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "recycleBin") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "time") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "audio") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "fileIcon") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "displayMetrics") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "registry") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "json") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "getEnv") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "execute") < 0)
-            return nullptr;
-        if (JS_AddModuleExport(ctx, m, "webFetch") < 0)
-            return nullptr;
+        // Register all exports. Failures here are extremely rare
+        // (OOM for the export name string). The module is already
+        // registered with the context by JS_NewCModule, so returning
+        // nullptr on partial failure would orphan it — the caller has
+        // no handle to finalize it. Always return the module so it
+        // is cleaned up normally when the context is destroyed.
+        JS_AddModuleExport(ctx, m, "clipboard");
+        JS_AddModuleExport(ctx, m, "wallpaper");
+        JS_AddModuleExport(ctx, m, "power");
+        JS_AddModuleExport(ctx, m, "cpu");
+        JS_AddModuleExport(ctx, m, "memory");
+        JS_AddModuleExport(ctx, m, "network");
+        JS_AddModuleExport(ctx, m, "disk");
+        JS_AddModuleExport(ctx, m, "recycleBin");
+        JS_AddModuleExport(ctx, m, "time");
+        JS_AddModuleExport(ctx, m, "audio");
+        JS_AddModuleExport(ctx, m, "fileIcon");
+        JS_AddModuleExport(ctx, m, "displayMetrics");
+        JS_AddModuleExport(ctx, m, "registry");
+        JS_AddModuleExport(ctx, m, "json");
+        JS_AddModuleExport(ctx, m, "getEnv");
+        JS_AddModuleExport(ctx, m, "execute");
+        JS_AddModuleExport(ctx, m, "webFetch");
         return m;
     }
 

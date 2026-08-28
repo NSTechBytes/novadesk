@@ -2069,30 +2069,18 @@ namespace novadesk::scripting::quickjs
         {
             return nullptr;
         }
-        if (JS_AddModuleExport(ctx, m, "widgetWindow") < 0)
-        {
-            return nullptr;
-        }
-        if (JS_AddModuleExport(ctx, m, "app") < 0)
-        {
-            return nullptr;
-        }
-        if (JS_AddModuleExport(ctx, m, "tray") < 0)
-        {
-            return nullptr;
-        }
-        if (JS_AddModuleExport(ctx, m, "addon") < 0)
-        {
-            return nullptr;
-        }
-        if (JS_AddModuleExport(ctx, m, "toast") < 0)
-        {
-            return nullptr;
-        }
-        if (JS_AddModuleExport(ctx, m, "dialog") < 0)
-        {
-            return nullptr;
-        }
+        // Register all exports. Failures here are extremely rare
+        // (OOM for the export name string). The module is already
+        // registered with the context by JS_NewCModule, so returning
+        // nullptr on partial failure would orphan it — the caller has
+        // no handle to finalize it. Always return the module so it
+        // is cleaned up normally when the context is destroyed.
+        JS_AddModuleExport(ctx, m, "widgetWindow");
+        JS_AddModuleExport(ctx, m, "app");
+        JS_AddModuleExport(ctx, m, "tray");
+        JS_AddModuleExport(ctx, m, "addon");
+        JS_AddModuleExport(ctx, m, "toast");
+        JS_AddModuleExport(ctx, m, "dialog");
         return m;
     }
 
