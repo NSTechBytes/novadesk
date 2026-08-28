@@ -4,12 +4,14 @@
  * License; either version 2 of the License, or (at your option) any later
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
- 
+
 #include "WidgetUiBindings.h"
 
 #include <algorithm>
 #include <cwctype>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "../../domain/Widget.h"
@@ -123,34 +125,47 @@ namespace novadesk::scripting::quickjs
             if (prop == "fallbackPath")
             {
                 std::wstring val;
-                if (auto *img = dynamic_cast<ImageElement *>(element)) val = img->GetFallbackPath();
-                else if (auto *btn = dynamic_cast<ButtonElement *>(element)) val = btn->GetFallbackPath();
-                else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) val = bmp->GetFallbackPath();
-                else if (auto *rot = dynamic_cast<RotatorElement *>(element)) val = rot->GetFallbackPath();
+                if (auto *img = dynamic_cast<ImageElement *>(element))
+                    val = img->GetFallbackPath();
+                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+                    val = btn->GetFallbackPath();
+                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
+                    val = bmp->GetFallbackPath();
+                else if (auto *rot = dynamic_cast<RotatorElement *>(element))
+                    val = rot->GetFallbackPath();
                 return JS_NewString(ctx, Utils::ToString(val).c_str());
             }
             if (prop == "grayscale")
             {
                 bool val = false;
-                if (auto *img = dynamic_cast<ImageElement *>(element)) val = img->IsGrayscale();
-                else if (auto *btn = dynamic_cast<ButtonElement *>(element)) val = btn->IsGrayscale();
-                else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) val = bmp->IsGrayscale();
+                if (auto *img = dynamic_cast<ImageElement *>(element))
+                    val = img->IsGrayscale();
+                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+                    val = btn->IsGrayscale();
+                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
+                    val = bmp->IsGrayscale();
                 return JS_NewBool(ctx, val ? 1 : 0);
             }
             if (prop == "useExifOrientation")
             {
                 bool val = false;
-                if (auto *img = dynamic_cast<ImageElement *>(element)) val = img->GetUseExifOrientation();
-                else if (auto *btn = dynamic_cast<ButtonElement *>(element)) val = btn->GetUseExifOrientation();
-                else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) val = bmp->GetUseExifOrientation();
+                if (auto *img = dynamic_cast<ImageElement *>(element))
+                    val = img->GetUseExifOrientation();
+                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+                    val = btn->GetUseExifOrientation();
+                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
+                    val = bmp->GetUseExifOrientation();
                 return JS_NewBool(ctx, val ? 1 : 0);
             }
             if (prop == "imageAlpha")
             {
                 BYTE val = 255;
-                if (auto *img = dynamic_cast<ImageElement *>(element)) val = img->GetImageAlpha();
-                else if (auto *btn = dynamic_cast<ButtonElement *>(element)) val = btn->GetImageAlpha();
-                else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) val = bmp->GetImageAlpha();
+                if (auto *img = dynamic_cast<ImageElement *>(element))
+                    val = img->GetImageAlpha();
+                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+                    val = btn->GetImageAlpha();
+                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
+                    val = bmp->GetImageAlpha();
                 return JS_NewInt32(ctx, static_cast<int>(val));
             }
             if (prop == "imageTint")
@@ -158,17 +173,35 @@ namespace novadesk::scripting::quickjs
                 bool hasTint = false;
                 COLORREF color = 0;
                 BYTE alpha = 255;
-                if (auto *img = dynamic_cast<ImageElement *>(element)) {
+                if (auto *img = dynamic_cast<ImageElement *>(element))
+                {
                     hasTint = img->HasImageTint();
-                    if (hasTint) { color = img->GetImageTint(); alpha = img->GetImageTintAlpha(); }
-                } else if (auto *btn = dynamic_cast<ButtonElement *>(element)) {
-                    hasTint = btn->HasImageTint();
-                    if (hasTint) { color = btn->GetImageTint(); alpha = btn->GetImageTintAlpha(); }
-                } else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) {
-                    hasTint = bmp->HasImageTint();
-                    if (hasTint) { color = bmp->GetImageTint(); alpha = bmp->GetImageTintAlpha(); }
+                    if (hasTint)
+                    {
+                        color = img->GetImageTint();
+                        alpha = img->GetImageTintAlpha();
+                    }
                 }
-                if (hasTint) {
+                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+                {
+                    hasTint = btn->HasImageTint();
+                    if (hasTint)
+                    {
+                        color = btn->GetImageTint();
+                        alpha = btn->GetImageTintAlpha();
+                    }
+                }
+                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
+                {
+                    hasTint = bmp->HasImageTint();
+                    if (hasTint)
+                    {
+                        color = bmp->GetImageTint();
+                        alpha = bmp->GetImageTintAlpha();
+                    }
+                }
+                if (hasTint)
+                {
                     const std::wstring c = ColorUtil::ToRGBAString(color, alpha);
                     return JS_NewString(ctx, Utils::ToString(c).c_str());
                 }
@@ -176,16 +209,27 @@ namespace novadesk::scripting::quickjs
             if (prop == "imageFlip")
             {
                 ImageFlipMode flip = IMAGE_FLIP_NONE;
-                if (auto *img = dynamic_cast<ImageElement *>(element)) flip = img->GetImageFlip();
-                else if (auto *btn = dynamic_cast<ButtonElement *>(element)) flip = btn->GetImageFlip();
-                else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) flip = bmp->GetImageFlip();
-                
+                if (auto *img = dynamic_cast<ImageElement *>(element))
+                    flip = img->GetImageFlip();
+                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+                    flip = btn->GetImageFlip();
+                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
+                    flip = bmp->GetImageFlip();
+
                 const char *flipStr = "none";
-                switch (flip) {
-                case IMAGE_FLIP_HORIZONTAL: flipStr = "horizontal"; break;
-                case IMAGE_FLIP_VERTICAL: flipStr = "vertical"; break;
-                case IMAGE_FLIP_BOTH: flipStr = "both"; break;
-                default: break;
+                switch (flip)
+                {
+                case IMAGE_FLIP_HORIZONTAL:
+                    flipStr = "horizontal";
+                    break;
+                case IMAGE_FLIP_VERTICAL:
+                    flipStr = "vertical";
+                    break;
+                case IMAGE_FLIP_BOTH:
+                    flipStr = "both";
+                    break;
+                default:
+                    break;
                 }
                 return JS_NewString(ctx, flipStr);
             }
@@ -194,14 +238,32 @@ namespace novadesk::scripting::quickjs
                 bool hasCrop = false;
                 float x = 0, y = 0, w = 0, h = 0;
                 ImageCropOrigin origin = IMAGE_CROP_ORIGIN_TOP_LEFT;
-                if (auto *img = dynamic_cast<ImageElement *>(element)) {
+                if (auto *img = dynamic_cast<ImageElement *>(element))
+                {
                     hasCrop = img->HasImageCrop();
-                    if (hasCrop) { x = img->GetImageCropX(); y = img->GetImageCropY(); w = img->GetImageCropW(); h = img->GetImageCropH(); origin = img->GetImageCropOrigin(); }
-                } else if (auto *btn = dynamic_cast<ButtonElement *>(element)) {
-                    hasCrop = btn->HasImageCrop();
-                    if (hasCrop) { x = btn->GetImageCropX(); y = btn->GetImageCropY(); w = btn->GetImageCropW(); h = btn->GetImageCropH(); origin = btn->GetImageCropOrigin(); }
+                    if (hasCrop)
+                    {
+                        x = img->GetImageCropX();
+                        y = img->GetImageCropY();
+                        w = img->GetImageCropW();
+                        h = img->GetImageCropH();
+                        origin = img->GetImageCropOrigin();
+                    }
                 }
-                if (hasCrop) {
+                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+                {
+                    hasCrop = btn->HasImageCrop();
+                    if (hasCrop)
+                    {
+                        x = btn->GetImageCropX();
+                        y = btn->GetImageCropY();
+                        w = btn->GetImageCropW();
+                        h = btn->GetImageCropH();
+                        origin = btn->GetImageCropOrigin();
+                    }
+                }
+                if (hasCrop)
+                {
                     JSValue arr = JS_NewArray(ctx);
                     JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat64(ctx, x));
                     JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat64(ctx, y));
@@ -215,19 +277,29 @@ namespace novadesk::scripting::quickjs
             {
                 bool hasMatrix = false;
                 const float *m = nullptr;
-                if (auto *img = dynamic_cast<ImageElement *>(element)) {
+                if (auto *img = dynamic_cast<ImageElement *>(element))
+                {
                     hasMatrix = img->HasColorMatrix();
-                    if (hasMatrix) m = img->GetColorMatrix();
-                } else if (auto *btn = dynamic_cast<ButtonElement *>(element)) {
-                    hasMatrix = btn->HasColorMatrix();
-                    if (hasMatrix) m = btn->GetColorMatrix();
-                } else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) {
-                    hasMatrix = bmp->HasColorMatrix();
-                    if (hasMatrix) m = bmp->GetColorMatrix();
+                    if (hasMatrix)
+                        m = img->GetColorMatrix();
                 }
-                if (hasMatrix && m) {
+                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+                {
+                    hasMatrix = btn->HasColorMatrix();
+                    if (hasMatrix)
+                        m = btn->GetColorMatrix();
+                }
+                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
+                {
+                    hasMatrix = bmp->HasColorMatrix();
+                    if (hasMatrix)
+                        m = bmp->GetColorMatrix();
+                }
+                if (hasMatrix && m)
+                {
                     JSValue arr = JS_NewArray(ctx);
-                    for (uint32_t i = 0; i < 20; ++i) JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, m[i]));
+                    for (uint32_t i = 0; i < 20; ++i)
+                        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, m[i]));
                     return arr;
                 }
             }
@@ -289,8 +361,10 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetAddColorPicker(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0])) return ThrowTypeError(ctx, "addColorPicker", "expected options object");
+            if (!widget)
+                return JS_UNDEFINED;
+            if (argc < 1 || !JS_IsObject(argv[0]))
+                return ThrowTypeError(ctx, "addColorPicker", "expected options object");
             PropertyParser::ColorPickerOptions options;
             PropertyParser::ParseColorPickerOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
             widget->AddColorPicker(options);
@@ -459,7 +533,7 @@ namespace novadesk::scripting::quickjs
             (void)thisVal;
             if (!widget || !JS_IsObject(obj))
                 return JS_UNDEFINED;
-            
+
             // Only check 'elementType' - no fallback to 'type'
             std::wstring type = ReadObjectString(ctx, obj, "elementType");
             if (type.empty())
@@ -468,7 +542,7 @@ namespace novadesk::scripting::quickjs
             }
             std::transform(type.begin(), type.end(), type.begin(), ::towlower);
 
-            JSValue argvLocal[1] = { obj };
+            JSValue argvLocal[1] = {obj};
             if (type == L"text")
                 return JsWidgetAddText(ctx, thisVal, 1, argvLocal);
             if (type == L"image")
@@ -526,7 +600,7 @@ namespace novadesk::scripting::quickjs
                 }
 
                 JS_SetPropertyStr(ctx, child, "container", JS_NewString(ctx, Utils::ToString(layoutId).c_str()));
-                
+
                 // Only check 'elementType' - no fallback to 'type'
                 std::wstring type = ReadObjectString(ctx, child, "elementType");
                 if (type.empty())
@@ -536,11 +610,11 @@ namespace novadesk::scripting::quickjs
                     return ThrowTypeError(ctx, "addLayoutBox", "children item must have 'elementType' property");
                 }
                 std::transform(type.begin(), type.end(), type.begin(), ::towlower);
-                
+
                 JSValue res = JS_UNDEFINED;
                 if (type == L"layoutbox")
                 {
-                    JSValue childArgv[1] = { child };
+                    JSValue childArgv[1] = {child};
                     res = JsWidgetAddLayoutBox(ctx, thisVal, 1, childArgv);
                 }
                 else
@@ -624,19 +698,45 @@ namespace novadesk::scripting::quickjs
             const char *typeName = "shape";
             switch (magic)
             {
-            case 0: typeName = "text"; break;
-            case 1: typeName = "image"; break;
-            case 2: typeName = "shape"; break;
-            case 3: typeName = "button"; break;
-            case 4: typeName = "bitmap"; break;
-            case 5: typeName = "rotator"; break;
-            case 6: typeName = "bar"; break;
-            case 7: typeName = "line"; break;
-            case 8: typeName = "histogram"; break;
-            case 9: typeName = "roundLine"; break;
-            case 10: typeName = "areaGraph"; break;
-            case 11: typeName = "layoutBox"; break;
-            case 12: typeName = "inputBox"; break;
+            case 0:
+                typeName = "text";
+                break;
+            case 1:
+                typeName = "image";
+                break;
+            case 2:
+                typeName = "shape";
+                break;
+            case 3:
+                typeName = "button";
+                break;
+            case 4:
+                typeName = "bitmap";
+                break;
+            case 5:
+                typeName = "rotator";
+                break;
+            case 6:
+                typeName = "bar";
+                break;
+            case 7:
+                typeName = "line";
+                break;
+            case 8:
+                typeName = "histogram";
+                break;
+            case 9:
+                typeName = "roundLine";
+                break;
+            case 10:
+                typeName = "areaGraph";
+                break;
+            case 11:
+                typeName = "layoutBox";
+                break;
+            case 12:
+                typeName = "inputBox";
+                break;
             }
             return CreateTypedElementObject(ctx, argv[0], typeName);
         }
@@ -648,30 +748,48 @@ namespace novadesk::scripting::quickjs
         static std::wstring ParseElemKeywordAndOffset(const std::wstring &expr, float &outOffset)
         {
             outOffset = 0.0f;
-            auto ltrim = [](std::wstring &s) { s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](wchar_t c) { return !::iswspace(c); })); };
-            auto rtrim = [](std::wstring &s) { s.erase(std::find_if(s.rbegin(), s.rend(), [](wchar_t c) { return !::iswspace(c); }).base(), s.end()); };
+            auto ltrim = [](std::wstring &s)
+            { s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](wchar_t c)
+                                              { return !::iswspace(c); })); };
+            auto rtrim = [](std::wstring &s)
+            { s.erase(std::find_if(s.rbegin(), s.rend(), [](wchar_t c)
+                                   { return !::iswspace(c); })
+                          .base(),
+                      s.end()); };
             std::wstring lower = expr;
-            ltrim(lower); rtrim(lower);
+            ltrim(lower);
+            rtrim(lower);
             std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
 
-            size_t plusPos  = lower.rfind(L'+');
+            size_t plusPos = lower.rfind(L'+');
             size_t minusPos = lower.rfind(L'-');
             size_t opPos = std::wstring::npos;
             bool negate = false;
             if (plusPos != std::wstring::npos && (minusPos == std::wstring::npos || plusPos > minusPos))
                 opPos = plusPos;
             else if (minusPos != std::wstring::npos && minusPos > 0)
-            { opPos = minusPos; negate = true; }
+            {
+                opPos = minusPos;
+                negate = true;
+            }
 
             std::wstring keyword = lower;
             if (opPos != std::wstring::npos && opPos > 0)
             {
                 std::wstring numPart = lower.substr(opPos + 1);
-                ltrim(numPart); rtrim(numPart);
-                bool isNum = !numPart.empty() && std::all_of(numPart.begin(), numPart.end(), [](wchar_t c) { return ::iswdigit(c) || c == L'.' || c == L'-'; });
+                ltrim(numPart);
+                rtrim(numPart);
+                bool isNum = !numPart.empty() && std::all_of(numPart.begin(), numPart.end(), [](wchar_t c)
+                                                             { return ::iswdigit(c) || c == L'.' || c == L'-'; });
                 if (isNum)
                 {
-                    try { outOffset = std::stof(numPart) * (negate ? -1.0f : 1.0f); } catch (...) {}
+                    try
+                    {
+                        outOffset = std::stof(numPart) * (negate ? -1.0f : 1.0f);
+                    }
+                    catch (...)
+                    {
+                    }
                     keyword = lower.substr(0, opPos);
                     rtrim(keyword);
                 }
@@ -681,23 +799,31 @@ namespace novadesk::scripting::quickjs
 
         static float ResolveElemXKeyword(const std::wstring &kw, int widgetW, int elemW, float offset)
         {
-            if (kw == L"left")             return offset;
-            if (kw == L"right")            return static_cast<float>(widgetW - elemW) + offset;
+            if (kw == L"left")
+                return offset;
+            if (kw == L"right")
+                return static_cast<float>(widgetW - elemW) + offset;
             if (kw == L"center" || kw == L"middle")
                 return static_cast<float>((widgetW - elemW) / 2) + offset;
-            if (kw == L"offscreen-left")   return static_cast<float>(-elemW) + offset;
-            if (kw == L"offscreen-right")  return static_cast<float>(widgetW) + offset;
+            if (kw == L"offscreen-left")
+                return static_cast<float>(-elemW) + offset;
+            if (kw == L"offscreen-right")
+                return static_cast<float>(widgetW) + offset;
             return offset;
         }
 
         static float ResolveElemYKeyword(const std::wstring &kw, int widgetH, int elemH, float offset)
         {
-            if (kw == L"top")              return offset;
-            if (kw == L"bottom")           return static_cast<float>(widgetH - elemH) + offset;
+            if (kw == L"top")
+                return offset;
+            if (kw == L"bottom")
+                return static_cast<float>(widgetH - elemH) + offset;
             if (kw == L"center" || kw == L"middle")
                 return static_cast<float>((widgetH - elemH) / 2) + offset;
-            if (kw == L"offscreen-top")    return static_cast<float>(-elemH) + offset;
-            if (kw == L"offscreen-bottom") return static_cast<float>(widgetH) + offset;
+            if (kw == L"offscreen-top")
+                return static_cast<float>(-elemH) + offset;
+            if (kw == L"offscreen-bottom")
+                return static_cast<float>(widgetH) + offset;
             return offset;
         }
 
@@ -710,7 +836,7 @@ namespace novadesk::scripting::quickjs
         {
             const int wW = widget.GetOptions().width;
             const int wH = widget.GetOptions().height;
-            const int eW = element ? element->GetWidth()  : 0;
+            const int eW = element ? element->GetWidth() : 0;
             const int eH = element ? element->GetHeight() : 0;
 
             if (hasXExpr && !xExpr.empty())
@@ -1121,8 +1247,10 @@ namespace novadesk::scripting::quickjs
                     if (!JS_IsUndefined(focusedVal))
                     {
                         bool focused = JS_ToBool(ctx, focusedVal) == 1;
-                        if (focused) widget->FocusInputBox(input);
-                        else widget->BlurInputBox(input);
+                        if (focused)
+                            widget->FocusInputBox(input);
+                        else
+                            widget->BlurInputBox(input);
                     }
                     JS_FreeValue(ctx, focusedVal);
 
@@ -1148,8 +1276,10 @@ namespace novadesk::scripting::quickjs
                     if (!JS_IsUndefined(openVal))
                     {
                         bool open = JS_ToBool(ctx, openVal) == 1;
-                        if (open) widget->OpenColorPicker(picker);
-                        else if (widget->IsColorPickerOpen(picker)) widget->CloseColorPicker();
+                        if (open)
+                            widget->OpenColorPicker(picker);
+                        else if (widget->IsColorPickerOpen(picker))
+                            widget->CloseColorPicker();
                     }
                     JS_FreeValue(ctx, openVal);
                 }
@@ -1235,238 +1365,338 @@ namespace novadesk::scripting::quickjs
                     outerBounds.Height + bevelPad * 2);
             }
 
-            if (prop == "id")
-                return JS_NewString(ctx, Utils::ToString(element->GetId()).c_str());
-            if (prop == "color")
+            // ── Fast-path O(1) dispatch for base + ColorPicker properties ──
             {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                enum BaseProp : uint16_t
                 {
-                    wchar_t value[8]; const COLORREF color = picker->GetColor();
-                    swprintf_s(value, L"#%02X%02X%02X", GetRValue(color), GetGValue(color), GetBValue(color));
-                    return JS_NewString(ctx, Utils::ToString(value).c_str());
-                }
-            }
-            if (prop == "isOpen")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                    Id,
+                    Color,
+                    IsOpen,
+                    BorderRadius,
+                    BorderWidth,
+                    BorderColor,
+                    Opacity,
+                    Shape,
+                    PopupBackground,
+                    PopupAccentColor,
+                    PopupBorderColor,
+                    PopupInputBackground,
+                    PopupInputColor,
+                    ShowEyedropper,
+                    ShowFormatToggle,
+                    DefaultMode,
+                    ContentX,
+                    ContentY,
+                    ContentWidth,
+                    ContentHeight,
+                    X,
+                    Y,
+                    Width,
+                    Height,
+                    Show,
+                    Container,
+                    Group,
+                    MouseEventCursor,
+                    MouseEventCursorName,
+                    CursorsDir,
+                    Rotate,
+                    AntiAlias,
+                    PixelHitTest,
+                    BackgroundColorRadius,
+                    BackgroundColor,
+                    BevelType,
+                    BevelWidth,
+                    BevelColor,
+                    BevelColor2,
+                    Padding,
+                    TransformMatrix,
+                    TooltipText,
+                    TooltipTitle,
+                    TooltipIcon,
+                    TooltipMaxWidth,
+                    TooltipMaxHeight,
+                    TooltipBalloon,
+                    TooltipDisabled,
+                    BackdropFilter,
+                    NotFound = 0xFFFF
+                };
+                static const std::unordered_map<std::string_view, BaseProp> s_PropMap = {
+                    {"id", Id},
+                    {"color", Color},
+                    {"isOpen", IsOpen},
+                    {"borderRadius", BorderRadius},
+                    {"borderWidth", BorderWidth},
+                    {"borderColor", BorderColor},
+                    {"opacity", Opacity},
+                    {"shape", Shape},
+                    {"popupBackground", PopupBackground},
+                    {"popupAccentColor", PopupAccentColor},
+                    {"popupBorderColor", PopupBorderColor},
+                    {"popupInputBackground", PopupInputBackground},
+                    {"popupInputBgColor", PopupInputBackground},
+                    {"popupInputColor", PopupInputColor},
+                    {"popupInputTextColor", PopupInputColor},
+                    {"showEyedropper", ShowEyedropper},
+                    {"showFormatToggle", ShowFormatToggle},
+                    {"defaultMode", DefaultMode},
+                    {"contentX", ContentX},
+                    {"contentY", ContentY},
+                    {"contentWidth", ContentWidth},
+                    {"contentHeight", ContentHeight},
+                    {"x", X},
+                    {"y", Y},
+                    {"width", Width},
+                    {"height", Height},
+                    {"show", Show},
+                    {"container", Container},
+                    {"group", Group},
+                    {"mouseEventCursor", MouseEventCursor},
+                    {"mouseEventCursorName", MouseEventCursorName},
+                    {"cursorsDir", CursorsDir},
+                    {"rotate", Rotate},
+                    {"antiAlias", AntiAlias},
+                    {"pixelHitTest", PixelHitTest},
+                    {"backgroundColorRadius", BackgroundColorRadius},
+                    {"backgroundColor", BackgroundColor},
+                    {"bevelType", BevelType},
+                    {"bevelWidth", BevelWidth},
+                    {"bevelColor", BevelColor},
+                    {"bevelColor2", BevelColor2},
+                    {"padding", Padding},
+                    {"transformMatrix", TransformMatrix},
+                    {"tooltipText", TooltipText},
+                    {"tooltipTitle", TooltipTitle},
+                    {"tooltipIcon", TooltipIcon},
+                    {"tooltipMaxWidth", TooltipMaxWidth},
+                    {"tooltipMaxHeight", TooltipMaxHeight},
+                    {"tooltipBalloon", TooltipBalloon},
+                    {"tooltipDisabled", TooltipDisabled},
+                    {"backdropFilter", BackdropFilter},
+                };
+                auto it = s_PropMap.find(prop);
+                if (it != s_PropMap.end())
                 {
-                    return JS_NewBool(ctx, widget->IsColorPickerOpen(picker) ? 1 : 0);
+                    switch (it->second)
+                    {
+                    case Id:
+                        return JS_NewString(ctx, Utils::ToString(element->GetId()).c_str());
+                    case Color:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                        {
+                            wchar_t value[8];
+                            const COLORREF color = picker->GetColor();
+                            swprintf_s(value, L"#%02X%02X%02X", GetRValue(color), GetGValue(color), GetBValue(color));
+                            return JS_NewString(ctx, Utils::ToString(value).c_str());
+                        }
+                        break;
+                    case IsOpen:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                            return JS_NewBool(ctx, widget->IsColorPickerOpen(picker) ? 1 : 0);
+                        break;
+                    case BorderRadius:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                            return JS_NewFloat64(ctx, picker->m_BorderRadius);
+                        break;
+                    case BorderWidth:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                            return JS_NewFloat64(ctx, picker->m_BorderWidth);
+                        break;
+                    case BorderColor:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                        {
+                            const std::wstring s = ColorUtil::ToRGBAString(picker->m_BorderColor, picker->m_BorderAlpha);
+                            return JS_NewString(ctx, Utils::ToString(s).c_str());
+                        }
+                        break;
+                    case Opacity:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                            return JS_NewFloat64(ctx, picker->m_Opacity);
+                        break;
+                    case Shape:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                            return JS_NewString(ctx, picker->m_CircleShape ? "circle" : "rectangle");
+                        break;
+                    case PopupBackground:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                        {
+                            const std::wstring s = ColorUtil::ToRGBAString(picker->m_PopupBackground, picker->m_PopupBackgroundAlpha);
+                            return JS_NewString(ctx, Utils::ToString(s).c_str());
+                        }
+                        break;
+                    case PopupAccentColor:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                        {
+                            const std::wstring s = ColorUtil::ToRGBAString(picker->m_PopupAccentColor, picker->m_PopupAccentAlpha);
+                            return JS_NewString(ctx, Utils::ToString(s).c_str());
+                        }
+                        break;
+                    case PopupBorderColor:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                        {
+                            const std::wstring s = ColorUtil::ToRGBAString(picker->m_PopupBorderColor, picker->m_PopupBorderAlpha);
+                            return JS_NewString(ctx, Utils::ToString(s).c_str());
+                        }
+                        break;
+                    case PopupInputBackground:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                        {
+                            const COLORREF bg = picker->m_HasPopupInputBackground ? picker->m_PopupInputBackground : picker->m_PopupBackground;
+                            const BYTE alpha = picker->m_HasPopupInputBackground ? picker->m_PopupInputBackgroundAlpha : picker->m_PopupBackgroundAlpha;
+                            const std::wstring s = ColorUtil::ToRGBAString(bg, alpha);
+                            return JS_NewString(ctx, Utils::ToString(s).c_str());
+                        }
+                        break;
+                    case PopupInputColor:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                        {
+                            const COLORREF c = picker->m_HasPopupInputColor ? picker->m_PopupInputColor : picker->m_PopupAccentColor;
+                            const BYTE alpha = picker->m_HasPopupInputColor ? picker->m_PopupInputColorAlpha : picker->m_PopupAccentAlpha;
+                            const std::wstring s = ColorUtil::ToRGBAString(c, alpha);
+                            return JS_NewString(ctx, Utils::ToString(s).c_str());
+                        }
+                        break;
+                    case ShowEyedropper:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                            return JS_NewBool(ctx, picker->m_ShowEyedropper ? 1 : 0);
+                        break;
+                    case ShowFormatToggle:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                            return JS_NewBool(ctx, picker->m_ShowFormatToggle ? 1 : 0);
+                        break;
+                    case DefaultMode:
+                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+                            return JS_NewString(ctx, picker->m_DefaultHexMode ? "hex" : "rgb");
+                        break;
+                    case ContentX:
+                        return JS_NewInt32(ctx, contentBounds.X);
+                    case ContentY:
+                        return JS_NewInt32(ctx, contentBounds.Y);
+                    case ContentWidth:
+                        return JS_NewInt32(ctx, contentBounds.Width);
+                    case ContentHeight:
+                        return JS_NewInt32(ctx, contentBounds.Height);
+                    case X:
+                        return JS_NewInt32(ctx, outerBounds.X);
+                    case Y:
+                        return JS_NewInt32(ctx, outerBounds.Y);
+                    case Width:
+                        return JS_NewInt32(ctx, outerBounds.Width);
+                    case Height:
+                        return JS_NewInt32(ctx, outerBounds.Height);
+                    case Show:
+                        return JS_NewBool(ctx, element->IsVisible() ? 1 : 0);
+                    case Container:
+                        return JS_NewString(ctx, Utils::ToString(element->GetContainerId()).c_str());
+                    case Group:
+                        return JS_NewString(ctx, Utils::ToString(element->GetGroupId()).c_str());
+                    case MouseEventCursor:
+                        return JS_NewBool(ctx, element->GetMouseEventCursor() ? 1 : 0);
+                    case MouseEventCursorName:
+                        return JS_NewString(ctx, Utils::ToString(element->GetMouseEventCursorName()).c_str());
+                    case CursorsDir:
+                        return JS_NewString(ctx, Utils::ToString(element->GetCursorsDir()).c_str());
+                    case Rotate:
+                        return JS_NewFloat64(ctx, element->GetRotate());
+                    case AntiAlias:
+                        return JS_NewBool(ctx, element->GetAntiAlias() ? 1 : 0);
+                    case PixelHitTest:
+                        return JS_NewBool(ctx, element->GetPixelHitTest() ? 1 : 0);
+                    case BackgroundColorRadius:
+                        return JS_NewInt32(ctx, element->GetCornerRadius());
+                    case BackgroundColor:
+                        if (element->HasSolidColor())
+                        {
+                            const std::wstring color = ColorUtil::ToRGBAString(element->GetSolidColor(), element->GetSolidAlpha());
+                            return JS_NewString(ctx, Utils::ToString(color).c_str());
+                        }
+                        break;
+                    case BevelType:
+                    {
+                        const int bt = element->GetBevelType();
+                        const char *bevStr = "none";
+                        switch (bt)
+                        {
+                        case 1:
+                            bevStr = "raised";
+                            break;
+                        case 2:
+                            bevStr = "sunken";
+                            break;
+                        case 3:
+                            bevStr = "emboss";
+                            break;
+                        case 4:
+                            bevStr = "pillow";
+                            break;
+                        default:
+                            break;
+                        }
+                        return JS_NewString(ctx, bevStr);
+                    }
+                    case BevelWidth:
+                        return JS_NewInt32(ctx, element->GetBevelWidth());
+                    case BevelColor:
+                    {
+                        const std::wstring color = ColorUtil::ToRGBAString(element->GetBevelColor(), element->GetBevelAlpha());
+                        return JS_NewString(ctx, Utils::ToString(color).c_str());
+                    }
+                    case BevelColor2:
+                    {
+                        const std::wstring color = ColorUtil::ToRGBAString(element->GetBevelColor2(), element->GetBevelAlpha2());
+                        return JS_NewString(ctx, Utils::ToString(color).c_str());
+                    }
+                    case Padding:
+                    {
+                        JSValue arr = JS_NewArray(ctx);
+                        JS_SetPropertyUint32(ctx, arr, 0, JS_NewInt32(ctx, element->GetPaddingLeft()));
+                        JS_SetPropertyUint32(ctx, arr, 1, JS_NewInt32(ctx, element->GetPaddingTop()));
+                        JS_SetPropertyUint32(ctx, arr, 2, JS_NewInt32(ctx, element->GetPaddingRight()));
+                        JS_SetPropertyUint32(ctx, arr, 3, JS_NewInt32(ctx, element->GetPaddingBottom()));
+                        return arr;
+                    }
+                    case TransformMatrix:
+                        if (element->HasTransformMatrix())
+                        {
+                            JSValue arr = JS_NewArray(ctx);
+                            const float *m = element->GetTransformMatrix();
+                            for (uint32_t i = 0; i < 6; ++i)
+                                JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, m[i]));
+                            return arr;
+                        }
+                        break;
+                    case TooltipText:
+                        return JS_NewString(ctx, Utils::ToString(element->GetToolTipText()).c_str());
+                    case TooltipTitle:
+                        return JS_NewString(ctx, Utils::ToString(element->GetToolTipTitle()).c_str());
+                    case TooltipIcon:
+                        return JS_NewString(ctx, Utils::ToString(element->GetToolTipIcon()).c_str());
+                    case TooltipMaxWidth:
+                        return JS_NewInt32(ctx, element->GetToolTipMaxWidth());
+                    case TooltipMaxHeight:
+                        return JS_NewInt32(ctx, element->GetToolTipMaxHeight());
+                    case TooltipBalloon:
+                        return JS_NewBool(ctx, element->GetToolTipBalloon() ? 1 : 0);
+                    case TooltipDisabled:
+                        return JS_NewBool(ctx, element->GetToolTipDisabled() ? 1 : 0);
+                    case BackdropFilter:
+                    {
+                        const auto &filter = element->GetBackdropFilter();
+                        JSValue result = JS_NewObject(ctx);
+                        JS_SetPropertyStr(ctx, result, "blur", JS_NewFloat64(ctx, filter.blur));
+                        JS_SetPropertyStr(ctx, result, "brightness", JS_NewFloat64(ctx, filter.brightness));
+                        JS_SetPropertyStr(ctx, result, "contrast", JS_NewFloat64(ctx, filter.contrast));
+                        JS_SetPropertyStr(ctx, result, "greyScale", JS_NewFloat64(ctx, filter.grayscale));
+                        JS_SetPropertyStr(ctx, result, "saturate", JS_NewFloat64(ctx, filter.saturate));
+                        JS_SetPropertyStr(ctx, result, "sepia", JS_NewFloat64(ctx, filter.sepia));
+                        JS_SetPropertyStr(ctx, result, "hueRotate", JS_NewFloat64(ctx, filter.hueRotate));
+                        JS_SetPropertyStr(ctx, result, "invert", JS_NewFloat64(ctx, filter.invert));
+                        JS_SetPropertyStr(ctx, result, "opacity", JS_NewFloat64(ctx, filter.opacity));
+                        return result;
+                    }
+                    default:
+                        break;
+                    }
                 }
-            }
-            // ── ColorPicker swatch properties ─────────────────────────────────
-            if (prop == "borderRadius")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                    return JS_NewFloat64(ctx, picker->m_BorderRadius);
-            }
-            if (prop == "borderWidth")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                    return JS_NewFloat64(ctx, picker->m_BorderWidth);
-            }
-            if (prop == "borderColor")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                {
-                    const std::wstring s = ColorUtil::ToRGBAString(picker->m_BorderColor, picker->m_BorderAlpha);
-                    return JS_NewString(ctx, Utils::ToString(s).c_str());
-                }
-            }
-            if (prop == "opacity")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                    return JS_NewFloat64(ctx, picker->m_Opacity);
-            }
-            if (prop == "shape")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                    return JS_NewString(ctx, picker->m_CircleShape ? "circle" : "rectangle");
-            }
-            // ── ColorPicker popup appearance ──────────────────────────────────
-            if (prop == "popupBackground")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                {
-                    const std::wstring s = ColorUtil::ToRGBAString(picker->m_PopupBackground, picker->m_PopupBackgroundAlpha);
-                    return JS_NewString(ctx, Utils::ToString(s).c_str());
-                }
-            }
-            if (prop == "popupAccentColor")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                {
-                    const std::wstring s = ColorUtil::ToRGBAString(picker->m_PopupAccentColor, picker->m_PopupAccentAlpha);
-                    return JS_NewString(ctx, Utils::ToString(s).c_str());
-                }
-            }
-            if (prop == "popupBorderColor")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                {
-                    const std::wstring s = ColorUtil::ToRGBAString(picker->m_PopupBorderColor, picker->m_PopupBorderAlpha);
-                    return JS_NewString(ctx, Utils::ToString(s).c_str());
-                }
-            }
-            if (prop == "popupInputBackground" || prop == "popupInputBgColor")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                {
-                    const COLORREF bg = picker->m_HasPopupInputBackground ? picker->m_PopupInputBackground : picker->m_PopupBackground;
-                    const BYTE alpha = picker->m_HasPopupInputBackground ? picker->m_PopupInputBackgroundAlpha : picker->m_PopupBackgroundAlpha;
-                    const std::wstring s = ColorUtil::ToRGBAString(bg, alpha);
-                    return JS_NewString(ctx, Utils::ToString(s).c_str());
-                }
-            }
-            if (prop == "popupInputColor" || prop == "popupInputTextColor")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                {
-                    const COLORREF c = picker->m_HasPopupInputColor ? picker->m_PopupInputColor : picker->m_PopupAccentColor;
-                    const BYTE alpha = picker->m_HasPopupInputColor ? picker->m_PopupInputColorAlpha : picker->m_PopupAccentAlpha;
-                    const std::wstring s = ColorUtil::ToRGBAString(c, alpha);
-                    return JS_NewString(ctx, Utils::ToString(s).c_str());
-                }
-            }
-            // ── ColorPicker popup behavior ────────────────────────────────────
-            if (prop == "showEyedropper")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                    return JS_NewBool(ctx, picker->m_ShowEyedropper ? 1 : 0);
-            }
-            if (prop == "showFormatToggle")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                    return JS_NewBool(ctx, picker->m_ShowFormatToggle ? 1 : 0);
-            }
-            if (prop == "defaultMode")
-            {
-                if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                    return JS_NewString(ctx, picker->m_DefaultHexMode ? "hex" : "rgb");
-            }
-            if (prop == "contentX")
-                return JS_NewInt32(ctx, contentBounds.X);
-            if (prop == "contentY")
-                return JS_NewInt32(ctx, contentBounds.Y);
-            if (prop == "contentWidth")
-                return JS_NewInt32(ctx, contentBounds.Width);
-            if (prop == "contentHeight")
-                return JS_NewInt32(ctx, contentBounds.Height);
-            if (prop == "x")
-                return JS_NewInt32(ctx, outerBounds.X);
-            if (prop == "y")
-                return JS_NewInt32(ctx, outerBounds.Y);
-            if (prop == "width")
-                return JS_NewInt32(ctx, outerBounds.Width);
-            if (prop == "height")
-                return JS_NewInt32(ctx, outerBounds.Height);
-            if (prop == "show")
-                return JS_NewBool(ctx, element->IsVisible() ? 1 : 0);
-            if (prop == "container")
-                return JS_NewString(ctx, Utils::ToString(element->GetContainerId()).c_str());
-            if (prop == "group")
-                return JS_NewString(ctx, Utils::ToString(element->GetGroupId()).c_str());
-            if (prop == "mouseEventCursor")
-                return JS_NewBool(ctx, element->GetMouseEventCursor() ? 1 : 0);
-            if (prop == "mouseEventCursorName")
-                return JS_NewString(ctx, Utils::ToString(element->GetMouseEventCursorName()).c_str());
-            if (prop == "cursorsDir")
-                return JS_NewString(ctx, Utils::ToString(element->GetCursorsDir()).c_str());
-            if (prop == "rotate")
-                return JS_NewFloat64(ctx, element->GetRotate());
-            if (prop == "antiAlias")
-                return JS_NewBool(ctx, element->GetAntiAlias() ? 1 : 0);
-            if (prop == "pixelHitTest")
-                return JS_NewBool(ctx, element->GetPixelHitTest() ? 1 : 0);
-            if (prop == "backgroundColorRadius")
-                return JS_NewInt32(ctx, element->GetCornerRadius());
-            if (prop == "backgroundColor" && element->HasSolidColor())
-            {
-                const std::wstring color = ColorUtil::ToRGBAString(element->GetSolidColor(), element->GetSolidAlpha());
-                return JS_NewString(ctx, Utils::ToString(color).c_str());
-            }
-            if (prop == "bevelType")
-            {
-                const int bt = element->GetBevelType();
-                const char *bevStr = "none";
-                switch (bt)
-                {
-                case 1:
-                    bevStr = "raised";
-                    break;
-                case 2:
-                    bevStr = "sunken";
-                    break;
-                case 3:
-                    bevStr = "emboss";
-                    break;
-                case 4:
-                    bevStr = "pillow";
-                    break;
-                default:
-                    break;
-                }
-                return JS_NewString(ctx, bevStr);
-            }
-            if (prop == "bevelWidth")
-                return JS_NewInt32(ctx, element->GetBevelWidth());
-            if (prop == "bevelColor")
-            {
-                const std::wstring color = ColorUtil::ToRGBAString(element->GetBevelColor(), element->GetBevelAlpha());
-                return JS_NewString(ctx, Utils::ToString(color).c_str());
-            }
-            if (prop == "bevelColor2")
-            {
-                const std::wstring color = ColorUtil::ToRGBAString(element->GetBevelColor2(), element->GetBevelAlpha2());
-                return JS_NewString(ctx, Utils::ToString(color).c_str());
-            }
-            if (prop == "padding")
-            {
-                JSValue arr = JS_NewArray(ctx);
-                JS_SetPropertyUint32(ctx, arr, 0, JS_NewInt32(ctx, element->GetPaddingLeft()));
-                JS_SetPropertyUint32(ctx, arr, 1, JS_NewInt32(ctx, element->GetPaddingTop()));
-                JS_SetPropertyUint32(ctx, arr, 2, JS_NewInt32(ctx, element->GetPaddingRight()));
-                JS_SetPropertyUint32(ctx, arr, 3, JS_NewInt32(ctx, element->GetPaddingBottom()));
-                return arr;
-            }
-            if (prop == "transformMatrix" && element->HasTransformMatrix())
-            {
-                JSValue arr = JS_NewArray(ctx);
-                const float *m = element->GetTransformMatrix();
-                for (uint32_t i = 0; i < 6; ++i)
-                {
-                    JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, m[i]));
-                }
-                return arr;
-            }
-
-            if (prop == "tooltipText")
-                return JS_NewString(ctx, Utils::ToString(element->GetToolTipText()).c_str());
-            if (prop == "tooltipTitle")
-                return JS_NewString(ctx, Utils::ToString(element->GetToolTipTitle()).c_str());
-            if (prop == "tooltipIcon")
-                return JS_NewString(ctx, Utils::ToString(element->GetToolTipIcon()).c_str());
-            if (prop == "tooltipMaxWidth")
-                return JS_NewInt32(ctx, element->GetToolTipMaxWidth());
-            if (prop == "tooltipMaxHeight")
-                return JS_NewInt32(ctx, element->GetToolTipMaxHeight());
-            if (prop == "tooltipBalloon")
-                return JS_NewBool(ctx, element->GetToolTipBalloon() ? 1 : 0);
-            if (prop == "tooltipDisabled")
-                return JS_NewBool(ctx, element->GetToolTipDisabled() ? 1 : 0);
-            if (prop == "backdropFilter")
-            {
-                const auto &filter = element->GetBackdropFilter();
-                JSValue result = JS_NewObject(ctx);
-                JS_SetPropertyStr(ctx, result, "blur", JS_NewFloat64(ctx, filter.blur));
-                JS_SetPropertyStr(ctx, result, "brightness", JS_NewFloat64(ctx, filter.brightness));
-                JS_SetPropertyStr(ctx, result, "contrast", JS_NewFloat64(ctx, filter.contrast));
-                JS_SetPropertyStr(ctx, result, "greyScale", JS_NewFloat64(ctx, filter.grayscale));
-                JS_SetPropertyStr(ctx, result, "saturate", JS_NewFloat64(ctx, filter.saturate));
-                JS_SetPropertyStr(ctx, result, "sepia", JS_NewFloat64(ctx, filter.sepia));
-                JS_SetPropertyStr(ctx, result, "hueRotate", JS_NewFloat64(ctx, filter.hueRotate));
-                JS_SetPropertyStr(ctx, result, "invert", JS_NewFloat64(ctx, filter.invert));
-                JS_SetPropertyStr(ctx, result, "opacity", JS_NewFloat64(ctx, filter.opacity));
-                return result;
             }
 
             if (element->GetType() == ELEMENT_TEXT)
@@ -1642,7 +1872,7 @@ namespace novadesk::scripting::quickjs
                 }
                 if (prop == "tile")
                     return JS_NewBool(ctx, img->IsTile() ? 1 : 0);
-                
+
                 return GetGeneralImagePropertyValue(ctx, element, prop);
             }
             else if (element->GetType() == ELEMENT_BUTTON)
@@ -1650,7 +1880,7 @@ namespace novadesk::scripting::quickjs
                 auto *btn = static_cast<ButtonElement *>(element);
                 if (prop == "buttonImageName")
                     return JS_NewString(ctx, Utils::ToString(btn->GetImagePath()).c_str());
-                
+
                 return GetGeneralImagePropertyValue(ctx, element, prop);
             }
             else if (element->GetType() == ELEMENT_BITMAP)
@@ -1946,8 +2176,8 @@ namespace novadesk::scripting::quickjs
             {
                 auto *shape = static_cast<ShapeElement *>(element);
                 ElementLayoutBox *layoutBox = (element->GetType() == ELEMENT_LAYOUT_BOX)
-                    ? static_cast<ElementLayoutBox *>(element)
-                    : nullptr;
+                                                  ? static_cast<ElementLayoutBox *>(element)
+                                                  : nullptr;
                 PropertyParser::LayoutBoxOptions layoutPrefill;
                 if (layoutBox)
                     PropertyParser::PreFillLayoutBoxOptions(layoutPrefill, layoutBox);
@@ -2073,10 +2303,14 @@ namespace novadesk::scripting::quickjs
                         {
                             switch (d)
                             {
-                            case ElementLayoutBox::DisplayType::Flex: return "flex";
-                            case ElementLayoutBox::DisplayType::None: return "none";
-                            case ElementLayoutBox::DisplayType::ListItem: return "list-item";
-                            default: return "flex";
+                            case ElementLayoutBox::DisplayType::Flex:
+                                return "flex";
+                            case ElementLayoutBox::DisplayType::None:
+                                return "none";
+                            case ElementLayoutBox::DisplayType::ListItem:
+                                return "list-item";
+                            default:
+                                return "flex";
                             }
                         };
                         return JS_NewString(ctx, displayToStr(layoutBox->GetDisplayType()));
@@ -2087,21 +2321,31 @@ namespace novadesk::scripting::quickjs
                         {
                             switch (t)
                             {
-                            case ElementLayoutBox::ListStyleType::Disc: return "disc";
-                            case ElementLayoutBox::ListStyleType::Circle: return "circle";
-                            case ElementLayoutBox::ListStyleType::Square: return "square";
-                            case ElementLayoutBox::ListStyleType::UpperRoman: return "upper-roman";
-                            case ElementLayoutBox::ListStyleType::LowerRoman: return "lower-roman";
-                            case ElementLayoutBox::ListStyleType::Decimal: return "decimal";
-                            case ElementLayoutBox::ListStyleType::LowerAlpha: return "lower-alpha";
-                            case ElementLayoutBox::ListStyleType::UpperAlpha: return "upper-alpha";
-                            case ElementLayoutBox::ListStyleType::None: return "none";
-                            default: return "disc";
+                            case ElementLayoutBox::ListStyleType::Disc:
+                                return "disc";
+                            case ElementLayoutBox::ListStyleType::Circle:
+                                return "circle";
+                            case ElementLayoutBox::ListStyleType::Square:
+                                return "square";
+                            case ElementLayoutBox::ListStyleType::UpperRoman:
+                                return "upper-roman";
+                            case ElementLayoutBox::ListStyleType::LowerRoman:
+                                return "lower-roman";
+                            case ElementLayoutBox::ListStyleType::Decimal:
+                                return "decimal";
+                            case ElementLayoutBox::ListStyleType::LowerAlpha:
+                                return "lower-alpha";
+                            case ElementLayoutBox::ListStyleType::UpperAlpha:
+                                return "upper-alpha";
+                            case ElementLayoutBox::ListStyleType::None:
+                                return "none";
+                            default:
+                                return "disc";
                             }
                         };
                         return JS_NewString(ctx, styleToStr(layoutBox->GetListStyleType()));
                     }
-                    
+
                     // Layout configuration properties
                     Widget::LayoutConfig cfg{};
                     if (widget->TryGetLayoutConfig(element->GetId(), cfg))
@@ -2133,16 +2377,26 @@ namespace novadesk::scripting::quickjs
                         {
                             switch (s)
                             {
-                            case ElementLayoutBox::BorderStyle::None: return "none";
-                            case ElementLayoutBox::BorderStyle::Hidden: return "hidden";
-                            case ElementLayoutBox::BorderStyle::Inset: return "inset";
-                            case ElementLayoutBox::BorderStyle::Outset: return "outset";
-                            case ElementLayoutBox::BorderStyle::Groove: return "groove";
-                            case ElementLayoutBox::BorderStyle::Ridge: return "ridge";
-                            case ElementLayoutBox::BorderStyle::Dotted: return "dotted";
-                            case ElementLayoutBox::BorderStyle::Dashed: return "dashed";
-                            case ElementLayoutBox::BorderStyle::Double: return "double";
-                            default: return "solid";
+                            case ElementLayoutBox::BorderStyle::None:
+                                return "none";
+                            case ElementLayoutBox::BorderStyle::Hidden:
+                                return "hidden";
+                            case ElementLayoutBox::BorderStyle::Inset:
+                                return "inset";
+                            case ElementLayoutBox::BorderStyle::Outset:
+                                return "outset";
+                            case ElementLayoutBox::BorderStyle::Groove:
+                                return "groove";
+                            case ElementLayoutBox::BorderStyle::Ridge:
+                                return "ridge";
+                            case ElementLayoutBox::BorderStyle::Dotted:
+                                return "dotted";
+                            case ElementLayoutBox::BorderStyle::Dashed:
+                                return "dashed";
+                            case ElementLayoutBox::BorderStyle::Double:
+                                return "double";
+                            default:
+                                return "solid";
                             }
                         };
                         JSValue arr = JS_NewArray(ctx);
@@ -2269,14 +2523,30 @@ namespace novadesk::scripting::quickjs
                     const char *typeName = "any";
                     switch (input->GetInputType())
                     {
-                    case InputType::Integer:     typeName = "integer";     break;
-                    case InputType::Float:       typeName = "float";       break;
-                    case InputType::Letters:     typeName = "letters";     break;
-                    case InputType::Alphanumeric:typeName = "alphanumeric";break;
-                    case InputType::Hex:         typeName = "hex";         break;
-                    case InputType::Email:       typeName = "email";       break;
-                    case InputType::Custom:      typeName = "custom";      break;
-                    default:                     typeName = "any";         break;
+                    case InputType::Integer:
+                        typeName = "integer";
+                        break;
+                    case InputType::Float:
+                        typeName = "float";
+                        break;
+                    case InputType::Letters:
+                        typeName = "letters";
+                        break;
+                    case InputType::Alphanumeric:
+                        typeName = "alphanumeric";
+                        break;
+                    case InputType::Hex:
+                        typeName = "hex";
+                        break;
+                    case InputType::Email:
+                        typeName = "email";
+                        break;
+                    case InputType::Custom:
+                        typeName = "custom";
+                        break;
+                    default:
+                        typeName = "any";
+                        break;
                     }
                     return JS_NewString(ctx, typeName);
                 }
@@ -2347,15 +2617,19 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetOpenColorPicker(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
-            if (argc < 1) return ThrowTypeError(ctx, "openColorPicker", "expected (id)");
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 1)
+                return ThrowTypeError(ctx, "openColorPicker", "expected (id)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8) return JS_EXCEPTION;
+            if (!idUtf8)
+                return JS_EXCEPTION;
             std::wstring id = Utils::ToWString(idUtf8);
             JS_FreeCString(ctx, idUtf8);
             Element *elem = widget->FindElementById(id);
             auto *picker = dynamic_cast<ColorPickerElement *>(elem);
-            if (!picker) return JS_NewBool(ctx, 0);
+            if (!picker)
+                return JS_NewBool(ctx, 0);
             widget->OpenColorPicker(picker);
             return JS_NewBool(ctx, 1);
         }
@@ -2363,7 +2637,8 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetCloseColorPicker(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
+            if (!widget)
+                return JS_NewBool(ctx, 0);
             widget->CloseColorPicker();
             return JS_NewBool(ctx, 1);
         }
@@ -2371,11 +2646,13 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetIsColorPickerOpen(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
+            if (!widget)
+                return JS_NewBool(ctx, 0);
             if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
             {
                 const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-                if (!idUtf8) return JS_EXCEPTION;
+                if (!idUtf8)
+                    return JS_EXCEPTION;
                 std::wstring id = Utils::ToWString(idUtf8);
                 JS_FreeCString(ctx, idUtf8);
                 Element *elem = widget->FindElementById(id);
@@ -2388,14 +2665,18 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetSetColorPickerColor(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
-            if (argc < 2) return ThrowTypeError(ctx, "setColorPickerColor", "expected (id, color)");
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 2)
+                return ThrowTypeError(ctx, "setColorPickerColor", "expected (id, color)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
             const char *colorUtf8 = JS_ToCString(ctx, argv[1]);
             if (!idUtf8 || !colorUtf8)
             {
-                if (idUtf8) JS_FreeCString(ctx, idUtf8);
-                if (colorUtf8) JS_FreeCString(ctx, colorUtf8);
+                if (idUtf8)
+                    JS_FreeCString(ctx, idUtf8);
+                if (colorUtf8)
+                    JS_FreeCString(ctx, colorUtf8);
                 return JS_EXCEPTION;
             }
             std::wstring id = Utils::ToWString(idUtf8);
@@ -2404,7 +2685,8 @@ namespace novadesk::scripting::quickjs
             JS_FreeCString(ctx, colorUtf8);
             Element *elem = widget->FindElementById(id);
             auto *picker = dynamic_cast<ColorPickerElement *>(elem);
-            if (!picker) return JS_NewBool(ctx, 0);
+            if (!picker)
+                return JS_NewBool(ctx, 0);
             COLORREF c = picker->GetColor();
             BYTE a = 255;
             ColorUtil::ParseRGBA(colorStr, c, a);
@@ -2416,15 +2698,19 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetGetColorPickerColor(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NULL;
-            if (argc < 1) return ThrowTypeError(ctx, "getColorPickerColor", "expected (id)");
+            if (!widget)
+                return JS_NULL;
+            if (argc < 1)
+                return ThrowTypeError(ctx, "getColorPickerColor", "expected (id)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8) return JS_EXCEPTION;
+            if (!idUtf8)
+                return JS_EXCEPTION;
             std::wstring id = Utils::ToWString(idUtf8);
             JS_FreeCString(ctx, idUtf8);
             Element *elem = widget->FindElementById(id);
             auto *picker = dynamic_cast<ColorPickerElement *>(elem);
-            if (!picker) return JS_NULL;
+            if (!picker)
+                return JS_NULL;
             wchar_t value[8];
             const COLORREF color = picker->GetColor();
             swprintf_s(value, L"#%02X%02X%02X", GetRValue(color), GetGValue(color), GetBValue(color));
@@ -2434,12 +2720,14 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetOpenColorPickerEyedropper(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
+            if (!widget)
+                return JS_NewBool(ctx, 0);
             ColorPickerElement *picker = nullptr;
             if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
             {
                 const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-                if (!idUtf8) return JS_EXCEPTION;
+                if (!idUtf8)
+                    return JS_EXCEPTION;
                 std::wstring id = Utils::ToWString(idUtf8);
                 JS_FreeCString(ctx, idUtf8);
                 Element *elem = widget->FindElementById(id);
@@ -2456,15 +2744,19 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetFocusInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
-            if (argc < 1) return ThrowTypeError(ctx, "focusInputBox", "expected (id)");
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 1)
+                return ThrowTypeError(ctx, "focusInputBox", "expected (id)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8) return JS_EXCEPTION;
+            if (!idUtf8)
+                return JS_EXCEPTION;
             std::wstring id = Utils::ToWString(idUtf8);
             JS_FreeCString(ctx, idUtf8);
             Element *elem = widget->FindElementById(id);
             auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input) return JS_NewBool(ctx, 0);
+            if (!input)
+                return JS_NewBool(ctx, 0);
             widget->FocusInputBox(input);
             return JS_NewBool(ctx, 1);
         }
@@ -2472,12 +2764,14 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetBlurInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
+            if (!widget)
+                return JS_NewBool(ctx, 0);
             InputBoxElement *input = nullptr;
             if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
             {
                 const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-                if (!idUtf8) return JS_EXCEPTION;
+                if (!idUtf8)
+                    return JS_EXCEPTION;
                 std::wstring id = Utils::ToWString(idUtf8);
                 JS_FreeCString(ctx, idUtf8);
                 Element *elem = widget->FindElementById(id);
@@ -2490,29 +2784,37 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetIsInputBoxFocused(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
-            if (argc < 1) return ThrowTypeError(ctx, "isInputBoxFocused", "expected (id)");
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 1)
+                return ThrowTypeError(ctx, "isInputBoxFocused", "expected (id)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8) return JS_EXCEPTION;
+            if (!idUtf8)
+                return JS_EXCEPTION;
             std::wstring id = Utils::ToWString(idUtf8);
             JS_FreeCString(ctx, idUtf8);
             Element *elem = widget->FindElementById(id);
             auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input) return JS_NewBool(ctx, 0);
+            if (!input)
+                return JS_NewBool(ctx, 0);
             return JS_NewBool(ctx, input->IsFocused() ? 1 : 0);
         }
 
         JSValue JsWidgetSetInputBoxText(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
-            if (argc < 2) return ThrowTypeError(ctx, "setInputBoxText", "expected (id, text)");
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 2)
+                return ThrowTypeError(ctx, "setInputBoxText", "expected (id, text)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
             const char *textUtf8 = JS_ToCString(ctx, argv[1]);
             if (!idUtf8 || !textUtf8)
             {
-                if (idUtf8) JS_FreeCString(ctx, idUtf8);
-                if (textUtf8) JS_FreeCString(ctx, textUtf8);
+                if (idUtf8)
+                    JS_FreeCString(ctx, idUtf8);
+                if (textUtf8)
+                    JS_FreeCString(ctx, textUtf8);
                 return JS_EXCEPTION;
             }
             std::wstring id = Utils::ToWString(idUtf8);
@@ -2521,7 +2823,8 @@ namespace novadesk::scripting::quickjs
             JS_FreeCString(ctx, textUtf8);
             Element *elem = widget->FindElementById(id);
             auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input) return JS_NewBool(ctx, 0);
+            if (!input)
+                return JS_NewBool(ctx, 0);
             input->SetText(text);
             widget->Redraw();
             return JS_NewBool(ctx, 1);
@@ -2530,30 +2833,38 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetGetInputBoxText(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NULL;
-            if (argc < 1) return ThrowTypeError(ctx, "getInputBoxText", "expected (id)");
+            if (!widget)
+                return JS_NULL;
+            if (argc < 1)
+                return ThrowTypeError(ctx, "getInputBoxText", "expected (id)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8) return JS_EXCEPTION;
+            if (!idUtf8)
+                return JS_EXCEPTION;
             std::wstring id = Utils::ToWString(idUtf8);
             JS_FreeCString(ctx, idUtf8);
             Element *elem = widget->FindElementById(id);
             auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input) return JS_NULL;
+            if (!input)
+                return JS_NULL;
             return JS_NewString(ctx, Utils::ToString(input->GetText()).c_str());
         }
 
         JSValue JsWidgetClearInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
-            if (argc < 1) return ThrowTypeError(ctx, "clearInputBox", "expected (id)");
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 1)
+                return ThrowTypeError(ctx, "clearInputBox", "expected (id)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8) return JS_EXCEPTION;
+            if (!idUtf8)
+                return JS_EXCEPTION;
             std::wstring id = Utils::ToWString(idUtf8);
             JS_FreeCString(ctx, idUtf8);
             Element *elem = widget->FindElementById(id);
             auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input) return JS_NewBool(ctx, 0);
+            if (!input)
+                return JS_NewBool(ctx, 0);
             input->SetText(L"");
             widget->Redraw();
             return JS_NewBool(ctx, 1);
@@ -2562,15 +2873,19 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetSelectInputBoxText(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
-            if (argc < 1) return ThrowTypeError(ctx, "selectInputBoxText", "expected (id)");
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 1)
+                return ThrowTypeError(ctx, "selectInputBoxText", "expected (id)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8) return JS_EXCEPTION;
+            if (!idUtf8)
+                return JS_EXCEPTION;
             std::wstring id = Utils::ToWString(idUtf8);
             JS_FreeCString(ctx, idUtf8);
             Element *elem = widget->FindElementById(id);
             auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input) return JS_NewBool(ctx, 0);
+            if (!input)
+                return JS_NewBool(ctx, 0);
             input->SelectAll();
             widget->Redraw();
             return JS_NewBool(ctx, 1);
@@ -2579,15 +2894,19 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetClearInputBoxSelection(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
-            if (argc < 1) return ThrowTypeError(ctx, "clearInputBoxSelection", "expected (id)");
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 1)
+                return ThrowTypeError(ctx, "clearInputBoxSelection", "expected (id)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8) return JS_EXCEPTION;
+            if (!idUtf8)
+                return JS_EXCEPTION;
             std::wstring id = Utils::ToWString(idUtf8);
             JS_FreeCString(ctx, idUtf8);
             Element *elem = widget->FindElementById(id);
             auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input) return JS_NewBool(ctx, 0);
+            if (!input)
+                return JS_NewBool(ctx, 0);
             input->ClearSelection();
             widget->Redraw();
             return JS_NewBool(ctx, 1);
@@ -2596,29 +2915,37 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetGetInputBoxSelectedText(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NULL;
-            if (argc < 1) return ThrowTypeError(ctx, "getInputBoxSelectedText", "expected (id)");
+            if (!widget)
+                return JS_NULL;
+            if (argc < 1)
+                return ThrowTypeError(ctx, "getInputBoxSelectedText", "expected (id)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8) return JS_EXCEPTION;
+            if (!idUtf8)
+                return JS_EXCEPTION;
             std::wstring id = Utils::ToWString(idUtf8);
             JS_FreeCString(ctx, idUtf8);
             Element *elem = widget->FindElementById(id);
             auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input) return JS_NULL;
+            if (!input)
+                return JS_NULL;
             return JS_NewString(ctx, Utils::ToString(input->GetSelectedText()).c_str());
         }
 
         JSValue JsWidgetReplaceInputBoxSelection(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
-            if (argc < 2) return ThrowTypeError(ctx, "replaceInputBoxSelection", "expected (id, text)");
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 2)
+                return ThrowTypeError(ctx, "replaceInputBoxSelection", "expected (id, text)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
             const char *textUtf8 = JS_ToCString(ctx, argv[1]);
             if (!idUtf8 || !textUtf8)
             {
-                if (idUtf8) JS_FreeCString(ctx, idUtf8);
-                if (textUtf8) JS_FreeCString(ctx, textUtf8);
+                if (idUtf8)
+                    JS_FreeCString(ctx, idUtf8);
+                if (textUtf8)
+                    JS_FreeCString(ctx, textUtf8);
                 return JS_EXCEPTION;
             }
             std::wstring id = Utils::ToWString(idUtf8);
@@ -2627,7 +2954,8 @@ namespace novadesk::scripting::quickjs
             JS_FreeCString(ctx, textUtf8);
             Element *elem = widget->FindElementById(id);
             auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input) return JS_NewBool(ctx, 0);
+            if (!input)
+                return JS_NewBool(ctx, 0);
             input->ReplaceSelection(text);
             widget->Redraw();
             return JS_NewBool(ctx, 1);
@@ -2636,64 +2964,82 @@ namespace novadesk::scripting::quickjs
         JSValue JsWidgetUndoInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
-            if (argc < 1) return ThrowTypeError(ctx, "undoInputBox", "expected (id)");
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 1)
+                return ThrowTypeError(ctx, "undoInputBox", "expected (id)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8) return JS_EXCEPTION;
+            if (!idUtf8)
+                return JS_EXCEPTION;
             std::wstring id = Utils::ToWString(idUtf8);
             JS_FreeCString(ctx, idUtf8);
             Element *elem = widget->FindElementById(id);
             auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input) return JS_NewBool(ctx, 0);
+            if (!input)
+                return JS_NewBool(ctx, 0);
             bool res = input->Undo();
-            if (res) widget->Redraw();
+            if (res)
+                widget->Redraw();
             return JS_NewBool(ctx, res ? 1 : 0);
         }
 
         JSValue JsWidgetRedoInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
-            if (argc < 1) return ThrowTypeError(ctx, "redoInputBox", "expected (id)");
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 1)
+                return ThrowTypeError(ctx, "redoInputBox", "expected (id)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8) return JS_EXCEPTION;
+            if (!idUtf8)
+                return JS_EXCEPTION;
             std::wstring id = Utils::ToWString(idUtf8);
             JS_FreeCString(ctx, idUtf8);
             Element *elem = widget->FindElementById(id);
             auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input) return JS_NewBool(ctx, 0);
+            if (!input)
+                return JS_NewBool(ctx, 0);
             bool res = input->Redo();
-            if (res) widget->Redraw();
+            if (res)
+                widget->Redraw();
             return JS_NewBool(ctx, res ? 1 : 0);
         }
 
         JSValue JsWidgetCanUndoInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
-            if (argc < 1) return ThrowTypeError(ctx, "canUndoInputBox", "expected (id)");
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 1)
+                return ThrowTypeError(ctx, "canUndoInputBox", "expected (id)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8) return JS_EXCEPTION;
+            if (!idUtf8)
+                return JS_EXCEPTION;
             std::wstring id = Utils::ToWString(idUtf8);
             JS_FreeCString(ctx, idUtf8);
             Element *elem = widget->FindElementById(id);
             auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input) return JS_NewBool(ctx, 0);
+            if (!input)
+                return JS_NewBool(ctx, 0);
             return JS_NewBool(ctx, input->CanUndo() ? 1 : 0);
         }
 
         JSValue JsWidgetCanRedoInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
         {
             Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget) return JS_NewBool(ctx, 0);
-            if (argc < 1) return ThrowTypeError(ctx, "canRedoInputBox", "expected (id)");
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            if (argc < 1)
+                return ThrowTypeError(ctx, "canRedoInputBox", "expected (id)");
             const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8) return JS_EXCEPTION;
+            if (!idUtf8)
+                return JS_EXCEPTION;
             std::wstring id = Utils::ToWString(idUtf8);
             JS_FreeCString(ctx, idUtf8);
             Element *elem = widget->FindElementById(id);
             auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input) return JS_NewBool(ctx, 0);
+            if (!input)
+                return JS_NewBool(ctx, 0);
             return JS_NewBool(ctx, input->CanRedo() ? 1 : 0);
         }
 
