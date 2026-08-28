@@ -839,7 +839,7 @@ namespace novadesk::scripting::quickjs
                     }
                     try
                     {
-                        int val = std::stoi(std::string(token.begin(), token.end()));
+                        int val = std::stoi(token);
                         if (val < 0 || val > 255)
                             return false;
                         octets[idx++] = val;
