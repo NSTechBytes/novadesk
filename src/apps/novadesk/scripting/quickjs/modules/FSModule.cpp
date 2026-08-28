@@ -72,7 +72,10 @@ namespace novadesk::scripting::quickjs
             std::ofstream out(fs::path(path), std::ios::binary | (append ? std::ios::app : std::ios::trunc));
             bool ok = out.is_open();
             if (ok)
+            {
                 out.write(data, static_cast<std::streamsize>(len));
+                ok = !out.fail();
+            }
             JS_FreeCString(ctx, data);
             return JS_NewBool(ctx, ok ? 1 : 0);
         }
