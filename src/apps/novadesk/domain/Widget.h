@@ -404,6 +404,7 @@ private:
     std::vector<ElementAnimation> m_Animations;
     std::vector<WindowAnimation> m_WindowAnimations;
     Element* m_MouseOverElement = nullptr;
+    Element* m_CursorElement = nullptr;
     Element* m_TooltipElement = nullptr;
     int m_IsBatchUpdating = 0;
     

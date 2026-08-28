@@ -960,62 +960,23 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
         if (LOWORD(lParam) == HTCLIENT && widget)
         {
-            POINT pt;
-            GetCursorPos(&pt);
-            ScreenToClient(hWnd, &pt);
-
-            Element *hitElement = nullptr;
-            Element *mouseActionElement = nullptr;
-            TextElement *textElement = nullptr;
-            
-            for (auto it = widget->m_Elements.rbegin(); it != widget->m_Elements.rend(); ++it)
-            {
-                Element *candidate = it->get();
-                if (!candidate->IsVisible())
-                    continue;
-                if (candidate->IsContained())
-                    continue;
-
-                if (candidate->IsContainer())
-                {
-                    Element *childHit = nullptr;
-                    Element *childAction = nullptr;
-                    Element *childMouseAction = nullptr;
-                    Element *childToolTip = nullptr;
-                    if (widget->HitTestContainerChildrenDetailed(
-                            candidate, pt.x, pt.y, WM_MOUSEMOVE, 0, childHit, childAction, childMouseAction, childToolTip))
-                    {
-                        if (!hitElement)
-                            hitElement = childHit;
-                        if (!mouseActionElement)
-                            mouseActionElement = childMouseAction;
-                        if (!textElement && childHit && childHit->GetType() == ELEMENT_TEXT)
-                            textElement = static_cast<TextElement*>(childHit);
-                    }
-                }
-
-                if (candidate->HitTest(pt.x, pt.y))
-                {
-                    if (!hitElement)
-                        hitElement = candidate;
-                    if (!mouseActionElement && candidate->HasMouseAction())
-                        mouseActionElement = candidate;
-                    if (!textElement && candidate->GetType() == ELEMENT_TEXT)
-                        textElement = static_cast<TextElement*>(candidate);
-                }
-
-                if (hitElement && mouseActionElement && textElement)
-                    break;
-            }
+            // Use the element already resolved by WM_MOUSEMOVE hit-test
+            // instead of re-running the full element iteration.
+            Element *cursorElement = widget->m_CursorElement;
+            if (cursorElement && !widget->IsTrackedElement(cursorElement))
+                cursorElement = nullptr;
 
             // Show I-beam cursor for selectable text
-            if (textElement && textElement->GetTextSelection())
+            if (cursorElement && cursorElement->GetType() == ELEMENT_TEXT)
             {
-                SetCursor(LoadCursorW(nullptr, IDC_IBEAM));
-                return TRUE;
+                TextElement *textElem = static_cast<TextElement*>(cursorElement);
+                if (textElem->GetTextSelection())
+                {
+                    SetCursor(LoadCursorW(nullptr, IDC_IBEAM));
+                    return TRUE;
+                }
             }
 
-            Element *cursorElement = mouseActionElement ? mouseActionElement : hitElement;
             if (cursorElement &&
                 cursorElement->GetMouseEventCursor() &&
                 (cursorElement->HasMouseAction() || !cursorElement->GetMouseEventCursorName().empty()))
@@ -3506,6 +3467,20 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 }
             }
             m_MouseOverElement = hoverElement;
+
+            // Cache cursor element so WM_SETCURSOR can use it directly
+            // instead of re-running the full hit-test.
+            {
+                TextElement *textSelElem = nullptr;
+                if (hitElement && hitElement->GetType() == ELEMENT_TEXT)
+                {
+                    TextElement *te = static_cast<TextElement*>(hitElement);
+                    if (te->GetTextSelection())
+                        textSelElem = te;
+                }
+                m_CursorElement = textSelElem ? textSelElem
+                    : (mouseActionElement ? mouseActionElement : hitElement);
+            }
 
             // Refresh cursor when element under mouse changes as it might have different action state
             PostMessage(m_hWnd, WM_SETCURSOR, (WPARAM)m_hWnd, MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));
