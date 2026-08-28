@@ -244,9 +244,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // Attach to parent console for logging if present
     if (AttachConsole(ATTACH_PARENT_PROCESS))
     {
-        FILE *fDummy;
+        FILE *fDummy = nullptr;
         freopen_s(&fDummy, "CONOUT$", "w", stdout);
+        if (fDummy) fclose(fDummy);
+        fDummy = nullptr;
         freopen_s(&fDummy, "CONOUT$", "w", stderr);
+        if (fDummy) fclose(fDummy);
         _setmode(_fileno(stdout), _O_U16TEXT);
     }
 
