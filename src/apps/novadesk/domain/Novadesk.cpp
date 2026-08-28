@@ -51,6 +51,8 @@ struct TrayState
     std::wstring toolTip;
     std::vector<MenuItem> menu;
     NOTIFYICONDATAW nid = {};
+    RECT iconRect = {0, 0, 0, 0};
+    DWORD lastRectUpdateMs = 0;
 };
 
 std::unordered_map<int, TrayState> g_trayStates;
@@ -87,13 +89,23 @@ void InitTrayIcon(int trayId);
 void RemoveTrayIcon(int trayId);
 void RemoveAllTrayIcons();
 static TrayState *GetTrayState(int trayId);
-static void DispatchTrayMouseEvent(int trayId, const char *name);
-
-static RECT GetTrayIconRect(int trayId)
+static void DispatchTrayMouseEvent(int trayId, const char *name);static RECT GetTrayIconRect(int trayId)
 {
     TrayState *state = GetTrayState(trayId);
+
     if (!state || !state->initialized)
         return {0, 0, 0, 0};
+
+    // Return cached rect if fresh enough (500 ms TTL).
+    // Shell_NotifyIconGetRect is expensive and this is called from a
+    // system-wide mouse hook — caching avoids per-scroll overhead.
+    const DWORD now = GetTickCount();
+    const DWORD kRectCacheMs = 500;
+    if (state->lastRectUpdateMs != 0 &&
+        (now - state->lastRectUpdateMs) < kRectCacheMs)
+    {
+        return state->iconRect;
+    }
 
     NOTIFYICONIDENTIFIER identifier = {sizeof(NOTIFYICONIDENTIFIER)};
     identifier.hWnd = state->hWnd;
@@ -117,6 +129,8 @@ static RECT GetTrayIconRect(int trayId)
     RECT rc = {0};
     if (pfnGetRect && pfnGetRect(&identifier, &rc) == S_OK)
     {
+        state->iconRect = rc;
+        state->lastRectUpdateMs = now;
         return rc;
     }
     return {0, 0, 0, 0};
