@@ -2573,6 +2573,7 @@ void Widget::RemoveElementsByGroup(const std::wstring &group)
             {
                 for (Element *child : element->GetContainerItems())
                 {
+                    UntrackButton(child);
                     child->SetContainer(nullptr);
                     child->SetContainerId(L"");
                 }
@@ -2653,6 +2654,7 @@ bool Widget::RemoveElements(const std::wstring &id)
             {
                 for (Element *child : element->GetContainerItems())
                 {
+                    UntrackButton(child);
                     child->SetContainer(nullptr);
                     child->SetContainerId(L"");
                 }
@@ -2703,6 +2705,7 @@ void Widget::RemoveElements(const std::vector<std::wstring> &ids)
                 {
                     for (Element *child : element->GetContainerItems())
                     {
+                        UntrackButton(child);
                         child->SetContainer(nullptr);
                         child->SetContainerId(L"");
                     }
