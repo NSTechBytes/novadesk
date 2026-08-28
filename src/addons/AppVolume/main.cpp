@@ -368,6 +368,13 @@ namespace
             return L"";
 
         static std::unordered_map<std::wstring, std::wstring> cache;
+        static constexpr size_t kMaxCacheEntries = 256;
+
+        // Evict the entire cache when it exceeds the cap to prevent
+        // unbounded memory growth over the application lifetime.
+        if (cache.size() > kMaxCacheEntries)
+            cache.clear();
+
         auto it = cache.find(filePath);
         if (it != cache.end() && FileExistsNonEmpty(it->second))
             return it->second;
