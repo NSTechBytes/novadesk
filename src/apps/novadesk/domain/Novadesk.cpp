@@ -25,6 +25,7 @@
 #include "FontManager.h"
 #include "../render/FontDownloader.h"
 #include "../shared/Logging.h"
+#include "../shared/System.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "../scripting/quickjs/modules/NovadeskModule.h"
 #include <filesystem>
@@ -900,6 +901,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     ctx = nullptr;
     System::Finalize();
+    novadesk::shared::system::ShutdownDiskIoStats();
 
     // Convert GDI+ shutdown
     FontManager::Cleanup();

@@ -115,6 +115,7 @@ namespace novadesk::shared::system
     bool GetNetworkStats(NetworkStats &outStats);
     bool GetDiskStats(const std::wstring &path, DiskStats &outStats);
     bool GetDiskIoStats(DiskIoStats &outStats);
+    void ShutdownDiskIoStats();
     bool GetRecycleBinStats(RecycleBinStats &outStats);
     bool OpenRecycleBin();
     bool EmptyRecycleBin(bool silent);

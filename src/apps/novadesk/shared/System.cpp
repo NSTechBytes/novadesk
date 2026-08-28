@@ -460,6 +460,21 @@ namespace novadesk::shared::system
         return true;
     }
 
+    void ShutdownDiskIoStats()
+    {
+        std::lock_guard<std::mutex> lock(g_diskIoMutex);
+        if (g_diskIoQuery)
+        {
+            PdhCloseQuery(g_diskIoQuery);
+            g_diskIoQuery = nullptr;
+        }
+        g_diskReadCounter = nullptr;
+        g_diskWriteCounter = nullptr;
+        g_diskIoPrimed = false;
+        g_diskIoReady.store(false, std::memory_order_release);
+        g_diskIoInitStarted.store(false, std::memory_order_release);
+    }
+
     // *****************************************************************************
     // RecycleBin Object
     // *****************************************************************************
