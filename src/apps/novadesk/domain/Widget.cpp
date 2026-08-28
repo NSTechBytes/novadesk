@@ -136,6 +136,16 @@ Widget::~Widget()
         KillTimer(m_hWnd, TIMER_CARET);
         KillTimer(m_hWnd, TIMER_CTRL_OVERRIDE);
         KillTimer(m_hWnd, TIMER_TOOLTIP);
+
+        // KillTimer prevents future firings, but already-queued WM_TIMER
+        // messages may still sit in the message queue.  Drain them now so
+        // they cannot dispatch after we release widget state.
+        MSG msg = {};
+        while (PeekMessageW(&msg, m_hWnd, WM_TIMER, WM_TIMER, PM_REMOVE))
+        {
+            // intentionally empty — just discard
+        }
+
         SetWindowLongPtr(m_hWnd, GWLP_USERDATA, 0);
     }
     WidgetAnimationHelper::ClearAllAnimations(*this);
