@@ -220,16 +220,22 @@ namespace
         }
     };
 
+    BrightnessControl &GetBrightnessControl(int displayIndex = 0)
+    {
+        // Lazy singleton — one open LCD device handle shared across all
+        // getValue/setValue calls instead of opening and closing on every call.
+        static BrightnessControl s_Instance(displayIndex);
+        return s_Instance;
+    }
+
     bool GetBrightness(BrightnessInfo &outInfo, int displayIndex)
     {
-        BrightnessControl control(displayIndex);
-        return control.GetBrightness(outInfo);
+        return GetBrightnessControl(displayIndex).GetBrightness(outInfo);
     }
 
     bool SetBrightnessPercent(int percent, int displayIndex)
     {
-        BrightnessControl control(displayIndex);
-        return control.SetBrightnessPercent(percent);
+        return GetBrightnessControl(displayIndex).SetBrightnessPercent(percent);
     }
 
     bool TryReadPropInt(novadesk_context ctx, const char *name, int &outValue, bool &outFound)
