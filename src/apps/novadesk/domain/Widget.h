@@ -360,6 +360,7 @@ private:
     bool IsTrackedElement(Element* el) const;
     static bool SearchContainerItems(Element* el, const std::vector<Element*>& items);
     void StampInteractiveBounds(Element* element, int offsetX, int offsetY, BYTE* pvBits, int surfW, int surfH);
+    void UntrackButton(Element* el);
 
 private:
     std::wstring m_Id;
@@ -369,6 +370,7 @@ private:
     Tooltip m_Tooltip;
     ZPOSITION m_WindowZPosition;
     std::vector<std::unique_ptr<Element>> m_Elements;
+    std::vector<ButtonElement*> m_Buttons;  // Cached button pointers for O(1) mouse-move iteration
     std::unordered_map<std::wstring, Element*> m_ElementIndex;
     std::unordered_map<std::wstring, LayoutConfig> m_LayoutConfigs;
     struct ElementAnimation

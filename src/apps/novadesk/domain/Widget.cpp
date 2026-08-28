@@ -146,6 +146,7 @@ Widget::~Widget()
     // Element-owned GeneralImage instances join their workers on destruction.
     // Do this while the widget HWND is still valid.
     m_Elements.clear();
+    m_Buttons.clear();
     m_ElementIndex.clear();
 
     if (m_hWnd)
@@ -1649,15 +1650,15 @@ void Widget::AddRotator(const PropertyParser::RotatorOptions &options)
 
     RotatorElement *element = new RotatorElement(options.id, options.x, options.y, options.rotatorImageName);
 
-    PropertyParser::ApplyRotatorOptions(element, options);
-
-    m_Elements.push_back(std::unique_ptr<Element>(element));
+    PropertyParser::ApplyRotatorOptions(element, options);    m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_Buttons.push_back(element);
     if (!element->GetId().empty())
         m_ElementIndex[element->GetId()] = element;
     UpdateContainerForElement(element, options.containerId);
 
     Redraw();
 }
+
 
 /*
 ** Add a text content item to the widget.
@@ -2564,6 +2565,7 @@ void Widget::RemoveElementsByGroup(const std::wstring &group)
             UpdateContainerForElement(element, L"");
             if (!element->GetId().empty())
                 m_ElementIndex.erase(element->GetId());
+            UntrackButton(element);
             it = m_Elements.erase(it);
             changed = true;
         }
@@ -2607,6 +2609,7 @@ bool Widget::RemoveElements(const std::wstring &id)
             UpdateContainerForElement(el, L"");
         }
         m_Elements.clear();
+        m_Buttons.clear();
         m_ElementIndex.clear();
         m_LayoutConfigs.clear();
         WidgetAnimationHelper::ClearAllAnimations(*this);
@@ -2643,6 +2646,7 @@ bool Widget::RemoveElements(const std::wstring &id)
             m_LayoutConfigs.erase(id);
             WidgetAnimationHelper::RemoveAnimationsForElement(*this, id);
             m_ElementIndex.erase(id);
+            UntrackButton(element);
             it = m_Elements.erase(it);
             changed = true;
         }
@@ -2691,6 +2695,7 @@ void Widget::RemoveElements(const std::vector<std::wstring> &ids)
                 m_LayoutConfigs.erase(id);
                 WidgetAnimationHelper::RemoveAnimationsForElement(*this, id);
                 m_ElementIndex.erase(id);
+                UntrackButton(element);
                 m_Elements.erase(it);
                 changed = true;
                 break;
@@ -3155,6 +3160,16 @@ bool Widget::SearchContainerItems(Element *el, const std::vector<Element *> &ite
     return false;
 }
 
+void Widget::UntrackButton(Element *el)
+{
+    if (!el || el->GetType() != ELEMENT_BUTTON)
+        return;
+    auto *btn = static_cast<ButtonElement *>(el);
+    auto it = std::find(m_Buttons.begin(), m_Buttons.end(), btn);
+    if (it != m_Buttons.end())
+        m_Buttons.erase(it);
+}
+
 bool Widget::IsTrackedElement(Element *el) const
 {
     if (!el)
@@ -3306,24 +3321,19 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         if (message == WM_LBUTTONDOWN) isDown = true;
         if (message == WM_LBUTTONUP) isDown = false;
         
-        for (auto &uptr : m_Elements)
+        for (ButtonElement *btn : m_Buttons)
         {
-            Element *el = uptr.get();
-            if (el->GetType() == ELEMENT_BUTTON)
+            ButtonState newState = BUTTON_STATE_NORMAL;
+            
+            if (message != WM_MOUSELEAVE && btn->IsVisible() && btn->HitTest(x, y))
             {
-                ButtonElement* btn = static_cast<ButtonElement*>(el);
-                ButtonState newState = BUTTON_STATE_NORMAL;
-                
-                if (message != WM_MOUSELEAVE && btn->IsVisible() && btn->HitTest(x, y))
-                {
-                    newState = isDown ? BUTTON_STATE_CLICKED : BUTTON_STATE_HOVERED;
-                }
-                
-                if (btn->GetButtonState() != newState)
-                {
-                    btn->SetButtonState(newState);
-                    needRedraw = true;
-                }
+                newState = isDown ? BUTTON_STATE_CLICKED : BUTTON_STATE_HOVERED;
+            }
+            
+            if (btn->GetButtonState() != newState)
+            {
+                btn->SetButtonState(newState);
+                needRedraw = true;
             }
         }
     }
