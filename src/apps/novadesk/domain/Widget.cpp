@@ -2739,8 +2739,11 @@ void Widget::OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>&
     for (auto &uptr : m_Elements)
     {
         Element *element = uptr.get();
-        element->OnImageDownloaded(url, buffer);
-        updated = true;
+        if (element->GetImageUrl() == url)
+        {
+            element->OnImageDownloaded(url, buffer);
+            updated = true;
+        }
     }
 
     if (updated)

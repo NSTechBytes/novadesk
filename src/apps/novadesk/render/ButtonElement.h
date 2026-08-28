@@ -34,6 +34,7 @@ public:
 
     virtual void OnOwnerHWNDSet() override;
     virtual void OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer) override;
+    std::wstring GetImageUrl() const override { return m_ButtonImage.GetPath(); }
 
     bool IsLoaded() const { return m_ButtonImage.IsLoaded(); }
 

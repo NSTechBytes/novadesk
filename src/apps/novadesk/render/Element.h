@@ -141,6 +141,7 @@ public:
 
     virtual void OnOwnerHWNDSet() {}
     virtual void OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer) {}
+    virtual std::wstring GetImageUrl() const { return L""; }
 
     virtual GfxRect GetBounds();
     virtual GfxRect GetBackgroundBounds();
