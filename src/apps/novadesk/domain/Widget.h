@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <memory>
 #include <mutex>
 #include <d2d1_1.h>
@@ -371,7 +372,7 @@ private:
     ZPOSITION m_WindowZPosition;
     std::vector<std::unique_ptr<Element>> m_Elements;
     std::vector<ButtonElement*> m_Buttons;  // Cached button pointers for O(1) mouse-move iteration
-    std::unordered_map<std::wstring, Element*> m_ElementIndex;
+    std::unordered_set<std::wstring> m_ElementIndex;  // Tracks known element IDs; ownership lives in m_Elements
     std::unordered_map<std::wstring, LayoutConfig> m_LayoutConfigs;
     struct ElementAnimation
     {
