@@ -3315,11 +3315,11 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         const int elementH = el ? el->GetHeight() : 0;
         if (elementW > 0)
         {
-            eventData.offsetXPercent = (int)(((eventData.offsetX + 1) / (double)elementW) * 100.0);
+            eventData.offsetXPercent = (int)((eventData.offsetX / (double)elementW) * 100.0);
         }
         if (elementH > 0)
         {
-            eventData.offsetYPercent = (int)(((eventData.offsetY + 1) / (double)elementH) * 100.0);
+            eventData.offsetYPercent = (int)((eventData.offsetY / (double)elementH) * 100.0);
         }
         return eventData;
     };
@@ -3399,11 +3399,11 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             const int clientH = clientRect.bottom - clientRect.top;
             if (clientW > 0)
             {
-                widgetEventData.offsetXPercent = (int)(((widgetEventData.offsetX + 1) / (double)clientW) * 100.0);
+                widgetEventData.offsetXPercent = (int)((widgetEventData.offsetX / (double)clientW) * 100.0);
             }
             if (clientH > 0)
             {
-                widgetEventData.offsetYPercent = (int)(((widgetEventData.offsetY + 1) / (double)clientH) * 100.0);
+                widgetEventData.offsetYPercent = (int)((widgetEventData.offsetY / (double)clientH) * 100.0);
             }
         }
 
@@ -3622,11 +3622,11 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                     const int clientH = clientRect.bottom - clientRect.top;
                     if (clientW > 0)
                     {
-                        leaveEventData.offsetXPercent = (int)(((leaveEventData.offsetX + 1) / (double)clientW) * 100.0);
+                        leaveEventData.offsetXPercent = (int)((leaveEventData.offsetX / (double)clientW) * 100.0);
                     }
                     if (clientH > 0)
                     {
-                        leaveEventData.offsetYPercent = (int)(((leaveEventData.offsetY + 1) / (double)clientH) * 100.0);
+                        leaveEventData.offsetYPercent = (int)((leaveEventData.offsetY / (double)clientH) * 100.0);
                     }
                 }
             }
@@ -3655,11 +3655,11 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                     const int elementH = m_MouseOverElement->GetHeight();
                     if (elementW > 0)
                     {
-                        elementLeaveData.offsetXPercent = (int)(((elementLeaveData.offsetX + 1) / (double)elementW) * 100.0);
+                        elementLeaveData.offsetXPercent = (int)((elementLeaveData.offsetX / (double)elementW) * 100.0);
                     }
                     if (elementH > 0)
                     {
-                        elementLeaveData.offsetYPercent = (int)(((elementLeaveData.offsetY + 1) / (double)elementH) * 100.0);
+                        elementLeaveData.offsetYPercent = (int)((elementLeaveData.offsetY / (double)elementH) * 100.0);
                     }
                 }
                 JSEngine::CallEventCallback(leaveId, this, &elementLeaveData);
@@ -3779,11 +3779,11 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             const int elementH = actionElement->GetHeight();
             if (elementW > 0)
             {
-                eventData.offsetXPercent = (int)(((eventData.offsetX + 1) / (double)elementW) * 100.0);
+                eventData.offsetXPercent = (int)((eventData.offsetX / (double)elementW) * 100.0);
             }
             if (elementH > 0)
             {
-                eventData.offsetYPercent = (int)(((eventData.offsetY + 1) / (double)elementH) * 100.0);
+                eventData.offsetYPercent = (int)((eventData.offsetY / (double)elementH) * 100.0);
             }
 
             // Execute function callback with mouse position aliases.
