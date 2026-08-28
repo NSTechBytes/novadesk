@@ -2061,6 +2061,21 @@ namespace JSEngine
             return -1;
         }
 
+        // Reuse a vacated slot (set to JS_UNDEFINED by ClearEventCallbacksForScript)
+        // to prevent unbounded vector growth across script reloads.
+        for (size_t i = 1; i < g_eventCallbacks.size(); ++i)
+        {
+            if (JS_IsUndefined(g_eventCallbacks[i]))
+            {
+                g_eventCallbacks[i] = JS_DupValue(g_context, fn);
+                if (i < g_eventCallbackOwners.size())
+                    g_eventCallbackOwners[i] = g_currentScriptPath;
+                else
+                    g_eventCallbackOwners.push_back(g_currentScriptPath);
+                return static_cast<int>(i);
+            }
+        }
+
         g_eventCallbacks.push_back(JS_DupValue(g_context, fn));
         g_eventCallbackOwners.push_back(g_currentScriptPath);
         return static_cast<int>(g_eventCallbacks.size() - 1);
