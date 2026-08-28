@@ -421,6 +421,8 @@ private:
     // Dragging State
     bool m_IsDragging = false;
     bool m_DragThresholdMet = false;
+    int m_DragThresholdX = 0;     // cached SM_CXDRAG at drag start
+    int m_DragThresholdY = 0;     // cached SM_CYDRAG at drag start
     POINT m_DragStartCursor = { 0, 0 };
     POINT m_DragStartWindow = { 0, 0 };
     bool m_IsElementDragging = false;

@@ -884,6 +884,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 SetCapture(hWnd);
                 widget->m_IsDragging = true;
                 widget->m_DragThresholdMet = false;
+                widget->m_DragThresholdX = GetSystemMetrics(SM_CXDRAG);
+                widget->m_DragThresholdY = GetSystemMetrics(SM_CYDRAG);
                 GetCursorPos(&widget->m_DragStartCursor);
                 RECT rc;
                 GetWindowRect(hWnd, &rc);
@@ -1026,7 +1028,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                 if (!widget->m_DragThresholdMet)
                 {
-                    if (abs(dx) > GetSystemMetrics(SM_CXDRAG) || abs(dy) > GetSystemMetrics(SM_CYDRAG))
+                    if (abs(dx) > widget->m_DragThresholdX || abs(dy) > widget->m_DragThresholdY)
                     {
                         widget->m_DragThresholdMet = true;
                     }
