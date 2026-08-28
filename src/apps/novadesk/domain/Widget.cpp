@@ -397,7 +397,7 @@ void Widget::ChangeZPos(ZPOSITION zPos, bool all)
     case ZPOSITION_NORMAL:
         if (all)
             break;
-        // Fallthrough
+        [[fallthrough]];
 
     case ZPOSITION_ONDESKTOP:
         if (System::GetShowDesktop())
