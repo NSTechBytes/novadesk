@@ -10,6 +10,7 @@
 
 #include <windows.h>
 #include <commctrl.h>
+#include <atomic>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -253,12 +254,12 @@ public:
     void SetToolbarTitle(const std::wstring& title);
 
     static std::mutex s_WidgetMutex;
-    static bool s_IsMenuActive;
-    static int s_ActiveColorPickerCount;
-    static bool IsMenuActive() { return s_IsMenuActive || s_ActiveColorPickerCount > 0; }
-    static void SetMenuActive(bool active) { s_IsMenuActive = active; }
-    static void IncrementColorPickerCount() { s_ActiveColorPickerCount++; }
-    static void DecrementColorPickerCount() { if (s_ActiveColorPickerCount > 0) s_ActiveColorPickerCount--; }
+    static std::atomic<bool> s_IsMenuActive;
+    static std::atomic<int> s_ActiveColorPickerCount;
+    static bool IsMenuActive() { return s_IsMenuActive.load(std::memory_order_relaxed) || s_ActiveColorPickerCount.load(std::memory_order_relaxed) > 0; }
+    static void SetMenuActive(bool active) { s_IsMenuActive.store(active, std::memory_order_relaxed); }
+    static void IncrementColorPickerCount() { s_ActiveColorPickerCount.fetch_add(1, std::memory_order_relaxed); }
+    static void DecrementColorPickerCount() { int prev; do { prev = s_ActiveColorPickerCount.load(std::memory_order_relaxed); } while (prev > 0 && !s_ActiveColorPickerCount.compare_exchange_weak(prev, prev - 1, std::memory_order_relaxed)); }
 
     const WidgetOptions& GetOptions() const { return m_Options; }
     uint64_t GetInstanceId() const { return m_InstanceId; }

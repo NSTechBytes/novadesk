@@ -60,8 +60,8 @@
 extern std::vector<Widget *> widgets; // Defined in Novadesk.cpp
 
 std::mutex Widget::s_WidgetMutex;
-bool Widget::s_IsMenuActive = false;
-int Widget::s_ActiveColorPickerCount = 0;
+std::atomic<bool> Widget::s_IsMenuActive{false};
+std::atomic<int> Widget::s_ActiveColorPickerCount{0};
 
 /*
 ** Check if a widget pointer is valid (exists in the global widgets list).
