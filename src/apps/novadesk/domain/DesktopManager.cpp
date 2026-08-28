@@ -229,18 +229,6 @@ bool System::CheckDesktopState(HWND desktopIconsHostWindow)
     return stateChanged;
 }
 
-static BOOL CALLBACK EnumWidgetsProc(HWND hwnd, LPARAM lParam)
-{
-    // FindWidget acquires s_WidgetMutex internally.
-    std::vector<Widget *> *windowsInZOrder = (std::vector<Widget *> *)lParam;
-    Widget *widget = FindWidget(hwnd);
-    if (widget)
-    {
-        windowsInZOrder->push_back(widget);
-    }
-    return TRUE;
-}
-
 /*
 ** Change z-order positions for all widgets in the correct order.
 ** Ensures widgets maintain their relative z-order positions.
@@ -248,13 +236,15 @@ static BOOL CALLBACK EnumWidgetsProc(HWND hwnd, LPARAM lParam)
 
 void System::ChangeZPosInOrder()
 {
-    std::vector<Widget *> windowsInZOrder;
-
-    // Enumerate all windows to get current Z-order
-    EnumWindows(EnumWidgetsProc, (LPARAM)(&windowsInZOrder));
-
-    // Reapply Z-positions in the order they were found (preserves user's stacking)
-    for (auto w : windowsInZOrder)
+    // Iterate known widgets directly instead of EnumWindows.
+    // EnumWindows enumerates ALL top-level windows system-wide and
+    // calls FindWidget (mutex + linear scan) for each — very expensive
+    // when called from a 50-100 ms timer.  ChangeZPos already sets
+    // absolute z-order via SetWindowPos, so enumeration order is
+    // irrelevant; we only need to reapply each widget's configured
+    // z-position.
+    std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
+    for (auto *w : widgets)
     {
         w->ChangeZPos(w->GetWindowZPosition());
     }

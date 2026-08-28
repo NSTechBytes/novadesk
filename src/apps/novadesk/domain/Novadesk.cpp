@@ -259,12 +259,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     if (AttachConsole(ATTACH_PARENT_PROCESS))
     {
         FILE *fDummy = nullptr;
-        freopen_s(&fDummy, "CONOUT$", "w", stdout);
-        if (fDummy) fclose(fDummy);
+        if (freopen_s(&fDummy, "CONOUT$", "w", stdout) == 0 && fDummy)
+            fclose(fDummy);
         fDummy = nullptr;
-        freopen_s(&fDummy, "CONOUT$", "w", stderr);
-        if (fDummy) fclose(fDummy);
-        _setmode(_fileno(stdout), _O_U16TEXT);
+        if (freopen_s(&fDummy, "CONOUT$", "w", stderr) == 0 && fDummy)
+            fclose(fDummy);
+        if (_fileno(stdout) >= 0)
+            _setmode(_fileno(stdout), _O_U16TEXT);
     }
 
     // Clear log file on startup
