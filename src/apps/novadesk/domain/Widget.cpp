@@ -191,7 +191,7 @@ Widget::~Widget()
 bool Widget::Register()
 {
     static std::once_flag s_Flag;
-    static bool s_Registered = false;
+    static std::atomic<bool> s_Registered{false};
     std::call_once(s_Flag, []()
     {
         HINSTANCE hInstance = GetModuleHandle(nullptr);
@@ -204,9 +204,9 @@ bool Widget::Register()
         wcex.hbrBackground = nullptr; // We'll paint it ourselves
         wcex.lpszClassName = WIDGET_CLASS_NAME;
 
-        s_Registered = (RegisterClassExW(&wcex) != 0);
+        s_Registered.store(RegisterClassExW(&wcex) != 0, std::memory_order_release);
     });
-    return s_Registered;
+    return s_Registered.load(std::memory_order_acquire);
 }
 
 /*
