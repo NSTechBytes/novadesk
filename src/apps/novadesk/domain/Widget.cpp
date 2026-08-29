@@ -162,6 +162,7 @@ Widget::~Widget()
     // Element-owned GeneralImage instances join their workers on destruction.
     // Do this while the widget HWND is still valid.
     m_Elements.clear();
+    m_TrackedElements.clear();
     m_Buttons.clear();
     m_ElementIndex.clear();
 
@@ -1598,6 +1599,7 @@ void Widget::AddImage(const PropertyParser::ImageOptions &options)
     }
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
     UpdateContainerForElement(element, options.containerId);
@@ -1626,6 +1628,7 @@ void Widget::AddButton(const PropertyParser::ButtonOptions &options)
     PropertyParser::ApplyButtonOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     m_Buttons.push_back(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
@@ -1655,6 +1658,7 @@ void Widget::AddBitmap(const PropertyParser::BitmapOptions &options)
     PropertyParser::ApplyBitmapOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
     UpdateContainerForElement(element, options.containerId);
@@ -1683,6 +1687,7 @@ void Widget::AddRotator(const PropertyParser::RotatorOptions &options)
 
     PropertyParser::ApplyRotatorOptions(element, options);
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
     UpdateContainerForElement(element, options.containerId);
@@ -1723,6 +1728,7 @@ void Widget::AddText(const PropertyParser::TextOptions &options)
     PropertyParser::ApplyTextOptions(element, options); // Changed from ApplyElementOptions
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
     UpdateContainerForElement(element, options.containerId);
@@ -1751,6 +1757,7 @@ void Widget::AddBar(const PropertyParser::BarOptions &options)
     PropertyParser::ApplyBarOptions(element, options); // Changed from ApplyElementOptions
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
     UpdateContainerForElement(element, options.containerId);
@@ -1778,6 +1785,7 @@ void Widget::AddLine(const PropertyParser::LineOptions &options)
     PropertyParser::ApplyLineOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
     UpdateContainerForElement(element, options.containerId);
@@ -1805,6 +1813,7 @@ void Widget::AddHistogram(const PropertyParser::HistogramOptions &options)
     PropertyParser::ApplyHistogramOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
     UpdateContainerForElement(element, options.containerId);
@@ -1833,6 +1842,7 @@ void Widget::AddRoundLine(const PropertyParser::RoundLineOptions &options)
     PropertyParser::ApplyRoundLineOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
     UpdateContainerForElement(element, options.containerId);
@@ -1896,6 +1906,7 @@ void Widget::AddShape(const PropertyParser::ShapeOptions &options)
     }
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
     UpdateContainerForElement(element, options.containerId);
@@ -1923,6 +1934,7 @@ void Widget::AddAreaGraph(const PropertyParser::AreaGraphOptions &options)
     PropertyParser::ApplyAreaGraphOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
     UpdateContainerForElement(element, options.containerId);
@@ -1946,6 +1958,7 @@ void Widget::AddLayoutBox(const PropertyParser::ShapeOptions &options)
     ElementLayoutBox *element = new ElementLayoutBox(options.id, options.x, options.y, options.width, options.height);
     PropertyParser::ApplyShapeOptions(element, options);
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
     UpdateContainerForElement(element, options.containerId);
@@ -1975,6 +1988,7 @@ void Widget::AddInputBox(const PropertyParser::InputBoxOptions &options)
     PropertyParser::ApplyInputBoxOptions(element, options);
 
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
     UpdateContainerForElement(element, options.containerId);
@@ -1989,6 +2003,7 @@ void Widget::AddColorPicker(const PropertyParser::ColorPickerOptions &options)
     auto *element = new ColorPickerElement(options.id, options.x, options.y, options.width > 0 ? options.width : 32, options.height > 0 ? options.height : 32);
     PropertyParser::ApplyColorPickerOptions(element, options);
     m_Elements.push_back(std::unique_ptr<Element>(element));
+    m_TrackedElements.insert(element);
     if (!element->GetId().empty())
         m_ElementIndex.insert(element->GetId());
     UpdateContainerForElement(element, options.containerId);
@@ -2600,6 +2615,7 @@ void Widget::RemoveElementsByGroup(const std::wstring &group)
             if (!element->GetId().empty())
                 m_ElementIndex.erase(element->GetId());
             UntrackButton(element);
+            m_TrackedElements.erase(element);
             it = m_Elements.erase(it);
             changed = true;
         }
@@ -2643,6 +2659,7 @@ bool Widget::RemoveElements(const std::wstring &id)
             UpdateContainerForElement(el, L"");
         }
         m_Elements.clear();
+        m_TrackedElements.clear();
         m_Buttons.clear();
         m_ElementIndex.clear();
         m_LayoutConfigs.clear();
@@ -2682,6 +2699,7 @@ bool Widget::RemoveElements(const std::wstring &id)
             WidgetAnimationHelper::RemoveAnimationsForElement(*this, id);
             m_ElementIndex.erase(id);
             UntrackButton(element);
+            m_TrackedElements.erase(element);
             it = m_Elements.erase(it);
             changed = true;
         }
@@ -2732,6 +2750,7 @@ void Widget::RemoveElements(const std::vector<std::wstring> &ids)
                 WidgetAnimationHelper::RemoveAnimationsForElement(*this, id);
                 m_ElementIndex.erase(id);
                 UntrackButton(element);
+                m_TrackedElements.erase(element);
                 m_Elements.erase(it);
                 changed = true;
                 break;
@@ -3190,25 +3209,6 @@ Element *Widget::FindElementById(const std::wstring &id)
     return nullptr;
 }
 
-/*
-** Check whether an element is tracked in this widget's element list,
-** searching recursively into containers.
-*/
-bool Widget::SearchContainerItems(Element *el, const std::vector<Element *> &items)
-{
-    for (Element *item : items)
-    {
-        if (item == el)
-            return true;
-        if (item && item->IsContainer())
-        {
-            if (SearchContainerItems(el, item->GetContainerItems()))
-                return true;
-        }
-    }
-    return false;
-}
-
 void Widget::UntrackButton(Element *el)
 {
     if (!el || el->GetType() != ELEMENT_BUTTON)
@@ -3223,18 +3223,7 @@ bool Widget::IsTrackedElement(Element *el) const
 {
     if (!el)
         return false;
-    for (const auto &uptr : m_Elements)
-    {
-        Element *root = uptr.get();
-        if (root == el)
-            return true;
-        if (root->IsContainer())
-        {
-            if (SearchContainerItems(el, root->GetContainerItems()))
-                return true;
-        }
-    }
-    return false;
+    return m_TrackedElements.count(el) > 0;
 }
 
 /*
