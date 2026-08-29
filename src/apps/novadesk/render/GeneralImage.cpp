@@ -56,6 +56,11 @@ namespace
     }
 }
 
+bool GeneralImage::DecodeFromBytes(const std::vector<BYTE>& bytes, DecodedImageData& out)
+{
+    return DecodeImageBytes(bytes, out);
+}
+
 GeneralImage::GeneralImage()
 {
     m_ColorMatrix = {
@@ -281,7 +286,11 @@ void GeneralImage::StartAsyncDownload(const std::wstring& url)
         AsyncImageResult* result = new AsyncImageResult();
         if (Direct2D::DownloadImageFromURL(url, result->encodedBytes) && !result->encodedBytes.empty())
         {
-            DecodeImageBytes(result->encodedBytes, result->decodedImage);
+            // Don't decode here — only the background-image path needs
+            // pre-decoded pixels, and that is done on-demand in the handler.
+            // Element images decode from the encoded bytes via OnImageDownloaded.
+            // This avoids having both encodedBytes and decodedImage.pixels in
+            // memory simultaneously, halving peak memory for large images.
             if (IsAsyncDownloadShutdown())
             {
                 delete result;

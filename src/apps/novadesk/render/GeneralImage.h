@@ -115,6 +115,11 @@ public:
     void OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer);
     void OnImageDecoded(const std::wstring& url, DecodedImageData&& image);
 
+    // Decode raw image bytes into pixels.  Used by the WM_USER+500 handler
+    // to decode on-demand instead of pre-decoding in the download thread,
+    // avoiding a 2× memory peak for large images.
+    static bool DecodeFromBytes(const std::vector<BYTE>& bytes, DecodedImageData& out);
+
 private:
     void ReloadWICBitmap();
     void ResetBitmapCache();

@@ -820,10 +820,16 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         {
             if (widget)
             {
-                if (widget->m_Options.backgroundImage == *pUrl && result->decodedImage.IsValid())
+                // Background image: decode on-demand so that encodedBytes and
+                // decodedImage.pixels are never both alive at the same time.
+                if (widget->m_Options.backgroundImage == *pUrl && !result->encodedBytes.empty())
                 {
-                    widget->m_BackgroundImage.OnImageDecoded(*pUrl, std::move(result->decodedImage));
-                    widget->Redraw();
+                    DecodedImageData decoded;
+                    if (GeneralImage::DecodeFromBytes(result->encodedBytes, decoded) && decoded.IsValid())
+                    {
+                        widget->m_BackgroundImage.OnImageDecoded(*pUrl, std::move(decoded));
+                        widget->Redraw();
+                    }
                 }
                 widget->OnImageDownloaded(*pUrl, result->encodedBytes);
             }
