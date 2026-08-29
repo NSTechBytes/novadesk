@@ -745,6 +745,8 @@ namespace novadesk::scripting::quickjs::parser
         bool hasY = false;
         bool draggable = true;
         bool hasDraggable = false;
+        bool resizable = false;
+        bool hasResizable = false;
         bool clickThrough = false;
         bool hasClickThrough = false;
         bool keepOnScreen = false;

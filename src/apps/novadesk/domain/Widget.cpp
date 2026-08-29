@@ -674,6 +674,14 @@ void Widget::SetDraggable(bool enable)
 }
 
 /*
+** Enable/disable resizing.
+*/
+void Widget::SetResizable(bool enable)
+{
+    m_Options.resizable = enable;
+}
+
+/*
 ** Enable/disable click-through.
 */
 void Widget::SetClickThrough(bool enable)
@@ -1110,6 +1118,27 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         return DefWindowProc(hWnd, message, wParam, lParam);
 
     case WM_NCHITTEST:
+        if (widget && widget->m_Options.resizable && !widget->m_Options.clickThrough)
+        {
+            POINT pt = { (short)LOWORD(lParam), (short)HIWORD(lParam) };
+            RECT rc{};
+            GetWindowRect(hWnd, &rc);
+
+            const int border = 8;
+            const bool left = (pt.x >= rc.left && pt.x < rc.left + border);
+            const bool right = (pt.x < rc.right && pt.x >= rc.right - border);
+            const bool top = (pt.y >= rc.top && pt.y < rc.top + border);
+            const bool bottom = (pt.y < rc.bottom && pt.y >= rc.bottom - border);
+
+            if (top && left) return HTTOPLEFT;
+            if (top && right) return HTTOPRIGHT;
+            if (bottom && left) return HTBOTTOMLEFT;
+            if (bottom && right) return HTBOTTOMRIGHT;
+            if (left) return HTLEFT;
+            if (right) return HTRIGHT;
+            if (top) return HTTOP;
+            if (bottom) return HTBOTTOM;
+        }
         return HTCLIENT; // We handle everything in client area to get mouse messages
 
     case WM_TIMER:
@@ -1183,7 +1212,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 wp->flags |= SWP_NOZORDER;
             }
 
-            if (!(wp->flags & SWP_NOMOVE))
+            // Only apply move-snapping and move-keepOnScreen when moving (not resizing)
+            if (!(wp->flags & SWP_NOMOVE) && (wp->flags & SWP_NOSIZE))
             {
                 // Snapping
                 const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
@@ -1319,20 +1349,49 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
         return 0;
 
+    case WM_GETMINMAXINFO:
+        if (lParam)
+        {
+            LPMINMAXINFO lpMMI = (LPMINMAXINFO)lParam;
+            lpMMI->ptMinTrackSize.x = 10;
+            lpMMI->ptMinTrackSize.y = 10;
+        }
+        return 0;
+
     case WM_WINDOWPOSCHANGED:
         if (widget)
         {
             LPWINDOWPOS wp = (LPWINDOWPOS)lParam;
+            bool moved = false;
+            bool sized = false;
             if (!(wp->flags & SWP_NOMOVE))
             {
-                JSEngine::TriggerWidgetEvent(widget, "move");
-                widget->m_Options.x = wp->x;
-                widget->m_Options.y = wp->y;
+                if (widget->m_Options.x != wp->x || widget->m_Options.y != wp->y)
+                {
+                    widget->m_Options.x = wp->x;
+                    widget->m_Options.y = wp->y;
+                    moved = true;
+                }
             }
             if (!(wp->flags & SWP_NOSIZE))
             {
-                widget->m_Options.width = wp->cx;
-                widget->m_Options.height = wp->cy;
+                if (widget->m_Options.width != wp->cx || widget->m_Options.height != wp->cy)
+                {
+                    widget->m_Options.width = wp->cx;
+                    widget->m_Options.height = wp->cy;
+                    widget->m_Options.m_WDefined = true;
+                    widget->m_Options.m_HDefined = true;
+                    sized = true;
+                }
+            }
+            if (moved)
+            {
+                JSEngine::TriggerWidgetEvent(widget, "move");
+            }
+            if (sized)
+            {
+                widget->Redraw();
+                JSEngine::TriggerWidgetEvent(widget, "resize");
             }
             // If Z-order changed and a tooltip is active, re-assert tooltip above this widget
             if (!(wp->flags & SWP_NOZORDER) && widget->m_Tooltip.IsActive())
@@ -1373,9 +1432,10 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             GetWindowRect(hWnd, &rc);
             widget->m_Options.x = rc.left;
             widget->m_Options.y = rc.top;
-            // Width/Height might change if we allow resizing (not implemented yet for borderless but good to have)
-            // widget->m_Options.width = rc.right - rc.left;
-            // widget->m_Options.height = rc.bottom - rc.top;
+            widget->m_Options.width = rc.right - rc.left;
+            widget->m_Options.height = rc.bottom - rc.top;
+            widget->m_Options.m_WDefined = true;
+            widget->m_Options.m_HDefined = true;
 
             Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
         }
@@ -3156,12 +3216,20 @@ void Widget::UpdateLayeredWindowContent()
         }
     }
 
-    POINT pptDst = {0, 0};
-    // We need current window position
-    RECT rc;
-    GetWindowRect(m_hWnd, &rc);
-    pptDst.x = rc.left;
-    pptDst.y = rc.top;
+    POINT pptDst = {m_Options.x, m_Options.y};
+    if (m_hWnd)
+    {
+        RECT rc;
+        if (GetWindowRect(m_hWnd, &rc))
+        {
+            if (m_Options.x == CW_USEDEFAULT)
+                m_Options.x = rc.left;
+            if (m_Options.y == CW_USEDEFAULT)
+                m_Options.y = rc.top;
+            pptDst.x = m_Options.x;
+            pptDst.y = m_Options.y;
+        }
+    }
 
     POINT pptSrc = {0, 0};
     SIZE size = {w, h};

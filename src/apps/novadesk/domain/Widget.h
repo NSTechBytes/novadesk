@@ -125,6 +125,7 @@ struct WidgetOptions
     BackgroundImageSize backgroundImageSize;
     BackgroundImagePosition backgroundImagePosition;
     bool draggable = true;
+    bool resizable = false;
     bool clickThrough = false;
     bool keepOnScreen = false;
     bool snapEdges = true;
@@ -246,6 +247,8 @@ public:
     void SetBackgroundImage(const std::wstring& path, const BackgroundImageSize& size, const BackgroundImagePosition& position);
     void SetBackgroundImageFallback(const std::wstring& path);
     void SetDraggable(bool enable);
+    void SetResizable(bool enable);
+    bool IsResizable() const { return m_Options.resizable; }
     void SetClickThrough(bool enable);
     void SetKeepOnScreen(bool enable);
     void SetSnapEdges(bool enable);

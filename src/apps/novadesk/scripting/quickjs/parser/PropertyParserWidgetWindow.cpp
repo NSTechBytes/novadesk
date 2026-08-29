@@ -63,6 +63,7 @@ namespace novadesk::scripting::quickjs::parser
         JS_FreeValue(ctx, yVal);
 
         out.hasDraggable = PropertyParser::Js::GetBoolProp(ctx, options, "draggable", out.draggable);
+        out.hasResizable = PropertyParser::Js::GetBoolProp(ctx, options, "resizable", out.resizable);
         out.hasClickThrough = PropertyParser::Js::GetBoolProp(ctx, options, "clickThrough", out.clickThrough);
         out.hasKeepOnScreen = PropertyParser::Js::GetBoolProp(ctx, options, "keepOnScreen", out.keepOnScreen);
         out.hasSnapEdges = PropertyParser::Js::GetBoolProp(ctx, options, "snapEdges", out.snapEdges);

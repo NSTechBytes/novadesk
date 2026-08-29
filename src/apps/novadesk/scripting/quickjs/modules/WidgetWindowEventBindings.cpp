@@ -177,6 +177,8 @@ namespace novadesk::scripting::quickjs
                 widget->SetWindowOpacity(parsed.windowOpacity);
             if (parsed.hasDraggable)
                 widget->SetDraggable(parsed.draggable);
+            if (parsed.hasResizable)
+                widget->SetResizable(parsed.resizable);
             if (parsed.hasClickThrough)
                 widget->SetClickThrough(parsed.clickThrough);
             if (parsed.hasKeepOnScreen)
@@ -236,6 +238,7 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, out, "width", JS_NewInt32(ctx, o.width));
             JS_SetPropertyStr(ctx, out, "height", JS_NewInt32(ctx, o.height));
             JS_SetPropertyStr(ctx, out, "draggable", JS_NewBool(ctx, o.draggable ? 1 : 0));
+            JS_SetPropertyStr(ctx, out, "resizable", JS_NewBool(ctx, o.resizable ? 1 : 0));
             JS_SetPropertyStr(ctx, out, "clickThrough", JS_NewBool(ctx, o.clickThrough ? 1 : 0));
             JS_SetPropertyStr(ctx, out, "keepOnScreen", JS_NewBool(ctx, o.keepOnScreen ? 1 : 0));
             JS_SetPropertyStr(ctx, out, "snapEdges", JS_NewBool(ctx, o.snapEdges ? 1 : 0));
@@ -496,6 +499,28 @@ namespace novadesk::scripting::quickjs
             opacity = std::clamp(opacity, 0, 255);
             widget->SetWindowOpacity(static_cast<BYTE>(opacity));
             return JS_DupValue(ctx, thisVal);
+        }
+
+        JSValue JsWidgetWindowSetResizable(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_UNDEFINED;
+            if (argc < 1)
+            {
+                return ThrowTypeError(ctx, "setResizable", "expected boolean");
+            }
+            const bool resizable = JS_ToBool(ctx, argv[0]) != 0;
+            widget->SetResizable(resizable);
+            return JS_DupValue(ctx, thisVal);
+        }
+
+        JSValue JsWidgetWindowIsResizable(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            return JS_NewBool(ctx, widget->IsResizable() ? 1 : 0);
         }
 
         JSValue JsWidgetWindowRefresh(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
@@ -1066,6 +1091,8 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("setBackgroundColor", 1, JsWidgetWindowSetBackgroundColor),
             JS_CFUNC_DEF("setOpacity", 1, JsWidgetWindowSetOpacity),
             JS_CFUNC_DEF("refresh", 0, JsWidgetWindowRefresh),
+            JS_CFUNC_DEF("setResizable", 1, JsWidgetWindowSetResizable),
+            JS_CFUNC_DEF("isResizable", 0, JsWidgetWindowIsResizable),
             JS_CFUNC_DEF("setFocus", 0, JsWidgetWindowSetFocus),
             JS_CFUNC_DEF("unFocus", 0, JsWidgetWindowUnFocus),
             JS_CFUNC_DEF("minimize", 0, JsWidgetWindowMinimize),

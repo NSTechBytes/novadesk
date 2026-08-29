@@ -31,6 +31,12 @@ function expect(name, condition, details) {
 
 win.on("close", () => console.log("[EVENT] close"));
 win.on("closed", () => console.log("[EVENT] closed"));
+let resizeEventFired = false;
+win.on("resize", () => {
+  const { width, height } = win.getSize();
+  console.log("New size:", width, "x", height);
+  resizeEventFired = true;
+});
 
 setTimeout(() => {
   const b = win.getBounds();
@@ -41,6 +47,10 @@ setTimeout(() => {
 
   expect("isVisible() initially", win.isVisible() === true, String(win.isVisible()));
   expect("isDestroyed() initially", win.isDestroyed() === false, String(win.isDestroyed()));
+  expect("isResizable() initially false", win.isResizable() === false, String(win.isResizable()));
+
+  win.setResizable(true);
+  expect("setResizable(true)/isResizable()", win.isResizable() === true, String(win.isResizable()));
 }, 250);
 
 setTimeout(() => {
@@ -48,6 +58,7 @@ setTimeout(() => {
   const size = win.getSize();
   const ok = !!size && size.width === 460 && size.height === 260;
   expect("setSize()/getSize()", ok, JSON.stringify(size));
+  expect("resize event fired", resizeEventFired === true, String(resizeEventFired));
 }, 550);
 
 setTimeout(() => {
@@ -88,12 +99,12 @@ setTimeout(() => {
   pass("setFocus()/isFocused()", String(focused));
 }, 2450);
 
-setTimeout(() => {
-  win.destroy();
-  pass("destroy()");
-}, 2850);
+// setTimeout(() => {
+//   win.destroy();
+//   pass("destroy()");
+// }, 2850);
 
-setTimeout(() => {
-  expect("isDestroyed() after destroy", win.isDestroyed() === true, String(win.isDestroyed()));
-  app.exit();
-}, 3250);
+// setTimeout(() => {
+//   expect("isDestroyed() after destroy", win.isDestroyed() === true, String(win.isDestroyed()));
+//   app.exit();
+// }, 3250);

@@ -10,7 +10,8 @@ const win = new widgetWindow({
   height: 520,
   backgroundColor: "rgba(20,24,32,0.95)",
   script: "./script.ui.js",
-  show: true
+  show: true,
+  resizable: true
 });
 
 console.log("[PASS] widgetWindow created: AnimationApiTestWindow");

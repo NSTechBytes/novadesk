@@ -3371,6 +3371,8 @@ namespace novadesk::scripting::quickjs
         }
         if (parsed.hasDraggable)
             options.draggable = parsed.draggable;
+        if (parsed.hasResizable)
+            options.resizable = parsed.resizable;
         if (parsed.hasClickThrough)
             options.clickThrough = parsed.clickThrough;
         if (parsed.hasKeepOnScreen)
