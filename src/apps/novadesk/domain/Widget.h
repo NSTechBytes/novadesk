@@ -377,6 +377,13 @@ private:
     std::vector<ButtonElement*> m_Buttons;  // Cached button pointers for O(1) mouse-move iteration
     std::unordered_set<std::wstring> m_ElementIndex;  // Tracks known element IDs; ownership lives in m_Elements
     std::unordered_map<std::wstring, LayoutConfig> m_LayoutConfigs;
+
+    // Spatial grid for O(1) hit-testing instead of O(n) linear scan.
+    // Cell size chosen so typical widget (200-600px) spans 3-10 cells.
+    static const int GRID_CELL_SIZE = 64;
+    static const int GRID_THRESHOLD = 32;  // Use grid only above this count
+    std::unordered_map<int64_t, std::vector<Element*>> m_SpatialGrid;
+    void RebuildSpatialGrid();
     struct ElementAnimation
     {
         std::wstring id;

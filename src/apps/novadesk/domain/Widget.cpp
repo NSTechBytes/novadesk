@@ -163,6 +163,7 @@ Widget::~Widget()
     // Do this while the widget HWND is still valid.
     m_Elements.clear();
     m_TrackedElements.clear();
+    m_SpatialGrid.clear();
     m_Buttons.clear();
     m_ElementIndex.clear();
 
@@ -2660,6 +2661,7 @@ bool Widget::RemoveElements(const std::wstring &id)
         }
         m_Elements.clear();
         m_TrackedElements.clear();
+        m_SpatialGrid.clear();
         m_Buttons.clear();
         m_ElementIndex.clear();
         m_LayoutConfigs.clear();
@@ -3219,6 +3221,38 @@ void Widget::UntrackButton(Element *el)
         m_Buttons.erase(it);
 }
 
+/*
+** Rebuild the spatial grid used for O(1) hit-testing.
+** Each visible, non-contained element is inserted into every grid cell
+** its bounding box overlaps, so a single cell lookup under the cursor
+** yields only the elements that could possibly contain that point.
+*/
+void Widget::RebuildSpatialGrid()
+{
+    m_SpatialGrid.clear();
+    // Iterate back-to-front so that the cell vectors preserve Z-order
+    // (last element in the vector = front-most = checked first).
+    for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it)
+    {
+        Element *el = it->get();
+        if (!el->IsVisible() || el->IsContained())
+            continue;
+        GfxRect bounds = el->GetBounds();
+        int minCX = bounds.X / GRID_CELL_SIZE;
+        int minCY = bounds.Y / GRID_CELL_SIZE;
+        int maxCX = (bounds.X + bounds.Width  - 1) / GRID_CELL_SIZE;
+        int maxCY = (bounds.Y + bounds.Height - 1) / GRID_CELL_SIZE;
+        for (int cy = minCY; cy <= maxCY; ++cy)
+        {
+            for (int cx = minCX; cx <= maxCX; ++cx)
+            {
+                int64_t key = (static_cast<int64_t>(cx) << 32) | static_cast<uint32_t>(cy);
+                m_SpatialGrid[key].push_back(el);
+            }
+        }
+    }
+}
+
 bool Widget::IsTrackedElement(Element *el) const
 {
     if (!el)
@@ -3453,47 +3487,100 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     Element *mouseActionElement = nullptr;
     Element *toolTipElement = nullptr;
 
-    for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it)
+    // Use the spatial grid for large element counts; fall back to linear scan
+    // for small counts where the hash-lookup overhead exceeds the savings.
+    if (static_cast<int>(m_Elements.size()) > GRID_THRESHOLD)
     {
-        Element *el = it->get();
-        if (!el->IsVisible())
-            continue;
-        if (el->IsContained())
-            continue;
-
-        if (el->IsContainer())
+        RebuildSpatialGrid();
+        int cx = x / GRID_CELL_SIZE;
+        int cy = y / GRID_CELL_SIZE;
+        int64_t key = (static_cast<int64_t>(cx) << 32) | static_cast<uint32_t>(cy);
+        auto cellIt = m_SpatialGrid.find(key);
+        if (cellIt != m_SpatialGrid.end())
         {
-            Element *childHit = nullptr;
-            Element *childAction = nullptr;
-            Element *childMouseAction = nullptr;
-            Element *childToolTip = nullptr;
-            if (HitTestContainerChildrenDetailed(el, x, y, message, wParam, childHit, childAction, childMouseAction, childToolTip))
+            // Elements in the cell are already in reverse Z-order.
+            for (Element *el : cellIt->second)
             {
-                if (!hitElement)
-                    hitElement = childHit;
-                if (!actionElement)
-                    actionElement = childAction;
-                if (!mouseActionElement)
-                    mouseActionElement = childMouseAction;
-                if (!toolTipElement)
-                    toolTipElement = childToolTip;
+                if (el->IsContainer())
+                {
+                    Element *childHit = nullptr;
+                    Element *childAction = nullptr;
+                    Element *childMouseAction = nullptr;
+                    Element *childToolTip = nullptr;
+                    if (HitTestContainerChildrenDetailed(el, x, y, message, wParam, childHit, childAction, childMouseAction, childToolTip))
+                    {
+                        if (!hitElement)
+                            hitElement = childHit;
+                        if (!actionElement)
+                            actionElement = childAction;
+                        if (!mouseActionElement)
+                            mouseActionElement = childMouseAction;
+                        if (!toolTipElement)
+                            toolTipElement = childToolTip;
+                    }
+                }
+
+                if (el->HitTest(x, y))
+                {
+                    if (!hitElement)
+                        hitElement = el;
+                    if (!actionElement && el->HasAction(message, wParam))
+                        actionElement = el;
+                    if (!mouseActionElement && el->HasMouseAction())
+                        mouseActionElement = el;
+                    if (!toolTipElement && el->HasToolTip())
+                        toolTipElement = el;
+                }
+
+                if (hitElement && actionElement && mouseActionElement && toolTipElement)
+                    break;
             }
         }
-
-        if (el->HitTest(x, y))
+    }
+    else
+    {
+        for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it)
         {
-            if (!hitElement)
-                hitElement = el;
-            if (!actionElement && el->HasAction(message, wParam))
-                actionElement = el;
-            if (!mouseActionElement && el->HasMouseAction())
-                mouseActionElement = el;
-            if (!toolTipElement && el->HasToolTip())
-                toolTipElement = el;
-        }
+            Element *el = it->get();
+            if (!el->IsVisible())
+                continue;
+            if (el->IsContained())
+                continue;
 
-        if (hitElement && actionElement && mouseActionElement && toolTipElement)
-            break;
+            if (el->IsContainer())
+            {
+                Element *childHit = nullptr;
+                Element *childAction = nullptr;
+                Element *childMouseAction = nullptr;
+                Element *childToolTip = nullptr;
+                if (HitTestContainerChildrenDetailed(el, x, y, message, wParam, childHit, childAction, childMouseAction, childToolTip))
+                {
+                    if (!hitElement)
+                        hitElement = childHit;
+                    if (!actionElement)
+                        actionElement = childAction;
+                    if (!mouseActionElement)
+                        mouseActionElement = childMouseAction;
+                    if (!toolTipElement)
+                        toolTipElement = childToolTip;
+                }
+            }
+
+            if (el->HitTest(x, y))
+            {
+                if (!hitElement)
+                    hitElement = el;
+                if (!actionElement && el->HasAction(message, wParam))
+                    actionElement = el;
+                if (!mouseActionElement && el->HasMouseAction())
+                    mouseActionElement = el;
+                if (!toolTipElement && el->HasToolTip())
+                    toolTipElement = el;
+            }
+
+            if (hitElement && actionElement && mouseActionElement && toolTipElement)
+                break;
+        }
     }
 
     // Handle Hover/Leave logic.
