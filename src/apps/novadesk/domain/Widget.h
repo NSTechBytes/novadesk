@@ -375,7 +375,7 @@ private:
     std::vector<std::unique_ptr<Element>> m_Elements;
     std::unordered_set<Element*> m_TrackedElements;  // Flat set of all live element pointers for O(1) IsTrackedElement
     std::vector<ButtonElement*> m_Buttons;  // Cached button pointers for O(1) mouse-move iteration
-    std::unordered_set<std::wstring> m_ElementIndex;  // Tracks known element IDs; ownership lives in m_Elements
+    std::unordered_map<std::wstring, Element*> m_ElementIndex;  // ID→pointer lookup; kept in sync with m_Elements
     std::unordered_map<std::wstring, LayoutConfig> m_LayoutConfigs;
 
     // Spatial grid for O(1) hit-testing instead of O(n) linear scan.
