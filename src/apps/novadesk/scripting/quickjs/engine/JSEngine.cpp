@@ -557,6 +557,10 @@ namespace JSEngine
                 delay = 0;
 
             UINT_PTR id = g_nextTimerId++;
+            // Guard against wrap-around on 32-bit builds: skip any ID
+            // that is still active in the timer map.
+            while (g_timers.count(id))
+                id = g_nextTimerId++;
             if (SetTimer(g_messageWindow, id, static_cast<UINT>(delay), nullptr) == 0)
             {
                 return JS_ThrowInternalError(ctx, "SetTimer failed");
