@@ -534,14 +534,14 @@ void Widget::SetWindowPosition(int x, int y, int w, int h)
     if (y == CW_USEDEFAULT)
         y = m_Options.y;
 
-    // Use -1 to indicate "keep current" for size
+    int newW = m_Options.width;
+    int newH = m_Options.height;
     bool sizeProvided = false;
     if (w != -1)
     {
         if (m_Options.minWidth > 0 && w < m_Options.minWidth)
             w = m_Options.minWidth;
-        m_Options.width = w;
-        m_Options.m_WDefined = (w > 0);
+        newW = w;
         sizeProvided = true;
     }
 
@@ -549,17 +549,24 @@ void Widget::SetWindowPosition(int x, int y, int w, int h)
     {
         if (m_Options.minHeight > 0 && h < m_Options.minHeight)
             h = m_Options.minHeight;
-        m_Options.height = h;
-        m_Options.m_HDefined = (h > 0);
+        newH = h;
         sizeProvided = true;
     }
 
     bool moved = (x != m_Options.x || y != m_Options.y);
+    bool sized = (sizeProvided && (newW != m_Options.width || newH != m_Options.height));
 
     if (moved || sizeProvided)
     {
         m_Options.x = x;
         m_Options.y = y;
+        m_Options.width = newW;
+        m_Options.height = newH;
+        if (sizeProvided)
+        {
+            m_Options.m_WDefined = (newW > 0);
+            m_Options.m_HDefined = (newH > 0);
+        }
 
         if (m_hWnd)
             SetWindowPos(m_hWnd, NULL, x, y, m_Options.width, m_Options.height, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -567,6 +574,15 @@ void Widget::SetWindowPosition(int x, int y, int w, int h)
         if (sizeProvided)
         {
             Redraw();
+        }
+
+        if (moved)
+        {
+            JSEngine::TriggerWidgetEvent(this, "move");
+        }
+        if (sized)
+        {
+            JSEngine::TriggerWidgetEvent(this, "resize");
         }
 
         Settings::SaveWidget(m_Options.id, m_Options);
