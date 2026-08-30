@@ -1418,6 +1418,18 @@ namespace novadesk::scripting::quickjs
                     TooltipBalloon,
                     TooltipDisabled,
                     BackdropFilter,
+                    ScrollX,
+                    ScrollY,
+                    ScrollStep,
+                    MaxScrollX,
+                    MaxScrollY,
+                    OverflowX,
+                    OverflowY,
+                    ShowScrollbar,
+                    ScrollbarWidth,
+                    ScrollbarRadius,
+                    ScrollbarColor,
+                    ScrollbarTrackColor,
                     NotFound = 0xFFFF
                 };
                 static const std::unordered_map<std::string_view, BaseProp> s_PropMap = {
@@ -1472,6 +1484,18 @@ namespace novadesk::scripting::quickjs
                     {"tooltipBalloon", TooltipBalloon},
                     {"tooltipDisabled", TooltipDisabled},
                     {"backdropFilter", BackdropFilter},
+                    {"scrollX", ScrollX},
+                    {"scrollY", ScrollY},
+                    {"scrollStep", ScrollStep},
+                    {"maxScrollX", MaxScrollX},
+                    {"maxScrollY", MaxScrollY},
+                    {"overflowX", OverflowX},
+                    {"overflowY", OverflowY},
+                    {"showScrollbar", ShowScrollbar},
+                    {"scrollbarWidth", ScrollbarWidth},
+                    {"scrollbarRadius", ScrollbarRadius},
+                    {"scrollbarColor", ScrollbarColor},
+                    {"scrollbarTrackColor", ScrollbarTrackColor},
                 };
                 auto it = s_PropMap.find(prop);
                 if (it != s_PropMap.end())
@@ -1692,6 +1716,48 @@ namespace novadesk::scripting::quickjs
                         JS_SetPropertyStr(ctx, result, "invert", JS_NewFloat64(ctx, filter.invert));
                         JS_SetPropertyStr(ctx, result, "opacity", JS_NewFloat64(ctx, filter.opacity));
                         return result;
+                    }
+                    case ScrollX:
+                        return JS_NewInt32(ctx, element->GetScrollX());
+                    case ScrollY:
+                        return JS_NewInt32(ctx, element->GetScrollY());
+                    case ScrollStep:
+                        return JS_NewInt32(ctx, element->GetScrollStep());
+                    case MaxScrollX:
+                        element->RecalcContentExtents();
+                        return JS_NewInt32(ctx, element->GetMaxScrollX());
+                    case MaxScrollY:
+                        element->RecalcContentExtents();
+                        return JS_NewInt32(ctx, element->GetMaxScrollY());
+                    case OverflowX:
+                        switch (element->GetOverflowX())
+                        {
+                        case Element::OverflowMode::Auto: return JS_NewString(ctx, "auto");
+                        case Element::OverflowMode::Scroll: return JS_NewString(ctx, "scroll");
+                        default: return JS_NewString(ctx, "hidden");
+                        }
+                    case OverflowY:
+                        switch (element->GetOverflowY())
+                        {
+                        case Element::OverflowMode::Auto: return JS_NewString(ctx, "auto");
+                        case Element::OverflowMode::Scroll: return JS_NewString(ctx, "scroll");
+                        default: return JS_NewString(ctx, "hidden");
+                        }
+                    case ShowScrollbar:
+                        return JS_NewBool(ctx, element->GetShowScrollbar() ? 1 : 0);
+                    case ScrollbarWidth:
+                        return JS_NewInt32(ctx, element->GetScrollbarWidth());
+                    case ScrollbarRadius:
+                        return JS_NewFloat64(ctx, element->GetScrollbarRadius());
+                    case ScrollbarColor:
+                    {
+                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarColor(), element->GetScrollbarAlpha());
+                        return JS_NewString(ctx, Utils::ToString(s).c_str());
+                    }
+                    case ScrollbarTrackColor:
+                    {
+                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarTrackColor(), element->GetScrollbarTrackAlpha());
+                        return JS_NewString(ctx, Utils::ToString(s).c_str());
                     }
                     default:
                         break;
@@ -3043,6 +3109,151 @@ namespace novadesk::scripting::quickjs
             return JS_NewBool(ctx, input->CanRedo() ? 1 : 0);
         }
 
+        JSValue JsUiOn(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_UNDEFINED;
+
+            if (argc < 2 || !JS_IsFunction(ctx, argv[1]))
+            {
+                return ThrowTypeError(ctx, "on", "expected (eventName, callback)");
+            }
+
+            const char *eventName = JS_ToCString(ctx, argv[0]);
+            if (!eventName || !*eventName)
+            {
+                if (eventName)
+                    JS_FreeCString(ctx, eventName);
+                return ThrowTypeError(ctx, "on", "eventName must be non-empty string");
+            }
+
+            const std::string event(eventName);
+            JS_FreeCString(ctx, eventName);
+
+            if (!JSEngine::RegisterWidgetEventListener(ctx, widget, event, argv[1]))
+            {
+                return JS_ThrowInternalError(ctx, "failed to register widget event listener");
+            }
+
+            return JS_DupValue(ctx, thisVal);
+        }
+
+        JSValue JsUiGetSize(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_NULL;
+            HWND hWnd = widget->GetWindow();
+            if (!hWnd)
+                return JS_NULL;
+            RECT rc{};
+            if (!GetWindowRect(hWnd, &rc))
+                return JS_NULL;
+            JSValue out = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, out, "width", JS_NewInt32(ctx, rc.right - rc.left));
+            JS_SetPropertyStr(ctx, out, "height", JS_NewInt32(ctx, rc.bottom - rc.top));
+            return out;
+        }
+
+        JSValue JsUiGetBounds(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_NULL;
+            HWND hWnd = widget->GetWindow();
+            if (!hWnd)
+                return JS_NULL;
+            RECT rc{};
+            if (!GetWindowRect(hWnd, &rc))
+                return JS_NULL;
+            JSValue out = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, out, "x", JS_NewInt32(ctx, rc.left));
+            JS_SetPropertyStr(ctx, out, "y", JS_NewInt32(ctx, rc.top));
+            JS_SetPropertyStr(ctx, out, "width", JS_NewInt32(ctx, rc.right - rc.left));
+            JS_SetPropertyStr(ctx, out, "height", JS_NewInt32(ctx, rc.bottom - rc.top));
+            return out;
+        }
+
+        JSValue JsUiIsMaximized(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            return JS_NewBool(ctx, widget->IsMaximized() ? 1 : 0);
+        }
+
+        JSValue JsUiIsMinimized(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            return JS_NewBool(ctx, widget->IsMinimized() ? 1 : 0);
+        }
+
+        JSValue JsWidgetScrollTo(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_UNDEFINED;
+            if (argc < 2)
+                return ThrowTypeError(ctx, "scrollTo", "expected (id, { x, y })");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8)
+                return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *element = widget->FindElementById(id);
+            if (!element)
+                return JS_UNDEFINED;
+            if (JS_IsObject(argv[1]))
+            {
+                int32_t x = 0, y = 0;
+                JSValue vx = JS_GetPropertyStr(ctx, argv[1], "x");
+                if (!JS_IsUndefined(vx) && !JS_IsNull(vx))
+                {
+                    if (JS_ToInt32(ctx, &x, vx) == 0)
+                        element->SetScrollX(x);
+                }
+                JS_FreeValue(ctx, vx);
+                JSValue vy = JS_GetPropertyStr(ctx, argv[1], "y");
+                if (!JS_IsUndefined(vy) && !JS_IsNull(vy))
+                {
+                    if (JS_ToInt32(ctx, &y, vy) == 0)
+                        element->SetScrollY(y);
+                }
+                JS_FreeValue(ctx, vy);
+                widget->Redraw();
+            }
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsWidgetGetScroll(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetAnyWidget(ctx, thisVal);
+            if (!widget)
+                return JS_NULL;
+            if (argc < 1)
+                return ThrowTypeError(ctx, "getScroll", "expected (id)");
+            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+            if (!idUtf8)
+                return JS_EXCEPTION;
+            std::wstring id = Utils::ToWString(idUtf8);
+            JS_FreeCString(ctx, idUtf8);
+            Element *element = widget->FindElementById(id);
+            if (!element)
+                return JS_NULL;
+            element->RecalcContentExtents();
+            JSValue out = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, out, "scrollX", JS_NewInt32(ctx, element->GetScrollX()));
+            JS_SetPropertyStr(ctx, out, "scrollY", JS_NewInt32(ctx, element->GetScrollY()));
+            JS_SetPropertyStr(ctx, out, "maxScrollX", JS_NewInt32(ctx, element->GetMaxScrollX()));
+            JS_SetPropertyStr(ctx, out, "maxScrollY", JS_NewInt32(ctx, element->GetMaxScrollY()));
+            JS_SetPropertyStr(ctx, out, "contentWidth", JS_NewInt32(ctx, element->GetContentWidth()));
+            JS_SetPropertyStr(ctx, out, "contentHeight", JS_NewInt32(ctx, element->GetContentHeight()));
+            return out;
+        }
+
         void JsWidgetFinalizer(JSRuntime *, JSValue val)
         {
             WidgetWrapper *wrapper = static_cast<WidgetWrapper *>(JS_GetOpaque(val, g_widgetWindowClassId));
@@ -3054,6 +3265,13 @@ namespace novadesk::scripting::quickjs
         }
 
         const JSCFunctionListEntry kWidgetProtoFuncs[] = {
+            JS_CFUNC_DEF("on", 2, JsUiOn),
+            JS_CFUNC_DEF("getSize", 0, JsUiGetSize),
+            JS_CFUNC_DEF("getBounds", 0, JsUiGetBounds),
+            JS_CFUNC_DEF("isMaximized", 0, JsUiIsMaximized),
+            JS_CFUNC_DEF("isMinimized", 0, JsUiIsMinimized),
+            JS_CFUNC_DEF("scrollTo", 2, JsWidgetScrollTo),
+            JS_CFUNC_DEF("getScroll", 1, JsWidgetGetScroll),
             JS_CFUNC_DEF("addImage", 1, JsWidgetAddImage),
             JS_CFUNC_DEF("addButton", 1, JsWidgetAddButton),
             JS_CFUNC_DEF("addText", 1, JsWidgetAddText),

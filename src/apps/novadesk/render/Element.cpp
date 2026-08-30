@@ -202,6 +202,100 @@ void Element::ClearContainerItems()
     m_ContainerItems.clear();
 }
 
+void Element::SetScrollX(int x)
+{
+    RecalcContentExtents();
+    int maxX = GetMaxScrollX();
+    m_ScrollX = (x < 0) ? 0 : ((x > maxX) ? maxX : x);
+}
+
+void Element::SetScrollY(int y)
+{
+    RecalcContentExtents();
+    int maxY = GetMaxScrollY();
+    m_ScrollY = (y < 0) ? 0 : ((y > maxY) ? maxY : y);
+}
+
+int Element::GetMaxScrollX() const
+{
+    int containerW = m_WDefined ? m_Width : 0;
+    return (m_ContentWidth > containerW) ? (m_ContentWidth - containerW) : 0;
+}
+
+int Element::GetMaxScrollY() const
+{
+    int containerH = m_HDefined ? m_Height : 0;
+    return (m_ContentHeight > containerH) ? (m_ContentHeight - containerH) : 0;
+}
+
+void Element::RecalcContentExtents()
+{
+    int maxRight = 0;
+    int maxBottom = 0;
+    for (Element* child : m_ContainerItems)
+    {
+        if (!child || !child->IsVisible())
+            continue;
+        int right = child->GetX() + child->GetWidth();
+        int bottom = child->GetY() + child->GetHeight();
+        if (right > maxRight) maxRight = right;
+        if (bottom > maxBottom) maxBottom = bottom;
+    }
+    m_ContentWidth = maxRight;
+    m_ContentHeight = maxBottom;
+}
+
+bool Element::IsScrollableX() const
+{
+    if (m_OverflowX == OverflowMode::Hidden)
+        return false;
+    if (m_OverflowX == OverflowMode::Scroll)
+        return true;
+    // Auto: scrollable only if content exceeds
+    int containerW = m_WDefined ? m_Width : 0;
+    return m_ContentWidth > containerW;
+}
+
+bool Element::IsScrollableY() const
+{
+    if (m_OverflowY == OverflowMode::Hidden)
+        return false;
+    if (m_OverflowY == OverflowMode::Scroll)
+        return true;
+    // Auto: scrollable only if content exceeds
+    int containerH = m_HDefined ? m_Height : 0;
+    return m_ContentHeight > containerH;
+}
+
+void Element::SetOverflow(const std::wstring& value)
+{
+    if (value == L"hidden")
+    {
+        m_OverflowX = OverflowMode::Hidden;
+        m_OverflowY = OverflowMode::Hidden;
+    }
+    else if (value == L"auto" || value == L"both")
+    {
+        m_OverflowX = OverflowMode::Auto;
+        m_OverflowY = OverflowMode::Auto;
+    }
+    else if (value == L"scroll")
+    {
+        m_OverflowX = OverflowMode::Scroll;
+        m_OverflowY = OverflowMode::Scroll;
+    }
+    else if (value == L"vertical")
+    {
+        m_OverflowX = OverflowMode::Hidden;
+        m_OverflowY = OverflowMode::Auto;
+    }
+    else if (value == L"horizontal")
+    {
+        m_OverflowX = OverflowMode::Auto;
+        m_OverflowY = OverflowMode::Hidden;
+    }
+}
+
 /*
 ** Render the background of the element.
 */

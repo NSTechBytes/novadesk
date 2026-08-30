@@ -240,6 +240,44 @@ public:
     const std::vector<Element*>& GetContainerItems() const { return m_ContainerItems; }
     bool IsContainer() const { return !m_ContainerItems.empty(); }
 
+    // Scroll properties
+    int GetScrollX() const { return m_ScrollX; }
+    int GetScrollY() const { return m_ScrollY; }
+    void SetScrollX(int x);
+    void SetScrollY(int y);
+    int GetScrollStep() const { return m_ScrollStep; }
+    void SetScrollStep(int step) { m_ScrollStep = step > 0 ? step : 1; }
+    int GetContentWidth() const { return m_ContentWidth; }
+    int GetContentHeight() const { return m_ContentHeight; }
+    int GetMaxScrollX() const;
+    int GetMaxScrollY() const;
+    void RecalcContentExtents();
+    bool IsScrollableX() const;
+    bool IsScrollableY() const;
+    bool IsScrollable() const { return IsScrollableX() || IsScrollableY(); }
+
+    // Overflow
+    enum class OverflowMode { Hidden, Auto, Scroll };
+    OverflowMode GetOverflowX() const { return m_OverflowX; }
+    OverflowMode GetOverflowY() const { return m_OverflowY; }
+    void SetOverflowX(OverflowMode mode) { m_OverflowX = mode; }
+    void SetOverflowY(OverflowMode mode) { m_OverflowY = mode; }
+    void SetOverflow(const std::wstring& value);
+
+    // Scrollbar appearance
+    bool GetShowScrollbar() const { return m_ShowScrollbar; }
+    void SetShowScrollbar(bool show) { m_ShowScrollbar = show; }
+    int GetScrollbarWidth() const { return m_ScrollbarWidth; }
+    void SetScrollbarWidth(int w) { m_ScrollbarWidth = w > 0 ? w : 1; }
+    float GetScrollbarRadius() const { return m_ScrollbarRadius; }
+    void SetScrollbarRadius(float r) { m_ScrollbarRadius = r; }
+    COLORREF GetScrollbarColor() const { return m_ScrollbarColor; }
+    BYTE GetScrollbarAlpha() const { return m_ScrollbarAlpha; }
+    void SetScrollbarColor(COLORREF color, BYTE alpha) { m_ScrollbarColor = color; m_ScrollbarAlpha = alpha; }
+    COLORREF GetScrollbarTrackColor() const { return m_ScrollbarTrackColor; }
+    BYTE GetScrollbarTrackAlpha() const { return m_ScrollbarTrackAlpha; }
+    void SetScrollbarTrackColor(COLORREF color, BYTE alpha) { m_ScrollbarTrackColor = color; m_ScrollbarTrackAlpha = alpha; }
+
     virtual bool IsTransparentHit() const { return false; }
 
     bool HasAction(UINT message, WPARAM wParam) const;
@@ -336,6 +374,22 @@ protected:
     std::wstring m_CursorsDir;
     Element* m_ContainerElement = nullptr;
     std::vector<Element*> m_ContainerItems;
+
+    // Scroll state
+    int m_ScrollX = 0;
+    int m_ScrollY = 0;
+    int m_ScrollStep = 24;
+    int m_ContentWidth = 0;
+    int m_ContentHeight = 0;
+    OverflowMode m_OverflowX = OverflowMode::Hidden;
+    OverflowMode m_OverflowY = OverflowMode::Hidden;
+    bool m_ShowScrollbar = true;
+    int m_ScrollbarWidth = 5;
+    float m_ScrollbarRadius = 2.5f;
+    COLORREF m_ScrollbarColor = RGB(255, 255, 255);
+    BYTE m_ScrollbarAlpha = 90;
+    COLORREF m_ScrollbarTrackColor = RGB(0, 0, 0);
+    BYTE m_ScrollbarTrackAlpha = 0;
     
     // Padding properties
     int m_PaddingLeft = 0;

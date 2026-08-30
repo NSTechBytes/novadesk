@@ -186,6 +186,53 @@ namespace PropertyParser
             filter.opacity = (std::clamp)(filter.opacity, 0.0f, 1.0f);
         }
         JS_FreeValue(ctx, backdropFilterV);
+
+        if (GetIntProp(ctx, obj, "scrollX", options.scrollX))
+            options.hasScrollX = true;
+        if (GetIntProp(ctx, obj, "scrollY", options.scrollY))
+            options.hasScrollY = true;
+        if (GetIntProp(ctx, obj, "scrollStep", options.scrollStep))
+            options.hasScrollStep = true;
+
+        std::wstring overflow = GetStringProp(ctx, obj, "overflow");
+        if (!overflow.empty())
+        {
+            options.overflow = overflow;
+            options.hasOverflow = true;
+        }
+
+        std::wstring overflowX = GetStringProp(ctx, obj, "overflowX");
+        if (!overflowX.empty())
+        {
+            options.overflowX = overflowX;
+            options.hasOverflowX = true;
+        }
+
+        std::wstring overflowY = GetStringProp(ctx, obj, "overflowY");
+        if (!overflowY.empty())
+        {
+            options.overflowY = overflowY;
+            options.hasOverflowY = true;
+        }
+
+        if (GetBoolProp(ctx, obj, "showScrollbar", options.showScrollbar))
+            options.hasShowScrollbar = true;
+        if (GetIntProp(ctx, obj, "scrollbarWidth", options.scrollbarWidth))
+            options.hasScrollbarWidth = true;
+        if (GetFloatProp(ctx, obj, "scrollbarRadius", options.scrollbarRadius))
+            options.hasScrollbarRadius = true;
+
+        std::wstring sbColor = GetStringProp(ctx, obj, "scrollbarColor");
+        if (!sbColor.empty())
+        {
+            options.hasScrollbarColor = ColorUtil::ParseRGBA(sbColor, options.scrollbarColor, options.scrollbarAlpha);
+        }
+
+        std::wstring sbTrackColor = GetStringProp(ctx, obj, "scrollbarTrackColor");
+        if (!sbTrackColor.empty())
+        {
+            options.hasScrollbarTrackColor = ColorUtil::ParseRGBA(sbTrackColor, options.scrollbarTrackColor, options.scrollbarTrackAlpha);
+        }
     }
     void ApplyElementOptions(Element *element, const ElementOptions &options)
     {
@@ -294,6 +341,55 @@ namespace PropertyParser
                 options.tooltipBalloon);
         }
         element->SetToolTipDisabled(options.tooltipDisabled);
+
+        if (options.hasOverflow)
+        {
+            element->SetOverflow(options.overflow);
+        }
+        if (options.hasOverflowX)
+        {
+            if (options.overflowX == L"hidden") element->SetOverflowX(Element::OverflowMode::Hidden);
+            else if (options.overflowX == L"auto") element->SetOverflowX(Element::OverflowMode::Auto);
+            else if (options.overflowX == L"scroll") element->SetOverflowX(Element::OverflowMode::Scroll);
+        }
+        if (options.hasOverflowY)
+        {
+            if (options.overflowY == L"hidden") element->SetOverflowY(Element::OverflowMode::Hidden);
+            else if (options.overflowY == L"auto") element->SetOverflowY(Element::OverflowMode::Auto);
+            else if (options.overflowY == L"scroll") element->SetOverflowY(Element::OverflowMode::Scroll);
+        }
+        if (options.hasScrollStep)
+        {
+            element->SetScrollStep(options.scrollStep);
+        }
+        if (options.hasShowScrollbar)
+        {
+            element->SetShowScrollbar(options.showScrollbar);
+        }
+        if (options.hasScrollbarWidth)
+        {
+            element->SetScrollbarWidth(options.scrollbarWidth);
+        }
+        if (options.hasScrollbarRadius)
+        {
+            element->SetScrollbarRadius(options.scrollbarRadius);
+        }
+        if (options.hasScrollbarColor)
+        {
+            element->SetScrollbarColor(options.scrollbarColor, options.scrollbarAlpha);
+        }
+        if (options.hasScrollbarTrackColor)
+        {
+            element->SetScrollbarTrackColor(options.scrollbarTrackColor, options.scrollbarTrackAlpha);
+        }
+        if (options.hasScrollX)
+        {
+            element->SetScrollX(options.scrollX);
+        }
+        if (options.hasScrollY)
+        {
+            element->SetScrollY(options.scrollY);
+        }
     }
     void PreFillElementOptions(ElementOptions &options, Element *element)
     {
@@ -347,5 +443,24 @@ namespace PropertyParser
             for (int i = 0; i < 6; ++i) options.transformMatrix[i] = m[i];
         }
         options.tooltipDisabled = element->GetToolTipDisabled();
+
+        options.hasScrollX = true;
+        options.scrollX = element->GetScrollX();
+        options.hasScrollY = true;
+        options.scrollY = element->GetScrollY();
+        options.hasScrollStep = true;
+        options.scrollStep = element->GetScrollStep();
+        options.hasShowScrollbar = true;
+        options.showScrollbar = element->GetShowScrollbar();
+        options.hasScrollbarWidth = true;
+        options.scrollbarWidth = element->GetScrollbarWidth();
+        options.hasScrollbarRadius = true;
+        options.scrollbarRadius = element->GetScrollbarRadius();
+        options.hasScrollbarColor = true;
+        options.scrollbarColor = element->GetScrollbarColor();
+        options.scrollbarAlpha = element->GetScrollbarAlpha();
+        options.hasScrollbarTrackColor = true;
+        options.scrollbarTrackColor = element->GetScrollbarTrackColor();
+        options.scrollbarTrackAlpha = element->GetScrollbarTrackAlpha();
     }
 }

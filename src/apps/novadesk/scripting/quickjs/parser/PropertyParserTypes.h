@@ -96,6 +96,32 @@ namespace PropertyParser
         bool tooltipBalloon = false;
         bool tooltipDisabled = false;
         BackdropFilter backdropFilter;
+
+        // Scroll & Overflow
+        bool hasScrollX = false;
+        int scrollX = 0;
+        bool hasScrollY = false;
+        int scrollY = 0;
+        bool hasScrollStep = false;
+        int scrollStep = 24;
+        bool hasOverflow = false;
+        std::wstring overflow;
+        bool hasOverflowX = false;
+        std::wstring overflowX;
+        bool hasOverflowY = false;
+        std::wstring overflowY;
+        bool hasShowScrollbar = false;
+        bool showScrollbar = true;
+        bool hasScrollbarWidth = false;
+        int scrollbarWidth = 5;
+        bool hasScrollbarRadius = false;
+        float scrollbarRadius = 2.5f;
+        bool hasScrollbarColor = false;
+        COLORREF scrollbarColor = RGB(255, 255, 255);
+        BYTE scrollbarAlpha = 90;
+        bool hasScrollbarTrackColor = false;
+        COLORREF scrollbarTrackColor = RGB(0, 0, 0);
+        BYTE scrollbarTrackAlpha = 0;
     };
 
     struct GeneralImageOptions : public ElementOptions

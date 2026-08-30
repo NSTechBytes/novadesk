@@ -3489,6 +3489,7 @@ void Widget::UpdateLayeredWindowContent()
                     continue;
                 if (element->IsContained())
                     continue;
+
                 if (!element->IsContainer())
                 {
                     element->Render(m_pContext.Get());
@@ -4247,6 +4248,54 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             // Execute function callback with mouse position aliases.
             JSEngine::CallEventCallback(actionId, this, &eventData);
             handled = true;
+        }
+    }
+
+    // Handle container scrolling via mouse wheel when not consumed by an element action
+    if (!handled && (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL))
+    {
+        Element *scrollTarget = hitElement;
+        while (scrollTarget)
+        {
+            if (scrollTarget->IsScrollable())
+                break;
+            scrollTarget = scrollTarget->GetContainer();
+        }
+
+        if (scrollTarget)
+        {
+            const bool isShiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+            const int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+            const int step = scrollTarget->GetScrollStep();
+            const int ticks = delta / WHEEL_DELTA;
+            const int scrollDelta = (ticks != 0 ? ticks : (delta > 0 ? 1 : -1)) * step;
+
+            if (message == WM_MOUSEHWHEEL || (message == WM_MOUSEWHEEL && isShiftDown))
+            {
+                if (scrollTarget->IsScrollableX())
+                {
+                    int oldScroll = scrollTarget->GetScrollX();
+                    scrollTarget->SetScrollX(oldScroll - scrollDelta);
+                    if (scrollTarget->GetScrollX() != oldScroll)
+                    {
+                        Redraw();
+                        handled = true;
+                    }
+                }
+            }
+            else if (message == WM_MOUSEWHEEL)
+            {
+                if (scrollTarget->IsScrollableY())
+                {
+                    int oldScroll = scrollTarget->GetScrollY();
+                    scrollTarget->SetScrollY(oldScroll - scrollDelta);
+                    if (scrollTarget->GetScrollY() != oldScroll)
+                    {
+                        Redraw();
+                        handled = true;
+                    }
+                }
+            }
         }
     }
 

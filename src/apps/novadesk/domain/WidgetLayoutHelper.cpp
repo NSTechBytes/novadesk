@@ -223,6 +223,7 @@ void WidgetLayoutHelper::RenderContainerChildren(const Widget& widget, Element* 
         {
             maskTarget->BeginDraw();
             maskTarget->Clear(D2D1::ColorF(0, 0.0f));
+            maskTarget->SetTransform(D2D1::Matrix3x2F::Translation(-(FLOAT)bounds.X, -(FLOAT)bounds.Y));
 
             if (ShapeElement* shapeContainer = dynamic_cast<ShapeElement*>(container))
             {
@@ -269,10 +270,17 @@ void WidgetLayoutHelper::RenderContainerChildren(const Widget& widget, Element* 
         context->PushLayer(D2D1::LayerParameters(clipRect), layer.Get());
     }
 
-    // Apply translation for container offset
+    // Recalculate content extents for scrollable containers
+    container->RecalcContentExtents();
+
+    // Apply translation for container offset with scroll
     D2D1_MATRIX_3X2_F originalTransform;
     context->GetTransform(&originalTransform);
-    D2D1_MATRIX_3X2_F translate = D2D1::Matrix3x2F::Translation((float)bounds.X, (float)bounds.Y);
+    float scrollOffX = (float)container->GetScrollX();
+    float scrollOffY = (float)container->GetScrollY();
+    D2D1_MATRIX_3X2_F translate = D2D1::Matrix3x2F::Translation(
+        (float)bounds.X - scrollOffX,
+        (float)bounds.Y - scrollOffY);
     context->SetTransform(translate * originalTransform);
 
     // Render all children recursively
@@ -289,8 +297,72 @@ void WidgetLayoutHelper::RenderContainerChildren(const Widget& widget, Element* 
         }
     }
 
-    // Restore transform and pop layer
+    // Restore transform before drawing scrollbars (scrollbars are in container-local space, not scrolled)
     context->SetTransform(originalTransform);
+
+    // Draw scrollbar thumbs
+    if (container->GetShowScrollbar())
+    {
+        const int sbW = container->GetScrollbarWidth();
+        const float sbR = container->GetScrollbarRadius();
+        const COLORREF sbColor = container->GetScrollbarColor();
+        const BYTE sbAlpha = container->GetScrollbarAlpha();
+
+        // Vertical scrollbar
+        if (container->IsScrollableY())
+        {
+            int maxScrollY = container->GetMaxScrollY();
+            if (maxScrollY > 0)
+            {
+                int contentH = container->GetContentHeight();
+                float trackH = (float)bounds.Height;
+                float thumbH = (std::max)(20.0f, trackH * ((float)bounds.Height / (float)contentH));
+                float thumbTravel = trackH - thumbH;
+                float thumbY = thumbTravel * ((float)container->GetScrollY() / (float)maxScrollY);
+
+                float sbLeft = (float)(bounds.X + bounds.Width) - (float)sbW - 2.0f;
+                float sbTop = (float)bounds.Y + thumbY;
+
+                D2D1_ROUNDED_RECT thumbRect = D2D1::RoundedRect(
+                    D2D1::RectF(sbLeft, sbTop, sbLeft + (float)sbW, sbTop + thumbH),
+                    sbR, sbR);
+
+                Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> thumbBrush;
+                if (Direct2D::CreateSolidBrush(context, sbColor, (float)sbAlpha / 255.0f, &thumbBrush))
+                {
+                    context->FillRoundedRectangle(thumbRect, thumbBrush.Get());
+                }
+            }
+        }
+
+        // Horizontal scrollbar
+        if (container->IsScrollableX())
+        {
+            int maxScrollX = container->GetMaxScrollX();
+            if (maxScrollX > 0)
+            {
+                int contentW = container->GetContentWidth();
+                float trackW = (float)bounds.Width;
+                float thumbW = (std::max)(20.0f, trackW * ((float)bounds.Width / (float)contentW));
+                float thumbTravel = trackW - thumbW;
+                float thumbX = thumbTravel * ((float)container->GetScrollX() / (float)maxScrollX);
+
+                float sbLeft = (float)bounds.X + thumbX;
+                float sbTop = (float)(bounds.Y + bounds.Height) - (float)sbW - 2.0f;
+
+                D2D1_ROUNDED_RECT thumbRect = D2D1::RoundedRect(
+                    D2D1::RectF(sbLeft, sbTop, sbLeft + thumbW, sbTop + (float)sbW),
+                    sbR, sbR);
+
+                Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> thumbBrush;
+                if (Direct2D::CreateSolidBrush(context, sbColor, (float)sbAlpha / 255.0f, &thumbBrush))
+                {
+                    context->FillRoundedRectangle(thumbRect, thumbBrush.Get());
+                }
+            }
+        }
+    }
+
     context->PopLayer();
 }
 
@@ -319,8 +391,8 @@ bool WidgetLayoutHelper::HitTestContainerChildren(Element* container, int x, int
             return false;
     }
 
-    int localX = x - bounds.X;
-    int localY = y - bounds.Y;
+    int localX = x - bounds.X + container->GetScrollX();
+    int localY = y - bounds.Y + container->GetScrollY();
     bool foundAny = false;
 
     const auto& items = container->GetContainerItems();
@@ -381,8 +453,8 @@ bool WidgetLayoutHelper::HitTestContainerChildrenDetailed(
     }
 
     // Test children in reverse order (top to bottom)
-    int localX = x - bounds.X;
-    int localY = y - bounds.Y;
+    int localX = x - bounds.X + container->GetScrollX();
+    int localY = y - bounds.Y + container->GetScrollY();
     bool foundAny = false;
 
     const auto& items = container->GetContainerItems();
