@@ -51,6 +51,19 @@ setTimeout(() => {
 
   win.setResizable(true);
   expect("setResizable(true)/isResizable()", win.isResizable() === true, String(win.isResizable()));
+
+  expect("getMinWidth() initially 0", win.getMinWidth() === 0, String(win.getMinWidth()));
+  expect("getMinHeight() initially 0", win.getMinHeight() === 0, String(win.getMinHeight()));
+
+  win.setMinSize(300, 200);
+  const minSize = win.getMinSize();
+  expect("setMinSize(300, 200)/getMinSize()", !!minSize && minSize.width === 300 && minSize.height === 200, JSON.stringify(minSize));
+  expect("getMinWidth() after setMinSize", win.getMinWidth() === 300, String(win.getMinWidth()));
+  expect("getMinHeight() after setMinSize", win.getMinHeight() === 200, String(win.getMinHeight()));
+
+  const props = win.getProperties();
+  expect("getProperties().minWidth === 300", !!props && props.minWidth === 300, String(props?.minWidth));
+  expect("getProperties().minHeight === 200", !!props && props.minHeight === 200, String(props?.minHeight));
 }, 250);
 
 setTimeout(() => {

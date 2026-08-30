@@ -236,6 +236,11 @@ bool Widget::Create()
     }
 
     const std::wstring windowTitle = m_Options.toolbarTitle.empty() ? m_Options.id : m_Options.toolbarTitle;
+    if (m_Options.minWidth > 0 && m_Options.width > 0 && m_Options.width < m_Options.minWidth)
+        m_Options.width = m_Options.minWidth;
+    if (m_Options.minHeight > 0 && m_Options.height > 0 && m_Options.height < m_Options.minHeight)
+        m_Options.height = m_Options.minHeight;
+
     m_hWnd = CreateWindowExW(
         dwExStyle,
         WIDGET_CLASS_NAME,
@@ -254,9 +259,19 @@ bool Widget::Create()
         m_Options.x = rc.left;
         m_Options.y = rc.top;
         if (!m_Options.m_WDefined)
-            m_Options.width = rc.right - rc.left;
+        {
+            int actualW = rc.right - rc.left;
+            if (m_Options.minWidth > 0 && actualW < m_Options.minWidth)
+                actualW = m_Options.minWidth;
+            m_Options.width = actualW;
+        }
         if (!m_Options.m_HDefined)
-            m_Options.height = rc.bottom - rc.top;
+        {
+            int actualH = rc.bottom - rc.top;
+            if (m_Options.minHeight > 0 && actualH < m_Options.minHeight)
+                actualH = m_Options.minHeight;
+            m_Options.height = actualH;
+        }
     }
 
     // Initial Z-position - use ChangeSingleZPos to bring new widgets to front
@@ -523,6 +538,8 @@ void Widget::SetWindowPosition(int x, int y, int w, int h)
     bool sizeProvided = false;
     if (w != -1)
     {
+        if (m_Options.minWidth > 0 && w < m_Options.minWidth)
+            w = m_Options.minWidth;
         m_Options.width = w;
         m_Options.m_WDefined = (w > 0);
         sizeProvided = true;
@@ -530,6 +547,8 @@ void Widget::SetWindowPosition(int x, int y, int w, int h)
 
     if (h != -1)
     {
+        if (m_Options.minHeight > 0 && h < m_Options.minHeight)
+            h = m_Options.minHeight;
         m_Options.height = h;
         m_Options.m_HDefined = (h > 0);
         sizeProvided = true;
@@ -679,6 +698,58 @@ void Widget::SetDraggable(bool enable)
 void Widget::SetResizable(bool enable)
 {
     m_Options.resizable = enable;
+}
+
+/*
+** Set minimum width.
+*/
+void Widget::SetMinWidth(int minWidth)
+{
+    if (minWidth < 0) minWidth = 0;
+    if (m_Options.minWidth != minWidth)
+    {
+        m_Options.minWidth = minWidth;
+        if (minWidth > 0 && m_Options.width < minWidth)
+        {
+            SetWindowPosition(CW_USEDEFAULT, CW_USEDEFAULT, minWidth, -1);
+        }
+    }
+}
+
+/*
+** Set minimum height.
+*/
+void Widget::SetMinHeight(int minHeight)
+{
+    if (minHeight < 0) minHeight = 0;
+    if (m_Options.minHeight != minHeight)
+    {
+        m_Options.minHeight = minHeight;
+        if (minHeight > 0 && m_Options.height < minHeight)
+        {
+            SetWindowPosition(CW_USEDEFAULT, CW_USEDEFAULT, -1, minHeight);
+        }
+    }
+}
+
+/*
+** Set minimum size (both width and height).
+*/
+void Widget::SetMinSize(int minWidth, int minHeight)
+{
+    if (minWidth < 0) minWidth = 0;
+    if (minHeight < 0) minHeight = 0;
+    if (m_Options.minWidth != minWidth || m_Options.minHeight != minHeight)
+    {
+        m_Options.minWidth = minWidth;
+        m_Options.minHeight = minHeight;
+        int newW = (minWidth > 0 && m_Options.width < minWidth) ? minWidth : -1;
+        int newH = (minHeight > 0 && m_Options.height < minHeight) ? minHeight : -1;
+        if (newW != -1 || newH != -1)
+        {
+            SetWindowPosition(CW_USEDEFAULT, CW_USEDEFAULT, newW, newH);
+        }
+    }
 }
 
 WidgetResizeEdge Widget::GetResizeEdgeAt(int x, int y, int w, int h)
@@ -1154,8 +1225,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 int newW = widget->m_ResizeStartWindow.w;
                 int newH = widget->m_ResizeStartWindow.h;
 
-                const int minW = 10;
-                const int minH = 10;
+                const int minW = widget->m_Options.minWidth > 0 ? widget->m_Options.minWidth : 10;
+                const int minH = widget->m_Options.minHeight > 0 ? widget->m_Options.minHeight : 10;
 
                 const int edgeInt = static_cast<int>(widget->m_ResizeEdge);
 
@@ -3101,9 +3172,17 @@ void Widget::UpdateLayeredWindowContent()
         }
 
         if (shouldCalcW)
+        {
             calcW = maxX;
+            if (m_Options.minWidth > 0 && calcW < m_Options.minWidth)
+                calcW = m_Options.minWidth;
+        }
         if (shouldCalcH)
+        {
             calcH = maxY;
+            if (m_Options.minHeight > 0 && calcH < m_Options.minHeight)
+                calcH = m_Options.minHeight;
+        }
 
         // Ensure at least 1x1
         if (calcW <= 0)

@@ -120,6 +120,11 @@ namespace novadesk::scripting::quickjs
             parser::WidgetWindowOptions parsed;
             parser::ParseWidgetWindowOptions(ctx, argv[0], parsed);
 
+            if (parsed.hasMinWidth)
+                widget->SetMinWidth(parsed.minWidth);
+            if (parsed.hasMinHeight)
+                widget->SetMinHeight(parsed.minHeight);
+
             if (parsed.hasX || parsed.hasY || parsed.hasWidth || parsed.hasHeight)
             {
                 const int x = parsed.hasX ? parsed.x : CW_USEDEFAULT;
@@ -237,6 +242,8 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, out, "y", JS_NewInt32(ctx, o.y));
             JS_SetPropertyStr(ctx, out, "width", JS_NewInt32(ctx, o.width));
             JS_SetPropertyStr(ctx, out, "height", JS_NewInt32(ctx, o.height));
+            JS_SetPropertyStr(ctx, out, "minWidth", JS_NewInt32(ctx, o.minWidth));
+            JS_SetPropertyStr(ctx, out, "minHeight", JS_NewInt32(ctx, o.minHeight));
             JS_SetPropertyStr(ctx, out, "draggable", JS_NewBool(ctx, o.draggable ? 1 : 0));
             JS_SetPropertyStr(ctx, out, "resizable", JS_NewBool(ctx, o.resizable ? 1 : 0));
             JS_SetPropertyStr(ctx, out, "clickThrough", JS_NewBool(ctx, o.clickThrough ? 1 : 0));
@@ -521,6 +528,88 @@ namespace novadesk::scripting::quickjs
             if (!widget)
                 return JS_NewBool(ctx, 0);
             return JS_NewBool(ctx, widget->IsResizable() ? 1 : 0);
+        }
+
+        JSValue JsWidgetWindowSetMinWidth(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_UNDEFINED;
+            if (argc < 1)
+            {
+                return ThrowTypeError(ctx, "setMinWidth", "expected width number");
+            }
+            int32_t minW = 0;
+            if (JS_ToInt32(ctx, &minW, argv[0]) != 0)
+            {
+                return ThrowTypeError(ctx, "setMinWidth", "width must be number");
+            }
+            widget->SetMinWidth(static_cast<int>(minW));
+            return JS_DupValue(ctx, thisVal);
+        }
+
+        JSValue JsWidgetWindowGetMinWidth(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_NewInt32(ctx, 0);
+            return JS_NewInt32(ctx, widget->GetMinWidth());
+        }
+
+        JSValue JsWidgetWindowSetMinHeight(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_UNDEFINED;
+            if (argc < 1)
+            {
+                return ThrowTypeError(ctx, "setMinHeight", "expected height number");
+            }
+            int32_t minH = 0;
+            if (JS_ToInt32(ctx, &minH, argv[0]) != 0)
+            {
+                return ThrowTypeError(ctx, "setMinHeight", "height must be number");
+            }
+            widget->SetMinHeight(static_cast<int>(minH));
+            return JS_DupValue(ctx, thisVal);
+        }
+
+        JSValue JsWidgetWindowGetMinHeight(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_NewInt32(ctx, 0);
+            return JS_NewInt32(ctx, widget->GetMinHeight());
+        }
+
+        JSValue JsWidgetWindowSetMinSize(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_UNDEFINED;
+            if (argc < 2)
+            {
+                return ThrowTypeError(ctx, "setMinSize", "expected (minWidth, minHeight)");
+            }
+            int32_t minW = 0;
+            int32_t minH = 0;
+            if (JS_ToInt32(ctx, &minW, argv[0]) != 0 || JS_ToInt32(ctx, &minH, argv[1]) != 0)
+            {
+                return ThrowTypeError(ctx, "setMinSize", "minWidth/minHeight must be numbers");
+            }
+            widget->SetMinSize(static_cast<int>(minW), static_cast<int>(minH));
+            return JS_DupValue(ctx, thisVal);
+        }
+
+        JSValue JsWidgetWindowGetMinSize(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_NULL;
+            JSValue out = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, out, "width", JS_NewInt32(ctx, widget->GetMinWidth()));
+            JS_SetPropertyStr(ctx, out, "height", JS_NewInt32(ctx, widget->GetMinHeight()));
+            return out;
         }
 
         JSValue JsWidgetWindowRefresh(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
@@ -1093,6 +1182,12 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("refresh", 0, JsWidgetWindowRefresh),
             JS_CFUNC_DEF("setResizable", 1, JsWidgetWindowSetResizable),
             JS_CFUNC_DEF("isResizable", 0, JsWidgetWindowIsResizable),
+            JS_CFUNC_DEF("setMinWidth", 1, JsWidgetWindowSetMinWidth),
+            JS_CFUNC_DEF("getMinWidth", 0, JsWidgetWindowGetMinWidth),
+            JS_CFUNC_DEF("setMinHeight", 1, JsWidgetWindowSetMinHeight),
+            JS_CFUNC_DEF("getMinHeight", 0, JsWidgetWindowGetMinHeight),
+            JS_CFUNC_DEF("setMinSize", 2, JsWidgetWindowSetMinSize),
+            JS_CFUNC_DEF("getMinSize", 0, JsWidgetWindowGetMinSize),
             JS_CFUNC_DEF("setFocus", 0, JsWidgetWindowSetFocus),
             JS_CFUNC_DEF("unFocus", 0, JsWidgetWindowUnFocus),
             JS_CFUNC_DEF("minimize", 0, JsWidgetWindowMinimize),

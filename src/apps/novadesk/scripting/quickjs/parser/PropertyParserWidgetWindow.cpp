@@ -46,6 +46,22 @@ namespace novadesk::scripting::quickjs::parser
         }
         JS_FreeValue(ctx, heightVal);
 
+        JSValue minWidthVal = JS_GetPropertyStr(ctx, options, "minWidth");
+        if (!JS_IsUndefined(minWidthVal) && !JS_IsNull(minWidthVal) && JS_ToInt32(ctx, &v, minWidthVal) == 0)
+        {
+            out.minWidth = static_cast<int>(v);
+            out.hasMinWidth = true;
+        }
+        JS_FreeValue(ctx, minWidthVal);
+
+        JSValue minHeightVal = JS_GetPropertyStr(ctx, options, "minHeight");
+        if (!JS_IsUndefined(minHeightVal) && !JS_IsNull(minHeightVal) && JS_ToInt32(ctx, &v, minHeightVal) == 0)
+        {
+            out.minHeight = static_cast<int>(v);
+            out.hasMinHeight = true;
+        }
+        JS_FreeValue(ctx, minHeightVal);
+
         JSValue xVal = JS_GetPropertyStr(ctx, options, "x");
         if (!JS_IsUndefined(xVal) && JS_ToInt32(ctx, &v, xVal) == 0)
         {

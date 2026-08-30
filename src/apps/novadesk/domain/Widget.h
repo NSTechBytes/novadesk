@@ -135,6 +135,8 @@ struct WidgetOptions
     int y = 0;
     int width = 0;
     int height = 0;
+    int minWidth = 0;
+    int minHeight = 0;
     std::wstring backgroundColor = L"rgba(0,0,0,0)";
     ZPOSITION zPos = ZPOSITION_NORMAL;
     BYTE bgAlpha = 0;          // Alpha component of background color (0-255)
@@ -270,6 +272,11 @@ public:
     void SetDraggable(bool enable);
     void SetResizable(bool enable);
     bool IsResizable() const { return m_Options.resizable; }
+    void SetMinWidth(int minWidth);
+    int GetMinWidth() const { return m_Options.minWidth; }
+    void SetMinHeight(int minHeight);
+    int GetMinHeight() const { return m_Options.minHeight; }
+    void SetMinSize(int minWidth, int minHeight);
     void SetClickThrough(bool enable);
     void SetKeepOnScreen(bool enable);
     void SetSnapEdges(bool enable);

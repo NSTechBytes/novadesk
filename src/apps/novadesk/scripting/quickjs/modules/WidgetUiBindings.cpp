@@ -3342,6 +3342,16 @@ namespace novadesk::scripting::quickjs
             options.m_HDefined = false;
         }
 
+        if (parsed.hasMinWidth)
+            options.minWidth = (std::max)(0, parsed.minWidth);
+        if (parsed.hasMinHeight)
+            options.minHeight = (std::max)(0, parsed.minHeight);
+
+        if (options.m_WDefined && options.minWidth > 0 && options.width < options.minWidth)
+            options.width = options.minWidth;
+        if (options.m_HDefined && options.minHeight > 0 && options.height < options.minHeight)
+            options.height = options.minHeight;
+
         if (parsed.hasShow)
             options.show = parsed.show;
         if (parsed.hasScriptPath)

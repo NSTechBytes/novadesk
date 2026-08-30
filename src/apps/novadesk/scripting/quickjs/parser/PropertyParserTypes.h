@@ -739,6 +739,10 @@ namespace novadesk::scripting::quickjs::parser
         int height = 0;
         bool hasWidth = false;
         bool hasHeight = false;
+        int minWidth = 0;
+        int minHeight = 0;
+        bool hasMinWidth = false;
+        bool hasMinHeight = false;
         int x = 0;
         int y = 0;
         bool hasX = false;
