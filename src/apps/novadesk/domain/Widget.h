@@ -260,6 +260,11 @@ public:
     void UnFocus();
     void Minimize();
     void UnMinimize();
+    void Maximize();
+    void Restore();
+    void ToggleMaximize();
+    bool IsMaximized() const { return m_IsMaximized; }
+    bool IsMinimized() const { return m_IsMinimized; }
     std::wstring GetTitle() const;
 
     void ChangeZPos(ZPOSITION zPos, bool all = false);
@@ -469,6 +474,8 @@ private:
     Element *m_DragElement = nullptr;
     bool m_IsMouseOverWidget = false;
     bool m_IsMinimized = false;
+    bool m_IsMaximized = false;
+    WidgetRect4 m_PreMaximizeBounds = { 0, 0, 0, 0 };
 
     // Resizing State
     bool m_IsResizing = false;

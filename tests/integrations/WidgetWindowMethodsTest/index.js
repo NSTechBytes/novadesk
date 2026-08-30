@@ -106,11 +106,42 @@ setTimeout(() => {
   expect("show()/isVisible()", win.isVisible() === true, String(win.isVisible()));
 }, 2150);
 
+let maximizeEventFired = false;
+let restoreEventFired = false;
+win.on("maximize", () => {
+  console.log("[EVENT] maximize");
+  maximizeEventFired = true;
+});
+win.on("restore", () => {
+  console.log("[EVENT] restore");
+  restoreEventFired = true;
+});
+
 setTimeout(() => {
   win.setFocus();
   const focused = win.isFocused();
   pass("setFocus()/isFocused()", String(focused));
 }, 2450);
+
+setTimeout(() => {
+  expect("isMaximized() initially false", win.isMaximized() === false, String(win.isMaximized()));
+  win.maximize();
+  expect("maximize()/isMaximized()", win.isMaximized() === true, String(win.isMaximized()));
+  expect("maximize event fired", maximizeEventFired === true, String(maximizeEventFired));
+}, 2750);
+
+setTimeout(() => {
+  win.restore();
+  expect("restore()/isMaximized() false", win.isMaximized() === false, String(win.isMaximized()));
+  expect("restore event fired", restoreEventFired === true, String(restoreEventFired));
+}, 3050);
+
+setTimeout(() => {
+  win.toggleMaximize();
+  expect("toggleMaximize() to true", win.isMaximized() === true, String(win.isMaximized()));
+  win.toggleMaximize();
+  expect("toggleMaximize() to false", win.isMaximized() === false, String(win.isMaximized()));
+}, 3350);
 
 // setTimeout(() => {
 //   win.destroy();

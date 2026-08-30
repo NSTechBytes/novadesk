@@ -657,6 +657,49 @@ namespace novadesk::scripting::quickjs
             return JS_UNDEFINED;
         }
 
+        JSValue JsWidgetWindowIsMinimized(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            return JS_NewBool(ctx, widget->IsMinimized() ? 1 : 0);
+        }
+
+        JSValue JsWidgetWindowMaximize(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_UNDEFINED;
+            widget->Maximize();
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsWidgetWindowRestore(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_UNDEFINED;
+            widget->Restore();
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsWidgetWindowToggleMaximize(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_UNDEFINED;
+            widget->ToggleMaximize();
+            return JS_UNDEFINED;
+        }
+
+        JSValue JsWidgetWindowIsMaximized(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
+        {
+            Widget *widget = GetWidget(ctx, thisVal);
+            if (!widget)
+                return JS_NewBool(ctx, 0);
+            return JS_NewBool(ctx, widget->IsMaximized() ? 1 : 0);
+        }
+
         JSValue JsWidgetWindowGetHandle(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
         {
             Widget *widget = GetWidget(ctx, thisVal);
@@ -1192,6 +1235,11 @@ namespace novadesk::scripting::quickjs
             JS_CFUNC_DEF("unFocus", 0, JsWidgetWindowUnFocus),
             JS_CFUNC_DEF("minimize", 0, JsWidgetWindowMinimize),
             JS_CFUNC_DEF("unMinimize", 0, JsWidgetWindowUnMinimize),
+            JS_CFUNC_DEF("maximize", 0, JsWidgetWindowMaximize),
+            JS_CFUNC_DEF("restore", 0, JsWidgetWindowRestore),
+            JS_CFUNC_DEF("toggleMaximize", 0, JsWidgetWindowToggleMaximize),
+            JS_CFUNC_DEF("isMaximized", 0, JsWidgetWindowIsMaximized),
+            JS_CFUNC_DEF("isMinimized", 0, JsWidgetWindowIsMinimized),
             JS_CFUNC_DEF("getHandle", 0, JsWidgetWindowGetHandle),
             JS_CFUNC_DEF("getInternalPointer", 0, JsWidgetWindowGetInternalPointer),
             JS_CFUNC_DEF("getTitle", 0, JsWidgetWindowGetTitle),

@@ -374,6 +374,71 @@ void Widget::UnMinimize()
     }
 }
 
+void Widget::Maximize()
+{
+    if (!m_hWnd)
+        return;
+
+    if (m_IsMinimized)
+    {
+        UnMinimize();
+    }
+
+    if (!m_IsMaximized)
+    {
+        m_PreMaximizeBounds = { m_Options.x, m_Options.y, m_Options.width, m_Options.height };
+
+        HMONITOR hMon = MonitorFromWindow(m_hWnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO mi{};
+        mi.cbSize = sizeof(mi);
+        if (GetMonitorInfoW(hMon, &mi))
+        {
+            int workX = mi.rcWork.left;
+            int workY = mi.rcWork.top;
+            int workW = mi.rcWork.right - mi.rcWork.left;
+            int workH = mi.rcWork.bottom - mi.rcWork.top;
+
+            m_IsMaximized = true;
+            SetWindowPosition(workX, workY, workW, workH);
+            JSEngine::TriggerWidgetEvent(this, "maximize");
+        }
+    }
+}
+
+void Widget::Restore()
+{
+    if (!m_hWnd)
+        return;
+
+    if (m_IsMinimized)
+    {
+        UnMinimize();
+    }
+
+    if (m_IsMaximized)
+    {
+        m_IsMaximized = false;
+        if (m_PreMaximizeBounds.w > 0 && m_PreMaximizeBounds.h > 0)
+        {
+            SetWindowPosition(m_PreMaximizeBounds.x, m_PreMaximizeBounds.y, m_PreMaximizeBounds.w, m_PreMaximizeBounds.h);
+        }
+        JSEngine::TriggerWidgetEvent(this, "restore");
+        JSEngine::TriggerWidgetEvent(this, "unMaximize");
+    }
+}
+
+void Widget::ToggleMaximize()
+{
+    if (m_IsMaximized)
+    {
+        Restore();
+    }
+    else
+    {
+        Maximize();
+    }
+}
+
 std::wstring Widget::GetTitle() const
 {
     if (!m_hWnd)
@@ -1272,6 +1337,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                 if (newX != widget->m_Options.x || newY != widget->m_Options.y || newW != widget->m_Options.width || newH != widget->m_Options.height)
                 {
+                    widget->m_IsMaximized = false;
                     widget->m_Options.x = newX;
                     widget->m_Options.y = newY;
                     widget->m_Options.width = newW;
@@ -1312,6 +1378,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
                 if (widget->m_DragThresholdMet)
                 {
+                    widget->m_IsMaximized = false;
                     int newX = widget->m_DragStartWindow.x + dx;
                     int newY = widget->m_DragStartWindow.y + dy;
 
@@ -1350,9 +1417,17 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     JSEngine::TriggerWidgetEvent(widget, "minimize");
                 }
             }
+            else if (command == SC_MAXIMIZE)
+            {
+                widget->Maximize();
+            }
             else if (command == SC_RESTORE)
             {
-                if (widget->m_IsMinimized)
+                if (widget->m_IsMaximized)
+                {
+                    widget->Restore();
+                }
+                else if (widget->m_IsMinimized)
                 {
                     widget->m_IsMinimized = false;
                     JSEngine::TriggerWidgetEvent(widget, "unMinimize");
@@ -1636,6 +1711,14 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 {
                     widget->m_IsMinimized = true;
                     JSEngine::TriggerWidgetEvent(widget, "minimize");
+                }
+            }
+            else if (wParam == SIZE_MAXIMIZED)
+            {
+                if (!widget->m_IsMaximized)
+                {
+                    widget->m_IsMaximized = true;
+                    JSEngine::TriggerWidgetEvent(widget, "maximize");
                 }
             }
             else
