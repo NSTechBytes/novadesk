@@ -681,6 +681,48 @@ void Widget::SetResizable(bool enable)
     m_Options.resizable = enable;
 }
 
+WidgetResizeEdge Widget::GetResizeEdgeAt(int x, int y, int w, int h)
+{
+    if (w <= 0 || h <= 0)
+        return WidgetResizeEdge::None;
+
+    const int border = 8;
+    int edge = 0;
+
+    if (x >= 0 && x < border)
+        edge |= (int)WidgetResizeEdge::Left;
+    else if (x <= w && x > w - border)
+        edge |= (int)WidgetResizeEdge::Right;
+
+    if (y >= 0 && y < border)
+        edge |= (int)WidgetResizeEdge::Top;
+    else if (y <= h && y > h - border)
+        edge |= (int)WidgetResizeEdge::Bottom;
+
+    return static_cast<WidgetResizeEdge>(edge);
+}
+
+LPCWSTR Widget::GetCursorForResizeEdge(WidgetResizeEdge edge)
+{
+    switch (edge)
+    {
+    case WidgetResizeEdge::Left:
+    case WidgetResizeEdge::Right:
+        return IDC_SIZEWE;
+    case WidgetResizeEdge::Top:
+    case WidgetResizeEdge::Bottom:
+        return IDC_SIZENS;
+    case WidgetResizeEdge::TopLeft:
+    case WidgetResizeEdge::BottomRight:
+        return IDC_SIZENWSE;
+    case WidgetResizeEdge::TopRight:
+    case WidgetResizeEdge::BottomLeft:
+        return IDC_SIZENESW;
+    default:
+        return nullptr;
+    }
+}
+
 /*
 ** Enable/disable click-through.
 */
@@ -895,6 +937,25 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_LBUTTONDOWN:
         if (widget)
         {
+            // Check if clicking on a resize border
+            if (widget->m_Options.resizable && !widget->m_Options.clickThrough)
+            {
+                POINT ptCursor;
+                GetCursorPos(&ptCursor);
+                POINT ptClient = ptCursor;
+                ScreenToClient(hWnd, &ptClient);
+                WidgetResizeEdge edge = Widget::GetResizeEdgeAt(ptClient.x, ptClient.y, widget->m_Options.width, widget->m_Options.height);
+                if (edge != WidgetResizeEdge::None)
+                {
+                    SetCapture(hWnd);
+                    widget->m_IsResizing = true;
+                    widget->m_ResizeEdge = edge;
+                    widget->m_ResizeStartCursor = ptCursor;
+                    widget->m_ResizeStartWindow = { widget->m_Options.x, widget->m_Options.y, widget->m_Options.width, widget->m_Options.height };
+                    return 0;
+                }
+            }
+
             widget->HandleMouseMessage(message, wParam, lParam);
 
             // Bring widget to front when clicked (for normal)
@@ -928,6 +989,18 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_LBUTTONUP:
         if (widget)
         {
+            if (widget->m_IsResizing)
+            {
+                widget->m_IsResizing = false;
+                widget->m_ResizeEdge = WidgetResizeEdge::None;
+                if (GetCapture() == hWnd)
+                {
+                    ReleaseCapture();
+                }
+                Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
+                return 0;
+            }
+
             if (widget->m_IsDragging)
             {
                 widget->m_IsDragging = false;
@@ -1005,8 +1078,36 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             SetCursor(LoadCursor(nullptr, IDC_ARROW));
             return TRUE;
         }
+
+        if (widget && widget->m_IsResizing)
+        {
+            LPCWSTR cursorId = Widget::GetCursorForResizeEdge(widget->m_ResizeEdge);
+            if (cursorId)
+            {
+                SetCursor(LoadCursorW(nullptr, cursorId));
+                return TRUE;
+            }
+        }
+
         if (LOWORD(lParam) == HTCLIENT && widget)
         {
+            if (widget->m_Options.resizable && !widget->m_Options.clickThrough)
+            {
+                POINT pt;
+                GetCursorPos(&pt);
+                ScreenToClient(hWnd, &pt);
+                WidgetResizeEdge edge = Widget::GetResizeEdgeAt(pt.x, pt.y, widget->m_Options.width, widget->m_Options.height);
+                if (edge != WidgetResizeEdge::None)
+                {
+                    LPCWSTR cursorId = Widget::GetCursorForResizeEdge(edge);
+                    if (cursorId)
+                    {
+                        SetCursor(LoadCursorW(nullptr, cursorId));
+                        return TRUE;
+                    }
+                }
+            }
+
             // Use the element already resolved by WM_MOUSEMOVE hit-test
             // instead of re-running the full element iteration.
             Element *cursorElement = widget->m_CursorElement;
@@ -1041,6 +1142,62 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_MOUSEMOVE:
         if (widget)
         {
+            if (widget->m_IsResizing)
+            {
+                POINT pt;
+                GetCursorPos(&pt);
+                int dx = pt.x - widget->m_ResizeStartCursor.x;
+                int dy = pt.y - widget->m_ResizeStartCursor.y;
+
+                int newX = widget->m_ResizeStartWindow.x;
+                int newY = widget->m_ResizeStartWindow.y;
+                int newW = widget->m_ResizeStartWindow.w;
+                int newH = widget->m_ResizeStartWindow.h;
+
+                const int minW = 10;
+                const int minH = 10;
+
+                const int edgeInt = static_cast<int>(widget->m_ResizeEdge);
+
+                if (edgeInt & static_cast<int>(WidgetResizeEdge::Left))
+                {
+                    int desiredW = widget->m_ResizeStartWindow.w - dx;
+                    if (desiredW < minW) desiredW = minW;
+                    newX = widget->m_ResizeStartWindow.x + (widget->m_ResizeStartWindow.w - desiredW);
+                    newW = desiredW;
+                }
+                else if (edgeInt & static_cast<int>(WidgetResizeEdge::Right))
+                {
+                    newW = (std::max)(minW, widget->m_ResizeStartWindow.w + dx);
+                }
+
+                if (edgeInt & static_cast<int>(WidgetResizeEdge::Top))
+                {
+                    int desiredH = widget->m_ResizeStartWindow.h - dy;
+                    if (desiredH < minH) desiredH = minH;
+                    newY = widget->m_ResizeStartWindow.y + (widget->m_ResizeStartWindow.h - desiredH);
+                    newH = desiredH;
+                }
+                else if (edgeInt & static_cast<int>(WidgetResizeEdge::Bottom))
+                {
+                    newH = (std::max)(minH, widget->m_ResizeStartWindow.h + dy);
+                }
+
+                if (newX != widget->m_Options.x || newY != widget->m_Options.y || newW != widget->m_Options.width || newH != widget->m_Options.height)
+                {
+                    widget->m_Options.x = newX;
+                    widget->m_Options.y = newY;
+                    widget->m_Options.width = newW;
+                    widget->m_Options.height = newH;
+                    widget->m_Options.m_WDefined = true;
+                    widget->m_Options.m_HDefined = true;
+
+                    widget->Redraw();
+                    JSEngine::TriggerWidgetEvent(widget, "resize");
+                }
+                return 0;
+            }
+
             // Don't allow widget drag while selecting text or input box is focused
             if (widget->m_IsDragging && (widget->m_TextSelectionElement != nullptr || widget->m_FocusedInputBox != nullptr))
             {
@@ -1118,28 +1275,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         return DefWindowProc(hWnd, message, wParam, lParam);
 
     case WM_NCHITTEST:
-        if (widget && widget->m_Options.resizable && !widget->m_Options.clickThrough)
-        {
-            POINT pt = { (short)LOWORD(lParam), (short)HIWORD(lParam) };
-            RECT rc{};
-            GetWindowRect(hWnd, &rc);
-
-            const int border = 8;
-            const bool left = (pt.x >= rc.left && pt.x < rc.left + border);
-            const bool right = (pt.x < rc.right && pt.x >= rc.right - border);
-            const bool top = (pt.y >= rc.top && pt.y < rc.top + border);
-            const bool bottom = (pt.y < rc.bottom && pt.y >= rc.bottom - border);
-
-            if (top && left) return HTTOPLEFT;
-            if (top && right) return HTTOPRIGHT;
-            if (bottom && left) return HTBOTTOMLEFT;
-            if (bottom && right) return HTBOTTOMRIGHT;
-            if (left) return HTLEFT;
-            if (right) return HTRIGHT;
-            if (top) return HTTOP;
-            if (bottom) return HTBOTTOM;
-        }
-        return HTCLIENT; // We handle everything in client area to get mouse messages
+        return HTCLIENT; // We handle everything in client area for 100% flicker-free mouse messages and resize
 
     case WM_TIMER:
         if (widget)

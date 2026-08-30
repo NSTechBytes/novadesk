@@ -63,6 +63,27 @@ namespace PropertyParser {
 
 #include "MenuItem.h"
 
+enum class WidgetResizeEdge
+{
+    None = 0,
+    Left = 1,
+    Right = 2,
+    Top = 4,
+    Bottom = 8,
+    TopLeft = 5,
+    TopRight = 6,
+    BottomLeft = 9,
+    BottomRight = 10
+};
+
+struct WidgetRect4
+{
+    int x = 0;
+    int y = 0;
+    int w = 0;
+    int h = 0;
+};
+
 struct BackgroundImageSize
 {
     enum class Type
@@ -441,6 +462,15 @@ private:
     Element *m_DragElement = nullptr;
     bool m_IsMouseOverWidget = false;
     bool m_IsMinimized = false;
+
+    // Resizing State
+    bool m_IsResizing = false;
+    WidgetResizeEdge m_ResizeEdge = WidgetResizeEdge::None;
+    POINT m_ResizeStartCursor = { 0, 0 };
+    WidgetRect4 m_ResizeStartWindow = { 0, 0, 0, 0 };
+    static WidgetResizeEdge GetResizeEdgeAt(int x, int y, int w, int h);
+    static LPCWSTR GetCursorForResizeEdge(WidgetResizeEdge edge);
+
     CursorManager m_CursorManager;
     HICON m_ToolbarIconHandle = nullptr;
     bool m_ToolbarIconOwned = false;
