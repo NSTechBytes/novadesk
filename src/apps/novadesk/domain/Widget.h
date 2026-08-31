@@ -492,6 +492,15 @@ private:
     int m_ScrollbarDragThumbLength = 0;
     int m_ScrollbarDragMaxScroll = 0;
 
+    // Container Swiping / Pan Dragging State
+    bool m_IsContainerSwiping = false;
+    Element* m_SwipeContainer = nullptr;
+    Element* m_SwipeTargetElement = nullptr;
+    POINT m_SwipeStartPos = { 0, 0 };
+    DWORD m_SwipeStartTime = 0;
+    int m_SwipeStartScrollX = 0;
+    int m_SwipeStartScrollY = 0;
+
     bool m_IsMouseOverWidget = false;
     bool m_IsMinimized = false;
     bool m_IsMaximized = false;

@@ -1124,7 +1124,9 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             const bool inputBoxFocused = (widget->m_FocusedInputBox != nullptr);
 
             const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-            if (!widget->m_IsElementDragging && !widget->m_IsScrollbarDragging && !isSelectingText && !inputBoxFocused && (widget->m_Options.draggable || ctrlHeld))
+            const bool hasSwipeContainer = (widget->m_SwipeContainer != nullptr);
+
+            if (!widget->m_IsElementDragging && !widget->m_IsScrollbarDragging && !hasSwipeContainer && !isSelectingText && !inputBoxFocused && (widget->m_Options.draggable || ctrlHeld))
             {
                 SetCapture(hWnd);
                 widget->m_IsDragging = true;
@@ -1351,8 +1353,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 return 0;
             }
 
-            // Don't allow widget drag while selecting text, input box is focused, or scrollbar is being dragged
-            if (widget->m_IsDragging && (widget->m_TextSelectionElement != nullptr || widget->m_FocusedInputBox != nullptr || widget->m_IsScrollbarDragging))
+            // Don't allow widget drag while selecting text, input box is focused, scrollbar is dragged, or container is swiping
+            if (widget->m_IsDragging && (widget->m_TextSelectionElement != nullptr || widget->m_FocusedInputBox != nullptr || widget->m_IsScrollbarDragging || widget->m_IsContainerSwiping || widget->m_SwipeContainer != nullptr))
             {
                 widget->m_IsDragging = false;
                 if (GetCapture() == hWnd)
@@ -1360,7 +1362,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     ReleaseCapture();
                 }
             }
-            
+
             if (widget->m_IsDragging)
             {
                 POINT pt;
@@ -1395,6 +1397,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             }
         }
         return 0;
+
 
     case WM_MOUSEACTIVATE:
         if (widget)
@@ -4143,8 +4146,6 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         tme.dwFlags = TME_LEAVE;
         tme.hwndTrack = m_hWnd;
         TrackMouseEvent(&tme);
-
-        handled = true;
     }
     else if (message == WM_MOUSELEAVE)
     {
@@ -4472,6 +4473,55 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
 
         if (!handled)
         {
+            // Helper: container has overflow that permits scrolling (OverflowX or Y is not Hidden)
+            auto isScrollContainer = [](Element* el) -> bool {
+                if (!el || !el->IsContainer()) return false;
+                return el->GetOverflowX() != Element::OverflowMode::Hidden ||
+                       el->GetOverflowY() != Element::OverflowMode::Hidden;
+            };
+
+            // Initialize container swipe tracking
+            Element* swipeTarget = hitElement;
+            Element* swipeCont = hitElement;
+
+            while (swipeCont)
+            {
+                if (isScrollContainer(swipeCont))
+                    break;
+                swipeCont = swipeCont->GetContainer();
+            }
+            if (!swipeCont)
+            {
+                for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it)
+                {
+                    Element* el = it->get();
+                    if (el && el->IsVisible() && isScrollContainer(el))
+                    {
+                        GfxRect b = el->GetBounds();
+                        if (x >= b.X && x < b.X + b.Width && y >= b.Y && y < b.Y + b.Height)
+                        {
+                            swipeCont = el;
+                            if (!swipeTarget) swipeTarget = el;
+                            break;
+                        }
+                    }
+                }
+            }
+            m_IsContainerSwiping = false;
+            m_SwipeContainer = swipeCont;
+            m_SwipeTargetElement = swipeTarget;
+            m_SwipeStartPos = { x, y };
+            m_SwipeStartTime = GetTickCount();
+            if (swipeCont) swipeCont->RecalcContentExtents();
+            m_SwipeStartScrollX = swipeCont ? swipeCont->GetScrollX() : 0;
+            m_SwipeStartScrollY = swipeCont ? swipeCont->GetScrollY() : 0;
+
+            // Capture mouse so WM_MOUSEMOVE reaches us even if cursor moves outside window
+            if (swipeCont)
+            {
+                SetCapture(m_hWnd);
+            }
+
             // Handle text selection
             TextElement* textElem = dynamic_cast<TextElement*>(hitElement);
             if (textElem && textElem->GetTextSelection())
@@ -4595,6 +4645,36 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             }
             handled = true;
         }
+        // Handle container swipe / pan scrolling
+        else if (m_SwipeContainer && !m_IsElementDragging && !m_TextSelectionElement && !m_FocusedInputBox)
+        {
+            int dx = x - m_SwipeStartPos.x;
+            int dy = y - m_SwipeStartPos.y;
+            if (!m_IsContainerSwiping && (abs(dx) > 3 || abs(dy) > 3))
+            {
+                m_IsContainerSwiping = true;
+                SetCapture(m_hWnd);
+            }
+
+            if (m_IsContainerSwiping)
+            {
+                // Pan in X if horizontal overflow is enabled (not hidden)
+                if (m_SwipeContainer->GetOverflowX() != Element::OverflowMode::Hidden)
+                {
+                    int newX = m_SwipeStartScrollX - dx;
+                    m_SwipeContainer->SetScrollX(newX);
+                    needRedraw = true;
+                }
+                // Pan in Y if vertical overflow is enabled (not hidden)
+                if (m_SwipeContainer->GetOverflowY() != Element::OverflowMode::Hidden)
+                {
+                    int newY = m_SwipeStartScrollY - dy;
+                    m_SwipeContainer->SetScrollY(newY);
+                    needRedraw = true;
+                }
+                handled = true;
+            }
+        }
 
         // Handle text selection dragging
         if (m_TextSelectionElement && m_TextSelectionElement->GetTextSelection())
@@ -4629,11 +4709,26 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         {
             m_IsScrollbarDragging = false;
             m_ScrollbarDragContainer = nullptr;
-            if (GetCapture() == m_hWnd && !m_IsDragging)
-            {
-                ReleaseCapture();
-            }
             handled = true;
+        }
+
+        // Handle swipe / pan gesture release
+        if (m_SwipeTargetElement || m_SwipeContainer)
+        {
+            if (m_IsContainerSwiping)
+            {
+                m_IsContainerSwiping = false;
+                handled = true;
+            }
+
+            m_SwipeContainer = nullptr;
+            m_SwipeTargetElement = nullptr;
+        }
+
+        // Always release capture on mouse up if this window holds it
+        if (GetCapture() == m_hWnd && !m_IsDragging && !m_IsScrollbarDragging && !m_IsElementDragging)
+        {
+            ReleaseCapture();
         }
 
         // Handle text selection release

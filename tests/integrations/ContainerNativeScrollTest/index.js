@@ -8,7 +8,7 @@ const win = new widgetWindow({
   y: 100,
   width: 600,
   height: 480,
-  // draggable: false,
+  draggable: false,
   backgroundColor: "rgba(18, 22, 34, 0.96)",
   script: "./script.ui.js",
   show: true

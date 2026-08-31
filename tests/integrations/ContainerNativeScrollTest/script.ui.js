@@ -41,8 +41,8 @@ ui.addShape({
   strokeColor: "rgba(255, 255, 255, 0.15)",
   strokeWidth: 1,
   overflow: "auto",
-  scrollX:50,
-  scrollY:50,
+  scrollX: 50,
+  scrollY: 50,
   scrollStep: 30,
   showScrollbar: true,
   scrollbarWidth: 6,
@@ -79,26 +79,3 @@ for (let i = 0; i < 10; i++) {
   });
 }
 
-// // Verification checks
-// const scrollInfo = ui.getScroll("scrollBox");
-// expect("getScroll() returned object", !!scrollInfo, JSON.stringify(scrollInfo));
-// expect("scrollX initially 0", scrollInfo?.scrollX === 0, String(scrollInfo?.scrollX));
-// expect("scrollY initially 0", scrollInfo?.scrollY === 0, String(scrollInfo?.scrollY));
-// expect("contentHeight > 220", scrollInfo?.contentHeight > 220, String(scrollInfo?.contentHeight));
-// expect("maxScrollY > 0", scrollInfo?.maxScrollY > 0, String(scrollInfo?.maxScrollY));
-
-// const overflowY = ui.getElementProperty("scrollBox", "overflowY");
-// expect("getElementProperty('overflowY') === 'auto'", overflowY === "auto", String(overflowY));
-
-// // Test scrollTo
-// ui.scrollTo("scrollBox", { y: 80 });
-// const afterScroll = ui.getScroll("scrollBox");
-// expect("ui.scrollTo({ y: 80 }) -> scrollY === 80", afterScroll?.scrollY === 80, String(afterScroll?.scrollY));
-
-// // Test setElementProperties with scrollY
-// ui.setElementProperties("scrollBox", { scrollY: 150 });
-// const afterSetProp = ui.getScroll("scrollBox");
-// expect("setElementProperties({ scrollY: 150 })", afterSetProp?.scrollY === 150, String(afterSetProp?.scrollY));
-
-// // Reset back to top for visual interactive testing
-// ui.scrollTo("scrollBox", { y: 0 });

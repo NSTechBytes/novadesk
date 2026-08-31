@@ -140,6 +140,7 @@ bool ShapeElement::HitTest(int x, int y)
 {
     if (!IsVisible()) return false;
     if (IsConsumed()) return false;
+    if (IsContainer()) return Element::HitTest(x, y);
     if (!GetPixelHitTest()) return Element::HitTest(x, y);
 
     // Transform the point into local (unrotated) space if needed.
