@@ -473,24 +473,28 @@ private:
     bool m_IsElementDragging = false;
     Element *m_DragElement = nullptr;
     
-    // Scrollbar Dragging State
+    // Scrollbar Dragging & Hover State
     enum class ScrollbarHitPart { None, VerticalThumb, VerticalTrack, HorizontalThumb, HorizontalTrack };
     struct ScrollbarHitResult {
         Element* container = nullptr;
         ScrollbarHitPart part = ScrollbarHitPart::None;
         int trackLength = 0;
         int thumbLength = 0;
+        int thumbOffset = 0;
         int maxScroll = 0;
     };
     bool HitTestContainerScrollbar(int x, int y, ScrollbarHitResult& result);
     bool m_IsScrollbarDragging = false;
     Element* m_ScrollbarDragContainer = nullptr;
+    Element* m_ScrollbarHoverContainer = nullptr;
+    ScrollbarHitPart m_ScrollbarHoverPart = ScrollbarHitPart::None;
     bool m_ScrollbarDragIsVertical = true;
     int m_ScrollbarDragStartMouse = 0;
     int m_ScrollbarDragStartScroll = 0;
     int m_ScrollbarDragTrackLength = 0;
     int m_ScrollbarDragThumbLength = 0;
     int m_ScrollbarDragMaxScroll = 0;
+    int m_ScrollbarDragGrabOffset = 0;
 
     // Container Swiping / Pan Dragging State
     bool m_IsContainerSwiping = false;

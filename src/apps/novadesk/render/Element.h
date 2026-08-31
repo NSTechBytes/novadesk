@@ -267,13 +267,33 @@ public:
     // Scrollbar appearance
     bool GetShowScrollbar() const { return m_ShowScrollbar; }
     void SetShowScrollbar(bool show) { m_ShowScrollbar = show; }
+    bool GetShowScrollbarX() const { return m_ShowScrollbarX; }
+    void SetShowScrollbarX(bool show) { m_ShowScrollbarX = show; }
+    bool GetShowScrollbarY() const { return m_ShowScrollbarY; }
+    void SetShowScrollbarY(bool show) { m_ShowScrollbarY = show; }
     int GetScrollbarWidth() const { return m_ScrollbarWidth; }
     void SetScrollbarWidth(int w) { m_ScrollbarWidth = w > 0 ? w : 1; }
+    int GetScrollbarHoverWidth() const { return m_ScrollbarHoverWidth > 0 ? m_ScrollbarHoverWidth : m_ScrollbarWidth; }
+    void SetScrollbarHoverWidth(int w) { m_ScrollbarHoverWidth = w; }
     float GetScrollbarRadius() const { return m_ScrollbarRadius; }
     void SetScrollbarRadius(float r) { m_ScrollbarRadius = r; }
+    float GetScrollbarTrackRadius() const { return m_ScrollbarTrackRadius >= 0.0f ? m_ScrollbarTrackRadius : m_ScrollbarRadius; }
+    void SetScrollbarTrackRadius(float r) { m_ScrollbarTrackRadius = r; }
+    float GetScrollbarInset() const { return m_ScrollbarInset; }
+    void SetScrollbarInset(float inset) { m_ScrollbarInset = (inset >= 0.0f ? inset : 0.0f); }
+    float GetScrollbarMinThumbLength() const { return m_ScrollbarMinThumbLength; }
+    void SetScrollbarMinThumbLength(float minLen) { m_ScrollbarMinThumbLength = (minLen >= 4.0f ? minLen : 4.0f); }
     COLORREF GetScrollbarColor() const { return m_ScrollbarColor; }
     BYTE GetScrollbarAlpha() const { return m_ScrollbarAlpha; }
     void SetScrollbarColor(COLORREF color, BYTE alpha) { m_ScrollbarColor = color; m_ScrollbarAlpha = alpha; }
+    bool HasScrollbarHoverColor() const { return m_HasScrollbarHoverColor; }
+    COLORREF GetScrollbarHoverColor() const { return m_HasScrollbarHoverColor ? m_ScrollbarHoverColor : m_ScrollbarColor; }
+    BYTE GetScrollbarHoverAlpha() const { return m_HasScrollbarHoverColor ? m_ScrollbarHoverAlpha : (BYTE)(std::min)(255, (int)m_ScrollbarAlpha + 50); }
+    void SetScrollbarHoverColor(COLORREF color, BYTE alpha) { m_ScrollbarHoverColor = color; m_ScrollbarHoverAlpha = alpha; m_HasScrollbarHoverColor = true; }
+    bool HasScrollbarActiveColor() const { return m_HasScrollbarActiveColor; }
+    COLORREF GetScrollbarActiveColor() const { return m_HasScrollbarActiveColor ? m_ScrollbarActiveColor : GetScrollbarHoverColor(); }
+    BYTE GetScrollbarActiveAlpha() const { return m_HasScrollbarActiveColor ? m_ScrollbarActiveAlpha : (BYTE)(std::min)(255, (int)GetScrollbarHoverAlpha() + 40); }
+    void SetScrollbarActiveColor(COLORREF color, BYTE alpha) { m_ScrollbarActiveColor = color; m_ScrollbarActiveAlpha = alpha; m_HasScrollbarActiveColor = true; }
     COLORREF GetScrollbarTrackColor() const { return m_ScrollbarTrackColor; }
     BYTE GetScrollbarTrackAlpha() const { return m_ScrollbarTrackAlpha; }
     void SetScrollbarTrackColor(COLORREF color, BYTE alpha) { m_ScrollbarTrackColor = color; m_ScrollbarTrackAlpha = alpha; }
@@ -384,10 +404,22 @@ protected:
     OverflowMode m_OverflowX = OverflowMode::Hidden;
     OverflowMode m_OverflowY = OverflowMode::Hidden;
     bool m_ShowScrollbar = true;
-    int m_ScrollbarWidth = 5;
-    float m_ScrollbarRadius = 2.5f;
+    bool m_ShowScrollbarX = true;
+    bool m_ShowScrollbarY = true;
+    int m_ScrollbarWidth = 6;
+    int m_ScrollbarHoverWidth = -1;
+    float m_ScrollbarRadius = 3.0f;
+    float m_ScrollbarTrackRadius = -1.0f;
+    float m_ScrollbarInset = 2.0f;
+    float m_ScrollbarMinThumbLength = 20.0f;
     COLORREF m_ScrollbarColor = RGB(255, 255, 255);
-    BYTE m_ScrollbarAlpha = 90;
+    BYTE m_ScrollbarAlpha = 100;
+    bool m_HasScrollbarHoverColor = false;
+    COLORREF m_ScrollbarHoverColor = RGB(255, 255, 255);
+    BYTE m_ScrollbarHoverAlpha = 180;
+    bool m_HasScrollbarActiveColor = false;
+    COLORREF m_ScrollbarActiveColor = RGB(255, 255, 255);
+    BYTE m_ScrollbarActiveAlpha = 240;
     COLORREF m_ScrollbarTrackColor = RGB(0, 0, 0);
     BYTE m_ScrollbarTrackAlpha = 0;
     

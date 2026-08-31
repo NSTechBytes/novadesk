@@ -217,15 +217,40 @@ namespace PropertyParser
 
         if (GetBoolProp(ctx, obj, "showScrollbar", options.showScrollbar))
             options.hasShowScrollbar = true;
+        if (GetBoolProp(ctx, obj, "showScrollbarX", options.showScrollbarX))
+            options.hasShowScrollbarX = true;
+        if (GetBoolProp(ctx, obj, "showScrollbarY", options.showScrollbarY))
+            options.hasShowScrollbarY = true;
         if (GetIntProp(ctx, obj, "scrollbarWidth", options.scrollbarWidth))
             options.hasScrollbarWidth = true;
+        if (GetIntProp(ctx, obj, "scrollbarHoverWidth", options.scrollbarHoverWidth))
+            options.hasScrollbarHoverWidth = true;
         if (GetFloatProp(ctx, obj, "scrollbarRadius", options.scrollbarRadius))
             options.hasScrollbarRadius = true;
+        if (GetFloatProp(ctx, obj, "scrollbarTrackRadius", options.scrollbarTrackRadius))
+            options.hasScrollbarTrackRadius = true;
+        if (GetFloatProp(ctx, obj, "scrollbarInset", options.scrollbarInset) ||
+            GetFloatProp(ctx, obj, "scrollbarMargin", options.scrollbarInset))
+            options.hasScrollbarInset = true;
+        if (GetFloatProp(ctx, obj, "scrollbarMinThumbLength", options.scrollbarMinThumbLength))
+            options.hasScrollbarMinThumbLength = true;
 
         std::wstring sbColor = GetStringProp(ctx, obj, "scrollbarColor");
         if (!sbColor.empty())
         {
             options.hasScrollbarColor = ColorUtil::ParseRGBA(sbColor, options.scrollbarColor, options.scrollbarAlpha);
+        }
+
+        std::wstring sbHoverColor = GetStringProp(ctx, obj, "scrollbarHoverColor");
+        if (!sbHoverColor.empty())
+        {
+            options.hasScrollbarHoverColor = ColorUtil::ParseRGBA(sbHoverColor, options.scrollbarHoverColor, options.scrollbarHoverAlpha);
+        }
+
+        std::wstring sbActiveColor = GetStringProp(ctx, obj, "scrollbarActiveColor");
+        if (!sbActiveColor.empty())
+        {
+            options.hasScrollbarActiveColor = ColorUtil::ParseRGBA(sbActiveColor, options.scrollbarActiveColor, options.scrollbarActiveAlpha);
         }
 
         std::wstring sbTrackColor = GetStringProp(ctx, obj, "scrollbarTrackColor");
@@ -366,17 +391,49 @@ namespace PropertyParser
         {
             element->SetShowScrollbar(options.showScrollbar);
         }
+        if (options.hasShowScrollbarX)
+        {
+            element->SetShowScrollbarX(options.showScrollbarX);
+        }
+        if (options.hasShowScrollbarY)
+        {
+            element->SetShowScrollbarY(options.showScrollbarY);
+        }
         if (options.hasScrollbarWidth)
         {
             element->SetScrollbarWidth(options.scrollbarWidth);
+        }
+        if (options.hasScrollbarHoverWidth)
+        {
+            element->SetScrollbarHoverWidth(options.scrollbarHoverWidth);
         }
         if (options.hasScrollbarRadius)
         {
             element->SetScrollbarRadius(options.scrollbarRadius);
         }
+        if (options.hasScrollbarTrackRadius)
+        {
+            element->SetScrollbarTrackRadius(options.scrollbarTrackRadius);
+        }
+        if (options.hasScrollbarInset)
+        {
+            element->SetScrollbarInset(options.scrollbarInset);
+        }
+        if (options.hasScrollbarMinThumbLength)
+        {
+            element->SetScrollbarMinThumbLength(options.scrollbarMinThumbLength);
+        }
         if (options.hasScrollbarColor)
         {
             element->SetScrollbarColor(options.scrollbarColor, options.scrollbarAlpha);
+        }
+        if (options.hasScrollbarHoverColor)
+        {
+            element->SetScrollbarHoverColor(options.scrollbarHoverColor, options.scrollbarHoverAlpha);
+        }
+        if (options.hasScrollbarActiveColor)
+        {
+            element->SetScrollbarActiveColor(options.scrollbarActiveColor, options.scrollbarActiveAlpha);
         }
         if (options.hasScrollbarTrackColor)
         {
@@ -452,13 +509,37 @@ namespace PropertyParser
         options.scrollStep = element->GetScrollStep();
         options.hasShowScrollbar = true;
         options.showScrollbar = element->GetShowScrollbar();
+        options.hasShowScrollbarX = true;
+        options.showScrollbarX = element->GetShowScrollbarX();
+        options.hasShowScrollbarY = true;
+        options.showScrollbarY = element->GetShowScrollbarY();
         options.hasScrollbarWidth = true;
         options.scrollbarWidth = element->GetScrollbarWidth();
+        options.hasScrollbarHoverWidth = true;
+        options.scrollbarHoverWidth = element->GetScrollbarHoverWidth();
         options.hasScrollbarRadius = true;
         options.scrollbarRadius = element->GetScrollbarRadius();
+        options.hasScrollbarTrackRadius = true;
+        options.scrollbarTrackRadius = element->GetScrollbarTrackRadius();
+        options.hasScrollbarInset = true;
+        options.scrollbarInset = element->GetScrollbarInset();
+        options.hasScrollbarMinThumbLength = true;
+        options.scrollbarMinThumbLength = element->GetScrollbarMinThumbLength();
         options.hasScrollbarColor = true;
         options.scrollbarColor = element->GetScrollbarColor();
         options.scrollbarAlpha = element->GetScrollbarAlpha();
+        if (element->HasScrollbarHoverColor())
+        {
+            options.hasScrollbarHoverColor = true;
+            options.scrollbarHoverColor = element->GetScrollbarHoverColor();
+            options.scrollbarHoverAlpha = element->GetScrollbarHoverAlpha();
+        }
+        if (element->HasScrollbarActiveColor())
+        {
+            options.hasScrollbarActiveColor = true;
+            options.scrollbarActiveColor = element->GetScrollbarActiveColor();
+            options.scrollbarActiveAlpha = element->GetScrollbarActiveAlpha();
+        }
         options.hasScrollbarTrackColor = true;
         options.scrollbarTrackColor = element->GetScrollbarTrackColor();
         options.scrollbarTrackAlpha = element->GetScrollbarTrackAlpha();

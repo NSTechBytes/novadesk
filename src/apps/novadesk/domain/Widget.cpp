@@ -2747,33 +2747,45 @@ bool Widget::HitTestContainerScrollbar(int x, int y, ScrollbarHitResult& result)
 
         element->RecalcContentExtents();
         GfxRect bounds = element->GetBounds();
-        const float sbW = (float)element->GetScrollbarWidth();
+
+        const float inset = element->GetScrollbarInset();
+        const float minThumbLen = element->GetScrollbarMinThumbLength();
+
+        const bool hasVert = element->GetShowScrollbarY() && element->IsScrollableY() && element->GetMaxScrollY() > 0;
+        const bool hasHoriz = element->GetShowScrollbarX() && element->IsScrollableX() && element->GetMaxScrollX() > 0;
+
+        const float baseVertW = (float)element->GetScrollbarWidth();
+        const float baseHorizW = (float)element->GetScrollbarWidth();
 
         // 1. Check Vertical Scrollbar
-        if (element->IsScrollableY())
+        if (hasVert)
         {
-            int maxScrollY = element->GetMaxScrollY();
-            if (maxScrollY > 0)
-            {
-                int contentH = element->GetContentHeight();
-                float trackH = (float)bounds.Height;
-                float thumbH = (std::max)(20.0f, trackH * ((float)bounds.Height / (float)contentH));
-                float thumbTravel = trackH - thumbH;
-                float thumbY = thumbTravel * ((float)element->GetScrollY() / (float)maxScrollY);
+            const int maxScrollY = element->GetMaxScrollY();
+            const int contentH = element->GetContentHeight();
+            const float trackH = (std::max)(0.0f, (float)bounds.Height - (2.0f * inset) - (hasHoriz ? (baseHorizW + inset) : 0.0f));
 
-                float sbLeft = (float)(bounds.X + bounds.Width) - sbW - 2.0f;
-                float sbRight = sbLeft + sbW;
-                float sbTop = (float)bounds.Y + thumbY;
-                float sbBottom = sbTop + thumbH;
+            if (trackH > 0.0f)
+            {
+                const float thumbH = (std::min)(trackH, (std::max)(minThumbLen, trackH * ((float)bounds.Height / (float)contentH)));
+                const float thumbTravel = (std::max)(0.0f, trackH - thumbH);
+                const float thumbY = (maxScrollY > 0) ? (thumbTravel * ((float)element->GetScrollY() / (float)maxScrollY)) : 0.0f;
+
+                const float sbLeft = (float)(bounds.X + bounds.Width) - baseVertW - inset;
+                const float sbRight = sbLeft + baseVertW;
+                const float sbTop = (float)bounds.Y + inset;
+                const float sbBottom = sbTop + trackH;
+                const float thumbTop = sbTop + thumbY;
+                const float thumbBottom = thumbTop + thumbH;
 
                 if (x >= (int)(sbLeft - hitMargin) && x <= (int)(sbRight + hitMargin) &&
-                    y >= bounds.Y && y <= (bounds.Y + bounds.Height))
+                    y >= (int)(sbTop - hitMargin) && y <= (int)(sbBottom + hitMargin))
                 {
                     result.container = element;
                     result.trackLength = (int)trackH;
                     result.thumbLength = (int)thumbH;
+                    result.thumbOffset = (int)thumbY;
                     result.maxScroll = maxScrollY;
-                    if (y >= (int)(sbTop - hitMargin) && y <= (int)(sbBottom + hitMargin))
+                    if (y >= (int)(thumbTop - hitMargin) && y <= (int)(thumbBottom + hitMargin))
                     {
                         result.part = ScrollbarHitPart::VerticalThumb;
                     }
@@ -2787,30 +2799,34 @@ bool Widget::HitTestContainerScrollbar(int x, int y, ScrollbarHitResult& result)
         }
 
         // 2. Check Horizontal Scrollbar
-        if (element->IsScrollableX())
+        if (hasHoriz)
         {
-            int maxScrollX = element->GetMaxScrollX();
-            if (maxScrollX > 0)
-            {
-                int contentW = element->GetContentWidth();
-                float trackW = (float)bounds.Width;
-                float thumbW = (std::max)(20.0f, trackW * ((float)bounds.Width / (float)contentW));
-                float thumbTravel = trackW - thumbW;
-                float thumbX = thumbTravel * ((float)element->GetScrollX() / (float)maxScrollX);
+            const int maxScrollX = element->GetMaxScrollX();
+            const int contentW = element->GetContentWidth();
+            const float trackW = (std::max)(0.0f, (float)bounds.Width - (2.0f * inset) - (hasVert ? (baseVertW + inset) : 0.0f));
 
-                float sbLeft = (float)bounds.X + thumbX;
-                float sbRight = sbLeft + thumbW;
-                float sbTop = (float)(bounds.Y + bounds.Height) - sbW - 2.0f;
-                float sbBottom = sbTop + sbW;
+            if (trackW > 0.0f)
+            {
+                const float thumbW = (std::min)(trackW, (std::max)(minThumbLen, trackW * ((float)bounds.Width / (float)contentW)));
+                const float thumbTravel = (std::max)(0.0f, trackW - thumbW);
+                const float thumbX = (maxScrollX > 0) ? (thumbTravel * ((float)element->GetScrollX() / (float)maxScrollX)) : 0.0f;
+
+                const float sbLeft = (float)bounds.X + inset;
+                const float sbRight = sbLeft + trackW;
+                const float sbTop = (float)(bounds.Y + bounds.Height) - baseHorizW - inset;
+                const float sbBottom = sbTop + baseHorizW;
+                const float thumbLeft = sbLeft + thumbX;
+                const float thumbRight = thumbLeft + thumbW;
 
                 if (y >= (int)(sbTop - hitMargin) && y <= (int)(sbBottom + hitMargin) &&
-                    x >= bounds.X && x <= (bounds.X + bounds.Width))
+                    x >= (int)(sbLeft - hitMargin) && x <= (int)(sbRight + hitMargin))
                 {
                     result.container = element;
                     result.trackLength = (int)trackW;
                     result.thumbLength = (int)thumbW;
+                    result.thumbOffset = (int)thumbX;
                     result.maxScroll = maxScrollX;
-                    if (x >= (int)(sbLeft - hitMargin) && x <= (int)(sbRight + hitMargin))
+                    if (x >= (int)(thumbLeft - hitMargin) && x <= (int)(thumbRight + hitMargin))
                     {
                         result.part = ScrollbarHitPart::HorizontalThumb;
                     }
@@ -4140,6 +4156,25 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             m_TooltipElement = nextToolTipElement;
         }
 
+        // Update container scrollbar hover state
+        if (!m_IsScrollbarDragging && !m_IsDragging && !m_IsContainerSwiping)
+        {
+            ScrollbarHitResult sbHoverHit;
+            Element* newHoverContainer = nullptr;
+            ScrollbarHitPart newHoverPart = ScrollbarHitPart::None;
+            if (HitTestContainerScrollbar(x, y, sbHoverHit))
+            {
+                newHoverContainer = sbHoverHit.container;
+                newHoverPart = sbHoverHit.part;
+            }
+            if (m_ScrollbarHoverContainer != newHoverContainer || m_ScrollbarHoverPart != newHoverPart)
+            {
+                m_ScrollbarHoverContainer = newHoverContainer;
+                m_ScrollbarHoverPart = newHoverPart;
+                needRedraw = true;
+            }
+        }
+
         // Ensure we track mouse leave window events
         TRACKMOUSEEVENT tme;
         tme.cbSize = sizeof(TRACKMOUSEEVENT);
@@ -4220,6 +4255,14 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         // Tooltip Update and kill timer
         m_Tooltip.Update(nullptr);
         KillTimer(m_hWnd, TIMER_TOOLTIP);
+
+        if (m_ScrollbarHoverContainer != nullptr || m_ScrollbarHoverPart != ScrollbarHitPart::None)
+        {
+            m_ScrollbarHoverContainer = nullptr;
+            m_ScrollbarHoverPart = ScrollbarHitPart::None;
+            needRedraw = true;
+        }
+
         handled = true;
     }
 
@@ -4397,12 +4440,16 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         ScrollbarHitResult sbHit;
         if (HitTestContainerScrollbar(x, y, sbHit))
         {
+            const float inset = sbHit.container->GetScrollbarInset();
+            const GfxRect bounds = sbHit.container->GetBounds();
+
             if (sbHit.part == ScrollbarHitPart::VerticalThumb)
             {
                 m_IsScrollbarDragging = true;
                 m_ScrollbarDragContainer = sbHit.container;
                 m_ScrollbarDragIsVertical = true;
                 m_ScrollbarDragStartMouse = y;
+                m_ScrollbarDragGrabOffset = y - ((int)bounds.Y + (int)inset + sbHit.thumbOffset);
                 m_ScrollbarDragStartScroll = sbHit.container->GetScrollY();
                 m_ScrollbarDragTrackLength = sbHit.trackLength;
                 m_ScrollbarDragThumbLength = sbHit.thumbLength;
@@ -4413,8 +4460,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             }
             else if (sbHit.part == ScrollbarHitPart::VerticalTrack)
             {
-                GfxRect bounds = sbHit.container->GetBounds();
-                float trackOffset = (float)(y - bounds.Y - sbHit.thumbLength / 2);
+                float trackOffset = (float)(y - ((float)bounds.Y + inset) - (float)sbHit.thumbLength / 2.0f);
                 float thumbTravel = (float)(sbHit.trackLength - sbHit.thumbLength);
                 if (thumbTravel > 0.0f)
                 {
@@ -4425,6 +4471,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 m_ScrollbarDragContainer = sbHit.container;
                 m_ScrollbarDragIsVertical = true;
                 m_ScrollbarDragStartMouse = y;
+                m_ScrollbarDragGrabOffset = sbHit.thumbLength / 2;
                 m_ScrollbarDragStartScroll = sbHit.container->GetScrollY();
                 m_ScrollbarDragTrackLength = sbHit.trackLength;
                 m_ScrollbarDragThumbLength = sbHit.thumbLength;
@@ -4439,6 +4486,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 m_ScrollbarDragContainer = sbHit.container;
                 m_ScrollbarDragIsVertical = false;
                 m_ScrollbarDragStartMouse = x;
+                m_ScrollbarDragGrabOffset = x - ((int)bounds.X + (int)inset + sbHit.thumbOffset);
                 m_ScrollbarDragStartScroll = sbHit.container->GetScrollX();
                 m_ScrollbarDragTrackLength = sbHit.trackLength;
                 m_ScrollbarDragThumbLength = sbHit.thumbLength;
@@ -4449,8 +4497,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             }
             else if (sbHit.part == ScrollbarHitPart::HorizontalTrack)
             {
-                GfxRect bounds = sbHit.container->GetBounds();
-                float trackOffset = (float)(x - bounds.X - sbHit.thumbLength / 2);
+                float trackOffset = (float)(x - ((float)bounds.X + inset) - (float)sbHit.thumbLength / 2.0f);
                 float thumbTravel = (float)(sbHit.trackLength - sbHit.thumbLength);
                 if (thumbTravel > 0.0f)
                 {
@@ -4461,6 +4508,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 m_ScrollbarDragContainer = sbHit.container;
                 m_ScrollbarDragIsVertical = false;
                 m_ScrollbarDragStartMouse = x;
+                m_ScrollbarDragGrabOffset = sbHit.thumbLength / 2;
                 m_ScrollbarDragStartScroll = sbHit.container->GetScrollX();
                 m_ScrollbarDragTrackLength = sbHit.trackLength;
                 m_ScrollbarDragThumbLength = sbHit.thumbLength;
@@ -4710,6 +4758,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             m_IsScrollbarDragging = false;
             m_ScrollbarDragContainer = nullptr;
             handled = true;
+            needRedraw = true;
         }
 
         // Handle swipe / pan gesture release

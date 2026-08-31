@@ -1426,9 +1426,17 @@ namespace novadesk::scripting::quickjs
                     OverflowX,
                     OverflowY,
                     ShowScrollbar,
+                    ShowScrollbarX,
+                    ShowScrollbarY,
                     ScrollbarWidth,
+                    ScrollbarHoverWidth,
                     ScrollbarRadius,
+                    ScrollbarTrackRadius,
+                    ScrollbarInset,
+                    ScrollbarMinThumbLength,
                     ScrollbarColor,
+                    ScrollbarHoverColor,
+                    ScrollbarActiveColor,
                     ScrollbarTrackColor,
                     NotFound = 0xFFFF
                 };
@@ -1492,9 +1500,18 @@ namespace novadesk::scripting::quickjs
                     {"overflowX", OverflowX},
                     {"overflowY", OverflowY},
                     {"showScrollbar", ShowScrollbar},
+                    {"showScrollbarX", ShowScrollbarX},
+                    {"showScrollbarY", ShowScrollbarY},
                     {"scrollbarWidth", ScrollbarWidth},
+                    {"scrollbarHoverWidth", ScrollbarHoverWidth},
                     {"scrollbarRadius", ScrollbarRadius},
+                    {"scrollbarTrackRadius", ScrollbarTrackRadius},
+                    {"scrollbarInset", ScrollbarInset},
+                    {"scrollbarMargin", ScrollbarInset},
+                    {"scrollbarMinThumbLength", ScrollbarMinThumbLength},
                     {"scrollbarColor", ScrollbarColor},
+                    {"scrollbarHoverColor", ScrollbarHoverColor},
+                    {"scrollbarActiveColor", ScrollbarActiveColor},
                     {"scrollbarTrackColor", ScrollbarTrackColor},
                 };
                 auto it = s_PropMap.find(prop);
@@ -1745,13 +1762,35 @@ namespace novadesk::scripting::quickjs
                         }
                     case ShowScrollbar:
                         return JS_NewBool(ctx, element->GetShowScrollbar() ? 1 : 0);
+                    case ShowScrollbarX:
+                        return JS_NewBool(ctx, element->GetShowScrollbarX() ? 1 : 0);
+                    case ShowScrollbarY:
+                        return JS_NewBool(ctx, element->GetShowScrollbarY() ? 1 : 0);
                     case ScrollbarWidth:
                         return JS_NewInt32(ctx, element->GetScrollbarWidth());
+                    case ScrollbarHoverWidth:
+                        return JS_NewInt32(ctx, element->GetScrollbarHoverWidth());
                     case ScrollbarRadius:
                         return JS_NewFloat64(ctx, element->GetScrollbarRadius());
+                    case ScrollbarTrackRadius:
+                        return JS_NewFloat64(ctx, element->GetScrollbarTrackRadius());
+                    case ScrollbarInset:
+                        return JS_NewFloat64(ctx, element->GetScrollbarInset());
+                    case ScrollbarMinThumbLength:
+                        return JS_NewFloat64(ctx, element->GetScrollbarMinThumbLength());
                     case ScrollbarColor:
                     {
                         const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarColor(), element->GetScrollbarAlpha());
+                        return JS_NewString(ctx, Utils::ToString(s).c_str());
+                    }
+                    case ScrollbarHoverColor:
+                    {
+                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarHoverColor(), element->GetScrollbarHoverAlpha());
+                        return JS_NewString(ctx, Utils::ToString(s).c_str());
+                    }
+                    case ScrollbarActiveColor:
+                    {
+                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarActiveColor(), element->GetScrollbarActiveAlpha());
                         return JS_NewString(ctx, Utils::ToString(s).c_str());
                     }
                     case ScrollbarTrackColor:
