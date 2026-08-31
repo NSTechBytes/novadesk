@@ -44,8 +44,8 @@ ui.addShape({
   scrollX: 50,
   scrollY: 50,
   showScrollbar: true,
-  scrollbarWidth: 6,
-  scrollbarHoverWidth: 9,
+  scrollbarWidth: 10,
+  scrollbarHoverWidth: 12,
   scrollbarRadius: 4,
   scrollbarTrackRadius: 4,
   scrollbarInset: 3,
@@ -53,7 +53,15 @@ ui.addShape({
   scrollbarColor: "rgba(100, 180, 255, 0.5)",
   scrollbarHoverColor: "rgba(120, 200, 255, 0.85)",
   scrollbarActiveColor: "rgba(200, 235, 255, 1.0)",
-  scrollbarTrackColor: "rgba(0, 0, 0, 0.3)"
+  scrollbarTrackColor: "rgba(0, 0, 0, 0.3)",
+  showScrollbarButtons: true,
+  scrollbarButtonSize: 14,
+  scrollbarButtonRadius: 3,
+  scrollbarArrowColor: "rgba(200, 230, 255, 0.7)",
+  scrollbarArrowHoverColor: "rgba(255, 255, 255, 1.0)",
+  scrollbarArrowActiveColor: "rgba(120, 210, 255, 1.0)",
+  scrollbarButtonBgColor: "rgba(255, 255, 255, 0.05)",
+  scrollbarButtonHoverBgColor: "rgba(255, 255, 255, 0.15)"
 });
 
 // 2. Add overflowing children attached via `container: "scrollBox"`

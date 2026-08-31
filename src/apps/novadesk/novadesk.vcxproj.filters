@@ -51,6 +51,9 @@
     <ClCompile Include="domain\InputBoxContextMenuHelper.cpp">
       <Filter>domain</Filter>
     </ClCompile>
+    <ClCompile Include="domain\ColorPickerPopup.cpp">
+      <Filter>domain</Filter>
+    </ClCompile>
     <ClCompile Include="domain\Novadesk.cpp">
       <Filter>domain</Filter>
     </ClCompile>
@@ -61,6 +64,9 @@
       <Filter>domain</Filter>
     </ClCompile>
     <ClCompile Include="domain\WidgetLayoutHelper.cpp">
+      <Filter>domain</Filter>
+    </ClCompile>
+    <ClCompile Include="domain\ScrollbarRenderer.cpp">
       <Filter>domain</Filter>
     </ClCompile>
     <ClCompile Include="domain\WidgetWindowChromeHelper.cpp">
@@ -150,8 +156,9 @@
     <ClCompile Include="render\InputBoxElement.cpp">
       <Filter>render</Filter>
     </ClCompile>
-    <ClCompile Include="domain\ColorPickerPopup.cpp"><Filter>domain</Filter></ClCompile>
-    <ClCompile Include="render\ColorPickerElement.cpp"><Filter>render</Filter></ClCompile>
+    <ClCompile Include="render\ColorPickerElement.cpp">
+      <Filter>render</Filter>
+    </ClCompile>
     <ClCompile Include="render\Tooltip.cpp">
       <Filter>render</Filter>
     </ClCompile>
@@ -206,7 +213,9 @@
     <ClCompile Include="scripting\quickjs\parser\PropertyParserInputBox.cpp">
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
-    <ClCompile Include="scripting\quickjs\parser\PropertyParserColorPicker.cpp"><Filter>scripting\quickjs\parser</Filter></ClCompile>
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserColorPicker.cpp">
+      <Filter>scripting\quickjs\parser</Filter>
+    </ClCompile>
     <ClCompile Include="scripting\quickjs\parser\PropertyParserWidgetWindow.cpp">
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
@@ -254,6 +263,9 @@
     <ClInclude Include="domain\InputBoxContextMenuHelper.h">
       <Filter>domain</Filter>
     </ClInclude>
+    <ClInclude Include="domain\ColorPickerPopup.h">
+      <Filter>domain</Filter>
+    </ClInclude>
     <ClInclude Include="domain\Novadesk.h">
       <Filter>domain</Filter>
     </ClInclude>
@@ -264,6 +276,9 @@
       <Filter>domain</Filter>
     </ClInclude>
     <ClInclude Include="domain\WidgetLayoutHelper.h">
+      <Filter>domain</Filter>
+    </ClInclude>
+    <ClInclude Include="domain\ScrollbarRenderer.h">
       <Filter>domain</Filter>
     </ClInclude>
     <ClInclude Include="domain\WidgetWindowChromeHelper.h">
@@ -356,8 +371,9 @@
     <ClInclude Include="render\InputBoxElement.h">
       <Filter>render</Filter>
     </ClInclude>
-    <ClInclude Include="domain\ColorPickerPopup.h"><Filter>domain</Filter></ClInclude>
-    <ClInclude Include="render\ColorPickerElement.h"><Filter>render</Filter></ClInclude>
+    <ClInclude Include="render\ColorPickerElement.h">
+      <Filter>render</Filter>
+    </ClInclude>
     <ClInclude Include="render\Tooltip.h">
       <Filter>render</Filter>
     </ClInclude>

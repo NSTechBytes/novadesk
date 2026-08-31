@@ -298,6 +298,29 @@ public:
     BYTE GetScrollbarTrackAlpha() const { return m_ScrollbarTrackAlpha; }
     void SetScrollbarTrackColor(COLORREF color, BYTE alpha) { m_ScrollbarTrackColor = color; m_ScrollbarTrackAlpha = alpha; }
 
+    // Scrollbar Arrow Buttons
+    bool GetShowScrollbarButtons() const { return m_ShowScrollbarButtons; }
+    void SetShowScrollbarButtons(bool show) { m_ShowScrollbarButtons = show; }
+    float GetScrollbarButtonSize() const { return m_ScrollbarButtonSize > 0.0f ? m_ScrollbarButtonSize : (float)GetScrollbarWidth(); }
+    void SetScrollbarButtonSize(float size) { m_ScrollbarButtonSize = size > 0.0f ? size : 0.0f; }
+    float GetScrollbarButtonRadius() const { return m_ScrollbarButtonRadius >= 0.0f ? m_ScrollbarButtonRadius : 0.0f; }
+    void SetScrollbarButtonRadius(float r) { m_ScrollbarButtonRadius = r; }
+    COLORREF GetScrollbarArrowColor() const { return m_HasScrollbarArrowColor ? m_ScrollbarArrowColor : GetScrollbarColor(); }
+    BYTE GetScrollbarArrowAlpha() const { return m_HasScrollbarArrowColor ? m_ScrollbarArrowAlpha : GetScrollbarAlpha(); }
+    void SetScrollbarArrowColor(COLORREF color, BYTE alpha) { m_ScrollbarArrowColor = color; m_ScrollbarArrowAlpha = alpha; m_HasScrollbarArrowColor = true; }
+    COLORREF GetScrollbarArrowHoverColor() const { return m_HasScrollbarArrowHoverColor ? m_ScrollbarArrowHoverColor : GetScrollbarHoverColor(); }
+    BYTE GetScrollbarArrowHoverAlpha() const { return m_HasScrollbarArrowHoverColor ? m_ScrollbarArrowHoverAlpha : GetScrollbarHoverAlpha(); }
+    void SetScrollbarArrowHoverColor(COLORREF color, BYTE alpha) { m_ScrollbarArrowHoverColor = color; m_ScrollbarArrowHoverAlpha = alpha; m_HasScrollbarArrowHoverColor = true; }
+    COLORREF GetScrollbarArrowActiveColor() const { return m_HasScrollbarArrowActiveColor ? m_ScrollbarArrowActiveColor : GetScrollbarActiveColor(); }
+    BYTE GetScrollbarArrowActiveAlpha() const { return m_HasScrollbarArrowActiveColor ? m_ScrollbarArrowActiveAlpha : GetScrollbarActiveAlpha(); }
+    void SetScrollbarArrowActiveColor(COLORREF color, BYTE alpha) { m_ScrollbarArrowActiveColor = color; m_ScrollbarArrowActiveAlpha = alpha; m_HasScrollbarArrowActiveColor = true; }
+    COLORREF GetScrollbarButtonBgColor() const { return m_ScrollbarButtonBgColor; }
+    BYTE GetScrollbarButtonBgAlpha() const { return m_ScrollbarButtonBgAlpha; }
+    void SetScrollbarButtonBgColor(COLORREF color, BYTE alpha) { m_ScrollbarButtonBgColor = color; m_ScrollbarButtonBgAlpha = alpha; }
+    COLORREF GetScrollbarButtonHoverBgColor() const { return m_ScrollbarButtonHoverBgColor; }
+    BYTE GetScrollbarButtonHoverBgAlpha() const { return m_ScrollbarButtonHoverBgAlpha; }
+    void SetScrollbarButtonHoverBgColor(COLORREF color, BYTE alpha) { m_ScrollbarButtonHoverBgColor = color; m_ScrollbarButtonHoverBgAlpha = alpha; }
+
     virtual bool IsTransparentHit() const { return false; }
 
     bool HasAction(UINT message, WPARAM wParam) const;
@@ -422,6 +445,22 @@ protected:
     BYTE m_ScrollbarActiveAlpha = 240;
     COLORREF m_ScrollbarTrackColor = RGB(0, 0, 0);
     BYTE m_ScrollbarTrackAlpha = 0;
+    bool m_ShowScrollbarButtons = false;
+    float m_ScrollbarButtonSize = 14.0f;
+    float m_ScrollbarButtonRadius = 2.0f;
+    bool m_HasScrollbarArrowColor = false;
+    COLORREF m_ScrollbarArrowColor = RGB(255, 255, 255);
+    BYTE m_ScrollbarArrowAlpha = 150;
+    bool m_HasScrollbarArrowHoverColor = false;
+    COLORREF m_ScrollbarArrowHoverColor = RGB(255, 255, 255);
+    BYTE m_ScrollbarArrowHoverAlpha = 220;
+    bool m_HasScrollbarArrowActiveColor = false;
+    COLORREF m_ScrollbarArrowActiveColor = RGB(255, 255, 255);
+    BYTE m_ScrollbarArrowActiveAlpha = 255;
+    COLORREF m_ScrollbarButtonBgColor = RGB(0, 0, 0);
+    BYTE m_ScrollbarButtonBgAlpha = 0;
+    COLORREF m_ScrollbarButtonHoverBgColor = RGB(255, 255, 255);
+    BYTE m_ScrollbarButtonHoverBgAlpha = 30;
     
     // Padding properties
     int m_PaddingLeft = 0;

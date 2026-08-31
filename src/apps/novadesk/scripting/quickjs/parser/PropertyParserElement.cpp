@@ -258,6 +258,44 @@ namespace PropertyParser
         {
             options.hasScrollbarTrackColor = ColorUtil::ParseRGBA(sbTrackColor, options.scrollbarTrackColor, options.scrollbarTrackAlpha);
         }
+
+        if (GetBoolProp(ctx, obj, "showScrollbarButtons", options.showScrollbarButtons) ||
+            GetBoolProp(ctx, obj, "scrollbarButtons", options.showScrollbarButtons))
+            options.hasShowScrollbarButtons = true;
+        if (GetFloatProp(ctx, obj, "scrollbarButtonSize", options.scrollbarButtonSize))
+            options.hasScrollbarButtonSize = true;
+        if (GetFloatProp(ctx, obj, "scrollbarButtonRadius", options.scrollbarButtonRadius))
+            options.hasScrollbarButtonRadius = true;
+
+        std::wstring sbArrowColor = GetStringProp(ctx, obj, "scrollbarArrowColor");
+        if (!sbArrowColor.empty())
+        {
+            options.hasScrollbarArrowColor = ColorUtil::ParseRGBA(sbArrowColor, options.scrollbarArrowColor, options.scrollbarArrowAlpha);
+        }
+
+        std::wstring sbArrowHoverColor = GetStringProp(ctx, obj, "scrollbarArrowHoverColor");
+        if (!sbArrowHoverColor.empty())
+        {
+            options.hasScrollbarArrowHoverColor = ColorUtil::ParseRGBA(sbArrowHoverColor, options.scrollbarArrowHoverColor, options.scrollbarArrowHoverAlpha);
+        }
+
+        std::wstring sbArrowActiveColor = GetStringProp(ctx, obj, "scrollbarArrowActiveColor");
+        if (!sbArrowActiveColor.empty())
+        {
+            options.hasScrollbarArrowActiveColor = ColorUtil::ParseRGBA(sbArrowActiveColor, options.scrollbarArrowActiveColor, options.scrollbarArrowActiveAlpha);
+        }
+
+        std::wstring sbBtnBgColor = GetStringProp(ctx, obj, "scrollbarButtonBgColor");
+        if (!sbBtnBgColor.empty())
+        {
+            options.hasScrollbarButtonBgColor = ColorUtil::ParseRGBA(sbBtnBgColor, options.scrollbarButtonBgColor, options.scrollbarButtonBgAlpha);
+        }
+
+        std::wstring sbBtnHoverBgColor = GetStringProp(ctx, obj, "scrollbarButtonHoverBgColor");
+        if (!sbBtnHoverBgColor.empty())
+        {
+            options.hasScrollbarButtonHoverBgColor = ColorUtil::ParseRGBA(sbBtnHoverBgColor, options.scrollbarButtonHoverBgColor, options.scrollbarButtonHoverBgAlpha);
+        }
     }
     void ApplyElementOptions(Element *element, const ElementOptions &options)
     {
@@ -439,6 +477,38 @@ namespace PropertyParser
         {
             element->SetScrollbarTrackColor(options.scrollbarTrackColor, options.scrollbarTrackAlpha);
         }
+        if (options.hasShowScrollbarButtons)
+        {
+            element->SetShowScrollbarButtons(options.showScrollbarButtons);
+        }
+        if (options.hasScrollbarButtonSize)
+        {
+            element->SetScrollbarButtonSize(options.scrollbarButtonSize);
+        }
+        if (options.hasScrollbarButtonRadius)
+        {
+            element->SetScrollbarButtonRadius(options.scrollbarButtonRadius);
+        }
+        if (options.hasScrollbarArrowColor)
+        {
+            element->SetScrollbarArrowColor(options.scrollbarArrowColor, options.scrollbarArrowAlpha);
+        }
+        if (options.hasScrollbarArrowHoverColor)
+        {
+            element->SetScrollbarArrowHoverColor(options.scrollbarArrowHoverColor, options.scrollbarArrowHoverAlpha);
+        }
+        if (options.hasScrollbarArrowActiveColor)
+        {
+            element->SetScrollbarArrowActiveColor(options.scrollbarArrowActiveColor, options.scrollbarArrowActiveAlpha);
+        }
+        if (options.hasScrollbarButtonBgColor)
+        {
+            element->SetScrollbarButtonBgColor(options.scrollbarButtonBgColor, options.scrollbarButtonBgAlpha);
+        }
+        if (options.hasScrollbarButtonHoverBgColor)
+        {
+            element->SetScrollbarButtonHoverBgColor(options.scrollbarButtonHoverBgColor, options.scrollbarButtonHoverBgAlpha);
+        }
         if (options.hasScrollX)
         {
             element->SetScrollX(options.scrollX);
@@ -543,5 +613,27 @@ namespace PropertyParser
         options.hasScrollbarTrackColor = true;
         options.scrollbarTrackColor = element->GetScrollbarTrackColor();
         options.scrollbarTrackAlpha = element->GetScrollbarTrackAlpha();
+
+        options.hasShowScrollbarButtons = true;
+        options.showScrollbarButtons = element->GetShowScrollbarButtons();
+        options.hasScrollbarButtonSize = true;
+        options.scrollbarButtonSize = element->GetScrollbarButtonSize();
+        options.hasScrollbarButtonRadius = true;
+        options.scrollbarButtonRadius = element->GetScrollbarButtonRadius();
+        options.hasScrollbarArrowColor = true;
+        options.scrollbarArrowColor = element->GetScrollbarArrowColor();
+        options.scrollbarArrowAlpha = element->GetScrollbarArrowAlpha();
+        options.hasScrollbarArrowHoverColor = true;
+        options.scrollbarArrowHoverColor = element->GetScrollbarArrowHoverColor();
+        options.scrollbarArrowHoverAlpha = element->GetScrollbarArrowHoverAlpha();
+        options.hasScrollbarArrowActiveColor = true;
+        options.scrollbarArrowActiveColor = element->GetScrollbarArrowActiveColor();
+        options.scrollbarArrowActiveAlpha = element->GetScrollbarArrowActiveAlpha();
+        options.hasScrollbarButtonBgColor = true;
+        options.scrollbarButtonBgColor = element->GetScrollbarButtonBgColor();
+        options.scrollbarButtonBgAlpha = element->GetScrollbarButtonBgAlpha();
+        options.hasScrollbarButtonHoverBgColor = true;
+        options.scrollbarButtonHoverBgColor = element->GetScrollbarButtonHoverBgColor();
+        options.scrollbarButtonHoverBgAlpha = element->GetScrollbarButtonHoverBgAlpha();
     }
 }

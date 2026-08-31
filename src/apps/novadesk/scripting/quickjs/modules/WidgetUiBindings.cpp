@@ -1438,6 +1438,14 @@ namespace novadesk::scripting::quickjs
                     ScrollbarHoverColor,
                     ScrollbarActiveColor,
                     ScrollbarTrackColor,
+                    ShowScrollbarButtons,
+                    ScrollbarButtonSize,
+                    ScrollbarButtonRadius,
+                    ScrollbarArrowColor,
+                    ScrollbarArrowHoverColor,
+                    ScrollbarArrowActiveColor,
+                    ScrollbarButtonBgColor,
+                    ScrollbarButtonHoverBgColor,
                     NotFound = 0xFFFF
                 };
                 static const std::unordered_map<std::string_view, BaseProp> s_PropMap = {
@@ -1513,6 +1521,15 @@ namespace novadesk::scripting::quickjs
                     {"scrollbarHoverColor", ScrollbarHoverColor},
                     {"scrollbarActiveColor", ScrollbarActiveColor},
                     {"scrollbarTrackColor", ScrollbarTrackColor},
+                    {"showScrollbarButtons", ShowScrollbarButtons},
+                    {"scrollbarButtons", ShowScrollbarButtons},
+                    {"scrollbarButtonSize", ScrollbarButtonSize},
+                    {"scrollbarButtonRadius", ScrollbarButtonRadius},
+                    {"scrollbarArrowColor", ScrollbarArrowColor},
+                    {"scrollbarArrowHoverColor", ScrollbarArrowHoverColor},
+                    {"scrollbarArrowActiveColor", ScrollbarArrowActiveColor},
+                    {"scrollbarButtonBgColor", ScrollbarButtonBgColor},
+                    {"scrollbarButtonHoverBgColor", ScrollbarButtonHoverBgColor},
                 };
                 auto it = s_PropMap.find(prop);
                 if (it != s_PropMap.end())
@@ -1796,6 +1813,37 @@ namespace novadesk::scripting::quickjs
                     case ScrollbarTrackColor:
                     {
                         const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarTrackColor(), element->GetScrollbarTrackAlpha());
+                        return JS_NewString(ctx, Utils::ToString(s).c_str());
+                    }
+                    case ShowScrollbarButtons:
+                        return JS_NewBool(ctx, element->GetShowScrollbarButtons() ? 1 : 0);
+                    case ScrollbarButtonSize:
+                        return JS_NewFloat64(ctx, element->GetScrollbarButtonSize());
+                    case ScrollbarButtonRadius:
+                        return JS_NewFloat64(ctx, element->GetScrollbarButtonRadius());
+                    case ScrollbarArrowColor:
+                    {
+                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarArrowColor(), element->GetScrollbarArrowAlpha());
+                        return JS_NewString(ctx, Utils::ToString(s).c_str());
+                    }
+                    case ScrollbarArrowHoverColor:
+                    {
+                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarArrowHoverColor(), element->GetScrollbarArrowHoverAlpha());
+                        return JS_NewString(ctx, Utils::ToString(s).c_str());
+                    }
+                    case ScrollbarArrowActiveColor:
+                    {
+                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarArrowActiveColor(), element->GetScrollbarArrowActiveAlpha());
+                        return JS_NewString(ctx, Utils::ToString(s).c_str());
+                    }
+                    case ScrollbarButtonBgColor:
+                    {
+                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarButtonBgColor(), element->GetScrollbarButtonBgAlpha());
+                        return JS_NewString(ctx, Utils::ToString(s).c_str());
+                    }
+                    case ScrollbarButtonHoverBgColor:
+                    {
+                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarButtonHoverBgColor(), element->GetScrollbarButtonHoverBgAlpha());
                         return JS_NewString(ctx, Utils::ToString(s).c_str());
                     }
                     default:

@@ -12,6 +12,7 @@
 #include "../render/ShapeElement.h"
 #include "../render/FlexLayoutEngine.h"
 #include "../render/Direct2DHelper.h"
+#include "ScrollbarRenderer.h"
 
 // Helper to access Widget's layout configs
 std::unordered_map<std::wstring, WidgetLayoutHelper::LayoutConfig>& 
@@ -270,170 +271,39 @@ void WidgetLayoutHelper::RenderContainerChildren(const Widget& widget, Element* 
         context->PushLayer(D2D1::LayerParameters(clipRect), layer.Get());
     }
 
-    // Recalculate content extents for scrollable containers
-    container->RecalcContentExtents();
-
-    // Apply translation for container offset with scroll
+    // Apply scroll translation: shift rendered children by (-scrollX, -scrollY)
     D2D1_MATRIX_3X2_F originalTransform;
     context->GetTransform(&originalTransform);
-    float scrollOffX = (float)container->GetScrollX();
-    float scrollOffY = (float)container->GetScrollY();
-    D2D1_MATRIX_3X2_F translate = D2D1::Matrix3x2F::Translation(
-        (float)bounds.X - scrollOffX,
-        (float)bounds.Y - scrollOffY);
-    context->SetTransform(translate * originalTransform);
+    float scrollX = (float)container->GetScrollX();
+    float scrollY = (float)container->GetScrollY();
+    D2D1_MATRIX_3X2_F scrollTranslation = D2D1::Matrix3x2F::Translation(-scrollX, -scrollY);
+    context->SetTransform(scrollTranslation * originalTransform);
 
-    // Render all children recursively
+    // Render all children of this container (elements stored in widget's flat list)
     for (Element* child : container->GetContainerItems())
     {
         if (!child || !child->IsVisible())
             continue;
-        
-        child->Render(context);
-        
+
+        if (!child->IsContainer())
+        {
+            child->Render(context);
+        }
+        else if (child->GetType() == ELEMENT_LAYOUT_BOX)
+        {
+            child->Render(context);
+        }
         if (child->IsContainer())
         {
             RenderContainerChildren(widget, child);
         }
     }
 
-    // Restore transform before drawing scrollbars (scrollbars are in container-local space, not scrolled)
+    // Restore transform before drawing scrollbars (in container-local space, not scrolled)
     context->SetTransform(originalTransform);
 
-    // Draw scrollbar thumbs & tracks
-    if (container->GetShowScrollbar())
-    {
-        const bool isVertDragging = (widget.m_IsScrollbarDragging && widget.m_ScrollbarDragContainer == container && widget.m_ScrollbarDragIsVertical);
-        const bool isHorizDragging = (widget.m_IsScrollbarDragging && widget.m_ScrollbarDragContainer == container && !widget.m_ScrollbarDragIsVertical);
-        const bool isVertHovered = (widget.m_ScrollbarHoverContainer == container && (widget.m_ScrollbarHoverPart == Widget::ScrollbarHitPart::VerticalThumb || widget.m_ScrollbarHoverPart == Widget::ScrollbarHitPart::VerticalTrack));
-        const bool isHorizHovered = (widget.m_ScrollbarHoverContainer == container && (widget.m_ScrollbarHoverPart == Widget::ScrollbarHitPart::HorizontalThumb || widget.m_ScrollbarHoverPart == Widget::ScrollbarHitPart::HorizontalTrack));
-
-        const float inset = container->GetScrollbarInset();
-        const float minThumbLen = container->GetScrollbarMinThumbLength();
-
-        const bool hasVert = container->GetShowScrollbarY() && container->IsScrollableY() && container->GetMaxScrollY() > 0;
-        const bool hasHoriz = container->GetShowScrollbarX() && container->IsScrollableX() && container->GetMaxScrollX() > 0;
-
-        // Base scrollbar thicknesses
-        const float baseVertW = (float)(isVertDragging || isVertHovered ? container->GetScrollbarHoverWidth() : container->GetScrollbarWidth());
-        const float baseHorizW = (float)(isHorizDragging || isHorizHovered ? container->GetScrollbarHoverWidth() : container->GetScrollbarWidth());
-
-        // Vertical scrollbar
-        if (hasVert)
-        {
-            const int maxScrollY = container->GetMaxScrollY();
-            const int contentH = container->GetContentHeight();
-            const float trackH = (std::max)(0.0f, (float)bounds.Height - (2.0f * inset) - (hasHoriz ? (baseHorizW + inset) : 0.0f));
-
-            if (trackH > 0.0f)
-            {
-                const float thumbH = (std::min)(trackH, (std::max)(minThumbLen, trackH * ((float)bounds.Height / (float)contentH)));
-                const float thumbTravel = (std::max)(0.0f, trackH - thumbH);
-                const float thumbY = (maxScrollY > 0) ? (thumbTravel * ((float)container->GetScrollY() / (float)maxScrollY)) : 0.0f;
-
-                const float sbLeft = (float)(bounds.X + bounds.Width) - baseVertW - inset;
-                const float sbTop = (float)bounds.Y + inset;
-
-                // 1. Draw track if enabled
-                if (container->GetScrollbarTrackAlpha() > 0)
-                {
-                    const float trackRadius = container->GetScrollbarTrackRadius();
-                    D2D1_ROUNDED_RECT trackRect = D2D1::RoundedRect(
-                        D2D1::RectF(sbLeft, sbTop, sbLeft + baseVertW, sbTop + trackH),
-                        trackRadius, trackRadius);
-
-                    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> trackBrush;
-                    if (Direct2D::CreateSolidBrush(context, container->GetScrollbarTrackColor(), (float)container->GetScrollbarTrackAlpha() / 255.0f, &trackBrush))
-                    {
-                        context->FillRoundedRectangle(trackRect, trackBrush.Get());
-                    }
-                }
-
-                // 2. Draw thumb
-                COLORREF thumbColor = container->GetScrollbarColor();
-                BYTE thumbAlpha = container->GetScrollbarAlpha();
-                if (isVertDragging)
-                {
-                    thumbColor = container->GetScrollbarActiveColor();
-                    thumbAlpha = container->GetScrollbarActiveAlpha();
-                }
-                else if (isVertHovered)
-                {
-                    thumbColor = container->GetScrollbarHoverColor();
-                    thumbAlpha = container->GetScrollbarHoverAlpha();
-                }
-
-                const float sbR = container->GetScrollbarRadius();
-                D2D1_ROUNDED_RECT thumbRect = D2D1::RoundedRect(
-                    D2D1::RectF(sbLeft, sbTop + thumbY, sbLeft + baseVertW, sbTop + thumbY + thumbH),
-                    sbR, sbR);
-
-                Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> thumbBrush;
-                if (Direct2D::CreateSolidBrush(context, thumbColor, (float)thumbAlpha / 255.0f, &thumbBrush))
-                {
-                    context->FillRoundedRectangle(thumbRect, thumbBrush.Get());
-                }
-            }
-        }
-
-        // Horizontal scrollbar
-        if (hasHoriz)
-        {
-            const int maxScrollX = container->GetMaxScrollX();
-            const int contentW = container->GetContentWidth();
-            const float trackW = (std::max)(0.0f, (float)bounds.Width - (2.0f * inset) - (hasVert ? (baseVertW + inset) : 0.0f));
-
-            if (trackW > 0.0f)
-            {
-                const float thumbW = (std::min)(trackW, (std::max)(minThumbLen, trackW * ((float)bounds.Width / (float)contentW)));
-                const float thumbTravel = (std::max)(0.0f, trackW - thumbW);
-                const float thumbX = (maxScrollX > 0) ? (thumbTravel * ((float)container->GetScrollX() / (float)maxScrollX)) : 0.0f;
-
-                const float sbLeft = (float)bounds.X + inset;
-                const float sbTop = (float)(bounds.Y + bounds.Height) - baseHorizW - inset;
-
-                // 1. Draw track if enabled
-                if (container->GetScrollbarTrackAlpha() > 0)
-                {
-                    const float trackRadius = container->GetScrollbarTrackRadius();
-                    D2D1_ROUNDED_RECT trackRect = D2D1::RoundedRect(
-                        D2D1::RectF(sbLeft, sbTop, sbLeft + trackW, sbTop + baseHorizW),
-                        trackRadius, trackRadius);
-
-                    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> trackBrush;
-                    if (Direct2D::CreateSolidBrush(context, container->GetScrollbarTrackColor(), (float)container->GetScrollbarTrackAlpha() / 255.0f, &trackBrush))
-                    {
-                        context->FillRoundedRectangle(trackRect, trackBrush.Get());
-                    }
-                }
-
-                // 2. Draw thumb
-                COLORREF thumbColor = container->GetScrollbarColor();
-                BYTE thumbAlpha = container->GetScrollbarAlpha();
-                if (isHorizDragging)
-                {
-                    thumbColor = container->GetScrollbarActiveColor();
-                    thumbAlpha = container->GetScrollbarActiveAlpha();
-                }
-                else if (isHorizHovered)
-                {
-                    thumbColor = container->GetScrollbarHoverColor();
-                    thumbAlpha = container->GetScrollbarHoverAlpha();
-                }
-
-                const float sbR = container->GetScrollbarRadius();
-                D2D1_ROUNDED_RECT thumbRect = D2D1::RoundedRect(
-                    D2D1::RectF(sbLeft + thumbX, sbTop, sbLeft + thumbX + thumbW, sbTop + baseHorizW),
-                    sbR, sbR);
-
-                Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> thumbBrush;
-                if (Direct2D::CreateSolidBrush(context, thumbColor, (float)thumbAlpha / 255.0f, &thumbBrush))
-                {
-                    context->FillRoundedRectangle(thumbRect, thumbBrush.Get());
-                }
-            }
-        }
-    }
+    // Draw scrollbars using dedicated ScrollbarRenderer
+    ScrollbarRenderer::DrawScrollbars(widget, container, context, bounds);
 
     context->PopLayer();
 }

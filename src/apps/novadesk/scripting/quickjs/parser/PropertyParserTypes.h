@@ -140,6 +140,27 @@ namespace PropertyParser
         bool hasScrollbarTrackColor = false;
         COLORREF scrollbarTrackColor = RGB(0, 0, 0);
         BYTE scrollbarTrackAlpha = 0;
+        bool hasShowScrollbarButtons = false;
+        bool showScrollbarButtons = false;
+        bool hasScrollbarButtonSize = false;
+        float scrollbarButtonSize = 14.0f;
+        bool hasScrollbarButtonRadius = false;
+        float scrollbarButtonRadius = 2.0f;
+        bool hasScrollbarArrowColor = false;
+        COLORREF scrollbarArrowColor = RGB(255, 255, 255);
+        BYTE scrollbarArrowAlpha = 150;
+        bool hasScrollbarArrowHoverColor = false;
+        COLORREF scrollbarArrowHoverColor = RGB(255, 255, 255);
+        BYTE scrollbarArrowHoverAlpha = 220;
+        bool hasScrollbarArrowActiveColor = false;
+        COLORREF scrollbarArrowActiveColor = RGB(255, 255, 255);
+        BYTE scrollbarArrowActiveAlpha = 255;
+        bool hasScrollbarButtonBgColor = false;
+        COLORREF scrollbarButtonBgColor = RGB(0, 0, 0);
+        BYTE scrollbarButtonBgAlpha = 0;
+        bool hasScrollbarButtonHoverBgColor = false;
+        COLORREF scrollbarButtonHoverBgColor = RGB(255, 255, 255);
+        BYTE scrollbarButtonHoverBgAlpha = 30;
     };
 
     struct GeneralImageOptions : public ElementOptions

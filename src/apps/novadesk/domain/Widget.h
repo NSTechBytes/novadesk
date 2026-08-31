@@ -43,6 +43,7 @@
 
 // Forward declarations
 class WidgetLayoutHelper;
+class ScrollbarRenderer;
 class ColorPickerPopup;
 
 namespace PropertyParser {
@@ -366,6 +367,7 @@ public:
 
     friend class WidgetAnimationHelper;
     friend class WidgetLayoutHelper;
+    friend class ScrollbarRenderer;
 
 private:
     static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -474,7 +476,17 @@ private:
     Element *m_DragElement = nullptr;
     
     // Scrollbar Dragging & Hover State
-    enum class ScrollbarHitPart { None, VerticalThumb, VerticalTrack, HorizontalThumb, HorizontalTrack };
+    enum class ScrollbarHitPart {
+        None,
+        VerticalTopButton,
+        VerticalBottomButton,
+        VerticalThumb,
+        VerticalTrack,
+        HorizontalLeftButton,
+        HorizontalRightButton,
+        HorizontalThumb,
+        HorizontalTrack
+    };
     struct ScrollbarHitResult {
         Element* container = nullptr;
         ScrollbarHitPart part = ScrollbarHitPart::None;
@@ -488,6 +500,7 @@ private:
     Element* m_ScrollbarDragContainer = nullptr;
     Element* m_ScrollbarHoverContainer = nullptr;
     ScrollbarHitPart m_ScrollbarHoverPart = ScrollbarHitPart::None;
+    ScrollbarHitPart m_ScrollbarActivePart = ScrollbarHitPart::None;
     bool m_ScrollbarDragIsVertical = true;
     int m_ScrollbarDragStartMouse = 0;
     int m_ScrollbarDragStartScroll = 0;
@@ -552,6 +565,7 @@ private:
     static const UINT_PTR TIMER_CTRL_OVERRIDE = 4;
     static const UINT_PTR TIMER_CARET = 5;
     static const UINT_PTR TIMER_ANIMATION = 6;
+    static const UINT_PTR TIMER_SCROLLBAR_BUTTON = 7;
 };
 
 #endif
