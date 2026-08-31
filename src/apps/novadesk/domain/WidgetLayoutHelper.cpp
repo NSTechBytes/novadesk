@@ -271,13 +271,16 @@ void WidgetLayoutHelper::RenderContainerChildren(const Widget& widget, Element* 
         context->PushLayer(D2D1::LayerParameters(clipRect), layer.Get());
     }
 
-    // Apply scroll translation: shift rendered children by (-scrollX, -scrollY)
+    // Apply container position and scroll translation:
+    // Children have container-relative coordinates, so we translate by (bounds.X - scrollX, bounds.Y - scrollY)
     D2D1_MATRIX_3X2_F originalTransform;
     context->GetTransform(&originalTransform);
     float scrollX = (float)container->GetScrollX();
     float scrollY = (float)container->GetScrollY();
-    D2D1_MATRIX_3X2_F scrollTranslation = D2D1::Matrix3x2F::Translation(-scrollX, -scrollY);
-    context->SetTransform(scrollTranslation * originalTransform);
+    D2D1_MATRIX_3X2_F translate = D2D1::Matrix3x2F::Translation(
+        (float)bounds.X - scrollX,
+        (float)bounds.Y - scrollY);
+    context->SetTransform(translate * originalTransform);
 
     // Render all children of this container (elements stored in widget's flat list)
     for (Element* child : container->GetContainerItems())
