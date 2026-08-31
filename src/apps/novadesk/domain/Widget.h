@@ -472,6 +472,26 @@ private:
     POINT m_DragStartWindow = { 0, 0 };
     bool m_IsElementDragging = false;
     Element *m_DragElement = nullptr;
+    
+    // Scrollbar Dragging State
+    enum class ScrollbarHitPart { None, VerticalThumb, VerticalTrack, HorizontalThumb, HorizontalTrack };
+    struct ScrollbarHitResult {
+        Element* container = nullptr;
+        ScrollbarHitPart part = ScrollbarHitPart::None;
+        int trackLength = 0;
+        int thumbLength = 0;
+        int maxScroll = 0;
+    };
+    bool HitTestContainerScrollbar(int x, int y, ScrollbarHitResult& result);
+    bool m_IsScrollbarDragging = false;
+    Element* m_ScrollbarDragContainer = nullptr;
+    bool m_ScrollbarDragIsVertical = true;
+    int m_ScrollbarDragStartMouse = 0;
+    int m_ScrollbarDragStartScroll = 0;
+    int m_ScrollbarDragTrackLength = 0;
+    int m_ScrollbarDragThumbLength = 0;
+    int m_ScrollbarDragMaxScroll = 0;
+
     bool m_IsMouseOverWidget = false;
     bool m_IsMinimized = false;
     bool m_IsMaximized = false;

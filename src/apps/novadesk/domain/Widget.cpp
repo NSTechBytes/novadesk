@@ -1124,7 +1124,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             const bool inputBoxFocused = (widget->m_FocusedInputBox != nullptr);
 
             const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-            if (!widget->m_IsElementDragging && !isSelectingText && !inputBoxFocused && (widget->m_Options.draggable || ctrlHeld))
+            if (!widget->m_IsElementDragging && !widget->m_IsScrollbarDragging && !isSelectingText && !inputBoxFocused && (widget->m_Options.draggable || ctrlHeld))
             {
                 SetCapture(hWnd);
                 widget->m_IsDragging = true;
@@ -1351,8 +1351,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 return 0;
             }
 
-            // Don't allow widget drag while selecting text or input box is focused
-            if (widget->m_IsDragging && (widget->m_TextSelectionElement != nullptr || widget->m_FocusedInputBox != nullptr))
+            // Don't allow widget drag while selecting text, input box is focused, or scrollbar is being dragged
+            if (widget->m_IsDragging && (widget->m_TextSelectionElement != nullptr || widget->m_FocusedInputBox != nullptr || widget->m_IsScrollbarDragging))
             {
                 widget->m_IsDragging = false;
                 if (GetCapture() == hWnd)
@@ -2731,6 +2731,96 @@ bool Widget::HitTestContainerChildrenDetailed(
     return WidgetLayoutHelper::HitTestContainerChildrenDetailed(
         *this, container, x, y, message, wParam,
         outHitElement, outActionElement, outMouseActionElement, outToolTipElement);
+}
+
+bool Widget::HitTestContainerScrollbar(int x, int y, ScrollbarHitResult& result)
+{
+    const float hitMargin = 4.0f;
+    for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it)
+    {
+        Element* element = it->get();
+        if (!element || !element->IsVisible() || !element->IsContainer() || !element->GetShowScrollbar())
+            continue;
+
+        element->RecalcContentExtents();
+        GfxRect bounds = element->GetBounds();
+        const float sbW = (float)element->GetScrollbarWidth();
+
+        // 1. Check Vertical Scrollbar
+        if (element->IsScrollableY())
+        {
+            int maxScrollY = element->GetMaxScrollY();
+            if (maxScrollY > 0)
+            {
+                int contentH = element->GetContentHeight();
+                float trackH = (float)bounds.Height;
+                float thumbH = (std::max)(20.0f, trackH * ((float)bounds.Height / (float)contentH));
+                float thumbTravel = trackH - thumbH;
+                float thumbY = thumbTravel * ((float)element->GetScrollY() / (float)maxScrollY);
+
+                float sbLeft = (float)(bounds.X + bounds.Width) - sbW - 2.0f;
+                float sbRight = sbLeft + sbW;
+                float sbTop = (float)bounds.Y + thumbY;
+                float sbBottom = sbTop + thumbH;
+
+                if (x >= (int)(sbLeft - hitMargin) && x <= (int)(sbRight + hitMargin) &&
+                    y >= bounds.Y && y <= (bounds.Y + bounds.Height))
+                {
+                    result.container = element;
+                    result.trackLength = (int)trackH;
+                    result.thumbLength = (int)thumbH;
+                    result.maxScroll = maxScrollY;
+                    if (y >= (int)(sbTop - hitMargin) && y <= (int)(sbBottom + hitMargin))
+                    {
+                        result.part = ScrollbarHitPart::VerticalThumb;
+                    }
+                    else
+                    {
+                        result.part = ScrollbarHitPart::VerticalTrack;
+                    }
+                    return true;
+                }
+            }
+        }
+
+        // 2. Check Horizontal Scrollbar
+        if (element->IsScrollableX())
+        {
+            int maxScrollX = element->GetMaxScrollX();
+            if (maxScrollX > 0)
+            {
+                int contentW = element->GetContentWidth();
+                float trackW = (float)bounds.Width;
+                float thumbW = (std::max)(20.0f, trackW * ((float)bounds.Width / (float)contentW));
+                float thumbTravel = trackW - thumbW;
+                float thumbX = thumbTravel * ((float)element->GetScrollX() / (float)maxScrollX);
+
+                float sbLeft = (float)bounds.X + thumbX;
+                float sbRight = sbLeft + thumbW;
+                float sbTop = (float)(bounds.Y + bounds.Height) - sbW - 2.0f;
+                float sbBottom = sbTop + sbW;
+
+                if (y >= (int)(sbTop - hitMargin) && y <= (int)(sbBottom + hitMargin) &&
+                    x >= bounds.X && x <= (bounds.X + bounds.Width))
+                {
+                    result.container = element;
+                    result.trackLength = (int)trackW;
+                    result.thumbLength = (int)thumbW;
+                    result.maxScroll = maxScrollX;
+                    if (x >= (int)(sbLeft - hitMargin) && x <= (int)(sbRight + hitMargin))
+                    {
+                        result.part = ScrollbarHitPart::HorizontalThumb;
+                    }
+                    else
+                    {
+                        result.part = ScrollbarHitPart::HorizontalTrack;
+                    }
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 /*
@@ -4302,91 +4392,172 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     // Dispatch drag actions (for slider-like interactions on any element).
     if (message == WM_LBUTTONDOWN)
     {
-        // Handle text selection
-        TextElement* textElem = dynamic_cast<TextElement*>(hitElement);
-        if (textElem && textElem->GetTextSelection())
+        // Check if scrollbar of a container was clicked
+        ScrollbarHitResult sbHit;
+        if (HitTestContainerScrollbar(x, y, sbHit))
         {
-            // Clear previous selection from other elements
-            if (m_TextSelectionElement && m_TextSelectionElement != textElem)
+            if (sbHit.part == ScrollbarHitPart::VerticalThumb)
             {
-                m_TextSelectionElement->ClearTextSelection();
-            }
-            m_TextSelectionElement = textElem;
-            textElem->HandleTextSelectionMouseDown(x, y);
-            handled = true;
-            needRedraw = true;
-        }
-        else
-        {
-            // Clicked on non-selectable element, clear selection
-            if (m_TextSelectionElement)
-            {
-                m_TextSelectionElement->ClearTextSelection();
-                m_TextSelectionElement = nullptr;
-                needRedraw = true;
-            }
-        }
-
-        // Input box focus + caret placement on click.
-        InputBoxElement* inputElem = dynamic_cast<InputBoxElement*>(hitElement);
-        ColorPickerElement* colorPicker = dynamic_cast<ColorPickerElement*>(hitElement);
-        if (colorPicker)
-        {
-            if (m_ColorPickerPopup) m_ColorPickerPopup->Close();
-            m_ColorPickerPopup = std::make_unique<ColorPickerPopup>(this, colorPicker);
-            m_ColorPickerPopup->Show();
-            handled = true;
-        }
-        if (inputElem)
-        {
-            if (m_FocusedInputBox && m_FocusedInputBox != inputElem)
-            {
-                if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-                    JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
-                m_FocusedInputBox->SetFocus(false);
-                KillTimer(m_hWnd, TIMER_CARET);
-            }
-            if (!inputElem->IsFocused())
-            {
-                inputElem->SetFocus(true);
-                SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
-                if (inputElem->m_OnFocusCallbackId != -1)
-                    JSEngine::CallEventCallback(inputElem->m_OnFocusCallbackId, this, nullptr);
-            }
-            m_FocusedInputBox = inputElem;
-            bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-            inputElem->HandleMouseDown(x, y, shift);
-            SetFocus();
-            SetCapture(m_hWnd);
-            handled = true;
-            needRedraw = true;
-        }
-        else
-        {
-            // Clicked outside any input box: blur the focused one.
-            if (m_FocusedInputBox)
-            {
-                if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-                    JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
-                m_FocusedInputBox->SetFocus(false);
-                m_FocusedInputBox = nullptr;
-                KillTimer(m_hWnd, TIMER_CARET);
-                needRedraw = true;
-            }
-        }
-
-        Element *dragTarget = actionElement ? actionElement : hitElement;
-        if (dragTarget && dragTarget->HasDragAction())
-        {
-            m_DragElement = dragTarget;
-            m_IsElementDragging = true;
-            SetCapture(m_hWnd);
-
-            if (m_DragElement->m_OnDragStartCallbackId != -1)
-            {
-                JSEngine::MouseEventData eventData = buildElementEventData(m_DragElement);
-                JSEngine::CallEventCallback(m_DragElement->m_OnDragStartCallbackId, this, &eventData);
+                m_IsScrollbarDragging = true;
+                m_ScrollbarDragContainer = sbHit.container;
+                m_ScrollbarDragIsVertical = true;
+                m_ScrollbarDragStartMouse = y;
+                m_ScrollbarDragStartScroll = sbHit.container->GetScrollY();
+                m_ScrollbarDragTrackLength = sbHit.trackLength;
+                m_ScrollbarDragThumbLength = sbHit.thumbLength;
+                m_ScrollbarDragMaxScroll = sbHit.maxScroll;
+                SetCapture(m_hWnd);
                 handled = true;
+                needRedraw = true;
+            }
+            else if (sbHit.part == ScrollbarHitPart::VerticalTrack)
+            {
+                GfxRect bounds = sbHit.container->GetBounds();
+                float trackOffset = (float)(y - bounds.Y - sbHit.thumbLength / 2);
+                float thumbTravel = (float)(sbHit.trackLength - sbHit.thumbLength);
+                if (thumbTravel > 0.0f)
+                {
+                    int targetScroll = (int)std::round((trackOffset / thumbTravel) * (float)sbHit.maxScroll);
+                    sbHit.container->SetScrollY(targetScroll);
+                }
+                m_IsScrollbarDragging = true;
+                m_ScrollbarDragContainer = sbHit.container;
+                m_ScrollbarDragIsVertical = true;
+                m_ScrollbarDragStartMouse = y;
+                m_ScrollbarDragStartScroll = sbHit.container->GetScrollY();
+                m_ScrollbarDragTrackLength = sbHit.trackLength;
+                m_ScrollbarDragThumbLength = sbHit.thumbLength;
+                m_ScrollbarDragMaxScroll = sbHit.maxScroll;
+                SetCapture(m_hWnd);
+                handled = true;
+                needRedraw = true;
+            }
+            else if (sbHit.part == ScrollbarHitPart::HorizontalThumb)
+            {
+                m_IsScrollbarDragging = true;
+                m_ScrollbarDragContainer = sbHit.container;
+                m_ScrollbarDragIsVertical = false;
+                m_ScrollbarDragStartMouse = x;
+                m_ScrollbarDragStartScroll = sbHit.container->GetScrollX();
+                m_ScrollbarDragTrackLength = sbHit.trackLength;
+                m_ScrollbarDragThumbLength = sbHit.thumbLength;
+                m_ScrollbarDragMaxScroll = sbHit.maxScroll;
+                SetCapture(m_hWnd);
+                handled = true;
+                needRedraw = true;
+            }
+            else if (sbHit.part == ScrollbarHitPart::HorizontalTrack)
+            {
+                GfxRect bounds = sbHit.container->GetBounds();
+                float trackOffset = (float)(x - bounds.X - sbHit.thumbLength / 2);
+                float thumbTravel = (float)(sbHit.trackLength - sbHit.thumbLength);
+                if (thumbTravel > 0.0f)
+                {
+                    int targetScroll = (int)std::round((trackOffset / thumbTravel) * (float)sbHit.maxScroll);
+                    sbHit.container->SetScrollX(targetScroll);
+                }
+                m_IsScrollbarDragging = true;
+                m_ScrollbarDragContainer = sbHit.container;
+                m_ScrollbarDragIsVertical = false;
+                m_ScrollbarDragStartMouse = x;
+                m_ScrollbarDragStartScroll = sbHit.container->GetScrollX();
+                m_ScrollbarDragTrackLength = sbHit.trackLength;
+                m_ScrollbarDragThumbLength = sbHit.thumbLength;
+                m_ScrollbarDragMaxScroll = sbHit.maxScroll;
+                SetCapture(m_hWnd);
+                handled = true;
+                needRedraw = true;
+            }
+        }
+
+        if (!handled)
+        {
+            // Handle text selection
+            TextElement* textElem = dynamic_cast<TextElement*>(hitElement);
+            if (textElem && textElem->GetTextSelection())
+            {
+                // Clear previous selection from other elements
+                if (m_TextSelectionElement && m_TextSelectionElement != textElem)
+                {
+                    m_TextSelectionElement->ClearTextSelection();
+                }
+                m_TextSelectionElement = textElem;
+                textElem->HandleTextSelectionMouseDown(x, y);
+                handled = true;
+                needRedraw = true;
+            }
+            else
+            {
+                // Clicked on non-selectable element, clear selection
+                if (m_TextSelectionElement)
+                {
+                    m_TextSelectionElement->ClearTextSelection();
+                    m_TextSelectionElement = nullptr;
+                    needRedraw = true;
+                }
+            }
+
+            // Input box focus + caret placement on click.
+            InputBoxElement* inputElem = dynamic_cast<InputBoxElement*>(hitElement);
+            ColorPickerElement* colorPicker = dynamic_cast<ColorPickerElement*>(hitElement);
+            if (colorPicker)
+            {
+                if (m_ColorPickerPopup) m_ColorPickerPopup->Close();
+                m_ColorPickerPopup = std::make_unique<ColorPickerPopup>(this, colorPicker);
+                m_ColorPickerPopup->Show();
+                handled = true;
+            }
+            if (inputElem)
+            {
+                if (m_FocusedInputBox && m_FocusedInputBox != inputElem)
+                {
+                    if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
+                        JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
+                    m_FocusedInputBox->SetFocus(false);
+                    KillTimer(m_hWnd, TIMER_CARET);
+                }
+                if (!inputElem->IsFocused())
+                {
+                    inputElem->SetFocus(true);
+                    SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
+                    if (inputElem->m_OnFocusCallbackId != -1)
+                        JSEngine::CallEventCallback(inputElem->m_OnFocusCallbackId, this, nullptr);
+                }
+                m_FocusedInputBox = inputElem;
+                bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+                inputElem->HandleMouseDown(x, y, shift);
+                SetFocus();
+                SetCapture(m_hWnd);
+                handled = true;
+                needRedraw = true;
+            }
+            else
+            {
+                // Clicked outside any input box: blur the focused one.
+                if (m_FocusedInputBox)
+                {
+                    if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
+                        JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
+                    m_FocusedInputBox->SetFocus(false);
+                    m_FocusedInputBox = nullptr;
+                    KillTimer(m_hWnd, TIMER_CARET);
+                    needRedraw = true;
+                }
+            }
+
+            Element *dragTarget = actionElement ? actionElement : hitElement;
+            if (dragTarget && dragTarget->HasDragAction())
+            {
+                m_DragElement = dragTarget;
+                m_IsElementDragging = true;
+                SetCapture(m_hWnd);
+
+                if (m_DragElement->m_OnDragStartCallbackId != -1)
+                {
+                    JSEngine::MouseEventData eventData = buildElementEventData(m_DragElement);
+                    JSEngine::CallEventCallback(m_DragElement->m_OnDragStartCallbackId, this, &eventData);
+                    handled = true;
+                }
             }
         }
     }
@@ -4404,6 +4575,27 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     }
     else if (message == WM_MOUSEMOVE)
     {
+        // Handle scrollbar dragging
+        if (m_IsScrollbarDragging && m_ScrollbarDragContainer)
+        {
+            int delta = (m_ScrollbarDragIsVertical ? y : x) - m_ScrollbarDragStartMouse;
+            float thumbTravel = (float)(m_ScrollbarDragTrackLength - m_ScrollbarDragThumbLength);
+            if (thumbTravel > 0.0f)
+            {
+                int newScroll = m_ScrollbarDragStartScroll + (int)std::round(((float)delta / thumbTravel) * (float)m_ScrollbarDragMaxScroll);
+                if (m_ScrollbarDragIsVertical)
+                {
+                    m_ScrollbarDragContainer->SetScrollY(newScroll);
+                }
+                else
+                {
+                    m_ScrollbarDragContainer->SetScrollX(newScroll);
+                }
+                needRedraw = true;
+            }
+            handled = true;
+        }
+
         // Handle text selection dragging
         if (m_TextSelectionElement && m_TextSelectionElement->GetTextSelection())
         {
@@ -4433,6 +4625,17 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     }
     else if (message == WM_LBUTTONUP)
     {
+        if (m_IsScrollbarDragging)
+        {
+            m_IsScrollbarDragging = false;
+            m_ScrollbarDragContainer = nullptr;
+            if (GetCapture() == m_hWnd && !m_IsDragging)
+            {
+                ReleaseCapture();
+            }
+            handled = true;
+        }
+
         // Handle text selection release
         if (m_TextSelectionElement && m_TextSelectionElement->GetTextSelection())
         {
