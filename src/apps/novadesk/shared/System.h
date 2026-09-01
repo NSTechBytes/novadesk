@@ -168,4 +168,49 @@ namespace novadesk::shared::system
     // Returns the button label string: "ok", "cancel", "yes", "no", "retry", "abort", "ignore"
     std::string ShowMessageBox(const MessageBoxOptions &opts);
 
+    struct FileFilter
+    {
+        std::wstring name;
+        std::vector<std::wstring> extensions; // e.g. ["jpg", "png"] or ["*"]
+    };
+
+    struct OpenFileDialogOptions
+    {
+        std::wstring title;
+        std::wstring defaultPath;
+        std::wstring buttonLabel;
+        std::vector<FileFilter> filters;
+        bool multiSelections = false;
+        bool openDirectory = false;
+        bool showHiddenFiles = false;
+        HWND parent = nullptr;
+    };
+
+    struct OpenFileDialogResult
+    {
+        bool canceled = true;
+        std::vector<std::wstring> filePaths;
+    };
+
+    OpenFileDialogResult ShowOpenFileDialog(const OpenFileDialogOptions &opts);
+
+    struct SaveFileDialogOptions
+    {
+        std::wstring title;
+        std::wstring defaultPath;
+        std::wstring buttonLabel;
+        std::wstring defaultExtension;
+        std::vector<FileFilter> filters;
+        bool showHiddenFiles = false;
+        HWND parent = nullptr;
+    };
+
+    struct SaveFileDialogResult
+    {
+        bool canceled = true;
+        std::wstring filePath;
+    };
+
+    SaveFileDialogResult ShowSaveFileDialog(const SaveFileDialogOptions &opts);
+
 } // namespace novadesk::shared::system

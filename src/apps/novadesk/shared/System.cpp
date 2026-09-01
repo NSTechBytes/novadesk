@@ -27,6 +27,8 @@
 #include <iphlpapi.h>
 #include <wininet.h>
 #include <shellapi.h>
+#include <shobjidl.h>
+#include <wrl/client.h>
 #include <pdh.h>
 
 #ifndef __IAudioMeterInformation_INTERFACE_DEFINED__
@@ -1221,6 +1223,228 @@ namespace novadesk::shared::system
         default:
             return "ok";
         }
+    }
+
+    OpenFileDialogResult ShowOpenFileDialog(const OpenFileDialogOptions &opts)
+    {
+        OpenFileDialogResult result;
+        result.canceled = true;
+
+        HRESULT hrCo = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        const bool needCoUninit = SUCCEEDED(hrCo);
+
+        Microsoft::WRL::ComPtr<IFileOpenDialog> pFileOpen;
+        HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&pFileOpen));
+        if (SUCCEEDED(hr) && pFileOpen)
+        {
+            FILEOPENDIALOGOPTIONS dialogOptions = FOS_FORCEFILESYSTEM;
+            if (opts.multiSelections)
+                dialogOptions |= FOS_ALLOWMULTISELECT;
+            if (opts.openDirectory)
+                dialogOptions |= FOS_PICKFOLDERS;
+            if (opts.showHiddenFiles)
+                dialogOptions |= FOS_FORCESHOWHIDDEN;
+
+            pFileOpen->SetOptions(dialogOptions);
+
+            if (!opts.title.empty())
+                pFileOpen->SetTitle(opts.title.c_str());
+
+            if (!opts.buttonLabel.empty())
+                pFileOpen->SetOkButtonLabel(opts.buttonLabel.c_str());
+
+            if (!opts.defaultPath.empty())
+            {
+                Microsoft::WRL::ComPtr<IShellItem> pFolder;
+                if (SUCCEEDED(SHCreateItemFromParsingName(opts.defaultPath.c_str(), nullptr, IID_PPV_ARGS(&pFolder))) && pFolder)
+                {
+                    pFileOpen->SetFolder(pFolder.Get());
+                }
+            }
+
+            // Set file filter specifications
+            std::vector<std::wstring> patternBuffers;
+            std::vector<COMDLG_FILTERSPEC> filterSpecs;
+            if (!opts.filters.empty() && !opts.openDirectory)
+            {
+                patternBuffers.reserve(opts.filters.size());
+                filterSpecs.reserve(opts.filters.size());
+
+                for (const auto &filter : opts.filters)
+                {
+                    std::wstring pattern;
+                    for (size_t i = 0; i < filter.extensions.size(); ++i)
+                    {
+                        if (i > 0)
+                            pattern += L";";
+                        if (filter.extensions[i] == L"*" || filter.extensions[i].empty())
+                            pattern += L"*.*";
+                        else if (filter.extensions[i][0] == L'*')
+                            pattern += filter.extensions[i];
+                        else
+                            pattern += L"*." + filter.extensions[i];
+                    }
+                    patternBuffers.push_back(pattern);
+                }
+
+                for (size_t i = 0; i < opts.filters.size(); ++i)
+                {
+                    COMDLG_FILTERSPEC spec = {};
+                    spec.pszName = opts.filters[i].name.c_str();
+                    spec.pszSpec = patternBuffers[i].c_str();
+                    filterSpecs.push_back(spec);
+                }
+
+                pFileOpen->SetFileTypes(static_cast<UINT>(filterSpecs.size()), filterSpecs.data());
+            }
+
+            hr = pFileOpen->Show(opts.parent);
+            if (SUCCEEDED(hr))
+            {
+                result.canceled = false;
+                if (opts.multiSelections)
+                {
+                    Microsoft::WRL::ComPtr<IShellItemArray> pItems;
+                    if (SUCCEEDED(pFileOpen->GetResults(&pItems)) && pItems)
+                    {
+                        DWORD count = 0;
+                        if (SUCCEEDED(pItems->GetCount(&count)))
+                        {
+                            for (DWORD i = 0; i < count; ++i)
+                            {
+                                Microsoft::WRL::ComPtr<IShellItem> pItem;
+                                if (SUCCEEDED(pItems->GetItemAt(i, &pItem)) && pItem)
+                                {
+                                    PWSTR pszPath = nullptr;
+                                    if (SUCCEEDED(pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszPath)) && pszPath)
+                                    {
+                                        result.filePaths.emplace_back(pszPath);
+                                        CoTaskMemFree(pszPath);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    Microsoft::WRL::ComPtr<IShellItem> pItem;
+                    if (SUCCEEDED(pFileOpen->GetResult(&pItem)) && pItem)
+                    {
+                        PWSTR pszPath = nullptr;
+                        if (SUCCEEDED(pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszPath)) && pszPath)
+                        {
+                            result.filePaths.emplace_back(pszPath);
+                            CoTaskMemFree(pszPath);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (needCoUninit)
+        {
+            CoUninitialize();
+        }
+
+        return result;
+    }
+
+    SaveFileDialogResult ShowSaveFileDialog(const SaveFileDialogOptions &opts)
+    {
+        SaveFileDialogResult result;
+        result.canceled = true;
+
+        HRESULT hrCo = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        const bool needCoUninit = SUCCEEDED(hrCo);
+
+        Microsoft::WRL::ComPtr<IFileSaveDialog> pFileSave;
+        HRESULT hr = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&pFileSave));
+        if (SUCCEEDED(hr) && pFileSave)
+        {
+            FILEOPENDIALOGOPTIONS dialogOptions = FOS_FORCEFILESYSTEM | FOS_OVERWRITEPROMPT;
+            if (opts.showHiddenFiles)
+                dialogOptions |= FOS_FORCESHOWHIDDEN;
+
+            pFileSave->SetOptions(dialogOptions);
+
+            if (!opts.title.empty())
+                pFileSave->SetTitle(opts.title.c_str());
+
+            if (!opts.buttonLabel.empty())
+                pFileSave->SetOkButtonLabel(opts.buttonLabel.c_str());
+
+            if (!opts.defaultExtension.empty())
+                pFileSave->SetDefaultExtension(opts.defaultExtension.c_str());
+
+            if (!opts.defaultPath.empty())
+            {
+                Microsoft::WRL::ComPtr<IShellItem> pFolder;
+                if (SUCCEEDED(SHCreateItemFromParsingName(opts.defaultPath.c_str(), nullptr, IID_PPV_ARGS(&pFolder))) && pFolder)
+                {
+                    pFileSave->SetFolder(pFolder.Get());
+                }
+            }
+
+            // Set file filter specifications
+            std::vector<std::wstring> patternBuffers;
+            std::vector<COMDLG_FILTERSPEC> filterSpecs;
+            if (!opts.filters.empty())
+            {
+                patternBuffers.reserve(opts.filters.size());
+                filterSpecs.reserve(opts.filters.size());
+
+                for (const auto &filter : opts.filters)
+                {
+                    std::wstring pattern;
+                    for (size_t i = 0; i < filter.extensions.size(); ++i)
+                    {
+                        if (i > 0)
+                            pattern += L";";
+                        if (filter.extensions[i] == L"*" || filter.extensions[i].empty())
+                            pattern += L"*.*";
+                        else if (filter.extensions[i][0] == L'*')
+                            pattern += filter.extensions[i];
+                        else
+                            pattern += L"*." + filter.extensions[i];
+                    }
+                    patternBuffers.push_back(pattern);
+                }
+
+                for (size_t i = 0; i < opts.filters.size(); ++i)
+                {
+                    COMDLG_FILTERSPEC spec = {};
+                    spec.pszName = opts.filters[i].name.c_str();
+                    spec.pszSpec = patternBuffers[i].c_str();
+                    filterSpecs.push_back(spec);
+                }
+
+                pFileSave->SetFileTypes(static_cast<UINT>(filterSpecs.size()), filterSpecs.data());
+            }
+
+            hr = pFileSave->Show(opts.parent);
+            if (SUCCEEDED(hr))
+            {
+                Microsoft::WRL::ComPtr<IShellItem> pItem;
+                if (SUCCEEDED(pFileSave->GetResult(&pItem)) && pItem)
+                {
+                    PWSTR pszPath = nullptr;
+                    if (SUCCEEDED(pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszPath)) && pszPath)
+                    {
+                        result.canceled = false;
+                        result.filePath = pszPath;
+                        CoTaskMemFree(pszPath);
+                    }
+                }
+            }
+        }
+
+        if (needCoUninit)
+        {
+            CoUninitialize();
+        }
+
+        return result;
     }
 
     // *****************************************************************************

@@ -1992,6 +1992,298 @@ namespace novadesk::scripting::quickjs
             return JS_NewString(ctx, result.c_str());
         }
 
+        void ParseFileFilters(JSContext *ctx, JSValueConst filtersVal, std::vector<novadesk::shared::system::FileFilter> &outFilters)
+        {
+            if (!JS_IsArray(filtersVal))
+                return;
+
+            uint32_t len = 0;
+            JSValue lenVal = JS_GetPropertyStr(ctx, filtersVal, "length");
+            JS_ToUint32(ctx, &len, lenVal);
+            JS_FreeValue(ctx, lenVal);
+
+            for (uint32_t i = 0; i < len; ++i)
+            {
+                JSValue item = JS_GetPropertyUint32(ctx, filtersVal, i);
+                if (JS_IsObject(item))
+                {
+                    novadesk::shared::system::FileFilter filter;
+                    GetObjectString(ctx, item, "name", filter.name);
+
+                    JSValue extsVal = JS_GetPropertyStr(ctx, item, "extensions");
+                    if (JS_IsArray(extsVal))
+                    {
+                        uint32_t extLen = 0;
+                        JSValue extLenVal = JS_GetPropertyStr(ctx, extsVal, "length");
+                        JS_ToUint32(ctx, &extLen, extLenVal);
+                        JS_FreeValue(ctx, extLenVal);
+
+                        for (uint32_t j = 0; j < extLen; ++j)
+                        {
+                            JSValue ext = JS_GetPropertyUint32(ctx, extsVal, j);
+                            const char *extStr = JS_ToCString(ctx, ext);
+                            if (extStr)
+                            {
+                                filter.extensions.push_back(Utils::ToWString(extStr));
+                                JS_FreeCString(ctx, extStr);
+                            }
+                            JS_FreeValue(ctx, ext);
+                        }
+                    }
+                    JS_FreeValue(ctx, extsVal);
+                    outFilters.push_back(filter);
+                }
+                JS_FreeValue(ctx, item);
+            }
+        }
+
+        void ParseDialogProperties(JSContext *ctx, JSValueConst propsVal, bool &outMulti, bool &outDir, bool &outHidden)
+        {
+            if (!JS_IsArray(propsVal))
+                return;
+
+            uint32_t len = 0;
+            JSValue lenVal = JS_GetPropertyStr(ctx, propsVal, "length");
+            JS_ToUint32(ctx, &len, lenVal);
+            JS_FreeValue(ctx, lenVal);
+
+            for (uint32_t i = 0; i < len; ++i)
+            {
+                JSValue item = JS_GetPropertyUint32(ctx, propsVal, i);
+                const char *s = JS_ToCString(ctx, item);
+                if (s)
+                {
+                    std::string str(s);
+                    JS_FreeCString(ctx, s);
+                    if (str == "multiSelections" || str == "multiSelection" || str == "multiple")
+                        outMulti = true;
+                    else if (str == "openDirectory" || str == "directory" || str == "folder")
+                        outDir = true;
+                    else if (str == "showHiddenFiles" || str == "hidden")
+                        outHidden = true;
+                }
+                JS_FreeValue(ctx, item);
+            }
+        }
+
+        JSValue JsDialogShowOpenDialog(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            novadesk::shared::system::OpenFileDialogOptions opts;
+            if (argc > 0 && JS_IsObject(argv[0]))
+            {
+                JSValueConst options = argv[0];
+                GetObjectString(ctx, options, "title", opts.title);
+                GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
+                GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
+                GetObjectBool(ctx, options, "multiSelections", opts.multiSelections);
+                GetObjectBool(ctx, options, "openDirectory", opts.openDirectory);
+                GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
+
+                JSValue filtersVal = JS_GetPropertyStr(ctx, options, "filters");
+                if (!JS_IsUndefined(filtersVal))
+                {
+                    ParseFileFilters(ctx, filtersVal, opts.filters);
+                    JS_FreeValue(ctx, filtersVal);
+                }
+
+                JSValue propsVal = JS_GetPropertyStr(ctx, options, "properties");
+                if (!JS_IsUndefined(propsVal))
+                {
+                    ParseDialogProperties(ctx, propsVal, opts.multiSelections, opts.openDirectory, opts.showHiddenFiles);
+                    JS_FreeValue(ctx, propsVal);
+                }
+            }
+
+            auto res = novadesk::shared::system::ShowOpenFileDialog(opts);
+
+            JSValue ret = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, ret, "canceled", JS_NewBool(ctx, res.canceled ? 1 : 0));
+
+            JSValue pathsArr = JS_NewArray(ctx);
+            for (uint32_t i = 0; i < static_cast<uint32_t>(res.filePaths.size()); ++i)
+            {
+                std::string pathStr = Utils::ToString(res.filePaths[i]);
+                JS_SetPropertyUint32(ctx, pathsArr, i, JS_NewString(ctx, pathStr.c_str()));
+            }
+            JS_SetPropertyStr(ctx, ret, "filePaths", pathsArr);
+
+            return ret;
+        }
+
+        JSValue JsDialogShowSaveDialog(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            novadesk::shared::system::SaveFileDialogOptions opts;
+            if (argc > 0 && JS_IsObject(argv[0]))
+            {
+                JSValueConst options = argv[0];
+                GetObjectString(ctx, options, "title", opts.title);
+                GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
+                GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
+                GetObjectString(ctx, options, "defaultExtension", opts.defaultExtension);
+                GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
+
+                JSValue filtersVal = JS_GetPropertyStr(ctx, options, "filters");
+                if (!JS_IsUndefined(filtersVal))
+                {
+                    ParseFileFilters(ctx, filtersVal, opts.filters);
+                    JS_FreeValue(ctx, filtersVal);
+                }
+            }
+
+            auto res = novadesk::shared::system::ShowSaveFileDialog(opts);
+
+            JSValue ret = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, ret, "canceled", JS_NewBool(ctx, res.canceled ? 1 : 0));
+            std::string pathStr = res.canceled ? "" : Utils::ToString(res.filePath);
+            JS_SetPropertyStr(ctx, ret, "filePath", JS_NewString(ctx, pathStr.c_str()));
+
+            return ret;
+        }
+
+        JSValue JsDialogShowFileExplorerDialog(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+        {
+            std::wstring type = L"open";
+            if (argc > 0 && JS_IsObject(argv[0]))
+            {
+                GetObjectString(ctx, argv[0], "type", type);
+                std::transform(type.begin(), type.end(), type.begin(), ::towlower);
+            }
+
+            if (type == L"save")
+            {
+                return JsDialogShowSaveDialog(ctx, this_val, argc, argv);
+            }
+            else if (type == L"directory" || type == L"folder")
+            {
+                novadesk::shared::system::OpenFileDialogOptions opts;
+                if (argc > 0 && JS_IsObject(argv[0]))
+                {
+                    JSValueConst options = argv[0];
+                    GetObjectString(ctx, options, "title", opts.title);
+                    GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
+                    GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
+                }
+                opts.openDirectory = true;
+                auto res = novadesk::shared::system::ShowOpenFileDialog(opts);
+                JSValue ret = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, ret, "canceled", JS_NewBool(ctx, res.canceled ? 1 : 0));
+                JSValue pathsArr = JS_NewArray(ctx);
+                for (uint32_t i = 0; i < static_cast<uint32_t>(res.filePaths.size()); ++i)
+                {
+                    std::string pathStr = Utils::ToString(res.filePaths[i]);
+                    JS_SetPropertyUint32(ctx, pathsArr, i, JS_NewString(ctx, pathStr.c_str()));
+                }
+                JS_SetPropertyStr(ctx, ret, "filePaths", pathsArr);
+                std::string singlePath = res.filePaths.empty() ? "" : Utils::ToString(res.filePaths[0]);
+                JS_SetPropertyStr(ctx, ret, "filePath", JS_NewString(ctx, singlePath.c_str()));
+                return ret;
+            }
+            else
+            {
+                return JsDialogShowOpenDialog(ctx, this_val, argc, argv);
+            }
+        }
+
+        JSValue JsDialogOpenFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            novadesk::shared::system::OpenFileDialogOptions opts;
+            opts.openDirectory = false;
+            if (argc > 0 && JS_IsObject(argv[0]))
+            {
+                JSValueConst options = argv[0];
+                GetObjectString(ctx, options, "title", opts.title);
+                GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
+                GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
+                GetObjectBool(ctx, options, "multiSelections", opts.multiSelections);
+                GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
+
+                JSValue filtersVal = JS_GetPropertyStr(ctx, options, "filters");
+                if (!JS_IsUndefined(filtersVal))
+                {
+                    ParseFileFilters(ctx, filtersVal, opts.filters);
+                    JS_FreeValue(ctx, filtersVal);
+                }
+
+                JSValue propsVal = JS_GetPropertyStr(ctx, options, "properties");
+                if (!JS_IsUndefined(propsVal))
+                {
+                    bool unusedDir = false;
+                    ParseDialogProperties(ctx, propsVal, opts.multiSelections, unusedDir, opts.showHiddenFiles);
+                    JS_FreeValue(ctx, propsVal);
+                }
+            }
+
+            auto res = novadesk::shared::system::ShowOpenFileDialog(opts);
+            if (res.canceled || res.filePaths.empty())
+            {
+                return JS_NULL;
+            }
+
+            if (opts.multiSelections)
+            {
+                JSValue pathsArr = JS_NewArray(ctx);
+                for (uint32_t i = 0; i < static_cast<uint32_t>(res.filePaths.size()); ++i)
+                {
+                    std::string pathStr = Utils::ToString(res.filePaths[i]);
+                    JS_SetPropertyUint32(ctx, pathsArr, i, JS_NewString(ctx, pathStr.c_str()));
+                }
+                return pathsArr;
+            }
+
+            return JS_NewString(ctx, Utils::ToString(res.filePaths[0]).c_str());
+        }
+
+        JSValue JsDialogSaveFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            novadesk::shared::system::SaveFileDialogOptions opts;
+            if (argc > 0 && JS_IsObject(argv[0]))
+            {
+                JSValueConst options = argv[0];
+                GetObjectString(ctx, options, "title", opts.title);
+                GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
+                GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
+                GetObjectString(ctx, options, "defaultExtension", opts.defaultExtension);
+                GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
+
+                JSValue filtersVal = JS_GetPropertyStr(ctx, options, "filters");
+                if (!JS_IsUndefined(filtersVal))
+                {
+                    ParseFileFilters(ctx, filtersVal, opts.filters);
+                    JS_FreeValue(ctx, filtersVal);
+                }
+            }
+
+            auto res = novadesk::shared::system::ShowSaveFileDialog(opts);
+            if (res.canceled || res.filePath.empty())
+            {
+                return JS_NULL;
+            }
+
+            return JS_NewString(ctx, Utils::ToString(res.filePath).c_str());
+        }
+
+        JSValue JsDialogOpenDirectory(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            novadesk::shared::system::OpenFileDialogOptions opts;
+            opts.openDirectory = true;
+            if (argc > 0 && JS_IsObject(argv[0]))
+            {
+                JSValueConst options = argv[0];
+                GetObjectString(ctx, options, "title", opts.title);
+                GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
+                GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
+                GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
+            }
+
+            auto res = novadesk::shared::system::ShowOpenFileDialog(opts);
+            if (res.canceled || res.filePaths.empty())
+            {
+                return JS_NULL;
+            }
+
+            return JS_NewString(ctx, Utils::ToString(res.filePaths[0]).c_str());
+        }
+
         int InitAppExport(JSContext *ctx, JSModuleDef *m)
         {
             JSValue app = JS_NewObject(ctx);
@@ -2036,6 +2328,13 @@ namespace novadesk::scripting::quickjs
 
             JSValue dialog = JS_NewObject(ctx);
             JS_SetPropertyStr(ctx, dialog, "show", JS_NewCFunction(ctx, JsDialogShow, "show", 1));
+            JS_SetPropertyStr(ctx, dialog, "showOpenDialog", JS_NewCFunction(ctx, JsDialogShowOpenDialog, "showOpenDialog", 1));
+            JS_SetPropertyStr(ctx, dialog, "showSaveDialog", JS_NewCFunction(ctx, JsDialogShowSaveDialog, "showSaveDialog", 1));
+            JS_SetPropertyStr(ctx, dialog, "showFileExplorerDialog", JS_NewCFunction(ctx, JsDialogShowFileExplorerDialog, "showFileExplorerDialog", 1));
+            JS_SetPropertyStr(ctx, dialog, "showFileExplorer", JS_NewCFunction(ctx, JsDialogShowFileExplorerDialog, "showFileExplorer", 1));
+            JS_SetPropertyStr(ctx, dialog, "openFile", JS_NewCFunction(ctx, JsDialogOpenFile, "openFile", 1));
+            JS_SetPropertyStr(ctx, dialog, "saveFile", JS_NewCFunction(ctx, JsDialogSaveFile, "saveFile", 1));
+            JS_SetPropertyStr(ctx, dialog, "openDirectory", JS_NewCFunction(ctx, JsDialogOpenDirectory, "openDirectory", 1));
             JS_SetModuleExport(ctx, m, "dialog", dialog);
 
             return 0;
