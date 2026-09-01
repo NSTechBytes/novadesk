@@ -79,6 +79,8 @@ namespace novadesk::scripting::quickjs
         bool g_moduleDebug = false;
         int g_nextTrayCommandId = 1;
         std::wstring g_lastToastError;
+        std::vector<std::wstring> g_appArgv;    // normalized [exePath, scriptPath, ...userArgs] (Node.js style)
+        std::vector<std::wstring> g_rawAppArgv; // exact raw argv from command line
 
         struct AddonInfo
         {
@@ -1043,6 +1045,35 @@ namespace novadesk::scripting::quickjs
         }
 
         JSValue JsAddonUnload(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv);
+
+        // Returns app.argv — an array of command-line arguments normalized to Node.js process.argv:
+        // argv[0]: executable path (Novadesk.exe)
+        // argv[1]: entry script path (index.js)
+        // argv[2...]: user-supplied arguments
+        JSValue JsAppGetArgv(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            JSValue arr = JS_NewArray(ctx);
+            uint32_t idx = 0;
+            for (const std::wstring &arg : g_appArgv)
+            {
+                const std::string argUtf8 = Utils::ToString(arg);
+                JS_SetPropertyUint32(ctx, arr, idx++, JS_NewString(ctx, argUtf8.c_str()));
+            }
+            return arr;
+        }
+
+        // Returns app.rawArgv — the exact, unparsed command-line arguments passed to the process.
+        JSValue JsAppGetRawArgv(JSContext *ctx, JSValueConst, int, JSValueConst *)
+        {
+            JSValue arr = JS_NewArray(ctx);
+            uint32_t idx = 0;
+            for (const std::wstring &arg : g_rawAppArgv)
+            {
+                const std::string argUtf8 = Utils::ToString(arg);
+                JS_SetPropertyUint32(ctx, arr, idx++, JS_NewString(ctx, argUtf8.c_str()));
+            }
+            return arr;
+        }
 
         JSValue JsAppReload(JSContext *ctx, JSValueConst, int, JSValueConst *)
         {
@@ -2292,6 +2323,8 @@ namespace novadesk::scripting::quickjs
         int InitAppExport(JSContext *ctx, JSModuleDef *m)
         {
             JSValue app = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, app, "argv", JsAppGetArgv(ctx, JS_UNDEFINED, 0, nullptr));
+            JS_SetPropertyStr(ctx, app, "rawArgv", JsAppGetRawArgv(ctx, JS_UNDEFINED, 0, nullptr));
             JS_SetPropertyStr(ctx, app, "reload", JS_NewCFunction(ctx, JsAppReload, "reload", 0));
             JS_SetPropertyStr(ctx, app, "refresh", JS_NewCFunction(ctx, JsAppRefresh, "refresh", 0));
             JS_SetPropertyStr(ctx, app, "exit", JS_NewCFunction(ctx, JsAppExit, "exit", 0));
@@ -2391,5 +2424,83 @@ namespace novadesk::scripting::quickjs
     void UnloadAllAddons()
     {
         UnloadAllAddonsInternal();
+    }
+
+    namespace
+    {
+        bool IsInternalEngineArg(const std::wstring &arg)
+        {
+            return arg == L"--new-instance" ||
+                   arg == L"--request-single-instance-lock" ||
+                   arg == L"--enable-hardware-acceleration" ||
+                   arg == L"--disable-hardware-acceleration" ||
+                   arg == L"--enable-debugging" ||
+                   arg == L"--disable-debugging" ||
+                   arg == L"--enable-logging" ||
+                   arg == L"--disable-logging" ||
+                   arg == L"--enable-save-log-to-file" ||
+                   arg == L"--disable-save-log-to-file" ||
+                   arg == L"--refresh" ||
+                   arg == L"--refresh-all" ||
+                   arg == L"--unload";
+        }
+    }
+
+    void SetAppArgv(const std::vector<std::wstring> &argv)
+    {
+        g_rawAppArgv = argv;
+        g_appArgv.clear();
+        if (argv.empty())
+        {
+            return;
+        }
+
+        // argv[0] is executable path
+        g_appArgv.push_back(argv[0]);
+
+        std::wstring scriptPath;
+        std::vector<std::wstring> userArgs;
+
+        for (size_t i = 1; i < argv.size(); ++i)
+        {
+            const std::wstring &arg = argv[i];
+            if (arg == L"--load" && i + 1 < argv.size())
+            {
+                if (scriptPath.empty())
+                {
+                    scriptPath = argv[++i];
+                }
+                else
+                {
+                    userArgs.push_back(argv[++i]);
+                }
+                continue;
+            }
+            if (IsInternalEngineArg(arg))
+            {
+                continue;
+            }
+            if (scriptPath.empty() && !arg.empty() && arg[0] != L'-')
+            {
+                scriptPath = arg;
+                continue;
+            }
+            userArgs.push_back(arg);
+        }
+
+        if (scriptPath.empty())
+        {
+            scriptPath = JSEngine::GetCurrentScriptPath();
+            if (scriptPath.empty())
+            {
+                scriptPath = JSEngine::GetEntryScriptDir();
+            }
+        }
+
+        g_appArgv.push_back(scriptPath);
+        for (const auto &u : userArgs)
+        {
+            g_appArgv.push_back(u);
+        }
     }
 } // namespace novadesk::scripting::quickjs

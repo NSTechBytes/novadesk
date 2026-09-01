@@ -309,6 +309,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
         if (argv)
         {
+            std::vector<std::wstring> argvVec;
+            argvVec.reserve(static_cast<size_t>(argc));
+            for (int i = 0; i < argc; ++i)
+                argvVec.emplace_back(argv[i]);
+            // Expose to app.argv in the JS module (mirrors Node.js process.argv).
+            novadesk::scripting::quickjs::SetAppArgv(argvVec);
+
             for (int i = 1; i < argc; ++i)
             {
                 const std::wstring arg = argv[i];
@@ -455,7 +462,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 }
                 if (!arg.empty() && arg[0] != L'-')
                 {
-                    loadPaths.push_back(arg);
+                    if (loadPaths.empty())
+                    {
+                        loadPaths.push_back(arg);
+                    }
                 }
             }
             HWND hExisting = FindWindowW(className.c_str(), NULL);
@@ -846,7 +856,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 }
                 if (!arg.empty() && arg[0] == L'-')
                     continue;
-                scriptPaths.push_back(arg);
+                if (scriptPaths.empty())
+                {
+                    scriptPaths.push_back(arg);
+                }
             }
         }
         LocalFree(argv);

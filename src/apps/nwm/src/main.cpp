@@ -1073,11 +1073,29 @@ bool InitWidget(const std::string& name) {
     }
 }
 
-bool RunWidget() {
-    fs::path widgetPath = fs::current_path();
+bool RunWidget(const std::string& widgetPathArg = "", const std::vector<std::string>& extraArgs = {}) {
+    fs::path widgetPath;
+    if (!widgetPathArg.empty()) {
+        fs::path candidate = fs::path(widgetPathArg);
+        if (!candidate.is_absolute()) {
+            candidate = fs::current_path() / candidate;
+        }
+        if (fs::exists(candidate / "index.js")) {
+            widgetPath = candidate;
+        } else if (fs::exists(candidate) && candidate.filename() == "index.js") {
+            widgetPath = candidate.parent_path();
+        } else if (fs::exists(fs::current_path() / "index.js")) {
+            widgetPath = fs::current_path();
+        } else {
+            widgetPath = candidate;
+        }
+    } else {
+        widgetPath = fs::current_path();
+    }
+
     fs::path scriptPath = widgetPath / "index.js";
     if (!fs::exists(scriptPath)) {
-        std::cerr << "Error: Could not find 'index.js' in current directory." << std::endl;
+        std::cerr << "Error: Could not find 'index.js' in " << widgetPath << std::endl;
         return false;
     }
 
@@ -1094,6 +1112,17 @@ bool RunWidget() {
     }
 
     std::string command = "\"" + novadeskExe.string() + "\" --new-instance \"" + scriptPath.string() + "\"";
+
+    // Append any extra args passed after -- on the nwm command line
+    for (const auto& arg : extraArgs) {
+        // Quote args that contain spaces; pass others as-is
+        if (arg.find(' ') != std::string::npos) {
+            command += " \"" + arg + "\"";
+        } else {
+            command += " " + arg;
+        }
+    }
+
     std::cout << "Running: " << command << std::endl;
 
     STARTUPINFOA si = { sizeof(si) };
@@ -1379,7 +1408,22 @@ int main(int argc, char* argv[]) {
         std::string widgetName = (argc > 2) ? argv[2] : "";
         return InitWidget(widgetName) ? 0 : 1;
     } else if (command == "run") {
-        return RunWidget() ? 0 : 1;
+        std::string widgetPath;
+        std::vector<std::string> extraArgs;
+        int i = 2;
+        if (i < argc) {
+            std::string first = argv[i];
+            if (first != "--" && !first.empty() && first[0] != '-') {
+                widgetPath = first;
+                i++;
+            }
+        }
+        for (; i < argc; ++i) {
+            std::string arg = argv[i];
+            if (arg == "--") continue;
+            extraArgs.push_back(arg);
+        }
+        return RunWidget(widgetPath, extraArgs) ? 0 : 1;
     } else if (command == "build") {
         return BuildWidget() ? 0 : 1;
     } else if (command == "-v" || command == "--version") {
