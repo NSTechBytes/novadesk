@@ -17,28 +17,31 @@
 class Widget;
 class Element;
 
-class WidgetDropTarget : public Microsoft::WRL::RuntimeClass<
-                             Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
-                             IDropTarget>
-{
+class WidgetDropTarget
+    : public Microsoft::WRL::RuntimeClass<
+          Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
+          IDropTarget> {
 public:
-    explicit WidgetDropTarget(Widget *widget);
-    virtual ~WidgetDropTarget() = default;
+  explicit WidgetDropTarget(Widget *widget);
+  virtual ~WidgetDropTarget() = default;
 
-    // IDropTarget
-    STDMETHOD(DragEnter)(IDataObject *pDataObj, DWORD grfKeyState, POINTL pt, DWORD *pdwEffect) override;
-    STDMETHOD(DragOver)(DWORD grfKeyState, POINTL pt, DWORD *pdwEffect) override;
-    STDMETHOD(DragLeave)() override;
-    STDMETHOD(Drop)(IDataObject *pDataObj, DWORD grfKeyState, POINTL pt, DWORD *pdwEffect) override;
+  // IDropTarget
+  STDMETHOD(DragEnter)(IDataObject *pDataObj, DWORD grfKeyState, POINTL pt,
+                       DWORD *pdwEffect) override;
+  STDMETHOD(DragOver)(DWORD grfKeyState, POINTL pt, DWORD *pdwEffect) override;
+  STDMETHOD(DragLeave)() override;
+  STDMETHOD(Drop)(IDataObject *pDataObj, DWORD grfKeyState, POINTL pt,
+                  DWORD *pdwEffect) override;
 
-    void SetWidget(Widget *widget) { m_Widget = widget; }
+  void SetWidget(Widget *widget) { m_Widget = widget; }
 
 private:
-    Widget *m_Widget = nullptr;
-    Element *m_CurrentHoverElement = nullptr;
-    bool m_AcceptsDrop = false;
-    std::vector<std::wstring> m_CachedFiles;
+  Widget *m_Widget = nullptr;
+  Element *m_CurrentHoverElement = nullptr;
+  bool m_AcceptsDrop = false;
+  std::vector<std::wstring> m_CachedFiles;
 
-    void ExtractFiles(IDataObject *pDataObj, std::vector<std::wstring> &outFiles);
-    Element *HitTestDropTarget(int screenX, int screenY, int &outLocalX, int &outLocalY);
+  void ExtractFiles(IDataObject *pDataObj, std::vector<std::wstring> &outFiles);
+  Element *HitTestDropTarget(int screenX, int screenY, int &outLocalX,
+                             int &outLocalY);
 };

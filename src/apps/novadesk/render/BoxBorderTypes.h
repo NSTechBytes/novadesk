@@ -7,26 +7,19 @@
 
 #pragma once
 
-namespace BoxBorder
-{
-    enum class Position
-    {
-        Outside,
-        Center,
-        Inside
-    };
+namespace BoxBorder {
+enum class Position { Outside, Center, Inside };
 
-    enum class Style
-    {
-        None,
-        Hidden,
-        Solid,
-        Inset,
-        Outset,
-        Groove,
-        Ridge,
-        Dotted,
-        Dashed,
-        Double
-    };
-}
+enum class Style {
+  None,
+  Hidden,
+  Solid,
+  Inset,
+  Outset,
+  Groove,
+  Ridge,
+  Dotted,
+  Dashed,
+  Double
+};
+} // namespace BoxBorder

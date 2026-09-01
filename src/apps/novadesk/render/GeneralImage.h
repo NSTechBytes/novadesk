@@ -19,147 +19,151 @@
 #include <wincodec.h>
 #include <wrl/client.h>
 
-enum ImageFlipMode
-{
-    IMAGE_FLIP_NONE = 0,
-    IMAGE_FLIP_HORIZONTAL,
-    IMAGE_FLIP_VERTICAL,
-    IMAGE_FLIP_BOTH
+enum ImageFlipMode {
+  IMAGE_FLIP_NONE = 0,
+  IMAGE_FLIP_HORIZONTAL,
+  IMAGE_FLIP_VERTICAL,
+  IMAGE_FLIP_BOTH
 };
 
-enum ImageCropOrigin
-{
-    IMAGE_CROP_ORIGIN_TOP_LEFT = 0,
-    IMAGE_CROP_ORIGIN_TOP_RIGHT = 1,
-    IMAGE_CROP_ORIGIN_BOTTOM_RIGHT = 2,
-    IMAGE_CROP_ORIGIN_BOTTOM_LEFT = 3,
-    IMAGE_CROP_ORIGIN_CENTER = 4
+enum ImageCropOrigin {
+  IMAGE_CROP_ORIGIN_TOP_LEFT = 0,
+  IMAGE_CROP_ORIGIN_TOP_RIGHT = 1,
+  IMAGE_CROP_ORIGIN_BOTTOM_RIGHT = 2,
+  IMAGE_CROP_ORIGIN_BOTTOM_LEFT = 3,
+  IMAGE_CROP_ORIGIN_CENTER = 4
 };
 
-struct DecodedImageData
-{
-    UINT width = 0;
-    UINT height = 0;
-    UINT stride = 0;
-    std::vector<BYTE> pixels;
+struct DecodedImageData {
+  UINT width = 0;
+  UINT height = 0;
+  UINT stride = 0;
+  std::vector<BYTE> pixels;
 
-    bool IsValid() const { return width > 0 && height > 0 && stride >= width * 4 && !pixels.empty(); }
+  bool IsValid() const {
+    return width > 0 && height > 0 && stride >= width * 4 && !pixels.empty();
+  }
 };
 
-struct AsyncImageResult
-{
-    std::vector<BYTE> encodedBytes;
-    DecodedImageData decodedImage;
+struct AsyncImageResult {
+  std::vector<BYTE> encodedBytes;
+  DecodedImageData decodedImage;
 };
 
-class GeneralImage
-{
+class GeneralImage {
 public:
-    GeneralImage();
-    ~GeneralImage();
+  GeneralImage();
+  ~GeneralImage();
 
-    void SetPath(const std::wstring &path);
-    const std::wstring &GetPath() const { return m_ImagePath; }
+  void SetPath(const std::wstring &path);
+  const std::wstring &GetPath() const { return m_ImagePath; }
 
-    void SetFallbackPath(const std::wstring &path);
-    const std::wstring &GetFallbackPath() const { return m_FallbackPath; }
+  void SetFallbackPath(const std::wstring &path);
+  const std::wstring &GetFallbackPath() const { return m_FallbackPath; }
 
-    void EnsureBitmap(ID2D1DeviceContext *context);
-    bool IsLoaded() const { return m_D2DBitmap != nullptr; }
-    ID2D1Bitmap *GetBitmap() const { return m_D2DBitmap.Get(); }
-    IWICBitmap *GetWICBitmap() const { return m_pWICBitmap.Get(); }
+  void EnsureBitmap(ID2D1DeviceContext *context);
+  bool IsLoaded() const { return m_D2DBitmap != nullptr; }
+  ID2D1Bitmap *GetBitmap() const { return m_D2DBitmap.Get(); }
+  IWICBitmap *GetWICBitmap() const { return m_pWICBitmap.Get(); }
 
-    BYTE GetPixelAlpha(int x, int y) const;
+  BYTE GetPixelAlpha(int x, int y) const;
 
-    void SetImageTint(COLORREF color, BYTE alpha);
-    bool HasImageTint() const { return m_HasImageTint; }
-    COLORREF GetImageTint() const { return m_ImageTint; }
-    BYTE GetImageTintAlpha() const { return m_ImageTintAlpha; }
+  void SetImageTint(COLORREF color, BYTE alpha);
+  bool HasImageTint() const { return m_HasImageTint; }
+  COLORREF GetImageTint() const { return m_ImageTint; }
+  BYTE GetImageTintAlpha() const { return m_ImageTintAlpha; }
 
-    void SetImageAlpha(BYTE alpha) { m_ImageAlpha = alpha; }
-    BYTE GetImageAlpha() const { return m_ImageAlpha; }
+  void SetImageAlpha(BYTE alpha) { m_ImageAlpha = alpha; }
+  BYTE GetImageAlpha() const { return m_ImageAlpha; }
 
-    void SetGrayscale(bool enable) { m_Grayscale = enable; }
-    bool IsGrayscale() const { return m_Grayscale; }
+  void SetGrayscale(bool enable) { m_Grayscale = enable; }
+  bool IsGrayscale() const { return m_Grayscale; }
 
-    void SetColorMatrix(const float *matrix);
-    bool HasColorMatrix() const { return m_HasColorMatrix; }
-    const float *GetColorMatrix() const { return m_ColorMatrix.data(); }
+  void SetColorMatrix(const float *matrix);
+  bool HasColorMatrix() const { return m_HasColorMatrix; }
+  const float *GetColorMatrix() const { return m_ColorMatrix.data(); }
 
-    void SetImageFlip(ImageFlipMode flip) { m_ImageFlip = flip; }
-    ImageFlipMode GetImageFlip() const { return m_ImageFlip; }
+  void SetImageFlip(ImageFlipMode flip) { m_ImageFlip = flip; }
+  ImageFlipMode GetImageFlip() const { return m_ImageFlip; }
 
-    void SetUseExifOrientation(bool enabled);
-    bool GetUseExifOrientation() const { return m_UseExifOrientation; }
+  void SetUseExifOrientation(bool enabled);
+  bool GetUseExifOrientation() const { return m_UseExifOrientation; }
 
-    void SetImageCrop(float x, float y, float w, float h, ImageCropOrigin origin);
-    void ClearImageCrop() { m_HasImageCrop = false; }
-    bool HasImageCrop() const { return m_HasImageCrop; }
-    float GetImageCropX() const { return m_ImageCropX; }
-    float GetImageCropY() const { return m_ImageCropY; }
-    float GetImageCropW() const { return m_ImageCropW; }
-    float GetImageCropH() const { return m_ImageCropH; }
-    ImageCropOrigin GetImageCropOrigin() const { return m_ImageCropOrigin; }
+  void SetImageCrop(float x, float y, float w, float h, ImageCropOrigin origin);
+  void ClearImageCrop() { m_HasImageCrop = false; }
+  bool HasImageCrop() const { return m_HasImageCrop; }
+  float GetImageCropX() const { return m_ImageCropX; }
+  float GetImageCropY() const { return m_ImageCropY; }
+  float GetImageCropW() const { return m_ImageCropW; }
+  float GetImageCropH() const { return m_ImageCropH; }
+  ImageCropOrigin GetImageCropOrigin() const { return m_ImageCropOrigin; }
 
-    bool ResolveImageCropRect(float imageWidth, float imageHeight, D2D1_RECT_F &rect) const;
-    void ApplyFlipToPixel(float &pixelX, float &pixelY, const D2D1_RECT_F &srcRect) const;
-    bool BuildFlipTransform(const D2D1_RECT_F &dstRect, D2D1_MATRIX_3X2_F &outTransform) const;
+  bool ResolveImageCropRect(float imageWidth, float imageHeight,
+                            D2D1_RECT_F &rect) const;
+  void ApplyFlipToPixel(float &pixelX, float &pixelY,
+                        const D2D1_RECT_F &srcRect) const;
+  bool BuildFlipTransform(const D2D1_RECT_F &dstRect,
+                          D2D1_MATRIX_3X2_F &outTransform) const;
 
-    bool BuildProcessedImage(ID2D1DeviceContext *context, Microsoft::WRL::ComPtr<ID2D1Image> &outImage) const;
+  bool BuildProcessedImage(ID2D1DeviceContext *context,
+                           Microsoft::WRL::ComPtr<ID2D1Image> &outImage) const;
 
-    int GetAutoWidth() const;
-    int GetAutoHeight() const;
+  int GetAutoWidth() const;
+  int GetAutoHeight() const;
 
-    void SetOwnerHWND(HWND hWnd);
-    void ShutdownAsyncDownloads();
-    void OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer);
-    void OnImageDecoded(const std::wstring& url, DecodedImageData&& image);
+  void SetOwnerHWND(HWND hWnd);
+  void ShutdownAsyncDownloads();
+  void OnImageDownloaded(const std::wstring &url,
+                         const std::vector<BYTE> &buffer);
+  void OnImageDecoded(const std::wstring &url, DecodedImageData &&image);
 
-    // Decode raw image bytes into pixels.  Used by the WM_USER+500 handler
-    // to decode on-demand instead of pre-decoding in the download thread,
-    // avoiding a 2× memory peak for large images.
-    static bool DecodeFromBytes(const std::vector<BYTE>& bytes, DecodedImageData& out);
+  // Decode raw image bytes into pixels.  Used by the WM_USER+500 handler
+  // to decode on-demand instead of pre-decoding in the download thread,
+  // avoiding a 2× memory peak for large images.
+  static bool DecodeFromBytes(const std::vector<BYTE> &bytes,
+                              DecodedImageData &out);
 
 private:
-    void ReloadWICBitmap();
-    void ResetBitmapCache();
-    void StartAsyncDownload(const std::wstring& url);
-    bool IsAsyncDownloadShutdown();
-    void LoadFallbackFromResource();
+  void ReloadWICBitmap();
+  void ResetBitmapCache();
+  void StartAsyncDownload(const std::wstring &url);
+  bool IsAsyncDownloadShutdown();
+  void LoadFallbackFromResource();
 
 private:
-    std::wstring m_ImagePath;
-    std::wstring m_LoadedPath;
-    std::wstring m_FallbackPath;
-    HWND m_OwnerHWND = nullptr;
-    std::mutex m_AsyncDownloadMutex;
-    std::vector<std::thread> m_AsyncDownloadThreads;
-    bool m_AsyncDownloadsShutdown = false;
+  std::wstring m_ImagePath;
+  std::wstring m_LoadedPath;
+  std::wstring m_FallbackPath;
+  HWND m_OwnerHWND = nullptr;
+  std::mutex m_AsyncDownloadMutex;
+  std::vector<std::thread> m_AsyncDownloadThreads;
+  bool m_AsyncDownloadsShutdown = false;
 
-    mutable std::recursive_mutex m_ImageStateMutex;
-    bool m_IsFallbackShowing = false;       // true while showing the embedded fallback image
-    std::vector<BYTE> m_DownloadedBuffer;   // in-memory buffer for async downloads
-    DecodedImageData m_DecodedImage;
-    Microsoft::WRL::ComPtr<ID2D1Bitmap> m_D2DBitmap;
-    Microsoft::WRL::ComPtr<IWICBitmap> m_pWICBitmap;
-    ID2D1RenderTarget *m_pLastTarget = nullptr;
+  mutable std::recursive_mutex m_ImageStateMutex;
+  bool m_IsFallbackShowing =
+      false; // true while showing the embedded fallback image
+  std::vector<BYTE> m_DownloadedBuffer; // in-memory buffer for async downloads
+  DecodedImageData m_DecodedImage;
+  Microsoft::WRL::ComPtr<ID2D1Bitmap> m_D2DBitmap;
+  Microsoft::WRL::ComPtr<IWICBitmap> m_pWICBitmap;
+  ID2D1RenderTarget *m_pLastTarget = nullptr;
 
-    bool m_HasImageTint = false;
-    COLORREF m_ImageTint = RGB(0, 0, 0);
-    BYTE m_ImageTintAlpha = 255;
-    BYTE m_ImageAlpha = 255;
-    bool m_Grayscale = false;
-    bool m_HasColorMatrix = false;
-    std::array<float, 20> m_ColorMatrix{};
-    ImageFlipMode m_ImageFlip = IMAGE_FLIP_NONE;
-    bool m_UseExifOrientation = false;
+  bool m_HasImageTint = false;
+  COLORREF m_ImageTint = RGB(0, 0, 0);
+  BYTE m_ImageTintAlpha = 255;
+  BYTE m_ImageAlpha = 255;
+  bool m_Grayscale = false;
+  bool m_HasColorMatrix = false;
+  std::array<float, 20> m_ColorMatrix{};
+  ImageFlipMode m_ImageFlip = IMAGE_FLIP_NONE;
+  bool m_UseExifOrientation = false;
 
-    bool m_HasImageCrop = false;
-    float m_ImageCropX = 0.0f;
-    float m_ImageCropY = 0.0f;
-    float m_ImageCropW = 0.0f;
-    float m_ImageCropH = 0.0f;
-    ImageCropOrigin m_ImageCropOrigin = IMAGE_CROP_ORIGIN_TOP_LEFT;
+  bool m_HasImageCrop = false;
+  float m_ImageCropX = 0.0f;
+  float m_ImageCropY = 0.0f;
+  float m_ImageCropW = 0.0f;
+  float m_ImageCropH = 0.0f;
+  ImageCropOrigin m_ImageCropOrigin = IMAGE_CROP_ORIGIN_TOP_LEFT;
 };
 
 #endif

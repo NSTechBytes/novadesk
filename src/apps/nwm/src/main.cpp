@@ -35,47 +35,37 @@ const std::string WIDGETS_DIR = "Widgets";
 const std::string INSTALLER_MAGIC = "NWSFX1";
 const std::string NDPKG_FOOTER_MAGIC = "NDPKG1";
 const std::unordered_set<std::string> DEFAULT_ADDONS = {
-    "appvolume",
-    "appvolume.dll",
-    "audiolevel",
-    "audiolevel.dll",
-    "brightness",
-    "brightness.dll",
-    "hotkey",
-    "hotkey.dll",
-    "nowplaying",
-    "nowplaying.dll",
-    "blurbehind",
-    "blurbehind.dll"
-};
+    "appvolume",  "appvolume.dll",  "audiolevel", "audiolevel.dll",
+    "brightness", "brightness.dll", "hotkey",     "hotkey.dll",
+    "nowplaying", "nowplaying.dll", "blurbehind", "blurbehind.dll"};
 
 struct SetupOptions {
-    bool createDesktopShortcut = true;
-    bool createStartupShortcut = false;
-    bool runOnStartup = false;
-    std::string installDir = "%ProgramFiles%\\Novadesk";
-    std::string startMenuFolder = "Novadesk";
-    std::string setupName = "setup";
-    std::string setupIcon;
-    bool enableUninstall = true;
-    bool launchAfterInstall = false;
+  bool createDesktopShortcut = true;
+  bool createStartupShortcut = false;
+  bool runOnStartup = false;
+  std::string installDir = "%ProgramFiles%\\Novadesk";
+  std::string startMenuFolder = "Novadesk";
+  std::string setupName = "setup";
+  std::string setupIcon;
+  bool enableUninstall = true;
+  bool launchAfterInstall = false;
 };
 
 struct WidgetMeta {
-    nlohmann::json json = nlohmann::json::object();
+  nlohmann::json json = nlohmann::json::object();
 };
 
 #pragma pack(push, 1)
 struct InstallerFooter {
-    char magic[8];
-    uint64_t payloadSize;
-    uint64_t manifestSize;
+  char magic[8];
+  uint64_t payloadSize;
+  uint64_t manifestSize;
 };
 
 struct NdpkgFooter {
-    char magic[8];
-    uint32_t version;
-    uint32_t reserved;
+  char magic[8];
+  uint32_t version;
+  uint32_t reserved;
 };
 #pragma pack(pop)
 
@@ -84,1356 +74,1552 @@ static_assert(sizeof(NdpkgFooter) == 16, "NdpkgFooter size mismatch");
 
 // Helper to get executable directory
 fs::path GetExeDir() {
-    wchar_t path[MAX_PATH];
-    GetModuleFileNameW(NULL, path, MAX_PATH);
-    return fs::path(path).parent_path();
+  wchar_t path[MAX_PATH];
+  GetModuleFileNameW(NULL, path, MAX_PATH);
+  return fs::path(path).parent_path();
 }
 
 // Helper to execute a command and wait
-bool ExecuteCommand(const std::string& command) {
-    STARTUPINFOA si = { sizeof(si) };
-    PROCESS_INFORMATION pi;
-    if (CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
-        WaitForSingleObject(pi.hProcess, INFINITE);
-        DWORD exitCode;
-        GetExitCodeProcess(pi.hProcess, &exitCode);
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        return exitCode == 0;
-    }
-    return false;
+bool ExecuteCommand(const std::string &command) {
+  STARTUPINFOA si = {sizeof(si)};
+  PROCESS_INFORMATION pi;
+  if (CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, FALSE, 0, NULL,
+                     NULL, &si, &pi)) {
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD exitCode;
+    GetExitCodeProcess(pi.hProcess, &exitCode);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return exitCode == 0;
+  }
+  return false;
 }
 
-bool LoadWidgetMeta(const fs::path& widgetPath, WidgetMeta& outMeta) {
-    fs::path metaPath = widgetPath / "meta.json";
-    if (!fs::exists(metaPath)) {
-        std::cerr << "Error: meta.json not found in current directory." << std::endl;
-        return false;
-    }
+bool LoadWidgetMeta(const fs::path &widgetPath, WidgetMeta &outMeta) {
+  fs::path metaPath = widgetPath / "meta.json";
+  if (!fs::exists(metaPath)) {
+    std::cerr << "Error: meta.json not found in current directory."
+              << std::endl;
+    return false;
+  }
 
-    std::ifstream metaFile(metaPath);
-    std::stringstream metaBuffer;
-    metaBuffer << metaFile.rdbuf();
+  std::ifstream metaFile(metaPath);
+  std::stringstream metaBuffer;
+  metaBuffer << metaFile.rdbuf();
 
-    outMeta.json = nlohmann::json::parse(metaBuffer.str(), nullptr, false);
-    if (outMeta.json.is_discarded()) {
-        std::cerr << "Error: meta.json is not valid JSON." << std::endl;
-        return false;
-    }
+  outMeta.json = nlohmann::json::parse(metaBuffer.str(), nullptr, false);
+  if (outMeta.json.is_discarded()) {
+    std::cerr << "Error: meta.json is not valid JSON." << std::endl;
+    return false;
+  }
 
-    return true;
+  return true;
 }
 
 void PrintUsage() {
-    std::cout << "Novadesk Widget Maker (nwm)" << std::endl;
-    std::cout << "Usage:" << std::endl;
-    std::cout << "  nwm init <widget-name>    - Create a new widget in current directory" << std::endl;
-    std::cout << "  nwm run                   - Run widget in current directory" << std::endl;
-    std::cout << "  nwm build                 - Build widget in current directory" << std::endl;
-    std::cout << "  nwm -v, --version         - Show version information" << std::endl;
-    std::cout << "  nwm -h, --help            - Show this help message" << std::endl;
+  std::cout << "Novadesk Widget Maker (nwm)" << std::endl;
+  std::cout << "Usage:" << std::endl;
+  std::cout << "  nwm init <widget-name>    - Create a new widget in current "
+               "directory"
+            << std::endl;
+  std::cout << "  nwm run                   - Run widget in current directory"
+            << std::endl;
+  std::cout << "  nwm build                 - Build widget in current directory"
+            << std::endl;
+  std::cout << "  nwm -v, --version         - Show version information"
+            << std::endl;
+  std::cout << "  nwm -h, --help            - Show this help message"
+            << std::endl;
 }
 
 // Helper for string conversion
-std::string ToString(const std::wstring& wstr) {
-    if (wstr.empty()) return "";
-    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
-    std::string strTo(size_needed, 0);
-    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
-    return strTo;
+std::string ToString(const std::wstring &wstr) {
+  if (wstr.empty())
+    return "";
+  int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(),
+                                        NULL, 0, NULL, NULL);
+  std::string strTo(size_needed, 0);
+  WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0],
+                      size_needed, NULL, NULL);
+  return strTo;
 }
 
 std::string ToLower(std::string value) {
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
-    return value;
+  std::transform(
+      value.begin(), value.end(), value.begin(),
+      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return value;
 }
 
-bool IsDefaultAddonName(const std::string& addonName) {
-    std::string lowered = ToLower(addonName);
-    if (DEFAULT_ADDONS.find(lowered) != DEFAULT_ADDONS.end()) {
-        return true;
-    }
-    if (lowered.size() > 4 && lowered.substr(lowered.size() - 4) == ".dll") {
-        lowered = lowered.substr(0, lowered.size() - 4);
-    }
-    return DEFAULT_ADDONS.find(lowered) != DEFAULT_ADDONS.end();
+bool IsDefaultAddonName(const std::string &addonName) {
+  std::string lowered = ToLower(addonName);
+  if (DEFAULT_ADDONS.find(lowered) != DEFAULT_ADDONS.end()) {
+    return true;
+  }
+  if (lowered.size() > 4 && lowered.substr(lowered.size() - 4) == ".dll") {
+    lowered = lowered.substr(0, lowered.size() - 4);
+  }
+  return DEFAULT_ADDONS.find(lowered) != DEFAULT_ADDONS.end();
 }
 
 std::string GetProductVersion() {
-    wchar_t szExePath[MAX_PATH];
-    GetModuleFileNameW(NULL, szExePath, MAX_PATH);
+  wchar_t szExePath[MAX_PATH];
+  GetModuleFileNameW(NULL, szExePath, MAX_PATH);
 
-    DWORD dwHandle = 0;
-    DWORD dwSize = GetFileVersionInfoSizeW(szExePath, &dwHandle);
-    if (dwSize == 0) return "Unknown";
-
-    std::vector<BYTE> data(dwSize);
-    if (!GetFileVersionInfoW(szExePath, dwHandle, dwSize, data.data())) return "Unknown";
-
-    struct LANGANDCODEPAGE {
-        WORD wLanguage;
-        WORD wCodePage;
-    } *lpTranslate;
-    UINT cbTranslate;
-
-    if (!VerQueryValueW(data.data(), L"\\VarFileInfo\\Translation", (LPVOID*)&lpTranslate, &cbTranslate))
-        return "Unknown";
-
-    wchar_t szSubBlock[100];
-    swprintf_s(szSubBlock, L"\\StringFileInfo\\%04x%04x\\ProductVersion",
-               lpTranslate[0].wLanguage, lpTranslate[0].wCodePage);
-
-    LPVOID lpBuffer;
-    UINT dwLen;
-    if (VerQueryValueW(data.data(), szSubBlock, &lpBuffer, &dwLen)) {
-        std::wstring wversion((wchar_t*)lpBuffer);
-        return ToString(wversion);
-    }
-
+  DWORD dwHandle = 0;
+  DWORD dwSize = GetFileVersionInfoSizeW(szExePath, &dwHandle);
+  if (dwSize == 0)
     return "Unknown";
+
+  std::vector<BYTE> data(dwSize);
+  if (!GetFileVersionInfoW(szExePath, dwHandle, dwSize, data.data()))
+    return "Unknown";
+
+  struct LANGANDCODEPAGE {
+    WORD wLanguage;
+    WORD wCodePage;
+  } *lpTranslate;
+  UINT cbTranslate;
+
+  if (!VerQueryValueW(data.data(), L"\\VarFileInfo\\Translation",
+                      (LPVOID *)&lpTranslate, &cbTranslate))
+    return "Unknown";
+
+  wchar_t szSubBlock[100];
+  swprintf_s(szSubBlock, L"\\StringFileInfo\\%04x%04x\\ProductVersion",
+             lpTranslate[0].wLanguage, lpTranslate[0].wCodePage);
+
+  LPVOID lpBuffer;
+  UINT dwLen;
+  if (VerQueryValueW(data.data(), szSubBlock, &lpBuffer, &dwLen)) {
+    std::wstring wversion((wchar_t *)lpBuffer);
+    return ToString(wversion);
+  }
+
+  return "Unknown";
 }
 
 // Helper for string conversion
-std::wstring ToWString(const std::string& str) {
-    if (str.empty()) return L"";
-    int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
-    std::wstring wstrTo(size_needed, 0);
-    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
-    return wstrTo;
+std::wstring ToWString(const std::string &str) {
+  if (str.empty())
+    return L"";
+  int size_needed =
+      MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+  std::wstring wstrTo(size_needed, 0);
+  MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0],
+                      size_needed);
+  return wstrTo;
 }
 
-std::wstring ExpandEnv(const std::wstring& value) {
-    if (value.empty()) return L"";
-    DWORD needed = ExpandEnvironmentStringsW(value.c_str(), nullptr, 0);
-    if (needed == 0) return value;
-    std::wstring buffer(needed, L'\0');
-    DWORD written = ExpandEnvironmentStringsW(value.c_str(), buffer.data(), needed);
-    if (written == 0) return value;
-    buffer.resize(written - 1);
-    return buffer;
+std::wstring ExpandEnv(const std::wstring &value) {
+  if (value.empty())
+    return L"";
+  DWORD needed = ExpandEnvironmentStringsW(value.c_str(), nullptr, 0);
+  if (needed == 0)
+    return value;
+  std::wstring buffer(needed, L'\0');
+  DWORD written =
+      ExpandEnvironmentStringsW(value.c_str(), buffer.data(), needed);
+  if (written == 0)
+    return value;
+  buffer.resize(written - 1);
+  return buffer;
 }
 
-bool ReadInstallerFooter(const fs::path& exePath, InstallerFooter& footer, uint64_t& footerOffset) {
-    std::ifstream in(exePath, std::ios::binary | std::ios::ate);
-    if (!in) return false;
-    std::streamoff size = in.tellg();
-    if (size < (std::streamoff)sizeof(InstallerFooter)) return false;
-    footerOffset = static_cast<uint64_t>(size) - sizeof(InstallerFooter);
-    in.seekg(static_cast<std::streamoff>(footerOffset));
-    in.read(reinterpret_cast<char*>(&footer), sizeof(footer));
-    if (!in) return false;
-    return std::memcmp(footer.magic, INSTALLER_MAGIC.c_str(), INSTALLER_MAGIC.size()) == 0;
+bool ReadInstallerFooter(const fs::path &exePath, InstallerFooter &footer,
+                         uint64_t &footerOffset) {
+  std::ifstream in(exePath, std::ios::binary | std::ios::ate);
+  if (!in)
+    return false;
+  std::streamoff size = in.tellg();
+  if (size < (std::streamoff)sizeof(InstallerFooter))
+    return false;
+  footerOffset = static_cast<uint64_t>(size) - sizeof(InstallerFooter);
+  in.seekg(static_cast<std::streamoff>(footerOffset));
+  in.read(reinterpret_cast<char *>(&footer), sizeof(footer));
+  if (!in)
+    return false;
+  return std::memcmp(footer.magic, INSTALLER_MAGIC.c_str(),
+                     INSTALLER_MAGIC.size()) == 0;
 }
 
 bool IsRunningAsAdmin() {
-    BOOL isAdmin = FALSE;
-    PSID adminGroup = nullptr;
-    SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
-    if (AllocateAndInitializeSid(&ntAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
-                                 DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup)) {
-        CheckTokenMembership(nullptr, adminGroup, &isAdmin);
-        FreeSid(adminGroup);
-    }
-    return isAdmin == TRUE;
+  BOOL isAdmin = FALSE;
+  PSID adminGroup = nullptr;
+  SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
+  if (AllocateAndInitializeSid(&ntAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
+                               DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0,
+                               &adminGroup)) {
+    CheckTokenMembership(nullptr, adminGroup, &isAdmin);
+    FreeSid(adminGroup);
+  }
+  return isAdmin == TRUE;
 }
 
-bool RelaunchAsAdmin(const std::wstring& arguments) {
-    wchar_t exePathBuf[MAX_PATH];
-    GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
-    SHELLEXECUTEINFOW sei = {};
-    sei.cbSize = sizeof(sei);
-    sei.fMask = SEE_MASK_NOCLOSEPROCESS;
-    sei.lpVerb = L"runas";
-    sei.lpFile = exePathBuf;
-    sei.lpParameters = arguments.c_str();
-    sei.nShow = SW_SHOWNORMAL;
-    if (!ShellExecuteExW(&sei)) {
-        return false;
-    }
-    if (sei.hProcess) {
-        CloseHandle(sei.hProcess);
-    }
-    return true;
+bool RelaunchAsAdmin(const std::wstring &arguments) {
+  wchar_t exePathBuf[MAX_PATH];
+  GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
+  SHELLEXECUTEINFOW sei = {};
+  sei.cbSize = sizeof(sei);
+  sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+  sei.lpVerb = L"runas";
+  sei.lpFile = exePathBuf;
+  sei.lpParameters = arguments.c_str();
+  sei.nShow = SW_SHOWNORMAL;
+  if (!ShellExecuteExW(&sei)) {
+    return false;
+  }
+  if (sei.hProcess) {
+    CloseHandle(sei.hProcess);
+  }
+  return true;
 }
 
-bool CreateShortcut(const std::wstring& targetPath, const std::wstring& shortcutPath, const std::wstring& workingDir, const std::wstring& description) {
-    ComPtr<IShellLinkW> shellLink;
-    HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&shellLink));
-    if (FAILED(hr)) return false;
+bool CreateShortcut(const std::wstring &targetPath,
+                    const std::wstring &shortcutPath,
+                    const std::wstring &workingDir,
+                    const std::wstring &description) {
+  ComPtr<IShellLinkW> shellLink;
+  HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(&shellLink));
+  if (FAILED(hr))
+    return false;
 
-    shellLink->SetPath(targetPath.c_str());
-    shellLink->SetWorkingDirectory(workingDir.c_str());
-    shellLink->SetDescription(description.c_str());
-    shellLink->SetIconLocation(targetPath.c_str(), 0);
+  shellLink->SetPath(targetPath.c_str());
+  shellLink->SetWorkingDirectory(workingDir.c_str());
+  shellLink->SetDescription(description.c_str());
+  shellLink->SetIconLocation(targetPath.c_str(), 0);
 
-    ComPtr<IPersistFile> persistFile;
-    hr = shellLink->QueryInterface(IID_PPV_ARGS(&persistFile));
-    if (FAILED(hr)) return false;
+  ComPtr<IPersistFile> persistFile;
+  hr = shellLink->QueryInterface(IID_PPV_ARGS(&persistFile));
+  if (FAILED(hr))
+    return false;
 
-    return SUCCEEDED(persistFile->Save(shortcutPath.c_str(), TRUE));
+  return SUCCEEDED(persistFile->Save(shortcutPath.c_str(), TRUE));
 }
 
 struct InstallerFileEntry {
-    std::string relPath;
-    uint64_t offset = 0;
-    uint64_t size = 0;
+  std::string relPath;
+  uint64_t offset = 0;
+  uint64_t size = 0;
 };
 
 bool InstallFromSelf() {
-    wchar_t exePathBuf[MAX_PATH];
-    GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
-    fs::path exePath = exePathBuf;
+  wchar_t exePathBuf[MAX_PATH];
+  GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
+  fs::path exePath = exePathBuf;
 
-    InstallerFooter footer{};
-    uint64_t footerOffset = 0;
-    if (!ReadInstallerFooter(exePath, footer, footerOffset)) {
-        return false;
+  InstallerFooter footer{};
+  uint64_t footerOffset = 0;
+  if (!ReadInstallerFooter(exePath, footer, footerOffset)) {
+    return false;
+  }
+
+  FreeConsole();
+
+  if (!IsRunningAsAdmin()) {
+    if (RelaunchAsAdmin(L"--install")) {
+      return true;
     }
-
-    FreeConsole();
-
-    if (!IsRunningAsAdmin()) {
-        if (RelaunchAsAdmin(L"--install")) {
-            return true;
-        }
-        return true;
-    }
-
-    uint64_t exeSize = footerOffset + sizeof(InstallerFooter);
-    uint64_t payloadSize = footer.payloadSize;
-    uint64_t manifestSize = footer.manifestSize;
-    if (manifestSize == 0 || payloadSize == 0) {
-        return true;
-    }
-
-    uint64_t payloadStart = exeSize - sizeof(InstallerFooter) - manifestSize - payloadSize;
-    uint64_t manifestOffset = payloadStart + payloadSize;
-
-    std::ifstream in(exePath, std::ios::binary);
-    if (!in) {
-        return true;
-    }
-
-    in.seekg(static_cast<std::streamoff>(manifestOffset));
-    std::string manifestJson(manifestSize, '\0');
-    in.read(manifestJson.data(), static_cast<std::streamsize>(manifestSize));
-    if (!in) {
-        return true;
-    }
-
-    nlohmann::json manifest = nlohmann::json::parse(manifestJson, nullptr, false);
-    if (manifest.is_discarded()) {
-        return true;
-    }
-
-    std::string appName = manifest.value("appName", "Novadesk");
-    std::string appExeRel = manifest.value("appExeRel", appName + ".exe");
-    auto setup = manifest.value("setup", nlohmann::json::object());
-
-    SetupOptions options;
-    options.createDesktopShortcut = setup.value("createDesktopShortcut", true);
-    options.createStartupShortcut = setup.value("createStartupShortcut", false);
-    options.runOnStartup = setup.value("runOnStartup", false);
-    options.installDir = setup.value("installDir", options.installDir);
-    options.startMenuFolder = setup.value("startMenuFolder", options.startMenuFolder);
-    options.enableUninstall = setup.value("enableUninstall", true);
-
-    std::wstring installDirW = ExpandEnv(ToWString(options.installDir));
-    if (installDirW.empty()) {
-        installDirW = ExpandEnv(ToWString("%ProgramFiles%\\Novadesk"));
-    }
-
-    fs::path installDir = fs::path(installDirW);
-    fs::create_directories(installDir);
-
-    auto files = manifest.value("files", nlohmann::json::array());
-    for (const auto& entry : files) {
-        InstallerFileEntry fileEntry;
-        fileEntry.relPath = entry.value("path", "");
-        fileEntry.offset = entry.value("offset", 0ull);
-        fileEntry.size = entry.value("size", 0ull);
-        if (fileEntry.relPath.empty() || fileEntry.size == 0) continue;
-
-        fs::path outPath = installDir / fs::path(fileEntry.relPath);
-        fs::create_directories(outPath.parent_path());
-
-        std::ofstream out(outPath, std::ios::binary);
-        if (!out) continue;
-
-        in.seekg(static_cast<std::streamoff>(payloadStart + fileEntry.offset));
-        uint64_t remaining = fileEntry.size;
-        std::vector<char> buffer(1024 * 1024);
-        while (remaining > 0) {
-            uint64_t toRead = std::min<uint64_t>(remaining, buffer.size());
-            in.read(buffer.data(), static_cast<std::streamsize>(toRead));
-            std::streamsize got = in.gcount();
-            if (got <= 0) break;
-            out.write(buffer.data(), got);
-            remaining -= static_cast<uint64_t>(got);
-        }
-    }
-
-    fs::path appExePath = installDir / fs::path(appExeRel);
-    std::wstring appExeW = appExePath.wstring();
-    std::wstring workingDirW = installDir.wstring();
-    std::wstring appNameW = ToWString(appName);
-
-    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    if (SUCCEEDED(hr)) {
-        if (!options.startMenuFolder.empty()) {
-            PWSTR programsPath = nullptr;
-            if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Programs, 0, nullptr, &programsPath))) {
-                fs::path startMenuDir = fs::path(programsPath) / fs::path(options.startMenuFolder);
-                fs::create_directories(startMenuDir);
-                fs::path shortcutPath = startMenuDir / (appName + ".lnk");
-                CreateShortcut(appExeW, shortcutPath.wstring(), workingDirW, appNameW);
-                CoTaskMemFree(programsPath);
-            }
-        }
-
-        if (options.createDesktopShortcut) {
-            PWSTR desktopPath = nullptr;
-            if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Desktop, 0, nullptr, &desktopPath))) {
-                fs::path shortcutPath = fs::path(desktopPath) / (appName + ".lnk");
-                CreateShortcut(appExeW, shortcutPath.wstring(), workingDirW, appNameW);
-                CoTaskMemFree(desktopPath);
-            }
-        }
-
-        if (options.createStartupShortcut || options.runOnStartup) {
-            PWSTR startupPath = nullptr;
-            if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Startup, 0, nullptr, &startupPath))) {
-                fs::path shortcutPath = fs::path(startupPath) / (appName + ".lnk");
-                CreateShortcut(appExeW, shortcutPath.wstring(), workingDirW, appNameW);
-                CoTaskMemFree(startupPath);
-            }
-        }
-
-        if (options.enableUninstall) {
-            fs::path uninstallPath = installDir / "Uninstall.exe";
-            try {
-                fs::copy_file(exePath, uninstallPath, fs::copy_options::overwrite_existing);
-            } catch (...) {
-            }
-
-            HKEY hKey = nullptr;
-            std::wstring uninstallKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" + appNameW;
-            if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, uninstallKey.c_str(), 0, nullptr, 0, KEY_WRITE, nullptr, &hKey, nullptr) == ERROR_SUCCESS) {
-                std::wstring displayName = appNameW;
-                std::wstring uninstallCmd = L"\"" + uninstallPath.wstring() + L"\" --uninstall";
-                RegSetValueExW(hKey, L"DisplayName", 0, REG_SZ, reinterpret_cast<const BYTE*>(displayName.c_str()), static_cast<DWORD>((displayName.size() + 1) * sizeof(wchar_t)));
-                RegSetValueExW(hKey, L"UninstallString", 0, REG_SZ, reinterpret_cast<const BYTE*>(uninstallCmd.c_str()), static_cast<DWORD>((uninstallCmd.size() + 1) * sizeof(wchar_t)));
-                RegSetValueExW(hKey, L"InstallLocation", 0, REG_SZ, reinterpret_cast<const BYTE*>(installDir.wstring().c_str()), static_cast<DWORD>((installDir.wstring().size() + 1) * sizeof(wchar_t)));
-                RegCloseKey(hKey);
-            }
-        }
-
-        CoUninitialize();
-    }
-
     return true;
+  }
+
+  uint64_t exeSize = footerOffset + sizeof(InstallerFooter);
+  uint64_t payloadSize = footer.payloadSize;
+  uint64_t manifestSize = footer.manifestSize;
+  if (manifestSize == 0 || payloadSize == 0) {
+    return true;
+  }
+
+  uint64_t payloadStart =
+      exeSize - sizeof(InstallerFooter) - manifestSize - payloadSize;
+  uint64_t manifestOffset = payloadStart + payloadSize;
+
+  std::ifstream in(exePath, std::ios::binary);
+  if (!in) {
+    return true;
+  }
+
+  in.seekg(static_cast<std::streamoff>(manifestOffset));
+  std::string manifestJson(manifestSize, '\0');
+  in.read(manifestJson.data(), static_cast<std::streamsize>(manifestSize));
+  if (!in) {
+    return true;
+  }
+
+  nlohmann::json manifest = nlohmann::json::parse(manifestJson, nullptr, false);
+  if (manifest.is_discarded()) {
+    return true;
+  }
+
+  std::string appName = manifest.value("appName", "Novadesk");
+  std::string appExeRel = manifest.value("appExeRel", appName + ".exe");
+  auto setup = manifest.value("setup", nlohmann::json::object());
+
+  SetupOptions options;
+  options.createDesktopShortcut = setup.value("createDesktopShortcut", true);
+  options.createStartupShortcut = setup.value("createStartupShortcut", false);
+  options.runOnStartup = setup.value("runOnStartup", false);
+  options.installDir = setup.value("installDir", options.installDir);
+  options.startMenuFolder =
+      setup.value("startMenuFolder", options.startMenuFolder);
+  options.enableUninstall = setup.value("enableUninstall", true);
+
+  std::wstring installDirW = ExpandEnv(ToWString(options.installDir));
+  if (installDirW.empty()) {
+    installDirW = ExpandEnv(ToWString("%ProgramFiles%\\Novadesk"));
+  }
+
+  fs::path installDir = fs::path(installDirW);
+  fs::create_directories(installDir);
+
+  auto files = manifest.value("files", nlohmann::json::array());
+  for (const auto &entry : files) {
+    InstallerFileEntry fileEntry;
+    fileEntry.relPath = entry.value("path", "");
+    fileEntry.offset = entry.value("offset", 0ull);
+    fileEntry.size = entry.value("size", 0ull);
+    if (fileEntry.relPath.empty() || fileEntry.size == 0)
+      continue;
+
+    fs::path outPath = installDir / fs::path(fileEntry.relPath);
+    fs::create_directories(outPath.parent_path());
+
+    std::ofstream out(outPath, std::ios::binary);
+    if (!out)
+      continue;
+
+    in.seekg(static_cast<std::streamoff>(payloadStart + fileEntry.offset));
+    uint64_t remaining = fileEntry.size;
+    std::vector<char> buffer(1024 * 1024);
+    while (remaining > 0) {
+      uint64_t toRead = std::min<uint64_t>(remaining, buffer.size());
+      in.read(buffer.data(), static_cast<std::streamsize>(toRead));
+      std::streamsize got = in.gcount();
+      if (got <= 0)
+        break;
+      out.write(buffer.data(), got);
+      remaining -= static_cast<uint64_t>(got);
+    }
+  }
+
+  fs::path appExePath = installDir / fs::path(appExeRel);
+  std::wstring appExeW = appExePath.wstring();
+  std::wstring workingDirW = installDir.wstring();
+  std::wstring appNameW = ToWString(appName);
+
+  HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  if (SUCCEEDED(hr)) {
+    if (!options.startMenuFolder.empty()) {
+      PWSTR programsPath = nullptr;
+      if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Programs, 0, nullptr,
+                                         &programsPath))) {
+        fs::path startMenuDir =
+            fs::path(programsPath) / fs::path(options.startMenuFolder);
+        fs::create_directories(startMenuDir);
+        fs::path shortcutPath = startMenuDir / (appName + ".lnk");
+        CreateShortcut(appExeW, shortcutPath.wstring(), workingDirW, appNameW);
+        CoTaskMemFree(programsPath);
+      }
+    }
+
+    if (options.createDesktopShortcut) {
+      PWSTR desktopPath = nullptr;
+      if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Desktop, 0, nullptr,
+                                         &desktopPath))) {
+        fs::path shortcutPath = fs::path(desktopPath) / (appName + ".lnk");
+        CreateShortcut(appExeW, shortcutPath.wstring(), workingDirW, appNameW);
+        CoTaskMemFree(desktopPath);
+      }
+    }
+
+    if (options.createStartupShortcut || options.runOnStartup) {
+      PWSTR startupPath = nullptr;
+      if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Startup, 0, nullptr,
+                                         &startupPath))) {
+        fs::path shortcutPath = fs::path(startupPath) / (appName + ".lnk");
+        CreateShortcut(appExeW, shortcutPath.wstring(), workingDirW, appNameW);
+        CoTaskMemFree(startupPath);
+      }
+    }
+
+    if (options.enableUninstall) {
+      fs::path uninstallPath = installDir / "Uninstall.exe";
+      try {
+        fs::copy_file(exePath, uninstallPath,
+                      fs::copy_options::overwrite_existing);
+      } catch (...) {
+      }
+
+      HKEY hKey = nullptr;
+      std::wstring uninstallKey =
+          L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\" +
+          appNameW;
+      if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, uninstallKey.c_str(), 0, nullptr,
+                          0, KEY_WRITE, nullptr, &hKey,
+                          nullptr) == ERROR_SUCCESS) {
+        std::wstring displayName = appNameW;
+        std::wstring uninstallCmd =
+            L"\"" + uninstallPath.wstring() + L"\" --uninstall";
+        RegSetValueExW(
+            hKey, L"DisplayName", 0, REG_SZ,
+            reinterpret_cast<const BYTE *>(displayName.c_str()),
+            static_cast<DWORD>((displayName.size() + 1) * sizeof(wchar_t)));
+        RegSetValueExW(
+            hKey, L"UninstallString", 0, REG_SZ,
+            reinterpret_cast<const BYTE *>(uninstallCmd.c_str()),
+            static_cast<DWORD>((uninstallCmd.size() + 1) * sizeof(wchar_t)));
+        RegSetValueExW(
+            hKey, L"InstallLocation", 0, REG_SZ,
+            reinterpret_cast<const BYTE *>(installDir.wstring().c_str()),
+            static_cast<DWORD>((installDir.wstring().size() + 1) *
+                               sizeof(wchar_t)));
+        RegCloseKey(hKey);
+      }
+    }
+
+    CoUninitialize();
+  }
+
+  return true;
 }
 
-bool BuildInstallerSfx(const fs::path& distDir,
-                       const fs::path& widgetPath,
-                       const fs::path& stubExe,
-                       const std::string& widgetRealName,
-                       const std::string& version,
-                       const std::string& author,
-                       const std::string& description,
-                       const SetupOptions& setupOptions) {
-    std::string setupName = setupOptions.setupName.empty() ? "setup" : setupOptions.setupName;
-    if (setupName.size() < 4 || setupName.substr(setupName.size() - 4) != ".exe") {
-        setupName += ".exe";
-    }
-    fs::path installerOut = distDir / setupName;
-    if (fs::exists(installerOut)) {
-        fs::remove(installerOut);
-    }
+bool BuildInstallerSfx(const fs::path &distDir, const fs::path &widgetPath,
+                       const fs::path &stubExe,
+                       const std::string &widgetRealName,
+                       const std::string &version, const std::string &author,
+                       const std::string &description,
+                       const SetupOptions &setupOptions) {
+  std::string setupName =
+      setupOptions.setupName.empty() ? "setup" : setupOptions.setupName;
+  if (setupName.size() < 4 ||
+      setupName.substr(setupName.size() - 4) != ".exe") {
+    setupName += ".exe";
+  }
+  fs::path installerOut = distDir / setupName;
+  if (fs::exists(installerOut)) {
+    fs::remove(installerOut);
+  }
 
-    // Clean up any stray stub artifacts in dist (we embed stub into setup.exe)
-    fs::path distStub = distDir / "installer_stub.exe";
-    if (fs::exists(distStub)) {
-        fs::remove(distStub);
-    }
-    fs::path distTmpStubExe = distDir / "_installer_stub.tmp.exe";
-    if (fs::exists(distTmpStubExe)) {
-        fs::remove(distTmpStubExe);
-    }
-    fs::path distTmpStub = distDir / "_installer_stub.tmp";
-    if (fs::exists(distTmpStub)) {
-        fs::remove(distTmpStub);
-    }
+  // Clean up any stray stub artifacts in dist (we embed stub into setup.exe)
+  fs::path distStub = distDir / "installer_stub.exe";
+  if (fs::exists(distStub)) {
+    fs::remove(distStub);
+  }
+  fs::path distTmpStubExe = distDir / "_installer_stub.tmp.exe";
+  if (fs::exists(distTmpStubExe)) {
+    fs::remove(distTmpStubExe);
+  }
+  fs::path distTmpStub = distDir / "_installer_stub.tmp";
+  if (fs::exists(distTmpStub)) {
+    fs::remove(distTmpStub);
+  }
 
-    // Create a temp copy of the stub so we never mutate the original build artifact
-    fs::path tempStub = fs::temp_directory_path() / ("_installer_stub_" + setupName);
-    if (tempStub.extension() != ".exe") {
-        tempStub += ".exe";
-    }
-    struct TempStubCleanup {
-        fs::path path;
-        ~TempStubCleanup() {
-            if (path.empty()) return;
-            try {
-                if (fs::exists(path)) {
-                    fs::remove(path);
-                }
-            } catch (...) {
-            }
+  // Create a temp copy of the stub so we never mutate the original build
+  // artifact
+  fs::path tempStub =
+      fs::temp_directory_path() / ("_installer_stub_" + setupName);
+  if (tempStub.extension() != ".exe") {
+    tempStub += ".exe";
+  }
+  struct TempStubCleanup {
+    fs::path path;
+    ~TempStubCleanup() {
+      if (path.empty())
+        return;
+      try {
+        if (fs::exists(path)) {
+          fs::remove(path);
         }
-    } tempStubCleanup{tempStub};
-
-    try {
-        fs::copy_file(stubExe, tempStub, fs::copy_options::overwrite_existing);
-    } catch (...) {
-        std::cerr << "Error: Failed to copy installer stub to temp at " << tempStub.string() << std::endl;
-        return false;
+      } catch (...) {
+      }
     }
+  } tempStubCleanup{tempStub};
 
-    // Apply app icon to the temp stub before embedding
-    if (!setupOptions.setupIcon.empty()) {
-        fs::path iconPath = widgetPath / setupOptions.setupIcon;
-        if (fs::exists(iconPath)) {
-            rescle::ResourceUpdater stubUpdater;
-            if (stubUpdater.Load(tempStub.c_str())) {
-                stubUpdater.SetIcon(iconPath.c_str());
-                stubUpdater.Commit();
-            }
-        }
+  try {
+    fs::copy_file(stubExe, tempStub, fs::copy_options::overwrite_existing);
+  } catch (...) {
+    std::cerr << "Error: Failed to copy installer stub to temp at "
+              << tempStub.string() << std::endl;
+    return false;
+  }
+
+  // Apply app icon to the temp stub before embedding
+  if (!setupOptions.setupIcon.empty()) {
+    fs::path iconPath = widgetPath / setupOptions.setupIcon;
+    if (fs::exists(iconPath)) {
+      rescle::ResourceUpdater stubUpdater;
+      if (stubUpdater.Load(tempStub.c_str())) {
+        stubUpdater.SetIcon(iconPath.c_str());
+        stubUpdater.Commit();
+      }
     }
+  }
 
-    {
-        std::ifstream stubIn(tempStub, std::ios::binary);
-        if (!stubIn) {
-            std::cerr << "Error: Failed to read installer stub from " << stubExe.string() << std::endl;
-            return false;
-        }
-        std::ofstream out(installerOut, std::ios::binary);
-        if (!out) {
-            std::cerr << "Error: Failed to create installer at " << installerOut.string() << std::endl;
-            return false;
-        }
-        out << stubIn.rdbuf();
+  {
+    std::ifstream stubIn(tempStub, std::ios::binary);
+    if (!stubIn) {
+      std::cerr << "Error: Failed to read installer stub from "
+                << stubExe.string() << std::endl;
+      return false;
     }
-
-    if (!setupOptions.setupIcon.empty()) {
-        fs::path iconPath = widgetPath / setupOptions.setupIcon;
-        if (fs::exists(iconPath)) {
-            rescle::ResourceUpdater updater;
-            if (updater.Load(installerOut.c_str())) {
-                updater.SetIcon(iconPath.c_str());
-                if (!updater.Commit()) {
-                    std::cerr << "Error: Failed to set installer icon." << std::endl;
-                    return false;
-                }
-            } else {
-                std::cerr << "Error: Failed to load installer for icon update." << std::endl;
-                return false;
-            }
-        } else {
-            std::cerr << "Error: setupIcon not found at " << iconPath.string() << std::endl;
-            return false;
-        }
-    }
-
-    // Embed installer_stub.exe as RT_RCDATA so Uninstall.exe can be created from it
-    try {
-        std::ifstream stubIn(tempStub, std::ios::binary);
-        if (!stubIn) {
-            std::cerr << "Error: Failed to read installer stub for embedding." << std::endl;
-            return false;
-        }
-        std::vector<char> stubBytes((std::istreambuf_iterator<char>(stubIn)), std::istreambuf_iterator<char>());
-        if (stubBytes.empty()) {
-            std::cerr << "Error: installer stub is empty." << std::endl;
-            return false;
-        }
-
-        HANDLE hUpdate = BeginUpdateResourceW(installerOut.wstring().c_str(), FALSE);
-        if (!hUpdate) {
-            std::cerr << "Error: BeginUpdateResource failed." << std::endl;
-            return false;
-        }
-
-        if (!UpdateResourceW(hUpdate, RT_RCDATA, L"INSTALLER_STUB", MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL),
-                             stubBytes.data(), static_cast<DWORD>(stubBytes.size()))) {
-            std::cerr << "Error: UpdateResource failed." << std::endl;
-            EndUpdateResourceW(hUpdate, TRUE);
-            return false;
-        }
-
-        if (!EndUpdateResourceW(hUpdate, FALSE)) {
-            std::cerr << "Error: EndUpdateResource failed." << std::endl;
-            return false;
-        }
-
-    } catch (...) {
-        std::cerr << "Error: Failed to embed installer stub resource." << std::endl;
-        return false;
-    }
-
-    struct FileMeta {
-        fs::path relPath;
-        uint64_t size = 0;
-        uint64_t offset = 0;
-    };
-
-    std::vector<FileMeta> files;
-    uint64_t payloadSize = 0;
-    for (const auto& entry : fs::recursive_directory_iterator(distDir)) {
-        if (!entry.is_regular_file()) continue;
-        if (entry.path() == installerOut) continue;
-
-        const std::string filename = entry.path().filename().string();
-        if (filename == "installer_stub.exe" || filename.rfind("_installer_stub.tmp", 0) == 0) {
-            continue;
-        }
-
-        FileMeta meta;
-        meta.relPath = fs::relative(entry.path(), distDir);
-        meta.size = static_cast<uint64_t>(fs::file_size(entry.path()));
-        meta.offset = payloadSize;
-        payloadSize += meta.size;
-        files.push_back(meta);
-    }
-
-    nlohmann::json manifest;
-    manifest["appName"] = widgetRealName;
-    manifest["version"] = version;
-    manifest["author"] = author;
-    manifest["description"] = description;
-    manifest["appExeRel"] = widgetRealName + ".exe";
-    manifest["setup"] = {
-        {"createDesktopShortcut", setupOptions.createDesktopShortcut},
-        {"createStartupShortcut", setupOptions.createStartupShortcut},
-        {"runOnStartup", setupOptions.runOnStartup},
-        {"installDir", setupOptions.installDir},
-        {"startMenuFolder", setupOptions.startMenuFolder},
-        {"setupName", setupOptions.setupName},
-        {"setupIcon", setupOptions.setupIcon},
-        {"enableUninstall", setupOptions.enableUninstall},
-        {"launchAfterInstall", setupOptions.launchAfterInstall}
-    };
-
-    nlohmann::json fileArray = nlohmann::json::array();
-    for (const auto& file : files) {
-        nlohmann::json entry;
-        entry["path"] = file.relPath.generic_string();
-        entry["offset"] = file.offset;
-        entry["size"] = file.size;
-        fileArray.push_back(entry);
-    }
-    manifest["files"] = fileArray;
-
-    std::string manifestJson = manifest.dump();
-    uint64_t manifestSize = static_cast<uint64_t>(manifestJson.size());
-
-    InstallerFooter footer{};
-    std::memset(&footer, 0, sizeof(footer));
-    std::memcpy(footer.magic, INSTALLER_MAGIC.c_str(), INSTALLER_MAGIC.size());
-    footer.payloadSize = payloadSize;
-    footer.manifestSize = manifestSize;
-
-    std::ofstream out(installerOut, std::ios::binary | std::ios::app);
+    std::ofstream out(installerOut, std::ios::binary);
     if (!out) {
-        std::cerr << "Error: Failed to append installer payload at " << installerOut.string() << std::endl;
+      std::cerr << "Error: Failed to create installer at "
+                << installerOut.string() << std::endl;
+      return false;
+    }
+    out << stubIn.rdbuf();
+  }
+
+  if (!setupOptions.setupIcon.empty()) {
+    fs::path iconPath = widgetPath / setupOptions.setupIcon;
+    if (fs::exists(iconPath)) {
+      rescle::ResourceUpdater updater;
+      if (updater.Load(installerOut.c_str())) {
+        updater.SetIcon(iconPath.c_str());
+        if (!updater.Commit()) {
+          std::cerr << "Error: Failed to set installer icon." << std::endl;
+          return false;
+        }
+      } else {
+        std::cerr << "Error: Failed to load installer for icon update."
+                  << std::endl;
         return false;
+      }
+    } else {
+      std::cerr << "Error: setupIcon not found at " << iconPath.string()
+                << std::endl;
+      return false;
+    }
+  }
+
+  // Embed installer_stub.exe as RT_RCDATA so Uninstall.exe can be created from
+  // it
+  try {
+    std::ifstream stubIn(tempStub, std::ios::binary);
+    if (!stubIn) {
+      std::cerr << "Error: Failed to read installer stub for embedding."
+                << std::endl;
+      return false;
+    }
+    std::vector<char> stubBytes((std::istreambuf_iterator<char>(stubIn)),
+                                std::istreambuf_iterator<char>());
+    if (stubBytes.empty()) {
+      std::cerr << "Error: installer stub is empty." << std::endl;
+      return false;
     }
 
-    std::vector<char> buffer(1024 * 1024);
-    for (const auto& file : files) {
-        fs::path filePath = distDir / file.relPath;
-        std::ifstream in(filePath, std::ios::binary);
-        if (!in) {
-            std::cerr << "Warning: Skipping file " << filePath.string() << std::endl;
-            continue;
-        }
-        while (in) {
-            in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-            std::streamsize got = in.gcount();
-            if (got > 0) out.write(buffer.data(), got);
-        }
+    HANDLE hUpdate =
+        BeginUpdateResourceW(installerOut.wstring().c_str(), FALSE);
+    if (!hUpdate) {
+      std::cerr << "Error: BeginUpdateResource failed." << std::endl;
+      return false;
     }
 
-    out.write(manifestJson.data(), static_cast<std::streamsize>(manifestJson.size()));
-    out.write(reinterpret_cast<const char*>(&footer), sizeof(footer));
+    if (!UpdateResourceW(hUpdate, RT_RCDATA, L"INSTALLER_STUB",
+                         MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL),
+                         stubBytes.data(),
+                         static_cast<DWORD>(stubBytes.size()))) {
+      std::cerr << "Error: UpdateResource failed." << std::endl;
+      EndUpdateResourceW(hUpdate, TRUE);
+      return false;
+    }
 
-    std::cout << "Installer created at " << installerOut << std::endl;
-    return true;
+    if (!EndUpdateResourceW(hUpdate, FALSE)) {
+      std::cerr << "Error: EndUpdateResource failed." << std::endl;
+      return false;
+    }
+
+  } catch (...) {
+    std::cerr << "Error: Failed to embed installer stub resource." << std::endl;
+    return false;
+  }
+
+  struct FileMeta {
+    fs::path relPath;
+    uint64_t size = 0;
+    uint64_t offset = 0;
+  };
+
+  std::vector<FileMeta> files;
+  uint64_t payloadSize = 0;
+  for (const auto &entry : fs::recursive_directory_iterator(distDir)) {
+    if (!entry.is_regular_file())
+      continue;
+    if (entry.path() == installerOut)
+      continue;
+
+    const std::string filename = entry.path().filename().string();
+    if (filename == "installer_stub.exe" ||
+        filename.rfind("_installer_stub.tmp", 0) == 0) {
+      continue;
+    }
+
+    FileMeta meta;
+    meta.relPath = fs::relative(entry.path(), distDir);
+    meta.size = static_cast<uint64_t>(fs::file_size(entry.path()));
+    meta.offset = payloadSize;
+    payloadSize += meta.size;
+    files.push_back(meta);
+  }
+
+  nlohmann::json manifest;
+  manifest["appName"] = widgetRealName;
+  manifest["version"] = version;
+  manifest["author"] = author;
+  manifest["description"] = description;
+  manifest["appExeRel"] = widgetRealName + ".exe";
+  manifest["setup"] = {
+      {"createDesktopShortcut", setupOptions.createDesktopShortcut},
+      {"createStartupShortcut", setupOptions.createStartupShortcut},
+      {"runOnStartup", setupOptions.runOnStartup},
+      {"installDir", setupOptions.installDir},
+      {"startMenuFolder", setupOptions.startMenuFolder},
+      {"setupName", setupOptions.setupName},
+      {"setupIcon", setupOptions.setupIcon},
+      {"enableUninstall", setupOptions.enableUninstall},
+      {"launchAfterInstall", setupOptions.launchAfterInstall}};
+
+  nlohmann::json fileArray = nlohmann::json::array();
+  for (const auto &file : files) {
+    nlohmann::json entry;
+    entry["path"] = file.relPath.generic_string();
+    entry["offset"] = file.offset;
+    entry["size"] = file.size;
+    fileArray.push_back(entry);
+  }
+  manifest["files"] = fileArray;
+
+  std::string manifestJson = manifest.dump();
+  uint64_t manifestSize = static_cast<uint64_t>(manifestJson.size());
+
+  InstallerFooter footer{};
+  std::memset(&footer, 0, sizeof(footer));
+  std::memcpy(footer.magic, INSTALLER_MAGIC.c_str(), INSTALLER_MAGIC.size());
+  footer.payloadSize = payloadSize;
+  footer.manifestSize = manifestSize;
+
+  std::ofstream out(installerOut, std::ios::binary | std::ios::app);
+  if (!out) {
+    std::cerr << "Error: Failed to append installer payload at "
+              << installerOut.string() << std::endl;
+    return false;
+  }
+
+  std::vector<char> buffer(1024 * 1024);
+  for (const auto &file : files) {
+    fs::path filePath = distDir / file.relPath;
+    std::ifstream in(filePath, std::ios::binary);
+    if (!in) {
+      std::cerr << "Warning: Skipping file " << filePath.string() << std::endl;
+      continue;
+    }
+    while (in) {
+      in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+      std::streamsize got = in.gcount();
+      if (got > 0)
+        out.write(buffer.data(), got);
+    }
+  }
+
+  out.write(manifestJson.data(),
+            static_cast<std::streamsize>(manifestJson.size()));
+  out.write(reinterpret_cast<const char *>(&footer), sizeof(footer));
+
+  std::cout << "Installer created at " << installerOut << std::endl;
+  return true;
 }
 
 // Helper to parse version string "1.0.0.0" into 4 shorts
-bool ParseVersion(const std::string& version, unsigned short& v1, unsigned short& v2, unsigned short& v3, unsigned short& v4) {
-    v1 = v2 = v3 = v4 = 0;
-    std::vector<int> parts;
-    std::string current;
-    for (char c : version) {
-        if (c == '.') {
-            if (!current.empty()) parts.push_back(std::stoi(current));
-            current.clear();
-        } else if (isdigit(c)) {
-            current += c;
-        }
+bool ParseVersion(const std::string &version, unsigned short &v1,
+                  unsigned short &v2, unsigned short &v3, unsigned short &v4) {
+  v1 = v2 = v3 = v4 = 0;
+  std::vector<int> parts;
+  std::string current;
+  for (char c : version) {
+    if (c == '.') {
+      if (!current.empty())
+        parts.push_back(std::stoi(current));
+      current.clear();
+    } else if (isdigit(c)) {
+      current += c;
     }
-    if (!current.empty()) parts.push_back(std::stoi(current));
+  }
+  if (!current.empty())
+    parts.push_back(std::stoi(current));
 
-    if (parts.size() >= 1) v1 = parts[0];
-    if (parts.size() >= 2) v2 = parts[1];
-    if (parts.size() >= 3) v3 = parts[2];
-    if (parts.size() >= 4) v4 = parts[3];
-    return parts.size() > 0;
+  if (parts.size() >= 1)
+    v1 = parts[0];
+  if (parts.size() >= 2)
+    v2 = parts[1];
+  if (parts.size() >= 3)
+    v3 = parts[2];
+  if (parts.size() >= 4)
+    v4 = parts[3];
+  return parts.size() > 0;
 }
 
-bool IsPortableNovadeskInstall(const fs::path& novadeskExePath) {
-    const fs::path settingsPath = novadeskExePath.parent_path() / "settings.json";
-    return fs::exists(settingsPath);
+bool IsPortableNovadeskInstall(const fs::path &novadeskExePath) {
+  const fs::path settingsPath = novadeskExePath.parent_path() / "settings.json";
+  return fs::exists(settingsPath);
 }
 
 fs::path GetDocumentsAddonsPath() {
-    PWSTR docs = nullptr;
-    fs::path out;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docs)) && docs) {
-        out = fs::path(docs) / "Novadesk" / "Addons";
-        CoTaskMemFree(docs);
-    }
-    return out;
+  PWSTR docs = nullptr;
+  fs::path out;
+  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docs)) &&
+      docs) {
+    out = fs::path(docs) / "Novadesk" / "Addons";
+    CoTaskMemFree(docs);
+  }
+  return out;
 }
 
-fs::path ResolveAddonsSourcePath(const fs::path& novadeskExePath) {
-    if (IsPortableNovadeskInstall(novadeskExePath)) {
-        return novadeskExePath.parent_path() / "Addons";
-    }
-    return GetDocumentsAddonsPath();
+fs::path ResolveAddonsSourcePath(const fs::path &novadeskExePath) {
+  if (IsPortableNovadeskInstall(novadeskExePath)) {
+    return novadeskExePath.parent_path() / "Addons";
+  }
+  return GetDocumentsAddonsPath();
 }
 
-bool CopyAddonsToStaging(const fs::path& addonsSourceDir,
-                         const fs::path& stagingDir,
-                         const std::vector<std::string>& requestedAddons,
-                         std::vector<std::string>* outIncludedAddons = nullptr) {
-    if (requestedAddons.empty()) {
-        return true;
-    }
-
-    if (addonsSourceDir.empty() || !fs::exists(addonsSourceDir) || !fs::is_directory(addonsSourceDir)) {
-        std::cerr << "Warning: Addons directory not found: " << addonsSourceDir << std::endl;
-        return false;
-    }
-
-    fs::path targetAddonsDir = stagingDir / "Addons";
-    fs::create_directories(targetAddonsDir);
-
-    std::unordered_map<std::string, fs::path> dllByName;
-    std::unordered_map<std::string, fs::path> dllByStem;
-
-    for (const auto& entry : fs::directory_iterator(addonsSourceDir)) {
-        if (!entry.is_regular_file()) continue;
-        const fs::path filePath = entry.path();
-        if (ToLower(filePath.extension().string()) != ".dll") continue;
-
-        dllByName[ToLower(filePath.filename().string())] = filePath;
-        dllByStem[ToLower(filePath.stem().string())] = filePath;
-    }
-
-    std::unordered_set<std::string> copiedNames;
-    size_t copiedCount = 0;
-    for (const auto& addonName : requestedAddons) {
-        std::string nameLower = ToLower(addonName);
-        std::string stemLower = nameLower;
-        if (nameLower.size() > 4 && nameLower.substr(nameLower.size() - 4) == ".dll") {
-            stemLower = nameLower.substr(0, nameLower.size() - 4);
-        }
-
-        fs::path sourceDll;
-        auto byNameIt = dllByName.find(nameLower);
-        if (byNameIt != dllByName.end()) {
-            sourceDll = byNameIt->second;
-        } else {
-            auto byStemIt = dllByStem.find(stemLower);
-            if (byStemIt != dllByStem.end()) {
-                sourceDll = byStemIt->second;
-            }
-        }
-
-        if (sourceDll.empty()) {
-            std::cerr << "Error: Requested addon not found: " << addonName << std::endl;
-            return false;
-        }
-
-        const std::string canonicalName = ToLower(sourceDll.filename().string());
-        if (copiedNames.find(canonicalName) != copiedNames.end()) {
-            continue;
-        }
-        fs::copy_file(sourceDll, targetAddonsDir / sourceDll.filename(), fs::copy_options::overwrite_existing);
-        copiedNames.insert(canonicalName);
-        if (outIncludedAddons) {
-            outIncludedAddons->push_back(sourceDll.filename().string());
-        }
-        ++copiedCount;
-    }
-
-    std::cout << "Copied " << copiedCount << " requested addon DLL(s) from " << addonsSourceDir << std::endl;
+bool CopyAddonsToStaging(
+    const fs::path &addonsSourceDir, const fs::path &stagingDir,
+    const std::vector<std::string> &requestedAddons,
+    std::vector<std::string> *outIncludedAddons = nullptr) {
+  if (requestedAddons.empty()) {
     return true;
-}
+  }
 
-std::string SanitizeFileNameComponent(const std::string& value) {
-    if (value.empty()) return "Unknown";
-    std::string out = value;
-    for (char& ch : out) {
-        if (ch == '<' || ch == '>' || ch == ':' || ch == '"' || ch == '/' || ch == '\\' || ch == '|' || ch == '?' || ch == '*') {
-            ch = '_';
-        }
-    }
-    while (!out.empty() && (out.back() == ' ' || out.back() == '.')) {
-        out.pop_back();
-    }
-    if (out.empty()) return "Unknown";
-    return out;
-}
-
-std::string NormalizeRelativeExcludeItem(const std::string& value) {
-    fs::path p(value);
-    std::string normalized = p.lexically_normal().generic_string();
-    while (normalized.rfind("./", 0) == 0) {
-        normalized.erase(0, 2);
-    }
-    while (!normalized.empty() && normalized.back() == '/') {
-        normalized.pop_back();
-    }
-    return normalized;
-}
-
-bool ShouldExcludeRelativePath(const fs::path& relativePath, const std::vector<std::string>& excludeItems) {
-    const std::string rel = NormalizeRelativeExcludeItem(relativePath.generic_string());
-    if (rel.empty()) return false;
-
-    for (const auto& rawItem : excludeItems) {
-        const std::string item = NormalizeRelativeExcludeItem(rawItem);
-        if (item.empty()) continue;
-        if (rel == item) return true;
-        if (rel.rfind(item + "/", 0) == 0) return true;
-    }
+  if (addonsSourceDir.empty() || !fs::exists(addonsSourceDir) ||
+      !fs::is_directory(addonsSourceDir)) {
+    std::cerr << "Warning: Addons directory not found: " << addonsSourceDir
+              << std::endl;
     return false;
-}
+  }
 
-bool AddFileToZip(zipFile zf, const fs::path& filePath, const std::string& zipEntryPath) {
-    std::ifstream in(filePath, std::ios::binary);
-    if (!in) {
-        std::cerr << "Error: Failed to read file for zip: " << filePath << std::endl;
-        return false;
+  fs::path targetAddonsDir = stagingDir / "Addons";
+  fs::create_directories(targetAddonsDir);
+
+  std::unordered_map<std::string, fs::path> dllByName;
+  std::unordered_map<std::string, fs::path> dllByStem;
+
+  for (const auto &entry : fs::directory_iterator(addonsSourceDir)) {
+    if (!entry.is_regular_file())
+      continue;
+    const fs::path filePath = entry.path();
+    if (ToLower(filePath.extension().string()) != ".dll")
+      continue;
+
+    dllByName[ToLower(filePath.filename().string())] = filePath;
+    dllByStem[ToLower(filePath.stem().string())] = filePath;
+  }
+
+  std::unordered_set<std::string> copiedNames;
+  size_t copiedCount = 0;
+  for (const auto &addonName : requestedAddons) {
+    std::string nameLower = ToLower(addonName);
+    std::string stemLower = nameLower;
+    if (nameLower.size() > 4 &&
+        nameLower.substr(nameLower.size() - 4) == ".dll") {
+      stemLower = nameLower.substr(0, nameLower.size() - 4);
     }
 
-    zip_fileinfo zi = {};
-    if (zipOpenNewFileInZip64(zf,
-                              zipEntryPath.c_str(),
-                              &zi,
-                              nullptr, 0,
-                              nullptr, 0,
-                              nullptr,
-                              Z_DEFLATED,
-                              Z_BEST_COMPRESSION,
-                              1) != ZIP_OK) {
-        std::cerr << "Error: Failed to add zip entry: " << zipEntryPath << std::endl;
-        return false;
-    }
-
-    std::vector<char> buffer(1024 * 1024);
-    while (in) {
-        in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-        const std::streamsize got = in.gcount();
-        if (got <= 0) break;
-        if (zipWriteInFileInZip(zf, buffer.data(), static_cast<unsigned int>(got)) < 0) {
-            zipCloseFileInZip(zf);
-            std::cerr << "Error: Failed writing zip entry: " << zipEntryPath << std::endl;
-            return false;
-        }
-    }
-
-    if (zipCloseFileInZip(zf) != ZIP_OK) {
-        std::cerr << "Error: Failed closing zip entry: " << zipEntryPath << std::endl;
-        return false;
-    }
-    return true;
-}
-
-bool AddDirectoryEntryToZip(zipFile zf, const std::string& zipDirPath) {
-    zip_fileinfo zi = {};
-    if (zipOpenNewFileInZip64(zf,
-                              zipDirPath.c_str(),
-                              &zi,
-                              nullptr, 0,
-                              nullptr, 0,
-                              nullptr,
-                              0,
-                              0,
-                              0) != ZIP_OK) {
-        std::cerr << "Error: Failed to add zip directory entry: " << zipDirPath << std::endl;
-        return false;
-    }
-    if (zipCloseFileInZip(zf) != ZIP_OK) {
-        std::cerr << "Error: Failed closing zip directory entry: " << zipDirPath << std::endl;
-        return false;
-    }
-    return true;
-}
-
-bool CreateZipFromDirectory(const fs::path& sourceDir,
-                            const fs::path& zipPath,
-                            const std::unordered_set<std::string>& excludedTopLevelNames = {},
-                            const std::vector<std::string>& requiredDirectories = {}) {
-    zipFile zf = zipOpen64(zipPath.string().c_str(), APPEND_STATUS_CREATE);
-    if (!zf) {
-        std::cerr << "Error: Failed to create zip: " << zipPath << std::endl;
-        return false;
-    }
-
-    bool ok = true;
-    for (const auto& dir : requiredDirectories) {
-        if (!AddDirectoryEntryToZip(zf, dir)) {
-            ok = false;
-            break;
-        }
-    }
-
-    if (!ok) {
-        zipClose(zf, nullptr);
-        return false;
-    }
-
-    for (const auto& entry : fs::recursive_directory_iterator(sourceDir)) {
-        if (!entry.is_regular_file()) continue;
-        fs::path relPath = fs::relative(entry.path(), sourceDir);
-        std::string rel = relPath.generic_string();
-        const std::string topLevel = relPath.begin() != relPath.end() ? relPath.begin()->string() : std::string();
-        if (!topLevel.empty() && excludedTopLevelNames.find(topLevel) != excludedTopLevelNames.end()) {
-            continue;
-        }
-        if (!AddFileToZip(zf, entry.path(), rel)) {
-            ok = false;
-            break;
-        }
-    }
-
-    if (zipClose(zf, nullptr) != ZIP_OK) {
-        std::cerr << "Error: Failed to finalize zip: " << zipPath << std::endl;
-        return false;
-    }
-    return ok;
-}
-
-bool AppendNdpkgFooter(const fs::path& ndpkgPath) {
-    std::ofstream out(ndpkgPath, std::ios::binary | std::ios::app);
-    if (!out) {
-        std::cerr << "Error: Failed to append ndpkg footer to " << ndpkgPath << std::endl;
-        return false;
-    }
-
-    NdpkgFooter footer{};
-    std::memset(&footer, 0, sizeof(footer));
-    std::memcpy(footer.magic, NDPKG_FOOTER_MAGIC.c_str(), NDPKG_FOOTER_MAGIC.size());
-    footer.version = 1;
-    footer.reserved = 0;
-    out.write(reinterpret_cast<const char*>(&footer), sizeof(footer));
-    return static_cast<bool>(out);
-}
-
-void CopyWidgetFilesForPackaging(const fs::path& widgetPath,
-                                 const fs::path& targetDir,
-                                 const std::string& widgetRealName,
-                                 const std::vector<std::string>& excludeItems) {
-    fs::create_directories(targetDir);
-
-    std::vector<std::string> effectiveExclude = excludeItems;
-    effectiveExclude.push_back("dist");
-
-    fs::recursive_directory_iterator it(widgetPath, fs::directory_options::skip_permission_denied);
-    fs::recursive_directory_iterator end;
-    for (; it != end; ++it) {
-        const auto& entry = *it;
-        const fs::path relPath = fs::relative(entry.path(), widgetPath);
-        if (relPath.empty()) continue;
-
-        if (ShouldExcludeRelativePath(relPath, effectiveExclude)) {
-            if (entry.is_directory()) {
-                it.disable_recursion_pending();
-            }
-            continue;
-        }
-
-        if (entry.is_directory()) {
-            fs::create_directories(targetDir / relPath);
-            continue;
-        }
-
-        if (!entry.is_regular_file()) continue;
-        if (!relPath.has_parent_path() && relPath.filename().string() == (widgetRealName + ".exe")) continue;
-
-        fs::create_directories((targetDir / relPath).parent_path());
-        fs::copy_file(entry.path(), targetDir / relPath, fs::copy_options::overwrite_existing);
-    }
-}
-
-bool ParseExcludeItems(const nlohmann::json& meta, std::vector<std::string>& excludeItems) {
-    excludeItems.clear();
-    if (!meta.contains("excludeItems")) {
-        return true;
-    }
-
-    if (!meta["excludeItems"].is_array()) {
-        std::cerr << "Error: 'excludeItems' must be an array in meta.json" << std::endl;
-        return false;
-    }
-
-    for (const auto& entry : meta["excludeItems"]) {
-        if (!entry.is_string()) {
-            std::cerr << "Error: all entries in 'excludeItems' must be strings" << std::endl;
-            return false;
-        }
-        const std::string item = entry.get<std::string>();
-        if (!NormalizeRelativeExcludeItem(item).empty()) {
-            excludeItems.push_back(item);
-        }
-    }
-    return true;
-}
-
-bool InitWidget(const std::string& name) {
-    if (name.empty()) {
-        std::cerr << "Error: Widget name required for init" << std::endl;
-        return false;
-    }
-    fs::path baseDir = fs::current_path() / name;
-    if (fs::exists(baseDir)) {
-        std::cerr << "Error: Widget directory already exists: " << baseDir << std::endl;
-        return false;
-    }
-
-    try {
-        fs::path exeDir = GetExeDir();
-        fs::path templateDir = exeDir / "template";
-
-        // Check if template exists in exe dir or source dir (for dev)
-        if (!fs::exists(templateDir)) {
-            templateDir = exeDir.parent_path().parent_path().parent_path() / "nwm" / "template";
-        }
-
-        if (fs::exists(templateDir)) {
-            fs::copy(templateDir, baseDir, fs::copy_options::recursive);
-
-            // Replace name in meta.json
-            fs::path metaPath = baseDir / "meta.json";
-            if (fs::exists(metaPath)) {
-                std::ifstream inFile(metaPath);
-                std::string content((std::istreambuf_iterator<char>(inFile)), std::istreambuf_iterator<char>());
-                inFile.close();
-
-                // Improved replacement logic: find "name" key and replace value between quotes
-                size_t nameKeyPos = content.find("\"name\"");
-                if (nameKeyPos != std::string::npos) {
-                    size_t colonPos = content.find(":", nameKeyPos);
-                    if (colonPos != std::string::npos) {
-                        size_t firstQuote = content.find("\"", colonPos);
-                        size_t secondQuote = content.find("\"", firstQuote + 1);
-                        if (firstQuote != std::string::npos && secondQuote != std::string::npos) {
-                            content.replace(firstQuote + 1, secondQuote - firstQuote - 1, name);
-                        }
-                    }
-                }
-
-                // Replace any remaining {NAME} placeholders
-                const std::string placeholderUpper = "{NAME}";
-                const std::string placeholderTitle = "{Name}";
-                size_t pos = 0;
-                while ((pos = content.find(placeholderUpper, pos)) != std::string::npos) {
-                    content.replace(pos, placeholderUpper.size(), name);
-                    pos += name.size();
-                }
-                pos = 0;
-                while ((pos = content.find(placeholderTitle, pos)) != std::string::npos) {
-                    content.replace(pos, placeholderTitle.size(), name);
-                    pos += name.size();
-                }
-
-                std::ofstream outFile(metaPath);
-                outFile << content;
-            }
-
-            std::cout << "Widget initialized from template." << std::endl;
-        } else {
-            std::cerr << "Error: Widget template folder not found at " << templateDir << std::endl;
-            return false;
-        }
-
-        std::cout << "Widget '" << name << "' initialized successfully at " << baseDir << std::endl;
-        return true;
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return false;
-    }
-}
-
-bool RunWidget(const std::string& widgetPathArg = "", const std::vector<std::string>& extraArgs = {}) {
-    fs::path widgetPath;
-    if (!widgetPathArg.empty()) {
-        fs::path candidate = fs::path(widgetPathArg);
-        if (!candidate.is_absolute()) {
-            candidate = fs::current_path() / candidate;
-        }
-        if (fs::exists(candidate / "index.js")) {
-            widgetPath = candidate;
-        } else if (fs::exists(candidate) && candidate.filename() == "index.js") {
-            widgetPath = candidate.parent_path();
-        } else if (fs::exists(fs::current_path() / "index.js")) {
-            widgetPath = fs::current_path();
-        } else {
-            widgetPath = candidate;
-        }
+    fs::path sourceDll;
+    auto byNameIt = dllByName.find(nameLower);
+    if (byNameIt != dllByName.end()) {
+      sourceDll = byNameIt->second;
     } else {
-        widgetPath = fs::current_path();
+      auto byStemIt = dllByStem.find(stemLower);
+      if (byStemIt != dllByStem.end()) {
+        sourceDll = byStemIt->second;
+      }
     }
 
-    fs::path scriptPath = widgetPath / "index.js";
-    if (!fs::exists(scriptPath)) {
-        std::cerr << "Error: Could not find 'index.js' in " << widgetPath << std::endl;
-        return false;
+    if (sourceDll.empty()) {
+      std::cerr << "Error: Requested addon not found: " << addonName
+                << std::endl;
+      return false;
     }
 
+    const std::string canonicalName = ToLower(sourceDll.filename().string());
+    if (copiedNames.find(canonicalName) != copiedNames.end()) {
+      continue;
+    }
+    fs::copy_file(sourceDll, targetAddonsDir / sourceDll.filename(),
+                  fs::copy_options::overwrite_existing);
+    copiedNames.insert(canonicalName);
+    if (outIncludedAddons) {
+      outIncludedAddons->push_back(sourceDll.filename().string());
+    }
+    ++copiedCount;
+  }
+
+  std::cout << "Copied " << copiedCount << " requested addon DLL(s) from "
+            << addonsSourceDir << std::endl;
+  return true;
+}
+
+std::string SanitizeFileNameComponent(const std::string &value) {
+  if (value.empty())
+    return "Unknown";
+  std::string out = value;
+  for (char &ch : out) {
+    if (ch == '<' || ch == '>' || ch == ':' || ch == '"' || ch == '/' ||
+        ch == '\\' || ch == '|' || ch == '?' || ch == '*') {
+      ch = '_';
+    }
+  }
+  while (!out.empty() && (out.back() == ' ' || out.back() == '.')) {
+    out.pop_back();
+  }
+  if (out.empty())
+    return "Unknown";
+  return out;
+}
+
+std::string NormalizeRelativeExcludeItem(const std::string &value) {
+  fs::path p(value);
+  std::string normalized = p.lexically_normal().generic_string();
+  while (normalized.rfind("./", 0) == 0) {
+    normalized.erase(0, 2);
+  }
+  while (!normalized.empty() && normalized.back() == '/') {
+    normalized.pop_back();
+  }
+  return normalized;
+}
+
+bool ShouldExcludeRelativePath(const fs::path &relativePath,
+                               const std::vector<std::string> &excludeItems) {
+  const std::string rel =
+      NormalizeRelativeExcludeItem(relativePath.generic_string());
+  if (rel.empty())
+    return false;
+
+  for (const auto &rawItem : excludeItems) {
+    const std::string item = NormalizeRelativeExcludeItem(rawItem);
+    if (item.empty())
+      continue;
+    if (rel == item)
+      return true;
+    if (rel.rfind(item + "/", 0) == 0)
+      return true;
+  }
+  return false;
+}
+
+bool AddFileToZip(zipFile zf, const fs::path &filePath,
+                  const std::string &zipEntryPath) {
+  std::ifstream in(filePath, std::ios::binary);
+  if (!in) {
+    std::cerr << "Error: Failed to read file for zip: " << filePath
+              << std::endl;
+    return false;
+  }
+
+  zip_fileinfo zi = {};
+  if (zipOpenNewFileInZip64(zf, zipEntryPath.c_str(), &zi, nullptr, 0, nullptr,
+                            0, nullptr, Z_DEFLATED, Z_BEST_COMPRESSION,
+                            1) != ZIP_OK) {
+    std::cerr << "Error: Failed to add zip entry: " << zipEntryPath
+              << std::endl;
+    return false;
+  }
+
+  std::vector<char> buffer(1024 * 1024);
+  while (in) {
+    in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+    const std::streamsize got = in.gcount();
+    if (got <= 0)
+      break;
+    if (zipWriteInFileInZip(zf, buffer.data(), static_cast<unsigned int>(got)) <
+        0) {
+      zipCloseFileInZip(zf);
+      std::cerr << "Error: Failed writing zip entry: " << zipEntryPath
+                << std::endl;
+      return false;
+    }
+  }
+
+  if (zipCloseFileInZip(zf) != ZIP_OK) {
+    std::cerr << "Error: Failed closing zip entry: " << zipEntryPath
+              << std::endl;
+    return false;
+  }
+  return true;
+}
+
+bool AddDirectoryEntryToZip(zipFile zf, const std::string &zipDirPath) {
+  zip_fileinfo zi = {};
+  if (zipOpenNewFileInZip64(zf, zipDirPath.c_str(), &zi, nullptr, 0, nullptr, 0,
+                            nullptr, 0, 0, 0) != ZIP_OK) {
+    std::cerr << "Error: Failed to add zip directory entry: " << zipDirPath
+              << std::endl;
+    return false;
+  }
+  if (zipCloseFileInZip(zf) != ZIP_OK) {
+    std::cerr << "Error: Failed closing zip directory entry: " << zipDirPath
+              << std::endl;
+    return false;
+  }
+  return true;
+}
+
+bool CreateZipFromDirectory(
+    const fs::path &sourceDir, const fs::path &zipPath,
+    const std::unordered_set<std::string> &excludedTopLevelNames = {},
+    const std::vector<std::string> &requiredDirectories = {}) {
+  zipFile zf = zipOpen64(zipPath.string().c_str(), APPEND_STATUS_CREATE);
+  if (!zf) {
+    std::cerr << "Error: Failed to create zip: " << zipPath << std::endl;
+    return false;
+  }
+
+  bool ok = true;
+  for (const auto &dir : requiredDirectories) {
+    if (!AddDirectoryEntryToZip(zf, dir)) {
+      ok = false;
+      break;
+    }
+  }
+
+  if (!ok) {
+    zipClose(zf, nullptr);
+    return false;
+  }
+
+  for (const auto &entry : fs::recursive_directory_iterator(sourceDir)) {
+    if (!entry.is_regular_file())
+      continue;
+    fs::path relPath = fs::relative(entry.path(), sourceDir);
+    std::string rel = relPath.generic_string();
+    const std::string topLevel = relPath.begin() != relPath.end()
+                                     ? relPath.begin()->string()
+                                     : std::string();
+    if (!topLevel.empty() &&
+        excludedTopLevelNames.find(topLevel) != excludedTopLevelNames.end()) {
+      continue;
+    }
+    if (!AddFileToZip(zf, entry.path(), rel)) {
+      ok = false;
+      break;
+    }
+  }
+
+  if (zipClose(zf, nullptr) != ZIP_OK) {
+    std::cerr << "Error: Failed to finalize zip: " << zipPath << std::endl;
+    return false;
+  }
+  return ok;
+}
+
+bool AppendNdpkgFooter(const fs::path &ndpkgPath) {
+  std::ofstream out(ndpkgPath, std::ios::binary | std::ios::app);
+  if (!out) {
+    std::cerr << "Error: Failed to append ndpkg footer to " << ndpkgPath
+              << std::endl;
+    return false;
+  }
+
+  NdpkgFooter footer{};
+  std::memset(&footer, 0, sizeof(footer));
+  std::memcpy(footer.magic, NDPKG_FOOTER_MAGIC.c_str(),
+              NDPKG_FOOTER_MAGIC.size());
+  footer.version = 1;
+  footer.reserved = 0;
+  out.write(reinterpret_cast<const char *>(&footer), sizeof(footer));
+  return static_cast<bool>(out);
+}
+
+void CopyWidgetFilesForPackaging(const fs::path &widgetPath,
+                                 const fs::path &targetDir,
+                                 const std::string &widgetRealName,
+                                 const std::vector<std::string> &excludeItems) {
+  fs::create_directories(targetDir);
+
+  std::vector<std::string> effectiveExclude = excludeItems;
+  effectiveExclude.push_back("dist");
+
+  fs::recursive_directory_iterator it(
+      widgetPath, fs::directory_options::skip_permission_denied);
+  fs::recursive_directory_iterator end;
+  for (; it != end; ++it) {
+    const auto &entry = *it;
+    const fs::path relPath = fs::relative(entry.path(), widgetPath);
+    if (relPath.empty())
+      continue;
+
+    if (ShouldExcludeRelativePath(relPath, effectiveExclude)) {
+      if (entry.is_directory()) {
+        it.disable_recursion_pending();
+      }
+      continue;
+    }
+
+    if (entry.is_directory()) {
+      fs::create_directories(targetDir / relPath);
+      continue;
+    }
+
+    if (!entry.is_regular_file())
+      continue;
+    if (!relPath.has_parent_path() &&
+        relPath.filename().string() == (widgetRealName + ".exe"))
+      continue;
+
+    fs::create_directories((targetDir / relPath).parent_path());
+    fs::copy_file(entry.path(), targetDir / relPath,
+                  fs::copy_options::overwrite_existing);
+  }
+}
+
+bool ParseExcludeItems(const nlohmann::json &meta,
+                       std::vector<std::string> &excludeItems) {
+  excludeItems.clear();
+  if (!meta.contains("excludeItems")) {
+    return true;
+  }
+
+  if (!meta["excludeItems"].is_array()) {
+    std::cerr << "Error: 'excludeItems' must be an array in meta.json"
+              << std::endl;
+    return false;
+  }
+
+  for (const auto &entry : meta["excludeItems"]) {
+    if (!entry.is_string()) {
+      std::cerr << "Error: all entries in 'excludeItems' must be strings"
+                << std::endl;
+      return false;
+    }
+    const std::string item = entry.get<std::string>();
+    if (!NormalizeRelativeExcludeItem(item).empty()) {
+      excludeItems.push_back(item);
+    }
+  }
+  return true;
+}
+
+bool InitWidget(const std::string &name) {
+  if (name.empty()) {
+    std::cerr << "Error: Widget name required for init" << std::endl;
+    return false;
+  }
+  fs::path baseDir = fs::current_path() / name;
+  if (fs::exists(baseDir)) {
+    std::cerr << "Error: Widget directory already exists: " << baseDir
+              << std::endl;
+    return false;
+  }
+
+  try {
     fs::path exeDir = GetExeDir();
-    fs::path novadeskExe = exeDir.parent_path() / NOVADESK_EXE;
-    if (!fs::exists(novadeskExe)) {
-        // Fallback for dev environment
-        novadeskExe = exeDir.parent_path().parent_path() / NOVADESK_EXE;
+    fs::path templateDir = exeDir / "template";
+
+    // Check if template exists in exe dir or source dir (for dev)
+    if (!fs::exists(templateDir)) {
+      templateDir =
+          exeDir.parent_path().parent_path().parent_path() / "nwm" / "template";
     }
 
-    if (!fs::exists(novadeskExe)) {
-        std::cerr << "Error: Novadesk.exe not found." << std::endl;
-        return false;
-    }
+    if (fs::exists(templateDir)) {
+      fs::copy(templateDir, baseDir, fs::copy_options::recursive);
 
-    std::string command = "\"" + novadeskExe.string() + "\" --new-instance \"" + scriptPath.string() + "\"";
+      // Replace name in meta.json
+      fs::path metaPath = baseDir / "meta.json";
+      if (fs::exists(metaPath)) {
+        std::ifstream inFile(metaPath);
+        std::string content((std::istreambuf_iterator<char>(inFile)),
+                            std::istreambuf_iterator<char>());
+        inFile.close();
 
-    // Append any extra args passed after -- on the nwm command line
-    for (const auto& arg : extraArgs) {
-        // Quote args that contain spaces; pass others as-is
-        if (arg.find(' ') != std::string::npos) {
-            command += " \"" + arg + "\"";
-        } else {
-            command += " " + arg;
+        // Improved replacement logic: find "name" key and replace value between
+        // quotes
+        size_t nameKeyPos = content.find("\"name\"");
+        if (nameKeyPos != std::string::npos) {
+          size_t colonPos = content.find(":", nameKeyPos);
+          if (colonPos != std::string::npos) {
+            size_t firstQuote = content.find("\"", colonPos);
+            size_t secondQuote = content.find("\"", firstQuote + 1);
+            if (firstQuote != std::string::npos &&
+                secondQuote != std::string::npos) {
+              content.replace(firstQuote + 1, secondQuote - firstQuote - 1,
+                              name);
+            }
+          }
         }
-    }
 
-    std::cout << "Running: " << command << std::endl;
+        // Replace any remaining {NAME} placeholders
+        const std::string placeholderUpper = "{NAME}";
+        const std::string placeholderTitle = "{Name}";
+        size_t pos = 0;
+        while ((pos = content.find(placeholderUpper, pos)) !=
+               std::string::npos) {
+          content.replace(pos, placeholderUpper.size(), name);
+          pos += name.size();
+        }
+        pos = 0;
+        while ((pos = content.find(placeholderTitle, pos)) !=
+               std::string::npos) {
+          content.replace(pos, placeholderTitle.size(), name);
+          pos += name.size();
+        }
 
-    STARTUPINFOA si = { sizeof(si) };
-    PROCESS_INFORMATION pi;
-    if (CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
-        std::cout << "Waiting for process to exit..." << std::endl;
-        WaitForSingleObject(pi.hProcess, INFINITE);
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        return true;
+        std::ofstream outFile(metaPath);
+        outFile << content;
+      }
+
+      std::cout << "Widget initialized from template." << std::endl;
     } else {
-        std::cerr << "Error: Failed to launch Novadesk.exe" << std::endl;
-        return false;
+      std::cerr << "Error: Widget template folder not found at " << templateDir
+                << std::endl;
+      return false;
     }
+
+    std::cout << "Widget '" << name << "' initialized successfully at "
+              << baseDir << std::endl;
+    return true;
+  } catch (const std::exception &e) {
+    std::cerr << "Error: " << e.what() << std::endl;
+    return false;
+  }
+}
+
+bool RunWidget(const std::string &widgetPathArg = "",
+               const std::vector<std::string> &extraArgs = {}) {
+  fs::path widgetPath;
+  if (!widgetPathArg.empty()) {
+    fs::path candidate = fs::path(widgetPathArg);
+    if (!candidate.is_absolute()) {
+      candidate = fs::current_path() / candidate;
+    }
+    if (fs::exists(candidate / "index.js")) {
+      widgetPath = candidate;
+    } else if (fs::exists(candidate) && candidate.filename() == "index.js") {
+      widgetPath = candidate.parent_path();
+    } else if (fs::exists(fs::current_path() / "index.js")) {
+      widgetPath = fs::current_path();
+    } else {
+      widgetPath = candidate;
+    }
+  } else {
+    widgetPath = fs::current_path();
+  }
+
+  fs::path scriptPath = widgetPath / "index.js";
+  if (!fs::exists(scriptPath)) {
+    std::cerr << "Error: Could not find 'index.js' in " << widgetPath
+              << std::endl;
+    return false;
+  }
+
+  fs::path exeDir = GetExeDir();
+  fs::path novadeskExe = exeDir.parent_path() / NOVADESK_EXE;
+  if (!fs::exists(novadeskExe)) {
+    // Fallback for dev environment
+    novadeskExe = exeDir.parent_path().parent_path() / NOVADESK_EXE;
+  }
+
+  if (!fs::exists(novadeskExe)) {
+    std::cerr << "Error: Novadesk.exe not found." << std::endl;
+    return false;
+  }
+
+  std::string command = "\"" + novadeskExe.string() + "\" --new-instance \"" +
+                        scriptPath.string() + "\"";
+
+  // Append any extra args passed after -- on the nwm command line
+  for (const auto &arg : extraArgs) {
+    // Quote args that contain spaces; pass others as-is
+    if (arg.find(' ') != std::string::npos) {
+      command += " \"" + arg + "\"";
+    } else {
+      command += " " + arg;
+    }
+  }
+
+  std::cout << "Running: " << command << std::endl;
+
+  STARTUPINFOA si = {sizeof(si)};
+  PROCESS_INFORMATION pi;
+  if (CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, FALSE, 0, NULL,
+                     NULL, &si, &pi)) {
+    std::cout << "Waiting for process to exit..." << std::endl;
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return true;
+  } else {
+    std::cerr << "Error: Failed to launch Novadesk.exe" << std::endl;
+    return false;
+  }
 }
 
 bool BuildWidget() {
-    fs::path widgetPath = fs::current_path();
-    WidgetMeta widgetMeta;
-    if (!LoadWidgetMeta(widgetPath, widgetMeta)) {
+  fs::path widgetPath = fs::current_path();
+  WidgetMeta widgetMeta;
+  if (!LoadWidgetMeta(widgetPath, widgetMeta)) {
+    return false;
+  }
+  nlohmann::json meta = widgetMeta.json;
+
+  std::string widgetRealName = meta.value("name", "");
+  std::string version = meta.value("version", "");
+  std::string icon = meta.value("icon", "");
+  std::string author = meta.value("author", "");
+  std::string description = meta.value("description", "");
+  std::vector<std::string> excludeItems;
+  if (!ParseExcludeItems(meta, excludeItems)) {
+    return false;
+  }
+  std::string previewPath;
+  if (meta.contains("preview") && meta["preview"].is_string()) {
+    previewPath = meta["preview"].get<std::string>();
+  }
+  std::vector<std::string> requestedAddons;
+  if (meta.contains("addons")) {
+    if (!meta["addons"].is_array()) {
+      std::cerr << "Error: 'addons' must be an array in meta.json" << std::endl;
+      return false;
+    }
+    for (const auto &addon : meta["addons"]) {
+      if (!addon.is_string()) {
+        std::cerr << "Error: all entries in 'addons' must be strings"
+                  << std::endl;
         return false;
+      }
+      const std::string addonValue = addon.get<std::string>();
+      if (!addonValue.empty()) {
+        requestedAddons.push_back(addonValue);
+      }
     }
-    nlohmann::json meta = widgetMeta.json;
+  }
+  std::vector<std::string> ndpkgAddons;
+  for (const auto &addon : requestedAddons) {
+    if (!IsDefaultAddonName(addon)) {
+      ndpkgAddons.push_back(addon);
+    }
+  }
+  auto setupJson = meta.value("setup", nlohmann::json::object());
+  SetupOptions setupOptions;
+  setupOptions.createDesktopShortcut = setupJson.value(
+      "createDesktopShortcut", setupOptions.createDesktopShortcut);
+  setupOptions.createStartupShortcut = setupJson.value(
+      "createStartupShortcut", setupOptions.createStartupShortcut);
+  setupOptions.runOnStartup =
+      setupJson.value("runOnStartup", setupOptions.runOnStartup);
+  setupOptions.installDir =
+      setupJson.value("installDir", setupOptions.installDir);
+  setupOptions.startMenuFolder =
+      setupJson.value("startMenuFolder", setupOptions.startMenuFolder);
+  setupOptions.setupName = setupJson.value("setupName", setupOptions.setupName);
+  setupOptions.setupIcon = setupJson.value("setupIcon", setupOptions.setupIcon);
+  setupOptions.enableUninstall =
+      setupJson.value("enableUninstall", setupOptions.enableUninstall);
+  setupOptions.launchAfterInstall =
+      setupJson.value("launchAfterInstall", setupOptions.launchAfterInstall);
 
-    std::string widgetRealName = meta.value("name", "");
-    std::string version = meta.value("version", "");
-    std::string icon = meta.value("icon", "");
-    std::string author = meta.value("author", "");
-    std::string description = meta.value("description", "");
-    std::vector<std::string> excludeItems;
-    if (!ParseExcludeItems(meta, excludeItems)) {
+  bool missing = false;
+  if (widgetRealName.empty()) {
+    std::cerr << "Error: 'name' is missing in meta.json" << std::endl;
+    missing = true;
+  }
+  if (version.empty()) {
+    std::cerr << "Error: 'version' is missing in meta.json" << std::endl;
+    missing = true;
+  }
+  if (icon.empty()) {
+    std::cerr << "Error: 'icon' is missing in meta.json" << std::endl;
+    missing = true;
+  }
+  if (author.empty()) {
+    std::cerr << "Error: 'author' is missing in meta.json" << std::endl;
+    missing = true;
+  }
+  if (description.empty()) {
+    std::cerr << "Error: 'description' is missing in meta.json" << std::endl;
+    missing = true;
+  }
+  if (setupOptions.installDir.empty()) {
+    std::cerr << "Error: 'setup.installDir' is missing in meta.json"
+              << std::endl;
+    missing = true;
+  }
+  if (setupOptions.startMenuFolder.empty()) {
+    std::cerr << "Error: 'setup.startMenuFolder' is missing in meta.json"
+              << std::endl;
+    missing = true;
+  }
+  if (setupOptions.setupName.empty()) {
+    std::cerr << "Error: 'setup.setupName' is missing in meta.json"
+              << std::endl;
+    missing = true;
+  }
+  if (setupOptions.setupIcon.empty()) {
+    std::cerr << "Error: 'setup.setupIcon' is missing in meta.json"
+              << std::endl;
+    missing = true;
+  }
+
+  if (missing)
+    return false;
+
+  try {
+    fs::path distDir = widgetPath / "dist";
+    if (fs::exists(distDir))
+      fs::remove_all(distDir);
+    fs::create_directories(distDir);
+
+    const auto now =
+        std::chrono::system_clock::now().time_since_epoch().count();
+    fs::path stagingDir =
+        fs::temp_directory_path() / ("nwm_build_stage_" + std::to_string(now));
+    if (fs::exists(stagingDir)) {
+      fs::remove_all(stagingDir);
+    }
+    fs::create_directories(stagingDir);
+
+    struct StageCleanup {
+      fs::path path;
+      ~StageCleanup() {
+        if (path.empty())
+          return;
+        try {
+          if (fs::exists(path))
+            fs::remove_all(path);
+        } catch (...) {
+        }
+      }
+    } stageCleanup{stagingDir};
+
+    fs::path ndpkgStageDir =
+        fs::temp_directory_path() / ("nwm_ndpkg_stage_" + std::to_string(now));
+    if (fs::exists(ndpkgStageDir)) {
+      fs::remove_all(ndpkgStageDir);
+    }
+    fs::create_directories(ndpkgStageDir);
+    StageCleanup ndpkgStageCleanup{ndpkgStageDir};
+
+    fs::path exeDir = GetExeDir();
+    fs::path srcExe = exeDir.parent_path() / NOVADESK_EXE;
+    if (!fs::exists(srcExe)) {
+      srcExe = exeDir.parent_path().parent_path() / NOVADESK_EXE;
+    }
+
+    fs::path destExe = stagingDir / (widgetRealName + ".exe");
+    fs::copy_file(srcExe, destExe, fs::copy_options::overwrite_existing);
+
+    const fs::path addonsSourceDir = ResolveAddonsSourcePath(srcExe);
+    if (requestedAddons.empty() && ndpkgAddons.empty()) {
+      std::cout << "No addons requested in meta.json; skipping addon copy."
+                << std::endl;
+    }
+    if (!CopyAddonsToStaging(addonsSourceDir, stagingDir, requestedAddons)) {
+      return false;
+    }
+
+    std::vector<std::string> ndpkgIncludedAddons;
+    if (!CopyAddonsToStaging(addonsSourceDir, ndpkgStageDir, ndpkgAddons,
+                             &ndpkgIncludedAddons)) {
+      return false;
+    }
+
+    fs::path widgetsSubDir = stagingDir / "Widgets";
+    CopyWidgetFilesForPackaging(widgetPath, widgetsSubDir, widgetRealName,
+                                excludeItems);
+
+    fs::path ndpkgWidgetsDir = ndpkgStageDir / "Widgets" / widgetRealName;
+    CopyWidgetFilesForPackaging(widgetPath, ndpkgWidgetsDir, widgetRealName,
+                                excludeItems);
+
+    if (!previewPath.empty()) {
+      fs::path previewSource = widgetPath / previewPath;
+      if (!fs::exists(previewSource) || !fs::is_regular_file(previewSource)) {
+        std::cerr << "Error: Preview image file not found: " << previewSource
+                  << std::endl;
         return false;
+      }
+      fs::path previewTargetName = "preview";
+      previewTargetName += previewSource.extension();
+      fs::copy_file(previewSource, ndpkgStageDir / previewTargetName,
+                    fs::copy_options::overwrite_existing);
     }
-    std::string previewPath;
-    if (meta.contains("preview") && meta["preview"].is_string()) {
-        previewPath = meta["preview"].get<std::string>();
-    }
-    std::vector<std::string> requestedAddons;
-    if (meta.contains("addons")) {
-        if (!meta["addons"].is_array()) {
-            std::cerr << "Error: 'addons' must be an array in meta.json" << std::endl;
-            return false;
+
+    std::cout << "Applying metadata via internal rescle..." << std::endl;
+    rescle::ResourceUpdater updater;
+    if (updater.Load(destExe.c_str())) {
+      updater.SetVersionString(RU_VS_PRODUCT_NAME,
+                               ToWString(widgetRealName).c_str());
+      updater.SetVersionString(RU_VS_COMPANY_NAME, ToWString(author).c_str());
+      updater.SetVersionString(RU_VS_FILE_DESCRIPTION,
+                               ToWString(description).c_str());
+      updater.SetVersionString(RU_VS_FILE_VERSION, ToWString(version).c_str());
+      updater.SetVersionString(RU_VS_PRODUCT_VERSION,
+                               ToWString(version).c_str());
+
+      unsigned short v1, v2, v3, v4;
+      if (ParseVersion(version, v1, v2, v3, v4)) {
+        updater.SetFileVersion(v1, v2, v3, v4);
+        updater.SetProductVersion(v1, v2, v3, v4);
+      }
+
+      if (!icon.empty()) {
+        fs::path iconPath = widgetPath / icon;
+        if (fs::exists(iconPath)) {
+          updater.SetIcon(iconPath.c_str());
         }
-        for (const auto& addon : meta["addons"]) {
-            if (!addon.is_string()) {
-                std::cerr << "Error: all entries in 'addons' must be strings" << std::endl;
-                return false;
-            }
-            const std::string addonValue = addon.get<std::string>();
-            if (!addonValue.empty()) {
-                requestedAddons.push_back(addonValue);
-            }
-        }
-    }
-    std::vector<std::string> ndpkgAddons;
-    for (const auto& addon : requestedAddons) {
-        if (!IsDefaultAddonName(addon)) {
-            ndpkgAddons.push_back(addon);
-        }
-    }
-    auto setupJson = meta.value("setup", nlohmann::json::object());
-    SetupOptions setupOptions;
-    setupOptions.createDesktopShortcut = setupJson.value("createDesktopShortcut", setupOptions.createDesktopShortcut);
-    setupOptions.createStartupShortcut = setupJson.value("createStartupShortcut", setupOptions.createStartupShortcut);
-    setupOptions.runOnStartup = setupJson.value("runOnStartup", setupOptions.runOnStartup);
-    setupOptions.installDir = setupJson.value("installDir", setupOptions.installDir);
-    setupOptions.startMenuFolder = setupJson.value("startMenuFolder", setupOptions.startMenuFolder);
-    setupOptions.setupName = setupJson.value("setupName", setupOptions.setupName);
-    setupOptions.setupIcon = setupJson.value("setupIcon", setupOptions.setupIcon);
-    setupOptions.enableUninstall = setupJson.value("enableUninstall", setupOptions.enableUninstall);
-    setupOptions.launchAfterInstall = setupJson.value("launchAfterInstall", setupOptions.launchAfterInstall);
+      }
 
-    bool missing = false;
-    if (widgetRealName.empty()) { std::cerr << "Error: 'name' is missing in meta.json" << std::endl; missing = true; }
-    if (version.empty()) { std::cerr << "Error: 'version' is missing in meta.json" << std::endl; missing = true; }
-    if (icon.empty()) { std::cerr << "Error: 'icon' is missing in meta.json" << std::endl; missing = true; }
-    if (author.empty()) { std::cerr << "Error: 'author' is missing in meta.json" << std::endl; missing = true; }
-    if (description.empty()) { std::cerr << "Error: 'description' is missing in meta.json" << std::endl; missing = true; }
-    if (setupOptions.installDir.empty()) { std::cerr << "Error: 'setup.installDir' is missing in meta.json" << std::endl; missing = true; }
-    if (setupOptions.startMenuFolder.empty()) { std::cerr << "Error: 'setup.startMenuFolder' is missing in meta.json" << std::endl; missing = true; }
-    if (setupOptions.setupName.empty()) { std::cerr << "Error: 'setup.setupName' is missing in meta.json" << std::endl; missing = true; }
-    if (setupOptions.setupIcon.empty()) { std::cerr << "Error: 'setup.setupIcon' is missing in meta.json" << std::endl; missing = true; }
-    
-    if (missing) return false;
-
-    try {
-        fs::path distDir = widgetPath / "dist";
-        if (fs::exists(distDir)) fs::remove_all(distDir);
-        fs::create_directories(distDir);
-
-        const auto now = std::chrono::system_clock::now().time_since_epoch().count();
-        fs::path stagingDir = fs::temp_directory_path() / ("nwm_build_stage_" + std::to_string(now));
-        if (fs::exists(stagingDir)) {
-            fs::remove_all(stagingDir);
-        }
-        fs::create_directories(stagingDir);
-
-        struct StageCleanup {
-            fs::path path;
-            ~StageCleanup() {
-                if (path.empty()) return;
-                try {
-                    if (fs::exists(path)) fs::remove_all(path);
-                } catch (...) {}
-            }
-        } stageCleanup{stagingDir};
-
-        fs::path ndpkgStageDir = fs::temp_directory_path() / ("nwm_ndpkg_stage_" + std::to_string(now));
-        if (fs::exists(ndpkgStageDir)) {
-            fs::remove_all(ndpkgStageDir);
-        }
-        fs::create_directories(ndpkgStageDir);
-        StageCleanup ndpkgStageCleanup{ndpkgStageDir};
-
-        fs::path exeDir = GetExeDir();
-        fs::path srcExe = exeDir.parent_path() / NOVADESK_EXE;
-        if (!fs::exists(srcExe)) {
-            srcExe = exeDir.parent_path().parent_path() / NOVADESK_EXE;
-        }
-
-        fs::path destExe = stagingDir / (widgetRealName + ".exe");
-        fs::copy_file(srcExe, destExe, fs::copy_options::overwrite_existing);
-
-        const fs::path addonsSourceDir = ResolveAddonsSourcePath(srcExe);
-        if (requestedAddons.empty() && ndpkgAddons.empty()) {
-            std::cout << "No addons requested in meta.json; skipping addon copy." << std::endl;
-        }
-        if (!CopyAddonsToStaging(addonsSourceDir, stagingDir, requestedAddons)) {
-            return false;
-        }
-
-        std::vector<std::string> ndpkgIncludedAddons;
-        if (!CopyAddonsToStaging(addonsSourceDir, ndpkgStageDir, ndpkgAddons, &ndpkgIncludedAddons)) {
-            return false;
-        }
-
-        fs::path widgetsSubDir = stagingDir / "Widgets";
-        CopyWidgetFilesForPackaging(widgetPath, widgetsSubDir, widgetRealName, excludeItems);
-
-        fs::path ndpkgWidgetsDir = ndpkgStageDir / "Widgets" / widgetRealName;
-        CopyWidgetFilesForPackaging(widgetPath, ndpkgWidgetsDir, widgetRealName, excludeItems);
-
-        if (!previewPath.empty()) {
-            fs::path previewSource = widgetPath / previewPath;
-            if (!fs::exists(previewSource) || !fs::is_regular_file(previewSource)) {
-                std::cerr << "Error: Preview image file not found: " << previewSource << std::endl;
-                return false;
-            }
-            fs::path previewTargetName = "preview";
-            previewTargetName += previewSource.extension();
-            fs::copy_file(previewSource, ndpkgStageDir / previewTargetName, fs::copy_options::overwrite_existing);
-        }
-
-        std::cout << "Applying metadata via internal rescle..." << std::endl;
-        rescle::ResourceUpdater updater;
-        if (updater.Load(destExe.c_str())) {
-            updater.SetVersionString(RU_VS_PRODUCT_NAME, ToWString(widgetRealName).c_str());
-            updater.SetVersionString(RU_VS_COMPANY_NAME, ToWString(author).c_str());
-            updater.SetVersionString(RU_VS_FILE_DESCRIPTION, ToWString(description).c_str());
-            updater.SetVersionString(RU_VS_FILE_VERSION, ToWString(version).c_str());
-            updater.SetVersionString(RU_VS_PRODUCT_VERSION, ToWString(version).c_str());
-
-            unsigned short v1, v2, v3, v4;
-            if (ParseVersion(version, v1, v2, v3, v4)) {
-                updater.SetFileVersion(v1, v2, v3, v4);
-                updater.SetProductVersion(v1, v2, v3, v4);
-            }
-
-            if (!icon.empty()) {
-                fs::path iconPath = widgetPath / icon;
-                if (fs::exists(iconPath)) {
-                    updater.SetIcon(iconPath.c_str());
-                }
-            }
-
-            if (!updater.Commit()) {
-                std::cerr << "Error: Failed to commit metadata updates via rescle." << std::endl;
-                return false;
-            }
-        } else {
-            std::cerr << "Error: Failed to load executable for metadata update." << std::endl;
-            return false;
-        }
-
-        fs::path stubExe = exeDir / "installer_stub.exe";
-        if (!fs::exists(stubExe)) {
-            fs::path fallbackStub = exeDir.parent_path() / "installer_stub.exe";
-            if (fs::exists(fallbackStub)) {
-                stubExe = fallbackStub;
-            } else {
-                std::cerr << "Warning: installer_stub.exe not found. Falling back to nwm.exe." << std::endl;
-                stubExe = exeDir / "nwm.exe";
-            }
-        }
-
-        if (!BuildInstallerSfx(stagingDir, widgetPath, stubExe, widgetRealName, version, author, description, setupOptions)) {
-            std::cerr << "Error: Failed to build installer." << std::endl;
-            return false;
-        }
-
-        std::string setupExeName = setupOptions.setupName;
-        if (setupExeName.size() < 4 || setupExeName.substr(setupExeName.size() - 4) != ".exe") {
-            setupExeName += ".exe";
-        }
-        fs::path setupExePath = stagingDir / setupExeName;
-        if (!fs::exists(setupExePath)) {
-            std::cerr << "Error: Expected setup file not found: " << setupExePath << std::endl;
-            return false;
-        }
-
-        const std::string zipName = SanitizeFileNameComponent(widgetRealName) + "_v" + SanitizeFileNameComponent(version) + ".zip";
-        const fs::path zipOut = distDir / zipName;
-        if (fs::exists(zipOut)) {
-            fs::remove(zipOut);
-        }
-        if (!CreateZipFromDirectory(stagingDir, zipOut, { setupExeName })) {
-            std::cerr << "Error: Failed to create zip package." << std::endl;
-            return false;
-        }
-
-        const fs::path setupOut = distDir / setupExeName;
-        if (fs::exists(setupOut)) {
-            fs::remove(setupOut);
-        }
-        fs::copy_file(setupExePath, setupOut, fs::copy_options::overwrite_existing);
-
-        nlohmann::json ndpkgMeta = nlohmann::json::object();
-        ndpkgMeta["name"] = widgetRealName;
-        ndpkgMeta["version"] = version;
-        ndpkgMeta["author"] = author;
-        ndpkgMeta["addons"] = nlohmann::json::array();
-        for (const auto& addonFile : ndpkgIncludedAddons) {
-            ndpkgMeta["addons"].push_back(addonFile);
-        }
-        {
-            std::ofstream ndpkgMetaOut(ndpkgStageDir / "ndpkg.json", std::ios::binary | std::ios::trunc);
-            if (!ndpkgMetaOut) {
-                std::cerr << "Error: Failed to write ndpkg.json" << std::endl;
-                return false;
-            }
-            ndpkgMetaOut << ndpkgMeta.dump(2);
-        }
-
-        const std::string ndpkgName = SanitizeFileNameComponent(widgetRealName) + "_v" + SanitizeFileNameComponent(version) + ".ndpkg";
-        const fs::path ndpkgOut = distDir / ndpkgName;
-        if (fs::exists(ndpkgOut)) {
-            fs::remove(ndpkgOut);
-        }
-        if (!CreateZipFromDirectory(ndpkgStageDir, ndpkgOut, {}, {"Widgets/", "Addons/"})) {
-            std::cerr << "Error: Failed to create ndpkg payload." << std::endl;
-            return false;
-        }
-        if (!AppendNdpkgFooter(ndpkgOut)) {
-            std::cerr << "Error: Failed to append ndpkg footer." << std::endl;
-            return false;
-        }
-
-        std::cout << "Successfully built widget package: " << zipOut << std::endl;
-        std::cout << "Setup file created: " << setupOut << std::endl;
-        std::cout << "NDPKG created: " << ndpkgOut << std::endl;
-        return true;
-    } catch (const std::exception& e) {
-        std::cerr << "Build Error: " << e.what() << std::endl;
+      if (!updater.Commit()) {
+        std::cerr << "Error: Failed to commit metadata updates via rescle."
+                  << std::endl;
         return false;
+      }
+    } else {
+      std::cerr << "Error: Failed to load executable for metadata update."
+                << std::endl;
+      return false;
     }
+
+    fs::path stubExe = exeDir / "installer_stub.exe";
+    if (!fs::exists(stubExe)) {
+      fs::path fallbackStub = exeDir.parent_path() / "installer_stub.exe";
+      if (fs::exists(fallbackStub)) {
+        stubExe = fallbackStub;
+      } else {
+        std::cerr
+            << "Warning: installer_stub.exe not found. Falling back to nwm.exe."
+            << std::endl;
+        stubExe = exeDir / "nwm.exe";
+      }
+    }
+
+    if (!BuildInstallerSfx(stagingDir, widgetPath, stubExe, widgetRealName,
+                           version, author, description, setupOptions)) {
+      std::cerr << "Error: Failed to build installer." << std::endl;
+      return false;
+    }
+
+    std::string setupExeName = setupOptions.setupName;
+    if (setupExeName.size() < 4 ||
+        setupExeName.substr(setupExeName.size() - 4) != ".exe") {
+      setupExeName += ".exe";
+    }
+    fs::path setupExePath = stagingDir / setupExeName;
+    if (!fs::exists(setupExePath)) {
+      std::cerr << "Error: Expected setup file not found: " << setupExePath
+                << std::endl;
+      return false;
+    }
+
+    const std::string zipName = SanitizeFileNameComponent(widgetRealName) +
+                                "_v" + SanitizeFileNameComponent(version) +
+                                ".zip";
+    const fs::path zipOut = distDir / zipName;
+    if (fs::exists(zipOut)) {
+      fs::remove(zipOut);
+    }
+    if (!CreateZipFromDirectory(stagingDir, zipOut, {setupExeName})) {
+      std::cerr << "Error: Failed to create zip package." << std::endl;
+      return false;
+    }
+
+    const fs::path setupOut = distDir / setupExeName;
+    if (fs::exists(setupOut)) {
+      fs::remove(setupOut);
+    }
+    fs::copy_file(setupExePath, setupOut, fs::copy_options::overwrite_existing);
+
+    nlohmann::json ndpkgMeta = nlohmann::json::object();
+    ndpkgMeta["name"] = widgetRealName;
+    ndpkgMeta["version"] = version;
+    ndpkgMeta["author"] = author;
+    ndpkgMeta["addons"] = nlohmann::json::array();
+    for (const auto &addonFile : ndpkgIncludedAddons) {
+      ndpkgMeta["addons"].push_back(addonFile);
+    }
+    {
+      std::ofstream ndpkgMetaOut(ndpkgStageDir / "ndpkg.json",
+                                 std::ios::binary | std::ios::trunc);
+      if (!ndpkgMetaOut) {
+        std::cerr << "Error: Failed to write ndpkg.json" << std::endl;
+        return false;
+      }
+      ndpkgMetaOut << ndpkgMeta.dump(2);
+    }
+
+    const std::string ndpkgName = SanitizeFileNameComponent(widgetRealName) +
+                                  "_v" + SanitizeFileNameComponent(version) +
+                                  ".ndpkg";
+    const fs::path ndpkgOut = distDir / ndpkgName;
+    if (fs::exists(ndpkgOut)) {
+      fs::remove(ndpkgOut);
+    }
+    if (!CreateZipFromDirectory(ndpkgStageDir, ndpkgOut, {},
+                                {"Widgets/", "Addons/"})) {
+      std::cerr << "Error: Failed to create ndpkg payload." << std::endl;
+      return false;
+    }
+    if (!AppendNdpkgFooter(ndpkgOut)) {
+      std::cerr << "Error: Failed to append ndpkg footer." << std::endl;
+      return false;
+    }
+
+    std::cout << "Successfully built widget package: " << zipOut << std::endl;
+    std::cout << "Setup file created: " << setupOut << std::endl;
+    std::cout << "NDPKG created: " << ndpkgOut << std::endl;
+    return true;
+  } catch (const std::exception &e) {
+    std::cerr << "Build Error: " << e.what() << std::endl;
+    return false;
+  }
 }
 
-
-int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        if (InstallFromSelf()) {
-            return 0;
-        }
-        PrintUsage();
-        return 1;
+int main(int argc, char *argv[]) {
+  if (argc < 2) {
+    if (InstallFromSelf()) {
+      return 0;
     }
+    PrintUsage();
+    return 1;
+  }
 
-    std::string command = argv[1];
+  std::string command = argv[1];
 
-    if (command == "--install") {
-        return InstallFromSelf() ? 0 : 1;
-    } else if (command == "init") {
-        std::string widgetName = (argc > 2) ? argv[2] : "";
-        return InitWidget(widgetName) ? 0 : 1;
-    } else if (command == "run") {
-        std::string widgetPath;
-        std::vector<std::string> extraArgs;
-        int i = 2;
-        if (i < argc) {
-            std::string first = argv[i];
-            if (first != "--" && !first.empty() && first[0] != '-') {
-                widgetPath = first;
-                i++;
-            }
-        }
-        for (; i < argc; ++i) {
-            std::string arg = argv[i];
-            if (arg == "--") continue;
-            extraArgs.push_back(arg);
-        }
-        return RunWidget(widgetPath, extraArgs) ? 0 : 1;
-    } else if (command == "build") {
-        return BuildWidget() ? 0 : 1;
-    } else if (command == "-v" || command == "--version") {
-        std::cout << "nwm version " << GetProductVersion() << std::endl;
-        return 0;
-    } else if (command == "-h" || command == "--help") {
-        PrintUsage();
-        return 0;
-    } else {
-        PrintUsage();
-        return 1;
+  if (command == "--install") {
+    return InstallFromSelf() ? 0 : 1;
+  } else if (command == "init") {
+    std::string widgetName = (argc > 2) ? argv[2] : "";
+    return InitWidget(widgetName) ? 0 : 1;
+  } else if (command == "run") {
+    std::string widgetPath;
+    std::vector<std::string> extraArgs;
+    int i = 2;
+    if (i < argc) {
+      std::string first = argv[i];
+      if (first != "--" && !first.empty() && first[0] != '-') {
+        widgetPath = first;
+        i++;
+      }
     }
+    for (; i < argc; ++i) {
+      std::string arg = argv[i];
+      if (arg == "--")
+        continue;
+      extraArgs.push_back(arg);
+    }
+    return RunWidget(widgetPath, extraArgs) ? 0 : 1;
+  } else if (command == "build") {
+    return BuildWidget() ? 0 : 1;
+  } else if (command == "-v" || command == "--version") {
+    std::cout << "nwm version " << GetProductVersion() << std::endl;
+    return 0;
+  } else if (command == "-h" || command == "--help") {
+    PrintUsage();
+    return 0;
+  } else {
+    PrintUsage();
+    return 1;
+  }
 }

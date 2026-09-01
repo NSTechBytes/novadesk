@@ -53,7 +53,9 @@
 #include "../shared/PathUtils.h"
 
 #define WIDGET_CLASS_NAME L"NovadeskWidget"
-#define ZPOS_FLAGS (SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOSENDCHANGING)
+#define ZPOS_FLAGS                                                             \
+  (SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_NOACTIVATE |              \
+   SWP_NOSENDCHANGING)
 #define SNAP_DISTANCE 10
 
 extern std::vector<Widget *> widgets; // Defined in Novadesk.cpp
@@ -65,37 +67,32 @@ std::atomic<int> Widget::s_ActiveColorPickerCount{0};
 /*
 ** Check if a widget pointer is valid (exists in the global widgets list).
 */
-bool Widget::IsValid(Widget *pWidget)
-{
-    if (!pWidget)
-        return false;
-    std::lock_guard<std::mutex> lock(s_WidgetMutex);
-    for (auto *w : widgets)
-    {
-        if (w == pWidget)
-            return true;
-    }
+bool Widget::IsValid(Widget *pWidget) {
+  if (!pWidget)
     return false;
+  std::lock_guard<std::mutex> lock(s_WidgetMutex);
+  for (auto *w : widgets) {
+    if (w == pWidget)
+      return true;
+  }
+  return false;
 }
 
-std::vector<Widget *> Widget::GetAllWidgets()
-{
-    std::lock_guard<std::mutex> lock(s_WidgetMutex);
-    return widgets; // returns a snapshot copy
+std::vector<Widget *> Widget::GetAllWidgets() {
+  std::lock_guard<std::mutex> lock(s_WidgetMutex);
+  return widgets; // returns a snapshot copy
 }
 
-void Widget::RemoveWidget(Widget *widget)
-{
-    std::lock_guard<std::mutex> lock(s_WidgetMutex);
-    auto it = std::find(widgets.begin(), widgets.end(), widget);
-    if (it != widgets.end())
-        widgets.erase(it);
+void Widget::RemoveWidget(Widget *widget) {
+  std::lock_guard<std::mutex> lock(s_WidgetMutex);
+  auto it = std::find(widgets.begin(), widgets.end(), widget);
+  if (it != widgets.end())
+    widgets.erase(it);
 }
 
-void Widget::ClearAllWidgets()
-{
-    std::lock_guard<std::mutex> lock(s_WidgetMutex);
-    widgets.clear();
+void Widget::ClearAllWidgets() {
+  std::lock_guard<std::mutex> lock(s_WidgetMutex);
+  widgets.clear();
 }
 
 /*
@@ -105,112 +102,111 @@ void Widget::ClearAllWidgets()
 static std::atomic<uint64_t> s_NextInstanceId{1};
 
 Widget::Widget(const WidgetOptions &options)
-    : m_hWnd(nullptr), m_Options(options), m_WindowZPosition(options.zPos), m_IsBatchUpdating(false), m_InstanceId(s_NextInstanceId++)
-{
-    if (!m_Options.backgroundImageFallback.empty())
-    {
-        if (PathUtils::IsPathRelative(m_Options.backgroundImageFallback))
-            m_Options.backgroundImageFallback = PathUtils::ResolvePath(m_Options.backgroundImageFallback, PathUtils::GetScriptBaseDir(m_Options.scriptPath, JSEngine::GetEntryScriptDir()));
-        else
-            m_Options.backgroundImageFallback = PathUtils::NormalizePath(m_Options.backgroundImageFallback);
-        m_BackgroundImage.SetFallbackPath(m_Options.backgroundImageFallback);
-    }
-    if (!m_Options.backgroundImage.empty())
-    {
-        if (PathUtils::IsPathRelative(m_Options.backgroundImage))
-            m_Options.backgroundImage = PathUtils::ResolvePath(m_Options.backgroundImage, PathUtils::GetScriptBaseDir(m_Options.scriptPath, JSEngine::GetEntryScriptDir()));
-        m_BackgroundImage.SetPath(m_Options.backgroundImage);
-    }
+    : m_hWnd(nullptr), m_Options(options), m_WindowZPosition(options.zPos),
+      m_IsBatchUpdating(false), m_InstanceId(s_NextInstanceId++) {
+  if (!m_Options.backgroundImageFallback.empty()) {
+    if (PathUtils::IsPathRelative(m_Options.backgroundImageFallback))
+      m_Options.backgroundImageFallback = PathUtils::ResolvePath(
+          m_Options.backgroundImageFallback,
+          PathUtils::GetScriptBaseDir(m_Options.scriptPath,
+                                      JSEngine::GetEntryScriptDir()));
+    else
+      m_Options.backgroundImageFallback =
+          PathUtils::NormalizePath(m_Options.backgroundImageFallback);
+    m_BackgroundImage.SetFallbackPath(m_Options.backgroundImageFallback);
+  }
+  if (!m_Options.backgroundImage.empty()) {
+    if (PathUtils::IsPathRelative(m_Options.backgroundImage))
+      m_Options.backgroundImage = PathUtils::ResolvePath(
+          m_Options.backgroundImage,
+          PathUtils::GetScriptBaseDir(m_Options.scriptPath,
+                                      JSEngine::GetEntryScriptDir()));
+    m_BackgroundImage.SetPath(m_Options.backgroundImage);
+  }
 }
 
 /*
 ** Destructor. Cleans up window resources and removes from system tracking.
 */
-Widget::~Widget()
-{
-    if (m_hWnd)
-    {
-        KillTimer(m_hWnd, WidgetAnimationHelper::kTimerId);
-        KillTimer(m_hWnd, TIMER_TOPMOST);
-        KillTimer(m_hWnd, TIMER_CARET);
-        KillTimer(m_hWnd, TIMER_CTRL_OVERRIDE);
-        KillTimer(m_hWnd, TIMER_TOOLTIP);
+Widget::~Widget() {
+  if (m_hWnd) {
+    KillTimer(m_hWnd, WidgetAnimationHelper::kTimerId);
+    KillTimer(m_hWnd, TIMER_TOPMOST);
+    KillTimer(m_hWnd, TIMER_CARET);
+    KillTimer(m_hWnd, TIMER_CTRL_OVERRIDE);
+    KillTimer(m_hWnd, TIMER_TOOLTIP);
 
-        // KillTimer prevents future firings, but already-queued WM_TIMER
-        // messages may still sit in the message queue.  Drain them now so
-        // they cannot dispatch after we release widget state.
-        MSG msg = {};
-        while (PeekMessageW(&msg, m_hWnd, WM_TIMER, WM_TIMER, PM_REMOVE))
-        {
-            // intentionally empty — just discard
-        }
-
-        SetWindowLongPtr(m_hWnd, GWLP_USERDATA, 0);
-
-        if (m_DropTarget)
-        {
-            RevokeDragDrop(m_hWnd);
-            m_DropTarget.Reset();
-        }
+    // KillTimer prevents future firings, but already-queued WM_TIMER
+    // messages may still sit in the message queue.  Drain them now so
+    // they cannot dispatch after we release widget state.
+    MSG msg = {};
+    while (PeekMessageW(&msg, m_hWnd, WM_TIMER, WM_TIMER, PM_REMOVE)) {
+      // intentionally empty — just discard
     }
-    WidgetAnimationHelper::ClearAllAnimations(*this);
 
-    JSEngine::ClearWidgetEventListeners(this);
-    JSEngine::UnregisterWidgetOwner(this);
+    SetWindowLongPtr(m_hWnd, GWLP_USERDATA, 0);
 
-    DestroyToolbarIcon();
-    ReleaseRenderSurface();
-
-    // Stop background-image workers before their target HWND can disappear.
-    m_BackgroundImage.ShutdownAsyncDownloads();
-
-    // Element-owned GeneralImage instances join their workers on destruction.
-    // Do this while the widget HWND is still valid.
-    m_Elements.clear();
-    m_TrackedElements.clear();
-    m_SpatialGrid.clear();
-    m_Buttons.clear();
-    m_ElementIndex.clear();
-
-    if (m_hWnd)
-    {
-        // Successful workers posted heap-owned payloads.  WM_DESTROY would
-        // otherwise discard these queued messages without releasing them.
-        MSG message = {};
-        while (PeekMessageW(&message, m_hWnd, WM_USER + 500, WM_USER + 500, PM_REMOVE))
-        {
-            delete reinterpret_cast<std::wstring *>(message.wParam);
-            delete reinterpret_cast<AsyncImageResult *>(message.lParam);
-        }
-
-        HWND hWnd = m_hWnd;
-        m_hWnd = nullptr;
-        DestroyWindow(hWnd);
+    if (m_DropTarget) {
+      RevokeDragDrop(m_hWnd);
+      m_DropTarget.Reset();
     }
+  }
+  WidgetAnimationHelper::ClearAllAnimations(*this);
+
+  JSEngine::ClearWidgetEventListeners(this);
+  JSEngine::UnregisterWidgetOwner(this);
+
+  DestroyToolbarIcon();
+  ReleaseRenderSurface();
+
+  // Stop background-image workers before their target HWND can disappear.
+  m_BackgroundImage.ShutdownAsyncDownloads();
+
+  // Element-owned GeneralImage instances join their workers on destruction.
+  // Do this while the widget HWND is still valid.
+  m_Elements.clear();
+  m_TrackedElements.clear();
+  m_SpatialGrid.clear();
+  m_Buttons.clear();
+  m_ElementIndex.clear();
+
+  if (m_hWnd) {
+    // Successful workers posted heap-owned payloads.  WM_DESTROY would
+    // otherwise discard these queued messages without releasing them.
+    MSG message = {};
+    while (PeekMessageW(&message, m_hWnd, WM_USER + 500, WM_USER + 500,
+                        PM_REMOVE)) {
+      delete reinterpret_cast<std::wstring *>(message.wParam);
+      delete reinterpret_cast<AsyncImageResult *>(message.lParam);
+    }
+
+    HWND hWnd = m_hWnd;
+    m_hWnd = nullptr;
+    DestroyWindow(hWnd);
+  }
 }
 
 /*
 ** Register the widget window class.
 ** Only needs to be called once per application instance.
 */
-bool Widget::Register()
-{
-    static std::once_flag s_Flag;
-    static std::atomic<bool> s_Registered{false};
-    std::call_once(s_Flag, []()
-                   {
-        HINSTANCE hInstance = GetModuleHandle(nullptr);
+bool Widget::Register() {
+  static std::once_flag s_Flag;
+  static std::atomic<bool> s_Registered{false};
+  std::call_once(s_Flag, []() {
+    HINSTANCE hInstance = GetModuleHandle(nullptr);
 
-        WNDCLASSEXW wcex = {sizeof(WNDCLASSEX)};
-        wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
-        wcex.lpfnWndProc = WndProc;
-        wcex.hInstance = hInstance;
-        wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
-        wcex.hbrBackground = nullptr; // We'll paint it ourselves
-        wcex.lpszClassName = WIDGET_CLASS_NAME;
+    WNDCLASSEXW wcex = {sizeof(WNDCLASSEX)};
+    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
+    wcex.lpfnWndProc = WndProc;
+    wcex.hInstance = hInstance;
+    wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wcex.hbrBackground = nullptr; // We'll paint it ourselves
+    wcex.lpszClassName = WIDGET_CLASS_NAME;
 
-        s_Registered.store(RegisterClassExW(&wcex) != 0, std::memory_order_release); });
-    return s_Registered.load(std::memory_order_acquire);
+    s_Registered.store(RegisterClassExW(&wcex) != 0, std::memory_order_release);
+  });
+  return s_Registered.load(std::memory_order_acquire);
 }
 
 /*
@@ -218,1769 +214,1575 @@ bool Widget::Register()
 ** Registers the window class if needed and creates the actual window.
 ** Returns true on success, false on failure.
 */
-bool Widget::Create()
-{
-    if (!Register())
-        return false;
+bool Widget::Create() {
+  if (!Register())
+    return false;
 
-    HINSTANCE hInstance = GetModuleHandle(nullptr);
+  HINSTANCE hInstance = GetModuleHandle(nullptr);
 
-    DWORD dwExStyle = WS_EX_LAYERED;
-    if (m_Options.showInToolbar)
-    {
-        dwExStyle |= WS_EX_APPWINDOW;
+  DWORD dwExStyle = WS_EX_LAYERED;
+  if (m_Options.showInToolbar) {
+    dwExStyle |= WS_EX_APPWINDOW;
+  } else {
+    dwExStyle |= WS_EX_TOOLWINDOW;
+  }
+  if (m_Options.clickThrough) {
+    dwExStyle |= WS_EX_TRANSPARENT;
+  }
+
+  const std::wstring windowTitle =
+      m_Options.toolbarTitle.empty() ? m_Options.id : m_Options.toolbarTitle;
+  if (m_Options.minWidth > 0 && m_Options.width > 0 &&
+      m_Options.width < m_Options.minWidth)
+    m_Options.width = m_Options.minWidth;
+  if (m_Options.minHeight > 0 && m_Options.height > 0 &&
+      m_Options.height < m_Options.minHeight)
+    m_Options.height = m_Options.minHeight;
+
+  m_hWnd = CreateWindowExW(dwExStyle, WIDGET_CLASS_NAME, windowTitle.c_str(),
+                           WS_POPUP, m_Options.x, m_Options.y, m_Options.width,
+                           m_Options.height, nullptr, nullptr, hInstance, this);
+
+  if (!m_hWnd)
+    return false;
+
+  // Sync actual position if CW_USEDEFAULT was used or OS repositioned it
+  RECT rc;
+  if (GetWindowRect(m_hWnd, &rc)) {
+    m_Options.x = rc.left;
+    m_Options.y = rc.top;
+    if (!m_Options.m_WDefined) {
+      int actualW = rc.right - rc.left;
+      if (m_Options.minWidth > 0 && actualW < m_Options.minWidth)
+        actualW = m_Options.minWidth;
+      m_Options.width = actualW;
     }
-    else
-    {
-        dwExStyle |= WS_EX_TOOLWINDOW;
+    if (!m_Options.m_HDefined) {
+      int actualH = rc.bottom - rc.top;
+      if (m_Options.minHeight > 0 && actualH < m_Options.minHeight)
+        actualH = m_Options.minHeight;
+      m_Options.height = actualH;
     }
-    if (m_Options.clickThrough)
-    {
-        dwExStyle |= WS_EX_TRANSPARENT;
-    }
+  }
 
-    const std::wstring windowTitle = m_Options.toolbarTitle.empty() ? m_Options.id : m_Options.toolbarTitle;
-    if (m_Options.minWidth > 0 && m_Options.width > 0 && m_Options.width < m_Options.minWidth)
-        m_Options.width = m_Options.minWidth;
-    if (m_Options.minHeight > 0 && m_Options.height > 0 && m_Options.height < m_Options.minHeight)
-        m_Options.height = m_Options.minHeight;
+  // Initial Z-position - use ChangeSingleZPos to bring new widgets to front
+  ChangeSingleZPos(m_WindowZPosition);
 
-    m_hWnd = CreateWindowExW(
-        dwExStyle,
-        WIDGET_CLASS_NAME,
-        windowTitle.c_str(),
-        WS_POPUP,
-        m_Options.x, m_Options.y, m_Options.width, m_Options.height,
-        nullptr, nullptr, hInstance, this);
+  // Initial draw to set content
+  UpdateLayeredWindowContent();
 
-    if (!m_hWnd)
-        return false;
+  if (m_WindowZPosition == ZPOSITION_ONTOPMOST) {
+    SetTimer(m_hWnd, TIMER_TOPMOST, 500, nullptr);
+  }
 
-    // Sync actual position if CW_USEDEFAULT was used or OS repositioned it
-    RECT rc;
-    if (GetWindowRect(m_hWnd, &rc))
-    {
-        m_Options.x = rc.left;
-        m_Options.y = rc.top;
-        if (!m_Options.m_WDefined)
-        {
-            int actualW = rc.right - rc.left;
-            if (m_Options.minWidth > 0 && actualW < m_Options.minWidth)
-                actualW = m_Options.minWidth;
-            m_Options.width = actualW;
-        }
-        if (!m_Options.m_HDefined)
-        {
-            int actualH = rc.bottom - rc.top;
-            if (m_Options.minHeight > 0 && actualH < m_Options.minHeight)
-                actualH = m_Options.minHeight;
-            m_Options.height = actualH;
-        }
-    }
+  ApplyToolbarTitle();
+  ApplyToolbarIcon();
 
-    // Initial Z-position - use ChangeSingleZPos to bring new widgets to front
-    ChangeSingleZPos(m_WindowZPosition);
+  // Initialize tooltip
+  m_Tooltip.Initialize(m_hWnd, hInstance);
+  // Poll Ctrl key to provide temporary runtime overrides
+  SetTimer(m_hWnd, TIMER_CTRL_OVERRIDE, 50, nullptr);
 
-    // Initial draw to set content
-    UpdateLayeredWindowContent();
+  // Initialize OLE Drag and Drop Target
+  OleInitialize(nullptr);
+  m_DropTarget = Microsoft::WRL::Make<WidgetDropTarget>(this);
+  if (m_DropTarget) {
+    RegisterDragDrop(m_hWnd, m_DropTarget.Get());
+  }
 
-    if (m_WindowZPosition == ZPOSITION_ONTOPMOST)
-    {
-        SetTimer(m_hWnd, TIMER_TOPMOST, 500, nullptr);
-    }
-
-    ApplyToolbarTitle();
-    ApplyToolbarIcon();
-
-    // Initialize tooltip
-    m_Tooltip.Initialize(m_hWnd, hInstance);
-    // Poll Ctrl key to provide temporary runtime overrides
-    SetTimer(m_hWnd, TIMER_CTRL_OVERRIDE, 50, nullptr);
-
-    // Initialize OLE Drag and Drop Target
-    OleInitialize(nullptr);
-    m_DropTarget = Microsoft::WRL::Make<WidgetDropTarget>(this);
-    if (m_DropTarget)
-    {
-        RegisterDragDrop(m_hWnd, m_DropTarget.Get());
-    }
-
-    return true;
+  return true;
 }
 
 /*
 ** Show the widget window.
 ** Makes the window visible and applies the configured z-order position.
 */
-void Widget::Show()
-{
-    if (m_hWnd)
-    {
-        ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
-        UpdateWindow(m_hWnd);
-        JSEngine::TriggerWidgetEvent(this, "show");
-    }
+void Widget::Show() {
+  if (m_hWnd) {
+    ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
+    UpdateWindow(m_hWnd);
+    JSEngine::TriggerWidgetEvent(this, "show");
+  }
 }
 
-void Widget::Hide()
-{
-    if (m_hWnd)
-    {
-        ShowWindow(m_hWnd, SW_HIDE);
-        JSEngine::TriggerWidgetEvent(this, "hide");
-    }
+void Widget::Hide() {
+  if (m_hWnd) {
+    ShowWindow(m_hWnd, SW_HIDE);
+    JSEngine::TriggerWidgetEvent(this, "hide");
+  }
 }
 
-void Widget::Refresh()
-{
-    JSEngine::TriggerWidgetEvent(this, "refresh");
+void Widget::Refresh() {
+  JSEngine::TriggerWidgetEvent(this, "refresh");
 
-    BeginUpdate();
-    RemoveElements(L""); // Clear all elements
-    if (!m_Options.scriptPath.empty())
-    {
-        JSEngine::ExecuteWidgetScript(this);
-    }
-    EndUpdate();
+  BeginUpdate();
+  RemoveElements(L""); // Clear all elements
+  if (!m_Options.scriptPath.empty()) {
+    JSEngine::ExecuteWidgetScript(this);
+  }
+  EndUpdate();
 }
 
-void Widget::SetFocus()
-{
-    if (m_hWnd)
-    {
-        ::SetFocus(m_hWnd);
-    }
+void Widget::SetFocus() {
+  if (m_hWnd) {
+    ::SetFocus(m_hWnd);
+  }
 }
 
-void Widget::UnFocus()
-{
-    if (m_hWnd && ::GetFocus() == m_hWnd)
-    {
-        ::SetFocus(NULL);
-    }
+void Widget::UnFocus() {
+  if (m_hWnd && ::GetFocus() == m_hWnd) {
+    ::SetFocus(NULL);
+  }
 }
 
-void Widget::Minimize()
-{
-    if (m_hWnd)
-    {
-        if (!m_IsMinimized)
-        {
-            m_IsMinimized = true;
-            JSEngine::TriggerWidgetEvent(this, "minimize");
-        }
-        ShowWindow(m_hWnd, SW_MINIMIZE);
+void Widget::Minimize() {
+  if (m_hWnd) {
+    if (!m_IsMinimized) {
+      m_IsMinimized = true;
+      JSEngine::TriggerWidgetEvent(this, "minimize");
     }
+    ShowWindow(m_hWnd, SW_MINIMIZE);
+  }
 }
 
-void Widget::UnMinimize()
-{
-    if (m_hWnd)
-    {
-        if (m_IsMinimized)
-        {
-            m_IsMinimized = false;
-            JSEngine::TriggerWidgetEvent(this, "unMinimize");
-        }
-        ShowWindow(m_hWnd, SW_RESTORE);
+void Widget::UnMinimize() {
+  if (m_hWnd) {
+    if (m_IsMinimized) {
+      m_IsMinimized = false;
+      JSEngine::TriggerWidgetEvent(this, "unMinimize");
     }
+    ShowWindow(m_hWnd, SW_RESTORE);
+  }
 }
 
-void Widget::Maximize()
-{
-    if (!m_hWnd)
-        return;
+void Widget::Maximize() {
+  if (!m_hWnd)
+    return;
 
-    if (m_IsMinimized)
-    {
-        UnMinimize();
+  if (m_IsMinimized) {
+    UnMinimize();
+  }
+
+  if (!m_IsMaximized) {
+    m_PreMaximizeBounds = {m_Options.x, m_Options.y, m_Options.width,
+                           m_Options.height};
+
+    HMONITOR hMon = MonitorFromWindow(m_hWnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi{};
+    mi.cbSize = sizeof(mi);
+    if (GetMonitorInfoW(hMon, &mi)) {
+      int workX = mi.rcWork.left;
+      int workY = mi.rcWork.top;
+      int workW = mi.rcWork.right - mi.rcWork.left;
+      int workH = mi.rcWork.bottom - mi.rcWork.top;
+
+      m_IsMaximized = true;
+      SetWindowPosition(workX, workY, workW, workH);
+      JSEngine::TriggerWidgetEvent(this, "maximize");
     }
-
-    if (!m_IsMaximized)
-    {
-        m_PreMaximizeBounds = {m_Options.x, m_Options.y, m_Options.width, m_Options.height};
-
-        HMONITOR hMon = MonitorFromWindow(m_hWnd, MONITOR_DEFAULTTONEAREST);
-        MONITORINFO mi{};
-        mi.cbSize = sizeof(mi);
-        if (GetMonitorInfoW(hMon, &mi))
-        {
-            int workX = mi.rcWork.left;
-            int workY = mi.rcWork.top;
-            int workW = mi.rcWork.right - mi.rcWork.left;
-            int workH = mi.rcWork.bottom - mi.rcWork.top;
-
-            m_IsMaximized = true;
-            SetWindowPosition(workX, workY, workW, workH);
-            JSEngine::TriggerWidgetEvent(this, "maximize");
-        }
-    }
+  }
 }
 
-void Widget::Restore()
-{
-    if (!m_hWnd)
-        return;
+void Widget::Restore() {
+  if (!m_hWnd)
+    return;
 
-    if (m_IsMinimized)
-    {
-        UnMinimize();
-    }
+  if (m_IsMinimized) {
+    UnMinimize();
+  }
 
-    if (m_IsMaximized)
-    {
-        m_IsMaximized = false;
-        if (m_PreMaximizeBounds.w > 0 && m_PreMaximizeBounds.h > 0)
-        {
-            SetWindowPosition(m_PreMaximizeBounds.x, m_PreMaximizeBounds.y, m_PreMaximizeBounds.w, m_PreMaximizeBounds.h);
-        }
-        JSEngine::TriggerWidgetEvent(this, "restore");
-        JSEngine::TriggerWidgetEvent(this, "unMaximize");
+  if (m_IsMaximized) {
+    m_IsMaximized = false;
+    if (m_PreMaximizeBounds.w > 0 && m_PreMaximizeBounds.h > 0) {
+      SetWindowPosition(m_PreMaximizeBounds.x, m_PreMaximizeBounds.y,
+                        m_PreMaximizeBounds.w, m_PreMaximizeBounds.h);
     }
+    JSEngine::TriggerWidgetEvent(this, "restore");
+    JSEngine::TriggerWidgetEvent(this, "unMaximize");
+  }
 }
 
-void Widget::ToggleMaximize()
-{
-    if (m_IsMaximized)
-    {
-        Restore();
-    }
-    else
-    {
-        Maximize();
-    }
+void Widget::ToggleMaximize() {
+  if (m_IsMaximized) {
+    Restore();
+  } else {
+    Maximize();
+  }
 }
 
-std::wstring Widget::GetTitle() const
-{
-    if (!m_hWnd)
-        return L"";
-    int len = GetWindowTextLengthW(m_hWnd);
-    if (len == 0)
-        return L"";
-    std::vector<wchar_t> buf(len + 1);
-    GetWindowTextW(m_hWnd, buf.data(), len + 1);
-    return std::wstring(buf.data());
+std::wstring Widget::GetTitle() const {
+  if (!m_hWnd)
+    return L"";
+  int len = GetWindowTextLengthW(m_hWnd);
+  if (len == 0)
+    return L"";
+  std::vector<wchar_t> buf(len + 1);
+  GetWindowTextW(m_hWnd, buf.data(), len + 1);
+  return std::wstring(buf.data());
 }
 
 /*
 ** Change the z-order position of this widget.
 ** If all is true, affects all widgets in the same z-order group.
 */
-void Widget::ChangeZPos(ZPOSITION zPos, bool all)
-{
-    if (Widget::IsMenuActive())
-        return;
+void Widget::ChangeZPos(ZPOSITION zPos, bool all) {
+  if (Widget::IsMenuActive())
+    return;
 
-    ZPOSITION oldZPos = m_WindowZPosition;
-    HWND winPos = HWND_NOTOPMOST;
+  ZPOSITION oldZPos = m_WindowZPosition;
+  HWND winPos = HWND_NOTOPMOST;
 
-    bool changed = (m_Options.zPos != zPos);
-    // Logging::Log(LogLevel::Debug, L"ChangeZPos: id=%s, current=%d, new=%d, changed=%d", m_Options.id.c_str(), m_Options.zPos, zPos, changed);
-    m_Options.zPos = zPos;
-    m_WindowZPosition = zPos;
+  bool changed = (m_Options.zPos != zPos);
+  // Logging::Log(LogLevel::Debug, L"ChangeZPos: id=%s, current=%d, new=%d,
+  // changed=%d", m_Options.id.c_str(), m_Options.zPos, zPos, changed);
+  m_Options.zPos = zPos;
+  m_WindowZPosition = zPos;
 
-    switch (zPos)
-    {
-    case ZPOSITION_ONTOPMOST:
-    case ZPOSITION_ONTOP:
-        winPos = HWND_TOPMOST;
-        break;
+  switch (zPos) {
+  case ZPOSITION_ONTOPMOST:
+  case ZPOSITION_ONTOP:
+    winPos = HWND_TOPMOST;
+    break;
 
-    case ZPOSITION_ONBOTTOM:
-        if (all)
-        {
-            if (System::GetShowDesktop())
-            {
-                winPos = System::GetWindow();
-            }
-            else
-            {
-                winPos = System::GetHelperWindow();
-            }
-        }
-        else
-        {
-            winPos = HWND_BOTTOM;
-        }
-        break;
-
-    case ZPOSITION_NORMAL:
-        if (all)
-            break;
-        [[fallthrough]];
-
-    case ZPOSITION_ONDESKTOP:
-        if (System::GetShowDesktop())
-        {
-            winPos = System::GetHelperWindow();
-            if (!all)
-            {
-                while (HWND prev = ::GetNextWindow(winPos, GW_HWNDPREV))
-                {
-                    if (GetWindowLongPtr(prev, GWL_EXSTYLE) & WS_EX_TOPMOST)
-                    {
-                        if (m_hWnd && SetWindowPos(m_hWnd, prev, 0, 0, 0, 0, ZPOS_FLAGS))
-                        {
-                            goto timer_check;
-                        }
-                    }
-                    winPos = prev;
-                }
-            }
-        }
-        else
-        {
-            if (all)
-            {
-                winPos = System::GetHelperWindow();
-            }
-            else
-            {
-                winPos = HWND_BOTTOM;
-            }
-        }
-        break;
+  case ZPOSITION_ONBOTTOM:
+    if (all) {
+      if (System::GetShowDesktop()) {
+        winPos = System::GetWindow();
+      } else {
+        winPos = System::GetHelperWindow();
+      }
+    } else {
+      winPos = HWND_BOTTOM;
     }
+    break;
 
-    if (m_hWnd)
-    {
-        SetWindowPos(m_hWnd, winPos, 0, 0, 0, 0, ZPOS_FLAGS);
+  case ZPOSITION_NORMAL:
+    if (all)
+      break;
+    [[fallthrough]];
 
-        // If a tooltip is active and we just asserted topmost, re-assert the tooltip above us
-        if (winPos == HWND_TOPMOST && m_Tooltip.IsActive())
-        {
-            HWND activeTooltip = m_Tooltip.GetActiveHWnd();
-            if (activeTooltip)
-            {
-                SetWindowPos(activeTooltip, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+  case ZPOSITION_ONDESKTOP:
+    if (System::GetShowDesktop()) {
+      winPos = System::GetHelperWindow();
+      if (!all) {
+        while (HWND prev = ::GetNextWindow(winPos, GW_HWNDPREV)) {
+          if (GetWindowLongPtr(prev, GWL_EXSTYLE) & WS_EX_TOPMOST) {
+            if (m_hWnd && SetWindowPos(m_hWnd, prev, 0, 0, 0, 0, ZPOS_FLAGS)) {
+              goto timer_check;
             }
+          }
+          winPos = prev;
         }
+      }
+    } else {
+      if (all) {
+        winPos = System::GetHelperWindow();
+      } else {
+        winPos = HWND_BOTTOM;
+      }
     }
+    break;
+  }
 
-    // Save Z-Pos state only if it actually changed
-    if (changed)
-    {
-        Settings::SaveWidget(m_Options.id, m_Options);
+  if (m_hWnd) {
+    SetWindowPos(m_hWnd, winPos, 0, 0, 0, 0, ZPOS_FLAGS);
+
+    // If a tooltip is active and we just asserted topmost, re-assert the
+    // tooltip above us
+    if (winPos == HWND_TOPMOST && m_Tooltip.IsActive()) {
+      HWND activeTooltip = m_Tooltip.GetActiveHWnd();
+      if (activeTooltip) {
+        SetWindowPos(activeTooltip, HWND_TOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+      }
     }
+  }
+
+  // Save Z-Pos state only if it actually changed
+  if (changed) {
+    Settings::SaveWidget(m_Options.id, m_Options);
+  }
 
 timer_check:
-    if (m_hWnd)
-    {
-        if (oldZPos == ZPOSITION_ONTOPMOST && m_WindowZPosition != ZPOSITION_ONTOPMOST)
-        {
-            KillTimer(m_hWnd, TIMER_TOPMOST);
-        }
-        else if (oldZPos != ZPOSITION_ONTOPMOST && m_WindowZPosition == ZPOSITION_ONTOPMOST)
-        {
-            SetTimer(m_hWnd, TIMER_TOPMOST, 500, nullptr);
-        }
+  if (m_hWnd) {
+    if (oldZPos == ZPOSITION_ONTOPMOST &&
+        m_WindowZPosition != ZPOSITION_ONTOPMOST) {
+      KillTimer(m_hWnd, TIMER_TOPMOST);
+    } else if (oldZPos != ZPOSITION_ONTOPMOST &&
+               m_WindowZPosition == ZPOSITION_ONTOPMOST) {
+      SetTimer(m_hWnd, TIMER_TOPMOST, 500, nullptr);
     }
+  }
 }
 
 /*
 ** Change the z-order position of a single widget.
 ** Similar to ChangeZPos but only affects this specific widget.
 */
-void Widget::ChangeSingleZPos(ZPOSITION zPos, bool all)
-{
-    if (zPos == ZPOSITION_NORMAL && (!all || System::GetShowDesktop()))
-    {
-        m_WindowZPosition = zPos;
-        if (m_hWnd)
-        {
-            SetWindowPos(m_hWnd, System::GetBackmostTopWindow(), 0, 0, 0, 0, ZPOS_FLAGS);
-            BringWindowToTop(m_hWnd);
-        }
+void Widget::ChangeSingleZPos(ZPOSITION zPos, bool all) {
+  if (zPos == ZPOSITION_NORMAL && (!all || System::GetShowDesktop())) {
+    m_WindowZPosition = zPos;
+    if (m_hWnd) {
+      SetWindowPos(m_hWnd, System::GetBackmostTopWindow(), 0, 0, 0, 0,
+                   ZPOS_FLAGS);
+      BringWindowToTop(m_hWnd);
     }
-    else
-    {
-        // For clicked widgets, we just want to re-assert z-order without necessarily saving
-        // unless it's a new Z-position.
-        ChangeZPos(zPos, all);
-    }
+  } else {
+    // For clicked widgets, we just want to re-assert z-order without
+    // necessarily saving unless it's a new Z-position.
+    ChangeZPos(zPos, all);
+  }
 }
 
 /*
 ** Set window position and size.
 */
-void Widget::SetWindowPosition(int x, int y, int w, int h)
-{
-    if (x == CW_USEDEFAULT)
-        x = m_Options.x;
-    if (y == CW_USEDEFAULT)
-        y = m_Options.y;
+void Widget::SetWindowPosition(int x, int y, int w, int h) {
+  if (x == CW_USEDEFAULT)
+    x = m_Options.x;
+  if (y == CW_USEDEFAULT)
+    y = m_Options.y;
 
-    int newW = m_Options.width;
-    int newH = m_Options.height;
-    bool sizeProvided = false;
-    if (w != -1)
-    {
-        if (m_Options.minWidth > 0 && w < m_Options.minWidth)
-            w = m_Options.minWidth;
-        newW = w;
-        sizeProvided = true;
+  int newW = m_Options.width;
+  int newH = m_Options.height;
+  bool sizeProvided = false;
+  if (w != -1) {
+    if (m_Options.minWidth > 0 && w < m_Options.minWidth)
+      w = m_Options.minWidth;
+    newW = w;
+    sizeProvided = true;
+  }
+
+  if (h != -1) {
+    if (m_Options.minHeight > 0 && h < m_Options.minHeight)
+      h = m_Options.minHeight;
+    newH = h;
+    sizeProvided = true;
+  }
+
+  bool moved = (x != m_Options.x || y != m_Options.y);
+  bool sized =
+      (sizeProvided && (newW != m_Options.width || newH != m_Options.height));
+
+  if (moved || sizeProvided) {
+    m_Options.x = x;
+    m_Options.y = y;
+    m_Options.width = newW;
+    m_Options.height = newH;
+    if (sizeProvided) {
+      m_Options.m_WDefined = (newW > 0);
+      m_Options.m_HDefined = (newH > 0);
     }
 
-    if (h != -1)
-    {
-        if (m_Options.minHeight > 0 && h < m_Options.minHeight)
-            h = m_Options.minHeight;
-        newH = h;
-        sizeProvided = true;
+    if (m_hWnd)
+      SetWindowPos(m_hWnd, NULL, x, y, m_Options.width, m_Options.height,
+                   SWP_NOZORDER | SWP_NOACTIVATE);
+
+    if (sizeProvided) {
+      Redraw();
     }
 
-    bool moved = (x != m_Options.x || y != m_Options.y);
-    bool sized = (sizeProvided && (newW != m_Options.width || newH != m_Options.height));
-
-    if (moved || sizeProvided)
-    {
-        m_Options.x = x;
-        m_Options.y = y;
-        m_Options.width = newW;
-        m_Options.height = newH;
-        if (sizeProvided)
-        {
-            m_Options.m_WDefined = (newW > 0);
-            m_Options.m_HDefined = (newH > 0);
-        }
-
-        if (m_hWnd)
-            SetWindowPos(m_hWnd, NULL, x, y, m_Options.width, m_Options.height, SWP_NOZORDER | SWP_NOACTIVATE);
-
-        if (sizeProvided)
-        {
-            Redraw();
-        }
-
-        if (moved)
-        {
-            JSEngine::TriggerWidgetEvent(this, "move");
-        }
-        if (sized)
-        {
-            JSEngine::TriggerWidgetEvent(this, "resize");
-        }
-
-        Settings::SaveWidget(m_Options.id, m_Options);
+    if (moved) {
+      JSEngine::TriggerWidgetEvent(this, "move");
     }
+    if (sized) {
+      JSEngine::TriggerWidgetEvent(this, "resize");
+    }
+
+    Settings::SaveWidget(m_Options.id, m_Options);
+  }
 }
 
 /*
 ** Set overall window opacity (0-255).
 */
-void Widget::SetWindowOpacity(BYTE opacity)
-{
-    if (m_Options.windowOpacity != opacity)
-    {
-        m_Options.windowOpacity = opacity;
-        Redraw();
-        Settings::SaveWidget(m_Options.id, m_Options);
-    }
+void Widget::SetWindowOpacity(BYTE opacity) {
+  if (m_Options.windowOpacity != opacity) {
+    m_Options.windowOpacity = opacity;
+    Redraw();
+    Settings::SaveWidget(m_Options.id, m_Options);
+  }
 }
 
 /*
 ** Set background color and alpha.
 */
-void Widget::SetBackgroundColor(const std::wstring &colorStr)
-{
-    COLORREF color = m_Options.color;
-    BYTE alpha = m_Options.bgAlpha;
-    GradientInfo grad;
+void Widget::SetBackgroundColor(const std::wstring &colorStr) {
+  COLORREF color = m_Options.color;
+  BYTE alpha = m_Options.bgAlpha;
+  GradientInfo grad;
 
-    bool isGradient = PropertyParser::ParseGradientString(colorStr, grad);
-    bool isColor = ColorUtil::ParseRGBA(colorStr, color, alpha);
+  bool isGradient = PropertyParser::ParseGradientString(colorStr, grad);
+  bool isColor = ColorUtil::ParseRGBA(colorStr, color, alpha);
 
-    if (isGradient || isColor)
-    {
-        bool changed = false;
-        if (m_Options.backgroundColor != colorStr)
-        {
-            m_Options.backgroundColor = colorStr;
-            changed = true;
-        }
-
-        if (isGradient)
-        {
-            if (m_Options.bgGradient.type != grad.type || m_Options.bgGradient.angle != grad.angle || m_Options.bgGradient.stops.size() != grad.stops.size())
-            {
-                m_Options.bgGradient = grad;
-                changed = true;
-            }
-        }
-        else
-        {
-            if (m_Options.bgGradient.type != GRADIENT_NONE)
-            {
-                m_Options.bgGradient.type = GRADIENT_NONE;
-                changed = true;
-            }
-            if (m_Options.color != color || m_Options.bgAlpha != alpha)
-            {
-                m_Options.color = color;
-                m_Options.bgAlpha = alpha;
-                changed = true;
-            }
-        }
-
-        if (changed)
-        {
-            Redraw();
-            Settings::SaveWidget(m_Options.id, m_Options);
-        }
+  if (isGradient || isColor) {
+    bool changed = false;
+    if (m_Options.backgroundColor != colorStr) {
+      m_Options.backgroundColor = colorStr;
+      changed = true;
     }
+
+    if (isGradient) {
+      if (m_Options.bgGradient.type != grad.type ||
+          m_Options.bgGradient.angle != grad.angle ||
+          m_Options.bgGradient.stops.size() != grad.stops.size()) {
+        m_Options.bgGradient = grad;
+        changed = true;
+      }
+    } else {
+      if (m_Options.bgGradient.type != GRADIENT_NONE) {
+        m_Options.bgGradient.type = GRADIENT_NONE;
+        changed = true;
+      }
+      if (m_Options.color != color || m_Options.bgAlpha != alpha) {
+        m_Options.color = color;
+        m_Options.bgAlpha = alpha;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      Redraw();
+      Settings::SaveWidget(m_Options.id, m_Options);
+    }
+  }
 }
 
-void Widget::SetBackgroundImage(const std::wstring &path, const BackgroundImageSize &size, const BackgroundImagePosition &position)
-{
-    std::wstring resolved = path;
-    if (!resolved.empty())
-    {
-        if (PathUtils::IsPathRelative(resolved))
-            resolved = PathUtils::ResolvePath(resolved, PathUtils::GetScriptBaseDir(m_Options.scriptPath, JSEngine::GetEntryScriptDir()));
-        else if (!PathUtils::IsURL(resolved))
-            resolved = PathUtils::NormalizePath(resolved);
-    }
-    const bool imageChanged = m_Options.backgroundImage != resolved;
-    if (!imageChanged && m_Options.backgroundImageSize == size && m_Options.backgroundImagePosition == position)
-        return;
-    m_Options.backgroundImage = resolved;
-    m_Options.backgroundImageSize = size;
-    m_Options.backgroundImagePosition = position;
-    if (imageChanged)
-        m_BackgroundImage.SetPath(resolved);
-    Redraw();
-    Settings::SaveWidget(m_Options.id, m_Options);
+void Widget::SetBackgroundImage(const std::wstring &path,
+                                const BackgroundImageSize &size,
+                                const BackgroundImagePosition &position) {
+  std::wstring resolved = path;
+  if (!resolved.empty()) {
+    if (PathUtils::IsPathRelative(resolved))
+      resolved = PathUtils::ResolvePath(
+          resolved, PathUtils::GetScriptBaseDir(m_Options.scriptPath,
+                                                JSEngine::GetEntryScriptDir()));
+    else if (!PathUtils::IsURL(resolved))
+      resolved = PathUtils::NormalizePath(resolved);
+  }
+  const bool imageChanged = m_Options.backgroundImage != resolved;
+  if (!imageChanged && m_Options.backgroundImageSize == size &&
+      m_Options.backgroundImagePosition == position)
+    return;
+  m_Options.backgroundImage = resolved;
+  m_Options.backgroundImageSize = size;
+  m_Options.backgroundImagePosition = position;
+  if (imageChanged)
+    m_BackgroundImage.SetPath(resolved);
+  Redraw();
+  Settings::SaveWidget(m_Options.id, m_Options);
 }
 
-void Widget::SetBackgroundImageFallback(const std::wstring &path)
-{
-    std::wstring resolved = path;
-    if (!resolved.empty())
-    {
-        if (PathUtils::IsPathRelative(resolved))
-            resolved = PathUtils::ResolvePath(resolved, PathUtils::GetScriptBaseDir(m_Options.scriptPath, JSEngine::GetEntryScriptDir()));
-        else
-            resolved = PathUtils::NormalizePath(resolved);
-    }
+void Widget::SetBackgroundImageFallback(const std::wstring &path) {
+  std::wstring resolved = path;
+  if (!resolved.empty()) {
+    if (PathUtils::IsPathRelative(resolved))
+      resolved = PathUtils::ResolvePath(
+          resolved, PathUtils::GetScriptBaseDir(m_Options.scriptPath,
+                                                JSEngine::GetEntryScriptDir()));
+    else
+      resolved = PathUtils::NormalizePath(resolved);
+  }
 
-    if (m_Options.backgroundImageFallback == resolved)
-        return;
+  if (m_Options.backgroundImageFallback == resolved)
+    return;
 
-    m_Options.backgroundImageFallback = resolved;
-    m_BackgroundImage.SetFallbackPath(resolved);
-    Redraw();
-    Settings::SaveWidget(m_Options.id, m_Options);
+  m_Options.backgroundImageFallback = resolved;
+  m_BackgroundImage.SetFallbackPath(resolved);
+  Redraw();
+  Settings::SaveWidget(m_Options.id, m_Options);
 }
 
 /*
 ** Enable/disable dragging.
 */
-void Widget::SetDraggable(bool enable)
-{
-    if (m_Options.draggable != enable)
-    {
-        m_Options.draggable = enable;
-        Settings::SaveWidget(m_Options.id, m_Options);
-    }
+void Widget::SetDraggable(bool enable) {
+  if (m_Options.draggable != enable) {
+    m_Options.draggable = enable;
+    Settings::SaveWidget(m_Options.id, m_Options);
+  }
 }
 
 /*
 ** Enable/disable resizing.
 */
-void Widget::SetResizable(bool enable)
-{
-    m_Options.resizable = enable;
-}
+void Widget::SetResizable(bool enable) { m_Options.resizable = enable; }
 
 /*
 ** Set minimum width.
 */
-void Widget::SetMinWidth(int minWidth)
-{
-    if (minWidth < 0)
-        minWidth = 0;
-    if (m_Options.minWidth != minWidth)
-    {
-        m_Options.minWidth = minWidth;
-        if (minWidth > 0 && m_Options.width < minWidth)
-        {
-            SetWindowPosition(CW_USEDEFAULT, CW_USEDEFAULT, minWidth, -1);
-        }
+void Widget::SetMinWidth(int minWidth) {
+  if (minWidth < 0)
+    minWidth = 0;
+  if (m_Options.minWidth != minWidth) {
+    m_Options.minWidth = minWidth;
+    if (minWidth > 0 && m_Options.width < minWidth) {
+      SetWindowPosition(CW_USEDEFAULT, CW_USEDEFAULT, minWidth, -1);
     }
+  }
 }
 
 /*
 ** Set minimum height.
 */
-void Widget::SetMinHeight(int minHeight)
-{
-    if (minHeight < 0)
-        minHeight = 0;
-    if (m_Options.minHeight != minHeight)
-    {
-        m_Options.minHeight = minHeight;
-        if (minHeight > 0 && m_Options.height < minHeight)
-        {
-            SetWindowPosition(CW_USEDEFAULT, CW_USEDEFAULT, -1, minHeight);
-        }
+void Widget::SetMinHeight(int minHeight) {
+  if (minHeight < 0)
+    minHeight = 0;
+  if (m_Options.minHeight != minHeight) {
+    m_Options.minHeight = minHeight;
+    if (minHeight > 0 && m_Options.height < minHeight) {
+      SetWindowPosition(CW_USEDEFAULT, CW_USEDEFAULT, -1, minHeight);
     }
+  }
 }
 
 /*
 ** Set minimum size (both width and height).
 */
-void Widget::SetMinSize(int minWidth, int minHeight)
-{
-    if (minWidth < 0)
-        minWidth = 0;
-    if (minHeight < 0)
-        minHeight = 0;
-    if (m_Options.minWidth != minWidth || m_Options.minHeight != minHeight)
-    {
-        m_Options.minWidth = minWidth;
-        m_Options.minHeight = minHeight;
-        int newW = (minWidth > 0 && m_Options.width < minWidth) ? minWidth : -1;
-        int newH = (minHeight > 0 && m_Options.height < minHeight) ? minHeight : -1;
-        if (newW != -1 || newH != -1)
-        {
-            SetWindowPosition(CW_USEDEFAULT, CW_USEDEFAULT, newW, newH);
-        }
+void Widget::SetMinSize(int minWidth, int minHeight) {
+  if (minWidth < 0)
+    minWidth = 0;
+  if (minHeight < 0)
+    minHeight = 0;
+  if (m_Options.minWidth != minWidth || m_Options.minHeight != minHeight) {
+    m_Options.minWidth = minWidth;
+    m_Options.minHeight = minHeight;
+    int newW = (minWidth > 0 && m_Options.width < minWidth) ? minWidth : -1;
+    int newH = (minHeight > 0 && m_Options.height < minHeight) ? minHeight : -1;
+    if (newW != -1 || newH != -1) {
+      SetWindowPosition(CW_USEDEFAULT, CW_USEDEFAULT, newW, newH);
     }
+  }
 }
 
-WidgetResizeEdge Widget::GetResizeEdgeAt(int x, int y, int w, int h)
-{
-    if (w <= 0 || h <= 0)
-        return WidgetResizeEdge::None;
+WidgetResizeEdge Widget::GetResizeEdgeAt(int x, int y, int w, int h) {
+  if (w <= 0 || h <= 0)
+    return WidgetResizeEdge::None;
 
-    const int border = 8;
-    int edge = 0;
+  const int border = 8;
+  int edge = 0;
 
-    if (x >= 0 && x < border)
-        edge |= (int)WidgetResizeEdge::Left;
-    else if (x <= w && x > w - border)
-        edge |= (int)WidgetResizeEdge::Right;
+  if (x >= 0 && x < border)
+    edge |= (int)WidgetResizeEdge::Left;
+  else if (x <= w && x > w - border)
+    edge |= (int)WidgetResizeEdge::Right;
 
-    if (y >= 0 && y < border)
-        edge |= (int)WidgetResizeEdge::Top;
-    else if (y <= h && y > h - border)
-        edge |= (int)WidgetResizeEdge::Bottom;
+  if (y >= 0 && y < border)
+    edge |= (int)WidgetResizeEdge::Top;
+  else if (y <= h && y > h - border)
+    edge |= (int)WidgetResizeEdge::Bottom;
 
-    return static_cast<WidgetResizeEdge>(edge);
+  return static_cast<WidgetResizeEdge>(edge);
 }
 
-LPCWSTR Widget::GetCursorForResizeEdge(WidgetResizeEdge edge)
-{
-    switch (edge)
-    {
-    case WidgetResizeEdge::Left:
-    case WidgetResizeEdge::Right:
-        return IDC_SIZEWE;
-    case WidgetResizeEdge::Top:
-    case WidgetResizeEdge::Bottom:
-        return IDC_SIZENS;
-    case WidgetResizeEdge::TopLeft:
-    case WidgetResizeEdge::BottomRight:
-        return IDC_SIZENWSE;
-    case WidgetResizeEdge::TopRight:
-    case WidgetResizeEdge::BottomLeft:
-        return IDC_SIZENESW;
-    default:
-        return nullptr;
-    }
+LPCWSTR Widget::GetCursorForResizeEdge(WidgetResizeEdge edge) {
+  switch (edge) {
+  case WidgetResizeEdge::Left:
+  case WidgetResizeEdge::Right:
+    return IDC_SIZEWE;
+  case WidgetResizeEdge::Top:
+  case WidgetResizeEdge::Bottom:
+    return IDC_SIZENS;
+  case WidgetResizeEdge::TopLeft:
+  case WidgetResizeEdge::BottomRight:
+    return IDC_SIZENWSE;
+  case WidgetResizeEdge::TopRight:
+  case WidgetResizeEdge::BottomLeft:
+    return IDC_SIZENESW;
+  default:
+    return nullptr;
+  }
 }
 
 /*
 ** Enable/disable click-through.
 */
-void Widget::SetClickThrough(bool enable)
-{
-    if (m_Options.clickThrough != enable)
-    {
-        m_Options.clickThrough = enable;
+void Widget::SetClickThrough(bool enable) {
+  if (m_Options.clickThrough != enable) {
+    m_Options.clickThrough = enable;
 
-        if (m_hWnd)
-        {
-            LONG exStyle = GetWindowLong(m_hWnd, GWL_EXSTYLE);
-            if (enable)
-                exStyle |= WS_EX_TRANSPARENT;
-            else
-                exStyle &= ~WS_EX_TRANSPARENT;
+    if (m_hWnd) {
+      LONG exStyle = GetWindowLong(m_hWnd, GWL_EXSTYLE);
+      if (enable)
+        exStyle |= WS_EX_TRANSPARENT;
+      else
+        exStyle &= ~WS_EX_TRANSPARENT;
 
-            SetWindowLong(m_hWnd, GWL_EXSTYLE, exStyle);
-        }
-        Settings::SaveWidget(m_Options.id, m_Options);
+      SetWindowLong(m_hWnd, GWL_EXSTYLE, exStyle);
     }
+    Settings::SaveWidget(m_Options.id, m_Options);
+  }
 }
 
 /*
 ** Enable/disable keeping on screen.
 */
-void Widget::SetKeepOnScreen(bool enable)
-{
-    if (m_Options.keepOnScreen != enable)
-    {
-        m_Options.keepOnScreen = enable;
-        Settings::SaveWidget(m_Options.id, m_Options);
-    }
+void Widget::SetKeepOnScreen(bool enable) {
+  if (m_Options.keepOnScreen != enable) {
+    m_Options.keepOnScreen = enable;
+    Settings::SaveWidget(m_Options.id, m_Options);
+  }
 }
 
 /*
 ** Enable/disable snap-to-edges.
 */
-void Widget::SetSnapEdges(bool enable)
-{
-    if (m_Options.snapEdges != enable)
-    {
-        m_Options.snapEdges = enable;
-        Settings::SaveWidget(m_Options.id, m_Options);
-    }
-}
-
-void Widget::SetShowInToolbar(bool enable)
-{
-    if (m_Options.showInToolbar == enable)
-        return;
-
-    m_Options.showInToolbar = enable;
-    ApplyToolbarStyle();
+void Widget::SetSnapEdges(bool enable) {
+  if (m_Options.snapEdges != enable) {
+    m_Options.snapEdges = enable;
     Settings::SaveWidget(m_Options.id, m_Options);
+  }
 }
 
-void Widget::SetToolbarIcon(const std::wstring &path)
-{
-    if (m_Options.toolbarIcon == path)
-        return;
+void Widget::SetShowInToolbar(bool enable) {
+  if (m_Options.showInToolbar == enable)
+    return;
 
-    m_Options.toolbarIcon = path;
-    ApplyToolbarIcon();
-    Settings::SaveWidget(m_Options.id, m_Options);
+  m_Options.showInToolbar = enable;
+  ApplyToolbarStyle();
+  Settings::SaveWidget(m_Options.id, m_Options);
 }
 
-void Widget::SetToolbarTitle(const std::wstring &title)
-{
-    if (m_Options.toolbarTitle == title)
-        return;
+void Widget::SetToolbarIcon(const std::wstring &path) {
+  if (m_Options.toolbarIcon == path)
+    return;
 
-    m_Options.toolbarTitle = title;
-    ApplyToolbarTitle();
-    Settings::SaveWidget(m_Options.id, m_Options);
+  m_Options.toolbarIcon = path;
+  ApplyToolbarIcon();
+  Settings::SaveWidget(m_Options.id, m_Options);
 }
 
-void Widget::ApplyToolbarStyle()
-{
-    WidgetWindowChromeHelper::ApplyToolbarStyle(m_hWnd, m_Options.showInToolbar);
+void Widget::SetToolbarTitle(const std::wstring &title) {
+  if (m_Options.toolbarTitle == title)
+    return;
+
+  m_Options.toolbarTitle = title;
+  ApplyToolbarTitle();
+  Settings::SaveWidget(m_Options.id, m_Options);
 }
 
-void Widget::DestroyToolbarIcon()
-{
-    WidgetWindowChromeHelper::DestroyToolbarIcon(m_ToolbarIconHandle, m_ToolbarIconOwned);
+void Widget::ApplyToolbarStyle() {
+  WidgetWindowChromeHelper::ApplyToolbarStyle(m_hWnd, m_Options.showInToolbar);
 }
 
-void Widget::ApplyToolbarIcon()
-{
-    WidgetWindowChromeHelper::ApplyToolbarIcon(m_hWnd, m_Options, m_ToolbarIconHandle, m_ToolbarIconOwned);
+void Widget::DestroyToolbarIcon() {
+  WidgetWindowChromeHelper::DestroyToolbarIcon(m_ToolbarIconHandle,
+                                               m_ToolbarIconOwned);
 }
 
-void Widget::ApplyToolbarTitle()
-{
-    WidgetWindowChromeHelper::ApplyToolbarTitle(m_hWnd, m_Options);
+void Widget::ApplyToolbarIcon() {
+  WidgetWindowChromeHelper::ApplyToolbarIcon(
+      m_hWnd, m_Options, m_ToolbarIconHandle, m_ToolbarIconOwned);
+}
+
+void Widget::ApplyToolbarTitle() {
+  WidgetWindowChromeHelper::ApplyToolbarTitle(m_hWnd, m_Options);
 }
 
 /*
 ** Retrieve the Widget instance associated with a window handle.
 */
-Widget *Widget::GetWidgetFromHWND(HWND hWnd)
-{
-    std::lock_guard<std::mutex> lock(s_WidgetMutex);
-    for (auto w : widgets)
-    {
-        if (w->m_hWnd == hWnd)
-            return w;
-    }
-    return nullptr;
+Widget *Widget::GetWidgetFromHWND(HWND hWnd) {
+  std::lock_guard<std::mutex> lock(s_WidgetMutex);
+  for (auto w : widgets) {
+    if (w->m_hWnd == hWnd)
+      return w;
+  }
+  return nullptr;
 }
 
-Widget *Widget::GetWidgetFromInstanceId(uint64_t instanceId)
-{
-    std::lock_guard<std::mutex> lock(s_WidgetMutex);
-    for (auto w : widgets)
-    {
-        if (w->m_InstanceId == instanceId)
-            return w;
-    }
-    return nullptr;
+Widget *Widget::GetWidgetFromInstanceId(uint64_t instanceId) {
+  std::lock_guard<std::mutex> lock(s_WidgetMutex);
+  for (auto w : widgets) {
+    if (w->m_InstanceId == instanceId)
+      return w;
+  }
+  return nullptr;
 }
 
 /*
 ** Window procedure for handling widget window messages.
 ** Handles painting, mouse input, dragging, and z-order management.
 */
-LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    if (message == WM_CREATE)
-    {
-        CREATESTRUCT *pcs = (CREATESTRUCT *)lParam;
-        SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)pcs->lpCreateParams);
-        return 0;
-    }
+LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
+                                 LPARAM lParam) {
+  if (message == WM_CREATE) {
+    CREATESTRUCT *pcs = (CREATESTRUCT *)lParam;
+    SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)pcs->lpCreateParams);
+    return 0;
+  }
 
-    Widget *widget = (Widget *)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+  Widget *widget = (Widget *)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 
-    switch (message)
-    {
-    case WM_USER + 500:
-    {
-        std::wstring *pUrl = reinterpret_cast<std::wstring *>(wParam);
-        AsyncImageResult *result = reinterpret_cast<AsyncImageResult *>(lParam);
-        if (pUrl && result)
-        {
-            if (widget)
-            {
-                // Background image: decode on-demand so that encodedBytes and
-                // decodedImage.pixels are never both alive at the same time.
-                if (widget->m_Options.backgroundImage == *pUrl && !result->encodedBytes.empty())
-                {
-                    DecodedImageData decoded;
-                    if (GeneralImage::DecodeFromBytes(result->encodedBytes, decoded) && decoded.IsValid())
-                    {
-                        widget->m_BackgroundImage.OnImageDecoded(*pUrl, std::move(decoded));
-                        widget->Redraw();
-                    }
-                }
-                widget->OnImageDownloaded(*pUrl, result->encodedBytes);
-            }
-            delete pUrl;
-            delete result;
-        }
-        return 0;
-    }
-
-    case WM_SETFOCUS:
-        if (widget)
-            JSEngine::TriggerWidgetEvent(widget, "focus");
-        return 0;
-
-    case WM_KILLFOCUS:
-        if (widget)
-        {
-            // Blur any focused input box
-            if (widget->m_FocusedInputBox)
-            {
-                KillTimer(hWnd, TIMER_CARET);
-                InputBoxElement *focusedInput = widget->m_FocusedInputBox;
-                const auto focusedElement = static_cast<Element *>(focusedInput);
-                const bool isTracked = std::find_if(widget->m_Elements.begin(), widget->m_Elements.end(),
-                                                    [&](const auto &u)
-                                                    { return u.get() == focusedElement; }) != widget->m_Elements.end();
-                if (isTracked)
-                {
-                    const int onBlurCallbackId = focusedInput->m_OnBlurCallbackId;
-                    if (onBlurCallbackId != -1)
-                        JSEngine::CallEventCallback(onBlurCallbackId, widget, nullptr);
-
-                    const bool stillTracked = std::find_if(widget->m_Elements.begin(), widget->m_Elements.end(),
-                                                           [&](const auto &u)
-                                                           { return u.get() == focusedElement; }) != widget->m_Elements.end();
-                    if (widget->m_FocusedInputBox == focusedInput && stillTracked)
-                        focusedInput->SetFocus(false);
-                }
-                if (widget->m_FocusedInputBox == focusedInput)
-                    widget->m_FocusedInputBox = nullptr;
-                widget->Redraw();
-            }
-            JSEngine::TriggerWidgetEvent(widget, "unFocus");
-        }
-        return 0;
-
-    case WM_ERASEBKGND:
-        return 1; // Handled, we don't need to erase background for layered window
-
-    case WM_PAINT:
-    {
-        PAINTSTRUCT ps;
-        BeginPaint(hWnd, &ps);
-        EndPaint(hWnd, &ps);
-        return 0;
-    }
-    case WM_LBUTTONDOWN:
-        if (widget)
-        {
-            // Check if clicking on a resize border
-            if (widget->m_Options.resizable && !widget->m_Options.clickThrough)
-            {
-                POINT ptCursor;
-                GetCursorPos(&ptCursor);
-                POINT ptClient = ptCursor;
-                ScreenToClient(hWnd, &ptClient);
-                WidgetResizeEdge edge = Widget::GetResizeEdgeAt(ptClient.x, ptClient.y, widget->m_Options.width, widget->m_Options.height);
-                if (edge != WidgetResizeEdge::None)
-                {
-                    SetCapture(hWnd);
-                    widget->m_IsResizing = true;
-                    widget->m_ResizeEdge = edge;
-                    widget->m_ResizeStartCursor = ptCursor;
-                    widget->m_ResizeStartWindow = {widget->m_Options.x, widget->m_Options.y, widget->m_Options.width, widget->m_Options.height};
-                    return 0;
-                }
-            }
-
-            widget->HandleMouseMessage(message, wParam, lParam);
-
-            // Bring widget to front when clicked (for normal)
-            if (widget->m_WindowZPosition != ZPOSITION_ONDESKTOP && widget->m_WindowZPosition != ZPOSITION_ONBOTTOM)
-            {
-                if (!Widget::IsMenuActive())
-                {
-                    widget->ChangeSingleZPos(widget->m_WindowZPosition);
-                }
-            }
-
-            // Don't start widget drag if we're selecting text or an input box is focused
-            const bool isSelectingText = (widget->m_TextSelectionElement != nullptr);
-            const bool inputBoxFocused = (widget->m_FocusedInputBox != nullptr);
-
-            const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-            const bool hasSwipeContainer = (widget->m_SwipeContainer != nullptr);
-            const bool isDragArea = (widget->m_MouseOverElement && widget->m_MouseOverElement->IsDragArea());
-            const bool canDragWindow = widget->m_Options.draggable || ctrlHeld || isDragArea;
-
-            if (!widget->m_IsElementDragging && !widget->m_IsScrollbarDragging && !hasSwipeContainer && !isSelectingText && !inputBoxFocused && canDragWindow)
-            {
-                SetCapture(hWnd);
-                widget->m_IsDragging = true;
-                widget->m_DragThresholdMet = false;
-                widget->m_DragThresholdX = GetSystemMetrics(SM_CXDRAG);
-                widget->m_DragThresholdY = GetSystemMetrics(SM_CYDRAG);
-                GetCursorPos(&widget->m_DragStartCursor);
-                RECT rc;
-                GetWindowRect(hWnd, &rc);
-                widget->m_DragStartWindow = {rc.left, rc.top};
-            }
-        }
-        return 0;
-    case WM_LBUTTONUP:
-        if (widget)
-        {
-            if (widget->m_IsResizing)
-            {
-                widget->m_IsResizing = false;
-                widget->m_ResizeEdge = WidgetResizeEdge::None;
-                if (GetCapture() == hWnd)
-                {
-                    ReleaseCapture();
-                }
-                Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
-                return 0;
-            }
-
-            if (widget->m_IsDragging)
-            {
-                widget->m_IsDragging = false;
-                ReleaseCapture();
-
-                if (widget->m_DragThresholdMet)
-                {
-                    // Save final position
-                    RECT rc;
-                    GetWindowRect(hWnd, &rc);
-                    widget->m_Options.x = rc.left;
-                    widget->m_Options.y = rc.top;
-                    Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
-                }
-                else
-                {
-                    // If we didn't drag enough, it's a click
-                    widget->HandleMouseMessage(message, wParam, lParam);
-                }
-                widget->m_DragThresholdMet = false;
-            }
-            else
-            {
-                widget->HandleMouseMessage(message, wParam, lParam);
-            }
-        }
-        return 0;
-
-    case WM_RBUTTONUP:
-        if (widget)
-        {
-            // If not handled by an element, let DefWindowProc handle it (generates WM_CONTEXTMENU)
-            if (!widget->HandleMouseMessage(message, wParam, lParam))
-            {
-                return DefWindowProc(hWnd, message, wParam, lParam);
-            }
-        }
-        return 0;
-
-    case WM_CONTEXTMENU:
-        if (widget)
-        {
-            widget->OnContextMenu();
-        }
-        return 0;
-
-    case WM_MOUSELEAVE:
-        if (widget)
-        {
-            widget->HandleMouseMessage(message, wParam, lParam);
-        }
-        return 0;
-
-    case WM_LBUTTONDBLCLK:
-    case WM_RBUTTONDOWN:
-    // case WM_RBUTTONUP: // Handled above
-    case WM_RBUTTONDBLCLK:
-    case WM_MBUTTONDOWN:
-    case WM_MBUTTONUP:
-    case WM_MBUTTONDBLCLK:
-    case WM_XBUTTONDOWN:
-    case WM_XBUTTONUP:
-    case WM_XBUTTONDBLCLK:
-    case WM_MOUSEWHEEL:
-    case WM_MOUSEHWHEEL:
-        if (widget)
-        {
-            widget->HandleMouseMessage(message, wParam, lParam);
-        }
-        return 0;
-
-    case WM_SETCURSOR:
-        if (widget && widget->IsColorPickerEyedropperActive())
-        {
-            SetCursor(LoadCursor(nullptr, IDC_ARROW));
-            return TRUE;
-        }
-
-        if (widget && widget->m_IsResizing)
-        {
-            LPCWSTR cursorId = Widget::GetCursorForResizeEdge(widget->m_ResizeEdge);
-            if (cursorId)
-            {
-                SetCursor(LoadCursorW(nullptr, cursorId));
-                return TRUE;
-            }
-        }
-
-        if (LOWORD(lParam) == HTCLIENT && widget)
-        {
-            if (widget->m_Options.resizable && !widget->m_Options.clickThrough)
-            {
-                POINT pt;
-                GetCursorPos(&pt);
-                ScreenToClient(hWnd, &pt);
-                WidgetResizeEdge edge = Widget::GetResizeEdgeAt(pt.x, pt.y, widget->m_Options.width, widget->m_Options.height);
-                if (edge != WidgetResizeEdge::None)
-                {
-                    LPCWSTR cursorId = Widget::GetCursorForResizeEdge(edge);
-                    if (cursorId)
-                    {
-                        SetCursor(LoadCursorW(nullptr, cursorId));
-                        return TRUE;
-                    }
-                }
-            }
-
-            // Use the element already resolved by WM_MOUSEMOVE hit-test
-            // instead of re-running the full element iteration.
-            Element *cursorElement = widget->m_CursorElement;
-            if (cursorElement && !widget->IsTrackedElement(cursorElement))
-                cursorElement = nullptr;
-
-            // Show I-beam cursor for selectable text
-            if (cursorElement && cursorElement->GetType() == ELEMENT_TEXT)
-            {
-                TextElement *textElem = static_cast<TextElement *>(cursorElement);
-                if (textElem->GetTextSelection())
-                {
-                    SetCursor(LoadCursorW(nullptr, IDC_IBEAM));
-                    return TRUE;
-                }
-            }
-
-            if (cursorElement &&
-                cursorElement->GetMouseEventCursor() &&
-                (cursorElement->HasMouseAction() || !cursorElement->GetMouseEventCursorName().empty()))
-            {
-                HCURSOR cursor = widget->m_CursorManager.GetCursorForElement(cursorElement);
-                if (cursor)
-                {
-                    SetCursor(cursor);
-                    return TRUE;
-                }
-            }
-        }
-        return DefWindowProc(hWnd, message, wParam, lParam);
-
-    case WM_MOUSEMOVE:
-        if (widget)
-        {
-            if (widget->m_IsResizing)
-            {
-                POINT pt;
-                GetCursorPos(&pt);
-                int dx = pt.x - widget->m_ResizeStartCursor.x;
-                int dy = pt.y - widget->m_ResizeStartCursor.y;
-
-                int newX = widget->m_ResizeStartWindow.x;
-                int newY = widget->m_ResizeStartWindow.y;
-                int newW = widget->m_ResizeStartWindow.w;
-                int newH = widget->m_ResizeStartWindow.h;
-
-                const int minW = widget->m_Options.minWidth > 0 ? widget->m_Options.minWidth : 10;
-                const int minH = widget->m_Options.minHeight > 0 ? widget->m_Options.minHeight : 10;
-
-                const int edgeInt = static_cast<int>(widget->m_ResizeEdge);
-
-                if (edgeInt & static_cast<int>(WidgetResizeEdge::Left))
-                {
-                    int desiredW = widget->m_ResizeStartWindow.w - dx;
-                    if (desiredW < minW)
-                        desiredW = minW;
-                    newX = widget->m_ResizeStartWindow.x + (widget->m_ResizeStartWindow.w - desiredW);
-                    newW = desiredW;
-                }
-                else if (edgeInt & static_cast<int>(WidgetResizeEdge::Right))
-                {
-                    newW = (std::max)(minW, widget->m_ResizeStartWindow.w + dx);
-                }
-
-                if (edgeInt & static_cast<int>(WidgetResizeEdge::Top))
-                {
-                    int desiredH = widget->m_ResizeStartWindow.h - dy;
-                    if (desiredH < minH)
-                        desiredH = minH;
-                    newY = widget->m_ResizeStartWindow.y + (widget->m_ResizeStartWindow.h - desiredH);
-                    newH = desiredH;
-                }
-                else if (edgeInt & static_cast<int>(WidgetResizeEdge::Bottom))
-                {
-                    newH = (std::max)(minH, widget->m_ResizeStartWindow.h + dy);
-                }
-
-                if (newX != widget->m_Options.x || newY != widget->m_Options.y || newW != widget->m_Options.width || newH != widget->m_Options.height)
-                {
-                    widget->m_IsMaximized = false;
-                    widget->m_Options.x = newX;
-                    widget->m_Options.y = newY;
-                    widget->m_Options.width = newW;
-                    widget->m_Options.height = newH;
-                    widget->m_Options.m_WDefined = true;
-                    widget->m_Options.m_HDefined = true;
-
-                    widget->Redraw();
-                    JSEngine::TriggerWidgetEvent(widget, "resize");
-                }
-                return 0;
-            }
-
-            // Don't allow widget drag while selecting text, input box is focused, scrollbar is dragged, or container is swiping
-            if (widget->m_IsDragging && (widget->m_TextSelectionElement != nullptr || widget->m_FocusedInputBox != nullptr || widget->m_IsScrollbarDragging || widget->m_IsContainerSwiping || widget->m_SwipeContainer != nullptr))
-            {
-                widget->m_IsDragging = false;
-                if (GetCapture() == hWnd)
-                {
-                    ReleaseCapture();
-                }
-            }
-
-            if (widget->m_IsDragging)
-            {
-                POINT pt;
-                GetCursorPos(&pt);
-                int dx = pt.x - widget->m_DragStartCursor.x;
-                int dy = pt.y - widget->m_DragStartCursor.y;
-
-                if (!widget->m_DragThresholdMet)
-                {
-                    if (abs(dx) > widget->m_DragThresholdX || abs(dy) > widget->m_DragThresholdY)
-                    {
-                        widget->m_DragThresholdMet = true;
-                    }
-                }
-
-                if (widget->m_DragThresholdMet)
-                {
-                    widget->m_IsMaximized = false;
-                    int newX = widget->m_DragStartWindow.x + dx;
-                    int newY = widget->m_DragStartWindow.y + dy;
-
-                    SetWindowPos(hWnd, NULL, newX, newY, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-
-                    // Update local options for hit testing
-                    widget->m_Options.x = newX;
-                    widget->m_Options.y = newY;
-                }
-            }
-            else
-            {
-                widget->HandleMouseMessage(message, wParam, lParam);
-            }
-        }
-        return 0;
-
-    case WM_MOUSEACTIVATE:
-        if (widget)
-        {
-            if (widget->m_WindowZPosition == ZPOSITION_ONDESKTOP || widget->m_WindowZPosition == ZPOSITION_ONBOTTOM)
-            {
-                return MA_NOACTIVATE;
-            }
-        }
-        return MA_ACTIVATE;
-    case WM_SYSCOMMAND:
-        if (widget)
-        {
-            const UINT command = static_cast<UINT>(wParam & 0xFFF0);
-            if (command == SC_MINIMIZE)
-            {
-                if (!widget->m_IsMinimized)
-                {
-                    widget->m_IsMinimized = true;
-                    JSEngine::TriggerWidgetEvent(widget, "minimize");
-                }
-            }
-            else if (command == SC_MAXIMIZE)
-            {
-                widget->Maximize();
-            }
-            else if (command == SC_RESTORE)
-            {
-                if (widget->m_IsMaximized)
-                {
-                    widget->Restore();
-                }
-                else if (widget->m_IsMinimized)
-                {
-                    widget->m_IsMinimized = false;
-                    JSEngine::TriggerWidgetEvent(widget, "unMinimize");
-                }
-            }
-        }
-        return DefWindowProc(hWnd, message, wParam, lParam);
-
-    case WM_NCHITTEST:
-        return HTCLIENT; // We handle everything in client area for 100% flicker-free mouse messages and resize
-
-    case WM_TIMER:
-        if (widget)
-        {
-            if (wParam == TIMER_TOPMOST)
-            {
-                if (widget->m_WindowZPosition == ZPOSITION_ONTOPMOST && !Widget::IsMenuActive() && !widget->m_Tooltip.IsActive())
-                {
-                    widget->ChangeZPos(ZPOSITION_ONTOPMOST);
-                }
-            }
-            else if (wParam == TIMER_CARET)
-            {
-                // Blink the focused input box caret.
-                if (widget->m_FocusedInputBox)
-                {
-                    const auto focused = static_cast<Element *>(widget->m_FocusedInputBox);
-                    const bool isTracked = std::find_if(widget->m_Elements.begin(), widget->m_Elements.end(),
-                                                        [&](const auto &u)
-                                                        { return u.get() == focused; }) != widget->m_Elements.end();
-                    if (isTracked)
-                    {
-                        widget->Redraw();
-                    }
-                    else
-                    {
-                        widget->m_FocusedInputBox = nullptr;
-                        KillTimer(hWnd, TIMER_CARET);
-                    }
-                }
-            }
-            else if (wParam == TIMER_CTRL_OVERRIDE)
-            {
-                if (widget->m_Options.clickThrough)
-                {
-                    const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-                    const bool shouldBeTransparent = !ctrlHeld;
-                    LONG_PTR exStyle = GetWindowLongPtrW(hWnd, GWL_EXSTYLE);
-                    const bool isTransparent = (exStyle & WS_EX_TRANSPARENT) != 0;
-                    if (isTransparent != shouldBeTransparent)
-                    {
-                        if (shouldBeTransparent)
-                            exStyle |= WS_EX_TRANSPARENT;
-                        else
-                            exStyle &= ~static_cast<LONG_PTR>(WS_EX_TRANSPARENT);
-                        SetWindowLongPtrW(hWnd, GWL_EXSTYLE, exStyle);
-                    }
-                }
-            }
-            else if (wParam == WidgetAnimationHelper::kTimerId)
-            {
-                WidgetAnimationHelper::StepAnimations(*widget);
-            }
-            else if (wParam == TIMER_SCROLLBAR_BUTTON)
-            {
-                if (widget->m_ScrollbarDragContainer && widget->m_ScrollbarActivePart != ScrollbarHitPart::None)
-                {
-                    int step = widget->m_ScrollbarDragContainer->GetScrollStep();
-                    if (widget->m_ScrollbarActivePart == ScrollbarHitPart::VerticalTopButton)
-                    {
-                        widget->m_ScrollbarDragContainer->SetScrollY(widget->m_ScrollbarDragContainer->GetScrollY() - step);
-                        widget->Redraw();
-                    }
-                    else if (widget->m_ScrollbarActivePart == ScrollbarHitPart::VerticalBottomButton)
-                    {
-                        widget->m_ScrollbarDragContainer->SetScrollY(widget->m_ScrollbarDragContainer->GetScrollY() + step);
-                        widget->Redraw();
-                    }
-                    else if (widget->m_ScrollbarActivePart == ScrollbarHitPart::HorizontalLeftButton)
-                    {
-                        widget->m_ScrollbarDragContainer->SetScrollX(widget->m_ScrollbarDragContainer->GetScrollX() - step);
-                        widget->Redraw();
-                    }
-                    else if (widget->m_ScrollbarActivePart == ScrollbarHitPart::HorizontalRightButton)
-                    {
-                        widget->m_ScrollbarDragContainer->SetScrollX(widget->m_ScrollbarDragContainer->GetScrollX() + step);
-                        widget->Redraw();
-                    }
-                    SetTimer(hWnd, TIMER_SCROLLBAR_BUTTON, 40, nullptr);
-                }
-                else
-                {
-                    KillTimer(hWnd, TIMER_SCROLLBAR_BUTTON);
-                }
-            }
-        }
-        return 0;
-
-    case WM_WINDOWPOSCHANGING:
-        if (widget)
-        {
-            LPWINDOWPOS wp = (LPWINDOWPOS)lParam;
-
-            if (widget->m_WindowZPosition == ZPOSITION_NORMAL && System::GetShowDesktop())
-            {
-                if (!(wp->flags & (SWP_NOOWNERZORDER | SWP_NOACTIVATE)))
-                {
-                    wp->hwndInsertAfter = System::GetBackmostTopWindow();
-                }
-            }
-            else if (widget->m_WindowZPosition == ZPOSITION_ONBOTTOM || widget->m_WindowZPosition == ZPOSITION_ONDESKTOP)
-            {
-                wp->flags |= SWP_NOZORDER;
-            }
-
-            // Only apply move-snapping and move-keepOnScreen when moving (not resizing)
-            if (!(wp->flags & SWP_NOMOVE) && (wp->flags & SWP_NOSIZE))
-            {
-                // Snapping
-                const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-                if (widget->m_Options.snapEdges && !ctrlHeld)
-                {
-                    const auto &monitors = System::GetMultiMonitorInfo().monitors;
-                    RECT windowRect = {wp->x, wp->y, wp->x + widget->m_Options.width, wp->y + widget->m_Options.height};
-                    const RECT *workArea = nullptr;
-
-                    // Find monitor with largest intersection
-                    LONG maxArea = 0;
-                    for (const auto &mon : monitors)
-                    {
-                        if (!mon.active)
-                            continue;
-                        RECT intersect;
-                        if (::IntersectRect(&intersect, &windowRect, &mon.screen))
-                        {
-                            LONG area = (intersect.right - intersect.left) * (intersect.bottom - intersect.top);
-                            if (area > maxArea)
-                            {
-                                maxArea = area;
-                                workArea = &mon.work;
-                            }
-                        }
-                    }
-
-                    // Snap to other widgets
-                    {
-                        std::lock_guard<std::mutex> lock(s_WidgetMutex);
-                        for (Widget *w : widgets)
-                        {
-                            if (w == widget)
-                                continue;
-                            RECT otherRect = {w->m_Options.x, w->m_Options.y,
-                                              w->m_Options.x + w->m_Options.width,
-                                              w->m_Options.y + w->m_Options.height};
-
-                            // Vertical overlap -> Snap horizontally
-                            if (wp->y < otherRect.bottom + SNAP_DISTANCE && wp->y + widget->m_Options.height > otherRect.top - SNAP_DISTANCE)
-                            {
-                                if (abs(wp->x - otherRect.left) < SNAP_DISTANCE)
-                                    wp->x = otherRect.left;
-                                if (abs(wp->x - otherRect.right) < SNAP_DISTANCE)
-                                    wp->x = otherRect.right;
-                                if (abs(wp->x + widget->m_Options.width - otherRect.left) < SNAP_DISTANCE)
-                                    wp->x = otherRect.left - widget->m_Options.width;
-                                if (abs(wp->x + widget->m_Options.width - otherRect.right) < SNAP_DISTANCE)
-                                    wp->x = otherRect.right - widget->m_Options.width;
-                            }
-
-                            // Horizontal overlap -> Snap vertically
-                            if (wp->x < otherRect.right + SNAP_DISTANCE && wp->x + widget->m_Options.width > otherRect.left - SNAP_DISTANCE)
-                            {
-                                if (abs(wp->y - otherRect.top) < SNAP_DISTANCE)
-                                    wp->y = otherRect.top;
-                                if (abs(wp->y - otherRect.bottom) < SNAP_DISTANCE)
-                                    wp->y = otherRect.bottom;
-                                if (abs(wp->y + widget->m_Options.height - otherRect.top) < SNAP_DISTANCE)
-                                    wp->y = otherRect.top - widget->m_Options.height;
-                                if (abs(wp->y + widget->m_Options.height - otherRect.bottom) < SNAP_DISTANCE)
-                                    wp->y = otherRect.bottom - widget->m_Options.height;
-                            }
-                        }
-                    }
-
-                    // Snap to screen edges
-                    if (workArea)
-                    {
-                        if (abs(wp->x - workArea->left) < SNAP_DISTANCE)
-                            wp->x = workArea->left;
-                        if (abs(wp->y - workArea->top) < SNAP_DISTANCE)
-                            wp->y = workArea->top;
-                        if (abs(wp->x + widget->m_Options.width - workArea->right) < SNAP_DISTANCE)
-                            wp->x = workArea->right - widget->m_Options.width;
-                        if (abs(wp->y + widget->m_Options.height - workArea->bottom) < SNAP_DISTANCE)
-                            wp->y = workArea->bottom - widget->m_Options.height;
-                    }
-                }
-
-                if (widget->m_Options.keepOnScreen)
-                {
-                    const auto &monitors = System::GetMultiMonitorInfo().monitors;
-                    const RECT *targetMonitor = nullptr;
-
-                    // Try 5 different points to find which monitor contains the window
-                    // This is more robust than just checking the center point
-                    POINT testPoints[5] = {
-                        {wp->x + widget->m_Options.width / 2, wp->y + widget->m_Options.height / 2}, // Center
-                        {wp->x, wp->y},                                                              // Top-left
-                        {wp->x + widget->m_Options.width, wp->y + widget->m_Options.height},         // Bottom-right
-                        {wp->x, wp->y + widget->m_Options.height},                                   // Bottom-left
-                        {wp->x + widget->m_Options.width, wp->y}                                     // Top-right
-                    };
-
-                    for (int i = 0; i < 5 && !targetMonitor; ++i)
-                    {
-                        for (const auto &mon : monitors)
-                        {
-                            if (!mon.active)
-                                continue;
-
-                            // Check if point is within monitor's screen area
-                            if (testPoints[i].x >= mon.screen.left && testPoints[i].x < mon.screen.right &&
-                                testPoints[i].y >= mon.screen.top && testPoints[i].y < mon.screen.bottom)
-                            {
-                                targetMonitor = &mon.screen;
-                                break;
-                            }
-                        }
-                    }
-
-                    // If no monitor found, use primary monitor
-                    if (!targetMonitor)
-                    {
-                        const int primaryIndex = System::GetMultiMonitorInfo().primary - 1;
-                        if (primaryIndex >= 0 && primaryIndex < (int)monitors.size())
-                        {
-                            targetMonitor = &monitors[primaryIndex].screen;
-                        }
-                    }
-
-                    // Constrain window position to monitor bounds
-                    if (targetMonitor)
-                    {
-                        wp->x = (std::min)(wp->x, (int)targetMonitor->right - widget->m_Options.width);
-                        wp->x = (std::max)(wp->x, (int)targetMonitor->left);
-                        wp->y = (std::min)(wp->y, (int)targetMonitor->bottom - widget->m_Options.height);
-                        wp->y = (std::max)(wp->y, (int)targetMonitor->top);
-                    }
-                }
-            }
-        }
-        return 0;
-
-    case WM_GETMINMAXINFO:
-        if (lParam)
-        {
-            LPMINMAXINFO lpMMI = (LPMINMAXINFO)lParam;
-            lpMMI->ptMinTrackSize.x = 10;
-            lpMMI->ptMinTrackSize.y = 10;
-        }
-        return 0;
-
-    case WM_WINDOWPOSCHANGED:
-        if (widget)
-        {
-            LPWINDOWPOS wp = (LPWINDOWPOS)lParam;
-            bool moved = false;
-            bool sized = false;
-            if (!(wp->flags & SWP_NOMOVE))
-            {
-                if (widget->m_Options.x != wp->x || widget->m_Options.y != wp->y)
-                {
-                    widget->m_Options.x = wp->x;
-                    widget->m_Options.y = wp->y;
-                    moved = true;
-                }
-            }
-            if (!(wp->flags & SWP_NOSIZE))
-            {
-                if (widget->m_Options.width != wp->cx || widget->m_Options.height != wp->cy)
-                {
-                    widget->m_Options.width = wp->cx;
-                    widget->m_Options.height = wp->cy;
-                    widget->m_Options.m_WDefined = true;
-                    widget->m_Options.m_HDefined = true;
-                    sized = true;
-                }
-            }
-            if (moved)
-            {
-                JSEngine::TriggerWidgetEvent(widget, "move");
-            }
-            if (sized)
-            {
-                widget->Redraw();
-                JSEngine::TriggerWidgetEvent(widget, "resize");
-            }
-            // If Z-order changed and a tooltip is active, re-assert tooltip above this widget
-            if (!(wp->flags & SWP_NOZORDER) && widget->m_Tooltip.IsActive())
-            {
-                HWND activeTooltip = widget->m_Tooltip.GetActiveHWnd();
-                if (activeTooltip)
-                {
-                    SetWindowPos(activeTooltip, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-                }
-            }
-        }
-        return 0;
-    case WM_SIZE:
-        if (widget)
-        {
-            if (wParam == SIZE_MINIMIZED)
-            {
-                if (!widget->m_IsMinimized)
-                {
-                    widget->m_IsMinimized = true;
-                    JSEngine::TriggerWidgetEvent(widget, "minimize");
-                }
-            }
-            else if (wParam == SIZE_MAXIMIZED)
-            {
-                if (!widget->m_IsMaximized)
-                {
-                    widget->m_IsMaximized = true;
-                    JSEngine::TriggerWidgetEvent(widget, "maximize");
-                }
-            }
-            else
-            {
-                if (widget->m_IsMinimized)
-                {
-                    widget->m_IsMinimized = false;
-                    JSEngine::TriggerWidgetEvent(widget, "unMinimize");
-                }
-            }
-        }
-        return 0;
-    case WM_EXITSIZEMOVE:
-        if (widget)
-        {
-            RECT rc;
-            GetWindowRect(hWnd, &rc);
-            widget->m_Options.x = rc.left;
-            widget->m_Options.y = rc.top;
-            widget->m_Options.width = rc.right - rc.left;
-            widget->m_Options.height = rc.bottom - rc.top;
-            widget->m_Options.m_WDefined = true;
-            widget->m_Options.m_HDefined = true;
-
-            Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
-        }
-        return 0;
-    case WM_CLOSE:
-        if (widget)
-        {
-            // Native close (taskbar/titlebar/system menu) must follow the same
-            // lifecycle as widget.close(): fire "close" while the widget is
-            // still valid, then re-check because the callback may destroy it.
-            JSEngine::TriggerWidgetEvent(widget, "close");
-            if (!Widget::IsValid(widget))
-                return 0;
-
-            {
-                std::lock_guard<std::mutex> lock(s_WidgetMutex);
-                auto it = std::find(widgets.begin(), widgets.end(), widget);
-                if (it != widgets.end())
-                    widgets.erase(it);
-            }
-            // Lock released before delete: the destructor calls DestroyWindow
-            // which dispatches WM_DESTROY synchronously; holding the lock there
-            // would deadlock.
-            SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
-            delete widget;
-            return 0;
-        }
-        break;
-
-    case WM_KEYDOWN:
-        if (widget && widget->m_TextSelectionElement)
-        {
-            TextElement *textElem = widget->m_TextSelectionElement;
-
-            // Handle Ctrl+C (Copy)
-            if (wParam == 'C' && (GetAsyncKeyState(VK_CONTROL) & 0x8000))
-            {
-                if (textElem->HasTextSelection())
-                {
-                    std::wstring selectedText = textElem->GetSelectedText();
-                    if (!selectedText.empty())
-                    {
-                        novadesk::shared::system::ClipboardSetText(selectedText);
-                    }
-                }
-                return 0;
-            }
-            // Handle Ctrl+A (Select All)
-            else if (wParam == 'A' && (GetAsyncKeyState(VK_CONTROL) & 0x8000))
-            {
-                textElem->SelectAll();
-                widget->Redraw();
-                return 0;
-            }
-            // Handle Escape (Clear Selection)
-            else if (wParam == VK_ESCAPE)
-            {
-                textElem->ClearTextSelection();
-                widget->m_TextSelectionElement = nullptr;
-                widget->Redraw();
-                return 0;
-            }
-        }
-        // Route keyboard to focused input box (editable text field).
-        if (widget && widget->m_FocusedInputBox)
-        {
-            InputBoxElement *input = widget->m_FocusedInputBox;
-            bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-            bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-
-            if (ctrl && wParam == 'A')
-            {
-                input->SelectAll();
-                widget->Redraw();
-                return 0;
-            }
-            if (ctrl && wParam == 'C')
-            {
-                std::wstring sel = input->GetSelectedText();
-                if (!sel.empty())
-                    novadesk::shared::system::ClipboardSetText(sel);
-                return 0;
-            }
-            if (ctrl && wParam == 'X')
-            {
-                std::wstring sel = input->GetSelectedText();
-                if (!sel.empty())
-                {
-                    novadesk::shared::system::ClipboardSetText(sel);
-                    input->DeleteSelection();
-                    if (input->m_OnTextChangeCallbackId != -1)
-                        JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId, widget, input->GetText());
-                    widget->Redraw();
-                }
-                return 0;
-            }
-            if (ctrl && wParam == 'V')
-            {
-                std::wstring clip;
-                if (novadesk::shared::system::ClipboardGetText(clip))
-                {
-                    input->ReplaceSelection(clip);
-                    if (input->m_OnTextChangeCallbackId != -1)
-                        JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId, widget, input->GetText());
-                    widget->Redraw();
-                }
-                return 0;
-            }
-            if (wParam == VK_RETURN)
-            {
-                if (input->IsMultiline())
-                {
-                    input->ReplaceSelection(L"\n");
-                    if (input->m_OnTextChangeCallbackId != -1)
-                        JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId, widget, input->GetText());
-                    widget->Redraw();
-                }
-                else
-                {
-                    if (input->m_OnEnterCallbackId != -1)
-                        JSEngine::CallEventCallbackWithText(input->m_OnEnterCallbackId, widget, input->GetText());
-                }
-                return 0;
-            }
-            if (wParam == VK_ESCAPE)
-            {
-                // Clear selection or blur on Escape
-                if (input->HasSelection())
-                    input->ClearSelection();
-                else
-                {
-                    input->SetFocus(false);
-                    widget->m_FocusedInputBox = nullptr;
-                }
-                widget->Redraw();
-                return 0;
-            }
-
-            bool changed = input->HandleKeyDown(wParam, shift, ctrl);
-            if (changed && input->m_OnTextChangeCallbackId != -1)
-                JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId, widget, input->GetText());
+  switch (message) {
+  case WM_USER + 500: {
+    std::wstring *pUrl = reinterpret_cast<std::wstring *>(wParam);
+    AsyncImageResult *result = reinterpret_cast<AsyncImageResult *>(lParam);
+    if (pUrl && result) {
+      if (widget) {
+        // Background image: decode on-demand so that encodedBytes and
+        // decodedImage.pixels are never both alive at the same time.
+        if (widget->m_Options.backgroundImage == *pUrl &&
+            !result->encodedBytes.empty()) {
+          DecodedImageData decoded;
+          if (GeneralImage::DecodeFromBytes(result->encodedBytes, decoded) &&
+              decoded.IsValid()) {
+            widget->m_BackgroundImage.OnImageDecoded(*pUrl, std::move(decoded));
             widget->Redraw();
-            return 0;
+          }
         }
-        return DefWindowProc(hWnd, message, wParam, lParam);
-
-    case WM_CHAR:
-        if (widget && widget->m_FocusedInputBox)
-        {
-            wchar_t ch = (wchar_t)wParam;
-            InputBoxElement *input = widget->m_FocusedInputBox;
-            auto result = input->HandleChar(ch);
-            if (result == InputBoxElement::HandleCharResult::Changed)
-            {
-                if (input->m_OnTextChangeCallbackId != -1)
-                    JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId, widget, input->GetText());
-            }
-            else if (result == InputBoxElement::HandleCharResult::Rejected)
-            {
-                if (input->m_OnInvalidInputCallbackId != -1)
-                    JSEngine::CallEventCallbackWithText(input->m_OnInvalidInputCallbackId, widget, std::wstring(1, ch));
-            }
-            widget->Redraw();
-            return 0;
-        }
-        return DefWindowProc(hWnd, message, wParam, lParam);
-
-    case WM_DESTROY:
-        // WM_DESTROY is dispatched synchronously by DestroyWindow(), which is
-        // called from the Widget destructor. The widget is already being
-        // destroyed — we must NOT delete it again here (double-free) and we
-        // must NOT try to lock s_WidgetMutex (deadlock: the caller may already
-        // hold it).
-        //
-        // Widget removal from the global vector is handled by WM_CLOSE or the
-        // JS close() path, both of which erase before calling delete.
-        SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
-        return 0;
-    default:
-        return DefWindowProc(hWnd, message, wParam, lParam);
+        widget->OnImageDownloaded(*pUrl, result->encodedBytes);
+      }
+      delete pUrl;
+      delete result;
     }
     return 0;
+  }
+
+  case WM_SETFOCUS:
+    if (widget)
+      JSEngine::TriggerWidgetEvent(widget, "focus");
+    return 0;
+
+  case WM_KILLFOCUS:
+    if (widget) {
+      // Blur any focused input box
+      if (widget->m_FocusedInputBox) {
+        KillTimer(hWnd, TIMER_CARET);
+        InputBoxElement *focusedInput = widget->m_FocusedInputBox;
+        const auto focusedElement = static_cast<Element *>(focusedInput);
+        const bool isTracked =
+            std::find_if(widget->m_Elements.begin(), widget->m_Elements.end(),
+                         [&](const auto &u) {
+                           return u.get() == focusedElement;
+                         }) != widget->m_Elements.end();
+        if (isTracked) {
+          const int onBlurCallbackId = focusedInput->m_OnBlurCallbackId;
+          if (onBlurCallbackId != -1)
+            JSEngine::CallEventCallback(onBlurCallbackId, widget, nullptr);
+
+          const bool stillTracked =
+              std::find_if(widget->m_Elements.begin(), widget->m_Elements.end(),
+                           [&](const auto &u) {
+                             return u.get() == focusedElement;
+                           }) != widget->m_Elements.end();
+          if (widget->m_FocusedInputBox == focusedInput && stillTracked)
+            focusedInput->SetFocus(false);
+        }
+        if (widget->m_FocusedInputBox == focusedInput)
+          widget->m_FocusedInputBox = nullptr;
+        widget->Redraw();
+      }
+      JSEngine::TriggerWidgetEvent(widget, "unFocus");
+    }
+    return 0;
+
+  case WM_ERASEBKGND:
+    return 1; // Handled, we don't need to erase background for layered window
+
+  case WM_PAINT: {
+    PAINTSTRUCT ps;
+    BeginPaint(hWnd, &ps);
+    EndPaint(hWnd, &ps);
+    return 0;
+  }
+  case WM_LBUTTONDOWN:
+    if (widget) {
+      // Check if clicking on a resize border
+      if (widget->m_Options.resizable && !widget->m_Options.clickThrough) {
+        POINT ptCursor;
+        GetCursorPos(&ptCursor);
+        POINT ptClient = ptCursor;
+        ScreenToClient(hWnd, &ptClient);
+        WidgetResizeEdge edge = Widget::GetResizeEdgeAt(
+            ptClient.x, ptClient.y, widget->m_Options.width,
+            widget->m_Options.height);
+        if (edge != WidgetResizeEdge::None) {
+          SetCapture(hWnd);
+          widget->m_IsResizing = true;
+          widget->m_ResizeEdge = edge;
+          widget->m_ResizeStartCursor = ptCursor;
+          widget->m_ResizeStartWindow = {
+              widget->m_Options.x, widget->m_Options.y, widget->m_Options.width,
+              widget->m_Options.height};
+          return 0;
+        }
+      }
+
+      widget->HandleMouseMessage(message, wParam, lParam);
+
+      // Bring widget to front when clicked (for normal)
+      if (widget->m_WindowZPosition != ZPOSITION_ONDESKTOP &&
+          widget->m_WindowZPosition != ZPOSITION_ONBOTTOM) {
+        if (!Widget::IsMenuActive()) {
+          widget->ChangeSingleZPos(widget->m_WindowZPosition);
+        }
+      }
+
+      // Don't start widget drag if we're selecting text or an input box is
+      // focused
+      const bool isSelectingText = (widget->m_TextSelectionElement != nullptr);
+      const bool inputBoxFocused = (widget->m_FocusedInputBox != nullptr);
+
+      const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+      const bool hasSwipeContainer = (widget->m_SwipeContainer != nullptr);
+      const bool isDragArea = (widget->m_MouseOverElement &&
+                               widget->m_MouseOverElement->IsDragArea());
+      const bool canDragWindow =
+          widget->m_Options.draggable || ctrlHeld || isDragArea;
+
+      if (!widget->m_IsElementDragging && !widget->m_IsScrollbarDragging &&
+          !hasSwipeContainer && !isSelectingText && !inputBoxFocused &&
+          canDragWindow) {
+        SetCapture(hWnd);
+        widget->m_IsDragging = true;
+        widget->m_DragThresholdMet = false;
+        widget->m_DragThresholdX = GetSystemMetrics(SM_CXDRAG);
+        widget->m_DragThresholdY = GetSystemMetrics(SM_CYDRAG);
+        GetCursorPos(&widget->m_DragStartCursor);
+        RECT rc;
+        GetWindowRect(hWnd, &rc);
+        widget->m_DragStartWindow = {rc.left, rc.top};
+      }
+    }
+    return 0;
+  case WM_LBUTTONUP:
+    if (widget) {
+      if (widget->m_IsResizing) {
+        widget->m_IsResizing = false;
+        widget->m_ResizeEdge = WidgetResizeEdge::None;
+        if (GetCapture() == hWnd) {
+          ReleaseCapture();
+        }
+        Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
+        return 0;
+      }
+
+      if (widget->m_IsDragging) {
+        widget->m_IsDragging = false;
+        ReleaseCapture();
+
+        if (widget->m_DragThresholdMet) {
+          // Save final position
+          RECT rc;
+          GetWindowRect(hWnd, &rc);
+          widget->m_Options.x = rc.left;
+          widget->m_Options.y = rc.top;
+          Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
+        } else {
+          // If we didn't drag enough, it's a click
+          widget->HandleMouseMessage(message, wParam, lParam);
+        }
+        widget->m_DragThresholdMet = false;
+      } else {
+        widget->HandleMouseMessage(message, wParam, lParam);
+      }
+    }
+    return 0;
+
+  case WM_RBUTTONUP:
+    if (widget) {
+      // If not handled by an element, let DefWindowProc handle it (generates
+      // WM_CONTEXTMENU)
+      if (!widget->HandleMouseMessage(message, wParam, lParam)) {
+        return DefWindowProc(hWnd, message, wParam, lParam);
+      }
+    }
+    return 0;
+
+  case WM_CONTEXTMENU:
+    if (widget) {
+      widget->OnContextMenu();
+    }
+    return 0;
+
+  case WM_MOUSELEAVE:
+    if (widget) {
+      widget->HandleMouseMessage(message, wParam, lParam);
+    }
+    return 0;
+
+  case WM_LBUTTONDBLCLK:
+  case WM_RBUTTONDOWN:
+  // case WM_RBUTTONUP: // Handled above
+  case WM_RBUTTONDBLCLK:
+  case WM_MBUTTONDOWN:
+  case WM_MBUTTONUP:
+  case WM_MBUTTONDBLCLK:
+  case WM_XBUTTONDOWN:
+  case WM_XBUTTONUP:
+  case WM_XBUTTONDBLCLK:
+  case WM_MOUSEWHEEL:
+  case WM_MOUSEHWHEEL:
+    if (widget) {
+      widget->HandleMouseMessage(message, wParam, lParam);
+    }
+    return 0;
+
+  case WM_SETCURSOR:
+    if (widget && widget->IsColorPickerEyedropperActive()) {
+      SetCursor(LoadCursor(nullptr, IDC_ARROW));
+      return TRUE;
+    }
+
+    if (widget && widget->m_IsResizing) {
+      LPCWSTR cursorId = Widget::GetCursorForResizeEdge(widget->m_ResizeEdge);
+      if (cursorId) {
+        SetCursor(LoadCursorW(nullptr, cursorId));
+        return TRUE;
+      }
+    }
+
+    if (LOWORD(lParam) == HTCLIENT && widget) {
+      if (widget->m_Options.resizable && !widget->m_Options.clickThrough) {
+        POINT pt;
+        GetCursorPos(&pt);
+        ScreenToClient(hWnd, &pt);
+        WidgetResizeEdge edge = Widget::GetResizeEdgeAt(
+            pt.x, pt.y, widget->m_Options.width, widget->m_Options.height);
+        if (edge != WidgetResizeEdge::None) {
+          LPCWSTR cursorId = Widget::GetCursorForResizeEdge(edge);
+          if (cursorId) {
+            SetCursor(LoadCursorW(nullptr, cursorId));
+            return TRUE;
+          }
+        }
+      }
+
+      // Use the element already resolved by WM_MOUSEMOVE hit-test
+      // instead of re-running the full element iteration.
+      Element *cursorElement = widget->m_CursorElement;
+      if (cursorElement && !widget->IsTrackedElement(cursorElement))
+        cursorElement = nullptr;
+
+      // Show I-beam cursor for selectable text
+      if (cursorElement && cursorElement->GetType() == ELEMENT_TEXT) {
+        TextElement *textElem = static_cast<TextElement *>(cursorElement);
+        if (textElem->GetTextSelection()) {
+          SetCursor(LoadCursorW(nullptr, IDC_IBEAM));
+          return TRUE;
+        }
+      }
+
+      if (cursorElement && cursorElement->GetMouseEventCursor() &&
+          (cursorElement->HasMouseAction() ||
+           !cursorElement->GetMouseEventCursorName().empty())) {
+        HCURSOR cursor =
+            widget->m_CursorManager.GetCursorForElement(cursorElement);
+        if (cursor) {
+          SetCursor(cursor);
+          return TRUE;
+        }
+      }
+    }
+    return DefWindowProc(hWnd, message, wParam, lParam);
+
+  case WM_MOUSEMOVE:
+    if (widget) {
+      if (widget->m_IsResizing) {
+        POINT pt;
+        GetCursorPos(&pt);
+        int dx = pt.x - widget->m_ResizeStartCursor.x;
+        int dy = pt.y - widget->m_ResizeStartCursor.y;
+
+        int newX = widget->m_ResizeStartWindow.x;
+        int newY = widget->m_ResizeStartWindow.y;
+        int newW = widget->m_ResizeStartWindow.w;
+        int newH = widget->m_ResizeStartWindow.h;
+
+        const int minW =
+            widget->m_Options.minWidth > 0 ? widget->m_Options.minWidth : 10;
+        const int minH =
+            widget->m_Options.minHeight > 0 ? widget->m_Options.minHeight : 10;
+
+        const int edgeInt = static_cast<int>(widget->m_ResizeEdge);
+
+        if (edgeInt & static_cast<int>(WidgetResizeEdge::Left)) {
+          int desiredW = widget->m_ResizeStartWindow.w - dx;
+          if (desiredW < minW)
+            desiredW = minW;
+          newX = widget->m_ResizeStartWindow.x +
+                 (widget->m_ResizeStartWindow.w - desiredW);
+          newW = desiredW;
+        } else if (edgeInt & static_cast<int>(WidgetResizeEdge::Right)) {
+          newW = (std::max)(minW, widget->m_ResizeStartWindow.w + dx);
+        }
+
+        if (edgeInt & static_cast<int>(WidgetResizeEdge::Top)) {
+          int desiredH = widget->m_ResizeStartWindow.h - dy;
+          if (desiredH < minH)
+            desiredH = minH;
+          newY = widget->m_ResizeStartWindow.y +
+                 (widget->m_ResizeStartWindow.h - desiredH);
+          newH = desiredH;
+        } else if (edgeInt & static_cast<int>(WidgetResizeEdge::Bottom)) {
+          newH = (std::max)(minH, widget->m_ResizeStartWindow.h + dy);
+        }
+
+        if (newX != widget->m_Options.x || newY != widget->m_Options.y ||
+            newW != widget->m_Options.width ||
+            newH != widget->m_Options.height) {
+          widget->m_IsMaximized = false;
+          widget->m_Options.x = newX;
+          widget->m_Options.y = newY;
+          widget->m_Options.width = newW;
+          widget->m_Options.height = newH;
+          widget->m_Options.m_WDefined = true;
+          widget->m_Options.m_HDefined = true;
+
+          widget->Redraw();
+          JSEngine::TriggerWidgetEvent(widget, "resize");
+        }
+        return 0;
+      }
+
+      // Don't allow widget drag while selecting text, input box is focused,
+      // scrollbar is dragged, or container is swiping
+      if (widget->m_IsDragging &&
+          (widget->m_TextSelectionElement != nullptr ||
+           widget->m_FocusedInputBox != nullptr ||
+           widget->m_IsScrollbarDragging || widget->m_IsContainerSwiping ||
+           widget->m_SwipeContainer != nullptr)) {
+        widget->m_IsDragging = false;
+        if (GetCapture() == hWnd) {
+          ReleaseCapture();
+        }
+      }
+
+      if (widget->m_IsDragging) {
+        POINT pt;
+        GetCursorPos(&pt);
+        int dx = pt.x - widget->m_DragStartCursor.x;
+        int dy = pt.y - widget->m_DragStartCursor.y;
+
+        if (!widget->m_DragThresholdMet) {
+          if (abs(dx) > widget->m_DragThresholdX ||
+              abs(dy) > widget->m_DragThresholdY) {
+            widget->m_DragThresholdMet = true;
+          }
+        }
+
+        if (widget->m_DragThresholdMet) {
+          widget->m_IsMaximized = false;
+          int newX = widget->m_DragStartWindow.x + dx;
+          int newY = widget->m_DragStartWindow.y + dy;
+
+          SetWindowPos(hWnd, NULL, newX, newY, 0, 0,
+                       SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+          // Update local options for hit testing
+          widget->m_Options.x = newX;
+          widget->m_Options.y = newY;
+        }
+      } else {
+        widget->HandleMouseMessage(message, wParam, lParam);
+      }
+    }
+    return 0;
+
+  case WM_MOUSEACTIVATE:
+    if (widget) {
+      if (widget->m_WindowZPosition == ZPOSITION_ONDESKTOP ||
+          widget->m_WindowZPosition == ZPOSITION_ONBOTTOM) {
+        return MA_NOACTIVATE;
+      }
+    }
+    return MA_ACTIVATE;
+  case WM_SYSCOMMAND:
+    if (widget) {
+      const UINT command = static_cast<UINT>(wParam & 0xFFF0);
+      if (command == SC_MINIMIZE) {
+        if (!widget->m_IsMinimized) {
+          widget->m_IsMinimized = true;
+          JSEngine::TriggerWidgetEvent(widget, "minimize");
+        }
+      } else if (command == SC_MAXIMIZE) {
+        widget->Maximize();
+      } else if (command == SC_RESTORE) {
+        if (widget->m_IsMaximized) {
+          widget->Restore();
+        } else if (widget->m_IsMinimized) {
+          widget->m_IsMinimized = false;
+          JSEngine::TriggerWidgetEvent(widget, "unMinimize");
+        }
+      }
+    }
+    return DefWindowProc(hWnd, message, wParam, lParam);
+
+  case WM_NCHITTEST:
+    return HTCLIENT; // We handle everything in client area for 100%
+                     // flicker-free mouse messages and resize
+
+  case WM_TIMER:
+    if (widget) {
+      if (wParam == TIMER_TOPMOST) {
+        if (widget->m_WindowZPosition == ZPOSITION_ONTOPMOST &&
+            !Widget::IsMenuActive() && !widget->m_Tooltip.IsActive()) {
+          widget->ChangeZPos(ZPOSITION_ONTOPMOST);
+        }
+      } else if (wParam == TIMER_CARET) {
+        // Blink the focused input box caret.
+        if (widget->m_FocusedInputBox) {
+          const auto focused =
+              static_cast<Element *>(widget->m_FocusedInputBox);
+          const bool isTracked =
+              std::find_if(widget->m_Elements.begin(), widget->m_Elements.end(),
+                           [&](const auto &u) { return u.get() == focused; }) !=
+              widget->m_Elements.end();
+          if (isTracked) {
+            widget->Redraw();
+          } else {
+            widget->m_FocusedInputBox = nullptr;
+            KillTimer(hWnd, TIMER_CARET);
+          }
+        }
+      } else if (wParam == TIMER_CTRL_OVERRIDE) {
+        if (widget->m_Options.clickThrough) {
+          const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+          const bool shouldBeTransparent = !ctrlHeld;
+          LONG_PTR exStyle = GetWindowLongPtrW(hWnd, GWL_EXSTYLE);
+          const bool isTransparent = (exStyle & WS_EX_TRANSPARENT) != 0;
+          if (isTransparent != shouldBeTransparent) {
+            if (shouldBeTransparent)
+              exStyle |= WS_EX_TRANSPARENT;
+            else
+              exStyle &= ~static_cast<LONG_PTR>(WS_EX_TRANSPARENT);
+            SetWindowLongPtrW(hWnd, GWL_EXSTYLE, exStyle);
+          }
+        }
+      } else if (wParam == WidgetAnimationHelper::kTimerId) {
+        WidgetAnimationHelper::StepAnimations(*widget);
+      } else if (wParam == TIMER_SCROLLBAR_BUTTON) {
+        if (widget->m_ScrollbarDragContainer &&
+            widget->m_ScrollbarActivePart != ScrollbarHitPart::None) {
+          int step = widget->m_ScrollbarDragContainer->GetScrollStep();
+          if (widget->m_ScrollbarActivePart ==
+              ScrollbarHitPart::VerticalTopButton) {
+            widget->m_ScrollbarDragContainer->SetScrollY(
+                widget->m_ScrollbarDragContainer->GetScrollY() - step);
+            widget->Redraw();
+          } else if (widget->m_ScrollbarActivePart ==
+                     ScrollbarHitPart::VerticalBottomButton) {
+            widget->m_ScrollbarDragContainer->SetScrollY(
+                widget->m_ScrollbarDragContainer->GetScrollY() + step);
+            widget->Redraw();
+          } else if (widget->m_ScrollbarActivePart ==
+                     ScrollbarHitPart::HorizontalLeftButton) {
+            widget->m_ScrollbarDragContainer->SetScrollX(
+                widget->m_ScrollbarDragContainer->GetScrollX() - step);
+            widget->Redraw();
+          } else if (widget->m_ScrollbarActivePart ==
+                     ScrollbarHitPart::HorizontalRightButton) {
+            widget->m_ScrollbarDragContainer->SetScrollX(
+                widget->m_ScrollbarDragContainer->GetScrollX() + step);
+            widget->Redraw();
+          }
+          SetTimer(hWnd, TIMER_SCROLLBAR_BUTTON, 40, nullptr);
+        } else {
+          KillTimer(hWnd, TIMER_SCROLLBAR_BUTTON);
+        }
+      }
+    }
+    return 0;
+
+  case WM_WINDOWPOSCHANGING:
+    if (widget) {
+      LPWINDOWPOS wp = (LPWINDOWPOS)lParam;
+
+      if (widget->m_WindowZPosition == ZPOSITION_NORMAL &&
+          System::GetShowDesktop()) {
+        if (!(wp->flags & (SWP_NOOWNERZORDER | SWP_NOACTIVATE))) {
+          wp->hwndInsertAfter = System::GetBackmostTopWindow();
+        }
+      } else if (widget->m_WindowZPosition == ZPOSITION_ONBOTTOM ||
+                 widget->m_WindowZPosition == ZPOSITION_ONDESKTOP) {
+        wp->flags |= SWP_NOZORDER;
+      }
+
+      // Only apply move-snapping and move-keepOnScreen when moving (not
+      // resizing)
+      if (!(wp->flags & SWP_NOMOVE) && (wp->flags & SWP_NOSIZE)) {
+        // Snapping
+        const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+        if (widget->m_Options.snapEdges && !ctrlHeld) {
+          const auto &monitors = System::GetMultiMonitorInfo().monitors;
+          RECT windowRect = {wp->x, wp->y, wp->x + widget->m_Options.width,
+                             wp->y + widget->m_Options.height};
+          const RECT *workArea = nullptr;
+
+          // Find monitor with largest intersection
+          LONG maxArea = 0;
+          for (const auto &mon : monitors) {
+            if (!mon.active)
+              continue;
+            RECT intersect;
+            if (::IntersectRect(&intersect, &windowRect, &mon.screen)) {
+              LONG area = (intersect.right - intersect.left) *
+                          (intersect.bottom - intersect.top);
+              if (area > maxArea) {
+                maxArea = area;
+                workArea = &mon.work;
+              }
+            }
+          }
+
+          // Snap to other widgets
+          {
+            std::lock_guard<std::mutex> lock(s_WidgetMutex);
+            for (Widget *w : widgets) {
+              if (w == widget)
+                continue;
+              RECT otherRect = {w->m_Options.x, w->m_Options.y,
+                                w->m_Options.x + w->m_Options.width,
+                                w->m_Options.y + w->m_Options.height};
+
+              // Vertical overlap -> Snap horizontally
+              if (wp->y < otherRect.bottom + SNAP_DISTANCE &&
+                  wp->y + widget->m_Options.height >
+                      otherRect.top - SNAP_DISTANCE) {
+                if (abs(wp->x - otherRect.left) < SNAP_DISTANCE)
+                  wp->x = otherRect.left;
+                if (abs(wp->x - otherRect.right) < SNAP_DISTANCE)
+                  wp->x = otherRect.right;
+                if (abs(wp->x + widget->m_Options.width - otherRect.left) <
+                    SNAP_DISTANCE)
+                  wp->x = otherRect.left - widget->m_Options.width;
+                if (abs(wp->x + widget->m_Options.width - otherRect.right) <
+                    SNAP_DISTANCE)
+                  wp->x = otherRect.right - widget->m_Options.width;
+              }
+
+              // Horizontal overlap -> Snap vertically
+              if (wp->x < otherRect.right + SNAP_DISTANCE &&
+                  wp->x + widget->m_Options.width >
+                      otherRect.left - SNAP_DISTANCE) {
+                if (abs(wp->y - otherRect.top) < SNAP_DISTANCE)
+                  wp->y = otherRect.top;
+                if (abs(wp->y - otherRect.bottom) < SNAP_DISTANCE)
+                  wp->y = otherRect.bottom;
+                if (abs(wp->y + widget->m_Options.height - otherRect.top) <
+                    SNAP_DISTANCE)
+                  wp->y = otherRect.top - widget->m_Options.height;
+                if (abs(wp->y + widget->m_Options.height - otherRect.bottom) <
+                    SNAP_DISTANCE)
+                  wp->y = otherRect.bottom - widget->m_Options.height;
+              }
+            }
+          }
+
+          // Snap to screen edges
+          if (workArea) {
+            if (abs(wp->x - workArea->left) < SNAP_DISTANCE)
+              wp->x = workArea->left;
+            if (abs(wp->y - workArea->top) < SNAP_DISTANCE)
+              wp->y = workArea->top;
+            if (abs(wp->x + widget->m_Options.width - workArea->right) <
+                SNAP_DISTANCE)
+              wp->x = workArea->right - widget->m_Options.width;
+            if (abs(wp->y + widget->m_Options.height - workArea->bottom) <
+                SNAP_DISTANCE)
+              wp->y = workArea->bottom - widget->m_Options.height;
+          }
+        }
+
+        if (widget->m_Options.keepOnScreen) {
+          const auto &monitors = System::GetMultiMonitorInfo().monitors;
+          const RECT *targetMonitor = nullptr;
+
+          // Try 5 different points to find which monitor contains the window
+          // This is more robust than just checking the center point
+          POINT testPoints[5] = {
+              {wp->x + widget->m_Options.width / 2,
+               wp->y + widget->m_Options.height / 2}, // Center
+              {wp->x, wp->y},                         // Top-left
+              {wp->x + widget->m_Options.width,
+               wp->y + widget->m_Options.height},        // Bottom-right
+              {wp->x, wp->y + widget->m_Options.height}, // Bottom-left
+              {wp->x + widget->m_Options.width, wp->y}   // Top-right
+          };
+
+          for (int i = 0; i < 5 && !targetMonitor; ++i) {
+            for (const auto &mon : monitors) {
+              if (!mon.active)
+                continue;
+
+              // Check if point is within monitor's screen area
+              if (testPoints[i].x >= mon.screen.left &&
+                  testPoints[i].x < mon.screen.right &&
+                  testPoints[i].y >= mon.screen.top &&
+                  testPoints[i].y < mon.screen.bottom) {
+                targetMonitor = &mon.screen;
+                break;
+              }
+            }
+          }
+
+          // If no monitor found, use primary monitor
+          if (!targetMonitor) {
+            const int primaryIndex = System::GetMultiMonitorInfo().primary - 1;
+            if (primaryIndex >= 0 && primaryIndex < (int)monitors.size()) {
+              targetMonitor = &monitors[primaryIndex].screen;
+            }
+          }
+
+          // Constrain window position to monitor bounds
+          if (targetMonitor) {
+            wp->x = (std::min)(wp->x, (int)targetMonitor->right -
+                                          widget->m_Options.width);
+            wp->x = (std::max)(wp->x, (int)targetMonitor->left);
+            wp->y = (std::min)(wp->y, (int)targetMonitor->bottom -
+                                          widget->m_Options.height);
+            wp->y = (std::max)(wp->y, (int)targetMonitor->top);
+          }
+        }
+      }
+    }
+    return 0;
+
+  case WM_GETMINMAXINFO:
+    if (lParam) {
+      LPMINMAXINFO lpMMI = (LPMINMAXINFO)lParam;
+      lpMMI->ptMinTrackSize.x = 10;
+      lpMMI->ptMinTrackSize.y = 10;
+    }
+    return 0;
+
+  case WM_WINDOWPOSCHANGED:
+    if (widget) {
+      LPWINDOWPOS wp = (LPWINDOWPOS)lParam;
+      bool moved = false;
+      bool sized = false;
+      if (!(wp->flags & SWP_NOMOVE)) {
+        if (widget->m_Options.x != wp->x || widget->m_Options.y != wp->y) {
+          widget->m_Options.x = wp->x;
+          widget->m_Options.y = wp->y;
+          moved = true;
+        }
+      }
+      if (!(wp->flags & SWP_NOSIZE)) {
+        if (widget->m_Options.width != wp->cx ||
+            widget->m_Options.height != wp->cy) {
+          widget->m_Options.width = wp->cx;
+          widget->m_Options.height = wp->cy;
+          widget->m_Options.m_WDefined = true;
+          widget->m_Options.m_HDefined = true;
+          sized = true;
+        }
+      }
+      if (moved) {
+        JSEngine::TriggerWidgetEvent(widget, "move");
+      }
+      if (sized) {
+        widget->Redraw();
+        JSEngine::TriggerWidgetEvent(widget, "resize");
+      }
+      // If Z-order changed and a tooltip is active, re-assert tooltip above
+      // this widget
+      if (!(wp->flags & SWP_NOZORDER) && widget->m_Tooltip.IsActive()) {
+        HWND activeTooltip = widget->m_Tooltip.GetActiveHWnd();
+        if (activeTooltip) {
+          SetWindowPos(activeTooltip, HWND_TOPMOST, 0, 0, 0, 0,
+                       SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE |
+                           SWP_SHOWWINDOW);
+        }
+      }
+    }
+    return 0;
+  case WM_SIZE:
+    if (widget) {
+      if (wParam == SIZE_MINIMIZED) {
+        if (!widget->m_IsMinimized) {
+          widget->m_IsMinimized = true;
+          JSEngine::TriggerWidgetEvent(widget, "minimize");
+        }
+      } else if (wParam == SIZE_MAXIMIZED) {
+        if (!widget->m_IsMaximized) {
+          widget->m_IsMaximized = true;
+          JSEngine::TriggerWidgetEvent(widget, "maximize");
+        }
+      } else {
+        if (widget->m_IsMinimized) {
+          widget->m_IsMinimized = false;
+          JSEngine::TriggerWidgetEvent(widget, "unMinimize");
+        }
+      }
+    }
+    return 0;
+  case WM_EXITSIZEMOVE:
+    if (widget) {
+      RECT rc;
+      GetWindowRect(hWnd, &rc);
+      widget->m_Options.x = rc.left;
+      widget->m_Options.y = rc.top;
+      widget->m_Options.width = rc.right - rc.left;
+      widget->m_Options.height = rc.bottom - rc.top;
+      widget->m_Options.m_WDefined = true;
+      widget->m_Options.m_HDefined = true;
+
+      Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
+    }
+    return 0;
+  case WM_CLOSE:
+    if (widget) {
+      // Native close (taskbar/titlebar/system menu) must follow the same
+      // lifecycle as widget.close(): fire "close" while the widget is
+      // still valid, then re-check because the callback may destroy it.
+      JSEngine::TriggerWidgetEvent(widget, "close");
+      if (!Widget::IsValid(widget))
+        return 0;
+
+      {
+        std::lock_guard<std::mutex> lock(s_WidgetMutex);
+        auto it = std::find(widgets.begin(), widgets.end(), widget);
+        if (it != widgets.end())
+          widgets.erase(it);
+      }
+      // Lock released before delete: the destructor calls DestroyWindow
+      // which dispatches WM_DESTROY synchronously; holding the lock there
+      // would deadlock.
+      SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
+      delete widget;
+      return 0;
+    }
+    break;
+
+  case WM_KEYDOWN:
+    if (widget && widget->m_TextSelectionElement) {
+      TextElement *textElem = widget->m_TextSelectionElement;
+
+      // Handle Ctrl+C (Copy)
+      if (wParam == 'C' && (GetAsyncKeyState(VK_CONTROL) & 0x8000)) {
+        if (textElem->HasTextSelection()) {
+          std::wstring selectedText = textElem->GetSelectedText();
+          if (!selectedText.empty()) {
+            novadesk::shared::system::ClipboardSetText(selectedText);
+          }
+        }
+        return 0;
+      }
+      // Handle Ctrl+A (Select All)
+      else if (wParam == 'A' && (GetAsyncKeyState(VK_CONTROL) & 0x8000)) {
+        textElem->SelectAll();
+        widget->Redraw();
+        return 0;
+      }
+      // Handle Escape (Clear Selection)
+      else if (wParam == VK_ESCAPE) {
+        textElem->ClearTextSelection();
+        widget->m_TextSelectionElement = nullptr;
+        widget->Redraw();
+        return 0;
+      }
+    }
+    // Route keyboard to focused input box (editable text field).
+    if (widget && widget->m_FocusedInputBox) {
+      InputBoxElement *input = widget->m_FocusedInputBox;
+      bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+      bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+
+      if (ctrl && wParam == 'A') {
+        input->SelectAll();
+        widget->Redraw();
+        return 0;
+      }
+      if (ctrl && wParam == 'C') {
+        std::wstring sel = input->GetSelectedText();
+        if (!sel.empty())
+          novadesk::shared::system::ClipboardSetText(sel);
+        return 0;
+      }
+      if (ctrl && wParam == 'X') {
+        std::wstring sel = input->GetSelectedText();
+        if (!sel.empty()) {
+          novadesk::shared::system::ClipboardSetText(sel);
+          input->DeleteSelection();
+          if (input->m_OnTextChangeCallbackId != -1)
+            JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId,
+                                                widget, input->GetText());
+          widget->Redraw();
+        }
+        return 0;
+      }
+      if (ctrl && wParam == 'V') {
+        std::wstring clip;
+        if (novadesk::shared::system::ClipboardGetText(clip)) {
+          input->ReplaceSelection(clip);
+          if (input->m_OnTextChangeCallbackId != -1)
+            JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId,
+                                                widget, input->GetText());
+          widget->Redraw();
+        }
+        return 0;
+      }
+      if (wParam == VK_RETURN) {
+        if (input->IsMultiline()) {
+          input->ReplaceSelection(L"\n");
+          if (input->m_OnTextChangeCallbackId != -1)
+            JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId,
+                                                widget, input->GetText());
+          widget->Redraw();
+        } else {
+          if (input->m_OnEnterCallbackId != -1)
+            JSEngine::CallEventCallbackWithText(input->m_OnEnterCallbackId,
+                                                widget, input->GetText());
+        }
+        return 0;
+      }
+      if (wParam == VK_ESCAPE) {
+        // Clear selection or blur on Escape
+        if (input->HasSelection())
+          input->ClearSelection();
+        else {
+          input->SetFocus(false);
+          widget->m_FocusedInputBox = nullptr;
+        }
+        widget->Redraw();
+        return 0;
+      }
+
+      bool changed = input->HandleKeyDown(wParam, shift, ctrl);
+      if (changed && input->m_OnTextChangeCallbackId != -1)
+        JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId,
+                                            widget, input->GetText());
+      widget->Redraw();
+      return 0;
+    }
+    return DefWindowProc(hWnd, message, wParam, lParam);
+
+  case WM_CHAR:
+    if (widget && widget->m_FocusedInputBox) {
+      wchar_t ch = (wchar_t)wParam;
+      InputBoxElement *input = widget->m_FocusedInputBox;
+      auto result = input->HandleChar(ch);
+      if (result == InputBoxElement::HandleCharResult::Changed) {
+        if (input->m_OnTextChangeCallbackId != -1)
+          JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId,
+                                              widget, input->GetText());
+      } else if (result == InputBoxElement::HandleCharResult::Rejected) {
+        if (input->m_OnInvalidInputCallbackId != -1)
+          JSEngine::CallEventCallbackWithText(input->m_OnInvalidInputCallbackId,
+                                              widget, std::wstring(1, ch));
+      }
+      widget->Redraw();
+      return 0;
+    }
+    return DefWindowProc(hWnd, message, wParam, lParam);
+
+  case WM_DESTROY:
+    // WM_DESTROY is dispatched synchronously by DestroyWindow(), which is
+    // called from the Widget destructor. The widget is already being
+    // destroyed — we must NOT delete it again here (double-free) and we
+    // must NOT try to lock s_WidgetMutex (deadlock: the caller may already
+    // hold it).
+    //
+    // Widget removal from the global vector is handled by WM_CLOSE or the
+    // JS close() path, both of which erase before calling delete.
+    SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
+    return 0;
+  default:
+    return DefWindowProc(hWnd, message, wParam, lParam);
+  }
+  return 0;
 }
 
 // ============================================================================
@@ -1991,1818 +1793,1742 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 ** Add an image content item to the widget.
 ** The image will be loaded and cached for rendering.
 */
-void Widget::AddImage(const PropertyParser::ImageOptions &options)
-{
-    if (options.id.empty())
-    {
-        Logging::Log(LogLevel::Error, L"AddImage failed: Element ID cannot be empty.");
-        return;
-    }
+void Widget::AddImage(const PropertyParser::ImageOptions &options) {
+  if (options.id.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"AddImage failed: Element ID cannot be empty.");
+    return;
+  }
 
-    if (FindElementById(options.id))
-    {
-        RemoveElements(options.id);
-    }
+  if (FindElementById(options.id)) {
+    RemoveElements(options.id);
+  }
 
-    ImageElement *element = new ImageElement(options.id, options.x, options.y, options.width, options.height, options.path);
+  ImageElement *element =
+      new ImageElement(options.id, options.x, options.y, options.width,
+                       options.height, options.path);
 
-    PropertyParser::ApplyImageOptions(element, options); // Changed from ApplyElementOptions and moved
+  PropertyParser::ApplyImageOptions(
+      element, options); // Changed from ApplyElementOptions and moved
 
-    element->SetPreserveAspectRatio(options.preserveAspectRatio);
-    element->SetImageAlpha(options.imageAlpha);
-    element->SetGrayscale(options.grayscale);
-    element->SetTile(options.tile);
+  element->SetPreserveAspectRatio(options.preserveAspectRatio);
+  element->SetImageAlpha(options.imageAlpha);
+  element->SetGrayscale(options.grayscale);
+  element->SetTile(options.tile);
 
-    if (options.hasTransformMatrix)
-    {
-        element->SetTransformMatrix(options.transformMatrix.data());
-    }
+  if (options.hasTransformMatrix) {
+    element->SetTransformMatrix(options.transformMatrix.data());
+  }
 
-    if (options.hasColorMatrix)
-    {
-        element->SetColorMatrix(options.colorMatrix.data());
-    }
+  if (options.hasColorMatrix) {
+    element->SetColorMatrix(options.colorMatrix.data());
+  }
 
-    if (options.hasImageTint)
-    {
-        element->SetImageTint(options.imageTint, options.imageTintAlpha);
-    }
+  if (options.hasImageTint) {
+    element->SetImageTint(options.imageTint, options.imageTintAlpha);
+  }
 
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
 
-    Redraw();
+  Redraw();
 }
 
 /*
 ** Add a button content item to the widget.
 */
-void Widget::AddButton(const PropertyParser::ButtonOptions &options)
-{
-    if (options.id.empty())
-    {
-        Logging::Log(LogLevel::Error, L"AddButton failed: Element ID cannot be empty.");
-        return;
-    }
+void Widget::AddButton(const PropertyParser::ButtonOptions &options) {
+  if (options.id.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"AddButton failed: Element ID cannot be empty.");
+    return;
+  }
 
-    if (FindElementById(options.id))
-    {
-        RemoveElements(options.id);
-    }
+  if (FindElementById(options.id)) {
+    RemoveElements(options.id);
+  }
 
-    ButtonElement *element = new ButtonElement(options.id, options.x, options.y, options.buttonImageName);
+  ButtonElement *element = new ButtonElement(options.id, options.x, options.y,
+                                             options.buttonImageName);
 
-    PropertyParser::ApplyButtonOptions(element, options);
+  PropertyParser::ApplyButtonOptions(element, options);
 
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    m_Buttons.push_back(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  m_Buttons.push_back(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
 
-    Redraw();
+  Redraw();
 }
 
 /*
 ** Add a bitmap content item to the widget.
 */
-void Widget::AddBitmap(const PropertyParser::BitmapOptions &options)
-{
-    if (options.id.empty())
-    {
-        Logging::Log(LogLevel::Error, L"AddBitmap failed: Element ID cannot be empty.");
-        return;
-    }
+void Widget::AddBitmap(const PropertyParser::BitmapOptions &options) {
+  if (options.id.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"AddBitmap failed: Element ID cannot be empty.");
+    return;
+  }
 
-    if (FindElementById(options.id))
-    {
-        RemoveElements(options.id);
-    }
+  if (FindElementById(options.id)) {
+    RemoveElements(options.id);
+  }
 
-    BitmapElement *element = new BitmapElement(options.id, options.x, options.y, options.bitmapImageName);
+  BitmapElement *element = new BitmapElement(options.id, options.x, options.y,
+                                             options.bitmapImageName);
 
-    PropertyParser::ApplyBitmapOptions(element, options);
+  PropertyParser::ApplyBitmapOptions(element, options);
 
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
 
-    Redraw();
+  Redraw();
 }
 
 /*
 ** Add a rotator content item to the widget.
 ** The rotator rotates an image based on the measure value.
 */
-void Widget::AddRotator(const PropertyParser::RotatorOptions &options)
-{
-    if (options.id.empty())
-    {
-        Logging::Log(LogLevel::Error, L"AddRotator failed: Element ID cannot be empty.");
-        return;
-    }
+void Widget::AddRotator(const PropertyParser::RotatorOptions &options) {
+  if (options.id.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"AddRotator failed: Element ID cannot be empty.");
+    return;
+  }
 
-    if (FindElementById(options.id))
-    {
-        RemoveElements(options.id);
-    }
+  if (FindElementById(options.id)) {
+    RemoveElements(options.id);
+  }
 
-    RotatorElement *element = new RotatorElement(options.id, options.x, options.y, options.rotatorImageName);
+  RotatorElement *element = new RotatorElement(options.id, options.x, options.y,
+                                               options.rotatorImageName);
 
-    PropertyParser::ApplyRotatorOptions(element, options);
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
+  PropertyParser::ApplyRotatorOptions(element, options);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
 
-    Redraw();
+  Redraw();
 }
 
 /*
 ** Add a text content item to the widget.
 ** Text will be rendered with the specified font and styling.
 */
-void Widget::AddText(const PropertyParser::TextOptions &options)
-{
-    if (options.id.empty())
-    {
-        Logging::Log(LogLevel::Error, L"AddText failed: Element ID cannot be empty.");
-        return;
-    }
+void Widget::AddText(const PropertyParser::TextOptions &options) {
+  if (options.id.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"AddText failed: Element ID cannot be empty.");
+    return;
+  }
 
-    if (FindElementById(options.id))
-    {
-        RemoveElements(options.id);
-    }
+  if (FindElementById(options.id)) {
+    RemoveElements(options.id);
+  }
 
-    TextElement *element = new TextElement(options.id, options.x, options.y, options.width, options.height,
-                                           options.text, options.fontFace, options.fontSize, options.fontColor, options.alpha,
-                                           options.fontWeight, options.italic, options.textAlign, options.clip, options.fontPath);
+  TextElement *element = new TextElement(
+      options.id, options.x, options.y, options.width, options.height,
+      options.text, options.fontFace, options.fontSize, options.fontColor,
+      options.alpha, options.fontWeight, options.italic, options.textAlign,
+      options.clip, options.fontPath);
 
-    // Set the owner HWND before applying options so that any async font download
-    // request captures the correct widget HWND (element->GetOwnerHWND() would
-    // otherwise return nullptr before the first Redraw / UpdateLayeredWindowContent).
-    if (m_hWnd)
-        element->SetOwnerHWND(m_hWnd);
+  // Set the owner HWND before applying options so that any async font download
+  // request captures the correct widget HWND (element->GetOwnerHWND() would
+  // otherwise return nullptr before the first Redraw /
+  // UpdateLayeredWindowContent).
+  if (m_hWnd)
+    element->SetOwnerHWND(m_hWnd);
 
-    // Logging::Log(LogLevel::Debug, L"Widget::AddText: Created TextElement id='%s', text='%s', x=%d, y=%d", element->GetId().c_str(), element->GetText().c_str(), element->GetX(), element->GetY());
+  // Logging::Log(LogLevel::Debug, L"Widget::AddText: Created TextElement
+  // id='%s', text='%s', x=%d, y=%d", element->GetId().c_str(),
+  // element->GetText().c_str(), element->GetX(), element->GetY());
 
-    PropertyParser::ApplyTextOptions(element, options); // Changed from ApplyElementOptions
+  PropertyParser::ApplyTextOptions(element,
+                                   options); // Changed from ApplyElementOptions
 
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
 
-    Redraw();
+  Redraw();
 }
 
 /*
 ** Add a bar content item to the widget.
 */
-void Widget::AddBar(const PropertyParser::BarOptions &options)
-{
-    if (options.id.empty())
-    {
-        Logging::Log(LogLevel::Error, L"AddBar failed: Element ID cannot be empty.");
-        return;
-    }
+void Widget::AddBar(const PropertyParser::BarOptions &options) {
+  if (options.id.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"AddBar failed: Element ID cannot be empty.");
+    return;
+  }
 
-    if (FindElementById(options.id))
-    {
-        RemoveElements(options.id);
-    }
+  if (FindElementById(options.id)) {
+    RemoveElements(options.id);
+  }
 
-    BarElement *element = new BarElement(options.id, options.x, options.y, options.width, options.height, options.value, options.orientation);
+  BarElement *element =
+      new BarElement(options.id, options.x, options.y, options.width,
+                     options.height, options.value, options.orientation);
 
-    PropertyParser::ApplyBarOptions(element, options); // Changed from ApplyElementOptions
+  PropertyParser::ApplyBarOptions(element,
+                                  options); // Changed from ApplyElementOptions
 
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
 
-    Redraw();
+  Redraw();
 }
 
 /*
 ** Add a line graph content item to the widget.
 */
-void Widget::AddLine(const PropertyParser::LineOptions &options)
-{
-    if (options.id.empty())
-    {
-        Logging::Log(LogLevel::Error, L"AddLine failed: Element ID cannot be empty.");
-        return;
-    }
+void Widget::AddLine(const PropertyParser::LineOptions &options) {
+  if (options.id.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"AddLine failed: Element ID cannot be empty.");
+    return;
+  }
 
-    if (FindElementById(options.id))
-    {
-        RemoveElements(options.id);
-    }
+  if (FindElementById(options.id)) {
+    RemoveElements(options.id);
+  }
 
-    LineElement *element = new LineElement(options.id, options.x, options.y, options.width, options.height);
-    PropertyParser::ApplyLineOptions(element, options);
+  LineElement *element = new LineElement(options.id, options.x, options.y,
+                                         options.width, options.height);
+  PropertyParser::ApplyLineOptions(element, options);
 
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
 
-    Redraw();
+  Redraw();
 }
 
 /*
 ** Add a histogram content item to the widget.
 */
-void Widget::AddHistogram(const PropertyParser::HistogramOptions &options)
-{
-    if (options.id.empty())
-    {
-        Logging::Log(LogLevel::Error, L"AddHistogram failed: Element ID cannot be empty.");
-        return;
-    }
+void Widget::AddHistogram(const PropertyParser::HistogramOptions &options) {
+  if (options.id.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"AddHistogram failed: Element ID cannot be empty.");
+    return;
+  }
 
-    if (FindElementById(options.id))
-    {
-        RemoveElements(options.id);
-    }
+  if (FindElementById(options.id)) {
+    RemoveElements(options.id);
+  }
 
-    HistogramElement *element = new HistogramElement(options.id, options.x, options.y, options.width, options.height);
-    PropertyParser::ApplyHistogramOptions(element, options);
+  HistogramElement *element = new HistogramElement(
+      options.id, options.x, options.y, options.width, options.height);
+  PropertyParser::ApplyHistogramOptions(element, options);
 
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
 
-    Redraw();
+  Redraw();
 }
 
 /*
 ** Add a round line content item to the widget.
 */
-void Widget::AddRoundLine(const PropertyParser::RoundLineOptions &options)
-{
-    if (options.id.empty())
-    {
-        Logging::Log(LogLevel::Error, L"AddRoundLine failed: Element ID cannot be empty.");
-        return;
-    }
+void Widget::AddRoundLine(const PropertyParser::RoundLineOptions &options) {
+  if (options.id.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"AddRoundLine failed: Element ID cannot be empty.");
+    return;
+  }
 
-    if (FindElementById(options.id))
-    {
-        RemoveElements(options.id);
-    }
+  if (FindElementById(options.id)) {
+    RemoveElements(options.id);
+  }
 
-    RoundLineElement *element = new RoundLineElement(options.id, options.x, options.y, options.width, options.height, options.value);
+  RoundLineElement *element =
+      new RoundLineElement(options.id, options.x, options.y, options.width,
+                           options.height, options.value);
 
-    PropertyParser::ApplyRoundLineOptions(element, options);
+  PropertyParser::ApplyRoundLineOptions(element, options);
 
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
 
-    Redraw();
+  Redraw();
 }
 
 /*
 ** Add shapes item to the widget.
 */
-void Widget::AddShape(const PropertyParser::ShapeOptions &options)
-{
-    if (options.id.empty())
-    {
-        Logging::Log(LogLevel::Error, L"AddShape failed: Element ID cannot be empty.");
-        return;
-    }
+void Widget::AddShape(const PropertyParser::ShapeOptions &options) {
+  if (options.id.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"AddShape failed: Element ID cannot be empty.");
+    return;
+  }
 
-    if (FindElementById(options.id))
-    {
-        RemoveElements(options.id);
-    }
+  if (FindElementById(options.id)) {
+    RemoveElements(options.id);
+  }
 
-    ShapeElement *element = nullptr;
+  ShapeElement *element = nullptr;
 
-    if (options.isCombine)
-    {
-        element = new PathShape(options.id, options.x, options.y, options.width, options.height);
-    }
-    else if (options.shapeType == L"ellipse")
-    {
-        element = new EllipseShape(options.id, options.x, options.y, options.width, options.height);
-    }
-    else if (options.shapeType == L"line")
-    {
-        element = new LineShape(options.id, options.x, options.y, options.width, options.height);
-    }
-    else if (options.shapeType == L"arc")
-    {
-        element = new ArcShape(options.id, options.x, options.y, options.width, options.height);
-    }
-    else if (options.shapeType == L"path")
-    {
-        element = new PathShape(options.id, options.x, options.y, options.width, options.height);
-    }
-    else if (options.shapeType == L"curve")
-    {
-        element = new CurveShape(options.id, options.x, options.y, options.width, options.height);
-    }
-    else
-    {
-        element = new RectangleShape(options.id, options.x, options.y, options.width, options.height);
-    }
+  if (options.isCombine) {
+    element = new PathShape(options.id, options.x, options.y, options.width,
+                            options.height);
+  } else if (options.shapeType == L"ellipse") {
+    element = new EllipseShape(options.id, options.x, options.y, options.width,
+                               options.height);
+  } else if (options.shapeType == L"line") {
+    element = new LineShape(options.id, options.x, options.y, options.width,
+                            options.height);
+  } else if (options.shapeType == L"arc") {
+    element = new ArcShape(options.id, options.x, options.y, options.width,
+                           options.height);
+  } else if (options.shapeType == L"path") {
+    element = new PathShape(options.id, options.x, options.y, options.width,
+                            options.height);
+  } else if (options.shapeType == L"curve") {
+    element = new CurveShape(options.id, options.x, options.y, options.width,
+                             options.height);
+  } else {
+    element = new RectangleShape(options.id, options.x, options.y,
+                                 options.width, options.height);
+  }
 
-    PropertyParser::ApplyShapeOptions(element, options);
+  PropertyParser::ApplyShapeOptions(element, options);
 
-    if (options.isCombine)
-    {
-        PathShape *path = static_cast<PathShape *>(element);
-        BuildCombinedShapeGeometry(path, options);
-    }
+  if (options.isCombine) {
+    PathShape *path = static_cast<PathShape *>(element);
+    BuildCombinedShapeGeometry(path, options);
+  }
 
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
 
-    Redraw();
+  Redraw();
 }
 
 /*
 ** Add an area graph content item to the widget.
 */
-void Widget::AddAreaGraph(const PropertyParser::AreaGraphOptions &options)
-{
-    if (options.id.empty())
-    {
-        Logging::Log(LogLevel::Error, L"AddAreaGraph failed: Element ID cannot be empty.");
-        return;
-    }
+void Widget::AddAreaGraph(const PropertyParser::AreaGraphOptions &options) {
+  if (options.id.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"AddAreaGraph failed: Element ID cannot be empty.");
+    return;
+  }
 
-    if (FindElementById(options.id))
-    {
-        RemoveElements(options.id);
-    }
+  if (FindElementById(options.id)) {
+    RemoveElements(options.id);
+  }
 
-    AreaGraphElement *element = new AreaGraphElement(options.id, options.x, options.y, options.width, options.height);
-    PropertyParser::ApplyAreaGraphOptions(element, options);
+  AreaGraphElement *element = new AreaGraphElement(
+      options.id, options.x, options.y, options.width, options.height);
+  PropertyParser::ApplyAreaGraphOptions(element, options);
 
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
 
-    Redraw();
+  Redraw();
 }
 
-void Widget::AddLayoutBox(const PropertyParser::ShapeOptions &options)
-{
-    if (options.id.empty())
-    {
-        Logging::Log(LogLevel::Error, L"AddLayoutBox failed: Element ID cannot be empty.");
-        return;
-    }
+void Widget::AddLayoutBox(const PropertyParser::ShapeOptions &options) {
+  if (options.id.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"AddLayoutBox failed: Element ID cannot be empty.");
+    return;
+  }
 
-    if (FindElementById(options.id))
-    {
-        RemoveElements(options.id);
-    }
+  if (FindElementById(options.id)) {
+    RemoveElements(options.id);
+  }
 
-    ElementLayoutBox *element = new ElementLayoutBox(options.id, options.x, options.y, options.width, options.height);
-    PropertyParser::ApplyShapeOptions(element, options);
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
-    Redraw();
+  ElementLayoutBox *element = new ElementLayoutBox(
+      options.id, options.x, options.y, options.width, options.height);
+  PropertyParser::ApplyShapeOptions(element, options);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
+  Redraw();
 }
 
-void Widget::AddInputBox(const PropertyParser::InputBoxOptions &options)
-{
-    if (options.id.empty())
-    {
-        Logging::Log(LogLevel::Error, L"AddInputBox failed: Element ID cannot be empty.");
-        return;
-    }
+void Widget::AddInputBox(const PropertyParser::InputBoxOptions &options) {
+  if (options.id.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"AddInputBox failed: Element ID cannot be empty.");
+    return;
+  }
 
-    if (FindElementById(options.id))
-    {
-        RemoveElements(options.id);
-    }
+  if (FindElementById(options.id)) {
+    RemoveElements(options.id);
+  }
 
-    InputBoxElement *element = new InputBoxElement(options.id, options.x, options.y, options.width, options.height);
+  InputBoxElement *element = new InputBoxElement(
+      options.id, options.x, options.y, options.width, options.height);
 
-    // Set the owner HWND before applying options so that any async font download
-    // request captures the correct widget HWND.
-    if (m_hWnd)
-        element->SetOwnerHWND(m_hWnd);
+  // Set the owner HWND before applying options so that any async font download
+  // request captures the correct widget HWND.
+  if (m_hWnd)
+    element->SetOwnerHWND(m_hWnd);
 
-    PropertyParser::ApplyInputBoxOptions(element, options);
+  PropertyParser::ApplyInputBoxOptions(element, options);
 
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
 
-    Redraw();
+  Redraw();
 }
 
-void Widget::AddColorPicker(const PropertyParser::ColorPickerOptions &options)
-{
-    if (options.id.empty())
-        return;
-    if (FindElementById(options.id))
-        RemoveElements(options.id);
-    auto *element = new ColorPickerElement(options.id, options.x, options.y, options.width > 0 ? options.width : 32, options.height > 0 ? options.height : 32);
-    PropertyParser::ApplyColorPickerOptions(element, options);
-    m_Elements.push_back(std::unique_ptr<Element>(element));
-    m_TrackedElements.insert(element);
-    if (!element->GetId().empty())
-        m_ElementIndex[element->GetId()] = element;
-    UpdateContainerForElement(element, options.containerId);
-    Redraw();
+void Widget::AddColorPicker(const PropertyParser::ColorPickerOptions &options) {
+  if (options.id.empty())
+    return;
+  if (FindElementById(options.id))
+    RemoveElements(options.id);
+  auto *element = new ColorPickerElement(
+      options.id, options.x, options.y, options.width > 0 ? options.width : 32,
+      options.height > 0 ? options.height : 32);
+  PropertyParser::ApplyColorPickerOptions(element, options);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
+  Redraw();
 }
 
-void Widget::OpenColorPicker(ColorPickerElement *colorPicker)
-{
-    if (!colorPicker)
-        return;
-    if (m_ColorPickerPopup)
-        m_ColorPickerPopup->Close();
-    m_ColorPickerPopup = std::make_unique<ColorPickerPopup>(this, colorPicker);
-    m_ColorPickerPopup->Show();
+void Widget::OpenColorPicker(ColorPickerElement *colorPicker) {
+  if (!colorPicker)
+    return;
+  if (m_ColorPickerPopup)
+    m_ColorPickerPopup->Close();
+  m_ColorPickerPopup = std::make_unique<ColorPickerPopup>(this, colorPicker);
+  m_ColorPickerPopup->Show();
 }
 
-void Widget::CloseColorPicker()
-{
-    if (m_ColorPickerPopup)
-    {
-        m_ColorPickerPopup->Close();
-        m_ColorPickerPopup.reset();
-    }
+void Widget::CloseColorPicker() {
+  if (m_ColorPickerPopup) {
+    m_ColorPickerPopup->Close();
+    m_ColorPickerPopup.reset();
+  }
 }
 
-bool Widget::IsColorPickerOpen(const ColorPickerElement *colorPicker) const
-{
-    if (!m_ColorPickerPopup || !m_ColorPickerPopup->IsOpen())
-        return false;
-    if (colorPicker)
-        return m_ColorPickerPopup->GetPickerElement() == colorPicker;
-    return true;
+bool Widget::IsColorPickerOpen(const ColorPickerElement *colorPicker) const {
+  if (!m_ColorPickerPopup || !m_ColorPickerPopup->IsOpen())
+    return false;
+  if (colorPicker)
+    return m_ColorPickerPopup->GetPickerElement() == colorPicker;
+  return true;
 }
 
-bool Widget::IsColorPickerEyedropperActive() const
-{
-    return m_ColorPickerPopup && m_ColorPickerPopup->IsEyedropperActive();
+bool Widget::IsColorPickerEyedropperActive() const {
+  return m_ColorPickerPopup && m_ColorPickerPopup->IsEyedropperActive();
 }
 
-void Widget::OpenColorPickerEyedropper(ColorPickerElement *colorPicker)
-{
-    if (colorPicker && (!m_ColorPickerPopup || m_ColorPickerPopup->GetPickerElement() != colorPicker))
-    {
-        OpenColorPicker(colorPicker);
-    }
-    if (m_ColorPickerPopup)
-    {
-        m_ColorPickerPopup->StartEyedropper();
-    }
+void Widget::OpenColorPickerEyedropper(ColorPickerElement *colorPicker) {
+  if (colorPicker && (!m_ColorPickerPopup ||
+                      m_ColorPickerPopup->GetPickerElement() != colorPicker)) {
+    OpenColorPicker(colorPicker);
+  }
+  if (m_ColorPickerPopup) {
+    m_ColorPickerPopup->StartEyedropper();
+  }
 }
 
-void Widget::FocusInputBox(InputBoxElement *inputElem)
-{
-    if (!inputElem)
-        return;
-    if (m_FocusedInputBox && m_FocusedInputBox != inputElem)
-    {
-        if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-            JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
-        m_FocusedInputBox->SetFocus(false);
-        if (m_hWnd)
-            KillTimer(m_hWnd, TIMER_CARET);
-    }
-    if (!inputElem->IsFocused())
-    {
-        inputElem->SetFocus(true);
-        if (m_hWnd)
-            SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
-        if (inputElem->m_OnFocusCallbackId != -1)
-            JSEngine::CallEventCallback(inputElem->m_OnFocusCallbackId, this, nullptr);
-    }
-    m_FocusedInputBox = inputElem;
-    Redraw();
-}
-
-void Widget::BlurInputBox(InputBoxElement *inputElem)
-{
-    if (!m_FocusedInputBox)
-        return;
-    if (inputElem && m_FocusedInputBox != inputElem)
-        return;
+void Widget::FocusInputBox(InputBoxElement *inputElem) {
+  if (!inputElem)
+    return;
+  if (m_FocusedInputBox && m_FocusedInputBox != inputElem) {
     if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-        JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
+      JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this,
+                                  nullptr);
     m_FocusedInputBox->SetFocus(false);
     if (m_hWnd)
-        KillTimer(m_hWnd, TIMER_CARET);
-    m_FocusedInputBox = nullptr;
-    Redraw();
+      KillTimer(m_hWnd, TIMER_CARET);
+  }
+  if (!inputElem->IsFocused()) {
+    inputElem->SetFocus(true);
+    if (m_hWnd)
+      SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
+    if (inputElem->m_OnFocusCallbackId != -1)
+      JSEngine::CallEventCallback(inputElem->m_OnFocusCallbackId, this,
+                                  nullptr);
+  }
+  m_FocusedInputBox = inputElem;
+  Redraw();
 }
 
-bool Widget::BuildCombinedShapeGeometry(PathShape *target, const PropertyParser::ShapeOptions &options)
-{
-    if (!target)
-        return false;
-
-    target->ClearCombinedGeometry();
-
-    if (options.combineBaseId.empty())
-    {
-        Logging::Log(LogLevel::Error, L"Combine shape '%s' missing base id.", options.id.c_str());
-        return false;
-    }
-
-    Element *baseElement = FindElementById(options.combineBaseId);
-    ShapeElement *baseShape = dynamic_cast<ShapeElement *>(baseElement);
-    if (!baseShape)
-    {
-        Logging::Log(LogLevel::Error, L"Combine shape '%s' base '%s' is not a shape.", options.id.c_str(), options.combineBaseId.c_str());
-        return false;
-    }
-    if (baseShape == target)
-    {
-        Logging::Log(LogLevel::Error, L"Combine shape '%s' cannot use itself as base.", options.id.c_str());
-        return false;
-    }
-
-    ID2D1Factory1 *factory = Direct2D::GetFactory();
-    if (!factory)
-    {
-        Logging::Log(LogLevel::Error, L"Combine shape '%s' failed: Direct2D factory unavailable.", options.id.c_str());
-        return false;
-    }
-
-    Microsoft::WRL::ComPtr<ID2D1Geometry> baseGeometry;
-    if (!baseShape->CreateGeometry(factory, baseGeometry) || !baseGeometry)
-    {
-        Logging::Log(LogLevel::Error, L"Combine shape '%s' failed: base geometry could not be created.", options.id.c_str());
-        return false;
-    }
-
-    D2D1_MATRIX_3X2_F baseTransform = baseShape->GetRenderTransformMatrix();
-    Microsoft::WRL::ComPtr<ID2D1Geometry> combinedGeometry;
-
-    bool baseTransformIsIdentity =
-        baseTransform._11 == 1.0f && baseTransform._12 == 0.0f &&
-        baseTransform._21 == 0.0f && baseTransform._22 == 1.0f &&
-        baseTransform._31 == 0.0f && baseTransform._32 == 0.0f;
-
-    if (baseTransformIsIdentity)
-    {
-        combinedGeometry = baseGeometry;
-    }
-    else
-    {
-        Microsoft::WRL::ComPtr<ID2D1TransformedGeometry> transformed;
-        if (FAILED(factory->CreateTransformedGeometry(baseGeometry.Get(), &baseTransform, transformed.GetAddressOf())))
-        {
-            Logging::Log(LogLevel::Error, L"Combine shape '%s' failed: base transform could not be applied.", options.id.c_str());
-            return false;
-        }
-        combinedGeometry = transformed;
-    }
-
-    std::vector<PathShape::CombineOp> resolvedOps;
-    resolvedOps.reserve(options.combineOps.size());
-
-    for (const auto &op : options.combineOps)
-    {
-        PathShape::CombineOp resolved;
-        resolved.id = op.id;
-        resolved.mode = op.mode;
-        resolved.consume = op.hasConsume ? op.consume : (options.hasCombineConsumeAll ? options.combineConsumeAll : false);
-        resolvedOps.push_back(resolved);
-
-        Element *opElement = FindElementById(op.id);
-        ShapeElement *opShape = dynamic_cast<ShapeElement *>(opElement);
-        if (!opShape)
-        {
-            Logging::Log(LogLevel::Error, L"Combine shape '%s' cannot combine with '%s' (not a shape).", options.id.c_str(), op.id.c_str());
-            return false;
-        }
-        if (opShape == target)
-        {
-            Logging::Log(LogLevel::Error, L"Combine shape '%s' cannot combine with itself.", options.id.c_str());
-            return false;
-        }
-
-        Microsoft::WRL::ComPtr<ID2D1Geometry> opGeometry;
-        if (!opShape->CreateGeometry(factory, opGeometry) || !opGeometry)
-        {
-            Logging::Log(LogLevel::Error, L"Combine shape '%s' failed: geometry for '%s' could not be created.", options.id.c_str(), op.id.c_str());
-            return false;
-        }
-
-        D2D1_MATRIX_3X2_F opTransform = opShape->GetRenderTransformMatrix();
-
-        Microsoft::WRL::ComPtr<ID2D1PathGeometry> path;
-        if (FAILED(factory->CreatePathGeometry(path.GetAddressOf())))
-        {
-            Logging::Log(LogLevel::Error, L"Combine shape '%s' failed: could not create path geometry.", options.id.c_str());
-            return false;
-        }
-
-        Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
-        if (FAILED(path->Open(sink.GetAddressOf())))
-        {
-            Logging::Log(LogLevel::Error, L"Combine shape '%s' failed: could not open geometry sink.", options.id.c_str());
-            return false;
-        }
-
-        HRESULT hr = combinedGeometry->CombineWithGeometry(opGeometry.Get(), op.mode, opTransform, sink.Get());
-        sink->Close();
-        if (FAILED(hr))
-        {
-            Logging::Log(LogLevel::Error, L"Combine shape '%s' failed: combine operation with '%s' failed.", options.id.c_str(), op.id.c_str());
-            return false;
-        }
-
-        combinedGeometry = path;
-    }
-
-    D2D1_RECT_F bounds = D2D1::RectF();
-    HRESULT hr = combinedGeometry->GetBounds(nullptr, &bounds);
-    if (FAILED(hr))
-    {
-        Logging::Log(LogLevel::Error, L"Combine shape '%s' failed: could not compute bounds.", options.id.c_str());
-        return false;
-    }
-
-    bool consumeBase = options.hasCombineConsumeAll ? options.combineConsumeAll : false;
-    target->SetCombineData(options.combineBaseId, resolvedOps, consumeBase);
-    target->SetCombinedGeometry(combinedGeometry, bounds);
-
-    if (consumeBase)
-    {
-        baseShape->AddCombineConsumer();
-    }
-    for (const auto &resolved : resolvedOps)
-    {
-        if (!resolved.consume)
-            continue;
-        Element *opElement = FindElementById(resolved.id);
-        if (ShapeElement *opShape = dynamic_cast<ShapeElement *>(opElement))
-        {
-            opShape->AddCombineConsumer();
-        }
-    }
-
-    return true;
+void Widget::BlurInputBox(InputBoxElement *inputElem) {
+  if (!m_FocusedInputBox)
+    return;
+  if (inputElem && m_FocusedInputBox != inputElem)
+    return;
+  if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
+    JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this,
+                                nullptr);
+  m_FocusedInputBox->SetFocus(false);
+  if (m_hWnd)
+    KillTimer(m_hWnd, TIMER_CARET);
+  m_FocusedInputBox = nullptr;
+  Redraw();
 }
 
-void Widget::ReleaseCombinedConsumes(PathShape *target)
-{
-    if (!target || !target->IsCombineShape())
-        return;
-
-    std::wstring baseId;
-    std::vector<PathShape::CombineOp> ops;
-    bool consumeBase = false;
-    target->GetCombineData(baseId, ops, consumeBase);
-
-    if (consumeBase && !baseId.empty())
-    {
-        if (ShapeElement *baseShape = dynamic_cast<ShapeElement *>(FindElementById(baseId)))
-        {
-            baseShape->RemoveCombineConsumer();
-        }
-    }
-
-    for (const auto &op : ops)
-    {
-        if (!op.consume)
-            continue;
-        if (ShapeElement *opShape = dynamic_cast<ShapeElement *>(FindElementById(op.id)))
-        {
-            opShape->RemoveCombineConsumer();
-        }
-    }
-}
-
-void Widget::UpdateContainerForElement(Element *element, const std::wstring &newContainerId)
-{
-    WidgetLayoutHelper::UpdateContainerForElement(*this, element, newContainerId);
-}
-
-void Widget::SetLayoutConfig(const std::wstring &id, const LayoutConfig &config)
-{
-    WidgetLayoutHelper::SetLayoutConfig(*this, id, config);
-}
-
-bool Widget::TryGetLayoutConfig(const std::wstring &id, LayoutConfig &config) const
-{
-    return WidgetLayoutHelper::TryGetLayoutConfig(*this, id, config);
-}
-
-void Widget::StartElementAnimation(const std::wstring &id, const AnimationTarget &to, const AnimationTarget &from, int durationMs, const std::wstring &easing, int iterationCount)
-{
-    WidgetAnimationHelper::StartElementAnimation(*this, id, to, from, durationMs, easing, iterationCount);
-}
-
-void Widget::StartElementKeyframeAnimation(const std::wstring &id, const std::vector<AnimationKeyframe> &keyframes, int durationMs, const std::wstring &easing, int iterationCount)
-{
-    WidgetAnimationHelper::StartElementKeyframeAnimation(*this, id, keyframes, durationMs, easing, iterationCount);
-}
-
-void Widget::StartWindowAnimation(const WindowAnimationTarget &to, const WindowAnimationTarget &from, int durationMs, const std::wstring &easing, int iterationCount)
-{
-    WidgetAnimationHelper::StartWindowAnimation(*this, to, from, durationMs, easing, iterationCount);
-}
-
-void Widget::StartWindowKeyframeAnimation(const std::vector<WindowAnimationKeyframe> &keyframes, int durationMs, const std::wstring &easing, int iterationCount)
-{
-    WidgetAnimationHelper::StartWindowKeyframeAnimation(*this, keyframes, durationMs, easing, iterationCount);
-}
-
-void Widget::StopWindowAnimations()
-{
-    WidgetAnimationHelper::StopWindowAnimations(*this);
-}
-
-bool Widget::IsLayoutContainer(const std::wstring &id) const
-{
-    return WidgetLayoutHelper::IsLayoutContainer(*this, id);
-}
-
-void Widget::ReflowLayout(const std::wstring &id)
-{
-    WidgetLayoutHelper::ReflowLayout(*this, id);
-}
-
-void Widget::ApplyLayoutForContainer(Element *container)
-{
-    WidgetLayoutHelper::ApplyLayoutForContainer(*this, container);
-}
-
-bool Widget::WouldCreateContainerCycle(Element *element, Element *container) const
-{
-    return WidgetLayoutHelper::WouldCreateContainerCycle(element, container);
-}
-
-void Widget::RenderContainerChildren(Element *container)
-{
-    WidgetLayoutHelper::RenderContainerChildren(*this, container);
-}
-
-bool Widget::HitTestContainerChildren(Element *container, int x, int y, Element *&outElement)
-{
-    return WidgetLayoutHelper::HitTestContainerChildren(container, x, y, outElement);
-}
-
-bool Widget::HitTestContainerChildrenDetailed(
-    Element *container,
-    int x,
-    int y,
-    UINT message,
-    WPARAM wParam,
-    Element *&outHitElement,
-    Element *&outActionElement,
-    Element *&outMouseActionElement,
-    Element *&outToolTipElement)
-{
-    return WidgetLayoutHelper::HitTestContainerChildrenDetailed(
-        *this, container, x, y, message, wParam,
-        outHitElement, outActionElement, outMouseActionElement, outToolTipElement);
-}
-
-bool Widget::HitTestContainerScrollbar(int x, int y, ScrollbarHitResult &result)
-{
-    const float hitMargin = 4.0f;
-    for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it)
-    {
-        Element *element = it->get();
-        if (!element || !element->IsVisible() || !element->IsContainer() || !element->GetShowScrollbar())
-            continue;
-
-        element->RecalcContentExtents();
-        GfxRect bounds = element->GetBounds();
-
-        const float inset = element->GetScrollbarInset();
-        const float minThumbLen = element->GetScrollbarMinThumbLength();
-
-        const bool hasVert = element->GetShowScrollbarY() && element->IsScrollableY() && element->GetMaxScrollY() > 0;
-        const bool hasHoriz = element->GetShowScrollbarX() && element->IsScrollableX() && element->GetMaxScrollX() > 0;
-
-        const float baseVertW = (float)element->GetScrollbarWidth();
-        const float baseHorizW = (float)element->GetScrollbarWidth();
-        const float hitVertW = (float)element->GetScrollbarHoverWidth();
-        const float hitHorizW = (float)element->GetScrollbarHoverWidth();
-
-        // 1. Check Vertical Scrollbar
-        if (hasVert)
-        {
-            const bool hasButtons = element->GetShowScrollbarButtons();
-            const float btnSize = hasButtons ? element->GetScrollbarButtonSize() : 0.0f;
-            const int maxScrollY = element->GetMaxScrollY();
-            const int contentH = element->GetContentHeight();
-            const float trackH = (std::max)(0.0f, (float)bounds.Height - (2.0f * inset) - (2.0f * btnSize) - (hasHoriz ? (baseHorizW + inset) : 0.0f));
-
-            const float sbRight = (float)(bounds.X + bounds.Width) - inset;
-            const float sbLeft = sbRight - hitVertW;
-            const float fullTop = (float)bounds.Y + inset;
-            const float fullBottom = (float)(bounds.Y + bounds.Height) - inset - (hasHoriz ? (baseHorizW + inset) : 0.0f);
-
-            if (x >= (int)(sbLeft - hitMargin) && x <= (int)(sbRight + hitMargin) &&
-                y >= (int)(fullTop - hitMargin) && y <= (int)(fullBottom + hitMargin))
-            {
-                result.container = element;
-                result.trackLength = (int)trackH;
-                result.maxScroll = maxScrollY;
-
-                // Check Top Button
-                if (hasButtons && y <= (int)(fullTop + btnSize + hitMargin))
-                {
-                    result.part = ScrollbarHitPart::VerticalTopButton;
-                    return true;
-                }
-                // Check Bottom Button
-                if (hasButtons && y >= (int)(fullBottom - btnSize - hitMargin))
-                {
-                    result.part = ScrollbarHitPart::VerticalBottomButton;
-                    return true;
-                }
-
-                if (trackH > 0.0f)
-                {
-                    const float thumbH = (std::min)(trackH, (std::max)(minThumbLen, trackH * ((float)bounds.Height / (float)contentH)));
-                    const float thumbTravel = (std::max)(0.0f, trackH - thumbH);
-                    const float thumbY = (maxScrollY > 0) ? (thumbTravel * ((float)element->GetScrollY() / (float)maxScrollY)) : 0.0f;
-
-                    const float trackTop = fullTop + btnSize;
-                    const float thumbTop = trackTop + thumbY;
-                    const float thumbBottom = thumbTop + thumbH;
-
-                    result.thumbLength = (int)thumbH;
-                    result.thumbOffset = (int)thumbY;
-
-                    if (y >= (int)(thumbTop - hitMargin) && y <= (int)(thumbBottom + hitMargin))
-                    {
-                        result.part = ScrollbarHitPart::VerticalThumb;
-                    }
-                    else
-                    {
-                        result.part = ScrollbarHitPart::VerticalTrack;
-                    }
-                    return true;
-                }
-            }
-        }
-
-        // 2. Check Horizontal Scrollbar
-        if (hasHoriz)
-        {
-            const bool hasButtons = element->GetShowScrollbarButtons();
-            const float btnSize = hasButtons ? element->GetScrollbarButtonSize() : 0.0f;
-            const int maxScrollX = element->GetMaxScrollX();
-            const int contentW = element->GetContentWidth();
-            const float trackW = (std::max)(0.0f, (float)bounds.Width - (2.0f * inset) - (2.0f * btnSize) - (hasVert ? (baseVertW + inset) : 0.0f));
-
-            const float fullLeft = (float)bounds.X + inset;
-            const float fullRight = (float)(bounds.X + bounds.Width) - inset - (hasVert ? (baseVertW + inset) : 0.0f);
-            const float sbBottom = (float)(bounds.Y + bounds.Height) - inset;
-            const float sbTop = sbBottom - hitHorizW;
-
-            if (y >= (int)(sbTop - hitMargin) && y <= (int)(sbBottom + hitMargin) &&
-                x >= (int)(fullLeft - hitMargin) && x <= (int)(fullRight + hitMargin))
-            {
-                result.container = element;
-                result.trackLength = (int)trackW;
-                result.maxScroll = maxScrollX;
-
-                // Check Left Button
-                if (hasButtons && x <= (int)(fullLeft + btnSize + hitMargin))
-                {
-                    result.part = ScrollbarHitPart::HorizontalLeftButton;
-                    return true;
-                }
-                // Check Right Button
-                if (hasButtons && x >= (int)(fullRight - btnSize - hitMargin))
-                {
-                    result.part = ScrollbarHitPart::HorizontalRightButton;
-                    return true;
-                }
-
-                if (trackW > 0.0f)
-                {
-                    const float thumbW = (std::min)(trackW, (std::max)(minThumbLen, trackW * ((float)bounds.Width / (float)contentW)));
-                    const float thumbTravel = (std::max)(0.0f, trackW - thumbW);
-                    const float thumbX = (maxScrollX > 0) ? (thumbTravel * ((float)element->GetScrollX() / (float)maxScrollX)) : 0.0f;
-
-                    const float trackLeft = fullLeft + btnSize;
-                    const float thumbLeft = trackLeft + thumbX;
-                    const float thumbRight = thumbLeft + thumbW;
-
-                    result.thumbLength = (int)thumbW;
-                    result.thumbOffset = (int)thumbX;
-
-                    if (x >= (int)(thumbLeft - hitMargin) && x <= (int)(thumbRight + hitMargin))
-                    {
-                        result.part = ScrollbarHitPart::HorizontalThumb;
-                    }
-                    else
-                    {
-                        result.part = ScrollbarHitPart::HorizontalTrack;
-                    }
-                    return true;
-                }
-            }
-        }
-    }
+bool Widget::BuildCombinedShapeGeometry(
+    PathShape *target, const PropertyParser::ShapeOptions &options) {
+  if (!target)
     return false;
+
+  target->ClearCombinedGeometry();
+
+  if (options.combineBaseId.empty()) {
+    Logging::Log(LogLevel::Error, L"Combine shape '%s' missing base id.",
+                 options.id.c_str());
+    return false;
+  }
+
+  Element *baseElement = FindElementById(options.combineBaseId);
+  ShapeElement *baseShape = dynamic_cast<ShapeElement *>(baseElement);
+  if (!baseShape) {
+    Logging::Log(LogLevel::Error,
+                 L"Combine shape '%s' base '%s' is not a shape.",
+                 options.id.c_str(), options.combineBaseId.c_str());
+    return false;
+  }
+  if (baseShape == target) {
+    Logging::Log(LogLevel::Error,
+                 L"Combine shape '%s' cannot use itself as base.",
+                 options.id.c_str());
+    return false;
+  }
+
+  ID2D1Factory1 *factory = Direct2D::GetFactory();
+  if (!factory) {
+    Logging::Log(LogLevel::Error,
+                 L"Combine shape '%s' failed: Direct2D factory unavailable.",
+                 options.id.c_str());
+    return false;
+  }
+
+  Microsoft::WRL::ComPtr<ID2D1Geometry> baseGeometry;
+  if (!baseShape->CreateGeometry(factory, baseGeometry) || !baseGeometry) {
+    Logging::Log(
+        LogLevel::Error,
+        L"Combine shape '%s' failed: base geometry could not be created.",
+        options.id.c_str());
+    return false;
+  }
+
+  D2D1_MATRIX_3X2_F baseTransform = baseShape->GetRenderTransformMatrix();
+  Microsoft::WRL::ComPtr<ID2D1Geometry> combinedGeometry;
+
+  bool baseTransformIsIdentity =
+      baseTransform._11 == 1.0f && baseTransform._12 == 0.0f &&
+      baseTransform._21 == 0.0f && baseTransform._22 == 1.0f &&
+      baseTransform._31 == 0.0f && baseTransform._32 == 0.0f;
+
+  if (baseTransformIsIdentity) {
+    combinedGeometry = baseGeometry;
+  } else {
+    Microsoft::WRL::ComPtr<ID2D1TransformedGeometry> transformed;
+    if (FAILED(factory->CreateTransformedGeometry(
+            baseGeometry.Get(), &baseTransform, transformed.GetAddressOf()))) {
+      Logging::Log(
+          LogLevel::Error,
+          L"Combine shape '%s' failed: base transform could not be applied.",
+          options.id.c_str());
+      return false;
+    }
+    combinedGeometry = transformed;
+  }
+
+  std::vector<PathShape::CombineOp> resolvedOps;
+  resolvedOps.reserve(options.combineOps.size());
+
+  for (const auto &op : options.combineOps) {
+    PathShape::CombineOp resolved;
+    resolved.id = op.id;
+    resolved.mode = op.mode;
+    resolved.consume = op.hasConsume ? op.consume
+                                     : (options.hasCombineConsumeAll
+                                            ? options.combineConsumeAll
+                                            : false);
+    resolvedOps.push_back(resolved);
+
+    Element *opElement = FindElementById(op.id);
+    ShapeElement *opShape = dynamic_cast<ShapeElement *>(opElement);
+    if (!opShape) {
+      Logging::Log(
+          LogLevel::Error,
+          L"Combine shape '%s' cannot combine with '%s' (not a shape).",
+          options.id.c_str(), op.id.c_str());
+      return false;
+    }
+    if (opShape == target) {
+      Logging::Log(LogLevel::Error,
+                   L"Combine shape '%s' cannot combine with itself.",
+                   options.id.c_str());
+      return false;
+    }
+
+    Microsoft::WRL::ComPtr<ID2D1Geometry> opGeometry;
+    if (!opShape->CreateGeometry(factory, opGeometry) || !opGeometry) {
+      Logging::Log(
+          LogLevel::Error,
+          L"Combine shape '%s' failed: geometry for '%s' could not be created.",
+          options.id.c_str(), op.id.c_str());
+      return false;
+    }
+
+    D2D1_MATRIX_3X2_F opTransform = opShape->GetRenderTransformMatrix();
+
+    Microsoft::WRL::ComPtr<ID2D1PathGeometry> path;
+    if (FAILED(factory->CreatePathGeometry(path.GetAddressOf()))) {
+      Logging::Log(
+          LogLevel::Error,
+          L"Combine shape '%s' failed: could not create path geometry.",
+          options.id.c_str());
+      return false;
+    }
+
+    Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
+    if (FAILED(path->Open(sink.GetAddressOf()))) {
+      Logging::Log(LogLevel::Error,
+                   L"Combine shape '%s' failed: could not open geometry sink.",
+                   options.id.c_str());
+      return false;
+    }
+
+    HRESULT hr = combinedGeometry->CombineWithGeometry(
+        opGeometry.Get(), op.mode, opTransform, sink.Get());
+    sink->Close();
+    if (FAILED(hr)) {
+      Logging::Log(
+          LogLevel::Error,
+          L"Combine shape '%s' failed: combine operation with '%s' failed.",
+          options.id.c_str(), op.id.c_str());
+      return false;
+    }
+
+    combinedGeometry = path;
+  }
+
+  D2D1_RECT_F bounds = D2D1::RectF();
+  HRESULT hr = combinedGeometry->GetBounds(nullptr, &bounds);
+  if (FAILED(hr)) {
+    Logging::Log(LogLevel::Error,
+                 L"Combine shape '%s' failed: could not compute bounds.",
+                 options.id.c_str());
+    return false;
+  }
+
+  bool consumeBase =
+      options.hasCombineConsumeAll ? options.combineConsumeAll : false;
+  target->SetCombineData(options.combineBaseId, resolvedOps, consumeBase);
+  target->SetCombinedGeometry(combinedGeometry, bounds);
+
+  if (consumeBase) {
+    baseShape->AddCombineConsumer();
+  }
+  for (const auto &resolved : resolvedOps) {
+    if (!resolved.consume)
+      continue;
+    Element *opElement = FindElementById(resolved.id);
+    if (ShapeElement *opShape = dynamic_cast<ShapeElement *>(opElement)) {
+      opShape->AddCombineConsumer();
+    }
+  }
+
+  return true;
+}
+
+void Widget::ReleaseCombinedConsumes(PathShape *target) {
+  if (!target || !target->IsCombineShape())
+    return;
+
+  std::wstring baseId;
+  std::vector<PathShape::CombineOp> ops;
+  bool consumeBase = false;
+  target->GetCombineData(baseId, ops, consumeBase);
+
+  if (consumeBase && !baseId.empty()) {
+    if (ShapeElement *baseShape =
+            dynamic_cast<ShapeElement *>(FindElementById(baseId))) {
+      baseShape->RemoveCombineConsumer();
+    }
+  }
+
+  for (const auto &op : ops) {
+    if (!op.consume)
+      continue;
+    if (ShapeElement *opShape =
+            dynamic_cast<ShapeElement *>(FindElementById(op.id))) {
+      opShape->RemoveCombineConsumer();
+    }
+  }
+}
+
+void Widget::UpdateContainerForElement(Element *element,
+                                       const std::wstring &newContainerId) {
+  WidgetLayoutHelper::UpdateContainerForElement(*this, element, newContainerId);
+}
+
+void Widget::SetLayoutConfig(const std::wstring &id,
+                             const LayoutConfig &config) {
+  WidgetLayoutHelper::SetLayoutConfig(*this, id, config);
+}
+
+bool Widget::TryGetLayoutConfig(const std::wstring &id,
+                                LayoutConfig &config) const {
+  return WidgetLayoutHelper::TryGetLayoutConfig(*this, id, config);
+}
+
+void Widget::StartElementAnimation(const std::wstring &id,
+                                   const AnimationTarget &to,
+                                   const AnimationTarget &from, int durationMs,
+                                   const std::wstring &easing,
+                                   int iterationCount) {
+  WidgetAnimationHelper::StartElementAnimation(*this, id, to, from, durationMs,
+                                               easing, iterationCount);
+}
+
+void Widget::StartElementKeyframeAnimation(
+    const std::wstring &id, const std::vector<AnimationKeyframe> &keyframes,
+    int durationMs, const std::wstring &easing, int iterationCount) {
+  WidgetAnimationHelper::StartElementKeyframeAnimation(
+      *this, id, keyframes, durationMs, easing, iterationCount);
+}
+
+void Widget::StartWindowAnimation(const WindowAnimationTarget &to,
+                                  const WindowAnimationTarget &from,
+                                  int durationMs, const std::wstring &easing,
+                                  int iterationCount) {
+  WidgetAnimationHelper::StartWindowAnimation(*this, to, from, durationMs,
+                                              easing, iterationCount);
+}
+
+void Widget::StartWindowKeyframeAnimation(
+    const std::vector<WindowAnimationKeyframe> &keyframes, int durationMs,
+    const std::wstring &easing, int iterationCount) {
+  WidgetAnimationHelper::StartWindowKeyframeAnimation(
+      *this, keyframes, durationMs, easing, iterationCount);
+}
+
+void Widget::StopWindowAnimations() {
+  WidgetAnimationHelper::StopWindowAnimations(*this);
+}
+
+bool Widget::IsLayoutContainer(const std::wstring &id) const {
+  return WidgetLayoutHelper::IsLayoutContainer(*this, id);
+}
+
+void Widget::ReflowLayout(const std::wstring &id) {
+  WidgetLayoutHelper::ReflowLayout(*this, id);
+}
+
+void Widget::ApplyLayoutForContainer(Element *container) {
+  WidgetLayoutHelper::ApplyLayoutForContainer(*this, container);
+}
+
+bool Widget::WouldCreateContainerCycle(Element *element,
+                                       Element *container) const {
+  return WidgetLayoutHelper::WouldCreateContainerCycle(element, container);
+}
+
+void Widget::RenderContainerChildren(Element *container) {
+  WidgetLayoutHelper::RenderContainerChildren(*this, container);
+}
+
+bool Widget::HitTestContainerChildren(Element *container, int x, int y,
+                                      Element *&outElement) {
+  return WidgetLayoutHelper::HitTestContainerChildren(container, x, y,
+                                                      outElement);
+}
+
+bool Widget::HitTestContainerChildrenDetailed(Element *container, int x, int y,
+                                              UINT message, WPARAM wParam,
+                                              Element *&outHitElement,
+                                              Element *&outActionElement,
+                                              Element *&outMouseActionElement,
+                                              Element *&outToolTipElement) {
+  return WidgetLayoutHelper::HitTestContainerChildrenDetailed(
+      *this, container, x, y, message, wParam, outHitElement, outActionElement,
+      outMouseActionElement, outToolTipElement);
+}
+
+bool Widget::HitTestContainerScrollbar(int x, int y,
+                                       ScrollbarHitResult &result) {
+  const float hitMargin = 4.0f;
+  for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it) {
+    Element *element = it->get();
+    if (!element || !element->IsVisible() || !element->IsContainer() ||
+        !element->GetShowScrollbar())
+      continue;
+
+    element->RecalcContentExtents();
+    GfxRect bounds = element->GetBounds();
+
+    const float inset = element->GetScrollbarInset();
+    const float minThumbLen = element->GetScrollbarMinThumbLength();
+
+    const bool hasVert = element->GetShowScrollbarY() &&
+                         element->IsScrollableY() &&
+                         element->GetMaxScrollY() > 0;
+    const bool hasHoriz = element->GetShowScrollbarX() &&
+                          element->IsScrollableX() &&
+                          element->GetMaxScrollX() > 0;
+
+    const float baseVertW = (float)element->GetScrollbarWidth();
+    const float baseHorizW = (float)element->GetScrollbarWidth();
+    const float hitVertW = (float)element->GetScrollbarHoverWidth();
+    const float hitHorizW = (float)element->GetScrollbarHoverWidth();
+
+    // 1. Check Vertical Scrollbar
+    if (hasVert) {
+      const bool hasButtons = element->GetShowScrollbarButtons();
+      const float btnSize =
+          hasButtons ? element->GetScrollbarButtonSize() : 0.0f;
+      const int maxScrollY = element->GetMaxScrollY();
+      const int contentH = element->GetContentHeight();
+      const float trackH =
+          (std::max)(0.0f, (float)bounds.Height - (2.0f * inset) -
+                               (2.0f * btnSize) -
+                               (hasHoriz ? (baseHorizW + inset) : 0.0f));
+
+      const float sbRight = (float)(bounds.X + bounds.Width) - inset;
+      const float sbLeft = sbRight - hitVertW;
+      const float fullTop = (float)bounds.Y + inset;
+      const float fullBottom = (float)(bounds.Y + bounds.Height) - inset -
+                               (hasHoriz ? (baseHorizW + inset) : 0.0f);
+
+      if (x >= (int)(sbLeft - hitMargin) && x <= (int)(sbRight + hitMargin) &&
+          y >= (int)(fullTop - hitMargin) &&
+          y <= (int)(fullBottom + hitMargin)) {
+        result.container = element;
+        result.trackLength = (int)trackH;
+        result.maxScroll = maxScrollY;
+
+        // Check Top Button
+        if (hasButtons && y <= (int)(fullTop + btnSize + hitMargin)) {
+          result.part = ScrollbarHitPart::VerticalTopButton;
+          return true;
+        }
+        // Check Bottom Button
+        if (hasButtons && y >= (int)(fullBottom - btnSize - hitMargin)) {
+          result.part = ScrollbarHitPart::VerticalBottomButton;
+          return true;
+        }
+
+        if (trackH > 0.0f) {
+          const float thumbH =
+              (std::min)(trackH, (std::max)(minThumbLen,
+                                            trackH * ((float)bounds.Height /
+                                                      (float)contentH)));
+          const float thumbTravel = (std::max)(0.0f, trackH - thumbH);
+          const float thumbY =
+              (maxScrollY > 0) ? (thumbTravel * ((float)element->GetScrollY() /
+                                                 (float)maxScrollY))
+                               : 0.0f;
+
+          const float trackTop = fullTop + btnSize;
+          const float thumbTop = trackTop + thumbY;
+          const float thumbBottom = thumbTop + thumbH;
+
+          result.thumbLength = (int)thumbH;
+          result.thumbOffset = (int)thumbY;
+
+          if (y >= (int)(thumbTop - hitMargin) &&
+              y <= (int)(thumbBottom + hitMargin)) {
+            result.part = ScrollbarHitPart::VerticalThumb;
+          } else {
+            result.part = ScrollbarHitPart::VerticalTrack;
+          }
+          return true;
+        }
+      }
+    }
+
+    // 2. Check Horizontal Scrollbar
+    if (hasHoriz) {
+      const bool hasButtons = element->GetShowScrollbarButtons();
+      const float btnSize =
+          hasButtons ? element->GetScrollbarButtonSize() : 0.0f;
+      const int maxScrollX = element->GetMaxScrollX();
+      const int contentW = element->GetContentWidth();
+      const float trackW =
+          (std::max)(0.0f, (float)bounds.Width - (2.0f * inset) -
+                               (2.0f * btnSize) -
+                               (hasVert ? (baseVertW + inset) : 0.0f));
+
+      const float fullLeft = (float)bounds.X + inset;
+      const float fullRight = (float)(bounds.X + bounds.Width) - inset -
+                              (hasVert ? (baseVertW + inset) : 0.0f);
+      const float sbBottom = (float)(bounds.Y + bounds.Height) - inset;
+      const float sbTop = sbBottom - hitHorizW;
+
+      if (y >= (int)(sbTop - hitMargin) && y <= (int)(sbBottom + hitMargin) &&
+          x >= (int)(fullLeft - hitMargin) &&
+          x <= (int)(fullRight + hitMargin)) {
+        result.container = element;
+        result.trackLength = (int)trackW;
+        result.maxScroll = maxScrollX;
+
+        // Check Left Button
+        if (hasButtons && x <= (int)(fullLeft + btnSize + hitMargin)) {
+          result.part = ScrollbarHitPart::HorizontalLeftButton;
+          return true;
+        }
+        // Check Right Button
+        if (hasButtons && x >= (int)(fullRight - btnSize - hitMargin)) {
+          result.part = ScrollbarHitPart::HorizontalRightButton;
+          return true;
+        }
+
+        if (trackW > 0.0f) {
+          const float thumbW =
+              (std::min)(trackW,
+                         (std::max)(minThumbLen, trackW * ((float)bounds.Width /
+                                                           (float)contentW)));
+          const float thumbTravel = (std::max)(0.0f, trackW - thumbW);
+          const float thumbX =
+              (maxScrollX > 0) ? (thumbTravel * ((float)element->GetScrollX() /
+                                                 (float)maxScrollX))
+                               : 0.0f;
+
+          const float trackLeft = fullLeft + btnSize;
+          const float thumbLeft = trackLeft + thumbX;
+          const float thumbRight = thumbLeft + thumbW;
+
+          result.thumbLength = (int)thumbW;
+          result.thumbOffset = (int)thumbX;
+
+          if (x >= (int)(thumbLeft - hitMargin) &&
+              x <= (int)(thumbRight + hitMargin)) {
+            result.part = ScrollbarHitPart::HorizontalThumb;
+          } else {
+            result.part = ScrollbarHitPart::HorizontalTrack;
+          }
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 /*
 ** Update properties of an existing element.
 */
-void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx, JSValueConst options)
-{
-    if (!element || !ctx || !JS_IsObject(options))
-        return;
+void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx,
+                                            JSValueConst options) {
+  if (!element || !ctx || !JS_IsObject(options))
+    return;
 
-    const std::wstring baseDir = PathUtils::GetScriptBaseDir(GetOptions().scriptPath, JSEngine::GetEntryScriptDir());
+  const std::wstring baseDir = PathUtils::GetScriptBaseDir(
+      GetOptions().scriptPath, JSEngine::GetEntryScriptDir());
 
-    if (element->GetType() == ELEMENT_TEXT)
-    {
-        PropertyParser::TextOptions parsed;
-        PropertyParser::PreFillTextOptions(parsed, static_cast<TextElement *>(element));
-        PropertyParser::ParseTextOptions(ctx, options, parsed, baseDir);
-        PropertyParser::ApplyTextOptions(static_cast<TextElement *>(element), parsed);
-        UpdateContainerForElement(element, parsed.containerId);
+  if (element->GetType() == ELEMENT_TEXT) {
+    PropertyParser::TextOptions parsed;
+    PropertyParser::PreFillTextOptions(parsed,
+                                       static_cast<TextElement *>(element));
+    PropertyParser::ParseTextOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyTextOptions(static_cast<TextElement *>(element),
+                                     parsed);
+    UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_IMAGE) {
+    PropertyParser::ImageOptions parsed;
+    PropertyParser::PreFillImageOptions(parsed,
+                                        static_cast<ImageElement *>(element));
+    PropertyParser::ParseImageOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyImageOptions(static_cast<ImageElement *>(element),
+                                      parsed);
+    UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_BAR) {
+    PropertyParser::BarOptions parsed;
+    PropertyParser::PreFillBarOptions(parsed,
+                                      static_cast<BarElement *>(element));
+    PropertyParser::ParseBarOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyBarOptions(static_cast<BarElement *>(element), parsed);
+    UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_LINE) {
+    PropertyParser::LineOptions parsed;
+    PropertyParser::PreFillLineOptions(parsed,
+                                       static_cast<LineElement *>(element));
+    PropertyParser::ParseLineOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyLineOptions(static_cast<LineElement *>(element),
+                                     parsed);
+    UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_HISTOGRAM) {
+    PropertyParser::HistogramOptions parsed;
+    PropertyParser::PreFillHistogramOptions(
+        parsed, static_cast<HistogramElement *>(element));
+    PropertyParser::ParseHistogramOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyHistogramOptions(
+        static_cast<HistogramElement *>(element), parsed);
+    UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_ROUNDLINE) {
+    PropertyParser::RoundLineOptions parsed;
+    PropertyParser::PreFillRoundLineOptions(
+        parsed, static_cast<RoundLineElement *>(element));
+    PropertyParser::ParseRoundLineOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyRoundLineOptions(
+        static_cast<RoundLineElement *>(element), parsed);
+    UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_LAYOUT_BOX) {
+    auto *layout = static_cast<ElementLayoutBox *>(element);
+    PropertyParser::LayoutBoxOptions parsed;
+    LayoutConfig cfg{};
+    if (TryGetLayoutConfig(element->GetId(), cfg)) {
+      PropertyParser::PreFillLayoutBoxOptions(
+          parsed, layout, &cfg.direction, &cfg.gap, &cfg.align, &cfg.justify,
+          &cfg.paddingLeft, &cfg.paddingTop, &cfg.paddingRight,
+          &cfg.paddingBottom, &cfg.flexDirection);
+    } else {
+      PropertyParser::PreFillLayoutBoxOptions(parsed, layout);
     }
-    else if (element->GetType() == ELEMENT_IMAGE)
-    {
-        PropertyParser::ImageOptions parsed;
-        PropertyParser::PreFillImageOptions(parsed, static_cast<ImageElement *>(element));
-        PropertyParser::ParseImageOptions(ctx, options, parsed, baseDir);
-        PropertyParser::ApplyImageOptions(static_cast<ImageElement *>(element), parsed);
-        UpdateContainerForElement(element, parsed.containerId);
+    PropertyParser::ParseLayoutBoxOptions(ctx, options, parsed, baseDir);
+    if (!parsed.hasBoxShadowError) {
+      PropertyParser::ApplyLayoutBoxOptions(layout, parsed);
+      LayoutConfig nextCfg{};
+      nextCfg.direction = parsed.direction;
+      nextCfg.flexDirection = parsed.flexDirection;
+      nextCfg.gap = parsed.gap;
+      nextCfg.align = parsed.align.empty() ? L"start" : parsed.align;
+      nextCfg.justify = parsed.justify.empty() ? L"start" : parsed.justify;
+      nextCfg.paddingLeft = parsed.paddingLeft;
+      nextCfg.paddingTop = parsed.paddingTop;
+      nextCfg.paddingRight = parsed.paddingRight;
+      nextCfg.paddingBottom = parsed.paddingBottom;
+      // Logging::Log(LogLevel::Debug, L"[PADDING] SetLayoutConfig for '%s':
+      // L=%d, T=%d, R=%d, B=%d, flexDirection='%s'",
+      //     element->GetId().c_str(), nextCfg.paddingLeft, nextCfg.paddingTop,
+      //     nextCfg.paddingRight, nextCfg.paddingBottom,
+      //     nextCfg.flexDirection.c_str());
+      SetLayoutConfig(element->GetId(), nextCfg);
+      UpdateContainerForElement(element, parsed.shape.containerId);
     }
-    else if (element->GetType() == ELEMENT_BAR)
-    {
-        PropertyParser::BarOptions parsed;
-        PropertyParser::PreFillBarOptions(parsed, static_cast<BarElement *>(element));
-        PropertyParser::ParseBarOptions(ctx, options, parsed, baseDir);
-        PropertyParser::ApplyBarOptions(static_cast<BarElement *>(element), parsed);
-        UpdateContainerForElement(element, parsed.containerId);
-    }
-    else if (element->GetType() == ELEMENT_LINE)
-    {
-        PropertyParser::LineOptions parsed;
-        PropertyParser::PreFillLineOptions(parsed, static_cast<LineElement *>(element));
-        PropertyParser::ParseLineOptions(ctx, options, parsed, baseDir);
-        PropertyParser::ApplyLineOptions(static_cast<LineElement *>(element), parsed);
-        UpdateContainerForElement(element, parsed.containerId);
-    }
-    else if (element->GetType() == ELEMENT_HISTOGRAM)
-    {
-        PropertyParser::HistogramOptions parsed;
-        PropertyParser::PreFillHistogramOptions(parsed, static_cast<HistogramElement *>(element));
-        PropertyParser::ParseHistogramOptions(ctx, options, parsed, baseDir);
-        PropertyParser::ApplyHistogramOptions(static_cast<HistogramElement *>(element), parsed);
-        UpdateContainerForElement(element, parsed.containerId);
-    }
-    else if (element->GetType() == ELEMENT_ROUNDLINE)
-    {
-        PropertyParser::RoundLineOptions parsed;
-        PropertyParser::PreFillRoundLineOptions(parsed, static_cast<RoundLineElement *>(element));
-        PropertyParser::ParseRoundLineOptions(ctx, options, parsed, baseDir);
-        PropertyParser::ApplyRoundLineOptions(static_cast<RoundLineElement *>(element), parsed);
-        UpdateContainerForElement(element, parsed.containerId);
-    }
-    else if (element->GetType() == ELEMENT_LAYOUT_BOX)
-    {
-        auto *layout = static_cast<ElementLayoutBox *>(element);
-        PropertyParser::LayoutBoxOptions parsed;
-        LayoutConfig cfg{};
-        if (TryGetLayoutConfig(element->GetId(), cfg))
-        {
-            PropertyParser::PreFillLayoutBoxOptions(
-                parsed,
-                layout,
-                &cfg.direction,
-                &cfg.gap,
-                &cfg.align,
-                &cfg.justify,
-                &cfg.paddingLeft,
-                &cfg.paddingTop,
-                &cfg.paddingRight,
-                &cfg.paddingBottom,
-                &cfg.flexDirection);
-        }
-        else
-        {
-            PropertyParser::PreFillLayoutBoxOptions(parsed, layout);
-        }
-        PropertyParser::ParseLayoutBoxOptions(ctx, options, parsed, baseDir);
-        if (!parsed.hasBoxShadowError)
-        {
-            PropertyParser::ApplyLayoutBoxOptions(layout, parsed);
-            LayoutConfig nextCfg{};
-            nextCfg.direction = parsed.direction;
-            nextCfg.flexDirection = parsed.flexDirection;
-            nextCfg.gap = parsed.gap;
-            nextCfg.align = parsed.align.empty() ? L"start" : parsed.align;
-            nextCfg.justify = parsed.justify.empty() ? L"start" : parsed.justify;
-            nextCfg.paddingLeft = parsed.paddingLeft;
-            nextCfg.paddingTop = parsed.paddingTop;
-            nextCfg.paddingRight = parsed.paddingRight;
-            nextCfg.paddingBottom = parsed.paddingBottom;
-            // Logging::Log(LogLevel::Debug, L"[PADDING] SetLayoutConfig for '%s': L=%d, T=%d, R=%d, B=%d, flexDirection='%s'",
-            //     element->GetId().c_str(), nextCfg.paddingLeft, nextCfg.paddingTop,
-            //     nextCfg.paddingRight, nextCfg.paddingBottom, nextCfg.flexDirection.c_str());
-            SetLayoutConfig(element->GetId(), nextCfg);
-            UpdateContainerForElement(element, parsed.shape.containerId);
-        }
-    }
-    else if (element->GetType() == ELEMENT_SHAPE)
-    {
-        PropertyParser::ShapeOptions parsed;
-        PropertyParser::PreFillShapeOptions(parsed, static_cast<ShapeElement *>(element));
-        PropertyParser::ParseShapeOptions(ctx, options, parsed, baseDir);
-        PropertyParser::ApplyShapeOptions(static_cast<ShapeElement *>(element), parsed);
-        UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_SHAPE) {
+    PropertyParser::ShapeOptions parsed;
+    PropertyParser::PreFillShapeOptions(parsed,
+                                        static_cast<ShapeElement *>(element));
+    PropertyParser::ParseShapeOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyShapeOptions(static_cast<ShapeElement *>(element),
+                                      parsed);
+    UpdateContainerForElement(element, parsed.containerId);
 
-        PathShape *path = dynamic_cast<PathShape *>(element);
-        if (path && (parsed.isCombine || path->IsCombineShape()))
-        {
-            if (parsed.isCombine)
-            {
-                ReleaseCombinedConsumes(path);
-                BuildCombinedShapeGeometry(path, parsed);
-            }
-        }
+    PathShape *path = dynamic_cast<PathShape *>(element);
+    if (path && (parsed.isCombine || path->IsCombineShape())) {
+      if (parsed.isCombine) {
+        ReleaseCombinedConsumes(path);
+        BuildCombinedShapeGeometry(path, parsed);
+      }
     }
-    else if (element->GetType() == ELEMENT_BUTTON)
-    {
-        PropertyParser::ButtonOptions parsed;
-        PropertyParser::PreFillButtonOptions(parsed, static_cast<ButtonElement *>(element));
-        PropertyParser::ParseButtonOptions(ctx, options, parsed, baseDir);
-        PropertyParser::ApplyButtonOptions(static_cast<ButtonElement *>(element), parsed);
-        UpdateContainerForElement(element, parsed.containerId);
-    }
-    else if (element->GetType() == ELEMENT_BITMAP)
-    {
-        PropertyParser::BitmapOptions parsed;
-        PropertyParser::PreFillBitmapOptions(parsed, static_cast<BitmapElement *>(element));
-        PropertyParser::ParseBitmapOptions(ctx, options, parsed, baseDir);
-        PropertyParser::ApplyBitmapOptions(static_cast<BitmapElement *>(element), parsed);
-        UpdateContainerForElement(element, parsed.containerId);
-    }
-    else if (element->GetType() == ELEMENT_ROTATOR)
-    {
-        PropertyParser::RotatorOptions parsed;
-        PropertyParser::PreFillRotatorOptions(parsed, static_cast<RotatorElement *>(element));
-        PropertyParser::ParseRotatorOptions(ctx, options, parsed, baseDir);
-        PropertyParser::ApplyRotatorOptions(static_cast<RotatorElement *>(element), parsed);
-        UpdateContainerForElement(element, parsed.containerId);
-    }
-    else if (element->GetType() == ELEMENT_AREA_GRAPH)
-    {
-        PropertyParser::AreaGraphOptions parsed;
-        PropertyParser::PreFillAreaGraphOptions(parsed, static_cast<AreaGraphElement *>(element));
-        PropertyParser::ParseAreaGraphOptions(ctx, options, parsed, baseDir);
-        PropertyParser::ApplyAreaGraphOptions(static_cast<AreaGraphElement *>(element), parsed);
-        UpdateContainerForElement(element, parsed.containerId);
-    }
+  } else if (element->GetType() == ELEMENT_BUTTON) {
+    PropertyParser::ButtonOptions parsed;
+    PropertyParser::PreFillButtonOptions(parsed,
+                                         static_cast<ButtonElement *>(element));
+    PropertyParser::ParseButtonOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyButtonOptions(static_cast<ButtonElement *>(element),
+                                       parsed);
+    UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_BITMAP) {
+    PropertyParser::BitmapOptions parsed;
+    PropertyParser::PreFillBitmapOptions(parsed,
+                                         static_cast<BitmapElement *>(element));
+    PropertyParser::ParseBitmapOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyBitmapOptions(static_cast<BitmapElement *>(element),
+                                       parsed);
+    UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_ROTATOR) {
+    PropertyParser::RotatorOptions parsed;
+    PropertyParser::PreFillRotatorOptions(
+        parsed, static_cast<RotatorElement *>(element));
+    PropertyParser::ParseRotatorOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyRotatorOptions(static_cast<RotatorElement *>(element),
+                                        parsed);
+    UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_AREA_GRAPH) {
+    PropertyParser::AreaGraphOptions parsed;
+    PropertyParser::PreFillAreaGraphOptions(
+        parsed, static_cast<AreaGraphElement *>(element));
+    PropertyParser::ParseAreaGraphOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyAreaGraphOptions(
+        static_cast<AreaGraphElement *>(element), parsed);
+    UpdateContainerForElement(element, parsed.containerId);
+  }
 }
 
-void Widget::SetElementProperties(const std::wstring &id, JSContext *ctx, JSValueConst options)
-{
-    Element *element = FindElementById(id);
-    if (!element)
-        return;
+void Widget::SetElementProperties(const std::wstring &id, JSContext *ctx,
+                                  JSValueConst options) {
+  Element *element = FindElementById(id);
+  if (!element)
+    return;
 
+  ApplyParsedPropertiesToElement(element, ctx, options);
+
+  if (!m_IsBatchUpdating) {
+    Redraw();
+  }
+}
+
+void Widget::SetGroupProperties(const std::wstring &group, JSContext *ctx,
+                                JSValueConst options) {
+  if (group.empty() || !ctx || !JS_IsObject(options))
+    return;
+
+  bool changed = false;
+  for (auto &uptr : m_Elements) {
+    Element *element = uptr.get();
+    if (element->GetGroupId() != group)
+      continue;
     ApplyParsedPropertiesToElement(element, ctx, options);
+    changed = true;
+  }
 
-    if (!m_IsBatchUpdating)
-    {
-        Redraw();
-    }
+  if (changed && !m_IsBatchUpdating) {
+    Redraw();
+  }
 }
 
-void Widget::SetGroupProperties(const std::wstring &group, JSContext *ctx, JSValueConst options)
-{
-    if (group.empty() || !ctx || !JS_IsObject(options))
-        return;
+void Widget::ClearElementReferences(Element *element) {
+  if (!element)
+    return;
 
-    bool changed = false;
-    for (auto &uptr : m_Elements)
-    {
-        Element *element = uptr.get();
-        if (element->GetGroupId() != group)
-            continue;
-        ApplyParsedPropertiesToElement(element, ctx, options);
-        changed = true;
-    }
-
-    if (changed && !m_IsBatchUpdating)
-    {
-        Redraw();
-    }
+  if (element == m_MouseOverElement)
+    m_MouseOverElement = nullptr;
+  if (element == m_TooltipElement)
+    m_TooltipElement = nullptr;
+  if (element == m_FocusedInputBox) {
+    m_FocusedInputBox->SetFocus(false);
+    m_FocusedInputBox = nullptr;
+    if (m_hWnd)
+      KillTimer(m_hWnd, TIMER_CARET);
+  }
+  if (element == m_TextSelectionElement) {
+    m_TextSelectionElement->ClearTextSelection();
+    m_TextSelectionElement = nullptr;
+  }
+  if (element == m_CursorElement)
+    m_CursorElement = nullptr;
+  if (element == m_DragElement) {
+    m_DragElement = nullptr;
+    m_IsElementDragging = false;
+    if (m_hWnd && GetCapture() == m_hWnd && !m_IsDragging)
+      ReleaseCapture();
+  }
 }
 
-void Widget::ClearElementReferences(Element *element)
-{
-    if (!element)
-        return;
+void Widget::RemoveElementsByGroup(const std::wstring &group) {
+  if (group.empty())
+    return;
 
-    if (element == m_MouseOverElement)
-        m_MouseOverElement = nullptr;
-    if (element == m_TooltipElement)
-        m_TooltipElement = nullptr;
-    if (element == m_FocusedInputBox)
-    {
-        m_FocusedInputBox->SetFocus(false);
-        m_FocusedInputBox = nullptr;
-        if (m_hWnd)
-            KillTimer(m_hWnd, TIMER_CARET);
-    }
-    if (element == m_TextSelectionElement)
-    {
-        m_TextSelectionElement->ClearTextSelection();
-        m_TextSelectionElement = nullptr;
-    }
-    if (element == m_CursorElement)
-        m_CursorElement = nullptr;
-    if (element == m_DragElement)
-    {
-        m_DragElement = nullptr;
-        m_IsElementDragging = false;
-        if (m_hWnd && GetCapture() == m_hWnd && !m_IsDragging)
-            ReleaseCapture();
-    }
-}
+  bool changed = false;
+  for (auto it = m_Elements.begin(); it != m_Elements.end();) {
+    Element *element = it->get();
+    if (element->GetGroupId() == group) {
+      ClearElementReferences(element);
 
-void Widget::RemoveElementsByGroup(const std::wstring &group)
-{
-    if (group.empty())
-        return;
+      if (PathShape *path = dynamic_cast<PathShape *>(element)) {
+        ReleaseCombinedConsumes(path);
+      }
 
-    bool changed = false;
-    for (auto it = m_Elements.begin(); it != m_Elements.end();)
-    {
-        Element *element = it->get();
-        if (element->GetGroupId() == group)
-        {
-            ClearElementReferences(element);
-
-            if (PathShape *path = dynamic_cast<PathShape *>(element))
-            {
-                ReleaseCombinedConsumes(path);
-            }
-
-            if (element->IsContainer())
-            {
-                for (Element *child : element->GetContainerItems())
-                {
-                    UntrackButton(child);
-                    child->SetContainer(nullptr);
-                    child->SetContainerId(L"");
-                }
-                element->ClearContainerItems();
-            }
-
-            UpdateContainerForElement(element, L"");
-            if (!element->GetId().empty())
-                m_ElementIndex.erase(element->GetId());
-            UntrackButton(element);
-            m_TrackedElements.erase(element);
-            it = m_Elements.erase(it);
-            changed = true;
+      if (element->IsContainer()) {
+        for (Element *child : element->GetContainerItems()) {
+          UntrackButton(child);
+          child->SetContainer(nullptr);
+          child->SetContainerId(L"");
         }
-        else
-        {
-            ++it;
-        }
-    }
+        element->ClearContainerItems();
+      }
 
-    if (changed)
-    {
-        Redraw();
+      UpdateContainerForElement(element, L"");
+      if (!element->GetId().empty())
+        m_ElementIndex.erase(element->GetId());
+      UntrackButton(element);
+      m_TrackedElements.erase(element);
+      it = m_Elements.erase(it);
+      changed = true;
+    } else {
+      ++it;
     }
+  }
+
+  if (changed) {
+    Redraw();
+  }
 }
 
 /*
 ** Remove one or more content items by ID.
 ** If id is empty, clears all content.
 */
-bool Widget::RemoveElements(const std::wstring &id)
-{
-    if (id.empty())
-    {
-        for (auto &uptr : m_Elements)
-        {
-            Element *el = uptr.get();
-            ClearElementReferences(el);
-            if (PathShape *path = dynamic_cast<PathShape *>(el))
-            {
-                ReleaseCombinedConsumes(path);
-            }
-            if (el->IsContainer())
-            {
-                for (Element *child : el->GetContainerItems())
-                {
-                    child->SetContainer(nullptr);
-                    child->SetContainerId(L"");
-                }
-                el->ClearContainerItems();
-            }
-            UpdateContainerForElement(el, L"");
+bool Widget::RemoveElements(const std::wstring &id) {
+  if (id.empty()) {
+    for (auto &uptr : m_Elements) {
+      Element *el = uptr.get();
+      ClearElementReferences(el);
+      if (PathShape *path = dynamic_cast<PathShape *>(el)) {
+        ReleaseCombinedConsumes(path);
+      }
+      if (el->IsContainer()) {
+        for (Element *child : el->GetContainerItems()) {
+          child->SetContainer(nullptr);
+          child->SetContainerId(L"");
         }
-        m_Elements.clear();
-        m_TrackedElements.clear();
-        m_SpatialGrid.clear();
-        m_Buttons.clear();
-        m_ElementIndex.clear();
-        m_LayoutConfigs.clear();
-        WidgetAnimationHelper::ClearAllAnimations(*this);
-        m_MouseOverElement = nullptr;
-        m_TooltipElement = nullptr;
-        Redraw();
-        return true;
+        el->ClearContainerItems();
+      }
+      UpdateContainerForElement(el, L"");
     }
+    m_Elements.clear();
+    m_TrackedElements.clear();
+    m_SpatialGrid.clear();
+    m_Buttons.clear();
+    m_ElementIndex.clear();
+    m_LayoutConfigs.clear();
+    WidgetAnimationHelper::ClearAllAnimations(*this);
+    m_MouseOverElement = nullptr;
+    m_TooltipElement = nullptr;
+    Redraw();
+    return true;
+  }
 
-    bool changed = false;
-    for (auto it = m_Elements.begin(); it != m_Elements.end();)
-    {
-        Element *element = it->get();
-        if (element->GetId() == id)
-        {
-            ClearElementReferences(element);
+  bool changed = false;
+  for (auto it = m_Elements.begin(); it != m_Elements.end();) {
+    Element *element = it->get();
+    if (element->GetId() == id) {
+      ClearElementReferences(element);
 
-            if (PathShape *path = dynamic_cast<PathShape *>(element))
-            {
-                ReleaseCombinedConsumes(path);
-            }
+      if (PathShape *path = dynamic_cast<PathShape *>(element)) {
+        ReleaseCombinedConsumes(path);
+      }
 
-            if (element->IsContainer())
-            {
-                for (Element *child : element->GetContainerItems())
-                {
-                    UntrackButton(child);
-                    child->SetContainer(nullptr);
-                    child->SetContainerId(L"");
-                }
-                element->ClearContainerItems();
-            }
-
-            UpdateContainerForElement(element, L"");
-            m_LayoutConfigs.erase(id);
-            WidgetAnimationHelper::RemoveAnimationsForElement(*this, id);
-            m_ElementIndex.erase(id);
-            UntrackButton(element);
-            m_TrackedElements.erase(element);
-            it = m_Elements.erase(it);
-            changed = true;
+      if (element->IsContainer()) {
+        for (Element *child : element->GetContainerItems()) {
+          UntrackButton(child);
+          child->SetContainer(nullptr);
+          child->SetContainerId(L"");
         }
-        else
-        {
-            ++it;
-        }
-    }
+        element->ClearContainerItems();
+      }
 
-    if (changed)
-    {
-        Redraw();
+      UpdateContainerForElement(element, L"");
+      m_LayoutConfigs.erase(id);
+      WidgetAnimationHelper::RemoveAnimationsForElement(*this, id);
+      m_ElementIndex.erase(id);
+      UntrackButton(element);
+      m_TrackedElements.erase(element);
+      it = m_Elements.erase(it);
+      changed = true;
+    } else {
+      ++it;
     }
-    return changed;
+  }
+
+  if (changed) {
+    Redraw();
+  }
+  return changed;
 }
 
 /*
 ** Remove multiple elements by their IDs.
 */
-void Widget::RemoveElements(const std::vector<std::wstring> &ids)
-{
-    bool changed = false;
-    for (const auto &id : ids)
-    {
-        for (auto it = m_Elements.begin(); it != m_Elements.end(); ++it)
-        {
-            Element *element = it->get();
-            if (element->GetId() == id)
-            {
-                ClearElementReferences(element);
-                if (PathShape *path = dynamic_cast<PathShape *>(element))
-                {
-                    ReleaseCombinedConsumes(path);
-                }
-                if (element->IsContainer())
-                {
-                    for (Element *child : element->GetContainerItems())
-                    {
-                        UntrackButton(child);
-                        child->SetContainer(nullptr);
-                        child->SetContainerId(L"");
-                    }
-                    element->ClearContainerItems();
-                }
-                UpdateContainerForElement(element, L"");
-                m_LayoutConfigs.erase(id);
-                WidgetAnimationHelper::RemoveAnimationsForElement(*this, id);
-                m_ElementIndex.erase(id);
-                UntrackButton(element);
-                m_TrackedElements.erase(element);
-                m_Elements.erase(it);
-                changed = true;
-                break;
-            }
+void Widget::RemoveElements(const std::vector<std::wstring> &ids) {
+  bool changed = false;
+  for (const auto &id : ids) {
+    for (auto it = m_Elements.begin(); it != m_Elements.end(); ++it) {
+      Element *element = it->get();
+      if (element->GetId() == id) {
+        ClearElementReferences(element);
+        if (PathShape *path = dynamic_cast<PathShape *>(element)) {
+          ReleaseCombinedConsumes(path);
         }
+        if (element->IsContainer()) {
+          for (Element *child : element->GetContainerItems()) {
+            UntrackButton(child);
+            child->SetContainer(nullptr);
+            child->SetContainerId(L"");
+          }
+          element->ClearContainerItems();
+        }
+        UpdateContainerForElement(element, L"");
+        m_LayoutConfigs.erase(id);
+        WidgetAnimationHelper::RemoveAnimationsForElement(*this, id);
+        m_ElementIndex.erase(id);
+        UntrackButton(element);
+        m_TrackedElements.erase(element);
+        m_Elements.erase(it);
+        changed = true;
+        break;
+      }
     }
-    if (changed)
-        Redraw();
+  }
+  if (changed)
+    Redraw();
 }
 
 /*
 ** Set the entire custom context menu.
 */
-void Widget::SetContextMenu(const std::vector<MenuItem> &menu)
-{
-    m_ContextMenu = menu;
+void Widget::SetContextMenu(const std::vector<MenuItem> &menu) {
+  m_ContextMenu = menu;
 }
 
 /*
 ** Clear all custom context menu items.
 */
-void Widget::ClearContextMenu()
-{
-    m_ContextMenu.clear();
-}
+void Widget::ClearContextMenu() { m_ContextMenu.clear(); }
 
 /*
 ** Redraw the widget window to reflect content changes.
 */
-void Widget::Redraw()
-{
-    if (m_IsBatchUpdating <= 0)
-    {
-        UpdateLayeredWindowContent();
-    }
+void Widget::Redraw() {
+  if (m_IsBatchUpdating <= 0) {
+    UpdateLayeredWindowContent();
+  }
 }
 
-void Widget::OnImageDownloaded(const std::wstring &url, const std::vector<BYTE> &buffer)
-{
-    bool updated = false;
-    if (m_Options.backgroundImage == url && !m_BackgroundImage.IsLoaded())
-    {
-        m_BackgroundImage.OnImageDownloaded(url, buffer);
-        updated = true;
+void Widget::OnImageDownloaded(const std::wstring &url,
+                               const std::vector<BYTE> &buffer) {
+  bool updated = false;
+  if (m_Options.backgroundImage == url && !m_BackgroundImage.IsLoaded()) {
+    m_BackgroundImage.OnImageDownloaded(url, buffer);
+    updated = true;
+  }
+  for (auto &uptr : m_Elements) {
+    Element *element = uptr.get();
+    if (element->GetImageUrl() == url) {
+      element->OnImageDownloaded(url, buffer);
+      updated = true;
     }
-    for (auto &uptr : m_Elements)
-    {
-        Element *element = uptr.get();
-        if (element->GetImageUrl() == url)
-        {
-            element->OnImageDownloaded(url, buffer);
-            updated = true;
-        }
-    }
+  }
 
-    if (updated)
-    {
-        Redraw();
-    }
+  if (updated) {
+    Redraw();
+  }
 }
 
-void Widget::SetElementFontPath(const std::wstring &elementId, const std::wstring &fontDir)
-{
-    Element *element = FindElementById(elementId);
-    if (!element)
-        return;
+void Widget::SetElementFontPath(const std::wstring &elementId,
+                                const std::wstring &fontDir) {
+  Element *element = FindElementById(elementId);
+  if (!element)
+    return;
 
-    TextElement *textElem = dynamic_cast<TextElement *>(element);
-    if (textElem)
-    {
-        textElem->SetFontPath(fontDir);
-        Redraw();
-        return;
-    }
+  TextElement *textElem = dynamic_cast<TextElement *>(element);
+  if (textElem) {
+    textElem->SetFontPath(fontDir);
+    Redraw();
+    return;
+  }
 
-    InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(element);
-    if (inputElem)
-    {
-        inputElem->SetFontPath(fontDir);
-        Redraw();
-        return;
-    }
+  InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(element);
+  if (inputElem) {
+    inputElem->SetFontPath(fontDir);
+    Redraw();
+    return;
+  }
 }
 
-void Widget::ReleaseRenderSurface()
-{
-    if (m_hRenderMemDc && m_hRenderOldBitmap)
-    {
-        SelectObject(m_hRenderMemDc, m_hRenderOldBitmap);
-        m_hRenderOldBitmap = nullptr;
-    }
-    if (m_hRenderBitmap)
-    {
-        DeleteObject(m_hRenderBitmap);
-        m_hRenderBitmap = nullptr;
-    }
-    if (m_hRenderMemDc)
-    {
-        DeleteDC(m_hRenderMemDc);
-        m_hRenderMemDc = nullptr;
-    }
-    m_pRenderBitmapBits = nullptr;
-    m_RenderBitmapW = 0;
-    m_RenderBitmapH = 0;
+void Widget::ReleaseRenderSurface() {
+  if (m_hRenderMemDc && m_hRenderOldBitmap) {
+    SelectObject(m_hRenderMemDc, m_hRenderOldBitmap);
+    m_hRenderOldBitmap = nullptr;
+  }
+  if (m_hRenderBitmap) {
+    DeleteObject(m_hRenderBitmap);
+    m_hRenderBitmap = nullptr;
+  }
+  if (m_hRenderMemDc) {
+    DeleteDC(m_hRenderMemDc);
+    m_hRenderMemDc = nullptr;
+  }
+  m_pRenderBitmapBits = nullptr;
+  m_RenderBitmapW = 0;
+  m_RenderBitmapH = 0;
 }
 
 /*
 ** Update the layered window content using UpdateLayeredWindow.
 ** Draws all content to a memory DC and updates the window.
 */
-void Widget::UpdateLayeredWindowContent()
-{
-    if (!m_hWnd)
-        return;
+void Widget::UpdateLayeredWindowContent() {
+  if (!m_hWnd)
+    return;
 
-    m_BackgroundImage.SetOwnerHWND(m_hWnd);
+  m_BackgroundImage.SetOwnerHWND(m_hWnd);
 
-    for (auto &uptr : m_Elements)
-    {
-        uptr->SetOwnerHWND(m_hWnd);
+  for (auto &uptr : m_Elements) {
+    uptr->SetOwnerHWND(m_hWnd);
+  }
+
+  int calcW = m_Options.width;
+  int calcH = m_Options.height;
+
+  bool shouldCalcW = !m_Options.m_WDefined;
+  bool shouldCalcH = !m_Options.m_HDefined;
+
+  if (shouldCalcW || shouldCalcH) {
+    int maxX = 0;
+    int maxY = 0;
+    for (auto &uptr : m_Elements) {
+      Element *element = uptr.get();
+      if (element->IsContained())
+        continue;
+      GfxRect bounds = element->GetBounds();
+      maxX = (std::max)(maxX, bounds.X + bounds.Width);
+      maxY = (std::max)(maxY, bounds.Y + bounds.Height);
+
+      //     Logging::Log(LogLevel::Debug, L"Widget::UpdateSize: Element '%s'
+      //     contributing to bounds: [X:%d, Y:%d, W:%d, H:%d] -> TargetMax: [%d,
+      //     %d]",
+      //         element->GetId().c_str(), bounds.X, bounds.Y, bounds.Width,
+      //         bounds.Height, maxX, maxY);
     }
 
-    int calcW = m_Options.width;
-    int calcH = m_Options.height;
-
-    bool shouldCalcW = !m_Options.m_WDefined;
-    bool shouldCalcH = !m_Options.m_HDefined;
-
-    if (shouldCalcW || shouldCalcH)
-    {
-        int maxX = 0;
-        int maxY = 0;
-        for (auto &uptr : m_Elements)
-        {
-            Element *element = uptr.get();
-            if (element->IsContained())
-                continue;
-            GfxRect bounds = element->GetBounds();
-            maxX = (std::max)(maxX, bounds.X + bounds.Width);
-            maxY = (std::max)(maxY, bounds.Y + bounds.Height);
-
-            //     Logging::Log(LogLevel::Debug, L"Widget::UpdateSize: Element '%s' contributing to bounds: [X:%d, Y:%d, W:%d, H:%d] -> TargetMax: [%d, %d]",
-            //         element->GetId().c_str(), bounds.X, bounds.Y, bounds.Width, bounds.Height, maxX, maxY);
-        }
-
-        if (shouldCalcW)
-        {
-            calcW = maxX;
-            if (m_Options.minWidth > 0 && calcW < m_Options.minWidth)
-                calcW = m_Options.minWidth;
-        }
-        if (shouldCalcH)
-        {
-            calcH = maxY;
-            if (m_Options.minHeight > 0 && calcH < m_Options.minHeight)
-                calcH = m_Options.minHeight;
-        }
-
-        // Ensure at least 1x1
-        if (calcW <= 0)
-            calcW = 1;
-        if (calcH <= 0)
-            calcH = 1;
-
-        // If size changed, update window and options
-        if (calcW != m_Options.width || calcH != m_Options.height)
-        {
-            // Logging::Log(LogLevel::Info, L"Widget::UpdateSize: Resizing window '%s' from %dx%d to %dx%d",
-            //     m_Options.id.c_str(), m_Options.width, m_Options.height, calcW, calcH);
-            m_Options.width = calcW;
-            m_Options.height = calcH;
-            SetWindowPos(m_hWnd, NULL, 0, 0, calcW, calcH, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-            ReleaseRenderSurface();
-        }
+    if (shouldCalcW) {
+      calcW = maxX;
+      if (m_Options.minWidth > 0 && calcW < m_Options.minWidth)
+        calcW = m_Options.minWidth;
+    }
+    if (shouldCalcH) {
+      calcH = maxY;
+      if (m_Options.minHeight > 0 && calcH < m_Options.minHeight)
+        calcH = m_Options.minHeight;
     }
 
-    // Use current dimensions
-    int w = m_Options.width;
-    int h = m_Options.height;
-    if (w <= 0 || h <= 0)
-        return;
+    // Ensure at least 1x1
+    if (calcW <= 0)
+      calcW = 1;
+    if (calcH <= 0)
+      calcH = 1;
 
-    HDC hdcScreen = GetDC(NULL);
+    // If size changed, update window and options
+    if (calcW != m_Options.width || calcH != m_Options.height) {
+      // Logging::Log(LogLevel::Info, L"Widget::UpdateSize: Resizing window '%s'
+      // from %dx%d to %dx%d",
+      //     m_Options.id.c_str(), m_Options.width, m_Options.height, calcW,
+      //     calcH);
+      m_Options.width = calcW;
+      m_Options.height = calcH;
+      SetWindowPos(m_hWnd, NULL, 0, 0, calcW, calcH,
+                   SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+      ReleaseRenderSurface();
+    }
+  }
 
-    if (!m_hRenderMemDc)
-    {
-        m_hRenderMemDc = CreateCompatibleDC(hdcScreen);
-        if (!m_hRenderMemDc)
-        {
-            ReleaseDC(NULL, hdcScreen);
-            return;
-        }
+  // Use current dimensions
+  int w = m_Options.width;
+  int h = m_Options.height;
+  if (w <= 0 || h <= 0)
+    return;
+
+  HDC hdcScreen = GetDC(NULL);
+
+  if (!m_hRenderMemDc) {
+    m_hRenderMemDc = CreateCompatibleDC(hdcScreen);
+    if (!m_hRenderMemDc) {
+      ReleaseDC(NULL, hdcScreen);
+      return;
+    }
+  }
+
+  void *pvBits = m_pRenderBitmapBits;
+  if (w != m_RenderBitmapW || h != m_RenderBitmapH || !m_hRenderBitmap) {
+    if (m_hRenderBitmap) {
+      SelectObject(m_hRenderMemDc, m_hRenderOldBitmap);
+      DeleteObject(m_hRenderBitmap);
+      m_hRenderBitmap = nullptr;
+      m_hRenderOldBitmap = nullptr;
+      m_pRenderBitmapBits = nullptr;
     }
 
-    void *pvBits = m_pRenderBitmapBits;
-    if (w != m_RenderBitmapW || h != m_RenderBitmapH || !m_hRenderBitmap)
-    {
-        if (m_hRenderBitmap)
-        {
-            SelectObject(m_hRenderMemDc, m_hRenderOldBitmap);
-            DeleteObject(m_hRenderBitmap);
-            m_hRenderBitmap = nullptr;
-            m_hRenderOldBitmap = nullptr;
-            m_pRenderBitmapBits = nullptr;
-        }
+    BITMAPINFO bmi;
+    ZeroMemory(&bmi, sizeof(BITMAPINFO));
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = w;
+    bmi.bmiHeader.biHeight = -h;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
 
-        BITMAPINFO bmi;
-        ZeroMemory(&bmi, sizeof(BITMAPINFO));
-        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        bmi.bmiHeader.biWidth = w;
-        bmi.bmiHeader.biHeight = -h;
-        bmi.bmiHeader.biPlanes = 1;
-        bmi.bmiHeader.biBitCount = 32;
-        bmi.bmiHeader.biCompression = BI_RGB;
+    m_hRenderBitmap = CreateDIBSection(m_hRenderMemDc, &bmi, DIB_RGB_COLORS,
+                                       &pvBits, NULL, 0);
+    if (!m_hRenderBitmap) {
+      ReleaseDC(NULL, hdcScreen);
+      return;
+    }
+    m_hRenderOldBitmap = (HBITMAP)SelectObject(m_hRenderMemDc, m_hRenderBitmap);
+    m_pRenderBitmapBits = pvBits;
+    m_RenderBitmapW = w;
+    m_RenderBitmapH = h;
+  }
 
-        m_hRenderBitmap = CreateDIBSection(m_hRenderMemDc, &bmi, DIB_RGB_COLORS, &pvBits, NULL, 0);
-        if (!m_hRenderBitmap)
-        {
-            ReleaseDC(NULL, hdcScreen);
-            return;
-        }
-        m_hRenderOldBitmap = (HBITMAP)SelectObject(m_hRenderMemDc, m_hRenderBitmap);
-        m_pRenderBitmapBits = pvBits;
-        m_RenderBitmapW = w;
-        m_RenderBitmapH = h;
+  HDC hdcMem = m_hRenderMemDc;
+
+  // Draw Direct2D
+  {
+    if (!m_pContext) {
+      bool useHW = Settings::GetGlobalBool("useHardwareAcceleration", false);
+      D2D1_RENDER_TARGET_TYPE rtType = useHW ? D2D1_RENDER_TARGET_TYPE_DEFAULT
+                                             : D2D1_RENDER_TARGET_TYPE_SOFTWARE;
+
+      // Logging::Log(LogLevel::Info, L"Creating Direct2D Context: Hardware
+      // Acceleration = %s", useHW ? L"ON" : L"OFF");
+
+      D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+          rtType,
+          D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,
+                            D2D1_ALPHA_MODE_PREMULTIPLIED),
+          0, 0, D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE);
+
+      Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pDCRT;
+      HRESULT hr = Direct2D::GetFactory()->CreateDCRenderTarget(
+          &props, pDCRT.GetAddressOf());
+      if (SUCCEEDED(hr)) {
+        hr = pDCRT.As<ID2D1DeviceContext>(&m_pContext);
+      }
+
+      if (FAILED(hr)) {
+        Logging::Log(LogLevel::Error, L"Failed to create D2D Context (0x%08X)",
+                     hr);
+      }
     }
 
-    HDC hdcMem = m_hRenderMemDc;
-
-    // Draw Direct2D
-    {
-        if (!m_pContext)
-        {
-            bool useHW = Settings::GetGlobalBool("useHardwareAcceleration", false);
-            D2D1_RENDER_TARGET_TYPE rtType = useHW ? D2D1_RENDER_TARGET_TYPE_DEFAULT : D2D1_RENDER_TARGET_TYPE_SOFTWARE;
-
-            // Logging::Log(LogLevel::Info, L"Creating Direct2D Context: Hardware Acceleration = %s", useHW ? L"ON" : L"OFF");
-
-            D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
-                rtType,
-                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
-                0, 0,
-                D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE);
-
-            Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pDCRT;
-            HRESULT hr = Direct2D::GetFactory()->CreateDCRenderTarget(&props, pDCRT.GetAddressOf());
-            if (SUCCEEDED(hr))
-            {
-                hr = pDCRT.As<ID2D1DeviceContext>(&m_pContext);
-            }
-
-            if (FAILED(hr))
-            {
-                Logging::Log(LogLevel::Error, L"Failed to create D2D Context (0x%08X)", hr);
-            }
+    if (m_pContext) {
+      Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pDCRT;
+      if (SUCCEEDED(m_pContext.As(&pDCRT))) {
+        RECT renderRect = {0, 0, w, h};
+        HRESULT hr = pDCRT->BindDC(hdcMem, &renderRect);
+        if (FAILED(hr)) {
+          Logging::Log(LogLevel::Error, L"BindDC failed (0x%08X)", hr);
         }
+      }
 
-        if (m_pContext)
-        {
-            Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> pDCRT;
-            if (SUCCEEDED(m_pContext.As(&pDCRT)))
-            {
-                RECT renderRect = {0, 0, w, h};
-                HRESULT hr = pDCRT->BindDC(hdcMem, &renderRect);
-                if (FAILED(hr))
-                {
-                    Logging::Log(LogLevel::Error, L"BindDC failed (0x%08X)", hr);
-                }
+      m_pContext->BeginDraw();
+      m_pContext->Clear(D2D1::ColorF(0, 0, 0, 0));
+
+      // Draw Background
+      D2D1_RECT_F backRect = D2D1::RectF(0, 0, (float)w, (float)h);
+      Microsoft::WRL::ComPtr<ID2D1Brush> pBackBrush;
+      Direct2D::CreateBrushFromGradientOrColor(
+          m_pContext.Get(), backRect, &m_Options.bgGradient, m_Options.color,
+          m_Options.bgAlpha / 255.0f, pBackBrush.GetAddressOf());
+
+      if (pBackBrush) {
+        m_pContext->FillRectangle(backRect, pBackBrush.Get());
+      }
+
+      if (!m_Options.backgroundImage.empty()) {
+        m_BackgroundImage.EnsureBitmap(m_pContext.Get());
+        if (ID2D1Bitmap *background = m_BackgroundImage.GetBitmap()) {
+          const D2D1_SIZE_F imageSize = background->GetSize();
+          if (imageSize.width > 0.0f && imageSize.height > 0.0f) {
+            D2D1_RECT_F dst = backRect;
+            const auto positionImage = [this, w, h](float drawW, float drawH) {
+              if (m_Options.backgroundImagePosition.type ==
+                  BackgroundImagePosition::Type::Explicit)
+                return D2D1::RectF(m_Options.backgroundImagePosition.x,
+                                   m_Options.backgroundImagePosition.y,
+                                   m_Options.backgroundImagePosition.x + drawW,
+                                   m_Options.backgroundImagePosition.y + drawH);
+
+              float x = 0.0f, y = 0.0f;
+              const std::wstring &position =
+                  m_Options.backgroundImagePosition.keyword;
+              if (position.find(L"right") != std::wstring::npos)
+                x = w - drawW;
+              else if (position.find(L"left") == std::wstring::npos)
+                x = (w - drawW) * 0.5f;
+              if (position.find(L"bottom") != std::wstring::npos)
+                y = h - drawH;
+              else if (position.find(L"top") == std::wstring::npos)
+                y = (h - drawH) * 0.5f;
+              return D2D1::RectF(x, y, x + drawW, y + drawH);
+            };
+            if (m_Options.backgroundImageSize.type ==
+                BackgroundImageSize::Type::Explicit) {
+              const float drawW = m_Options.backgroundImageSize.hasWidth
+                                      ? m_Options.backgroundImageSize.width
+                                      : m_Options.backgroundImageSize.height *
+                                            imageSize.width / imageSize.height;
+              const float drawH = m_Options.backgroundImageSize.hasHeight
+                                      ? m_Options.backgroundImageSize.height
+                                      : m_Options.backgroundImageSize.width *
+                                            imageSize.height / imageSize.width;
+              dst = positionImage(drawW, drawH);
+            } else if (m_Options.backgroundImageSize.type !=
+                       BackgroundImageSize::Type::Stretch) {
+              const float scale =
+                  m_Options.backgroundImageSize.type ==
+                          BackgroundImageSize::Type::Contain
+                      ? (std::min)(static_cast<float>(w) / imageSize.width,
+                                   static_cast<float>(h) / imageSize.height)
+                      : (std::max)(static_cast<float>(w) / imageSize.width,
+                                   static_cast<float>(h) / imageSize.height);
+              const float drawW = imageSize.width * scale;
+              const float drawH = imageSize.height * scale;
+              dst = positionImage(drawW, drawH);
             }
-
-            m_pContext->BeginDraw();
-            m_pContext->Clear(D2D1::ColorF(0, 0, 0, 0));
-
-            // Draw Background
-            D2D1_RECT_F backRect = D2D1::RectF(0, 0, (float)w, (float)h);
-            Microsoft::WRL::ComPtr<ID2D1Brush> pBackBrush;
-            Direct2D::CreateBrushFromGradientOrColor(
-                m_pContext.Get(),
-                backRect,
-                &m_Options.bgGradient,
-                m_Options.color,
-                m_Options.bgAlpha / 255.0f,
-                pBackBrush.GetAddressOf());
-
-            if (pBackBrush)
-            {
-                m_pContext->FillRectangle(backRect, pBackBrush.Get());
-            }
-
-            if (!m_Options.backgroundImage.empty())
-            {
-                m_BackgroundImage.EnsureBitmap(m_pContext.Get());
-                if (ID2D1Bitmap *background = m_BackgroundImage.GetBitmap())
-                {
-                    const D2D1_SIZE_F imageSize = background->GetSize();
-                    if (imageSize.width > 0.0f && imageSize.height > 0.0f)
-                    {
-                        D2D1_RECT_F dst = backRect;
-                        const auto positionImage = [this, w, h](float drawW, float drawH)
-                        {
-                            if (m_Options.backgroundImagePosition.type == BackgroundImagePosition::Type::Explicit)
-                                return D2D1::RectF(m_Options.backgroundImagePosition.x, m_Options.backgroundImagePosition.y,
-                                                   m_Options.backgroundImagePosition.x + drawW, m_Options.backgroundImagePosition.y + drawH);
-
-                            float x = 0.0f, y = 0.0f;
-                            const std::wstring &position = m_Options.backgroundImagePosition.keyword;
-                            if (position.find(L"right") != std::wstring::npos)
-                                x = w - drawW;
-                            else if (position.find(L"left") == std::wstring::npos)
-                                x = (w - drawW) * 0.5f;
-                            if (position.find(L"bottom") != std::wstring::npos)
-                                y = h - drawH;
-                            else if (position.find(L"top") == std::wstring::npos)
-                                y = (h - drawH) * 0.5f;
-                            return D2D1::RectF(x, y, x + drawW, y + drawH);
-                        };
-                        if (m_Options.backgroundImageSize.type == BackgroundImageSize::Type::Explicit)
-                        {
-                            const float drawW = m_Options.backgroundImageSize.hasWidth
-                                                    ? m_Options.backgroundImageSize.width
-                                                    : m_Options.backgroundImageSize.height * imageSize.width / imageSize.height;
-                            const float drawH = m_Options.backgroundImageSize.hasHeight
-                                                    ? m_Options.backgroundImageSize.height
-                                                    : m_Options.backgroundImageSize.width * imageSize.height / imageSize.width;
-                            dst = positionImage(drawW, drawH);
-                        }
-                        else if (m_Options.backgroundImageSize.type != BackgroundImageSize::Type::Stretch)
-                        {
-                            const float scale = m_Options.backgroundImageSize.type == BackgroundImageSize::Type::Contain
-                                                    ? (std::min)(static_cast<float>(w) / imageSize.width, static_cast<float>(h) / imageSize.height)
-                                                    : (std::max)(static_cast<float>(w) / imageSize.width, static_cast<float>(h) / imageSize.height);
-                            const float drawW = imageSize.width * scale;
-                            const float drawH = imageSize.height * scale;
-                            dst = positionImage(drawW, drawH);
-                        }
-                        m_pContext->PushAxisAlignedClip(backRect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
-                        m_pContext->DrawBitmap(background, &dst, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
-                        m_pContext->PopAxisAlignedClip();
-                    }
-                }
-            }
-
-            // Advance the caret blink phase for the focused input box.
-            if (m_FocusedInputBox)
-            {
-                const auto focused = static_cast<Element *>(m_FocusedInputBox);
-                const bool isTracked = std::find_if(m_Elements.begin(), m_Elements.end(),
-                                                    [&](const auto &u)
-                                                    { return u.get() == focused; }) != m_Elements.end();
-                if (isTracked)
-                {
-                    m_FocusedInputBox->UpdateBlink();
-                }
-                else
-                {
-                    m_FocusedInputBox = nullptr;
-                    if (m_hWnd)
-                        KillTimer(m_hWnd, TIMER_CARET);
-                }
-            }
-
-            // Draw Elements
-            for (auto &uptr : m_Elements)
-            {
-                Element *element = uptr.get();
-                if (!element->IsVisible())
-                    continue;
-                if (element->IsContained())
-                    continue;
-
-                if (!element->IsContainer())
-                {
-                    element->Render(m_pContext.Get());
-                }
-                else if (element->GetType() == ELEMENT_LAYOUT_BOX)
-                {
-                    // LayoutBox is both structural and visual; render box chrome first.
-                    element->Render(m_pContext.Get());
-                }
-                if (element->IsContainer())
-                {
-                    RenderContainerChildren(element);
-                }
-            }
-
-            HRESULT hr = m_pContext->EndDraw();
-            if (hr == D2DERR_RECREATE_TARGET)
-            {
-                m_pContext.Reset();
-                Logging::Log(LogLevel::Error, L"D2D Device lost, resetting RenderContext");
-            }
-            else if (FAILED(hr))
-            {
-                Logging::Log(LogLevel::Error, L"D2D EndDraw failed (0x%08X)", hr);
-            }
+            m_pContext->PushAxisAlignedClip(backRect,
+                                            D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+            m_pContext->DrawBitmap(background, &dst, 1.0f,
+                                   D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+            m_pContext->PopAxisAlignedClip();
+          }
         }
-    }
+      }
 
-    // Keep bounds-hit interactive element areas mouse-reachable even when their
-    // pixels are fully transparent in the layered window surface.
-    if (pvBits)
-    {
-        for (auto &uptr : m_Elements)
-        {
-            Element *element = uptr.get();
-            if (element->IsContained())
-                continue;
-            StampInteractiveBounds(element, 0, 0, static_cast<BYTE *>(pvBits), w, h);
+      // Advance the caret blink phase for the focused input box.
+      if (m_FocusedInputBox) {
+        const auto focused = static_cast<Element *>(m_FocusedInputBox);
+        const bool isTracked =
+            std::find_if(m_Elements.begin(), m_Elements.end(),
+                         [&](const auto &u) { return u.get() == focused; }) !=
+            m_Elements.end();
+        if (isTracked) {
+          m_FocusedInputBox->UpdateBlink();
+        } else {
+          m_FocusedInputBox = nullptr;
+          if (m_hWnd)
+            KillTimer(m_hWnd, TIMER_CARET);
         }
-    }
+      }
 
-    POINT pptDst = {m_Options.x, m_Options.y};
-    if (m_hWnd)
-    {
-        RECT rc;
-        if (GetWindowRect(m_hWnd, &rc))
-        {
-            if (m_Options.x == CW_USEDEFAULT)
-                m_Options.x = rc.left;
-            if (m_Options.y == CW_USEDEFAULT)
-                m_Options.y = rc.top;
-            pptDst.x = m_Options.x;
-            pptDst.y = m_Options.y;
+      // Draw Elements
+      for (auto &uptr : m_Elements) {
+        Element *element = uptr.get();
+        if (!element->IsVisible())
+          continue;
+        if (element->IsContained())
+          continue;
+
+        if (!element->IsContainer()) {
+          element->Render(m_pContext.Get());
+        } else if (element->GetType() == ELEMENT_LAYOUT_BOX) {
+          // LayoutBox is both structural and visual; render box chrome first.
+          element->Render(m_pContext.Get());
         }
+        if (element->IsContainer()) {
+          RenderContainerChildren(element);
+        }
+      }
+
+      HRESULT hr = m_pContext->EndDraw();
+      if (hr == D2DERR_RECREATE_TARGET) {
+        m_pContext.Reset();
+        Logging::Log(LogLevel::Error,
+                     L"D2D Device lost, resetting RenderContext");
+      } else if (FAILED(hr)) {
+        Logging::Log(LogLevel::Error, L"D2D EndDraw failed (0x%08X)", hr);
+      }
     }
+  }
 
-    POINT pptSrc = {0, 0};
-    SIZE size = {w, h};
-
-    BLENDFUNCTION bf;
-    bf.BlendOp = AC_SRC_OVER;
-    bf.BlendFlags = 0;
-    bf.SourceConstantAlpha = m_Options.windowOpacity; // Master opacity
-    bf.AlphaFormat = AC_SRC_ALPHA;                    // Pre-multiplied alpha
-
-    BOOL success = UpdateLayeredWindow(m_hWnd, hdcScreen, &pptDst, &size, hdcMem, &pptSrc, 0, &bf, ULW_ALPHA);
-    if (!success)
-    {
-        DWORD err = GetLastError();
-        Logging::Log(LogLevel::Error, L"UpdateLayeredWindow failed for widget %s (Error: %d). Size: %dx%d, Pos: %d,%d",
-                     m_Options.id.c_str(), err, w, h, pptDst.x, pptDst.y);
+  // Keep bounds-hit interactive element areas mouse-reachable even when their
+  // pixels are fully transparent in the layered window surface.
+  if (pvBits) {
+    for (auto &uptr : m_Elements) {
+      Element *element = uptr.get();
+      if (element->IsContained())
+        continue;
+      StampInteractiveBounds(element, 0, 0, static_cast<BYTE *>(pvBits), w, h);
     }
+  }
 
-    ReleaseDC(NULL, hdcScreen);
+  POINT pptDst = {m_Options.x, m_Options.y};
+  if (m_hWnd) {
+    RECT rc;
+    if (GetWindowRect(m_hWnd, &rc)) {
+      if (m_Options.x == CW_USEDEFAULT)
+        m_Options.x = rc.left;
+      if (m_Options.y == CW_USEDEFAULT)
+        m_Options.y = rc.top;
+      pptDst.x = m_Options.x;
+      pptDst.y = m_Options.y;
+    }
+  }
+
+  POINT pptSrc = {0, 0};
+  SIZE size = {w, h};
+
+  BLENDFUNCTION bf;
+  bf.BlendOp = AC_SRC_OVER;
+  bf.BlendFlags = 0;
+  bf.SourceConstantAlpha = m_Options.windowOpacity; // Master opacity
+  bf.AlphaFormat = AC_SRC_ALPHA;                    // Pre-multiplied alpha
+
+  BOOL success = UpdateLayeredWindow(m_hWnd, hdcScreen, &pptDst, &size, hdcMem,
+                                     &pptSrc, 0, &bf, ULW_ALPHA);
+  if (!success) {
+    DWORD err = GetLastError();
+    Logging::Log(LogLevel::Error,
+                 L"UpdateLayeredWindow failed for widget %s (Error: %d). Size: "
+                 L"%dx%d, Pos: %d,%d",
+                 m_Options.id.c_str(), err, w, h, pptDst.x, pptDst.y);
+  }
+
+  ReleaseDC(NULL, hdcScreen);
 }
 
 /*
 ** Find a content element by its ID.
 ** Returns pointer to the element or nullptr if not found.
 */
-Element *Widget::FindElementById(const std::wstring &id)
-{
-    if (id.empty())
-        return nullptr;
-    auto it = m_ElementIndex.find(id);
-    if (it == m_ElementIndex.end())
-        return nullptr;
-    Element *el = it->second;
-    // Defensive: the index should always be in sync, but verify via the
-    // flat pointer set to guard against any future sync bugs.
-    if (el && m_TrackedElements.count(el))
-        return el;
-    // Stale entry — remove it.
-    m_ElementIndex.erase(it);
+Element *Widget::FindElementById(const std::wstring &id) {
+  if (id.empty())
     return nullptr;
+  auto it = m_ElementIndex.find(id);
+  if (it == m_ElementIndex.end())
+    return nullptr;
+  Element *el = it->second;
+  // Defensive: the index should always be in sync, but verify via the
+  // flat pointer set to guard against any future sync bugs.
+  if (el && m_TrackedElements.count(el))
+    return el;
+  // Stale entry — remove it.
+  m_ElementIndex.erase(it);
+  return nullptr;
 }
 
-void Widget::UntrackButton(Element *el)
-{
-    if (!el || el->GetType() != ELEMENT_BUTTON)
-        return;
-    auto *btn = static_cast<ButtonElement *>(el);
-    auto it = std::find(m_Buttons.begin(), m_Buttons.end(), btn);
-    if (it != m_Buttons.end())
-        m_Buttons.erase(it);
+void Widget::UntrackButton(Element *el) {
+  if (!el || el->GetType() != ELEMENT_BUTTON)
+    return;
+  auto *btn = static_cast<ButtonElement *>(el);
+  auto it = std::find(m_Buttons.begin(), m_Buttons.end(), btn);
+  if (it != m_Buttons.end())
+    m_Buttons.erase(it);
 }
 
 /*
@@ -3811,1219 +3537,1079 @@ void Widget::UntrackButton(Element *el)
 ** its bounding box overlaps, so a single cell lookup under the cursor
 ** yields only the elements that could possibly contain that point.
 */
-void Widget::RebuildSpatialGrid()
-{
-    m_SpatialGrid.clear();
-    // Iterate back-to-front so that the cell vectors preserve Z-order
-    // (last element in the vector = front-most = checked first).
-    for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it)
-    {
-        Element *el = it->get();
-        if (!el->IsVisible() || el->IsContained())
-            continue;
-        GfxRect bounds = el->GetBounds();
-        int minCX = bounds.X / GRID_CELL_SIZE;
-        int minCY = bounds.Y / GRID_CELL_SIZE;
-        int maxCX = (bounds.X + bounds.Width - 1) / GRID_CELL_SIZE;
-        int maxCY = (bounds.Y + bounds.Height - 1) / GRID_CELL_SIZE;
-        for (int cy = minCY; cy <= maxCY; ++cy)
-        {
-            for (int cx = minCX; cx <= maxCX; ++cx)
-            {
-                int64_t key = (static_cast<int64_t>(cx) << 32) | static_cast<uint32_t>(cy);
-                m_SpatialGrid[key].push_back(el);
-            }
-        }
+void Widget::RebuildSpatialGrid() {
+  m_SpatialGrid.clear();
+  // Iterate back-to-front so that the cell vectors preserve Z-order
+  // (last element in the vector = front-most = checked first).
+  for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it) {
+    Element *el = it->get();
+    if (!el->IsVisible() || el->IsContained())
+      continue;
+    GfxRect bounds = el->GetBounds();
+    int minCX = bounds.X / GRID_CELL_SIZE;
+    int minCY = bounds.Y / GRID_CELL_SIZE;
+    int maxCX = (bounds.X + bounds.Width - 1) / GRID_CELL_SIZE;
+    int maxCY = (bounds.Y + bounds.Height - 1) / GRID_CELL_SIZE;
+    for (int cy = minCY; cy <= maxCY; ++cy) {
+      for (int cx = minCX; cx <= maxCX; ++cx) {
+        int64_t key =
+            (static_cast<int64_t>(cx) << 32) | static_cast<uint32_t>(cy);
+        m_SpatialGrid[key].push_back(el);
+      }
     }
+  }
 }
 
-bool Widget::IsTrackedElement(Element *el) const
-{
-    if (!el)
-        return false;
-    return m_TrackedElements.count(el) > 0;
+bool Widget::IsTrackedElement(Element *el) const {
+  if (!el)
+    return false;
+  return m_TrackedElements.count(el) > 0;
 }
 
 /*
 ** Stamp a 1-alpha pixel in interactive element bounds so the layered
 ** window keeps those areas mouse-reachable even when visually transparent.
 */
-void Widget::StampInteractiveBounds(Element *element, int offsetX, int offsetY, BYTE *pvBits, int surfW, int surfH)
-{
-    if (!element || !element->IsVisible())
-        return;
+void Widget::StampInteractiveBounds(Element *element, int offsetX, int offsetY,
+                                    BYTE *pvBits, int surfW, int surfH) {
+  if (!element || !element->IsVisible())
+    return;
 
-    GfxRect bounds = element->GetBounds();
-    const int absLeft = offsetX + bounds.X;
-    const int absTop = offsetY + bounds.Y;
-    const int absRight = absLeft + bounds.Width;
-    const int absBottom = absTop + bounds.Height;
+  GfxRect bounds = element->GetBounds();
+  const int absLeft = offsetX + bounds.X;
+  const int absTop = offsetY + bounds.Y;
+  const int absRight = absLeft + bounds.Width;
+  const int absBottom = absTop + bounds.Height;
 
-    if (element->HasMouseAction() && !element->GetPixelHitTest())
-    {
-        int left = (std::max)(0, absLeft);
-        int top = (std::max)(0, absTop);
-        int right = (std::min)(surfW, absRight);
-        int bottom = (std::min)(surfH, absBottom);
-        if (left < right && top < bottom)
-        {
-            BYTE *pixels = static_cast<BYTE *>(pvBits);
-            for (int yy = top; yy < bottom; ++yy)
-            {
-                BYTE *row = pixels + static_cast<size_t>(yy) * static_cast<size_t>(surfW) * 4;
-                for (int xx = left; xx < right; ++xx)
-                {
-                    BYTE &alpha = row[static_cast<size_t>(xx) * 4 + 3];
-                    if (alpha == 0)
-                    {
-                        alpha = 1;
-                    }
-                }
-            }
+  if (element->HasMouseAction() && !element->GetPixelHitTest()) {
+    int left = (std::max)(0, absLeft);
+    int top = (std::max)(0, absTop);
+    int right = (std::min)(surfW, absRight);
+    int bottom = (std::min)(surfH, absBottom);
+    if (left < right && top < bottom) {
+      BYTE *pixels = static_cast<BYTE *>(pvBits);
+      for (int yy = top; yy < bottom; ++yy) {
+        BYTE *row =
+            pixels + static_cast<size_t>(yy) * static_cast<size_t>(surfW) * 4;
+        for (int xx = left; xx < right; ++xx) {
+          BYTE &alpha = row[static_cast<size_t>(xx) * 4 + 3];
+          if (alpha == 0) {
+            alpha = 1;
+          }
         }
+      }
     }
+  }
 
-    if (element->IsContainer())
-    {
-        for (Element *child : element->GetContainerItems())
-        {
-            StampInteractiveBounds(child, absLeft, absTop, pvBits, surfW, surfH);
-        }
+  if (element->IsContainer()) {
+    for (Element *child : element->GetContainerItems()) {
+      StampInteractiveBounds(child, absLeft, absTop, pvBits, surfW, surfH);
     }
+  }
 }
 
 /*
 ** Handle mouse messages and dispatch to elements.
 ** Returns true if the message was handled by an element, false otherwise.
 */
-bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
-{
-    bool handled = false;
-    int x = GET_X_LPARAM(lParam);
-    int y = GET_Y_LPARAM(lParam);
-    bool justEnteredWidget = false;
+bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
+  bool handled = false;
+  int x = GET_X_LPARAM(lParam);
+  int y = GET_Y_LPARAM(lParam);
+  bool justEnteredWidget = false;
 
-    if (!IsTrackedElement(m_DragElement))
-    {
-        m_DragElement = nullptr;
-        m_IsElementDragging = false;
+  if (!IsTrackedElement(m_DragElement)) {
+    m_DragElement = nullptr;
+    m_IsElementDragging = false;
+  }
+
+  auto buildElementEventData = [&](Element *el) -> JSEngine::MouseEventData {
+    JSEngine::MouseEventData eventData;
+    eventData.clientX = x;
+    eventData.clientY = y;
+
+    POINT screenPt = {x, y};
+    ClientToScreen(m_hWnd, &screenPt);
+    eventData.screenX = screenPt.x;
+    eventData.screenY = screenPt.y;
+
+    const int elementX = el ? el->GetX() : 0;
+    const int elementY = el ? el->GetY() : 0;
+    eventData.offsetX = x - elementX;
+    eventData.offsetY = y - elementY;
+
+    const int elementW = el ? el->GetWidth() : 0;
+    const int elementH = el ? el->GetHeight() : 0;
+    if (elementW > 0) {
+      eventData.offsetXPercent =
+          (int)((eventData.offsetX / (double)elementW) * 100.0);
     }
-
-    auto buildElementEventData = [&](Element *el) -> JSEngine::MouseEventData
-    {
-        JSEngine::MouseEventData eventData;
-        eventData.clientX = x;
-        eventData.clientY = y;
-
-        POINT screenPt = {x, y};
-        ClientToScreen(m_hWnd, &screenPt);
-        eventData.screenX = screenPt.x;
-        eventData.screenY = screenPt.y;
-
-        const int elementX = el ? el->GetX() : 0;
-        const int elementY = el ? el->GetY() : 0;
-        eventData.offsetX = x - elementX;
-        eventData.offsetY = y - elementY;
-
-        const int elementW = el ? el->GetWidth() : 0;
-        const int elementH = el ? el->GetHeight() : 0;
-        if (elementW > 0)
-        {
-            eventData.offsetXPercent = (int)((eventData.offsetX / (double)elementW) * 100.0);
-        }
-        if (elementH > 0)
-        {
-            eventData.offsetYPercent = (int)((eventData.offsetY / (double)elementH) * 100.0);
-        }
-        return eventData;
-    };
-
-    // Manual tracking for tooltips to support hybrid delayed moves
-    m_Tooltip.Move();
-
-    if (message == WM_MOUSEMOVE)
-    {
-        if (!m_IsMouseOverWidget)
-        {
-            m_IsMouseOverWidget = true;
-            justEnteredWidget = true;
-        }
+    if (elementH > 0) {
+      eventData.offsetYPercent =
+          (int)((eventData.offsetY / (double)elementH) * 100.0);
     }
+    return eventData;
+  };
 
-    // For mouse wheel, coordinates are screen relative.
-    // Ignore wheel when cursor is outside this widget.
-    if (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL)
-    {
-        POINT pt = {x, y};
-        ScreenToClient(m_hWnd, &pt);
-        x = pt.x;
-        y = pt.y;
+  // Manual tracking for tooltips to support hybrid delayed moves
+  m_Tooltip.Move();
 
-        RECT clientRect = {};
-        if (GetClientRect(m_hWnd, &clientRect))
-        {
-            POINT clientPt = {x, y};
-            if (!PtInRect(&clientRect, clientPt))
-            {
-                return false;
-            }
-        }
+  if (message == WM_MOUSEMOVE) {
+    if (!m_IsMouseOverWidget) {
+      m_IsMouseOverWidget = true;
+      justEnteredWidget = true;
     }
+  }
 
-    bool needRedraw = false;
-    if (message == WM_MOUSEMOVE || message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || message == WM_MOUSELEAVE)
-    {
-        bool isDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
-        if (message == WM_LBUTTONDOWN)
-            isDown = true;
-        if (message == WM_LBUTTONUP)
-            isDown = false;
+  // For mouse wheel, coordinates are screen relative.
+  // Ignore wheel when cursor is outside this widget.
+  if (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL) {
+    POINT pt = {x, y};
+    ScreenToClient(m_hWnd, &pt);
+    x = pt.x;
+    y = pt.y;
 
-        for (ButtonElement *btn : m_Buttons)
-        {
-            ButtonState newState = BUTTON_STATE_NORMAL;
-
-            if (message != WM_MOUSELEAVE && btn->IsVisible() && btn->HitTest(x, y))
-            {
-                newState = isDown ? BUTTON_STATE_CLICKED : BUTTON_STATE_HOVERED;
-            }
-
-            if (btn->GetButtonState() != newState)
-            {
-                btn->SetButtonState(newState);
-                needRedraw = true;
-            }
-        }
+    RECT clientRect = {};
+    if (GetClientRect(m_hWnd, &clientRect)) {
+      POINT clientPt = {x, y};
+      if (!PtInRect(&clientRect, clientPt)) {
+        return false;
+      }
     }
+  }
 
-    {
-        JSEngine::MouseEventData widgetEventData;
-        widgetEventData.clientX = x;
-        widgetEventData.clientY = y;
-        widgetEventData.offsetX = x;
-        widgetEventData.offsetY = y;
-
-        POINT screenPt = {x, y};
-        ClientToScreen(m_hWnd, &screenPt);
-        widgetEventData.screenX = screenPt.x;
-        widgetEventData.screenY = screenPt.y;
-
-        RECT clientRect = {};
-        if (GetClientRect(m_hWnd, &clientRect))
-        {
-            const int clientW = clientRect.right - clientRect.left;
-            const int clientH = clientRect.bottom - clientRect.top;
-            if (clientW > 0)
-            {
-                widgetEventData.offsetXPercent = (int)((widgetEventData.offsetX / (double)clientW) * 100.0);
-            }
-            if (clientH > 0)
-            {
-                widgetEventData.offsetYPercent = (int)((widgetEventData.offsetY / (double)clientH) * 100.0);
-            }
-        }
-
-        if (message == WM_MOUSEMOVE)
-        {
-            if (justEnteredWidget)
-            {
-                JSEngine::TriggerWidgetEvent(this, "mouseOver", &widgetEventData);
-            }
-            JSEngine::TriggerWidgetEvent(this, "mouseMove", &widgetEventData);
-        }
-        else if (
-            message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN || message == WM_MBUTTONDOWN || message == WM_XBUTTONDOWN)
-        {
-            JSEngine::TriggerWidgetEvent(this, "mouseDown", &widgetEventData);
-        }
-        else if (
-            message == WM_LBUTTONUP || message == WM_RBUTTONUP || message == WM_MBUTTONUP || message == WM_XBUTTONUP)
-        {
-            JSEngine::TriggerWidgetEvent(this, "mouseUp", &widgetEventData);
-            if (message == WM_LBUTTONUP)
-            {
-                JSEngine::TriggerWidgetEvent(this, "click", &widgetEventData);
-            }
-            else if (message == WM_RBUTTONUP)
-            {
-                JSEngine::TriggerWidgetEvent(this, "right-click", &widgetEventData);
-            }
-        }
-        else if (message == WM_LBUTTONDBLCLK)
-        {
-            JSEngine::TriggerWidgetEvent(this, "double-click", &widgetEventData);
-        }
-        else if (message == WM_MOUSEWHEEL)
-        {
-            const int delta = GET_WHEEL_DELTA_WPARAM(wParam);
-            if (delta > 0)
-            {
-                JSEngine::TriggerWidgetEvent(this, "scroll-up", &widgetEventData);
-            }
-            else if (delta < 0)
-            {
-                JSEngine::TriggerWidgetEvent(this, "scroll-down", &widgetEventData);
-            }
-        }
-    }
-
-    // Find element at cursor (Front to Back)
-    Element *hitElement = nullptr;
-    Element *actionElement = nullptr;
-    Element *mouseActionElement = nullptr;
-    Element *toolTipElement = nullptr;
-
-    // Use the spatial grid for large element counts; fall back to linear scan
-    // for small counts where the hash-lookup overhead exceeds the savings.
-    if (static_cast<int>(m_Elements.size()) > GRID_THRESHOLD)
-    {
-        RebuildSpatialGrid();
-        int cx = x / GRID_CELL_SIZE;
-        int cy = y / GRID_CELL_SIZE;
-        int64_t key = (static_cast<int64_t>(cx) << 32) | static_cast<uint32_t>(cy);
-        auto cellIt = m_SpatialGrid.find(key);
-        if (cellIt != m_SpatialGrid.end())
-        {
-            // Elements in the cell are already in reverse Z-order.
-            for (Element *el : cellIt->second)
-            {
-                if (el->IsContainer())
-                {
-                    Element *childHit = nullptr;
-                    Element *childAction = nullptr;
-                    Element *childMouseAction = nullptr;
-                    Element *childToolTip = nullptr;
-                    if (HitTestContainerChildrenDetailed(el, x, y, message, wParam, childHit, childAction, childMouseAction, childToolTip))
-                    {
-                        if (!hitElement)
-                            hitElement = childHit;
-                        if (!actionElement)
-                            actionElement = childAction;
-                        if (!mouseActionElement)
-                            mouseActionElement = childMouseAction;
-                        if (!toolTipElement)
-                            toolTipElement = childToolTip;
-                    }
-                }
-
-                if (el->HitTest(x, y))
-                {
-                    if (!hitElement)
-                        hitElement = el;
-                    if (!actionElement && el->HasAction(message, wParam))
-                        actionElement = el;
-                    if (!mouseActionElement && el->HasMouseAction())
-                        mouseActionElement = el;
-                    if (!toolTipElement && el->HasToolTip())
-                        toolTipElement = el;
-                }
-
-                if (hitElement && actionElement && mouseActionElement && toolTipElement)
-                    break;
-            }
-        }
-    }
-    else
-    {
-        for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it)
-        {
-            Element *el = it->get();
-            if (!el->IsVisible())
-                continue;
-            if (el->IsContained())
-                continue;
-
-            if (el->IsContainer())
-            {
-                Element *childHit = nullptr;
-                Element *childAction = nullptr;
-                Element *childMouseAction = nullptr;
-                Element *childToolTip = nullptr;
-                if (HitTestContainerChildrenDetailed(el, x, y, message, wParam, childHit, childAction, childMouseAction, childToolTip))
-                {
-                    if (!hitElement)
-                        hitElement = childHit;
-                    if (!actionElement)
-                        actionElement = childAction;
-                    if (!mouseActionElement)
-                        mouseActionElement = childMouseAction;
-                    if (!toolTipElement)
-                        toolTipElement = childToolTip;
-                }
-            }
-
-            if (el->HitTest(x, y))
-            {
-                if (!hitElement)
-                    hitElement = el;
-                if (!actionElement && el->HasAction(message, wParam))
-                    actionElement = el;
-                if (!mouseActionElement && el->HasMouseAction())
-                    mouseActionElement = el;
-                if (!toolTipElement && el->HasToolTip())
-                    toolTipElement = el;
-            }
-
-            if (hitElement && actionElement && mouseActionElement && toolTipElement)
-                break;
-        }
-    }
-
-    // Handle Hover/Leave logic.
-    // Prefer the element that can handle hover callbacks; this avoids
-    // non-interactive overlays (for example text labels) stealing hover
-    // from the interactive element underneath.
-    if (message == WM_MOUSEMOVE)
-    {
-        Element *hoverElement = actionElement ? actionElement : (mouseActionElement ? mouseActionElement : hitElement);
-        if (m_MouseOverElement && m_MouseOverElement->IsVisible() && m_MouseOverElement->HasMouseAction() && m_MouseOverElement->HitTest(x, y))
-        {
-            hoverElement = m_MouseOverElement;
-        }
-        Element *nextToolTipElement = toolTipElement ? toolTipElement : hoverElement;
-
-        if (hoverElement != m_MouseOverElement)
-        {
-            if (m_MouseOverElement && IsTrackedElement(m_MouseOverElement))
-            {
-                m_MouseOverElement->m_IsMouseOver = false;
-                int leaveId = m_MouseOverElement->m_OnMouseLeaveCallbackId;
-                if (leaveId != -1)
-                {
-                    JSEngine::MouseEventData leaveData = buildElementEventData(m_MouseOverElement);
-                    JSEngine::CallEventCallback(leaveId, this, &leaveData);
-                }
-
-                // If callback cleared the elements or deleted hoverElement/actionElement, handle it
-                if (!IsTrackedElement(hoverElement))
-                    hoverElement = nullptr;
-                if (!IsTrackedElement(actionElement))
-                    actionElement = nullptr;
-                if (!IsTrackedElement(mouseActionElement))
-                    mouseActionElement = nullptr;
-                if (!IsTrackedElement(toolTipElement))
-                    toolTipElement = nullptr;
-
-                if (m_Elements.empty())
-                {
-                    m_MouseOverElement = nullptr;
-                    m_TooltipElement = nullptr;
-                    return true;
-                }
-            }
-
-            if (hoverElement && IsTrackedElement(hoverElement))
-            {
-                hoverElement->m_IsMouseOver = true;
-                int overId = hoverElement->m_OnMouseOverCallbackId;
-                if (overId != -1)
-                {
-                    JSEngine::MouseEventData overData = buildElementEventData(hoverElement);
-                    JSEngine::CallEventCallback(overId, this, &overData);
-                }
-
-                // Re-verify after callback
-                if (!IsTrackedElement(hoverElement))
-                    hoverElement = nullptr;
-                if (!IsTrackedElement(actionElement))
-                    actionElement = nullptr;
-                if (!IsTrackedElement(mouseActionElement))
-                    mouseActionElement = nullptr;
-                if (!IsTrackedElement(toolTipElement))
-                    toolTipElement = nullptr;
-
-                if (m_Elements.empty())
-                {
-                    m_MouseOverElement = nullptr;
-                    m_TooltipElement = nullptr;
-                    return true;
-                }
-            }
-            m_MouseOverElement = hoverElement;
-
-            // Cache cursor element so WM_SETCURSOR can use it directly
-            // instead of re-running the full hit-test.
-            {
-                TextElement *textSelElem = nullptr;
-                if (hitElement && hitElement->GetType() == ELEMENT_TEXT)
-                {
-                    TextElement *te = static_cast<TextElement *>(hitElement);
-                    if (te->GetTextSelection())
-                        textSelElem = te;
-                }
-                m_CursorElement = textSelElem ? textSelElem
-                                              : (mouseActionElement ? mouseActionElement : hitElement);
-            }
-
-            // Refresh cursor when element under mouse changes as it might have different action state
-            PostMessage(m_hWnd, WM_SETCURSOR, (WPARAM)m_hWnd, MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));
-        }
-
-        if (nextToolTipElement != m_TooltipElement)
-        {
-            m_Tooltip.Update(nextToolTipElement);
-            m_TooltipElement = nextToolTipElement;
-        }
-
-        // Update container scrollbar hover state
-        if (!m_IsScrollbarDragging && !m_IsDragging && !m_IsContainerSwiping)
-        {
-            ScrollbarHitResult sbHoverHit;
-            Element *newHoverContainer = nullptr;
-            ScrollbarHitPart newHoverPart = ScrollbarHitPart::None;
-            if (HitTestContainerScrollbar(x, y, sbHoverHit))
-            {
-                newHoverContainer = sbHoverHit.container;
-                newHoverPart = sbHoverHit.part;
-            }
-            if (m_ScrollbarHoverContainer != newHoverContainer || m_ScrollbarHoverPart != newHoverPart)
-            {
-                m_ScrollbarHoverContainer = newHoverContainer;
-                m_ScrollbarHoverPart = newHoverPart;
-                needRedraw = true;
-            }
-        }
-
-        // Ensure we track mouse leave window events
-        TRACKMOUSEEVENT tme;
-        tme.cbSize = sizeof(TRACKMOUSEEVENT);
-        tme.dwFlags = TME_LEAVE;
-        tme.hwndTrack = m_hWnd;
-        TrackMouseEvent(&tme);
-    }
-    else if (message == WM_MOUSELEAVE)
-    {
-        if (m_IsMouseOverWidget)
-        {
-            m_IsMouseOverWidget = false;
-            JSEngine::MouseEventData leaveEventData;
-            POINT screenPt = {};
-            if (GetCursorPos(&screenPt))
-            {
-                POINT clientPt = screenPt;
-                ScreenToClient(m_hWnd, &clientPt);
-                leaveEventData.clientX = clientPt.x;
-                leaveEventData.clientY = clientPt.y;
-                leaveEventData.offsetX = clientPt.x;
-                leaveEventData.offsetY = clientPt.y;
-                leaveEventData.screenX = screenPt.x;
-                leaveEventData.screenY = screenPt.y;
-
-                RECT clientRect = {};
-                if (GetClientRect(m_hWnd, &clientRect))
-                {
-                    const int clientW = clientRect.right - clientRect.left;
-                    const int clientH = clientRect.bottom - clientRect.top;
-                    if (clientW > 0)
-                    {
-                        leaveEventData.offsetXPercent = (int)((leaveEventData.offsetX / (double)clientW) * 100.0);
-                    }
-                    if (clientH > 0)
-                    {
-                        leaveEventData.offsetYPercent = (int)((leaveEventData.offsetY / (double)clientH) * 100.0);
-                    }
-                }
-            }
-            JSEngine::TriggerWidgetEvent(this, "mouseLeave", &leaveEventData);
-        }
-        if (m_MouseOverElement && IsTrackedElement(m_MouseOverElement))
-        {
-            m_MouseOverElement->m_IsMouseOver = false;
-            int leaveId = m_MouseOverElement->m_OnMouseLeaveCallbackId;
-            if (leaveId != -1)
-            {
-                JSEngine::MouseEventData elementLeaveData;
-                POINT screenPt = {};
-                if (GetCursorPos(&screenPt))
-                {
-                    POINT clientPt = screenPt;
-                    ScreenToClient(m_hWnd, &clientPt);
-                    elementLeaveData.clientX = clientPt.x;
-                    elementLeaveData.clientY = clientPt.y;
-                    elementLeaveData.offsetX = clientPt.x - m_MouseOverElement->GetX();
-                    elementLeaveData.offsetY = clientPt.y - m_MouseOverElement->GetY();
-                    elementLeaveData.screenX = screenPt.x;
-                    elementLeaveData.screenY = screenPt.y;
-
-                    const int elementW = m_MouseOverElement->GetWidth();
-                    const int elementH = m_MouseOverElement->GetHeight();
-                    if (elementW > 0)
-                    {
-                        elementLeaveData.offsetXPercent = (int)((elementLeaveData.offsetX / (double)elementW) * 100.0);
-                    }
-                    if (elementH > 0)
-                    {
-                        elementLeaveData.offsetYPercent = (int)((elementLeaveData.offsetY / (double)elementH) * 100.0);
-                    }
-                }
-                JSEngine::CallEventCallback(leaveId, this, &elementLeaveData);
-            }
-            m_MouseOverElement = nullptr;
-            m_TooltipElement = nullptr;
-        }
-        // Tooltip Update and kill timer
-        m_Tooltip.Update(nullptr);
-        KillTimer(m_hWnd, TIMER_TOOLTIP);
-
-        if (m_ScrollbarHoverContainer != nullptr || m_ScrollbarHoverPart != ScrollbarHitPart::None)
-        {
-            m_ScrollbarHoverContainer = nullptr;
-            m_ScrollbarHoverPart = ScrollbarHitPart::None;
-            needRedraw = true;
-        }
-
-        handled = true;
-    }
-
-    // Dispatch Actions
-    if (actionElement && IsTrackedElement(actionElement))
-    {
-        int actionId = -1;
-
-        switch (message)
-        {
-        case WM_LBUTTONUP:
-            actionId = actionElement->m_OnLeftMouseUpCallbackId;
-            break;
-        case WM_LBUTTONDOWN:
-            actionId = actionElement->m_OnLeftMouseDownCallbackId;
-            break;
-        case WM_LBUTTONDBLCLK:
-            actionId = actionElement->m_OnLeftDoubleClickCallbackId;
-            break;
-        case WM_RBUTTONUP:
-            actionId = actionElement->m_OnRightMouseUpCallbackId;
-            break;
-        case WM_RBUTTONDOWN:
-            actionId = actionElement->m_OnRightMouseDownCallbackId;
-            break;
-        case WM_RBUTTONDBLCLK:
-            actionId = actionElement->m_OnRightDoubleClickCallbackId;
-            break;
-        case WM_MBUTTONUP:
-            actionId = actionElement->m_OnMiddleMouseUpCallbackId;
-            break;
-        case WM_MBUTTONDOWN:
-            actionId = actionElement->m_OnMiddleMouseDownCallbackId;
-            break;
-        case WM_MBUTTONDBLCLK:
-            actionId = actionElement->m_OnMiddleDoubleClickCallbackId;
-            break;
-        case WM_XBUTTONUP:
-            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
-            {
-                actionId = actionElement->m_OnX1MouseUpCallbackId;
-            }
-            else
-            {
-                actionId = actionElement->m_OnX2MouseUpCallbackId;
-            }
-            break;
-        case WM_XBUTTONDOWN:
-            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
-            {
-                actionId = actionElement->m_OnX1MouseDownCallbackId;
-            }
-            else
-            {
-                actionId = actionElement->m_OnX2MouseDownCallbackId;
-            }
-            break;
-        case WM_XBUTTONDBLCLK:
-            if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
-            {
-                actionId = actionElement->m_OnX1DoubleClickCallbackId;
-            }
-            else
-            {
-                actionId = actionElement->m_OnX2DoubleClickCallbackId;
-            }
-            break;
-        case WM_MOUSEWHEEL:
-            if (GET_WHEEL_DELTA_WPARAM(wParam) > 0)
-            {
-                actionId = actionElement->m_OnScrollUpCallbackId;
-            }
-            else
-            {
-                actionId = actionElement->m_OnScrollDownCallbackId;
-            }
-            break;
-        case WM_MOUSEHWHEEL:
-            if (GET_WHEEL_DELTA_WPARAM(wParam) > 0)
-            {
-                actionId = actionElement->m_OnScrollRightCallbackId;
-            }
-            else
-            {
-                actionId = actionElement->m_OnScrollLeftCallbackId;
-            }
-            break;
-        }
-
-        if (actionId != -1)
-        {
-            JSEngine::MouseEventData eventData;
-            eventData.clientX = x;
-            eventData.clientY = y;
-
-            POINT screenPt = {x, y};
-            ClientToScreen(m_hWnd, &screenPt);
-            eventData.screenX = screenPt.x;
-            eventData.screenY = screenPt.y;
-
-            const int elementX = actionElement->GetX();
-            const int elementY = actionElement->GetY();
-            eventData.offsetX = x - elementX;
-            eventData.offsetY = y - elementY;
-
-            const int elementW = actionElement->GetWidth();
-            const int elementH = actionElement->GetHeight();
-            if (elementW > 0)
-            {
-                eventData.offsetXPercent = (int)((eventData.offsetX / (double)elementW) * 100.0);
-            }
-            if (elementH > 0)
-            {
-                eventData.offsetYPercent = (int)((eventData.offsetY / (double)elementH) * 100.0);
-            }
-
-            // Execute function callback with mouse position aliases.
-            JSEngine::CallEventCallback(actionId, this, &eventData);
-            handled = true;
-        }
-    }
-
-    // Handle container scrolling via mouse wheel when not consumed by an element action
-    if (!handled && (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL))
-    {
-        Element *scrollTarget = hitElement;
-        while (scrollTarget)
-        {
-            if (scrollTarget->IsScrollable())
-                break;
-            scrollTarget = scrollTarget->GetContainer();
-        }
-
-        if (scrollTarget)
-        {
-            const bool isShiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-            const int delta = GET_WHEEL_DELTA_WPARAM(wParam);
-            const int step = scrollTarget->GetScrollStep();
-            const int ticks = delta / WHEEL_DELTA;
-            const int scrollDelta = (ticks != 0 ? ticks : (delta > 0 ? 1 : -1)) * step;
-
-            if (message == WM_MOUSEHWHEEL || (message == WM_MOUSEWHEEL && isShiftDown))
-            {
-                if (scrollTarget->IsScrollableX())
-                {
-                    int oldScroll = scrollTarget->GetScrollX();
-                    scrollTarget->SetScrollX(oldScroll - scrollDelta);
-                    if (scrollTarget->GetScrollX() != oldScroll)
-                    {
-                        Redraw();
-                        handled = true;
-                    }
-                }
-            }
-            else if (message == WM_MOUSEWHEEL)
-            {
-                if (scrollTarget->IsScrollableY())
-                {
-                    int oldScroll = scrollTarget->GetScrollY();
-                    scrollTarget->SetScrollY(oldScroll - scrollDelta);
-                    if (scrollTarget->GetScrollY() != oldScroll)
-                    {
-                        Redraw();
-                        handled = true;
-                    }
-                }
-            }
-        }
-    }
-
-    // Dispatch drag actions (for slider-like interactions on any element).
+  bool needRedraw = false;
+  if (message == WM_MOUSEMOVE || message == WM_LBUTTONDOWN ||
+      message == WM_LBUTTONUP || message == WM_MOUSELEAVE) {
+    bool isDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
     if (message == WM_LBUTTONDOWN)
-    {
-        // Check if scrollbar of a container was clicked
-        ScrollbarHitResult sbHit;
-        if (HitTestContainerScrollbar(x, y, sbHit))
-        {
-            const float inset = sbHit.container->GetScrollbarInset();
-            const GfxRect bounds = sbHit.container->GetBounds();
+      isDown = true;
+    if (message == WM_LBUTTONUP)
+      isDown = false;
 
-            if (sbHit.part == ScrollbarHitPart::VerticalTopButton)
-            {
-                int step = sbHit.container->GetScrollStep();
-                sbHit.container->SetScrollY(sbHit.container->GetScrollY() - step);
-                m_ScrollbarDragContainer = sbHit.container;
-                m_ScrollbarActivePart = ScrollbarHitPart::VerticalTopButton;
-                SetTimer(m_hWnd, TIMER_SCROLLBAR_BUTTON, 250, nullptr);
-                SetCapture(m_hWnd);
-                handled = true;
-                needRedraw = true;
-            }
-            else if (sbHit.part == ScrollbarHitPart::VerticalBottomButton)
-            {
-                int step = sbHit.container->GetScrollStep();
-                sbHit.container->SetScrollY(sbHit.container->GetScrollY() + step);
-                m_ScrollbarDragContainer = sbHit.container;
-                m_ScrollbarActivePart = ScrollbarHitPart::VerticalBottomButton;
-                SetTimer(m_hWnd, TIMER_SCROLLBAR_BUTTON, 250, nullptr);
-                SetCapture(m_hWnd);
-                handled = true;
-                needRedraw = true;
-            }
-            else if (sbHit.part == ScrollbarHitPart::HorizontalLeftButton)
-            {
-                int step = sbHit.container->GetScrollStep();
-                sbHit.container->SetScrollX(sbHit.container->GetScrollX() - step);
-                m_ScrollbarDragContainer = sbHit.container;
-                m_ScrollbarActivePart = ScrollbarHitPart::HorizontalLeftButton;
-                SetTimer(m_hWnd, TIMER_SCROLLBAR_BUTTON, 250, nullptr);
-                SetCapture(m_hWnd);
-                handled = true;
-                needRedraw = true;
-            }
-            else if (sbHit.part == ScrollbarHitPart::HorizontalRightButton)
-            {
-                int step = sbHit.container->GetScrollStep();
-                sbHit.container->SetScrollX(sbHit.container->GetScrollX() + step);
-                m_ScrollbarDragContainer = sbHit.container;
-                m_ScrollbarActivePart = ScrollbarHitPart::HorizontalRightButton;
-                SetTimer(m_hWnd, TIMER_SCROLLBAR_BUTTON, 250, nullptr);
-                SetCapture(m_hWnd);
-                handled = true;
-                needRedraw = true;
-            }
-            else if (sbHit.part == ScrollbarHitPart::VerticalThumb)
-            {
-                m_IsScrollbarDragging = true;
-                m_ScrollbarDragContainer = sbHit.container;
-                m_ScrollbarDragIsVertical = true;
-                m_ScrollbarDragStartMouse = y;
-                m_ScrollbarDragGrabOffset = y - ((int)bounds.Y + (int)inset + sbHit.thumbOffset);
-                m_ScrollbarDragStartScroll = sbHit.container->GetScrollY();
-                m_ScrollbarDragTrackLength = sbHit.trackLength;
-                m_ScrollbarDragThumbLength = sbHit.thumbLength;
-                m_ScrollbarDragMaxScroll = sbHit.maxScroll;
-                SetCapture(m_hWnd);
-                handled = true;
-                needRedraw = true;
-            }
-            else if (sbHit.part == ScrollbarHitPart::VerticalTrack)
-            {
-                float trackOffset = (float)(y - ((float)bounds.Y + inset) - (float)sbHit.thumbLength / 2.0f);
-                float thumbTravel = (float)(sbHit.trackLength - sbHit.thumbLength);
-                if (thumbTravel > 0.0f)
-                {
-                    int targetScroll = (int)std::round((trackOffset / thumbTravel) * (float)sbHit.maxScroll);
-                    sbHit.container->SetScrollY(targetScroll);
-                }
-                m_IsScrollbarDragging = true;
-                m_ScrollbarDragContainer = sbHit.container;
-                m_ScrollbarDragIsVertical = true;
-                m_ScrollbarDragStartMouse = y;
-                m_ScrollbarDragGrabOffset = sbHit.thumbLength / 2;
-                m_ScrollbarDragStartScroll = sbHit.container->GetScrollY();
-                m_ScrollbarDragTrackLength = sbHit.trackLength;
-                m_ScrollbarDragThumbLength = sbHit.thumbLength;
-                m_ScrollbarDragMaxScroll = sbHit.maxScroll;
-                SetCapture(m_hWnd);
-                handled = true;
-                needRedraw = true;
-            }
-            else if (sbHit.part == ScrollbarHitPart::HorizontalThumb)
-            {
-                m_IsScrollbarDragging = true;
-                m_ScrollbarDragContainer = sbHit.container;
-                m_ScrollbarDragIsVertical = false;
-                m_ScrollbarDragStartMouse = x;
-                m_ScrollbarDragGrabOffset = x - ((int)bounds.X + (int)inset + sbHit.thumbOffset);
-                m_ScrollbarDragStartScroll = sbHit.container->GetScrollX();
-                m_ScrollbarDragTrackLength = sbHit.trackLength;
-                m_ScrollbarDragThumbLength = sbHit.thumbLength;
-                m_ScrollbarDragMaxScroll = sbHit.maxScroll;
-                SetCapture(m_hWnd);
-                handled = true;
-                needRedraw = true;
-            }
-            else if (sbHit.part == ScrollbarHitPart::HorizontalTrack)
-            {
-                float trackOffset = (float)(x - ((float)bounds.X + inset) - (float)sbHit.thumbLength / 2.0f);
-                float thumbTravel = (float)(sbHit.trackLength - sbHit.thumbLength);
-                if (thumbTravel > 0.0f)
-                {
-                    int targetScroll = (int)std::round((trackOffset / thumbTravel) * (float)sbHit.maxScroll);
-                    sbHit.container->SetScrollX(targetScroll);
-                }
-                m_IsScrollbarDragging = true;
-                m_ScrollbarDragContainer = sbHit.container;
-                m_ScrollbarDragIsVertical = false;
-                m_ScrollbarDragStartMouse = x;
-                m_ScrollbarDragGrabOffset = sbHit.thumbLength / 2;
-                m_ScrollbarDragStartScroll = sbHit.container->GetScrollX();
-                m_ScrollbarDragTrackLength = sbHit.trackLength;
-                m_ScrollbarDragThumbLength = sbHit.thumbLength;
-                m_ScrollbarDragMaxScroll = sbHit.maxScroll;
-                SetCapture(m_hWnd);
-                handled = true;
-                needRedraw = true;
-            }
-        }
+    for (ButtonElement *btn : m_Buttons) {
+      ButtonState newState = BUTTON_STATE_NORMAL;
 
-        if (!handled)
-        {
-            // Helper: container has overflow that permits scrolling (OverflowX or Y is not Hidden)
-            auto isScrollContainer = [](Element *el) -> bool
-            {
-                if (!el || !el->IsContainer())
-                    return false;
-                return el->GetOverflowX() != Element::OverflowMode::Hidden ||
-                       el->GetOverflowY() != Element::OverflowMode::Hidden;
-            };
+      if (message != WM_MOUSELEAVE && btn->IsVisible() && btn->HitTest(x, y)) {
+        newState = isDown ? BUTTON_STATE_CLICKED : BUTTON_STATE_HOVERED;
+      }
 
-            // Initialize container swipe tracking
-            Element *swipeTarget = hitElement;
-            Element *swipeCont = hitElement;
-
-            while (swipeCont)
-            {
-                if (isScrollContainer(swipeCont))
-                    break;
-                swipeCont = swipeCont->GetContainer();
-            }
-            if (!swipeCont)
-            {
-                for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it)
-                {
-                    Element *el = it->get();
-                    if (el && el->IsVisible() && isScrollContainer(el))
-                    {
-                        GfxRect b = el->GetBounds();
-                        if (x >= b.X && x < b.X + b.Width && y >= b.Y && y < b.Y + b.Height)
-                        {
-                            swipeCont = el;
-                            if (!swipeTarget)
-                                swipeTarget = el;
-                            break;
-                        }
-                    }
-                }
-            }
-            m_IsContainerSwiping = false;
-            m_SwipeContainer = swipeCont;
-            m_SwipeTargetElement = swipeTarget;
-            m_SwipeStartPos = {x, y};
-            m_SwipeStartTime = GetTickCount();
-            if (swipeCont)
-                swipeCont->RecalcContentExtents();
-            m_SwipeStartScrollX = swipeCont ? swipeCont->GetScrollX() : 0;
-            m_SwipeStartScrollY = swipeCont ? swipeCont->GetScrollY() : 0;
-
-            // Capture mouse so WM_MOUSEMOVE reaches us even if cursor moves outside window
-            if (swipeCont)
-            {
-                SetCapture(m_hWnd);
-            }
-
-            // Handle text selection
-            TextElement *textElem = dynamic_cast<TextElement *>(hitElement);
-            if (textElem && textElem->GetTextSelection())
-            {
-                // Clear previous selection from other elements
-                if (m_TextSelectionElement && m_TextSelectionElement != textElem)
-                {
-                    m_TextSelectionElement->ClearTextSelection();
-                }
-                m_TextSelectionElement = textElem;
-                textElem->HandleTextSelectionMouseDown(x, y);
-                handled = true;
-                needRedraw = true;
-            }
-            else
-            {
-                // Clicked on non-selectable element, clear selection
-                if (m_TextSelectionElement)
-                {
-                    m_TextSelectionElement->ClearTextSelection();
-                    m_TextSelectionElement = nullptr;
-                    needRedraw = true;
-                }
-            }
-
-            // Input box focus + caret placement on click.
-            InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(hitElement);
-            ColorPickerElement *colorPicker = dynamic_cast<ColorPickerElement *>(hitElement);
-            if (colorPicker)
-            {
-                if (m_ColorPickerPopup)
-                    m_ColorPickerPopup->Close();
-                m_ColorPickerPopup = std::make_unique<ColorPickerPopup>(this, colorPicker);
-                m_ColorPickerPopup->Show();
-                handled = true;
-            }
-            if (inputElem)
-            {
-                if (m_FocusedInputBox && m_FocusedInputBox != inputElem)
-                {
-                    if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-                        JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
-                    m_FocusedInputBox->SetFocus(false);
-                    KillTimer(m_hWnd, TIMER_CARET);
-                }
-                if (!inputElem->IsFocused())
-                {
-                    inputElem->SetFocus(true);
-                    SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
-                    if (inputElem->m_OnFocusCallbackId != -1)
-                        JSEngine::CallEventCallback(inputElem->m_OnFocusCallbackId, this, nullptr);
-                }
-                m_FocusedInputBox = inputElem;
-                bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-                inputElem->HandleMouseDown(x, y, shift);
-                SetFocus();
-                SetCapture(m_hWnd);
-                handled = true;
-                needRedraw = true;
-            }
-            else
-            {
-                // Clicked outside any input box: blur the focused one.
-                if (m_FocusedInputBox)
-                {
-                    if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-                        JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this, nullptr);
-                    m_FocusedInputBox->SetFocus(false);
-                    m_FocusedInputBox = nullptr;
-                    KillTimer(m_hWnd, TIMER_CARET);
-                    needRedraw = true;
-                }
-            }
-
-            Element *dragTarget = actionElement ? actionElement : hitElement;
-            if (dragTarget && dragTarget->HasDragAction())
-            {
-                m_DragElement = dragTarget;
-                m_IsElementDragging = true;
-                SetCapture(m_hWnd);
-
-                if (m_DragElement->m_OnDragStartCallbackId != -1)
-                {
-                    JSEngine::MouseEventData eventData = buildElementEventData(m_DragElement);
-                    JSEngine::CallEventCallback(m_DragElement->m_OnDragStartCallbackId, this, &eventData);
-                    handled = true;
-                }
-            }
-        }
+      if (btn->GetButtonState() != newState) {
+        btn->SetButtonState(newState);
+        needRedraw = true;
+      }
     }
-    else if (message == WM_LBUTTONDBLCLK)
-    {
-        // Handle double-click for word selection
-        TextElement *textElem = dynamic_cast<TextElement *>(hitElement);
-        if (textElem && textElem->GetTextSelection())
-        {
-            m_TextSelectionElement = textElem;
-            textElem->HandleTextSelectionDoubleClick(x, y);
+  }
+
+  {
+    JSEngine::MouseEventData widgetEventData;
+    widgetEventData.clientX = x;
+    widgetEventData.clientY = y;
+    widgetEventData.offsetX = x;
+    widgetEventData.offsetY = y;
+
+    POINT screenPt = {x, y};
+    ClientToScreen(m_hWnd, &screenPt);
+    widgetEventData.screenX = screenPt.x;
+    widgetEventData.screenY = screenPt.y;
+
+    RECT clientRect = {};
+    if (GetClientRect(m_hWnd, &clientRect)) {
+      const int clientW = clientRect.right - clientRect.left;
+      const int clientH = clientRect.bottom - clientRect.top;
+      if (clientW > 0) {
+        widgetEventData.offsetXPercent =
+            (int)((widgetEventData.offsetX / (double)clientW) * 100.0);
+      }
+      if (clientH > 0) {
+        widgetEventData.offsetYPercent =
+            (int)((widgetEventData.offsetY / (double)clientH) * 100.0);
+      }
+    }
+
+    if (message == WM_MOUSEMOVE) {
+      if (justEnteredWidget) {
+        JSEngine::TriggerWidgetEvent(this, "mouseOver", &widgetEventData);
+      }
+      JSEngine::TriggerWidgetEvent(this, "mouseMove", &widgetEventData);
+    } else if (message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN ||
+               message == WM_MBUTTONDOWN || message == WM_XBUTTONDOWN) {
+      JSEngine::TriggerWidgetEvent(this, "mouseDown", &widgetEventData);
+    } else if (message == WM_LBUTTONUP || message == WM_RBUTTONUP ||
+               message == WM_MBUTTONUP || message == WM_XBUTTONUP) {
+      JSEngine::TriggerWidgetEvent(this, "mouseUp", &widgetEventData);
+      if (message == WM_LBUTTONUP) {
+        JSEngine::TriggerWidgetEvent(this, "click", &widgetEventData);
+      } else if (message == WM_RBUTTONUP) {
+        JSEngine::TriggerWidgetEvent(this, "right-click", &widgetEventData);
+      }
+    } else if (message == WM_LBUTTONDBLCLK) {
+      JSEngine::TriggerWidgetEvent(this, "double-click", &widgetEventData);
+    } else if (message == WM_MOUSEWHEEL) {
+      const int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+      if (delta > 0) {
+        JSEngine::TriggerWidgetEvent(this, "scroll-up", &widgetEventData);
+      } else if (delta < 0) {
+        JSEngine::TriggerWidgetEvent(this, "scroll-down", &widgetEventData);
+      }
+    }
+  }
+
+  // Find element at cursor (Front to Back)
+  Element *hitElement = nullptr;
+  Element *actionElement = nullptr;
+  Element *mouseActionElement = nullptr;
+  Element *toolTipElement = nullptr;
+
+  // Use the spatial grid for large element counts; fall back to linear scan
+  // for small counts where the hash-lookup overhead exceeds the savings.
+  if (static_cast<int>(m_Elements.size()) > GRID_THRESHOLD) {
+    RebuildSpatialGrid();
+    int cx = x / GRID_CELL_SIZE;
+    int cy = y / GRID_CELL_SIZE;
+    int64_t key = (static_cast<int64_t>(cx) << 32) | static_cast<uint32_t>(cy);
+    auto cellIt = m_SpatialGrid.find(key);
+    if (cellIt != m_SpatialGrid.end()) {
+      // Elements in the cell are already in reverse Z-order.
+      for (Element *el : cellIt->second) {
+        if (el->IsContainer()) {
+          Element *childHit = nullptr;
+          Element *childAction = nullptr;
+          Element *childMouseAction = nullptr;
+          Element *childToolTip = nullptr;
+          if (HitTestContainerChildrenDetailed(
+                  el, x, y, message, wParam, childHit, childAction,
+                  childMouseAction, childToolTip)) {
+            if (!hitElement)
+              hitElement = childHit;
+            if (!actionElement)
+              actionElement = childAction;
+            if (!mouseActionElement)
+              mouseActionElement = childMouseAction;
+            if (!toolTipElement)
+              toolTipElement = childToolTip;
+          }
+        }
+
+        if (el->HitTest(x, y)) {
+          if (!hitElement)
+            hitElement = el;
+          if (!actionElement && el->HasAction(message, wParam))
+            actionElement = el;
+          if (!mouseActionElement && el->HasMouseAction())
+            mouseActionElement = el;
+          if (!toolTipElement && el->HasToolTip())
+            toolTipElement = el;
+        }
+
+        if (hitElement && actionElement && mouseActionElement && toolTipElement)
+          break;
+      }
+    }
+  } else {
+    for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it) {
+      Element *el = it->get();
+      if (!el->IsVisible())
+        continue;
+      if (el->IsContained())
+        continue;
+
+      if (el->IsContainer()) {
+        Element *childHit = nullptr;
+        Element *childAction = nullptr;
+        Element *childMouseAction = nullptr;
+        Element *childToolTip = nullptr;
+        if (HitTestContainerChildrenDetailed(el, x, y, message, wParam,
+                                             childHit, childAction,
+                                             childMouseAction, childToolTip)) {
+          if (!hitElement)
+            hitElement = childHit;
+          if (!actionElement)
+            actionElement = childAction;
+          if (!mouseActionElement)
+            mouseActionElement = childMouseAction;
+          if (!toolTipElement)
+            toolTipElement = childToolTip;
+        }
+      }
+
+      if (el->HitTest(x, y)) {
+        if (!hitElement)
+          hitElement = el;
+        if (!actionElement && el->HasAction(message, wParam))
+          actionElement = el;
+        if (!mouseActionElement && el->HasMouseAction())
+          mouseActionElement = el;
+        if (!toolTipElement && el->HasToolTip())
+          toolTipElement = el;
+      }
+
+      if (hitElement && actionElement && mouseActionElement && toolTipElement)
+        break;
+    }
+  }
+
+  // Handle Hover/Leave logic.
+  // Prefer the element that can handle hover callbacks; this avoids
+  // non-interactive overlays (for example text labels) stealing hover
+  // from the interactive element underneath.
+  if (message == WM_MOUSEMOVE) {
+    Element *hoverElement =
+        actionElement ? actionElement
+                      : (mouseActionElement ? mouseActionElement : hitElement);
+    if (m_MouseOverElement && m_MouseOverElement->IsVisible() &&
+        m_MouseOverElement->HasMouseAction() &&
+        m_MouseOverElement->HitTest(x, y)) {
+      hoverElement = m_MouseOverElement;
+    }
+    Element *nextToolTipElement =
+        toolTipElement ? toolTipElement : hoverElement;
+
+    if (hoverElement != m_MouseOverElement) {
+      if (m_MouseOverElement && IsTrackedElement(m_MouseOverElement)) {
+        m_MouseOverElement->m_IsMouseOver = false;
+        int leaveId = m_MouseOverElement->m_OnMouseLeaveCallbackId;
+        if (leaveId != -1) {
+          JSEngine::MouseEventData leaveData =
+              buildElementEventData(m_MouseOverElement);
+          JSEngine::CallEventCallback(leaveId, this, &leaveData);
+        }
+
+        // If callback cleared the elements or deleted
+        // hoverElement/actionElement, handle it
+        if (!IsTrackedElement(hoverElement))
+          hoverElement = nullptr;
+        if (!IsTrackedElement(actionElement))
+          actionElement = nullptr;
+        if (!IsTrackedElement(mouseActionElement))
+          mouseActionElement = nullptr;
+        if (!IsTrackedElement(toolTipElement))
+          toolTipElement = nullptr;
+
+        if (m_Elements.empty()) {
+          m_MouseOverElement = nullptr;
+          m_TooltipElement = nullptr;
+          return true;
+        }
+      }
+
+      if (hoverElement && IsTrackedElement(hoverElement)) {
+        hoverElement->m_IsMouseOver = true;
+        int overId = hoverElement->m_OnMouseOverCallbackId;
+        if (overId != -1) {
+          JSEngine::MouseEventData overData =
+              buildElementEventData(hoverElement);
+          JSEngine::CallEventCallback(overId, this, &overData);
+        }
+
+        // Re-verify after callback
+        if (!IsTrackedElement(hoverElement))
+          hoverElement = nullptr;
+        if (!IsTrackedElement(actionElement))
+          actionElement = nullptr;
+        if (!IsTrackedElement(mouseActionElement))
+          mouseActionElement = nullptr;
+        if (!IsTrackedElement(toolTipElement))
+          toolTipElement = nullptr;
+
+        if (m_Elements.empty()) {
+          m_MouseOverElement = nullptr;
+          m_TooltipElement = nullptr;
+          return true;
+        }
+      }
+      m_MouseOverElement = hoverElement;
+
+      // Cache cursor element so WM_SETCURSOR can use it directly
+      // instead of re-running the full hit-test.
+      {
+        TextElement *textSelElem = nullptr;
+        if (hitElement && hitElement->GetType() == ELEMENT_TEXT) {
+          TextElement *te = static_cast<TextElement *>(hitElement);
+          if (te->GetTextSelection())
+            textSelElem = te;
+        }
+        m_CursorElement = textSelElem ? textSelElem
+                                      : (mouseActionElement ? mouseActionElement
+                                                            : hitElement);
+      }
+
+      // Refresh cursor when element under mouse changes as it might have
+      // different action state
+      PostMessage(m_hWnd, WM_SETCURSOR, (WPARAM)m_hWnd,
+                  MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));
+    }
+
+    if (nextToolTipElement != m_TooltipElement) {
+      m_Tooltip.Update(nextToolTipElement);
+      m_TooltipElement = nextToolTipElement;
+    }
+
+    // Update container scrollbar hover state
+    if (!m_IsScrollbarDragging && !m_IsDragging && !m_IsContainerSwiping) {
+      ScrollbarHitResult sbHoverHit;
+      Element *newHoverContainer = nullptr;
+      ScrollbarHitPart newHoverPart = ScrollbarHitPart::None;
+      if (HitTestContainerScrollbar(x, y, sbHoverHit)) {
+        newHoverContainer = sbHoverHit.container;
+        newHoverPart = sbHoverHit.part;
+      }
+      if (m_ScrollbarHoverContainer != newHoverContainer ||
+          m_ScrollbarHoverPart != newHoverPart) {
+        m_ScrollbarHoverContainer = newHoverContainer;
+        m_ScrollbarHoverPart = newHoverPart;
+        needRedraw = true;
+      }
+    }
+
+    // Ensure we track mouse leave window events
+    TRACKMOUSEEVENT tme;
+    tme.cbSize = sizeof(TRACKMOUSEEVENT);
+    tme.dwFlags = TME_LEAVE;
+    tme.hwndTrack = m_hWnd;
+    TrackMouseEvent(&tme);
+  } else if (message == WM_MOUSELEAVE) {
+    if (m_IsMouseOverWidget) {
+      m_IsMouseOverWidget = false;
+      JSEngine::MouseEventData leaveEventData;
+      POINT screenPt = {};
+      if (GetCursorPos(&screenPt)) {
+        POINT clientPt = screenPt;
+        ScreenToClient(m_hWnd, &clientPt);
+        leaveEventData.clientX = clientPt.x;
+        leaveEventData.clientY = clientPt.y;
+        leaveEventData.offsetX = clientPt.x;
+        leaveEventData.offsetY = clientPt.y;
+        leaveEventData.screenX = screenPt.x;
+        leaveEventData.screenY = screenPt.y;
+
+        RECT clientRect = {};
+        if (GetClientRect(m_hWnd, &clientRect)) {
+          const int clientW = clientRect.right - clientRect.left;
+          const int clientH = clientRect.bottom - clientRect.top;
+          if (clientW > 0) {
+            leaveEventData.offsetXPercent =
+                (int)((leaveEventData.offsetX / (double)clientW) * 100.0);
+          }
+          if (clientH > 0) {
+            leaveEventData.offsetYPercent =
+                (int)((leaveEventData.offsetY / (double)clientH) * 100.0);
+          }
+        }
+      }
+      JSEngine::TriggerWidgetEvent(this, "mouseLeave", &leaveEventData);
+    }
+    if (m_MouseOverElement && IsTrackedElement(m_MouseOverElement)) {
+      m_MouseOverElement->m_IsMouseOver = false;
+      int leaveId = m_MouseOverElement->m_OnMouseLeaveCallbackId;
+      if (leaveId != -1) {
+        JSEngine::MouseEventData elementLeaveData;
+        POINT screenPt = {};
+        if (GetCursorPos(&screenPt)) {
+          POINT clientPt = screenPt;
+          ScreenToClient(m_hWnd, &clientPt);
+          elementLeaveData.clientX = clientPt.x;
+          elementLeaveData.clientY = clientPt.y;
+          elementLeaveData.offsetX = clientPt.x - m_MouseOverElement->GetX();
+          elementLeaveData.offsetY = clientPt.y - m_MouseOverElement->GetY();
+          elementLeaveData.screenX = screenPt.x;
+          elementLeaveData.screenY = screenPt.y;
+
+          const int elementW = m_MouseOverElement->GetWidth();
+          const int elementH = m_MouseOverElement->GetHeight();
+          if (elementW > 0) {
+            elementLeaveData.offsetXPercent =
+                (int)((elementLeaveData.offsetX / (double)elementW) * 100.0);
+          }
+          if (elementH > 0) {
+            elementLeaveData.offsetYPercent =
+                (int)((elementLeaveData.offsetY / (double)elementH) * 100.0);
+          }
+        }
+        JSEngine::CallEventCallback(leaveId, this, &elementLeaveData);
+      }
+      m_MouseOverElement = nullptr;
+      m_TooltipElement = nullptr;
+    }
+    // Tooltip Update and kill timer
+    m_Tooltip.Update(nullptr);
+    KillTimer(m_hWnd, TIMER_TOOLTIP);
+
+    if (m_ScrollbarHoverContainer != nullptr ||
+        m_ScrollbarHoverPart != ScrollbarHitPart::None) {
+      m_ScrollbarHoverContainer = nullptr;
+      m_ScrollbarHoverPart = ScrollbarHitPart::None;
+      needRedraw = true;
+    }
+
+    handled = true;
+  }
+
+  // Dispatch Actions
+  if (actionElement && IsTrackedElement(actionElement)) {
+    int actionId = -1;
+
+    switch (message) {
+    case WM_LBUTTONUP:
+      actionId = actionElement->m_OnLeftMouseUpCallbackId;
+      break;
+    case WM_LBUTTONDOWN:
+      actionId = actionElement->m_OnLeftMouseDownCallbackId;
+      break;
+    case WM_LBUTTONDBLCLK:
+      actionId = actionElement->m_OnLeftDoubleClickCallbackId;
+      break;
+    case WM_RBUTTONUP:
+      actionId = actionElement->m_OnRightMouseUpCallbackId;
+      break;
+    case WM_RBUTTONDOWN:
+      actionId = actionElement->m_OnRightMouseDownCallbackId;
+      break;
+    case WM_RBUTTONDBLCLK:
+      actionId = actionElement->m_OnRightDoubleClickCallbackId;
+      break;
+    case WM_MBUTTONUP:
+      actionId = actionElement->m_OnMiddleMouseUpCallbackId;
+      break;
+    case WM_MBUTTONDOWN:
+      actionId = actionElement->m_OnMiddleMouseDownCallbackId;
+      break;
+    case WM_MBUTTONDBLCLK:
+      actionId = actionElement->m_OnMiddleDoubleClickCallbackId;
+      break;
+    case WM_XBUTTONUP:
+      if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) {
+        actionId = actionElement->m_OnX1MouseUpCallbackId;
+      } else {
+        actionId = actionElement->m_OnX2MouseUpCallbackId;
+      }
+      break;
+    case WM_XBUTTONDOWN:
+      if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) {
+        actionId = actionElement->m_OnX1MouseDownCallbackId;
+      } else {
+        actionId = actionElement->m_OnX2MouseDownCallbackId;
+      }
+      break;
+    case WM_XBUTTONDBLCLK:
+      if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) {
+        actionId = actionElement->m_OnX1DoubleClickCallbackId;
+      } else {
+        actionId = actionElement->m_OnX2DoubleClickCallbackId;
+      }
+      break;
+    case WM_MOUSEWHEEL:
+      if (GET_WHEEL_DELTA_WPARAM(wParam) > 0) {
+        actionId = actionElement->m_OnScrollUpCallbackId;
+      } else {
+        actionId = actionElement->m_OnScrollDownCallbackId;
+      }
+      break;
+    case WM_MOUSEHWHEEL:
+      if (GET_WHEEL_DELTA_WPARAM(wParam) > 0) {
+        actionId = actionElement->m_OnScrollRightCallbackId;
+      } else {
+        actionId = actionElement->m_OnScrollLeftCallbackId;
+      }
+      break;
+    }
+
+    if (actionId != -1) {
+      JSEngine::MouseEventData eventData;
+      eventData.clientX = x;
+      eventData.clientY = y;
+
+      POINT screenPt = {x, y};
+      ClientToScreen(m_hWnd, &screenPt);
+      eventData.screenX = screenPt.x;
+      eventData.screenY = screenPt.y;
+
+      const int elementX = actionElement->GetX();
+      const int elementY = actionElement->GetY();
+      eventData.offsetX = x - elementX;
+      eventData.offsetY = y - elementY;
+
+      const int elementW = actionElement->GetWidth();
+      const int elementH = actionElement->GetHeight();
+      if (elementW > 0) {
+        eventData.offsetXPercent =
+            (int)((eventData.offsetX / (double)elementW) * 100.0);
+      }
+      if (elementH > 0) {
+        eventData.offsetYPercent =
+            (int)((eventData.offsetY / (double)elementH) * 100.0);
+      }
+
+      // Execute function callback with mouse position aliases.
+      JSEngine::CallEventCallback(actionId, this, &eventData);
+      handled = true;
+    }
+  }
+
+  // Handle container scrolling via mouse wheel when not consumed by an element
+  // action
+  if (!handled && (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL)) {
+    Element *scrollTarget = hitElement;
+    while (scrollTarget) {
+      if (scrollTarget->IsScrollable())
+        break;
+      scrollTarget = scrollTarget->GetContainer();
+    }
+
+    if (scrollTarget) {
+      const bool isShiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+      const int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+      const int step = scrollTarget->GetScrollStep();
+      const int ticks = delta / WHEEL_DELTA;
+      const int scrollDelta =
+          (ticks != 0 ? ticks : (delta > 0 ? 1 : -1)) * step;
+
+      if (message == WM_MOUSEHWHEEL ||
+          (message == WM_MOUSEWHEEL && isShiftDown)) {
+        if (scrollTarget->IsScrollableX()) {
+          int oldScroll = scrollTarget->GetScrollX();
+          scrollTarget->SetScrollX(oldScroll - scrollDelta);
+          if (scrollTarget->GetScrollX() != oldScroll) {
+            Redraw();
             handled = true;
-            needRedraw = true;
+          }
         }
-    }
-    else if (message == WM_MOUSEMOVE)
-    {
-        // Handle scrollbar dragging
-        if (m_IsScrollbarDragging && m_ScrollbarDragContainer)
-        {
-            int delta = (m_ScrollbarDragIsVertical ? y : x) - m_ScrollbarDragStartMouse;
-            float thumbTravel = (float)(m_ScrollbarDragTrackLength - m_ScrollbarDragThumbLength);
-            if (thumbTravel > 0.0f)
-            {
-                int newScroll = m_ScrollbarDragStartScroll + (int)std::round(((float)delta / thumbTravel) * (float)m_ScrollbarDragMaxScroll);
-                if (m_ScrollbarDragIsVertical)
-                {
-                    m_ScrollbarDragContainer->SetScrollY(newScroll);
-                }
-                else
-                {
-                    m_ScrollbarDragContainer->SetScrollX(newScroll);
-                }
-                needRedraw = true;
-            }
+      } else if (message == WM_MOUSEWHEEL) {
+        if (scrollTarget->IsScrollableY()) {
+          int oldScroll = scrollTarget->GetScrollY();
+          scrollTarget->SetScrollY(oldScroll - scrollDelta);
+          if (scrollTarget->GetScrollY() != oldScroll) {
+            Redraw();
             handled = true;
+          }
         }
-        // Handle container swipe / pan scrolling
-        else if (m_SwipeContainer && !m_IsElementDragging && !m_TextSelectionElement && !m_FocusedInputBox)
-        {
-            int dx = x - m_SwipeStartPos.x;
-            int dy = y - m_SwipeStartPos.y;
-            if (!m_IsContainerSwiping && (abs(dx) > 3 || abs(dy) > 3))
-            {
-                m_IsContainerSwiping = true;
-                SetCapture(m_hWnd);
-            }
-
-            if (m_IsContainerSwiping)
-            {
-                // Pan in X if horizontal overflow is enabled (not hidden)
-                if (m_SwipeContainer->GetOverflowX() != Element::OverflowMode::Hidden)
-                {
-                    int newX = m_SwipeStartScrollX - dx;
-                    m_SwipeContainer->SetScrollX(newX);
-                    needRedraw = true;
-                }
-                // Pan in Y if vertical overflow is enabled (not hidden)
-                if (m_SwipeContainer->GetOverflowY() != Element::OverflowMode::Hidden)
-                {
-                    int newY = m_SwipeStartScrollY - dy;
-                    m_SwipeContainer->SetScrollY(newY);
-                    needRedraw = true;
-                }
-                handled = true;
-            }
-        }
-
-        // Handle text selection dragging
-        if (m_TextSelectionElement && m_TextSelectionElement->GetTextSelection())
-        {
-            if (hitElement == m_TextSelectionElement || IsTrackedElement(m_TextSelectionElement))
-            {
-                m_TextSelectionElement->HandleTextSelectionMouseMove(x, y);
-                needRedraw = true;
-            }
-        }
-
-        if (m_IsElementDragging && IsTrackedElement(m_DragElement))
-        {
-            if (m_DragElement->m_OnDragCallbackId != -1)
-            {
-                JSEngine::MouseEventData eventData = buildElementEventData(m_DragElement);
-                JSEngine::CallEventCallback(m_DragElement->m_OnDragCallbackId, this, &eventData);
-                handled = true;
-            }
-        }
-
-        // Drag selection inside a focused input box.
-        if (m_FocusedInputBox)
-        {
-            m_FocusedInputBox->HandleMouseMove(x, y);
-            needRedraw = true;
-        }
+      }
     }
-    else if (message == WM_LBUTTONUP)
-    {
-        if (m_ScrollbarActivePart != ScrollbarHitPart::None)
-        {
-            m_ScrollbarActivePart = ScrollbarHitPart::None;
-            KillTimer(m_hWnd, TIMER_SCROLLBAR_BUTTON);
-            handled = true;
-            needRedraw = true;
-        }
+  }
 
-        if (m_IsScrollbarDragging)
-        {
-            m_IsScrollbarDragging = false;
-            m_ScrollbarDragContainer = nullptr;
-            handled = true;
-            needRedraw = true;
-        }
+  // Dispatch drag actions (for slider-like interactions on any element).
+  if (message == WM_LBUTTONDOWN) {
+    // Check if scrollbar of a container was clicked
+    ScrollbarHitResult sbHit;
+    if (HitTestContainerScrollbar(x, y, sbHit)) {
+      const float inset = sbHit.container->GetScrollbarInset();
+      const GfxRect bounds = sbHit.container->GetBounds();
 
-        // Handle swipe / pan gesture release
-        if (m_SwipeTargetElement || m_SwipeContainer)
-        {
-            if (m_IsContainerSwiping)
-            {
-                m_IsContainerSwiping = false;
-                handled = true;
-            }
-
-            m_SwipeContainer = nullptr;
-            m_SwipeTargetElement = nullptr;
+      if (sbHit.part == ScrollbarHitPart::VerticalTopButton) {
+        int step = sbHit.container->GetScrollStep();
+        sbHit.container->SetScrollY(sbHit.container->GetScrollY() - step);
+        m_ScrollbarDragContainer = sbHit.container;
+        m_ScrollbarActivePart = ScrollbarHitPart::VerticalTopButton;
+        SetTimer(m_hWnd, TIMER_SCROLLBAR_BUTTON, 250, nullptr);
+        SetCapture(m_hWnd);
+        handled = true;
+        needRedraw = true;
+      } else if (sbHit.part == ScrollbarHitPart::VerticalBottomButton) {
+        int step = sbHit.container->GetScrollStep();
+        sbHit.container->SetScrollY(sbHit.container->GetScrollY() + step);
+        m_ScrollbarDragContainer = sbHit.container;
+        m_ScrollbarActivePart = ScrollbarHitPart::VerticalBottomButton;
+        SetTimer(m_hWnd, TIMER_SCROLLBAR_BUTTON, 250, nullptr);
+        SetCapture(m_hWnd);
+        handled = true;
+        needRedraw = true;
+      } else if (sbHit.part == ScrollbarHitPart::HorizontalLeftButton) {
+        int step = sbHit.container->GetScrollStep();
+        sbHit.container->SetScrollX(sbHit.container->GetScrollX() - step);
+        m_ScrollbarDragContainer = sbHit.container;
+        m_ScrollbarActivePart = ScrollbarHitPart::HorizontalLeftButton;
+        SetTimer(m_hWnd, TIMER_SCROLLBAR_BUTTON, 250, nullptr);
+        SetCapture(m_hWnd);
+        handled = true;
+        needRedraw = true;
+      } else if (sbHit.part == ScrollbarHitPart::HorizontalRightButton) {
+        int step = sbHit.container->GetScrollStep();
+        sbHit.container->SetScrollX(sbHit.container->GetScrollX() + step);
+        m_ScrollbarDragContainer = sbHit.container;
+        m_ScrollbarActivePart = ScrollbarHitPart::HorizontalRightButton;
+        SetTimer(m_hWnd, TIMER_SCROLLBAR_BUTTON, 250, nullptr);
+        SetCapture(m_hWnd);
+        handled = true;
+        needRedraw = true;
+      } else if (sbHit.part == ScrollbarHitPart::VerticalThumb) {
+        m_IsScrollbarDragging = true;
+        m_ScrollbarDragContainer = sbHit.container;
+        m_ScrollbarDragIsVertical = true;
+        m_ScrollbarDragStartMouse = y;
+        m_ScrollbarDragGrabOffset =
+            y - ((int)bounds.Y + (int)inset + sbHit.thumbOffset);
+        m_ScrollbarDragStartScroll = sbHit.container->GetScrollY();
+        m_ScrollbarDragTrackLength = sbHit.trackLength;
+        m_ScrollbarDragThumbLength = sbHit.thumbLength;
+        m_ScrollbarDragMaxScroll = sbHit.maxScroll;
+        SetCapture(m_hWnd);
+        handled = true;
+        needRedraw = true;
+      } else if (sbHit.part == ScrollbarHitPart::VerticalTrack) {
+        float trackOffset = (float)(y - ((float)bounds.Y + inset) -
+                                    (float)sbHit.thumbLength / 2.0f);
+        float thumbTravel = (float)(sbHit.trackLength - sbHit.thumbLength);
+        if (thumbTravel > 0.0f) {
+          int targetScroll = (int)std::round((trackOffset / thumbTravel) *
+                                             (float)sbHit.maxScroll);
+          sbHit.container->SetScrollY(targetScroll);
         }
-
-        // Always release capture on mouse up if this window holds it
-        if (GetCapture() == m_hWnd && !m_IsDragging && !m_IsScrollbarDragging && !m_IsElementDragging)
-        {
-            ReleaseCapture();
+        m_IsScrollbarDragging = true;
+        m_ScrollbarDragContainer = sbHit.container;
+        m_ScrollbarDragIsVertical = true;
+        m_ScrollbarDragStartMouse = y;
+        m_ScrollbarDragGrabOffset = sbHit.thumbLength / 2;
+        m_ScrollbarDragStartScroll = sbHit.container->GetScrollY();
+        m_ScrollbarDragTrackLength = sbHit.trackLength;
+        m_ScrollbarDragThumbLength = sbHit.thumbLength;
+        m_ScrollbarDragMaxScroll = sbHit.maxScroll;
+        SetCapture(m_hWnd);
+        handled = true;
+        needRedraw = true;
+      } else if (sbHit.part == ScrollbarHitPart::HorizontalThumb) {
+        m_IsScrollbarDragging = true;
+        m_ScrollbarDragContainer = sbHit.container;
+        m_ScrollbarDragIsVertical = false;
+        m_ScrollbarDragStartMouse = x;
+        m_ScrollbarDragGrabOffset =
+            x - ((int)bounds.X + (int)inset + sbHit.thumbOffset);
+        m_ScrollbarDragStartScroll = sbHit.container->GetScrollX();
+        m_ScrollbarDragTrackLength = sbHit.trackLength;
+        m_ScrollbarDragThumbLength = sbHit.thumbLength;
+        m_ScrollbarDragMaxScroll = sbHit.maxScroll;
+        SetCapture(m_hWnd);
+        handled = true;
+        needRedraw = true;
+      } else if (sbHit.part == ScrollbarHitPart::HorizontalTrack) {
+        float trackOffset = (float)(x - ((float)bounds.X + inset) -
+                                    (float)sbHit.thumbLength / 2.0f);
+        float thumbTravel = (float)(sbHit.trackLength - sbHit.thumbLength);
+        if (thumbTravel > 0.0f) {
+          int targetScroll = (int)std::round((trackOffset / thumbTravel) *
+                                             (float)sbHit.maxScroll);
+          sbHit.container->SetScrollX(targetScroll);
         }
-
-        // Handle text selection release
-        if (m_TextSelectionElement && m_TextSelectionElement->GetTextSelection())
-        {
-            m_TextSelectionElement->HandleTextSelectionMouseUp();
-        }
-
-        if (m_FocusedInputBox)
-        {
-            m_FocusedInputBox->HandleMouseUp();
-        }
-
-        if (m_IsElementDragging && IsTrackedElement(m_DragElement))
-        {
-            if (m_DragElement->m_OnDragEndCallbackId != -1)
-            {
-                JSEngine::MouseEventData eventData = buildElementEventData(m_DragElement);
-                JSEngine::CallEventCallback(m_DragElement->m_OnDragEndCallbackId, this, &eventData);
-                handled = true;
-            }
-        }
-        m_DragElement = nullptr;
-        m_IsElementDragging = false;
-        if (GetCapture() == m_hWnd && !m_IsDragging)
-        {
-            ReleaseCapture();
-        }
-    }
-    else if (message == WM_RBUTTONUP)
-    {
-        InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(hitElement);
-        if (inputElem)
-        {
-            if (InputBoxContextMenuHelper::ShowInputBoxContextMenu(*this, inputElem, x, y))
-            {
-                needRedraw = true;
-            }
-            handled = true;
-        }
+        m_IsScrollbarDragging = true;
+        m_ScrollbarDragContainer = sbHit.container;
+        m_ScrollbarDragIsVertical = false;
+        m_ScrollbarDragStartMouse = x;
+        m_ScrollbarDragGrabOffset = sbHit.thumbLength / 2;
+        m_ScrollbarDragStartScroll = sbHit.container->GetScrollX();
+        m_ScrollbarDragTrackLength = sbHit.trackLength;
+        m_ScrollbarDragThumbLength = sbHit.thumbLength;
+        m_ScrollbarDragMaxScroll = sbHit.maxScroll;
+        SetCapture(m_hWnd);
+        handled = true;
+        needRedraw = true;
+      }
     }
 
-    if (needRedraw && !m_IsBatchUpdating)
-    {
-        Redraw();
+    if (!handled) {
+      // Helper: container has overflow that permits scrolling (OverflowX or Y
+      // is not Hidden)
+      auto isScrollContainer = [](Element *el) -> bool {
+        if (!el || !el->IsContainer())
+          return false;
+        return el->GetOverflowX() != Element::OverflowMode::Hidden ||
+               el->GetOverflowY() != Element::OverflowMode::Hidden;
+      };
+
+      // Initialize container swipe tracking
+      Element *swipeTarget = hitElement;
+      Element *swipeCont = hitElement;
+
+      while (swipeCont) {
+        if (isScrollContainer(swipeCont))
+          break;
+        swipeCont = swipeCont->GetContainer();
+      }
+      if (!swipeCont) {
+        for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it) {
+          Element *el = it->get();
+          if (el && el->IsVisible() && isScrollContainer(el)) {
+            GfxRect b = el->GetBounds();
+            if (x >= b.X && x < b.X + b.Width && y >= b.Y &&
+                y < b.Y + b.Height) {
+              swipeCont = el;
+              if (!swipeTarget)
+                swipeTarget = el;
+              break;
+            }
+          }
+        }
+      }
+      m_IsContainerSwiping = false;
+      m_SwipeContainer = swipeCont;
+      m_SwipeTargetElement = swipeTarget;
+      m_SwipeStartPos = {x, y};
+      m_SwipeStartTime = GetTickCount();
+      if (swipeCont)
+        swipeCont->RecalcContentExtents();
+      m_SwipeStartScrollX = swipeCont ? swipeCont->GetScrollX() : 0;
+      m_SwipeStartScrollY = swipeCont ? swipeCont->GetScrollY() : 0;
+
+      // Capture mouse so WM_MOUSEMOVE reaches us even if cursor moves outside
+      // window
+      if (swipeCont) {
+        SetCapture(m_hWnd);
+      }
+
+      // Handle text selection
+      TextElement *textElem = dynamic_cast<TextElement *>(hitElement);
+      if (textElem && textElem->GetTextSelection()) {
+        // Clear previous selection from other elements
+        if (m_TextSelectionElement && m_TextSelectionElement != textElem) {
+          m_TextSelectionElement->ClearTextSelection();
+        }
+        m_TextSelectionElement = textElem;
+        textElem->HandleTextSelectionMouseDown(x, y);
+        handled = true;
+        needRedraw = true;
+      } else {
+        // Clicked on non-selectable element, clear selection
+        if (m_TextSelectionElement) {
+          m_TextSelectionElement->ClearTextSelection();
+          m_TextSelectionElement = nullptr;
+          needRedraw = true;
+        }
+      }
+
+      // Input box focus + caret placement on click.
+      InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(hitElement);
+      ColorPickerElement *colorPicker =
+          dynamic_cast<ColorPickerElement *>(hitElement);
+      if (colorPicker) {
+        if (m_ColorPickerPopup)
+          m_ColorPickerPopup->Close();
+        m_ColorPickerPopup =
+            std::make_unique<ColorPickerPopup>(this, colorPicker);
+        m_ColorPickerPopup->Show();
+        handled = true;
+      }
+      if (inputElem) {
+        if (m_FocusedInputBox && m_FocusedInputBox != inputElem) {
+          if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
+            JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId,
+                                        this, nullptr);
+          m_FocusedInputBox->SetFocus(false);
+          KillTimer(m_hWnd, TIMER_CARET);
+        }
+        if (!inputElem->IsFocused()) {
+          inputElem->SetFocus(true);
+          SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
+          if (inputElem->m_OnFocusCallbackId != -1)
+            JSEngine::CallEventCallback(inputElem->m_OnFocusCallbackId, this,
+                                        nullptr);
+        }
+        m_FocusedInputBox = inputElem;
+        bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+        inputElem->HandleMouseDown(x, y, shift);
+        SetFocus();
+        SetCapture(m_hWnd);
+        handled = true;
+        needRedraw = true;
+      } else {
+        // Clicked outside any input box: blur the focused one.
+        if (m_FocusedInputBox) {
+          if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
+            JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId,
+                                        this, nullptr);
+          m_FocusedInputBox->SetFocus(false);
+          m_FocusedInputBox = nullptr;
+          KillTimer(m_hWnd, TIMER_CARET);
+          needRedraw = true;
+        }
+      }
+
+      Element *dragTarget = actionElement ? actionElement : hitElement;
+      if (dragTarget && dragTarget->HasDragAction()) {
+        m_DragElement = dragTarget;
+        m_IsElementDragging = true;
+        SetCapture(m_hWnd);
+
+        if (m_DragElement->m_OnDragStartCallbackId != -1) {
+          JSEngine::MouseEventData eventData =
+              buildElementEventData(m_DragElement);
+          JSEngine::CallEventCallback(m_DragElement->m_OnDragStartCallbackId,
+                                      this, &eventData);
+          handled = true;
+        }
+      }
+    }
+  } else if (message == WM_LBUTTONDBLCLK) {
+    // Handle double-click for word selection
+    TextElement *textElem = dynamic_cast<TextElement *>(hitElement);
+    if (textElem && textElem->GetTextSelection()) {
+      m_TextSelectionElement = textElem;
+      textElem->HandleTextSelectionDoubleClick(x, y);
+      handled = true;
+      needRedraw = true;
+    }
+  } else if (message == WM_MOUSEMOVE) {
+    // Handle scrollbar dragging
+    if (m_IsScrollbarDragging && m_ScrollbarDragContainer) {
+      int delta =
+          (m_ScrollbarDragIsVertical ? y : x) - m_ScrollbarDragStartMouse;
+      float thumbTravel =
+          (float)(m_ScrollbarDragTrackLength - m_ScrollbarDragThumbLength);
+      if (thumbTravel > 0.0f) {
+        int newScroll = m_ScrollbarDragStartScroll +
+                        (int)std::round(((float)delta / thumbTravel) *
+                                        (float)m_ScrollbarDragMaxScroll);
+        if (m_ScrollbarDragIsVertical) {
+          m_ScrollbarDragContainer->SetScrollY(newScroll);
+        } else {
+          m_ScrollbarDragContainer->SetScrollX(newScroll);
+        }
+        needRedraw = true;
+      }
+      handled = true;
+    }
+    // Handle container swipe / pan scrolling
+    else if (m_SwipeContainer && !m_IsElementDragging &&
+             !m_TextSelectionElement && !m_FocusedInputBox) {
+      int dx = x - m_SwipeStartPos.x;
+      int dy = y - m_SwipeStartPos.y;
+      if (!m_IsContainerSwiping && (abs(dx) > 3 || abs(dy) > 3)) {
+        m_IsContainerSwiping = true;
+        SetCapture(m_hWnd);
+      }
+
+      if (m_IsContainerSwiping) {
+        // Pan in X if horizontal overflow is enabled (not hidden)
+        if (m_SwipeContainer->GetOverflowX() != Element::OverflowMode::Hidden) {
+          int newX = m_SwipeStartScrollX - dx;
+          m_SwipeContainer->SetScrollX(newX);
+          needRedraw = true;
+        }
+        // Pan in Y if vertical overflow is enabled (not hidden)
+        if (m_SwipeContainer->GetOverflowY() != Element::OverflowMode::Hidden) {
+          int newY = m_SwipeStartScrollY - dy;
+          m_SwipeContainer->SetScrollY(newY);
+          needRedraw = true;
+        }
+        handled = true;
+      }
     }
 
-    return handled;
+    // Handle text selection dragging
+    if (m_TextSelectionElement && m_TextSelectionElement->GetTextSelection()) {
+      if (hitElement == m_TextSelectionElement ||
+          IsTrackedElement(m_TextSelectionElement)) {
+        m_TextSelectionElement->HandleTextSelectionMouseMove(x, y);
+        needRedraw = true;
+      }
+    }
+
+    if (m_IsElementDragging && IsTrackedElement(m_DragElement)) {
+      if (m_DragElement->m_OnDragCallbackId != -1) {
+        JSEngine::MouseEventData eventData =
+            buildElementEventData(m_DragElement);
+        JSEngine::CallEventCallback(m_DragElement->m_OnDragCallbackId, this,
+                                    &eventData);
+        handled = true;
+      }
+    }
+
+    // Drag selection inside a focused input box.
+    if (m_FocusedInputBox) {
+      m_FocusedInputBox->HandleMouseMove(x, y);
+      needRedraw = true;
+    }
+  } else if (message == WM_LBUTTONUP) {
+    if (m_ScrollbarActivePart != ScrollbarHitPart::None) {
+      m_ScrollbarActivePart = ScrollbarHitPart::None;
+      KillTimer(m_hWnd, TIMER_SCROLLBAR_BUTTON);
+      handled = true;
+      needRedraw = true;
+    }
+
+    if (m_IsScrollbarDragging) {
+      m_IsScrollbarDragging = false;
+      m_ScrollbarDragContainer = nullptr;
+      handled = true;
+      needRedraw = true;
+    }
+
+    // Handle swipe / pan gesture release
+    if (m_SwipeTargetElement || m_SwipeContainer) {
+      if (m_IsContainerSwiping) {
+        m_IsContainerSwiping = false;
+        handled = true;
+      }
+
+      m_SwipeContainer = nullptr;
+      m_SwipeTargetElement = nullptr;
+    }
+
+    // Always release capture on mouse up if this window holds it
+    if (GetCapture() == m_hWnd && !m_IsDragging && !m_IsScrollbarDragging &&
+        !m_IsElementDragging) {
+      ReleaseCapture();
+    }
+
+    // Handle text selection release
+    if (m_TextSelectionElement && m_TextSelectionElement->GetTextSelection()) {
+      m_TextSelectionElement->HandleTextSelectionMouseUp();
+    }
+
+    if (m_FocusedInputBox) {
+      m_FocusedInputBox->HandleMouseUp();
+    }
+
+    if (m_IsElementDragging && IsTrackedElement(m_DragElement)) {
+      if (m_DragElement->m_OnDragEndCallbackId != -1) {
+        JSEngine::MouseEventData eventData =
+            buildElementEventData(m_DragElement);
+        JSEngine::CallEventCallback(m_DragElement->m_OnDragEndCallbackId, this,
+                                    &eventData);
+        handled = true;
+      }
+    }
+    m_DragElement = nullptr;
+    m_IsElementDragging = false;
+    if (GetCapture() == m_hWnd && !m_IsDragging) {
+      ReleaseCapture();
+    }
+  } else if (message == WM_RBUTTONUP) {
+    InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(hitElement);
+    if (inputElem) {
+      if (InputBoxContextMenuHelper::ShowInputBoxContextMenu(*this, inputElem,
+                                                             x, y)) {
+        needRedraw = true;
+      }
+      handled = true;
+    }
+  }
+
+  if (needRedraw && !m_IsBatchUpdating) {
+    Redraw();
+  }
+
+  return handled;
 }
 
 /*
 ** Show the context menu for the widget.
 */
-void Widget::OnContextMenu()
-{
-    if (m_ContextMenuDisabled)
-        return;
+void Widget::OnContextMenu() {
+  if (m_ContextMenuDisabled)
+    return;
 
-    const int cmd = WidgetContextMenuHelper::ShowContextMenu(
-        m_hWnd,
-        m_ContextMenu,
-        m_ShowDefaultContextMenuItems,
-        m_WindowZPosition,
-        m_Options);
-    WidgetContextMenuHelper::HandleContextCommand(*this, cmd);
+  const int cmd = WidgetContextMenuHelper::ShowContextMenu(
+      m_hWnd, m_ContextMenu, m_ShowDefaultContextMenuItems, m_WindowZPosition,
+      m_Options);
+  WidgetContextMenuHelper::HandleContextCommand(*this, cmd);
 }
 
-void Widget::BeginUpdate()
-{
-    m_IsBatchUpdating++;
-}
+void Widget::BeginUpdate() { m_IsBatchUpdating++; }
 
-void Widget::EndUpdate()
-{
-    m_IsBatchUpdating--;
-    if (m_IsBatchUpdating < 0)
-        m_IsBatchUpdating = 0;
+void Widget::EndUpdate() {
+  m_IsBatchUpdating--;
+  if (m_IsBatchUpdating < 0)
+    m_IsBatchUpdating = 0;
 
-    if (m_IsBatchUpdating == 0)
-    {
-        Redraw();
-    }
+  if (m_IsBatchUpdating == 0) {
+    Redraw();
+  }
 }

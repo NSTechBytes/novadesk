@@ -13,16 +13,14 @@
 
 class Element;
 
-class CursorManager
-{
+class CursorManager {
 public:
-    CursorManager() = default;
-    ~CursorManager();
+  CursorManager() = default;
+  ~CursorManager();
 
-    HCURSOR GetCursorForElement(Element* element);
+  HCURSOR GetCursorForElement(Element *element);
 
 private:
-    HCURSOR LoadCustomCursorFile(const std::wstring& fullPath);
-    std::unordered_map<std::wstring, HCURSOR> m_CustomCursorCache;
+  HCURSOR LoadCustomCursorFile(const std::wstring &fullPath);
+  std::unordered_map<std::wstring, HCURSOR> m_CustomCursorCache;
 };
-

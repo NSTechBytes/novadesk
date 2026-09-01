@@ -46,3779 +46,3741 @@
 
 extern std::vector<Widget *> widgets;
 
-namespace novadesk::scripting::quickjs
-{
-    namespace
-    {
-        bool g_widgetUiDebug = false;
-        JSClassID g_widgetWindowClassId = 0;
-        JSClassID g_widgetUiClassId = 0;
-        JSRuntime *g_widgetWindowClassRuntime = nullptr;
-        JSRuntime *g_widgetUiClassRuntime = nullptr;
-
-        Widget *GetWidget(JSContext *ctx, JSValueConst thisVal)
-        {
-            (void)ctx;
-            WidgetWrapper *wrapper = static_cast<WidgetWrapper *>(JS_GetOpaque(thisVal, g_widgetWindowClassId));
-            if (!wrapper || !wrapper->widget || wrapper->widget->GetInstanceId() != wrapper->instanceId)
-                return nullptr;
-            return Widget::IsValid(wrapper->widget) ? wrapper->widget : nullptr;
-        }
-
-        Widget *GetUiWidget(JSContext *ctx, JSValueConst thisVal)
-        {
-            (void)ctx;
-            WidgetWrapper *wrapper = static_cast<WidgetWrapper *>(JS_GetOpaque(thisVal, g_widgetUiClassId));
-            if (!wrapper || !wrapper->widget || wrapper->widget->GetInstanceId() != wrapper->instanceId)
-                return nullptr;
-            return Widget::IsValid(wrapper->widget) ? wrapper->widget : nullptr;
-        }
-
-        Widget *GetAnyWidget(JSContext *ctx, JSValueConst thisVal)
-        {
-            Widget *widget = GetWidget(ctx, thisVal);
-            if (!widget)
-            {
-                widget = GetUiWidget(ctx, thisVal);
-            }
-            return widget;
-        }
-
-        std::wstring ToGradientOrRGBAString(const GradientInfo &gradient, COLORREF color, BYTE alpha)
-        {
-            if (gradient.type == GRADIENT_NONE || gradient.stops.empty())
-            {
-                return ColorUtil::ToRGBAString(color, alpha);
-            }
-
-            std::wstring result;
-            if (gradient.type == GRADIENT_LINEAR)
-            {
-                wchar_t buf[64];
-                swprintf_s(buf, L"linearGradient(%.1f", gradient.angle);
-                result = buf;
-            }
-            else if (gradient.type == GRADIENT_RADIAL)
-            {
-                result = L"radialGradient(" + gradient.shape;
-            }
-            else
-            {
-                return ColorUtil::ToRGBAString(color, alpha);
-            }
-
-            for (const auto &stop : gradient.stops)
-            {
-                result += L", " + ColorUtil::ToRGBAString(stop.color, stop.alpha);
-            }
-            result += L")";
-            return result;
-        }
-
-        JSValue ThrowTypeError(JSContext *ctx, const char *method, const char *usage)
-        {
-            return JS_ThrowTypeError(ctx, "%s: %s", method, usage);
-        }
-
-        JSValue GetGeneralImagePropertyValue(JSContext *ctx, Element *element, const std::string &prop)
-        {
-            if (prop == "fallbackPath")
-            {
-                std::wstring val;
-                if (auto *img = dynamic_cast<ImageElement *>(element))
-                    val = img->GetFallbackPath();
-                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
-                    val = btn->GetFallbackPath();
-                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
-                    val = bmp->GetFallbackPath();
-                else if (auto *rot = dynamic_cast<RotatorElement *>(element))
-                    val = rot->GetFallbackPath();
-                return JS_NewString(ctx, Utils::ToString(val).c_str());
-            }
-            if (prop == "grayscale")
-            {
-                bool val = false;
-                if (auto *img = dynamic_cast<ImageElement *>(element))
-                    val = img->IsGrayscale();
-                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
-                    val = btn->IsGrayscale();
-                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
-                    val = bmp->IsGrayscale();
-                return JS_NewBool(ctx, val ? 1 : 0);
-            }
-            if (prop == "useExifOrientation")
-            {
-                bool val = false;
-                if (auto *img = dynamic_cast<ImageElement *>(element))
-                    val = img->GetUseExifOrientation();
-                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
-                    val = btn->GetUseExifOrientation();
-                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
-                    val = bmp->GetUseExifOrientation();
-                return JS_NewBool(ctx, val ? 1 : 0);
-            }
-            if (prop == "imageAlpha")
-            {
-                BYTE val = 255;
-                if (auto *img = dynamic_cast<ImageElement *>(element))
-                    val = img->GetImageAlpha();
-                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
-                    val = btn->GetImageAlpha();
-                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
-                    val = bmp->GetImageAlpha();
-                return JS_NewInt32(ctx, static_cast<int>(val));
-            }
-            if (prop == "imageTint")
-            {
-                bool hasTint = false;
-                COLORREF color = 0;
-                BYTE alpha = 255;
-                if (auto *img = dynamic_cast<ImageElement *>(element))
-                {
-                    hasTint = img->HasImageTint();
-                    if (hasTint)
-                    {
-                        color = img->GetImageTint();
-                        alpha = img->GetImageTintAlpha();
-                    }
-                }
-                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
-                {
-                    hasTint = btn->HasImageTint();
-                    if (hasTint)
-                    {
-                        color = btn->GetImageTint();
-                        alpha = btn->GetImageTintAlpha();
-                    }
-                }
-                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
-                {
-                    hasTint = bmp->HasImageTint();
-                    if (hasTint)
-                    {
-                        color = bmp->GetImageTint();
-                        alpha = bmp->GetImageTintAlpha();
-                    }
-                }
-                if (hasTint)
-                {
-                    const std::wstring c = ColorUtil::ToRGBAString(color, alpha);
-                    return JS_NewString(ctx, Utils::ToString(c).c_str());
-                }
-            }
-            if (prop == "imageFlip")
-            {
-                ImageFlipMode flip = IMAGE_FLIP_NONE;
-                if (auto *img = dynamic_cast<ImageElement *>(element))
-                    flip = img->GetImageFlip();
-                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
-                    flip = btn->GetImageFlip();
-                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
-                    flip = bmp->GetImageFlip();
-
-                const char *flipStr = "none";
-                switch (flip)
-                {
-                case IMAGE_FLIP_HORIZONTAL:
-                    flipStr = "horizontal";
-                    break;
-                case IMAGE_FLIP_VERTICAL:
-                    flipStr = "vertical";
-                    break;
-                case IMAGE_FLIP_BOTH:
-                    flipStr = "both";
-                    break;
-                default:
-                    break;
-                }
-                return JS_NewString(ctx, flipStr);
-            }
-            if (prop == "imageCrop")
-            {
-                bool hasCrop = false;
-                float x = 0, y = 0, w = 0, h = 0;
-                ImageCropOrigin origin = IMAGE_CROP_ORIGIN_TOP_LEFT;
-                if (auto *img = dynamic_cast<ImageElement *>(element))
-                {
-                    hasCrop = img->HasImageCrop();
-                    if (hasCrop)
-                    {
-                        x = img->GetImageCropX();
-                        y = img->GetImageCropY();
-                        w = img->GetImageCropW();
-                        h = img->GetImageCropH();
-                        origin = img->GetImageCropOrigin();
-                    }
-                }
-                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
-                {
-                    hasCrop = btn->HasImageCrop();
-                    if (hasCrop)
-                    {
-                        x = btn->GetImageCropX();
-                        y = btn->GetImageCropY();
-                        w = btn->GetImageCropW();
-                        h = btn->GetImageCropH();
-                        origin = btn->GetImageCropOrigin();
-                    }
-                }
-                if (hasCrop)
-                {
-                    JSValue arr = JS_NewArray(ctx);
-                    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat64(ctx, x));
-                    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat64(ctx, y));
-                    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat64(ctx, w));
-                    JS_SetPropertyUint32(ctx, arr, 3, JS_NewFloat64(ctx, h));
-                    JS_SetPropertyUint32(ctx, arr, 4, JS_NewInt32(ctx, (int)origin));
-                    return arr;
-                }
-            }
-            if (prop == "colorMatrix")
-            {
-                bool hasMatrix = false;
-                const float *m = nullptr;
-                if (auto *img = dynamic_cast<ImageElement *>(element))
-                {
-                    hasMatrix = img->HasColorMatrix();
-                    if (hasMatrix)
-                        m = img->GetColorMatrix();
-                }
-                else if (auto *btn = dynamic_cast<ButtonElement *>(element))
-                {
-                    hasMatrix = btn->HasColorMatrix();
-                    if (hasMatrix)
-                        m = btn->GetColorMatrix();
-                }
-                else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
-                {
-                    hasMatrix = bmp->HasColorMatrix();
-                    if (hasMatrix)
-                        m = bmp->GetColorMatrix();
-                }
-                if (hasMatrix && m)
-                {
-                    JSValue arr = JS_NewArray(ctx);
-                    for (uint32_t i = 0; i < 20; ++i)
-                        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, m[i]));
-                    return arr;
-                }
-            }
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddImage(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addImage", "expected options object");
-            PropertyParser::ImageOptions options;
-            PropertyParser::ParseImageOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            widget->AddImage(options);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddButton(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addButton", "expected options object");
-            PropertyParser::ButtonOptions options;
-            PropertyParser::ParseButtonOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            widget->AddButton(options);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddText(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addText", "expected options object");
-            PropertyParser::TextOptions options;
-            PropertyParser::ParseTextOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            widget->AddText(options);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addInputBox", "expected options object");
-            PropertyParser::InputBoxOptions options;
-            PropertyParser::ParseInputBoxOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            widget->AddInputBox(options);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddColorPicker(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addColorPicker", "expected options object");
-            PropertyParser::ColorPickerOptions options;
-            PropertyParser::ParseColorPickerOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            widget->AddColorPicker(options);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddBar(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addBar", "expected options object");
-            PropertyParser::BarOptions options;
-            PropertyParser::ParseBarOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            widget->AddBar(options);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddRoundLine(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addRoundLine", "expected options object");
-            PropertyParser::RoundLineOptions options;
-            PropertyParser::ParseRoundLineOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            widget->AddRoundLine(options);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddLine(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addLine", "expected options object");
-            PropertyParser::LineOptions options;
-            PropertyParser::ParseLineOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            widget->AddLine(options);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddHistogram(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addHistogram", "expected options object");
-            PropertyParser::HistogramOptions options;
-            PropertyParser::ParseHistogramOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            widget->AddHistogram(options);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddShape(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addShape", "expected options object");
-            PropertyParser::ShapeOptions options;
-            PropertyParser::ParseShapeOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            widget->AddShape(options);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddBitmap(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addBitmap", "expected options object");
-            PropertyParser::BitmapOptions options;
-            PropertyParser::ParseBitmapOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            widget->AddBitmap(options);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddRotator(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addRotator", "expected options object");
-            PropertyParser::RotatorOptions options;
-            PropertyParser::ParseRotatorOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            widget->AddRotator(options);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddAreaGraph(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addAreaGraph", "expected options object");
-            PropertyParser::AreaGraphOptions options;
-            PropertyParser::ParseAreaGraphOptions(ctx, argv[0], options, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            widget->AddAreaGraph(options);
-            return JS_UNDEFINED;
-        }
-
-        static std::wstring ReadObjectString(JSContext *ctx, JSValueConst obj, const char *key)
-        {
-            JSValue v = JS_GetPropertyStr(ctx, obj, key);
-            if (JS_IsException(v) || JS_IsUndefined(v) || JS_IsNull(v))
-            {
-                JS_FreeValue(ctx, v);
-                return L"";
-            }
-            const char *s = JS_ToCString(ctx, v);
-            std::wstring out;
-            if (s)
-            {
-                out = Utils::ToWString(s);
-                JS_FreeCString(ctx, s);
-            }
-            JS_FreeValue(ctx, v);
-            return out;
-        }
-
-        static JSValue CreateTypedElementObject(JSContext *ctx, JSValueConst srcOptions, const char *typeName)
-        {
-            JSValue obj = JS_NewObject(ctx);
-            // Only set 'elementType' (no longer setting 'type' for backward compatibility)
-            JS_SetPropertyStr(ctx, obj, "elementType", JS_NewString(ctx, typeName));
-            if (JS_IsObject(srcOptions))
-            {
-                JSPropertyEnum *tab = nullptr;
-                uint32_t len = 0;
-                if (JS_GetOwnPropertyNames(ctx, &tab, &len, srcOptions, JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) == 0)
-                {
-                    for (uint32_t i = 0; i < len; ++i)
-                    {
-                        JSValue keyV = JS_AtomToString(ctx, tab[i].atom);
-                        const char *key = JS_ToCString(ctx, keyV);
-                        if (key)
-                        {
-                            // Skip 'elementType' and 'type' to avoid overwriting
-                            if (std::strcmp(key, "elementType") != 0 && std::strcmp(key, "type") != 0)
-                            {
-                                JSValue val = JS_GetProperty(ctx, srcOptions, tab[i].atom);
-                                JS_SetPropertyStr(ctx, obj, key, val);
-                            }
-                            JS_FreeCString(ctx, key);
-                        }
-                        JS_FreeValue(ctx, keyV);
-                        JS_FreeAtom(ctx, tab[i].atom);
-                    }
-                    js_free(ctx, tab);
-                }
-            }
-            return obj;
-        }
-
-        static JSValue CallAddByType(JSContext *ctx, Widget *widget, JSValueConst thisVal, JSValue obj)
-        {
-            (void)thisVal;
-            if (!widget || !JS_IsObject(obj))
-                return JS_UNDEFINED;
-
-            // Only check 'elementType' - no fallback to 'type'
-            std::wstring type = ReadObjectString(ctx, obj, "elementType");
-            if (type.empty())
-            {
-                return ThrowTypeError(ctx, "addLayoutBox", "children item must have 'elementType' property");
-            }
-            std::transform(type.begin(), type.end(), type.begin(), ::towlower);
-
-            JSValue argvLocal[1] = {obj};
-            if (type == L"text")
-                return JsWidgetAddText(ctx, thisVal, 1, argvLocal);
-            if (type == L"image")
-                return JsWidgetAddImage(ctx, thisVal, 1, argvLocal);
-            if (type == L"shape")
-                return JsWidgetAddShape(ctx, thisVal, 1, argvLocal);
-            if (type == L"button")
-                return JsWidgetAddButton(ctx, thisVal, 1, argvLocal);
-            if (type == L"inputbox")
-                return JsWidgetAddInputBox(ctx, thisVal, 1, argvLocal);
-            if (type == L"colorpicker")
-                return JsWidgetAddColorPicker(ctx, thisVal, 1, argvLocal);
-            if (type == L"bitmap")
-                return JsWidgetAddBitmap(ctx, thisVal, 1, argvLocal);
-            if (type == L"rotator")
-                return JsWidgetAddRotator(ctx, thisVal, 1, argvLocal);
-            if (type == L"bar")
-                return JsWidgetAddBar(ctx, thisVal, 1, argvLocal);
-            if (type == L"line")
-                return JsWidgetAddLine(ctx, thisVal, 1, argvLocal);
-            if (type == L"histogram")
-                return JsWidgetAddHistogram(ctx, thisVal, 1, argvLocal);
-            if (type == L"roundline")
-                return JsWidgetAddRoundLine(ctx, thisVal, 1, argvLocal);
-            if (type == L"areagraph")
-                return JsWidgetAddAreaGraph(ctx, thisVal, 1, argvLocal);
-            if (type == L"layoutbox")
-                return JS_UNDEFINED;
-            return ThrowTypeError(ctx, "addLayoutBox", Utils::ToString(L"children item has unsupported elementType: " + type).c_str());
-        }
-
-        static JSValue JsWidgetAddLayoutBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv);
-
-        static JSValue AddLayoutBoxChildren(JSContext *ctx, Widget *widget, JSValueConst thisVal, JSValueConst layoutObj, const std::wstring &layoutId)
-        {
-            JSValue childrenVal = JS_GetPropertyStr(ctx, layoutObj, "children");
-            if (!JS_IsArray(childrenVal))
-            {
-                JS_FreeValue(ctx, childrenVal);
-                return JS_UNDEFINED;
-            }
-
-            JSValue lenV = JS_GetPropertyStr(ctx, childrenVal, "length");
-            uint32_t len = 0;
-            JS_ToUint32(ctx, &len, lenV);
-            JS_FreeValue(ctx, lenV);
-
-            for (uint32_t i = 0; i < len; ++i)
-            {
-                JSValue child = JS_GetPropertyUint32(ctx, childrenVal, i);
-                if (!JS_IsObject(child))
-                {
-                    JS_FreeValue(ctx, child);
-                    continue;
-                }
-
-                JS_SetPropertyStr(ctx, child, "container", JS_NewString(ctx, Utils::ToString(layoutId).c_str()));
-
-                // Only check 'elementType' - no fallback to 'type'
-                std::wstring type = ReadObjectString(ctx, child, "elementType");
-                if (type.empty())
-                {
-                    JS_FreeValue(ctx, child);
-                    JS_FreeValue(ctx, childrenVal);
-                    return ThrowTypeError(ctx, "addLayoutBox", "children item must have 'elementType' property");
-                }
-                std::transform(type.begin(), type.end(), type.begin(), ::towlower);
-
-                JSValue res = JS_UNDEFINED;
-                if (type == L"layoutbox")
-                {
-                    JSValue childArgv[1] = {child};
-                    res = JsWidgetAddLayoutBox(ctx, thisVal, 1, childArgv);
-                }
-                else
-                {
-                    res = CallAddByType(ctx, widget, thisVal, child);
-                }
-
-                JS_FreeValue(ctx, child);
-                if (JS_IsException(res))
-                {
-                    JS_FreeValue(ctx, childrenVal);
-                    return res;
-                }
-                JS_FreeValue(ctx, res);
-            }
-
-            JS_FreeValue(ctx, childrenVal);
-            return JS_UNDEFINED;
-        }
-
-        static JSValue JsWidgetAddLayoutBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "addLayoutBox", "expected options object");
-
-            PropertyParser::LayoutBoxOptions layoutOptions;
-            PropertyParser::ParseLayoutBoxOptions(ctx, argv[0], layoutOptions, PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir()));
-            PropertyParser::ShapeOptions &shapeOptions = layoutOptions.shape;
-            if (shapeOptions.id.empty())
-                return ThrowTypeError(ctx, "addLayoutBox", "id is required");
-            if (layoutOptions.hasBoxShadowError)
-                return ThrowTypeError(ctx, "addLayoutBox", Utils::ToString(layoutOptions.boxShadowError).c_str());
-
-            widget->AddLayoutBox(shapeOptions);
-            if (Element *layoutElement = widget->FindElementById(shapeOptions.id))
-            {
-                if (auto *lb = dynamic_cast<ElementLayoutBox *>(layoutElement))
-                {
-                    PropertyParser::ApplyLayoutBoxOptions(lb, layoutOptions);
-                }
-            }
-
-            Widget::LayoutConfig cfg;
-            cfg.direction = layoutOptions.direction;
-            cfg.flexDirection = layoutOptions.flexDirection;
-            cfg.gap = layoutOptions.gap;
-            if (!layoutOptions.align.empty())
-                cfg.align = layoutOptions.align;
-            if (!layoutOptions.justify.empty())
-                cfg.justify = layoutOptions.justify;
-            cfg.paddingLeft = layoutOptions.paddingLeft;
-            cfg.paddingTop = layoutOptions.paddingTop;
-            cfg.paddingRight = layoutOptions.paddingRight;
-            cfg.paddingBottom = layoutOptions.paddingBottom;
-
-            // Logging::Log(LogLevel::Debug, L"[PADDING] JsWidgetAddLayoutBox SetLayoutConfig for '%s': L=%d, T=%d, R=%d, B=%d",
-            //     shapeOptions.id.c_str(), cfg.paddingLeft, cfg.paddingTop, cfg.paddingRight, cfg.paddingBottom);
-
-            widget->SetLayoutConfig(shapeOptions.id, cfg);
-            JSValue childRes = AddLayoutBoxChildren(ctx, widget, thisVal, argv[0], shapeOptions.id);
-            if (JS_IsException(childRes))
-                return childRes;
-            // Ensure a post-config render pass. AddLayoutBox redraws once before
-            // layout metadata is fully applied, which can briefly show stale visuals.
-            widget->Redraw();
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetAddLayout(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            return JsWidgetAddLayoutBox(ctx, thisVal, argc, argv);
-        }
-
-        JSValue JsWidgetElementFactory(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv, int magic)
-        {
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return JS_ThrowTypeError(ctx, "element factory expects options object");
-            const char *typeName = "shape";
-            switch (magic)
-            {
-            case 0:
-                typeName = "text";
-                break;
-            case 1:
-                typeName = "image";
-                break;
-            case 2:
-                typeName = "shape";
-                break;
-            case 3:
-                typeName = "button";
-                break;
-            case 4:
-                typeName = "bitmap";
-                break;
-            case 5:
-                typeName = "rotator";
-                break;
-            case 6:
-                typeName = "bar";
-                break;
-            case 7:
-                typeName = "line";
-                break;
-            case 8:
-                typeName = "histogram";
-                break;
-            case 9:
-                typeName = "roundLine";
-                break;
-            case 10:
-                typeName = "areaGraph";
-                break;
-            case 11:
-                typeName = "layoutBox";
-                break;
-            case 12:
-                typeName = "inputBox";
-                break;
-            }
-            return CreateTypedElementObject(ctx, argv[0], typeName);
-        }
-
-        // ── Widget-Relative Position Resolver ──────────────────────────────────
-        // Keywords resolve against the widget canvas (0,0 = top-left of widget).
-        // widgetW/widgetH = widget dimensions; elemW/elemH = element dimensions.
-
-        static std::wstring ParseElemKeywordAndOffset(const std::wstring &expr, float &outOffset)
-        {
-            outOffset = 0.0f;
-            auto ltrim = [](std::wstring &s)
-            { s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](wchar_t c)
-                                              { return !::iswspace(c); })); };
-            auto rtrim = [](std::wstring &s)
-            { s.erase(std::find_if(s.rbegin(), s.rend(), [](wchar_t c)
-                                   { return !::iswspace(c); })
-                          .base(),
-                      s.end()); };
-            std::wstring lower = expr;
-            ltrim(lower);
-            rtrim(lower);
-            std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
-
-            size_t plusPos = lower.rfind(L'+');
-            size_t minusPos = lower.rfind(L'-');
-            size_t opPos = std::wstring::npos;
-            bool negate = false;
-            if (plusPos != std::wstring::npos && (minusPos == std::wstring::npos || plusPos > minusPos))
-                opPos = plusPos;
-            else if (minusPos != std::wstring::npos && minusPos > 0)
-            {
-                opPos = minusPos;
-                negate = true;
-            }
-
-            std::wstring keyword = lower;
-            if (opPos != std::wstring::npos && opPos > 0)
-            {
-                std::wstring numPart = lower.substr(opPos + 1);
-                ltrim(numPart);
-                rtrim(numPart);
-                bool isNum = !numPart.empty() && std::all_of(numPart.begin(), numPart.end(), [](wchar_t c)
-                                                             { return ::iswdigit(c) || c == L'.' || c == L'-'; });
-                if (isNum)
-                {
-                    try
-                    {
-                        outOffset = std::stof(numPart) * (negate ? -1.0f : 1.0f);
-                    }
-                    catch (...)
-                    {
-                    }
-                    keyword = lower.substr(0, opPos);
-                    rtrim(keyword);
-                }
-            }
-            return keyword;
-        }
-
-        static float ResolveElemXKeyword(const std::wstring &kw, int widgetW, int elemW, float offset)
-        {
-            if (kw == L"left")
-                return offset;
-            if (kw == L"right")
-                return static_cast<float>(widgetW - elemW) + offset;
-            if (kw == L"center" || kw == L"middle")
-                return static_cast<float>((widgetW - elemW) / 2) + offset;
-            if (kw == L"offscreen-left")
-                return static_cast<float>(-elemW) + offset;
-            if (kw == L"offscreen-right")
-                return static_cast<float>(widgetW) + offset;
-            return offset;
-        }
-
-        static float ResolveElemYKeyword(const std::wstring &kw, int widgetH, int elemH, float offset)
-        {
-            if (kw == L"top")
-                return offset;
-            if (kw == L"bottom")
-                return static_cast<float>(widgetH - elemH) + offset;
-            if (kw == L"center" || kw == L"middle")
-                return static_cast<float>((widgetH - elemH) / 2) + offset;
-            if (kw == L"offscreen-top")
-                return static_cast<float>(-elemH) + offset;
-            if (kw == L"offscreen-bottom")
-                return static_cast<float>(widgetH) + offset;
-            return offset;
-        }
-
-        static void ResolveElemTargetExpressions(
-            Widget::AnimationTarget &target,
-            const Widget &widget,
-            Element *element,
-            bool hasXExpr, const std::wstring &xExpr,
-            bool hasYExpr, const std::wstring &yExpr)
-        {
-            const int wW = widget.GetOptions().width;
-            const int wH = widget.GetOptions().height;
-            const int eW = element ? element->GetWidth() : 0;
-            const int eH = element ? element->GetHeight() : 0;
-
-            if (hasXExpr && !xExpr.empty())
-            {
-                float offset = 0.0f;
-                const std::wstring kw = ParseElemKeywordAndOffset(xExpr, offset);
-                target.hasX = true;
-                target.x = ResolveElemXKeyword(kw, wW, eW, offset);
-            }
-            if (hasYExpr && !yExpr.empty())
-            {
-                float offset = 0.0f;
-                const std::wstring kw = ParseElemKeywordAndOffset(yExpr, offset);
-                target.hasY = true;
-                target.y = ResolveElemYKeyword(kw, wH, eH, offset);
-            }
-        }
-
-        // ── Animation Target Builders ───────────────────────────────────────────
-
-        Widget::AnimationTarget BuildAnimationTargetFromOptions(
-            const PropertyParser::AnimationOptions &options,
-            bool useFrom,
-            const Widget *widget,
-            Element *element)
-        {
-            Widget::AnimationTarget target{};
-            if (useFrom)
-            {
-                target.hasX = options.fromHasX;
-                target.hasY = options.fromHasY;
-                target.hasWidth = options.fromHasWidth;
-                target.hasHeight = options.fromHasHeight;
-                target.hasRotate = options.fromHasRotate;
-                target.x = options.fromX;
-                target.y = options.fromY;
-                target.width = options.fromWidth;
-                target.height = options.fromHeight;
-                target.rotate = options.fromRotate;
-            }
-            else
-            {
-                target.hasX = options.hasX;
-                target.hasY = options.hasY;
-                target.hasWidth = options.hasWidth;
-                target.hasHeight = options.hasHeight;
-                target.hasRotate = options.hasRotate;
-                target.x = options.x;
-                target.y = options.y;
-                target.width = options.width;
-                target.height = options.height;
-                target.rotate = options.rotate;
-            }
-
-            if (widget && element)
-            {
-                if (useFrom)
-                    ResolveElemTargetExpressions(target, *widget, element, options.fromHasXExpr, options.fromXExpr, options.fromHasYExpr, options.fromYExpr);
-                else
-                    ResolveElemTargetExpressions(target, *widget, element, options.hasXExpr, options.xExpr, options.hasYExpr, options.yExpr);
-            }
-            return target;
-        }
-
-        Widget::AnimationTarget BuildAnimationTargetFromKeyframe(
-            const PropertyParser::AnimationKeyframeOptions &kf,
-            const Widget *widget,
-            Element *element)
-        {
-            Widget::AnimationTarget target{};
-            target.hasX = kf.hasX;
-            target.hasY = kf.hasY;
-            target.hasWidth = kf.hasWidth;
-            target.hasHeight = kf.hasHeight;
-            target.hasRotate = kf.hasRotate;
-            target.x = kf.x;
-            target.y = kf.y;
-            target.width = kf.width;
-            target.height = kf.height;
-            target.rotate = kf.rotate;
-            target.hasFontSize = kf.hasFontSize;
-            target.hasFontWeight = kf.hasFontWeight;
-            target.hasLetterSpacing = kf.hasLetterSpacing;
-            target.hasFontColor = kf.hasFontColor;
-            target.fontSize = kf.fontSize;
-            target.fontWeight = kf.fontWeight;
-            target.letterSpacing = kf.letterSpacing;
-            target.fontColorR = kf.fontColorR;
-            target.fontColorG = kf.fontColorG;
-            target.fontColorB = kf.fontColorB;
-            target.fontAlpha = kf.fontAlpha;
-
-            if (widget && element)
-            {
-                ResolveElemTargetExpressions(target, *widget, element, kf.hasXExpr, kf.xExpr, kf.hasYExpr, kf.yExpr);
-            }
-            return target;
-        }
-
-        std::vector<Widget::AnimationKeyframe> BuildKeyframesFromOptions(
-            const PropertyParser::AnimationOptions &options,
-            const Widget *widget,
-            Element *element)
-        {
-            std::vector<Widget::AnimationKeyframe> keyframes;
-            keyframes.reserve(options.keyframes.size());
-            for (const PropertyParser::AnimationKeyframeOptions &kf : options.keyframes)
-            {
-                Widget::AnimationKeyframe entry{};
-                entry.offset = kf.offset;
-                entry.easing = kf.easing;
-                entry.values = BuildAnimationTargetFromKeyframe(kf, widget, element);
-                keyframes.push_back(entry);
-            }
-            return keyframes;
-        }
-
-        JSValue JsWidgetAnimate(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1 || !JS_IsObject(argv[0]))
-                return ThrowTypeError(ctx, "animate", "expected options object");
-
-            PropertyParser::AnimationOptions options;
-            PropertyParser::ParseAnimationOptions(ctx, argv[0], options);
-            if (options.id.empty())
-                return ThrowTypeError(ctx, "animate", "id is required");
-
-            if (!options.HasAnyToProps())
-                return ThrowTypeError(ctx, "animate", "to must include at least one supported property");
-
-            Element *element = widget->FindElementById(options.id);
-            if (!element)
-                return ThrowTypeError(ctx, "animate", "element not found");
-
-            if (options.hasKeyframes && options.HasAnyTextToProps() && element->GetType() != ELEMENT_TEXT)
-                return ThrowTypeError(ctx, "animate", "fontSize, fontWeight, letterSpacing, and fontColor in keyframes require a text element");
-
-            if (options.iterationCountInvalid)
-                return ThrowTypeError(ctx, "animate", "iterationCount must be at least 1 or 'infinite'");
-
-            if (options.keyframesInvalid)
-            {
-                const std::string msg = Utils::ToString(options.keyframesError.empty() ? L"invalid keyframes" : options.keyframesError);
-                return ThrowTypeError(ctx, "animate", msg.c_str());
-            }
-
-            if (options.tweenInvalid)
-            {
-                const std::string msg = Utils::ToString(options.tweenError.empty() ? L"invalid from/to" : options.tweenError);
-                return ThrowTypeError(ctx, "animate", msg.c_str());
-            }
-
-            int iterationCount = options.iterationCount;
-            if (options.iterationInfinite)
-                iterationCount = -1;
-
-            if (options.hasKeyframes)
-            {
-                const std::vector<Widget::AnimationKeyframe> keyframes = BuildKeyframesFromOptions(options, widget, element);
-                widget->StartElementKeyframeAnimation(options.id, keyframes, options.duration, options.easing, iterationCount);
-                return JS_UNDEFINED;
-            }
-
-            const Widget::AnimationTarget to = BuildAnimationTargetFromOptions(options, false, widget, element);
-            const Widget::AnimationTarget from = BuildAnimationTargetFromOptions(options, true, widget, element);
-            widget->StartElementAnimation(options.id, to, from, options.duration, options.easing, iterationCount);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetRemoveElements(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-
-            if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
-            {
-                return JS_NewBool(ctx, widget->RemoveElements() ? 1 : 0);
-            }
-
-            if (JS_IsArray(argv[0]))
-            {
-                JSValue lenV = JS_GetPropertyStr(ctx, argv[0], "length");
-                uint32_t len = 0;
-                JS_ToUint32(ctx, &len, lenV);
-                JS_FreeValue(ctx, lenV);
-                std::vector<std::wstring> ids;
-                ids.reserve(static_cast<size_t>(len));
-                for (uint32_t i = 0; i < len; ++i)
-                {
-                    JSValue iv = JS_GetPropertyUint32(ctx, argv[0], i);
-                    const char *idUtf8 = JS_ToCString(ctx, iv);
-                    if (idUtf8)
-                    {
-                        ids.emplace_back(Utils::ToWString(idUtf8));
-                        JS_FreeCString(ctx, idUtf8);
-                    }
-                    JS_FreeValue(ctx, iv);
-                }
-                widget->RemoveElements(ids);
-                return JS_NewBool(ctx, 1);
-            }
-
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            return JS_NewBool(ctx, widget->RemoveElements(id) ? 1 : 0);
-        }
-
-        JSValue JsWidgetRemoveElementById(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 1)
-                return ThrowTypeError(ctx, "removeElementById", "expected (id)");
-
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            return JS_NewBool(ctx, widget->RemoveElements(id) ? 1 : 0);
-        }
-
-        JSValue JsWidgetRemoveElementsByGroup(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 1)
-                return ThrowTypeError(ctx, "removeElementsByGroup", "expected group id string");
-            const char *groupUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!groupUtf8)
-                return JS_EXCEPTION;
-            std::wstring group = Utils::ToWString(groupUtf8);
-            JS_FreeCString(ctx, groupUtf8);
-            widget->RemoveElementsByGroup(group);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetBeginUpdate(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            widget->BeginUpdate();
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetEndUpdate(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            widget->EndUpdate();
-            return JS_UNDEFINED;
-        }
-        JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 2 || !JS_IsObject(argv[1]))
-                return ThrowTypeError(ctx, "setElementProperties", "expected (id, options)");
-
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-
-            Element *element = widget->FindElementById(id);
-            if (!element)
-                return JS_UNDEFINED;
-            const std::wstring baseDir = PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir());
-
-            if (auto *image = dynamic_cast<ImageElement *>(element))
-            {
-                PropertyParser::ImageOptions options;
-                PropertyParser::PreFillImageOptions(options, image);
-                PropertyParser::ParseImageOptions(ctx, argv[1], options, baseDir);
-                PropertyParser::ApplyImageOptions(image, options);
-            }
-            else if (auto *btn = dynamic_cast<ButtonElement *>(element))
-            {
-                PropertyParser::ButtonOptions options;
-                PropertyParser::PreFillButtonOptions(options, btn);
-                PropertyParser::ParseButtonOptions(ctx, argv[1], options, baseDir);
-                PropertyParser::ApplyButtonOptions(btn, options);
-            }
-            else if (auto *text = dynamic_cast<TextElement *>(element))
-            {
-                PropertyParser::TextOptions options;
-                PropertyParser::PreFillTextOptions(options, text);
-                PropertyParser::ParseTextOptions(ctx, argv[1], options, baseDir);
-                PropertyParser::ApplyTextOptions(text, options);
-            }
-            else if (auto *bar = dynamic_cast<BarElement *>(element))
-            {
-                PropertyParser::BarOptions options;
-                PropertyParser::PreFillBarOptions(options, bar);
-                PropertyParser::ParseBarOptions(ctx, argv[1], options, baseDir);
-                PropertyParser::ApplyBarOptions(bar, options);
-            }
-            else if (auto *round = dynamic_cast<RoundLineElement *>(element))
-            {
-                PropertyParser::RoundLineOptions options;
-                PropertyParser::PreFillRoundLineOptions(options, round);
-                PropertyParser::ParseRoundLineOptions(ctx, argv[1], options, baseDir);
-                PropertyParser::ApplyRoundLineOptions(round, options);
-            }
-            else if (auto *line = dynamic_cast<LineElement *>(element))
-            {
-                PropertyParser::LineOptions options;
-                PropertyParser::PreFillLineOptions(options, line);
-                PropertyParser::ParseLineOptions(ctx, argv[1], options, baseDir);
-                PropertyParser::ApplyLineOptions(line, options);
-            }
-            else if (auto *histogram = dynamic_cast<HistogramElement *>(element))
-            {
-                PropertyParser::HistogramOptions options;
-                PropertyParser::PreFillHistogramOptions(options, histogram);
-                PropertyParser::ParseHistogramOptions(ctx, argv[1], options, baseDir);
-                PropertyParser::ApplyHistogramOptions(histogram, options);
-            }
-            else if (auto *layout = dynamic_cast<ElementLayoutBox *>(element))
-            {
-                PropertyParser::LayoutBoxOptions options;
-                Widget::LayoutConfig cfg{};
-                if (widget->TryGetLayoutConfig(id, cfg))
-                {
-                    PropertyParser::PreFillLayoutBoxOptions(
-                        options,
-                        layout,
-                        &cfg.direction,
-                        &cfg.gap,
-                        &cfg.align,
-                        &cfg.justify,
-                        &cfg.paddingLeft,
-                        &cfg.paddingTop,
-                        &cfg.paddingRight,
-                        &cfg.paddingBottom);
-                }
-                else
-                {
-                    PropertyParser::PreFillLayoutBoxOptions(options, layout);
-                }
-                PropertyParser::ParseLayoutBoxOptions(ctx, argv[1], options, baseDir);
-                if (options.hasBoxShadowError)
-                    return ThrowTypeError(ctx, "setElementProperties", Utils::ToString(options.boxShadowError).c_str());
-                PropertyParser::ApplyLayoutBoxOptions(layout, options);
-
-                Widget::LayoutConfig nextCfg{};
-                nextCfg.direction = options.direction;
-                nextCfg.flexDirection = options.flexDirection;
-                nextCfg.gap = options.gap;
-                nextCfg.align = options.align.empty() ? L"start" : options.align;
-                nextCfg.justify = options.justify.empty() ? L"start" : options.justify;
-                nextCfg.paddingLeft = options.paddingLeft;
-                nextCfg.paddingTop = options.paddingTop;
-                nextCfg.paddingRight = options.paddingRight;
-                nextCfg.paddingBottom = options.paddingBottom;
-                widget->SetLayoutConfig(id, nextCfg);
-            }
-            else if (auto *shape = dynamic_cast<ShapeElement *>(element))
-            {
-                PropertyParser::ShapeOptions options;
-                PropertyParser::PreFillShapeOptions(options, shape);
-                PropertyParser::ParseShapeOptions(ctx, argv[1], options, baseDir);
-                PropertyParser::ApplyShapeOptions(shape, options);
-            }
-            else if (auto *bitmap = dynamic_cast<BitmapElement *>(element))
-            {
-                PropertyParser::BitmapOptions options;
-                PropertyParser::PreFillBitmapOptions(options, bitmap);
-                PropertyParser::ParseBitmapOptions(ctx, argv[1], options, baseDir);
-                PropertyParser::ApplyBitmapOptions(bitmap, options);
-            }
-            else if (auto *rotator = dynamic_cast<RotatorElement *>(element))
-            {
-                PropertyParser::RotatorOptions options;
-                PropertyParser::PreFillRotatorOptions(options, rotator);
-                PropertyParser::ParseRotatorOptions(ctx, argv[1], options, baseDir);
-                PropertyParser::ApplyRotatorOptions(rotator, options);
-            }
-            else if (auto *graph = dynamic_cast<AreaGraphElement *>(element))
-            {
-                PropertyParser::AreaGraphOptions options;
-                PropertyParser::PreFillAreaGraphOptions(options, graph);
-                PropertyParser::ParseAreaGraphOptions(ctx, argv[1], options, baseDir);
-                PropertyParser::ApplyAreaGraphOptions(graph, options);
-            }
-            else if (auto *input = dynamic_cast<InputBoxElement *>(element))
-            {
-                PropertyParser::InputBoxOptions options;
-                PropertyParser::PreFillInputBoxOptions(options, input);
-                PropertyParser::ParseInputBoxOptions(ctx, argv[1], options, baseDir);
-                PropertyParser::ApplyInputBoxOptions(input, options);
-                if (JS_IsObject(argv[1]))
-                {
-                    JSValue focusedVal = JS_GetPropertyStr(ctx, argv[1], "focused");
-                    if (!JS_IsUndefined(focusedVal))
-                    {
-                        bool focused = JS_ToBool(ctx, focusedVal) == 1;
-                        if (focused)
-                            widget->FocusInputBox(input);
-                        else
-                            widget->BlurInputBox(input);
-                    }
-                    JS_FreeValue(ctx, focusedVal);
-
-                    JSValue selectAllVal = JS_GetPropertyStr(ctx, argv[1], "selectAll");
-                    if (JS_ToBool(ctx, selectAllVal) == 1)
-                    {
-                        input->SelectAll();
-                    }
-                    JS_FreeValue(ctx, selectAllVal);
-                }
-            }
-            else if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-            {
-                PropertyParser::ColorPickerOptions options;
-                PropertyParser::PreFillColorPickerOptions(options, picker);
-                PropertyParser::ParseColorPickerOptions(ctx, argv[1], options, baseDir);
-                PropertyParser::ApplyColorPickerOptions(picker, options);
-                if (JS_IsObject(argv[1]))
-                {
-                    JSValue openVal = JS_GetPropertyStr(ctx, argv[1], "isOpen");
-                    if (JS_IsUndefined(openVal))
-                        openVal = JS_GetPropertyStr(ctx, argv[1], "open");
-                    if (!JS_IsUndefined(openVal))
-                    {
-                        bool open = JS_ToBool(ctx, openVal) == 1;
-                        if (open)
-                            widget->OpenColorPicker(picker);
-                        else if (widget->IsColorPickerOpen(picker))
-                            widget->CloseColorPicker();
-                    }
-                    JS_FreeValue(ctx, openVal);
-                }
-            }
-
-            widget->Redraw();
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetSetElementProperty(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            // Backward compatible path: setElementProperty(id, optionsObject)
-            if (argc >= 2 && JS_IsObject(argv[1]))
-            {
-                return JsWidgetSetElementProperties(ctx, thisVal, argc, argv);
-            }
-
-            // New API: setElementProperty(id, key, value)
-            if (argc < 3)
-            {
-                return ThrowTypeError(ctx, "setElementProperty", "expected (id, key, value)");
-            }
-
-            const char *keyUtf8 = JS_ToCString(ctx, argv[1]);
-            if (!keyUtf8)
-                return JS_EXCEPTION;
-
-            JSValue options = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, options, keyUtf8, JS_DupValue(ctx, argv[2]));
-            JS_FreeCString(ctx, keyUtf8);
-
-            JSValue args[2] = {argv[0], options};
-            JSValue ret = JsWidgetSetElementProperties(ctx, thisVal, 2, args);
-            JS_FreeValue(ctx, options);
-            return ret;
-        }
-
-        JSValue JsWidgetIsElementExist(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 1)
-                return ThrowTypeError(ctx, "isElementExist", "expected (id)");
-
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-
-            return JS_NewBool(ctx, widget->FindElementById(id) ? 1 : 0);
-        }
-
-        JSValue JsWidgetSetElementPropertiesByGroup(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 2)
-                return ThrowTypeError(ctx, "setElementPropertiesByGroup", "expected (groupId, options)");
-            const char *groupUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!groupUtf8)
-                return JS_EXCEPTION;
-            std::wstring group = Utils::ToWString(groupUtf8);
-            JS_FreeCString(ctx, groupUtf8);
-            widget->SetGroupProperties(group, ctx, argv[1]);
-            widget->Redraw();
-            return JS_UNDEFINED;
-        }
-
-        JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget, Element *element, const std::string &prop)
-        {
-            const GfxRect contentBounds = element->GetBounds();
-            GfxRect outerBounds = element->GetBackgroundBounds();
-            if (element->GetBevelType() != 0)
-            {
-                const int bevelPad = 2;
-                outerBounds = GfxRect(
-                    outerBounds.X - bevelPad,
-                    outerBounds.Y - bevelPad,
-                    outerBounds.Width + bevelPad * 2,
-                    outerBounds.Height + bevelPad * 2);
-            }
-
-            // ── Fast-path O(1) dispatch for base + ColorPicker properties ──
-            {
-                enum BaseProp : uint16_t
-                {
-                    Id,
-                    Color,
-                    IsOpen,
-                    BorderRadius,
-                    BorderWidth,
-                    BorderColor,
-                    Opacity,
-                    Shape,
-                    PopupBackground,
-                    PopupAccentColor,
-                    PopupBorderColor,
-                    PopupInputBackground,
-                    PopupInputColor,
-                    ShowEyedropper,
-                    ShowFormatToggle,
-                    DefaultMode,
-                    ContentX,
-                    ContentY,
-                    ContentWidth,
-                    ContentHeight,
-                    X,
-                    Y,
-                    Width,
-                    Height,
-                    Show,
-                    Container,
-                    Group,
-                    MouseEventCursor,
-                    MouseEventCursorName,
-                    CursorsDir,
-                    Rotate,
-                    AntiAlias,
-                    PixelHitTest,
-                    BackgroundColorRadius,
-                    BackgroundColor,
-                    BevelType,
-                    BevelWidth,
-                    BevelColor,
-                    BevelColor2,
-                    Padding,
-                    TransformMatrix,
-                    TooltipText,
-                    TooltipTitle,
-                    TooltipIcon,
-                    TooltipMaxWidth,
-                    TooltipMaxHeight,
-                    TooltipBalloon,
-                    TooltipDisabled,
-                    BackdropFilter,
-                    ScrollX,
-                    ScrollY,
-                    ScrollStep,
-                    MaxScrollX,
-                    MaxScrollY,
-                    OverflowX,
-                    OverflowY,
-                    ShowScrollbar,
-                    ShowScrollbarX,
-                    ShowScrollbarY,
-                    ScrollbarWidth,
-                    ScrollbarHoverWidth,
-                    ScrollbarRadius,
-                    ScrollbarTrackRadius,
-                    ScrollbarInset,
-                    ScrollbarMinThumbLength,
-                    ScrollbarColor,
-                    ScrollbarHoverColor,
-                    ScrollbarActiveColor,
-                    ScrollbarTrackColor,
-                    ShowScrollbarButtons,
-                    ScrollbarButtonSize,
-                    ScrollbarButtonRadius,
-                    ScrollbarArrowColor,
-                    ScrollbarArrowHoverColor,
-                    ScrollbarArrowActiveColor,
-                    ScrollbarButtonBgColor,
-                    ScrollbarButtonHoverBgColor,
-                    DropTarget,
-                    DragArea,
-                    NotFound = 0xFFFF
-                };
-                static const std::unordered_map<std::string_view, BaseProp> s_PropMap = {
-                    {"id", Id},
-                    {"color", Color},
-                    {"isOpen", IsOpen},
-                    {"borderRadius", BorderRadius},
-                    {"borderWidth", BorderWidth},
-                    {"borderColor", BorderColor},
-                    {"opacity", Opacity},
-                    {"shape", Shape},
-                    {"popupBackground", PopupBackground},
-                    {"popupAccentColor", PopupAccentColor},
-                    {"popupBorderColor", PopupBorderColor},
-                    {"popupInputBackground", PopupInputBackground},
-                    {"popupInputBgColor", PopupInputBackground},
-                    {"popupInputColor", PopupInputColor},
-                    {"popupInputTextColor", PopupInputColor},
-                    {"showEyedropper", ShowEyedropper},
-                    {"showFormatToggle", ShowFormatToggle},
-                    {"defaultMode", DefaultMode},
-                    {"contentX", ContentX},
-                    {"contentY", ContentY},
-                    {"contentWidth", ContentWidth},
-                    {"contentHeight", ContentHeight},
-                    {"x", X},
-                    {"y", Y},
-                    {"width", Width},
-                    {"height", Height},
-                    {"show", Show},
-                    {"container", Container},
-                    {"group", Group},
-                    {"mouseEventCursor", MouseEventCursor},
-                    {"mouseEventCursorName", MouseEventCursorName},
-                    {"cursorsDir", CursorsDir},
-                    {"rotate", Rotate},
-                    {"antiAlias", AntiAlias},
-                    {"pixelHitTest", PixelHitTest},
-                    {"backgroundColorRadius", BackgroundColorRadius},
-                    {"backgroundColor", BackgroundColor},
-                    {"bevelType", BevelType},
-                    {"bevelWidth", BevelWidth},
-                    {"bevelColor", BevelColor},
-                    {"bevelColor2", BevelColor2},
-                    {"padding", Padding},
-                    {"transformMatrix", TransformMatrix},
-                    {"tooltipText", TooltipText},
-                    {"tooltipTitle", TooltipTitle},
-                    {"tooltipIcon", TooltipIcon},
-                    {"tooltipMaxWidth", TooltipMaxWidth},
-                    {"tooltipMaxHeight", TooltipMaxHeight},
-                    {"tooltipBalloon", TooltipBalloon},
-                    {"tooltipDisabled", TooltipDisabled},
-                    {"backdropFilter", BackdropFilter},
-                    {"scrollX", ScrollX},
-                    {"scrollY", ScrollY},
-                    {"scrollStep", ScrollStep},
-                    {"maxScrollX", MaxScrollX},
-                    {"maxScrollY", MaxScrollY},
-                    {"overflowX", OverflowX},
-                    {"overflowY", OverflowY},
-                    {"showScrollbar", ShowScrollbar},
-                    {"showScrollbarX", ShowScrollbarX},
-                    {"showScrollbarY", ShowScrollbarY},
-                    {"scrollbarWidth", ScrollbarWidth},
-                    {"scrollbarHoverWidth", ScrollbarHoverWidth},
-                    {"scrollbarRadius", ScrollbarRadius},
-                    {"scrollbarTrackRadius", ScrollbarTrackRadius},
-                    {"scrollbarInset", ScrollbarInset},
-                    {"scrollbarMargin", ScrollbarInset},
-                    {"scrollbarMinThumbLength", ScrollbarMinThumbLength},
-                    {"scrollbarColor", ScrollbarColor},
-                    {"scrollbarHoverColor", ScrollbarHoverColor},
-                    {"scrollbarActiveColor", ScrollbarActiveColor},
-                    {"scrollbarTrackColor", ScrollbarTrackColor},
-                    {"showScrollbarButtons", ShowScrollbarButtons},
-                    {"scrollbarButtons", ShowScrollbarButtons},
-                    {"scrollbarButtonSize", ScrollbarButtonSize},
-                    {"scrollbarButtonRadius", ScrollbarButtonRadius},
-                    {"scrollbarArrowColor", ScrollbarArrowColor},
-                    {"scrollbarArrowHoverColor", ScrollbarArrowHoverColor},
-                    {"scrollbarArrowActiveColor", ScrollbarArrowActiveColor},
-                    {"scrollbarButtonBgColor", ScrollbarButtonBgColor},
-                    {"scrollbarButtonHoverBgColor", ScrollbarButtonHoverBgColor},
-                    {"dropTarget", DropTarget},
-                    {"isDropTarget", DropTarget},
-                    {"dragArea", DragArea},
-                    {"windowDrag", DragArea},
-                };
-                auto it = s_PropMap.find(prop);
-                if (it != s_PropMap.end())
-                {
-                    switch (it->second)
-                    {
-                    case Id:
-                        return JS_NewString(ctx, Utils::ToString(element->GetId()).c_str());
-                    case Color:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                        {
-                            wchar_t value[8];
-                            const COLORREF color = picker->GetColor();
-                            swprintf_s(value, L"#%02X%02X%02X", GetRValue(color), GetGValue(color), GetBValue(color));
-                            return JS_NewString(ctx, Utils::ToString(value).c_str());
-                        }
-                        break;
-                    case IsOpen:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                            return JS_NewBool(ctx, widget->IsColorPickerOpen(picker) ? 1 : 0);
-                        break;
-                    case BorderRadius:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                            return JS_NewFloat64(ctx, picker->m_BorderRadius);
-                        break;
-                    case BorderWidth:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                            return JS_NewFloat64(ctx, picker->m_BorderWidth);
-                        break;
-                    case BorderColor:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                        {
-                            const std::wstring s = ColorUtil::ToRGBAString(picker->m_BorderColor, picker->m_BorderAlpha);
-                            return JS_NewString(ctx, Utils::ToString(s).c_str());
-                        }
-                        break;
-                    case Opacity:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                            return JS_NewFloat64(ctx, picker->m_Opacity);
-                        break;
-                    case Shape:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                            return JS_NewString(ctx, picker->m_CircleShape ? "circle" : "rectangle");
-                        break;
-                    case PopupBackground:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                        {
-                            const std::wstring s = ColorUtil::ToRGBAString(picker->m_PopupBackground, picker->m_PopupBackgroundAlpha);
-                            return JS_NewString(ctx, Utils::ToString(s).c_str());
-                        }
-                        break;
-                    case PopupAccentColor:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                        {
-                            const std::wstring s = ColorUtil::ToRGBAString(picker->m_PopupAccentColor, picker->m_PopupAccentAlpha);
-                            return JS_NewString(ctx, Utils::ToString(s).c_str());
-                        }
-                        break;
-                    case PopupBorderColor:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                        {
-                            const std::wstring s = ColorUtil::ToRGBAString(picker->m_PopupBorderColor, picker->m_PopupBorderAlpha);
-                            return JS_NewString(ctx, Utils::ToString(s).c_str());
-                        }
-                        break;
-                    case PopupInputBackground:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                        {
-                            const COLORREF bg = picker->m_HasPopupInputBackground ? picker->m_PopupInputBackground : picker->m_PopupBackground;
-                            const BYTE alpha = picker->m_HasPopupInputBackground ? picker->m_PopupInputBackgroundAlpha : picker->m_PopupBackgroundAlpha;
-                            const std::wstring s = ColorUtil::ToRGBAString(bg, alpha);
-                            return JS_NewString(ctx, Utils::ToString(s).c_str());
-                        }
-                        break;
-                    case PopupInputColor:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                        {
-                            const COLORREF c = picker->m_HasPopupInputColor ? picker->m_PopupInputColor : picker->m_PopupAccentColor;
-                            const BYTE alpha = picker->m_HasPopupInputColor ? picker->m_PopupInputColorAlpha : picker->m_PopupAccentAlpha;
-                            const std::wstring s = ColorUtil::ToRGBAString(c, alpha);
-                            return JS_NewString(ctx, Utils::ToString(s).c_str());
-                        }
-                        break;
-                    case ShowEyedropper:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                            return JS_NewBool(ctx, picker->m_ShowEyedropper ? 1 : 0);
-                        break;
-                    case ShowFormatToggle:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                            return JS_NewBool(ctx, picker->m_ShowFormatToggle ? 1 : 0);
-                        break;
-                    case DefaultMode:
-                        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
-                            return JS_NewString(ctx, picker->m_DefaultHexMode ? "hex" : "rgb");
-                        break;
-                    case ContentX:
-                        return JS_NewInt32(ctx, contentBounds.X);
-                    case ContentY:
-                        return JS_NewInt32(ctx, contentBounds.Y);
-                    case ContentWidth:
-                        return JS_NewInt32(ctx, contentBounds.Width);
-                    case ContentHeight:
-                        return JS_NewInt32(ctx, contentBounds.Height);
-                    case X:
-                        return JS_NewInt32(ctx, outerBounds.X);
-                    case Y:
-                        return JS_NewInt32(ctx, outerBounds.Y);
-                    case Width:
-                        return JS_NewInt32(ctx, outerBounds.Width);
-                    case Height:
-                        return JS_NewInt32(ctx, outerBounds.Height);
-                    case Show:
-                        return JS_NewBool(ctx, element->IsVisible() ? 1 : 0);
-                    case Container:
-                        return JS_NewString(ctx, Utils::ToString(element->GetContainerId()).c_str());
-                    case Group:
-                        return JS_NewString(ctx, Utils::ToString(element->GetGroupId()).c_str());
-                    case MouseEventCursor:
-                        return JS_NewBool(ctx, element->GetMouseEventCursor() ? 1 : 0);
-                    case MouseEventCursorName:
-                        return JS_NewString(ctx, Utils::ToString(element->GetMouseEventCursorName()).c_str());
-                    case CursorsDir:
-                        return JS_NewString(ctx, Utils::ToString(element->GetCursorsDir()).c_str());
-                    case Rotate:
-                        return JS_NewFloat64(ctx, element->GetRotate());
-                    case AntiAlias:
-                        return JS_NewBool(ctx, element->GetAntiAlias() ? 1 : 0);
-                    case PixelHitTest:
-                        return JS_NewBool(ctx, element->GetPixelHitTest() ? 1 : 0);
-                    case BackgroundColorRadius:
-                        return JS_NewInt32(ctx, element->GetCornerRadius());
-                    case BackgroundColor:
-                        if (element->HasSolidColor())
-                        {
-                            const std::wstring color = ColorUtil::ToRGBAString(element->GetSolidColor(), element->GetSolidAlpha());
-                            return JS_NewString(ctx, Utils::ToString(color).c_str());
-                        }
-                        break;
-                    case BevelType:
-                    {
-                        const int bt = element->GetBevelType();
-                        const char *bevStr = "none";
-                        switch (bt)
-                        {
-                        case 1:
-                            bevStr = "raised";
-                            break;
-                        case 2:
-                            bevStr = "sunken";
-                            break;
-                        case 3:
-                            bevStr = "emboss";
-                            break;
-                        case 4:
-                            bevStr = "pillow";
-                            break;
-                        default:
-                            break;
-                        }
-                        return JS_NewString(ctx, bevStr);
-                    }
-                    case BevelWidth:
-                        return JS_NewInt32(ctx, element->GetBevelWidth());
-                    case BevelColor:
-                    {
-                        const std::wstring color = ColorUtil::ToRGBAString(element->GetBevelColor(), element->GetBevelAlpha());
-                        return JS_NewString(ctx, Utils::ToString(color).c_str());
-                    }
-                    case BevelColor2:
-                    {
-                        const std::wstring color = ColorUtil::ToRGBAString(element->GetBevelColor2(), element->GetBevelAlpha2());
-                        return JS_NewString(ctx, Utils::ToString(color).c_str());
-                    }
-                    case Padding:
-                    {
-                        JSValue arr = JS_NewArray(ctx);
-                        JS_SetPropertyUint32(ctx, arr, 0, JS_NewInt32(ctx, element->GetPaddingLeft()));
-                        JS_SetPropertyUint32(ctx, arr, 1, JS_NewInt32(ctx, element->GetPaddingTop()));
-                        JS_SetPropertyUint32(ctx, arr, 2, JS_NewInt32(ctx, element->GetPaddingRight()));
-                        JS_SetPropertyUint32(ctx, arr, 3, JS_NewInt32(ctx, element->GetPaddingBottom()));
-                        return arr;
-                    }
-                    case TransformMatrix:
-                        if (element->HasTransformMatrix())
-                        {
-                            JSValue arr = JS_NewArray(ctx);
-                            const float *m = element->GetTransformMatrix();
-                            for (uint32_t i = 0; i < 6; ++i)
-                                JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, m[i]));
-                            return arr;
-                        }
-                        break;
-                    case TooltipText:
-                        return JS_NewString(ctx, Utils::ToString(element->GetToolTipText()).c_str());
-                    case TooltipTitle:
-                        return JS_NewString(ctx, Utils::ToString(element->GetToolTipTitle()).c_str());
-                    case TooltipIcon:
-                        return JS_NewString(ctx, Utils::ToString(element->GetToolTipIcon()).c_str());
-                    case TooltipMaxWidth:
-                        return JS_NewInt32(ctx, element->GetToolTipMaxWidth());
-                    case TooltipMaxHeight:
-                        return JS_NewInt32(ctx, element->GetToolTipMaxHeight());
-                    case TooltipBalloon:
-                        return JS_NewBool(ctx, element->GetToolTipBalloon() ? 1 : 0);
-                    case TooltipDisabled:
-                        return JS_NewBool(ctx, element->GetToolTipDisabled() ? 1 : 0);
-                    case BackdropFilter:
-                    {
-                        const auto &filter = element->GetBackdropFilter();
-                        JSValue result = JS_NewObject(ctx);
-                        JS_SetPropertyStr(ctx, result, "blur", JS_NewFloat64(ctx, filter.blur));
-                        JS_SetPropertyStr(ctx, result, "brightness", JS_NewFloat64(ctx, filter.brightness));
-                        JS_SetPropertyStr(ctx, result, "contrast", JS_NewFloat64(ctx, filter.contrast));
-                        JS_SetPropertyStr(ctx, result, "greyScale", JS_NewFloat64(ctx, filter.grayscale));
-                        JS_SetPropertyStr(ctx, result, "saturate", JS_NewFloat64(ctx, filter.saturate));
-                        JS_SetPropertyStr(ctx, result, "sepia", JS_NewFloat64(ctx, filter.sepia));
-                        JS_SetPropertyStr(ctx, result, "hueRotate", JS_NewFloat64(ctx, filter.hueRotate));
-                        JS_SetPropertyStr(ctx, result, "invert", JS_NewFloat64(ctx, filter.invert));
-                        JS_SetPropertyStr(ctx, result, "opacity", JS_NewFloat64(ctx, filter.opacity));
-                        return result;
-                    }
-                    case ScrollX:
-                        return JS_NewInt32(ctx, element->GetScrollX());
-                    case ScrollY:
-                        return JS_NewInt32(ctx, element->GetScrollY());
-                    case ScrollStep:
-                        return JS_NewInt32(ctx, element->GetScrollStep());
-                    case MaxScrollX:
-                        element->RecalcContentExtents();
-                        return JS_NewInt32(ctx, element->GetMaxScrollX());
-                    case MaxScrollY:
-                        element->RecalcContentExtents();
-                        return JS_NewInt32(ctx, element->GetMaxScrollY());
-                    case OverflowX:
-                        switch (element->GetOverflowX())
-                        {
-                        case Element::OverflowMode::Auto: return JS_NewString(ctx, "auto");
-                        case Element::OverflowMode::Scroll: return JS_NewString(ctx, "scroll");
-                        default: return JS_NewString(ctx, "hidden");
-                        }
-                    case OverflowY:
-                        switch (element->GetOverflowY())
-                        {
-                        case Element::OverflowMode::Auto: return JS_NewString(ctx, "auto");
-                        case Element::OverflowMode::Scroll: return JS_NewString(ctx, "scroll");
-                        default: return JS_NewString(ctx, "hidden");
-                        }
-                    case ShowScrollbar:
-                        return JS_NewBool(ctx, element->GetShowScrollbar() ? 1 : 0);
-                    case ShowScrollbarX:
-                        return JS_NewBool(ctx, element->GetShowScrollbarX() ? 1 : 0);
-                    case ShowScrollbarY:
-                        return JS_NewBool(ctx, element->GetShowScrollbarY() ? 1 : 0);
-                    case ScrollbarWidth:
-                        return JS_NewInt32(ctx, element->GetScrollbarWidth());
-                    case ScrollbarHoverWidth:
-                        return JS_NewInt32(ctx, element->GetScrollbarHoverWidth());
-                    case ScrollbarRadius:
-                        return JS_NewFloat64(ctx, element->GetScrollbarRadius());
-                    case ScrollbarTrackRadius:
-                        return JS_NewFloat64(ctx, element->GetScrollbarTrackRadius());
-                    case ScrollbarInset:
-                        return JS_NewFloat64(ctx, element->GetScrollbarInset());
-                    case ScrollbarMinThumbLength:
-                        return JS_NewFloat64(ctx, element->GetScrollbarMinThumbLength());
-                    case ScrollbarColor:
-                    {
-                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarColor(), element->GetScrollbarAlpha());
-                        return JS_NewString(ctx, Utils::ToString(s).c_str());
-                    }
-                    case ScrollbarHoverColor:
-                    {
-                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarHoverColor(), element->GetScrollbarHoverAlpha());
-                        return JS_NewString(ctx, Utils::ToString(s).c_str());
-                    }
-                    case ScrollbarActiveColor:
-                    {
-                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarActiveColor(), element->GetScrollbarActiveAlpha());
-                        return JS_NewString(ctx, Utils::ToString(s).c_str());
-                    }
-                    case ScrollbarTrackColor:
-                    {
-                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarTrackColor(), element->GetScrollbarTrackAlpha());
-                        return JS_NewString(ctx, Utils::ToString(s).c_str());
-                    }
-                    case ShowScrollbarButtons:
-                        return JS_NewBool(ctx, element->GetShowScrollbarButtons() ? 1 : 0);
-                    case ScrollbarButtonSize:
-                        return JS_NewFloat64(ctx, element->GetScrollbarButtonSize());
-                    case ScrollbarButtonRadius:
-                        return JS_NewFloat64(ctx, element->GetScrollbarButtonRadius());
-                    case ScrollbarArrowColor:
-                    {
-                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarArrowColor(), element->GetScrollbarArrowAlpha());
-                        return JS_NewString(ctx, Utils::ToString(s).c_str());
-                    }
-                    case ScrollbarArrowHoverColor:
-                    {
-                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarArrowHoverColor(), element->GetScrollbarArrowHoverAlpha());
-                        return JS_NewString(ctx, Utils::ToString(s).c_str());
-                    }
-                    case ScrollbarArrowActiveColor:
-                    {
-                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarArrowActiveColor(), element->GetScrollbarArrowActiveAlpha());
-                        return JS_NewString(ctx, Utils::ToString(s).c_str());
-                    }
-                    case ScrollbarButtonBgColor:
-                    {
-                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarButtonBgColor(), element->GetScrollbarButtonBgAlpha());
-                        return JS_NewString(ctx, Utils::ToString(s).c_str());
-                    }
-                    case ScrollbarButtonHoverBgColor:
-                    {
-                        const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarButtonHoverBgColor(), element->GetScrollbarButtonHoverBgAlpha());
-                        return JS_NewString(ctx, Utils::ToString(s).c_str());
-                    }
-                    case DropTarget:
-                        return JS_NewBool(ctx, element->IsDropTarget() ? 1 : 0);
-                    case DragArea:
-                        return JS_NewBool(ctx, element->IsDragArea() ? 1 : 0);
-                    default:
-                        break;
-                    }
-                }
-            }
-
-            if (element->GetType() == ELEMENT_TEXT)
-            {
-                auto *t = static_cast<TextElement *>(element);
-                if (prop == "text")
-                    return JS_NewString(ctx, Utils::ToString(t->GetText()).c_str());
-                if (prop == "fontFace")
-                    return JS_NewString(ctx, Utils::ToString(t->GetFontFace()).c_str());
-                if (prop == "fontSize")
-                    return JS_NewInt32(ctx, t->GetFontSize());
-                if (prop == "fontColor")
-                {
-                    const std::wstring color = ColorUtil::ToRGBAString(t->GetFontColor(), t->GetFontAlpha());
-                    return JS_NewString(ctx, Utils::ToString(color).c_str());
-                }
-                if (prop == "fontWeight")
-                    return JS_NewInt32(ctx, t->GetFontWeight());
-                if (prop == "italic")
-                    return JS_NewBool(ctx, t->IsItalic() ? 1 : 0);
-                if (prop == "underLine")
-                    return JS_NewBool(ctx, t->GetUnderline() ? 1 : 0);
-                if (prop == "strikeThrough")
-                    return JS_NewBool(ctx, t->GetStrikethrough() ? 1 : 0);
-                if (prop == "letterSpacing")
-                    return JS_NewFloat64(ctx, t->GetLetterSpacing());
-                if (prop == "fontPath")
-                    return JS_NewString(ctx, Utils::ToString(t->GetFontPath()).c_str());
-                if (prop == "backdropFilter")
-                {
-                    const auto &filter = t->GetBackdropFilter();
-                    JSValue result = JS_NewObject(ctx);
-                    JS_SetPropertyStr(ctx, result, "blur", JS_NewFloat64(ctx, filter.blur));
-                    JS_SetPropertyStr(ctx, result, "brightness", JS_NewFloat64(ctx, filter.brightness));
-                    JS_SetPropertyStr(ctx, result, "contrast", JS_NewFloat64(ctx, filter.contrast));
-                    JS_SetPropertyStr(ctx, result, "greyScale", JS_NewFloat64(ctx, filter.grayscale));
-                    JS_SetPropertyStr(ctx, result, "saturate", JS_NewFloat64(ctx, filter.saturate));
-                    JS_SetPropertyStr(ctx, result, "sepia", JS_NewFloat64(ctx, filter.sepia));
-                    JS_SetPropertyStr(ctx, result, "hueRotate", JS_NewFloat64(ctx, filter.hueRotate));
-                    JS_SetPropertyStr(ctx, result, "invert", JS_NewFloat64(ctx, filter.invert));
-                    JS_SetPropertyStr(ctx, result, "opacity", JS_NewFloat64(ctx, filter.opacity));
-                    return result;
-                }
-
-                if (prop == "textAlign")
-                {
-                    const char *alStr = "left-top";
-                    switch (t->GetTextAlign())
-                    {
-                    case TEXT_ALIGN_LEFT_TOP:
-                        alStr = "left-top";
-                        break;
-                    case TEXT_ALIGN_CENTER_TOP:
-                        alStr = "center-top";
-                        break;
-                    case TEXT_ALIGN_RIGHT_TOP:
-                        alStr = "right-top";
-                        break;
-                    case TEXT_ALIGN_LEFT_CENTER:
-                        alStr = "left-center";
-                        break;
-                    case TEXT_ALIGN_CENTER_CENTER:
-                        alStr = "center-center";
-                        break;
-                    case TEXT_ALIGN_RIGHT_CENTER:
-                        alStr = "right-center";
-                        break;
-                    case TEXT_ALIGN_LEFT_BOTTOM:
-                        alStr = "left-bottom";
-                        break;
-                    case TEXT_ALIGN_CENTER_BOTTOM:
-                        alStr = "center-bottom";
-                        break;
-                    case TEXT_ALIGN_RIGHT_BOTTOM:
-                        alStr = "right-bottom";
-                        break;
-                    default:
-                        break;
-                    }
-                    return JS_NewString(ctx, alStr);
-                }
-                if (prop == "textClip")
-                {
-                    const char *clipStr = "none";
-                    switch (t->GettextClip())
-                    {
-                    case TEXT_CLIP_ON:
-                        clipStr = "clip";
-                        break;
-                    case TEXT_CLIP_ELLIPSIS:
-                        clipStr = "ellipsis";
-                        break;
-                    case TEXT_CLIP_WRAP:
-                        clipStr = "wrap";
-                        break;
-                    default:
-                        break;
-                    }
-                    return JS_NewString(ctx, clipStr);
-                }
-                if (prop == "case")
-                {
-                    const char *caseStr = "normal";
-                    switch (t->GetTextCase())
-                    {
-                    case TEXT_CASE_UPPER:
-                        caseStr = "upper";
-                        break;
-                    case TEXT_CASE_LOWER:
-                        caseStr = "lower";
-                        break;
-                    case TEXT_CASE_CAPITALIZE:
-                        caseStr = "capitalize";
-                        break;
-                    case TEXT_CASE_SENTENCE:
-                        caseStr = "sentence";
-                        break;
-                    default:
-                        break;
-                    }
-                    return JS_NewString(ctx, caseStr);
-                }
-                if (prop == "fontShadow")
-                {
-                    JSValue arr = JS_NewArray(ctx);
-                    const auto &shadows = t->GetShadows();
-                    for (uint32_t i = 0; i < static_cast<uint32_t>(shadows.size()); ++i)
-                    {
-                        JSValue sh = JS_NewObject(ctx);
-                        JS_SetPropertyStr(ctx, sh, "x", JS_NewFloat64(ctx, shadows[i].offsetX));
-                        JS_SetPropertyStr(ctx, sh, "y", JS_NewFloat64(ctx, shadows[i].offsetY));
-                        JS_SetPropertyStr(ctx, sh, "blur", JS_NewFloat64(ctx, shadows[i].blur));
-                        const std::wstring c = ColorUtil::ToRGBAString(shadows[i].color, shadows[i].alpha);
-                        JS_SetPropertyStr(ctx, sh, "color", JS_NewString(ctx, Utils::ToString(c).c_str()));
-                        JS_SetPropertyUint32(ctx, arr, i, sh);
-                    }
-                    return arr;
-                }
-            }
-            else if (element->GetType() == ELEMENT_IMAGE)
-            {
-                auto *img = static_cast<ImageElement *>(element);
-                if (prop == "path")
-                    return JS_NewString(ctx, Utils::ToString(img->GetImagePath()).c_str());
-                if (prop == "preserveAspectRatio")
-                {
-                    const char *aspect = "stretch";
-                    switch (img->GetPreserveAspectRatio())
-                    {
-                    case IMAGE_ASPECT_PRESERVE:
-                        aspect = "preserve";
-                        break;
-                    case IMAGE_ASPECT_CROP:
-                        aspect = "crop";
-                        break;
-                    default:
-                        break;
-                    }
-                    return JS_NewString(ctx, aspect);
-                }
-                if (prop == "scaleMargins")
-                {
-                    if (!img->HasScaleMargins())
-                    {
-                        return JS_UNDEFINED;
-                    }
-                    JSValue arr = JS_NewArray(ctx);
-                    JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat64(ctx, img->GetScaleMarginLeft()));
-                    JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat64(ctx, img->GetScaleMarginTop()));
-                    JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat64(ctx, img->GetScaleMarginRight()));
-                    JS_SetPropertyUint32(ctx, arr, 3, JS_NewFloat64(ctx, img->GetScaleMarginBottom()));
-                    return arr;
-                }
-                if (prop == "tile")
-                    return JS_NewBool(ctx, img->IsTile() ? 1 : 0);
-
-                return GetGeneralImagePropertyValue(ctx, element, prop);
-            }
-            else if (element->GetType() == ELEMENT_BUTTON)
-            {
-                auto *btn = static_cast<ButtonElement *>(element);
-                if (prop == "buttonImageName")
-                    return JS_NewString(ctx, Utils::ToString(btn->GetImagePath()).c_str());
-
-                return GetGeneralImagePropertyValue(ctx, element, prop);
-            }
-            else if (element->GetType() == ELEMENT_BITMAP)
-            {
-                auto *bitmap = static_cast<BitmapElement *>(element);
-                if (prop == "value")
-                    return JS_NewFloat64(ctx, bitmap->GetValue());
-                if (prop == "bitmapImageName")
-                    return JS_NewString(ctx, Utils::ToString(bitmap->GetImagePath()).c_str());
-                if (prop == "bitmapFrames")
-                    return JS_NewInt32(ctx, bitmap->GetBitmapFrames());
-                if (prop == "bitmapZeroFrame")
-                    return JS_NewBool(ctx, bitmap->GetBitmapZeroFrame() ? 1 : 0);
-                if (prop == "bitmapExtend")
-                    return JS_NewBool(ctx, bitmap->GetBitmapExtend() ? 1 : 0);
-                if (prop == "minValue")
-                    return JS_NewFloat64(ctx, bitmap->GetMinValue());
-                if (prop == "maxValue")
-                    return JS_NewFloat64(ctx, bitmap->GetMaxValue());
-                if (prop == "bitmapOrientation")
-                    return JS_NewString(ctx, Utils::ToString(bitmap->GetBitmapOrientation()).c_str());
-                if (prop == "bitmapDigits")
-                    return JS_NewInt32(ctx, bitmap->GetBitmapDigits());
-                if (prop == "bitmapSeparation")
-                    return JS_NewInt32(ctx, bitmap->GetBitmapSeparation());
-                if (prop == "bitmapAlign")
-                {
-                    const char *align = "left";
-                    switch (bitmap->GetBitmapAlign())
-                    {
-                    case BITMAP_ALIGN_CENTER:
-                        align = "center";
-                        break;
-                    case BITMAP_ALIGN_RIGHT:
-                        align = "right";
-                        break;
-                    default:
-                        break;
-                    }
-                    return JS_NewString(ctx, align);
-                }
-
-                return GetGeneralImagePropertyValue(ctx, element, prop);
-            }
-            else if (element->GetType() == ELEMENT_AREA_GRAPH)
-            {
-                auto *graph = static_cast<AreaGraphElement *>(element);
-                if (prop == "data")
-                {
-                    JSValue arr = JS_NewArray(ctx);
-                    const auto &data = graph->GetData();
-                    for (uint32_t i = 0; i < static_cast<uint32_t>(data.size()); ++i)
-                    {
-                        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, data[i]));
-                    }
-                    return arr;
-                }
-                if (prop == "minValue")
-                    return JS_NewFloat64(ctx, graph->GetMinValue());
-                if (prop == "maxValue")
-                    return JS_NewFloat64(ctx, graph->GetMaxValue());
-                if (prop == "autoRange")
-                    return JS_NewBool(ctx, graph->GetAutoRange() ? 1 : 0);
-                if (prop == "lineColor")
-                    return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(graph->GetLineColor(), 255)).c_str());
-                if (prop == "lineWidth")
-                    return JS_NewFloat64(ctx, graph->GetLineWidth());
-                if (prop == "fillColor")
-                    return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(graph->GetFillColor(), graph->GetFillAlpha())).c_str());
-                if (prop == "fillAlpha")
-                    return JS_NewInt32(ctx, graph->GetFillAlpha());
-                if (prop == "maxPoints")
-                    return JS_NewInt32(ctx, graph->GetMaxPoints());
-                if (prop == "gridColor")
-                    return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(graph->GetGridColor(), graph->GetGridAlpha())).c_str());
-                if (prop == "gridAlpha")
-                    return JS_NewInt32(ctx, graph->GetGridAlpha());
-                if (prop == "gridVisible")
-                    return JS_NewBool(ctx, graph->GetGridVisible() ? 1 : 0);
-                if (prop == "gridX")
-                    return JS_NewInt32(ctx, graph->GetGridXSpacing());
-                if (prop == "gridY")
-                    return JS_NewInt32(ctx, graph->GetGridYSpacing());
-                if (prop == "graphStart")
-                    return JS_NewString(ctx, graph->GetGraphStartLeft() ? "left" : "right");
-                if (prop == "flip")
-                    return JS_NewBool(ctx, graph->GetFlip() ? 1 : 0);
-            }
-            else if (element->GetType() == ELEMENT_ROTATOR)
-            {
-                auto *rotator = static_cast<RotatorElement *>(element);
-                if (prop == "value")
-                    return JS_NewFloat64(ctx, rotator->GetValue());
-                if (prop == "rotatorImageName")
-                    return JS_NewString(ctx, Utils::ToString(rotator->GetImagePath()).c_str());
-                if (prop == "offsetX")
-                    return JS_NewFloat64(ctx, rotator->GetOffsetX());
-                if (prop == "offsetY")
-                    return JS_NewFloat64(ctx, rotator->GetOffsetY());
-                if (prop == "startAngle")
-                    return JS_NewFloat64(ctx, rotator->GetStartAngle());
-                if (prop == "rotationAngle")
-                    return JS_NewFloat64(ctx, rotator->GetRotationAngle());
-                if (prop == "valueRemainder")
-                    return JS_NewInt32(ctx, rotator->GetValueRemainder());
-                if (prop == "minValue")
-                    return JS_NewFloat64(ctx, rotator->GetMinValue());
-                if (prop == "maxValue")
-                    return JS_NewFloat64(ctx, rotator->GetMaxValue());
-
-                return GetGeneralImagePropertyValue(ctx, element, prop);
-            }
-            else if (element->GetType() == ELEMENT_BAR)
-            {
-                auto *bar = static_cast<BarElement *>(element);
-                if (prop == "value")
-                    return JS_NewFloat64(ctx, bar->GetValue());
-                if (prop == "barCornerRadius")
-                    return JS_NewInt32(ctx, bar->GetBarCornerRadius());
-                if (prop == "orientation")
-                    return JS_NewString(ctx, bar->GetOrientation() == BAR_VERTICAL ? "vertical" : "horizontal");
-                if (prop == "barColor" && bar->HasBarColor())
-                {
-                    const std::wstring c = ColorUtil::ToRGBAString(bar->GetBarColor(), bar->GetBarAlpha());
-                    return JS_NewString(ctx, Utils::ToString(c).c_str());
-                }
-            }
-            else if (element->GetType() == ELEMENT_ROUNDLINE)
-            {
-                auto *rl = static_cast<RoundLineElement *>(element);
-                if (prop == "value")
-                    return JS_NewFloat64(ctx, rl->GetValue());
-                if (prop == "radius")
-                    return JS_NewInt32(ctx, rl->GetRadius());
-                if (prop == "thickness")
-                    return JS_NewInt32(ctx, rl->GetThickness());
-                if (prop == "startAngle")
-                    return JS_NewFloat64(ctx, rl->GetStartAngle());
-                if (prop == "totalAngle")
-                    return JS_NewFloat64(ctx, rl->GetTotalAngle());
-                if (prop == "clockwise")
-                    return JS_NewBool(ctx, rl->IsClockwise() ? 1 : 0);
-                if (prop == "endThickness")
-                    return JS_NewInt32(ctx, rl->GetEndThickness());
-                if (prop == "ticks")
-                    return JS_NewInt32(ctx, rl->GetTicks());
-                if (prop == "capType")
-                    return JS_NewString(ctx, rl->GetCapType() == ROUNDLINE_CAP_ROUND ? "round" : "flat");
-                if (prop == "lineColor" && rl->HasLineColor())
-                {
-                    const std::wstring c = ColorUtil::ToRGBAString(rl->GetLineColor(), rl->GetLineAlpha());
-                    return JS_NewString(ctx, Utils::ToString(c).c_str());
-                }
-                if (prop == "lineColorBg" && rl->HasLineColorBg())
-                {
-                    const std::wstring c = ColorUtil::ToRGBAString(rl->GetLineColorBg(), rl->GetLineAlphaBg());
-                    return JS_NewString(ctx, Utils::ToString(c).c_str());
-                }
-            }
-            else if (element->GetType() == ELEMENT_LINE)
-            {
-                auto *line = static_cast<LineElement *>(element);
-                if (prop == "lineCount")
-                    return JS_NewInt32(ctx, line->GetLineCount());
-                if (prop == "lineWidth")
-                    return JS_NewFloat64(ctx, line->GetLineWidth());
-                if (prop == "maxPoints")
-                    return JS_NewInt32(ctx, line->GetMaxPoints());
-                if (prop == "horizontalLines")
-                    return JS_NewBool(ctx, line->GetHorizontalLines() ? 1 : 0);
-                if (prop == "horizontalLineColor")
-                {
-                    const std::wstring c = ColorUtil::ToRGBAString(line->GetHorizontalLineColor(), line->GetHorizontalLineAlpha());
-                    return JS_NewString(ctx, Utils::ToString(c).c_str());
-                }
-                if (prop == "graphStart")
-                    return JS_NewString(ctx, line->GetGraphStartLeft() ? "left" : "right");
-                if (prop == "graphOrientation")
-                    return JS_NewString(ctx, line->GetGraphHorizontalOrientation() ? "horizontal" : "vertical");
-                if (prop == "flip")
-                    return JS_NewBool(ctx, line->GetFlip() ? 1 : 0);
-                if (prop == "transformStroke")
-                    return JS_NewString(ctx, line->GetStrokeTransformType() == D2D1_STROKE_TRANSFORM_TYPE_FIXED ? "fixed" : "normal");
-                if (prop == "autoRange")
-                    return JS_NewBool(ctx, line->GetAutoRange() ? 1 : 0);
-                if (prop == "rangeMin")
-                    return JS_NewFloat64(ctx, line->GetScaleMin());
-                if (prop == "rangeMax")
-                    return JS_NewFloat64(ctx, line->GetScaleMax());
-
-                if (prop == "data")
-                {
-                    JSValue arr = JS_NewArray(ctx);
-                    const auto &dataSets = line->GetDataSets();
-                    if (!dataSets.empty())
-                    {
-                        for (uint32_t i = 0; i < static_cast<uint32_t>(dataSets[0].size()); ++i)
-                        {
-                            JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, dataSets[0][i]));
-                        }
-                    }
-                    return arr;
-                }
-
-                for (int i = 0; i < line->GetLineCount(); ++i)
-                {
-                    std::string colorKey = (i == 0) ? "lineColor" : ("lineColor" + std::to_string(i + 1));
-                    if (prop == colorKey)
-                    {
-                        const auto &colors = line->GetLineColors();
-                        const auto &alphas = line->GetLineAlphas();
-                        if (i < (int)colors.size() && i < (int)alphas.size())
-                        {
-                            const std::wstring c = ColorUtil::ToRGBAString(colors[(size_t)i], alphas[(size_t)i]);
-                            return JS_NewString(ctx, Utils::ToString(c).c_str());
-                        }
-                    }
-
-                    std::string scaleKey = (i == 0) ? "lineScale" : ("lineScale" + std::to_string(i + 1));
-                    if (prop == scaleKey)
-                    {
-                        const auto &scales = line->GetScaleValues();
-                        if (i < (int)scales.size())
-                        {
-                            return JS_NewFloat64(ctx, scales[(size_t)i]);
-                        }
-                    }
-
-                    std::string dataKey = (i == 0) ? "data" : ("data" + std::to_string(i + 1));
-                    if (prop == dataKey)
-                    {
-                        JSValue arr = JS_NewArray(ctx);
-                        const auto &dataSets = line->GetDataSets();
-                        if (i < (int)dataSets.size())
-                        {
-                            for (uint32_t k = 0; k < static_cast<uint32_t>(dataSets[(size_t)i].size()); ++k)
-                            {
-                                JS_SetPropertyUint32(ctx, arr, k, JS_NewFloat64(ctx, dataSets[(size_t)i][k]));
-                            }
-                        }
-                        return arr;
-                    }
-                }
-            }
-            else if (element->GetType() == ELEMENT_HISTOGRAM)
-            {
-                auto *histogram = static_cast<HistogramElement *>(element);
-                if (prop == "data")
-                {
-                    JSValue arr = JS_NewArray(ctx);
-                    const auto &data = histogram->GetData();
-                    for (uint32_t i = 0; i < static_cast<uint32_t>(data.size()); ++i)
-                    {
-                        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, data[i]));
-                    }
-                    return arr;
-                }
-                if (prop == "data2")
-                {
-                    JSValue arr = JS_NewArray(ctx);
-                    const auto &data = histogram->GetData2();
-                    for (uint32_t i = 0; i < static_cast<uint32_t>(data.size()); ++i)
-                    {
-                        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, data[i]));
-                    }
-                    return arr;
-                }
-                if (prop == "autoRange")
-                    return JS_NewBool(ctx, histogram->GetAutoRange() ? 1 : 0);
-                if (prop == "graphStart")
-                    return JS_NewString(ctx, histogram->GetGraphStartLeft() ? "left" : "right");
-                if (prop == "graphOrientation")
-                    return JS_NewString(ctx, histogram->GetGraphHorizontalOrientation() ? "horizontal" : "vertical");
-                if (prop == "flip")
-                    return JS_NewBool(ctx, histogram->GetFlip() ? 1 : 0);
-                if (prop == "primaryColor")
-                {
-                    const std::wstring c = ColorUtil::ToRGBAString(histogram->GetPrimaryColor(), histogram->GetPrimaryAlpha());
-                    return JS_NewString(ctx, Utils::ToString(c).c_str());
-                }
-                if (prop == "secondaryColor")
-                {
-                    const std::wstring c = ColorUtil::ToRGBAString(histogram->GetSecondaryColor(), histogram->GetSecondaryAlpha());
-                    return JS_NewString(ctx, Utils::ToString(c).c_str());
-                }
-                if (prop == "bothColor")
-                {
-                    const std::wstring c = ColorUtil::ToRGBAString(histogram->GetBothColor(), histogram->GetBothAlpha());
-                    return JS_NewString(ctx, Utils::ToString(c).c_str());
-                }
-            }
-            else if (element->GetType() == ELEMENT_SHAPE || element->GetType() == ELEMENT_LAYOUT_BOX)
-            {
-                auto *shape = static_cast<ShapeElement *>(element);
-                ElementLayoutBox *layoutBox = (element->GetType() == ELEMENT_LAYOUT_BOX)
-                                                  ? static_cast<ElementLayoutBox *>(element)
-                                                  : nullptr;
-                PropertyParser::LayoutBoxOptions layoutPrefill;
-                if (layoutBox)
-                    PropertyParser::PreFillLayoutBoxOptions(layoutPrefill, layoutBox);
-
-                auto capToStr = [](D2D1_CAP_STYLE cap) -> const char *
-                {
-                    switch (cap)
-                    {
-                    case D2D1_CAP_STYLE_ROUND:
-                        return "Round";
-                    case D2D1_CAP_STYLE_SQUARE:
-                        return "Square";
-                    case D2D1_CAP_STYLE_TRIANGLE:
-                        return "Triangle";
-                    default:
-                        return "Flat";
-                    }
-                };
-                auto joinToStr = [](D2D1_LINE_JOIN join) -> const char *
-                {
-                    switch (join)
-                    {
-                    case D2D1_LINE_JOIN_BEVEL:
-                        return "Bevel";
-                    case D2D1_LINE_JOIN_ROUND:
-                        return "Round";
-                    case D2D1_LINE_JOIN_MITER_OR_BEVEL:
-                        return "MiterOrBevel";
-                    default:
-                        return "Miter";
-                    }
-                };
-
-                if (prop == "shapeType")
-                {
-                    if (dynamic_cast<RectangleShape *>(shape))
-                        return JS_NewString(ctx, "rectangle");
-                    if (dynamic_cast<EllipseShape *>(shape))
-                        return JS_NewString(ctx, "ellipse");
-                    if (dynamic_cast<LineShape *>(shape))
-                        return JS_NewString(ctx, "line");
-                    if (dynamic_cast<ArcShape *>(shape))
-                        return JS_NewString(ctx, "arc");
-                    if (dynamic_cast<CurveShape *>(shape))
-                        return JS_NewString(ctx, "curve");
-                    if (dynamic_cast<PathShape *>(shape))
-                        return JS_NewString(ctx, "path");
-                }
-
-                if (prop == "strokeWidth")
-                    return JS_NewFloat64(ctx, shape->GetStrokeWidth());
-                if (prop == "strokeColor" && shape->HasStroke())
-                {
-                    const std::wstring c = ColorUtil::ToRGBAString(shape->GetStrokeColor(), shape->GetStrokeAlpha());
-                    return JS_NewString(ctx, Utils::ToString(c).c_str());
-                }
-                if (prop == "fillColor" && shape->HasFill())
-                {
-                    const std::wstring c = ToGradientOrRGBAString(
-                        shape->GetFillGradient(),
-                        shape->GetFillColor(),
-                        shape->GetFillAlpha());
-                    return JS_NewString(ctx, Utils::ToString(c).c_str());
-                }
-
-                if (prop == "radiusX")
-                    return JS_NewFloat64(ctx, shape->GetRadiusX());
-                if (prop == "radiusY")
-                    return JS_NewFloat64(ctx, shape->GetRadiusY());
-                if (prop == "startX")
-                    return JS_NewFloat64(ctx, shape->GetStartX());
-                if (prop == "startY")
-                    return JS_NewFloat64(ctx, shape->GetStartY());
-                if (prop == "endX")
-                    return JS_NewFloat64(ctx, shape->GetEndX());
-                if (prop == "endY")
-                    return JS_NewFloat64(ctx, shape->GetEndY());
-                if (prop == "curveType")
-                    return JS_NewString(ctx, Utils::ToString(shape->GetCurveType()).c_str());
-                if (prop == "controlX")
-                    return JS_NewFloat64(ctx, shape->GetControlX());
-                if (prop == "controlY")
-                    return JS_NewFloat64(ctx, shape->GetControlY());
-                if (prop == "control2X")
-                    return JS_NewFloat64(ctx, shape->GetControl2X());
-                if (prop == "control2Y")
-                    return JS_NewFloat64(ctx, shape->GetControl2Y());
-                if (prop == "startAngle")
-                    return JS_NewFloat64(ctx, shape->GetStartAngle());
-                if (prop == "endAngle")
-                    return JS_NewFloat64(ctx, shape->GetEndAngle());
-                if (prop == "clockwise")
-                    return JS_NewBool(ctx, shape->IsClockwise() ? 1 : 0);
-                if (prop == "pathData")
-                    return JS_NewString(ctx, Utils::ToString(shape->GetPathData()).c_str());
-
-                if (prop == "strokeStartCap")
-                    return JS_NewString(ctx, capToStr(shape->GetStrokeStartCap()));
-                if (prop == "strokeEndCap")
-                    return JS_NewString(ctx, capToStr(shape->GetStrokeEndCap()));
-                if (prop == "strokeDashCap")
-                    return JS_NewString(ctx, capToStr(shape->GetStrokeDashCap()));
-                if (prop == "strokeLineJoin")
-                    return JS_NewString(ctx, joinToStr(shape->GetStrokeLineJoin()));
-                if (prop == "strokeDashOffset")
-                    return JS_NewFloat64(ctx, shape->GetStrokeDashOffset());
-                if (prop == "strokeDashes")
-                {
-                    JSValue arr = JS_NewArray(ctx);
-                    const auto &dashes = shape->GetStrokeDashes();
-                    for (uint32_t i = 0; i < static_cast<uint32_t>(dashes.size()); ++i)
-                    {
-                        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, dashes[i]));
-                    }
-                    return arr;
-                }
-
-                if (layoutBox)
-                {
-                    if (prop == "display")
-                    {
-                        auto displayToStr = [](ElementLayoutBox::DisplayType d) -> const char *
-                        {
-                            switch (d)
-                            {
-                            case ElementLayoutBox::DisplayType::Flex:
-                                return "flex";
-                            case ElementLayoutBox::DisplayType::None:
-                                return "none";
-                            case ElementLayoutBox::DisplayType::ListItem:
-                                return "list-item";
-                            default:
-                                return "flex";
-                            }
-                        };
-                        return JS_NewString(ctx, displayToStr(layoutBox->GetDisplayType()));
-                    }
-                    if (prop == "listStyleType")
-                    {
-                        auto styleToStr = [](ElementLayoutBox::ListStyleType t) -> const char *
-                        {
-                            switch (t)
-                            {
-                            case ElementLayoutBox::ListStyleType::Disc:
-                                return "disc";
-                            case ElementLayoutBox::ListStyleType::Circle:
-                                return "circle";
-                            case ElementLayoutBox::ListStyleType::Square:
-                                return "square";
-                            case ElementLayoutBox::ListStyleType::UpperRoman:
-                                return "upper-roman";
-                            case ElementLayoutBox::ListStyleType::LowerRoman:
-                                return "lower-roman";
-                            case ElementLayoutBox::ListStyleType::Decimal:
-                                return "decimal";
-                            case ElementLayoutBox::ListStyleType::LowerAlpha:
-                                return "lower-alpha";
-                            case ElementLayoutBox::ListStyleType::UpperAlpha:
-                                return "upper-alpha";
-                            case ElementLayoutBox::ListStyleType::None:
-                                return "none";
-                            default:
-                                return "disc";
-                            }
-                        };
-                        return JS_NewString(ctx, styleToStr(layoutBox->GetListStyleType()));
-                    }
-
-                    // Layout configuration properties
-                    Widget::LayoutConfig cfg{};
-                    if (widget->TryGetLayoutConfig(element->GetId(), cfg))
-                    {
-                        if (prop == "direction")
-                        {
-                            return JS_NewString(ctx, Utils::ToString(cfg.direction).c_str());
-                        }
-                        if (prop == "flexDirection")
-                        {
-                            return JS_NewString(ctx, Utils::ToString(cfg.flexDirection).c_str());
-                        }
-                        if (prop == "gap")
-                        {
-                            return JS_NewInt32(ctx, cfg.gap);
-                        }
-                        if (prop == "alignItems" || prop == "align")
-                        {
-                            return JS_NewString(ctx, Utils::ToString(cfg.align).c_str());
-                        }
-                        if (prop == "justifyContent" || prop == "justify")
-                        {
-                            return JS_NewString(ctx, Utils::ToString(cfg.justify).c_str());
-                        }
-                    }
-                    if (prop == "borderStyle")
-                    {
-                        auto styleToStr = [](ElementLayoutBox::BorderStyle s) -> const char *
-                        {
-                            switch (s)
-                            {
-                            case ElementLayoutBox::BorderStyle::None:
-                                return "none";
-                            case ElementLayoutBox::BorderStyle::Hidden:
-                                return "hidden";
-                            case ElementLayoutBox::BorderStyle::Inset:
-                                return "inset";
-                            case ElementLayoutBox::BorderStyle::Outset:
-                                return "outset";
-                            case ElementLayoutBox::BorderStyle::Groove:
-                                return "groove";
-                            case ElementLayoutBox::BorderStyle::Ridge:
-                                return "ridge";
-                            case ElementLayoutBox::BorderStyle::Dotted:
-                                return "dotted";
-                            case ElementLayoutBox::BorderStyle::Dashed:
-                                return "dashed";
-                            case ElementLayoutBox::BorderStyle::Double:
-                                return "double";
-                            default:
-                                return "solid";
-                            }
-                        };
-                        JSValue arr = JS_NewArray(ctx);
-                        JS_SetPropertyUint32(ctx, arr, 0, JS_NewString(ctx, styleToStr(layoutPrefill.borderTop)));
-                        JS_SetPropertyUint32(ctx, arr, 1, JS_NewString(ctx, styleToStr(layoutPrefill.borderRight)));
-                        JS_SetPropertyUint32(ctx, arr, 2, JS_NewString(ctx, styleToStr(layoutPrefill.borderBottom)));
-                        JS_SetPropertyUint32(ctx, arr, 3, JS_NewString(ctx, styleToStr(layoutPrefill.borderLeft)));
-                        return arr;
-                    }
-                    if (prop == "boxShadow")
-                    {
-                        JSValue arr = JS_NewArray(ctx);
-                        for (uint32_t i = 0; i < static_cast<uint32_t>(layoutPrefill.boxShadows.size()); ++i)
-                        {
-                            const auto &sh = layoutPrefill.boxShadows[i];
-                            JSValue item = JS_NewObject(ctx);
-                            JS_SetPropertyStr(ctx, item, "x", JS_NewFloat64(ctx, sh.x));
-                            JS_SetPropertyStr(ctx, item, "y", JS_NewFloat64(ctx, sh.y));
-                            JS_SetPropertyStr(ctx, item, "blur", JS_NewFloat64(ctx, sh.blur));
-                            JS_SetPropertyStr(ctx, item, "spread", JS_NewFloat64(ctx, sh.spread));
-                            const std::wstring c = ColorUtil::ToRGBAString(sh.color, sh.alpha);
-                            JS_SetPropertyStr(ctx, item, "color", JS_NewString(ctx, Utils::ToString(c).c_str()));
-                            JS_SetPropertyStr(ctx, item, "inset", JS_NewBool(ctx, sh.inset ? 1 : 0));
-                            JS_SetPropertyUint32(ctx, arr, i, item);
-                        }
-                        return arr;
-                    }
-                    if (prop == "backdropFilter")
-                    {
-                        const auto &filter = layoutPrefill.shape.backdropFilter;
-                        JSValue result = JS_NewObject(ctx);
-                        JS_SetPropertyStr(ctx, result, "blur", JS_NewFloat64(ctx, filter.blur));
-                        JS_SetPropertyStr(ctx, result, "brightness", JS_NewFloat64(ctx, filter.brightness));
-                        JS_SetPropertyStr(ctx, result, "contrast", JS_NewFloat64(ctx, filter.contrast));
-                        JS_SetPropertyStr(ctx, result, "greyScale", JS_NewFloat64(ctx, filter.grayscale));
-                        JS_SetPropertyStr(ctx, result, "saturate", JS_NewFloat64(ctx, filter.saturate));
-                        JS_SetPropertyStr(ctx, result, "sepia", JS_NewFloat64(ctx, filter.sepia));
-                        JS_SetPropertyStr(ctx, result, "hueRotate", JS_NewFloat64(ctx, filter.hueRotate));
-                        JS_SetPropertyStr(ctx, result, "invert", JS_NewFloat64(ctx, filter.invert));
-                        JS_SetPropertyStr(ctx, result, "opacity", JS_NewFloat64(ctx, filter.opacity));
-                        return result;
-                    }
-                }
-
-                if (auto *pathShape = dynamic_cast<PathShape *>(shape))
-                {
-                    if (prop == "isCombine")
-                        return JS_NewBool(ctx, pathShape->IsCombineShape() ? 1 : 0);
-                    if (prop == "combineBaseId" || prop == "combineConsumeAll" || prop == "combineOps")
-                    {
-                        std::wstring baseId;
-                        std::vector<PathShape::CombineOp> ops;
-                        bool consumeBase = false;
-                        pathShape->GetCombineData(baseId, ops, consumeBase);
-                        if (prop == "combineBaseId")
-                            return JS_NewString(ctx, Utils::ToString(baseId).c_str());
-                        if (prop == "combineConsumeAll")
-                            return JS_NewBool(ctx, consumeBase ? 1 : 0);
-                        JSValue arr = JS_NewArray(ctx);
-                        for (uint32_t i = 0; i < static_cast<uint32_t>(ops.size()); ++i)
-                        {
-                            JSValue op = JS_NewObject(ctx);
-                            JS_SetPropertyStr(ctx, op, "id", JS_NewString(ctx, Utils::ToString(ops[i].id).c_str()));
-                            const char *mode = "union";
-                            switch (ops[i].mode)
-                            {
-                            case D2D1_COMBINE_MODE_INTERSECT:
-                                mode = "intersect";
-                                break;
-                            case D2D1_COMBINE_MODE_XOR:
-                                mode = "xor";
-                                break;
-                            case D2D1_COMBINE_MODE_EXCLUDE:
-                                mode = "exclude";
-                                break;
-                            default:
-                                break;
-                            }
-                            JS_SetPropertyStr(ctx, op, "mode", JS_NewString(ctx, mode));
-                            JS_SetPropertyStr(ctx, op, "consume", JS_NewBool(ctx, ops[i].consume ? 1 : 0));
-                            JS_SetPropertyUint32(ctx, arr, i, op);
-                        }
-                        return arr;
-                    }
-                }
-            }
-            else if (element->GetType() == ELEMENT_INPUT_BOX)
-            {
-                auto *input = static_cast<InputBoxElement *>(element);
-                if (prop == "text")
-                    return JS_NewString(ctx, Utils::ToString(input->GetText()).c_str());
-                if (prop == "placeholder")
-                    return JS_NewString(ctx, Utils::ToString(input->GetPlaceholder()).c_str());
-                if (prop == "focused")
-                    return JS_NewBool(ctx, input->IsFocused() ? 1 : 0);
-                if (prop == "selectedText")
-                    return JS_NewString(ctx, Utils::ToString(input->GetSelectedText()).c_str());
-                if (prop == "hasSelection")
-                    return JS_NewBool(ctx, input->HasSelection() ? 1 : 0);
-                if (prop == "canUndo")
-                    return JS_NewBool(ctx, input->CanUndo() ? 1 : 0);
-                if (prop == "canRedo")
-                    return JS_NewBool(ctx, input->CanRedo() ? 1 : 0);
-                if (prop == "fontFace")
-                    return JS_NewString(ctx, Utils::ToString(input->GetFontFace()).c_str());
-                if (prop == "fontSize")
-                    return JS_NewInt32(ctx, input->GetFontSize());
-                if (prop == "fontColor" || prop == "textColor" || prop == "color")
-                    return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetFontGradient(), input->GetFontColor(), input->GetFontAlpha())).c_str());
-                if (prop == "placeholderColor")
-                    return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetPlaceholderGradient(), input->GetPlaceholderColor(), input->GetPlaceholderAlpha())).c_str());
-                if (prop == "caretColor")
-                    return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetCaretGradient(), input->GetCaretColor(), input->GetCaretAlpha())).c_str());
-                if (prop == "selectionColor")
-                    return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetSelectionGradient(), input->GetSelectionColor(), input->GetSelectionAlpha())).c_str());
-                if (prop == "password")
-                    return JS_NewBool(ctx, input->IsPasswordMode() ? 1 : 0);
-                if (prop == "maxLength")
-                    return JS_NewInt32(ctx, input->GetMaxLength());
-                if (prop == "multiline")
-                    return JS_NewBool(ctx, input->IsMultiline() ? 1 : 0);
-                if (prop == "inputType")
-                {
-                    const char *typeName = "any";
-                    switch (input->GetInputType())
-                    {
-                    case InputType::Integer:
-                        typeName = "integer";
-                        break;
-                    case InputType::Float:
-                        typeName = "float";
-                        break;
-                    case InputType::Letters:
-                        typeName = "letters";
-                        break;
-                    case InputType::Alphanumeric:
-                        typeName = "alphanumeric";
-                        break;
-                    case InputType::Hex:
-                        typeName = "hex";
-                        break;
-                    case InputType::Email:
-                        typeName = "email";
-                        break;
-                    case InputType::Custom:
-                        typeName = "custom";
-                        break;
-                    default:
-                        typeName = "any";
-                        break;
-                    }
-                    return JS_NewString(ctx, typeName);
-                }
-                if (prop == "allowedChars")
-                    return JS_NewString(ctx, Utils::ToString(input->GetAllowedChars()).c_str());
-                if (prop == "fontPath")
-                    return JS_NewString(ctx, Utils::ToString(input->GetFontPath()).c_str());
-
-                if (prop == "borderColor")
-                    return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetBorderGradient(), input->GetBorderColor(), input->GetBorderAlpha())).c_str());
-                if (prop == "borderWidth")
-                    return JS_NewInt32(ctx, (int)input->GetBorderWidth());
-                if (prop == "borderRadius")
-                    return JS_NewInt32(ctx, (int)input->GetBorderRadius());
-                if (prop == "fillColor" || prop == "backgroundColor" || prop == "bgColor")
-                {
-                    if (input->HasFillColor() || input->GetFillGradient().type != GRADIENT_NONE)
-                        return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetFillGradient(), input->GetFillColor(), input->GetFillAlpha())).c_str());
-                    return JS_UNDEFINED;
-                }
-                if (prop == "borderFocusColor")
-                {
-                    if (input->HasBorderFocusColor() || input->GetBorderFocusGradient().type != GRADIENT_NONE)
-                        return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(input->GetBorderFocusGradient(), input->GetBorderFocusColor(), input->GetBorderFocusAlpha())).c_str());
-                    return JS_UNDEFINED;
-                }
-            }
-
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetGetElementProperty(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 2)
-                return ThrowTypeError(ctx, "getElementProperty", "expected (id, propertyName)");
-
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            const char *propUtf8 = JS_ToCString(ctx, argv[1]);
-            if (!idUtf8 || !propUtf8)
-            {
-                if (idUtf8)
-                    JS_FreeCString(ctx, idUtf8);
-                if (propUtf8)
-                    JS_FreeCString(ctx, propUtf8);
-                return JS_EXCEPTION;
-            }
-
-            const std::wstring id = Utils::ToWString(idUtf8);
-            const std::string prop = propUtf8;
-            JS_FreeCString(ctx, idUtf8);
-            JS_FreeCString(ctx, propUtf8);
-
-            Element *element = widget->FindElementById(id);
-            if (!element)
-            {
-                return JS_NULL;
-            }
-            return GetElementPropertyValue(ctx, widget, element, prop);
-        }
-
-        // -------------------------------------------------------------
-        // ColorPicker Element Methods
-        // -------------------------------------------------------------
-
-        JSValue JsWidgetOpenColorPicker(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 1)
-                return ThrowTypeError(ctx, "openColorPicker", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *picker = dynamic_cast<ColorPickerElement *>(elem);
-            if (!picker)
-                return JS_NewBool(ctx, 0);
-            widget->OpenColorPicker(picker);
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsWidgetCloseColorPicker(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            widget->CloseColorPicker();
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsWidgetIsColorPickerOpen(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
-            {
-                const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-                if (!idUtf8)
-                    return JS_EXCEPTION;
-                std::wstring id = Utils::ToWString(idUtf8);
-                JS_FreeCString(ctx, idUtf8);
-                Element *elem = widget->FindElementById(id);
-                auto *picker = dynamic_cast<ColorPickerElement *>(elem);
-                return JS_NewBool(ctx, widget->IsColorPickerOpen(picker) ? 1 : 0);
-            }
-            return JS_NewBool(ctx, widget->IsColorPickerOpen() ? 1 : 0);
-        }
-
-        JSValue JsWidgetSetColorPickerColor(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 2)
-                return ThrowTypeError(ctx, "setColorPickerColor", "expected (id, color)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            const char *colorUtf8 = JS_ToCString(ctx, argv[1]);
-            if (!idUtf8 || !colorUtf8)
-            {
-                if (idUtf8)
-                    JS_FreeCString(ctx, idUtf8);
-                if (colorUtf8)
-                    JS_FreeCString(ctx, colorUtf8);
-                return JS_EXCEPTION;
-            }
-            std::wstring id = Utils::ToWString(idUtf8);
-            std::wstring colorStr = Utils::ToWString(colorUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            JS_FreeCString(ctx, colorUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *picker = dynamic_cast<ColorPickerElement *>(elem);
-            if (!picker)
-                return JS_NewBool(ctx, 0);
-            COLORREF c = picker->GetColor();
-            BYTE a = 255;
-            ColorUtil::ParseRGBA(colorStr, c, a);
-            picker->SetColor(c);
-            widget->Redraw();
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsWidgetGetColorPickerColor(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NULL;
-            if (argc < 1)
-                return ThrowTypeError(ctx, "getColorPickerColor", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *picker = dynamic_cast<ColorPickerElement *>(elem);
-            if (!picker)
-                return JS_NULL;
-            wchar_t value[8];
-            const COLORREF color = picker->GetColor();
-            swprintf_s(value, L"#%02X%02X%02X", GetRValue(color), GetGValue(color), GetBValue(color));
-            return JS_NewString(ctx, Utils::ToString(value).c_str());
-        }
-
-        JSValue JsWidgetOpenColorPickerEyedropper(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            ColorPickerElement *picker = nullptr;
-            if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
-            {
-                const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-                if (!idUtf8)
-                    return JS_EXCEPTION;
-                std::wstring id = Utils::ToWString(idUtf8);
-                JS_FreeCString(ctx, idUtf8);
-                Element *elem = widget->FindElementById(id);
-                picker = dynamic_cast<ColorPickerElement *>(elem);
-            }
-            widget->OpenColorPickerEyedropper(picker);
-            return JS_NewBool(ctx, 1);
-        }
-
-        // -------------------------------------------------------------
-        // InputBox Element Methods
-        // -------------------------------------------------------------
-
-        JSValue JsWidgetFocusInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 1)
-                return ThrowTypeError(ctx, "focusInputBox", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input)
-                return JS_NewBool(ctx, 0);
-            widget->FocusInputBox(input);
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsWidgetBlurInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            InputBoxElement *input = nullptr;
-            if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
-            {
-                const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-                if (!idUtf8)
-                    return JS_EXCEPTION;
-                std::wstring id = Utils::ToWString(idUtf8);
-                JS_FreeCString(ctx, idUtf8);
-                Element *elem = widget->FindElementById(id);
-                input = dynamic_cast<InputBoxElement *>(elem);
-            }
-            widget->BlurInputBox(input);
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsWidgetIsInputBoxFocused(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 1)
-                return ThrowTypeError(ctx, "isInputBoxFocused", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input)
-                return JS_NewBool(ctx, 0);
-            return JS_NewBool(ctx, input->IsFocused() ? 1 : 0);
-        }
-
-        JSValue JsWidgetSetInputBoxText(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 2)
-                return ThrowTypeError(ctx, "setInputBoxText", "expected (id, text)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            const char *textUtf8 = JS_ToCString(ctx, argv[1]);
-            if (!idUtf8 || !textUtf8)
-            {
-                if (idUtf8)
-                    JS_FreeCString(ctx, idUtf8);
-                if (textUtf8)
-                    JS_FreeCString(ctx, textUtf8);
-                return JS_EXCEPTION;
-            }
-            std::wstring id = Utils::ToWString(idUtf8);
-            std::wstring text = Utils::ToWString(textUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            JS_FreeCString(ctx, textUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input)
-                return JS_NewBool(ctx, 0);
-            input->SetText(text);
-            widget->Redraw();
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsWidgetGetInputBoxText(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NULL;
-            if (argc < 1)
-                return ThrowTypeError(ctx, "getInputBoxText", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input)
-                return JS_NULL;
-            return JS_NewString(ctx, Utils::ToString(input->GetText()).c_str());
-        }
-
-        JSValue JsWidgetClearInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 1)
-                return ThrowTypeError(ctx, "clearInputBox", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input)
-                return JS_NewBool(ctx, 0);
-            input->SetText(L"");
-            widget->Redraw();
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsWidgetSelectInputBoxText(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 1)
-                return ThrowTypeError(ctx, "selectInputBoxText", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input)
-                return JS_NewBool(ctx, 0);
-            input->SelectAll();
-            widget->Redraw();
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsWidgetClearInputBoxSelection(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 1)
-                return ThrowTypeError(ctx, "clearInputBoxSelection", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input)
-                return JS_NewBool(ctx, 0);
-            input->ClearSelection();
-            widget->Redraw();
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsWidgetGetInputBoxSelectedText(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NULL;
-            if (argc < 1)
-                return ThrowTypeError(ctx, "getInputBoxSelectedText", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input)
-                return JS_NULL;
-            return JS_NewString(ctx, Utils::ToString(input->GetSelectedText()).c_str());
-        }
-
-        JSValue JsWidgetReplaceInputBoxSelection(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 2)
-                return ThrowTypeError(ctx, "replaceInputBoxSelection", "expected (id, text)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            const char *textUtf8 = JS_ToCString(ctx, argv[1]);
-            if (!idUtf8 || !textUtf8)
-            {
-                if (idUtf8)
-                    JS_FreeCString(ctx, idUtf8);
-                if (textUtf8)
-                    JS_FreeCString(ctx, textUtf8);
-                return JS_EXCEPTION;
-            }
-            std::wstring id = Utils::ToWString(idUtf8);
-            std::wstring text = Utils::ToWString(textUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            JS_FreeCString(ctx, textUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input)
-                return JS_NewBool(ctx, 0);
-            input->ReplaceSelection(text);
-            widget->Redraw();
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsWidgetUndoInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 1)
-                return ThrowTypeError(ctx, "undoInputBox", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input)
-                return JS_NewBool(ctx, 0);
-            bool res = input->Undo();
-            if (res)
-                widget->Redraw();
-            return JS_NewBool(ctx, res ? 1 : 0);
-        }
-
-        JSValue JsWidgetRedoInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 1)
-                return ThrowTypeError(ctx, "redoInputBox", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input)
-                return JS_NewBool(ctx, 0);
-            bool res = input->Redo();
-            if (res)
-                widget->Redraw();
-            return JS_NewBool(ctx, res ? 1 : 0);
-        }
-
-        JSValue JsWidgetCanUndoInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 1)
-                return ThrowTypeError(ctx, "canUndoInputBox", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input)
-                return JS_NewBool(ctx, 0);
-            return JS_NewBool(ctx, input->CanUndo() ? 1 : 0);
-        }
-
-        JSValue JsWidgetCanRedoInputBox(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            if (argc < 1)
-                return ThrowTypeError(ctx, "canRedoInputBox", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *elem = widget->FindElementById(id);
-            auto *input = dynamic_cast<InputBoxElement *>(elem);
-            if (!input)
-                return JS_NewBool(ctx, 0);
-            return JS_NewBool(ctx, input->CanRedo() ? 1 : 0);
-        }
-
-        JSValue JsUiOn(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-
-            if (argc < 2 || !JS_IsFunction(ctx, argv[1]))
-            {
-                return ThrowTypeError(ctx, "on", "expected (eventName, callback)");
-            }
-
-            const char *eventName = JS_ToCString(ctx, argv[0]);
-            if (!eventName || !*eventName)
-            {
-                if (eventName)
-                    JS_FreeCString(ctx, eventName);
-                return ThrowTypeError(ctx, "on", "eventName must be non-empty string");
-            }
-
-            const std::string event(eventName);
-            JS_FreeCString(ctx, eventName);
-
-            if (!JSEngine::RegisterWidgetEventListener(ctx, widget, event, argv[1]))
-            {
-                return JS_ThrowInternalError(ctx, "failed to register widget event listener");
-            }
-
-            return JS_DupValue(ctx, thisVal);
-        }
-
-        JSValue JsUiGetSize(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NULL;
-            HWND hWnd = widget->GetWindow();
-            if (!hWnd)
-                return JS_NULL;
-            RECT rc{};
-            if (!GetWindowRect(hWnd, &rc))
-                return JS_NULL;
-            JSValue out = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, out, "width", JS_NewInt32(ctx, rc.right - rc.left));
-            JS_SetPropertyStr(ctx, out, "height", JS_NewInt32(ctx, rc.bottom - rc.top));
-            return out;
-        }
-
-        JSValue JsUiGetBounds(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NULL;
-            HWND hWnd = widget->GetWindow();
-            if (!hWnd)
-                return JS_NULL;
-            RECT rc{};
-            if (!GetWindowRect(hWnd, &rc))
-                return JS_NULL;
-            JSValue out = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, out, "x", JS_NewInt32(ctx, rc.left));
-            JS_SetPropertyStr(ctx, out, "y", JS_NewInt32(ctx, rc.top));
-            JS_SetPropertyStr(ctx, out, "width", JS_NewInt32(ctx, rc.right - rc.left));
-            JS_SetPropertyStr(ctx, out, "height", JS_NewInt32(ctx, rc.bottom - rc.top));
-            return out;
-        }
-
-        JSValue JsUiIsMaximized(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            return JS_NewBool(ctx, widget->IsMaximized() ? 1 : 0);
-        }
-
-        JSValue JsUiIsMinimized(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NewBool(ctx, 0);
-            return JS_NewBool(ctx, widget->IsMinimized() ? 1 : 0);
-        }
-
-        JSValue JsWidgetScrollTo(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_UNDEFINED;
-            if (argc < 2)
-                return ThrowTypeError(ctx, "scrollTo", "expected (id, { x, y })");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *element = widget->FindElementById(id);
-            if (!element)
-                return JS_UNDEFINED;
-            if (JS_IsObject(argv[1]))
-            {
-                int32_t x = 0, y = 0;
-                JSValue vx = JS_GetPropertyStr(ctx, argv[1], "x");
-                if (!JS_IsUndefined(vx) && !JS_IsNull(vx))
-                {
-                    if (JS_ToInt32(ctx, &x, vx) == 0)
-                        element->SetScrollX(x);
-                }
-                JS_FreeValue(ctx, vx);
-                JSValue vy = JS_GetPropertyStr(ctx, argv[1], "y");
-                if (!JS_IsUndefined(vy) && !JS_IsNull(vy))
-                {
-                    if (JS_ToInt32(ctx, &y, vy) == 0)
-                        element->SetScrollY(y);
-                }
-                JS_FreeValue(ctx, vy);
-                widget->Redraw();
-            }
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsWidgetGetScroll(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            Widget *widget = GetAnyWidget(ctx, thisVal);
-            if (!widget)
-                return JS_NULL;
-            if (argc < 1)
-                return ThrowTypeError(ctx, "getScroll", "expected (id)");
-            const char *idUtf8 = JS_ToCString(ctx, argv[0]);
-            if (!idUtf8)
-                return JS_EXCEPTION;
-            std::wstring id = Utils::ToWString(idUtf8);
-            JS_FreeCString(ctx, idUtf8);
-            Element *element = widget->FindElementById(id);
-            if (!element)
-                return JS_NULL;
-            element->RecalcContentExtents();
-            JSValue out = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, out, "scrollX", JS_NewInt32(ctx, element->GetScrollX()));
-            JS_SetPropertyStr(ctx, out, "scrollY", JS_NewInt32(ctx, element->GetScrollY()));
-            JS_SetPropertyStr(ctx, out, "maxScrollX", JS_NewInt32(ctx, element->GetMaxScrollX()));
-            JS_SetPropertyStr(ctx, out, "maxScrollY", JS_NewInt32(ctx, element->GetMaxScrollY()));
-            JS_SetPropertyStr(ctx, out, "contentWidth", JS_NewInt32(ctx, element->GetContentWidth()));
-            JS_SetPropertyStr(ctx, out, "contentHeight", JS_NewInt32(ctx, element->GetContentHeight()));
-            return out;
-        }
-
-        void JsWidgetFinalizer(JSRuntime *, JSValue val)
-        {
-            WidgetWrapper *wrapper = static_cast<WidgetWrapper *>(JS_GetOpaque(val, g_widgetWindowClassId));
-            if (!wrapper)
-            {
-                wrapper = static_cast<WidgetWrapper *>(JS_GetOpaque(val, g_widgetUiClassId));
-            }
-            delete wrapper;
-        }
-
-        const JSCFunctionListEntry kWidgetProtoFuncs[] = {
-            JS_CFUNC_DEF("on", 2, JsUiOn),
-            JS_CFUNC_DEF("getSize", 0, JsUiGetSize),
-            JS_CFUNC_DEF("getBounds", 0, JsUiGetBounds),
-            JS_CFUNC_DEF("isMaximized", 0, JsUiIsMaximized),
-            JS_CFUNC_DEF("isMinimized", 0, JsUiIsMinimized),
-            JS_CFUNC_DEF("scrollTo", 2, JsWidgetScrollTo),
-            JS_CFUNC_DEF("getScroll", 1, JsWidgetGetScroll),
-            JS_CFUNC_DEF("addImage", 1, JsWidgetAddImage),
-            JS_CFUNC_DEF("addButton", 1, JsWidgetAddButton),
-            JS_CFUNC_DEF("addText", 1, JsWidgetAddText),
-            JS_CFUNC_DEF("addInputBox", 1, JsWidgetAddInputBox),
-            JS_CFUNC_DEF("addColorPicker", 1, JsWidgetAddColorPicker),
-            JS_CFUNC_DEF("addBar", 1, JsWidgetAddBar),
-            JS_CFUNC_DEF("addLine", 1, JsWidgetAddLine),
-            JS_CFUNC_DEF("addHistogram", 1, JsWidgetAddHistogram),
-            JS_CFUNC_DEF("addRoundLine", 1, JsWidgetAddRoundLine),
-            JS_CFUNC_DEF("addShape", 1, JsWidgetAddShape),
-            JS_CFUNC_DEF("addBitmap", 1, JsWidgetAddBitmap),
-            JS_CFUNC_DEF("addRotator", 1, JsWidgetAddRotator),
-            JS_CFUNC_DEF("addAreaGraph", 1, JsWidgetAddAreaGraph),
-            JS_CFUNC_DEF("addLayout", 1, JsWidgetAddLayout),
-            JS_CFUNC_DEF("addLayoutBox", 1, JsWidgetAddLayoutBox),
-            JS_CFUNC_DEF("animate", 1, JsWidgetAnimate),
-            JS_CFUNC_DEF("setElementProperty", 3, JsWidgetSetElementProperty),
-            JS_CFUNC_DEF("setElementProperties", 2, JsWidgetSetElementProperties),
-            JS_CFUNC_DEF("setElementPropertyByGroup", 2, JsWidgetSetElementPropertiesByGroup),
-            JS_CFUNC_DEF("setElementPropertiesByGroup", 2, JsWidgetSetElementPropertiesByGroup),
-            JS_CFUNC_DEF("getElementProperty", 2, JsWidgetGetElementProperty),
-            JS_CFUNC_DEF("isElementExist", 1, JsWidgetIsElementExist),
-            JS_CFUNC_DEF("removeElements", 1, JsWidgetRemoveElements),
-            JS_CFUNC_DEF("removeElementById", 1, JsWidgetRemoveElementById),
-            JS_CFUNC_DEF("removeElementsByGroup", 1, JsWidgetRemoveElementsByGroup),
-            JS_CFUNC_DEF("beginUpdate", 0, JsWidgetBeginUpdate),
-            JS_CFUNC_DEF("endUpdate", 0, JsWidgetEndUpdate),
-
-            // ColorPicker
-            JS_CFUNC_DEF("openColorPicker", 1, JsWidgetOpenColorPicker),
-            JS_CFUNC_DEF("closeColorPicker", 0, JsWidgetCloseColorPicker),
-            JS_CFUNC_DEF("isColorPickerOpen", 1, JsWidgetIsColorPickerOpen),
-            JS_CFUNC_DEF("setColorPickerColor", 2, JsWidgetSetColorPickerColor),
-            JS_CFUNC_DEF("getColorPickerColor", 1, JsWidgetGetColorPickerColor),
-            JS_CFUNC_DEF("openColorPickerEyedropper", 1, JsWidgetOpenColorPickerEyedropper),
-
-            // InputBox
-            JS_CFUNC_DEF("focusInputBox", 1, JsWidgetFocusInputBox),
-            JS_CFUNC_DEF("blurInputBox", 1, JsWidgetBlurInputBox),
-            JS_CFUNC_DEF("isInputBoxFocused", 1, JsWidgetIsInputBoxFocused),
-            JS_CFUNC_DEF("setInputBoxText", 2, JsWidgetSetInputBoxText),
-            JS_CFUNC_DEF("getInputBoxText", 1, JsWidgetGetInputBoxText),
-            JS_CFUNC_DEF("clearInputBox", 1, JsWidgetClearInputBox),
-            JS_CFUNC_DEF("selectInputBoxText", 1, JsWidgetSelectInputBoxText),
-            JS_CFUNC_DEF("clearInputBoxSelection", 1, JsWidgetClearInputBoxSelection),
-            JS_CFUNC_DEF("getInputBoxSelectedText", 1, JsWidgetGetInputBoxSelectedText),
-            JS_CFUNC_DEF("replaceInputBoxSelection", 2, JsWidgetReplaceInputBoxSelection),
-            JS_CFUNC_DEF("undoInputBox", 1, JsWidgetUndoInputBox),
-            JS_CFUNC_DEF("redoInputBox", 1, JsWidgetRedoInputBox),
-            JS_CFUNC_DEF("canUndoInputBox", 1, JsWidgetCanUndoInputBox),
-            JS_CFUNC_DEF("canRedoInputBox", 1, JsWidgetCanRedoInputBox),
+namespace novadesk::scripting::quickjs {
+namespace {
+bool g_widgetUiDebug = false;
+JSClassID g_widgetWindowClassId = 0;
+JSClassID g_widgetUiClassId = 0;
+JSRuntime *g_widgetWindowClassRuntime = nullptr;
+JSRuntime *g_widgetUiClassRuntime = nullptr;
+
+Widget *GetWidget(JSContext *ctx, JSValueConst thisVal) {
+  (void)ctx;
+  WidgetWrapper *wrapper = static_cast<WidgetWrapper *>(
+      JS_GetOpaque(thisVal, g_widgetWindowClassId));
+  if (!wrapper || !wrapper->widget ||
+      wrapper->widget->GetInstanceId() != wrapper->instanceId)
+    return nullptr;
+  return Widget::IsValid(wrapper->widget) ? wrapper->widget : nullptr;
+}
+
+Widget *GetUiWidget(JSContext *ctx, JSValueConst thisVal) {
+  (void)ctx;
+  WidgetWrapper *wrapper =
+      static_cast<WidgetWrapper *>(JS_GetOpaque(thisVal, g_widgetUiClassId));
+  if (!wrapper || !wrapper->widget ||
+      wrapper->widget->GetInstanceId() != wrapper->instanceId)
+    return nullptr;
+  return Widget::IsValid(wrapper->widget) ? wrapper->widget : nullptr;
+}
+
+Widget *GetAnyWidget(JSContext *ctx, JSValueConst thisVal) {
+  Widget *widget = GetWidget(ctx, thisVal);
+  if (!widget) {
+    widget = GetUiWidget(ctx, thisVal);
+  }
+  return widget;
+}
+
+std::wstring ToGradientOrRGBAString(const GradientInfo &gradient,
+                                    COLORREF color, BYTE alpha) {
+  if (gradient.type == GRADIENT_NONE || gradient.stops.empty()) {
+    return ColorUtil::ToRGBAString(color, alpha);
+  }
+
+  std::wstring result;
+  if (gradient.type == GRADIENT_LINEAR) {
+    wchar_t buf[64];
+    swprintf_s(buf, L"linearGradient(%.1f", gradient.angle);
+    result = buf;
+  } else if (gradient.type == GRADIENT_RADIAL) {
+    result = L"radialGradient(" + gradient.shape;
+  } else {
+    return ColorUtil::ToRGBAString(color, alpha);
+  }
+
+  for (const auto &stop : gradient.stops) {
+    result += L", " + ColorUtil::ToRGBAString(stop.color, stop.alpha);
+  }
+  result += L")";
+  return result;
+}
+
+JSValue ThrowTypeError(JSContext *ctx, const char *method, const char *usage) {
+  return JS_ThrowTypeError(ctx, "%s: %s", method, usage);
+}
+
+JSValue GetGeneralImagePropertyValue(JSContext *ctx, Element *element,
+                                     const std::string &prop) {
+  if (prop == "fallbackPath") {
+    std::wstring val;
+    if (auto *img = dynamic_cast<ImageElement *>(element))
+      val = img->GetFallbackPath();
+    else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+      val = btn->GetFallbackPath();
+    else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
+      val = bmp->GetFallbackPath();
+    else if (auto *rot = dynamic_cast<RotatorElement *>(element))
+      val = rot->GetFallbackPath();
+    return JS_NewString(ctx, Utils::ToString(val).c_str());
+  }
+  if (prop == "grayscale") {
+    bool val = false;
+    if (auto *img = dynamic_cast<ImageElement *>(element))
+      val = img->IsGrayscale();
+    else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+      val = btn->IsGrayscale();
+    else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
+      val = bmp->IsGrayscale();
+    return JS_NewBool(ctx, val ? 1 : 0);
+  }
+  if (prop == "useExifOrientation") {
+    bool val = false;
+    if (auto *img = dynamic_cast<ImageElement *>(element))
+      val = img->GetUseExifOrientation();
+    else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+      val = btn->GetUseExifOrientation();
+    else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
+      val = bmp->GetUseExifOrientation();
+    return JS_NewBool(ctx, val ? 1 : 0);
+  }
+  if (prop == "imageAlpha") {
+    BYTE val = 255;
+    if (auto *img = dynamic_cast<ImageElement *>(element))
+      val = img->GetImageAlpha();
+    else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+      val = btn->GetImageAlpha();
+    else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
+      val = bmp->GetImageAlpha();
+    return JS_NewInt32(ctx, static_cast<int>(val));
+  }
+  if (prop == "imageTint") {
+    bool hasTint = false;
+    COLORREF color = 0;
+    BYTE alpha = 255;
+    if (auto *img = dynamic_cast<ImageElement *>(element)) {
+      hasTint = img->HasImageTint();
+      if (hasTint) {
+        color = img->GetImageTint();
+        alpha = img->GetImageTintAlpha();
+      }
+    } else if (auto *btn = dynamic_cast<ButtonElement *>(element)) {
+      hasTint = btn->HasImageTint();
+      if (hasTint) {
+        color = btn->GetImageTint();
+        alpha = btn->GetImageTintAlpha();
+      }
+    } else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) {
+      hasTint = bmp->HasImageTint();
+      if (hasTint) {
+        color = bmp->GetImageTint();
+        alpha = bmp->GetImageTintAlpha();
+      }
+    }
+    if (hasTint) {
+      const std::wstring c = ColorUtil::ToRGBAString(color, alpha);
+      return JS_NewString(ctx, Utils::ToString(c).c_str());
+    }
+  }
+  if (prop == "imageFlip") {
+    ImageFlipMode flip = IMAGE_FLIP_NONE;
+    if (auto *img = dynamic_cast<ImageElement *>(element))
+      flip = img->GetImageFlip();
+    else if (auto *btn = dynamic_cast<ButtonElement *>(element))
+      flip = btn->GetImageFlip();
+    else if (auto *bmp = dynamic_cast<BitmapElement *>(element))
+      flip = bmp->GetImageFlip();
+
+    const char *flipStr = "none";
+    switch (flip) {
+    case IMAGE_FLIP_HORIZONTAL:
+      flipStr = "horizontal";
+      break;
+    case IMAGE_FLIP_VERTICAL:
+      flipStr = "vertical";
+      break;
+    case IMAGE_FLIP_BOTH:
+      flipStr = "both";
+      break;
+    default:
+      break;
+    }
+    return JS_NewString(ctx, flipStr);
+  }
+  if (prop == "imageCrop") {
+    bool hasCrop = false;
+    float x = 0, y = 0, w = 0, h = 0;
+    ImageCropOrigin origin = IMAGE_CROP_ORIGIN_TOP_LEFT;
+    if (auto *img = dynamic_cast<ImageElement *>(element)) {
+      hasCrop = img->HasImageCrop();
+      if (hasCrop) {
+        x = img->GetImageCropX();
+        y = img->GetImageCropY();
+        w = img->GetImageCropW();
+        h = img->GetImageCropH();
+        origin = img->GetImageCropOrigin();
+      }
+    } else if (auto *btn = dynamic_cast<ButtonElement *>(element)) {
+      hasCrop = btn->HasImageCrop();
+      if (hasCrop) {
+        x = btn->GetImageCropX();
+        y = btn->GetImageCropY();
+        w = btn->GetImageCropW();
+        h = btn->GetImageCropH();
+        origin = btn->GetImageCropOrigin();
+      }
+    }
+    if (hasCrop) {
+      JSValue arr = JS_NewArray(ctx);
+      JS_SetPropertyUint32(ctx, arr, 0, JS_NewFloat64(ctx, x));
+      JS_SetPropertyUint32(ctx, arr, 1, JS_NewFloat64(ctx, y));
+      JS_SetPropertyUint32(ctx, arr, 2, JS_NewFloat64(ctx, w));
+      JS_SetPropertyUint32(ctx, arr, 3, JS_NewFloat64(ctx, h));
+      JS_SetPropertyUint32(ctx, arr, 4, JS_NewInt32(ctx, (int)origin));
+      return arr;
+    }
+  }
+  if (prop == "colorMatrix") {
+    bool hasMatrix = false;
+    const float *m = nullptr;
+    if (auto *img = dynamic_cast<ImageElement *>(element)) {
+      hasMatrix = img->HasColorMatrix();
+      if (hasMatrix)
+        m = img->GetColorMatrix();
+    } else if (auto *btn = dynamic_cast<ButtonElement *>(element)) {
+      hasMatrix = btn->HasColorMatrix();
+      if (hasMatrix)
+        m = btn->GetColorMatrix();
+    } else if (auto *bmp = dynamic_cast<BitmapElement *>(element)) {
+      hasMatrix = bmp->HasColorMatrix();
+      if (hasMatrix)
+        m = bmp->GetColorMatrix();
+    }
+    if (hasMatrix && m) {
+      JSValue arr = JS_NewArray(ctx);
+      for (uint32_t i = 0; i < 20; ++i)
+        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, m[i]));
+      return arr;
+    }
+  }
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddImage(JSContext *ctx, JSValueConst thisVal, int argc,
+                         JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addImage", "expected options object");
+  PropertyParser::ImageOptions options;
+  PropertyParser::ParseImageOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddImage(options);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddButton(JSContext *ctx, JSValueConst thisVal, int argc,
+                          JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addButton", "expected options object");
+  PropertyParser::ButtonOptions options;
+  PropertyParser::ParseButtonOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddButton(options);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddText(JSContext *ctx, JSValueConst thisVal, int argc,
+                        JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addText", "expected options object");
+  PropertyParser::TextOptions options;
+  PropertyParser::ParseTextOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddText(options);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddInputBox(JSContext *ctx, JSValueConst thisVal, int argc,
+                            JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addInputBox", "expected options object");
+  PropertyParser::InputBoxOptions options;
+  PropertyParser::ParseInputBoxOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddInputBox(options);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddColorPicker(JSContext *ctx, JSValueConst thisVal, int argc,
+                               JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addColorPicker", "expected options object");
+  PropertyParser::ColorPickerOptions options;
+  PropertyParser::ParseColorPickerOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddColorPicker(options);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddBar(JSContext *ctx, JSValueConst thisVal, int argc,
+                       JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addBar", "expected options object");
+  PropertyParser::BarOptions options;
+  PropertyParser::ParseBarOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddBar(options);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddRoundLine(JSContext *ctx, JSValueConst thisVal, int argc,
+                             JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addRoundLine", "expected options object");
+  PropertyParser::RoundLineOptions options;
+  PropertyParser::ParseRoundLineOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddRoundLine(options);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddLine(JSContext *ctx, JSValueConst thisVal, int argc,
+                        JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addLine", "expected options object");
+  PropertyParser::LineOptions options;
+  PropertyParser::ParseLineOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddLine(options);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddHistogram(JSContext *ctx, JSValueConst thisVal, int argc,
+                             JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addHistogram", "expected options object");
+  PropertyParser::HistogramOptions options;
+  PropertyParser::ParseHistogramOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddHistogram(options);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddShape(JSContext *ctx, JSValueConst thisVal, int argc,
+                         JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addShape", "expected options object");
+  PropertyParser::ShapeOptions options;
+  PropertyParser::ParseShapeOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddShape(options);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddBitmap(JSContext *ctx, JSValueConst thisVal, int argc,
+                          JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addBitmap", "expected options object");
+  PropertyParser::BitmapOptions options;
+  PropertyParser::ParseBitmapOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddBitmap(options);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddRotator(JSContext *ctx, JSValueConst thisVal, int argc,
+                           JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addRotator", "expected options object");
+  PropertyParser::RotatorOptions options;
+  PropertyParser::ParseRotatorOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddRotator(options);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddAreaGraph(JSContext *ctx, JSValueConst thisVal, int argc,
+                             JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addAreaGraph", "expected options object");
+  PropertyParser::AreaGraphOptions options;
+  PropertyParser::ParseAreaGraphOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddAreaGraph(options);
+  return JS_UNDEFINED;
+}
+
+static std::wstring ReadObjectString(JSContext *ctx, JSValueConst obj,
+                                     const char *key) {
+  JSValue v = JS_GetPropertyStr(ctx, obj, key);
+  if (JS_IsException(v) || JS_IsUndefined(v) || JS_IsNull(v)) {
+    JS_FreeValue(ctx, v);
+    return L"";
+  }
+  const char *s = JS_ToCString(ctx, v);
+  std::wstring out;
+  if (s) {
+    out = Utils::ToWString(s);
+    JS_FreeCString(ctx, s);
+  }
+  JS_FreeValue(ctx, v);
+  return out;
+}
+
+static JSValue CreateTypedElementObject(JSContext *ctx, JSValueConst srcOptions,
+                                        const char *typeName) {
+  JSValue obj = JS_NewObject(ctx);
+  // Only set 'elementType' (no longer setting 'type' for backward
+  // compatibility)
+  JS_SetPropertyStr(ctx, obj, "elementType", JS_NewString(ctx, typeName));
+  if (JS_IsObject(srcOptions)) {
+    JSPropertyEnum *tab = nullptr;
+    uint32_t len = 0;
+    if (JS_GetOwnPropertyNames(ctx, &tab, &len, srcOptions,
+                               JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) == 0) {
+      for (uint32_t i = 0; i < len; ++i) {
+        JSValue keyV = JS_AtomToString(ctx, tab[i].atom);
+        const char *key = JS_ToCString(ctx, keyV);
+        if (key) {
+          // Skip 'elementType' and 'type' to avoid overwriting
+          if (std::strcmp(key, "elementType") != 0 &&
+              std::strcmp(key, "type") != 0) {
+            JSValue val = JS_GetProperty(ctx, srcOptions, tab[i].atom);
+            JS_SetPropertyStr(ctx, obj, key, val);
+          }
+          JS_FreeCString(ctx, key);
+        }
+        JS_FreeValue(ctx, keyV);
+        JS_FreeAtom(ctx, tab[i].atom);
+      }
+      js_free(ctx, tab);
+    }
+  }
+  return obj;
+}
+
+static JSValue CallAddByType(JSContext *ctx, Widget *widget,
+                             JSValueConst thisVal, JSValue obj) {
+  (void)thisVal;
+  if (!widget || !JS_IsObject(obj))
+    return JS_UNDEFINED;
+
+  // Only check 'elementType' - no fallback to 'type'
+  std::wstring type = ReadObjectString(ctx, obj, "elementType");
+  if (type.empty()) {
+    return ThrowTypeError(ctx, "addLayoutBox",
+                          "children item must have 'elementType' property");
+  }
+  std::transform(type.begin(), type.end(), type.begin(), ::towlower);
+
+  JSValue argvLocal[1] = {obj};
+  if (type == L"text")
+    return JsWidgetAddText(ctx, thisVal, 1, argvLocal);
+  if (type == L"image")
+    return JsWidgetAddImage(ctx, thisVal, 1, argvLocal);
+  if (type == L"shape")
+    return JsWidgetAddShape(ctx, thisVal, 1, argvLocal);
+  if (type == L"button")
+    return JsWidgetAddButton(ctx, thisVal, 1, argvLocal);
+  if (type == L"inputbox")
+    return JsWidgetAddInputBox(ctx, thisVal, 1, argvLocal);
+  if (type == L"colorpicker")
+    return JsWidgetAddColorPicker(ctx, thisVal, 1, argvLocal);
+  if (type == L"bitmap")
+    return JsWidgetAddBitmap(ctx, thisVal, 1, argvLocal);
+  if (type == L"rotator")
+    return JsWidgetAddRotator(ctx, thisVal, 1, argvLocal);
+  if (type == L"bar")
+    return JsWidgetAddBar(ctx, thisVal, 1, argvLocal);
+  if (type == L"line")
+    return JsWidgetAddLine(ctx, thisVal, 1, argvLocal);
+  if (type == L"histogram")
+    return JsWidgetAddHistogram(ctx, thisVal, 1, argvLocal);
+  if (type == L"roundline")
+    return JsWidgetAddRoundLine(ctx, thisVal, 1, argvLocal);
+  if (type == L"areagraph")
+    return JsWidgetAddAreaGraph(ctx, thisVal, 1, argvLocal);
+  if (type == L"layoutbox")
+    return JS_UNDEFINED;
+  return ThrowTypeError(
+      ctx, "addLayoutBox",
+      Utils::ToString(L"children item has unsupported elementType: " + type)
+          .c_str());
+}
+
+static JSValue JsWidgetAddLayoutBox(JSContext *ctx, JSValueConst thisVal,
+                                    int argc, JSValueConst *argv);
+
+static JSValue AddLayoutBoxChildren(JSContext *ctx, Widget *widget,
+                                    JSValueConst thisVal,
+                                    JSValueConst layoutObj,
+                                    const std::wstring &layoutId) {
+  JSValue childrenVal = JS_GetPropertyStr(ctx, layoutObj, "children");
+  if (!JS_IsArray(childrenVal)) {
+    JS_FreeValue(ctx, childrenVal);
+    return JS_UNDEFINED;
+  }
+
+  JSValue lenV = JS_GetPropertyStr(ctx, childrenVal, "length");
+  uint32_t len = 0;
+  JS_ToUint32(ctx, &len, lenV);
+  JS_FreeValue(ctx, lenV);
+
+  for (uint32_t i = 0; i < len; ++i) {
+    JSValue child = JS_GetPropertyUint32(ctx, childrenVal, i);
+    if (!JS_IsObject(child)) {
+      JS_FreeValue(ctx, child);
+      continue;
+    }
+
+    JS_SetPropertyStr(ctx, child, "container",
+                      JS_NewString(ctx, Utils::ToString(layoutId).c_str()));
+
+    // Only check 'elementType' - no fallback to 'type'
+    std::wstring type = ReadObjectString(ctx, child, "elementType");
+    if (type.empty()) {
+      JS_FreeValue(ctx, child);
+      JS_FreeValue(ctx, childrenVal);
+      return ThrowTypeError(ctx, "addLayoutBox",
+                            "children item must have 'elementType' property");
+    }
+    std::transform(type.begin(), type.end(), type.begin(), ::towlower);
+
+    JSValue res = JS_UNDEFINED;
+    if (type == L"layoutbox") {
+      JSValue childArgv[1] = {child};
+      res = JsWidgetAddLayoutBox(ctx, thisVal, 1, childArgv);
+    } else {
+      res = CallAddByType(ctx, widget, thisVal, child);
+    }
+
+    JS_FreeValue(ctx, child);
+    if (JS_IsException(res)) {
+      JS_FreeValue(ctx, childrenVal);
+      return res;
+    }
+    JS_FreeValue(ctx, res);
+  }
+
+  JS_FreeValue(ctx, childrenVal);
+  return JS_UNDEFINED;
+}
+
+static JSValue JsWidgetAddLayoutBox(JSContext *ctx, JSValueConst thisVal,
+                                    int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addLayoutBox", "expected options object");
+
+  PropertyParser::LayoutBoxOptions layoutOptions;
+  PropertyParser::ParseLayoutBoxOptions(
+      ctx, argv[0], layoutOptions,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  PropertyParser::ShapeOptions &shapeOptions = layoutOptions.shape;
+  if (shapeOptions.id.empty())
+    return ThrowTypeError(ctx, "addLayoutBox", "id is required");
+  if (layoutOptions.hasBoxShadowError)
+    return ThrowTypeError(
+        ctx, "addLayoutBox",
+        Utils::ToString(layoutOptions.boxShadowError).c_str());
+
+  widget->AddLayoutBox(shapeOptions);
+  if (Element *layoutElement = widget->FindElementById(shapeOptions.id)) {
+    if (auto *lb = dynamic_cast<ElementLayoutBox *>(layoutElement)) {
+      PropertyParser::ApplyLayoutBoxOptions(lb, layoutOptions);
+    }
+  }
+
+  Widget::LayoutConfig cfg;
+  cfg.direction = layoutOptions.direction;
+  cfg.flexDirection = layoutOptions.flexDirection;
+  cfg.gap = layoutOptions.gap;
+  if (!layoutOptions.align.empty())
+    cfg.align = layoutOptions.align;
+  if (!layoutOptions.justify.empty())
+    cfg.justify = layoutOptions.justify;
+  cfg.paddingLeft = layoutOptions.paddingLeft;
+  cfg.paddingTop = layoutOptions.paddingTop;
+  cfg.paddingRight = layoutOptions.paddingRight;
+  cfg.paddingBottom = layoutOptions.paddingBottom;
+
+  // Logging::Log(LogLevel::Debug, L"[PADDING] JsWidgetAddLayoutBox
+  // SetLayoutConfig for '%s': L=%d, T=%d, R=%d, B=%d",
+  //     shapeOptions.id.c_str(), cfg.paddingLeft, cfg.paddingTop,
+  //     cfg.paddingRight, cfg.paddingBottom);
+
+  widget->SetLayoutConfig(shapeOptions.id, cfg);
+  JSValue childRes =
+      AddLayoutBoxChildren(ctx, widget, thisVal, argv[0], shapeOptions.id);
+  if (JS_IsException(childRes))
+    return childRes;
+  // Ensure a post-config render pass. AddLayoutBox redraws once before
+  // layout metadata is fully applied, which can briefly show stale visuals.
+  widget->Redraw();
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetAddLayout(JSContext *ctx, JSValueConst thisVal, int argc,
+                          JSValueConst *argv) {
+  return JsWidgetAddLayoutBox(ctx, thisVal, argc, argv);
+}
+
+JSValue JsWidgetElementFactory(JSContext *ctx, JSValueConst, int argc,
+                               JSValueConst *argv, int magic) {
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return JS_ThrowTypeError(ctx, "element factory expects options object");
+  const char *typeName = "shape";
+  switch (magic) {
+  case 0:
+    typeName = "text";
+    break;
+  case 1:
+    typeName = "image";
+    break;
+  case 2:
+    typeName = "shape";
+    break;
+  case 3:
+    typeName = "button";
+    break;
+  case 4:
+    typeName = "bitmap";
+    break;
+  case 5:
+    typeName = "rotator";
+    break;
+  case 6:
+    typeName = "bar";
+    break;
+  case 7:
+    typeName = "line";
+    break;
+  case 8:
+    typeName = "histogram";
+    break;
+  case 9:
+    typeName = "roundLine";
+    break;
+  case 10:
+    typeName = "areaGraph";
+    break;
+  case 11:
+    typeName = "layoutBox";
+    break;
+  case 12:
+    typeName = "inputBox";
+    break;
+  }
+  return CreateTypedElementObject(ctx, argv[0], typeName);
+}
+
+// ── Widget-Relative Position Resolver ──────────────────────────────────
+// Keywords resolve against the widget canvas (0,0 = top-left of widget).
+// widgetW/widgetH = widget dimensions; elemW/elemH = element dimensions.
+
+static std::wstring ParseElemKeywordAndOffset(const std::wstring &expr,
+                                              float &outOffset) {
+  outOffset = 0.0f;
+  auto ltrim = [](std::wstring &s) {
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(),
+                                    [](wchar_t c) { return !::iswspace(c); }));
+  };
+  auto rtrim = [](std::wstring &s) {
+    s.erase(std::find_if(s.rbegin(), s.rend(),
+                         [](wchar_t c) { return !::iswspace(c); })
+                .base(),
+            s.end());
+  };
+  std::wstring lower = expr;
+  ltrim(lower);
+  rtrim(lower);
+  std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
+
+  size_t plusPos = lower.rfind(L'+');
+  size_t minusPos = lower.rfind(L'-');
+  size_t opPos = std::wstring::npos;
+  bool negate = false;
+  if (plusPos != std::wstring::npos &&
+      (minusPos == std::wstring::npos || plusPos > minusPos))
+    opPos = plusPos;
+  else if (minusPos != std::wstring::npos && minusPos > 0) {
+    opPos = minusPos;
+    negate = true;
+  }
+
+  std::wstring keyword = lower;
+  if (opPos != std::wstring::npos && opPos > 0) {
+    std::wstring numPart = lower.substr(opPos + 1);
+    ltrim(numPart);
+    rtrim(numPart);
+    bool isNum = !numPart.empty() &&
+                 std::all_of(numPart.begin(), numPart.end(), [](wchar_t c) {
+                   return ::iswdigit(c) || c == L'.' || c == L'-';
+                 });
+    if (isNum) {
+      try {
+        outOffset = std::stof(numPart) * (negate ? -1.0f : 1.0f);
+      } catch (...) {
+      }
+      keyword = lower.substr(0, opPos);
+      rtrim(keyword);
+    }
+  }
+  return keyword;
+}
+
+static float ResolveElemXKeyword(const std::wstring &kw, int widgetW, int elemW,
+                                 float offset) {
+  if (kw == L"left")
+    return offset;
+  if (kw == L"right")
+    return static_cast<float>(widgetW - elemW) + offset;
+  if (kw == L"center" || kw == L"middle")
+    return static_cast<float>((widgetW - elemW) / 2) + offset;
+  if (kw == L"offscreen-left")
+    return static_cast<float>(-elemW) + offset;
+  if (kw == L"offscreen-right")
+    return static_cast<float>(widgetW) + offset;
+  return offset;
+}
+
+static float ResolveElemYKeyword(const std::wstring &kw, int widgetH, int elemH,
+                                 float offset) {
+  if (kw == L"top")
+    return offset;
+  if (kw == L"bottom")
+    return static_cast<float>(widgetH - elemH) + offset;
+  if (kw == L"center" || kw == L"middle")
+    return static_cast<float>((widgetH - elemH) / 2) + offset;
+  if (kw == L"offscreen-top")
+    return static_cast<float>(-elemH) + offset;
+  if (kw == L"offscreen-bottom")
+    return static_cast<float>(widgetH) + offset;
+  return offset;
+}
+
+static void ResolveElemTargetExpressions(Widget::AnimationTarget &target,
+                                         const Widget &widget, Element *element,
+                                         bool hasXExpr,
+                                         const std::wstring &xExpr,
+                                         bool hasYExpr,
+                                         const std::wstring &yExpr) {
+  const int wW = widget.GetOptions().width;
+  const int wH = widget.GetOptions().height;
+  const int eW = element ? element->GetWidth() : 0;
+  const int eH = element ? element->GetHeight() : 0;
+
+  if (hasXExpr && !xExpr.empty()) {
+    float offset = 0.0f;
+    const std::wstring kw = ParseElemKeywordAndOffset(xExpr, offset);
+    target.hasX = true;
+    target.x = ResolveElemXKeyword(kw, wW, eW, offset);
+  }
+  if (hasYExpr && !yExpr.empty()) {
+    float offset = 0.0f;
+    const std::wstring kw = ParseElemKeywordAndOffset(yExpr, offset);
+    target.hasY = true;
+    target.y = ResolveElemYKeyword(kw, wH, eH, offset);
+  }
+}
+
+// ── Animation Target Builders ───────────────────────────────────────────
+
+Widget::AnimationTarget
+BuildAnimationTargetFromOptions(const PropertyParser::AnimationOptions &options,
+                                bool useFrom, const Widget *widget,
+                                Element *element) {
+  Widget::AnimationTarget target{};
+  if (useFrom) {
+    target.hasX = options.fromHasX;
+    target.hasY = options.fromHasY;
+    target.hasWidth = options.fromHasWidth;
+    target.hasHeight = options.fromHasHeight;
+    target.hasRotate = options.fromHasRotate;
+    target.x = options.fromX;
+    target.y = options.fromY;
+    target.width = options.fromWidth;
+    target.height = options.fromHeight;
+    target.rotate = options.fromRotate;
+  } else {
+    target.hasX = options.hasX;
+    target.hasY = options.hasY;
+    target.hasWidth = options.hasWidth;
+    target.hasHeight = options.hasHeight;
+    target.hasRotate = options.hasRotate;
+    target.x = options.x;
+    target.y = options.y;
+    target.width = options.width;
+    target.height = options.height;
+    target.rotate = options.rotate;
+  }
+
+  if (widget && element) {
+    if (useFrom)
+      ResolveElemTargetExpressions(target, *widget, element,
+                                   options.fromHasXExpr, options.fromXExpr,
+                                   options.fromHasYExpr, options.fromYExpr);
+    else
+      ResolveElemTargetExpressions(target, *widget, element, options.hasXExpr,
+                                   options.xExpr, options.hasYExpr,
+                                   options.yExpr);
+  }
+  return target;
+}
+
+Widget::AnimationTarget BuildAnimationTargetFromKeyframe(
+    const PropertyParser::AnimationKeyframeOptions &kf, const Widget *widget,
+    Element *element) {
+  Widget::AnimationTarget target{};
+  target.hasX = kf.hasX;
+  target.hasY = kf.hasY;
+  target.hasWidth = kf.hasWidth;
+  target.hasHeight = kf.hasHeight;
+  target.hasRotate = kf.hasRotate;
+  target.x = kf.x;
+  target.y = kf.y;
+  target.width = kf.width;
+  target.height = kf.height;
+  target.rotate = kf.rotate;
+  target.hasFontSize = kf.hasFontSize;
+  target.hasFontWeight = kf.hasFontWeight;
+  target.hasLetterSpacing = kf.hasLetterSpacing;
+  target.hasFontColor = kf.hasFontColor;
+  target.fontSize = kf.fontSize;
+  target.fontWeight = kf.fontWeight;
+  target.letterSpacing = kf.letterSpacing;
+  target.fontColorR = kf.fontColorR;
+  target.fontColorG = kf.fontColorG;
+  target.fontColorB = kf.fontColorB;
+  target.fontAlpha = kf.fontAlpha;
+
+  if (widget && element) {
+    ResolveElemTargetExpressions(target, *widget, element, kf.hasXExpr,
+                                 kf.xExpr, kf.hasYExpr, kf.yExpr);
+  }
+  return target;
+}
+
+std::vector<Widget::AnimationKeyframe>
+BuildKeyframesFromOptions(const PropertyParser::AnimationOptions &options,
+                          const Widget *widget, Element *element) {
+  std::vector<Widget::AnimationKeyframe> keyframes;
+  keyframes.reserve(options.keyframes.size());
+  for (const PropertyParser::AnimationKeyframeOptions &kf : options.keyframes) {
+    Widget::AnimationKeyframe entry{};
+    entry.offset = kf.offset;
+    entry.easing = kf.easing;
+    entry.values = BuildAnimationTargetFromKeyframe(kf, widget, element);
+    keyframes.push_back(entry);
+  }
+  return keyframes;
+}
+
+JSValue JsWidgetAnimate(JSContext *ctx, JSValueConst thisVal, int argc,
+                        JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "animate", "expected options object");
+
+  PropertyParser::AnimationOptions options;
+  PropertyParser::ParseAnimationOptions(ctx, argv[0], options);
+  if (options.id.empty())
+    return ThrowTypeError(ctx, "animate", "id is required");
+
+  if (!options.HasAnyToProps())
+    return ThrowTypeError(ctx, "animate",
+                          "to must include at least one supported property");
+
+  Element *element = widget->FindElementById(options.id);
+  if (!element)
+    return ThrowTypeError(ctx, "animate", "element not found");
+
+  if (options.hasKeyframes && options.HasAnyTextToProps() &&
+      element->GetType() != ELEMENT_TEXT)
+    return ThrowTypeError(ctx, "animate",
+                          "fontSize, fontWeight, letterSpacing, and fontColor "
+                          "in keyframes require a text element");
+
+  if (options.iterationCountInvalid)
+    return ThrowTypeError(ctx, "animate",
+                          "iterationCount must be at least 1 or 'infinite'");
+
+  if (options.keyframesInvalid) {
+    const std::string msg = Utils::ToString(options.keyframesError.empty()
+                                                ? L"invalid keyframes"
+                                                : options.keyframesError);
+    return ThrowTypeError(ctx, "animate", msg.c_str());
+  }
+
+  if (options.tweenInvalid) {
+    const std::string msg = Utils::ToString(
+        options.tweenError.empty() ? L"invalid from/to" : options.tweenError);
+    return ThrowTypeError(ctx, "animate", msg.c_str());
+  }
+
+  int iterationCount = options.iterationCount;
+  if (options.iterationInfinite)
+    iterationCount = -1;
+
+  if (options.hasKeyframes) {
+    const std::vector<Widget::AnimationKeyframe> keyframes =
+        BuildKeyframesFromOptions(options, widget, element);
+    widget->StartElementKeyframeAnimation(options.id, keyframes,
+                                          options.duration, options.easing,
+                                          iterationCount);
+    return JS_UNDEFINED;
+  }
+
+  const Widget::AnimationTarget to =
+      BuildAnimationTargetFromOptions(options, false, widget, element);
+  const Widget::AnimationTarget from =
+      BuildAnimationTargetFromOptions(options, true, widget, element);
+  widget->StartElementAnimation(options.id, to, from, options.duration,
+                                options.easing, iterationCount);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetRemoveElements(JSContext *ctx, JSValueConst thisVal, int argc,
+                               JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+
+  if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0])) {
+    return JS_NewBool(ctx, widget->RemoveElements() ? 1 : 0);
+  }
+
+  if (JS_IsArray(argv[0])) {
+    JSValue lenV = JS_GetPropertyStr(ctx, argv[0], "length");
+    uint32_t len = 0;
+    JS_ToUint32(ctx, &len, lenV);
+    JS_FreeValue(ctx, lenV);
+    std::vector<std::wstring> ids;
+    ids.reserve(static_cast<size_t>(len));
+    for (uint32_t i = 0; i < len; ++i) {
+      JSValue iv = JS_GetPropertyUint32(ctx, argv[0], i);
+      const char *idUtf8 = JS_ToCString(ctx, iv);
+      if (idUtf8) {
+        ids.emplace_back(Utils::ToWString(idUtf8));
+        JS_FreeCString(ctx, idUtf8);
+      }
+      JS_FreeValue(ctx, iv);
+    }
+    widget->RemoveElements(ids);
+    return JS_NewBool(ctx, 1);
+  }
+
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  return JS_NewBool(ctx, widget->RemoveElements(id) ? 1 : 0);
+}
+
+JSValue JsWidgetRemoveElementById(JSContext *ctx, JSValueConst thisVal,
+                                  int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "removeElementById", "expected (id)");
+
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  return JS_NewBool(ctx, widget->RemoveElements(id) ? 1 : 0);
+}
+
+JSValue JsWidgetRemoveElementsByGroup(JSContext *ctx, JSValueConst thisVal,
+                                      int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "removeElementsByGroup",
+                          "expected group id string");
+  const char *groupUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!groupUtf8)
+    return JS_EXCEPTION;
+  std::wstring group = Utils::ToWString(groupUtf8);
+  JS_FreeCString(ctx, groupUtf8);
+  widget->RemoveElementsByGroup(group);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetBeginUpdate(JSContext *ctx, JSValueConst thisVal, int,
+                            JSValueConst *) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  widget->BeginUpdate();
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetEndUpdate(JSContext *ctx, JSValueConst thisVal, int,
+                          JSValueConst *) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  widget->EndUpdate();
+  return JS_UNDEFINED;
+}
+JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
+                                     int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 2 || !JS_IsObject(argv[1]))
+    return ThrowTypeError(ctx, "setElementProperties",
+                          "expected (id, options)");
+
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+
+  Element *element = widget->FindElementById(id);
+  if (!element)
+    return JS_UNDEFINED;
+  const std::wstring baseDir = PathUtils::GetScriptBaseDir(
+      widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir());
+
+  if (auto *image = dynamic_cast<ImageElement *>(element)) {
+    PropertyParser::ImageOptions options;
+    PropertyParser::PreFillImageOptions(options, image);
+    PropertyParser::ParseImageOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyImageOptions(image, options);
+  } else if (auto *btn = dynamic_cast<ButtonElement *>(element)) {
+    PropertyParser::ButtonOptions options;
+    PropertyParser::PreFillButtonOptions(options, btn);
+    PropertyParser::ParseButtonOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyButtonOptions(btn, options);
+  } else if (auto *text = dynamic_cast<TextElement *>(element)) {
+    PropertyParser::TextOptions options;
+    PropertyParser::PreFillTextOptions(options, text);
+    PropertyParser::ParseTextOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyTextOptions(text, options);
+  } else if (auto *bar = dynamic_cast<BarElement *>(element)) {
+    PropertyParser::BarOptions options;
+    PropertyParser::PreFillBarOptions(options, bar);
+    PropertyParser::ParseBarOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyBarOptions(bar, options);
+  } else if (auto *round = dynamic_cast<RoundLineElement *>(element)) {
+    PropertyParser::RoundLineOptions options;
+    PropertyParser::PreFillRoundLineOptions(options, round);
+    PropertyParser::ParseRoundLineOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyRoundLineOptions(round, options);
+  } else if (auto *line = dynamic_cast<LineElement *>(element)) {
+    PropertyParser::LineOptions options;
+    PropertyParser::PreFillLineOptions(options, line);
+    PropertyParser::ParseLineOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyLineOptions(line, options);
+  } else if (auto *histogram = dynamic_cast<HistogramElement *>(element)) {
+    PropertyParser::HistogramOptions options;
+    PropertyParser::PreFillHistogramOptions(options, histogram);
+    PropertyParser::ParseHistogramOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyHistogramOptions(histogram, options);
+  } else if (auto *layout = dynamic_cast<ElementLayoutBox *>(element)) {
+    PropertyParser::LayoutBoxOptions options;
+    Widget::LayoutConfig cfg{};
+    if (widget->TryGetLayoutConfig(id, cfg)) {
+      PropertyParser::PreFillLayoutBoxOptions(
+          options, layout, &cfg.direction, &cfg.gap, &cfg.align, &cfg.justify,
+          &cfg.paddingLeft, &cfg.paddingTop, &cfg.paddingRight,
+          &cfg.paddingBottom);
+    } else {
+      PropertyParser::PreFillLayoutBoxOptions(options, layout);
+    }
+    PropertyParser::ParseLayoutBoxOptions(ctx, argv[1], options, baseDir);
+    if (options.hasBoxShadowError)
+      return ThrowTypeError(ctx, "setElementProperties",
+                            Utils::ToString(options.boxShadowError).c_str());
+    PropertyParser::ApplyLayoutBoxOptions(layout, options);
+
+    Widget::LayoutConfig nextCfg{};
+    nextCfg.direction = options.direction;
+    nextCfg.flexDirection = options.flexDirection;
+    nextCfg.gap = options.gap;
+    nextCfg.align = options.align.empty() ? L"start" : options.align;
+    nextCfg.justify = options.justify.empty() ? L"start" : options.justify;
+    nextCfg.paddingLeft = options.paddingLeft;
+    nextCfg.paddingTop = options.paddingTop;
+    nextCfg.paddingRight = options.paddingRight;
+    nextCfg.paddingBottom = options.paddingBottom;
+    widget->SetLayoutConfig(id, nextCfg);
+  } else if (auto *shape = dynamic_cast<ShapeElement *>(element)) {
+    PropertyParser::ShapeOptions options;
+    PropertyParser::PreFillShapeOptions(options, shape);
+    PropertyParser::ParseShapeOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyShapeOptions(shape, options);
+  } else if (auto *bitmap = dynamic_cast<BitmapElement *>(element)) {
+    PropertyParser::BitmapOptions options;
+    PropertyParser::PreFillBitmapOptions(options, bitmap);
+    PropertyParser::ParseBitmapOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyBitmapOptions(bitmap, options);
+  } else if (auto *rotator = dynamic_cast<RotatorElement *>(element)) {
+    PropertyParser::RotatorOptions options;
+    PropertyParser::PreFillRotatorOptions(options, rotator);
+    PropertyParser::ParseRotatorOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyRotatorOptions(rotator, options);
+  } else if (auto *graph = dynamic_cast<AreaGraphElement *>(element)) {
+    PropertyParser::AreaGraphOptions options;
+    PropertyParser::PreFillAreaGraphOptions(options, graph);
+    PropertyParser::ParseAreaGraphOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyAreaGraphOptions(graph, options);
+  } else if (auto *input = dynamic_cast<InputBoxElement *>(element)) {
+    PropertyParser::InputBoxOptions options;
+    PropertyParser::PreFillInputBoxOptions(options, input);
+    PropertyParser::ParseInputBoxOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyInputBoxOptions(input, options);
+    if (JS_IsObject(argv[1])) {
+      JSValue focusedVal = JS_GetPropertyStr(ctx, argv[1], "focused");
+      if (!JS_IsUndefined(focusedVal)) {
+        bool focused = JS_ToBool(ctx, focusedVal) == 1;
+        if (focused)
+          widget->FocusInputBox(input);
+        else
+          widget->BlurInputBox(input);
+      }
+      JS_FreeValue(ctx, focusedVal);
+
+      JSValue selectAllVal = JS_GetPropertyStr(ctx, argv[1], "selectAll");
+      if (JS_ToBool(ctx, selectAllVal) == 1) {
+        input->SelectAll();
+      }
+      JS_FreeValue(ctx, selectAllVal);
+    }
+  } else if (auto *picker = dynamic_cast<ColorPickerElement *>(element)) {
+    PropertyParser::ColorPickerOptions options;
+    PropertyParser::PreFillColorPickerOptions(options, picker);
+    PropertyParser::ParseColorPickerOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyColorPickerOptions(picker, options);
+    if (JS_IsObject(argv[1])) {
+      JSValue openVal = JS_GetPropertyStr(ctx, argv[1], "isOpen");
+      if (JS_IsUndefined(openVal))
+        openVal = JS_GetPropertyStr(ctx, argv[1], "open");
+      if (!JS_IsUndefined(openVal)) {
+        bool open = JS_ToBool(ctx, openVal) == 1;
+        if (open)
+          widget->OpenColorPicker(picker);
+        else if (widget->IsColorPickerOpen(picker))
+          widget->CloseColorPicker();
+      }
+      JS_FreeValue(ctx, openVal);
+    }
+  }
+
+  widget->Redraw();
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetSetElementProperty(JSContext *ctx, JSValueConst thisVal,
+                                   int argc, JSValueConst *argv) {
+  // Backward compatible path: setElementProperty(id, optionsObject)
+  if (argc >= 2 && JS_IsObject(argv[1])) {
+    return JsWidgetSetElementProperties(ctx, thisVal, argc, argv);
+  }
+
+  // New API: setElementProperty(id, key, value)
+  if (argc < 3) {
+    return ThrowTypeError(ctx, "setElementProperty",
+                          "expected (id, key, value)");
+  }
+
+  const char *keyUtf8 = JS_ToCString(ctx, argv[1]);
+  if (!keyUtf8)
+    return JS_EXCEPTION;
+
+  JSValue options = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, options, keyUtf8, JS_DupValue(ctx, argv[2]));
+  JS_FreeCString(ctx, keyUtf8);
+
+  JSValue args[2] = {argv[0], options};
+  JSValue ret = JsWidgetSetElementProperties(ctx, thisVal, 2, args);
+  JS_FreeValue(ctx, options);
+  return ret;
+}
+
+JSValue JsWidgetIsElementExist(JSContext *ctx, JSValueConst thisVal, int argc,
+                               JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "isElementExist", "expected (id)");
+
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+
+  return JS_NewBool(ctx, widget->FindElementById(id) ? 1 : 0);
+}
+
+JSValue JsWidgetSetElementPropertiesByGroup(JSContext *ctx,
+                                            JSValueConst thisVal, int argc,
+                                            JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 2)
+    return ThrowTypeError(ctx, "setElementPropertiesByGroup",
+                          "expected (groupId, options)");
+  const char *groupUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!groupUtf8)
+    return JS_EXCEPTION;
+  std::wstring group = Utils::ToWString(groupUtf8);
+  JS_FreeCString(ctx, groupUtf8);
+  widget->SetGroupProperties(group, ctx, argv[1]);
+  widget->Redraw();
+  return JS_UNDEFINED;
+}
+
+JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
+                                Element *element, const std::string &prop) {
+  const GfxRect contentBounds = element->GetBounds();
+  GfxRect outerBounds = element->GetBackgroundBounds();
+  if (element->GetBevelType() != 0) {
+    const int bevelPad = 2;
+    outerBounds = GfxRect(outerBounds.X - bevelPad, outerBounds.Y - bevelPad,
+                          outerBounds.Width + bevelPad * 2,
+                          outerBounds.Height + bevelPad * 2);
+  }
+
+  // ── Fast-path O(1) dispatch for base + ColorPicker properties ──
+  {
+    enum BaseProp : uint16_t {
+      Id,
+      Color,
+      IsOpen,
+      BorderRadius,
+      BorderWidth,
+      BorderColor,
+      Opacity,
+      Shape,
+      PopupBackground,
+      PopupAccentColor,
+      PopupBorderColor,
+      PopupInputBackground,
+      PopupInputColor,
+      ShowEyedropper,
+      ShowFormatToggle,
+      DefaultMode,
+      ContentX,
+      ContentY,
+      ContentWidth,
+      ContentHeight,
+      X,
+      Y,
+      Width,
+      Height,
+      Show,
+      Container,
+      Group,
+      MouseEventCursor,
+      MouseEventCursorName,
+      CursorsDir,
+      Rotate,
+      AntiAlias,
+      PixelHitTest,
+      BackgroundColorRadius,
+      BackgroundColor,
+      BevelType,
+      BevelWidth,
+      BevelColor,
+      BevelColor2,
+      Padding,
+      TransformMatrix,
+      TooltipText,
+      TooltipTitle,
+      TooltipIcon,
+      TooltipMaxWidth,
+      TooltipMaxHeight,
+      TooltipBalloon,
+      TooltipDisabled,
+      BackdropFilter,
+      ScrollX,
+      ScrollY,
+      ScrollStep,
+      MaxScrollX,
+      MaxScrollY,
+      OverflowX,
+      OverflowY,
+      ShowScrollbar,
+      ShowScrollbarX,
+      ShowScrollbarY,
+      ScrollbarWidth,
+      ScrollbarHoverWidth,
+      ScrollbarRadius,
+      ScrollbarTrackRadius,
+      ScrollbarInset,
+      ScrollbarMinThumbLength,
+      ScrollbarColor,
+      ScrollbarHoverColor,
+      ScrollbarActiveColor,
+      ScrollbarTrackColor,
+      ShowScrollbarButtons,
+      ScrollbarButtonSize,
+      ScrollbarButtonRadius,
+      ScrollbarArrowColor,
+      ScrollbarArrowHoverColor,
+      ScrollbarArrowActiveColor,
+      ScrollbarButtonBgColor,
+      ScrollbarButtonHoverBgColor,
+      DropTarget,
+      DragArea,
+      NotFound = 0xFFFF
+    };
+    static const std::unordered_map<std::string_view, BaseProp> s_PropMap = {
+        {"id", Id},
+        {"color", Color},
+        {"isOpen", IsOpen},
+        {"borderRadius", BorderRadius},
+        {"borderWidth", BorderWidth},
+        {"borderColor", BorderColor},
+        {"opacity", Opacity},
+        {"shape", Shape},
+        {"popupBackground", PopupBackground},
+        {"popupAccentColor", PopupAccentColor},
+        {"popupBorderColor", PopupBorderColor},
+        {"popupInputBackground", PopupInputBackground},
+        {"popupInputBgColor", PopupInputBackground},
+        {"popupInputColor", PopupInputColor},
+        {"popupInputTextColor", PopupInputColor},
+        {"showEyedropper", ShowEyedropper},
+        {"showFormatToggle", ShowFormatToggle},
+        {"defaultMode", DefaultMode},
+        {"contentX", ContentX},
+        {"contentY", ContentY},
+        {"contentWidth", ContentWidth},
+        {"contentHeight", ContentHeight},
+        {"x", X},
+        {"y", Y},
+        {"width", Width},
+        {"height", Height},
+        {"show", Show},
+        {"container", Container},
+        {"group", Group},
+        {"mouseEventCursor", MouseEventCursor},
+        {"mouseEventCursorName", MouseEventCursorName},
+        {"cursorsDir", CursorsDir},
+        {"rotate", Rotate},
+        {"antiAlias", AntiAlias},
+        {"pixelHitTest", PixelHitTest},
+        {"backgroundColorRadius", BackgroundColorRadius},
+        {"backgroundColor", BackgroundColor},
+        {"bevelType", BevelType},
+        {"bevelWidth", BevelWidth},
+        {"bevelColor", BevelColor},
+        {"bevelColor2", BevelColor2},
+        {"padding", Padding},
+        {"transformMatrix", TransformMatrix},
+        {"tooltipText", TooltipText},
+        {"tooltipTitle", TooltipTitle},
+        {"tooltipIcon", TooltipIcon},
+        {"tooltipMaxWidth", TooltipMaxWidth},
+        {"tooltipMaxHeight", TooltipMaxHeight},
+        {"tooltipBalloon", TooltipBalloon},
+        {"tooltipDisabled", TooltipDisabled},
+        {"backdropFilter", BackdropFilter},
+        {"scrollX", ScrollX},
+        {"scrollY", ScrollY},
+        {"scrollStep", ScrollStep},
+        {"maxScrollX", MaxScrollX},
+        {"maxScrollY", MaxScrollY},
+        {"overflowX", OverflowX},
+        {"overflowY", OverflowY},
+        {"showScrollbar", ShowScrollbar},
+        {"showScrollbarX", ShowScrollbarX},
+        {"showScrollbarY", ShowScrollbarY},
+        {"scrollbarWidth", ScrollbarWidth},
+        {"scrollbarHoverWidth", ScrollbarHoverWidth},
+        {"scrollbarRadius", ScrollbarRadius},
+        {"scrollbarTrackRadius", ScrollbarTrackRadius},
+        {"scrollbarInset", ScrollbarInset},
+        {"scrollbarMargin", ScrollbarInset},
+        {"scrollbarMinThumbLength", ScrollbarMinThumbLength},
+        {"scrollbarColor", ScrollbarColor},
+        {"scrollbarHoverColor", ScrollbarHoverColor},
+        {"scrollbarActiveColor", ScrollbarActiveColor},
+        {"scrollbarTrackColor", ScrollbarTrackColor},
+        {"showScrollbarButtons", ShowScrollbarButtons},
+        {"scrollbarButtons", ShowScrollbarButtons},
+        {"scrollbarButtonSize", ScrollbarButtonSize},
+        {"scrollbarButtonRadius", ScrollbarButtonRadius},
+        {"scrollbarArrowColor", ScrollbarArrowColor},
+        {"scrollbarArrowHoverColor", ScrollbarArrowHoverColor},
+        {"scrollbarArrowActiveColor", ScrollbarArrowActiveColor},
+        {"scrollbarButtonBgColor", ScrollbarButtonBgColor},
+        {"scrollbarButtonHoverBgColor", ScrollbarButtonHoverBgColor},
+        {"dropTarget", DropTarget},
+        {"isDropTarget", DropTarget},
+        {"dragArea", DragArea},
+        {"windowDrag", DragArea},
+    };
+    auto it = s_PropMap.find(prop);
+    if (it != s_PropMap.end()) {
+      switch (it->second) {
+      case Id:
+        return JS_NewString(ctx, Utils::ToString(element->GetId()).c_str());
+      case Color:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element)) {
+          wchar_t value[8];
+          const COLORREF color = picker->GetColor();
+          swprintf_s(value, L"#%02X%02X%02X", GetRValue(color),
+                     GetGValue(color), GetBValue(color));
+          return JS_NewString(ctx, Utils::ToString(value).c_str());
+        }
+        break;
+      case IsOpen:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+          return JS_NewBool(ctx, widget->IsColorPickerOpen(picker) ? 1 : 0);
+        break;
+      case BorderRadius:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+          return JS_NewFloat64(ctx, picker->m_BorderRadius);
+        break;
+      case BorderWidth:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+          return JS_NewFloat64(ctx, picker->m_BorderWidth);
+        break;
+      case BorderColor:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element)) {
+          const std::wstring s = ColorUtil::ToRGBAString(picker->m_BorderColor,
+                                                         picker->m_BorderAlpha);
+          return JS_NewString(ctx, Utils::ToString(s).c_str());
+        }
+        break;
+      case Opacity:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+          return JS_NewFloat64(ctx, picker->m_Opacity);
+        break;
+      case Shape:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+          return JS_NewString(ctx,
+                              picker->m_CircleShape ? "circle" : "rectangle");
+        break;
+      case PopupBackground:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element)) {
+          const std::wstring s = ColorUtil::ToRGBAString(
+              picker->m_PopupBackground, picker->m_PopupBackgroundAlpha);
+          return JS_NewString(ctx, Utils::ToString(s).c_str());
+        }
+        break;
+      case PopupAccentColor:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element)) {
+          const std::wstring s = ColorUtil::ToRGBAString(
+              picker->m_PopupAccentColor, picker->m_PopupAccentAlpha);
+          return JS_NewString(ctx, Utils::ToString(s).c_str());
+        }
+        break;
+      case PopupBorderColor:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element)) {
+          const std::wstring s = ColorUtil::ToRGBAString(
+              picker->m_PopupBorderColor, picker->m_PopupBorderAlpha);
+          return JS_NewString(ctx, Utils::ToString(s).c_str());
+        }
+        break;
+      case PopupInputBackground:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element)) {
+          const COLORREF bg = picker->m_HasPopupInputBackground
+                                  ? picker->m_PopupInputBackground
+                                  : picker->m_PopupBackground;
+          const BYTE alpha = picker->m_HasPopupInputBackground
+                                 ? picker->m_PopupInputBackgroundAlpha
+                                 : picker->m_PopupBackgroundAlpha;
+          const std::wstring s = ColorUtil::ToRGBAString(bg, alpha);
+          return JS_NewString(ctx, Utils::ToString(s).c_str());
+        }
+        break;
+      case PopupInputColor:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element)) {
+          const COLORREF c = picker->m_HasPopupInputColor
+                                 ? picker->m_PopupInputColor
+                                 : picker->m_PopupAccentColor;
+          const BYTE alpha = picker->m_HasPopupInputColor
+                                 ? picker->m_PopupInputColorAlpha
+                                 : picker->m_PopupAccentAlpha;
+          const std::wstring s = ColorUtil::ToRGBAString(c, alpha);
+          return JS_NewString(ctx, Utils::ToString(s).c_str());
+        }
+        break;
+      case ShowEyedropper:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+          return JS_NewBool(ctx, picker->m_ShowEyedropper ? 1 : 0);
+        break;
+      case ShowFormatToggle:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+          return JS_NewBool(ctx, picker->m_ShowFormatToggle ? 1 : 0);
+        break;
+      case DefaultMode:
+        if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
+          return JS_NewString(ctx, picker->m_DefaultHexMode ? "hex" : "rgb");
+        break;
+      case ContentX:
+        return JS_NewInt32(ctx, contentBounds.X);
+      case ContentY:
+        return JS_NewInt32(ctx, contentBounds.Y);
+      case ContentWidth:
+        return JS_NewInt32(ctx, contentBounds.Width);
+      case ContentHeight:
+        return JS_NewInt32(ctx, contentBounds.Height);
+      case X:
+        return JS_NewInt32(ctx, outerBounds.X);
+      case Y:
+        return JS_NewInt32(ctx, outerBounds.Y);
+      case Width:
+        return JS_NewInt32(ctx, outerBounds.Width);
+      case Height:
+        return JS_NewInt32(ctx, outerBounds.Height);
+      case Show:
+        return JS_NewBool(ctx, element->IsVisible() ? 1 : 0);
+      case Container:
+        return JS_NewString(ctx,
+                            Utils::ToString(element->GetContainerId()).c_str());
+      case Group:
+        return JS_NewString(ctx,
+                            Utils::ToString(element->GetGroupId()).c_str());
+      case MouseEventCursor:
+        return JS_NewBool(ctx, element->GetMouseEventCursor() ? 1 : 0);
+      case MouseEventCursorName:
+        return JS_NewString(
+            ctx, Utils::ToString(element->GetMouseEventCursorName()).c_str());
+      case CursorsDir:
+        return JS_NewString(ctx,
+                            Utils::ToString(element->GetCursorsDir()).c_str());
+      case Rotate:
+        return JS_NewFloat64(ctx, element->GetRotate());
+      case AntiAlias:
+        return JS_NewBool(ctx, element->GetAntiAlias() ? 1 : 0);
+      case PixelHitTest:
+        return JS_NewBool(ctx, element->GetPixelHitTest() ? 1 : 0);
+      case BackgroundColorRadius:
+        return JS_NewInt32(ctx, element->GetCornerRadius());
+      case BackgroundColor:
+        if (element->HasSolidColor()) {
+          const std::wstring color = ColorUtil::ToRGBAString(
+              element->GetSolidColor(), element->GetSolidAlpha());
+          return JS_NewString(ctx, Utils::ToString(color).c_str());
+        }
+        break;
+      case BevelType: {
+        const int bt = element->GetBevelType();
+        const char *bevStr = "none";
+        switch (bt) {
+        case 1:
+          bevStr = "raised";
+          break;
+        case 2:
+          bevStr = "sunken";
+          break;
+        case 3:
+          bevStr = "emboss";
+          break;
+        case 4:
+          bevStr = "pillow";
+          break;
+        default:
+          break;
+        }
+        return JS_NewString(ctx, bevStr);
+      }
+      case BevelWidth:
+        return JS_NewInt32(ctx, element->GetBevelWidth());
+      case BevelColor: {
+        const std::wstring color = ColorUtil::ToRGBAString(
+            element->GetBevelColor(), element->GetBevelAlpha());
+        return JS_NewString(ctx, Utils::ToString(color).c_str());
+      }
+      case BevelColor2: {
+        const std::wstring color = ColorUtil::ToRGBAString(
+            element->GetBevelColor2(), element->GetBevelAlpha2());
+        return JS_NewString(ctx, Utils::ToString(color).c_str());
+      }
+      case Padding: {
+        JSValue arr = JS_NewArray(ctx);
+        JS_SetPropertyUint32(ctx, arr, 0,
+                             JS_NewInt32(ctx, element->GetPaddingLeft()));
+        JS_SetPropertyUint32(ctx, arr, 1,
+                             JS_NewInt32(ctx, element->GetPaddingTop()));
+        JS_SetPropertyUint32(ctx, arr, 2,
+                             JS_NewInt32(ctx, element->GetPaddingRight()));
+        JS_SetPropertyUint32(ctx, arr, 3,
+                             JS_NewInt32(ctx, element->GetPaddingBottom()));
+        return arr;
+      }
+      case TransformMatrix:
+        if (element->HasTransformMatrix()) {
+          JSValue arr = JS_NewArray(ctx);
+          const float *m = element->GetTransformMatrix();
+          for (uint32_t i = 0; i < 6; ++i)
+            JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, m[i]));
+          return arr;
+        }
+        break;
+      case TooltipText:
+        return JS_NewString(ctx,
+                            Utils::ToString(element->GetToolTipText()).c_str());
+      case TooltipTitle:
+        return JS_NewString(
+            ctx, Utils::ToString(element->GetToolTipTitle()).c_str());
+      case TooltipIcon:
+        return JS_NewString(ctx,
+                            Utils::ToString(element->GetToolTipIcon()).c_str());
+      case TooltipMaxWidth:
+        return JS_NewInt32(ctx, element->GetToolTipMaxWidth());
+      case TooltipMaxHeight:
+        return JS_NewInt32(ctx, element->GetToolTipMaxHeight());
+      case TooltipBalloon:
+        return JS_NewBool(ctx, element->GetToolTipBalloon() ? 1 : 0);
+      case TooltipDisabled:
+        return JS_NewBool(ctx, element->GetToolTipDisabled() ? 1 : 0);
+      case BackdropFilter: {
+        const auto &filter = element->GetBackdropFilter();
+        JSValue result = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, result, "blur", JS_NewFloat64(ctx, filter.blur));
+        JS_SetPropertyStr(ctx, result, "brightness",
+                          JS_NewFloat64(ctx, filter.brightness));
+        JS_SetPropertyStr(ctx, result, "contrast",
+                          JS_NewFloat64(ctx, filter.contrast));
+        JS_SetPropertyStr(ctx, result, "greyScale",
+                          JS_NewFloat64(ctx, filter.grayscale));
+        JS_SetPropertyStr(ctx, result, "saturate",
+                          JS_NewFloat64(ctx, filter.saturate));
+        JS_SetPropertyStr(ctx, result, "sepia",
+                          JS_NewFloat64(ctx, filter.sepia));
+        JS_SetPropertyStr(ctx, result, "hueRotate",
+                          JS_NewFloat64(ctx, filter.hueRotate));
+        JS_SetPropertyStr(ctx, result, "invert",
+                          JS_NewFloat64(ctx, filter.invert));
+        JS_SetPropertyStr(ctx, result, "opacity",
+                          JS_NewFloat64(ctx, filter.opacity));
+        return result;
+      }
+      case ScrollX:
+        return JS_NewInt32(ctx, element->GetScrollX());
+      case ScrollY:
+        return JS_NewInt32(ctx, element->GetScrollY());
+      case ScrollStep:
+        return JS_NewInt32(ctx, element->GetScrollStep());
+      case MaxScrollX:
+        element->RecalcContentExtents();
+        return JS_NewInt32(ctx, element->GetMaxScrollX());
+      case MaxScrollY:
+        element->RecalcContentExtents();
+        return JS_NewInt32(ctx, element->GetMaxScrollY());
+      case OverflowX:
+        switch (element->GetOverflowX()) {
+        case Element::OverflowMode::Auto:
+          return JS_NewString(ctx, "auto");
+        case Element::OverflowMode::Scroll:
+          return JS_NewString(ctx, "scroll");
+        default:
+          return JS_NewString(ctx, "hidden");
+        }
+      case OverflowY:
+        switch (element->GetOverflowY()) {
+        case Element::OverflowMode::Auto:
+          return JS_NewString(ctx, "auto");
+        case Element::OverflowMode::Scroll:
+          return JS_NewString(ctx, "scroll");
+        default:
+          return JS_NewString(ctx, "hidden");
+        }
+      case ShowScrollbar:
+        return JS_NewBool(ctx, element->GetShowScrollbar() ? 1 : 0);
+      case ShowScrollbarX:
+        return JS_NewBool(ctx, element->GetShowScrollbarX() ? 1 : 0);
+      case ShowScrollbarY:
+        return JS_NewBool(ctx, element->GetShowScrollbarY() ? 1 : 0);
+      case ScrollbarWidth:
+        return JS_NewInt32(ctx, element->GetScrollbarWidth());
+      case ScrollbarHoverWidth:
+        return JS_NewInt32(ctx, element->GetScrollbarHoverWidth());
+      case ScrollbarRadius:
+        return JS_NewFloat64(ctx, element->GetScrollbarRadius());
+      case ScrollbarTrackRadius:
+        return JS_NewFloat64(ctx, element->GetScrollbarTrackRadius());
+      case ScrollbarInset:
+        return JS_NewFloat64(ctx, element->GetScrollbarInset());
+      case ScrollbarMinThumbLength:
+        return JS_NewFloat64(ctx, element->GetScrollbarMinThumbLength());
+      case ScrollbarColor: {
+        const std::wstring s = ColorUtil::ToRGBAString(
+            element->GetScrollbarColor(), element->GetScrollbarAlpha());
+        return JS_NewString(ctx, Utils::ToString(s).c_str());
+      }
+      case ScrollbarHoverColor: {
+        const std::wstring s =
+            ColorUtil::ToRGBAString(element->GetScrollbarHoverColor(),
+                                    element->GetScrollbarHoverAlpha());
+        return JS_NewString(ctx, Utils::ToString(s).c_str());
+      }
+      case ScrollbarActiveColor: {
+        const std::wstring s =
+            ColorUtil::ToRGBAString(element->GetScrollbarActiveColor(),
+                                    element->GetScrollbarActiveAlpha());
+        return JS_NewString(ctx, Utils::ToString(s).c_str());
+      }
+      case ScrollbarTrackColor: {
+        const std::wstring s =
+            ColorUtil::ToRGBAString(element->GetScrollbarTrackColor(),
+                                    element->GetScrollbarTrackAlpha());
+        return JS_NewString(ctx, Utils::ToString(s).c_str());
+      }
+      case ShowScrollbarButtons:
+        return JS_NewBool(ctx, element->GetShowScrollbarButtons() ? 1 : 0);
+      case ScrollbarButtonSize:
+        return JS_NewFloat64(ctx, element->GetScrollbarButtonSize());
+      case ScrollbarButtonRadius:
+        return JS_NewFloat64(ctx, element->GetScrollbarButtonRadius());
+      case ScrollbarArrowColor: {
+        const std::wstring s =
+            ColorUtil::ToRGBAString(element->GetScrollbarArrowColor(),
+                                    element->GetScrollbarArrowAlpha());
+        return JS_NewString(ctx, Utils::ToString(s).c_str());
+      }
+      case ScrollbarArrowHoverColor: {
+        const std::wstring s =
+            ColorUtil::ToRGBAString(element->GetScrollbarArrowHoverColor(),
+                                    element->GetScrollbarArrowHoverAlpha());
+        return JS_NewString(ctx, Utils::ToString(s).c_str());
+      }
+      case ScrollbarArrowActiveColor: {
+        const std::wstring s =
+            ColorUtil::ToRGBAString(element->GetScrollbarArrowActiveColor(),
+                                    element->GetScrollbarArrowActiveAlpha());
+        return JS_NewString(ctx, Utils::ToString(s).c_str());
+      }
+      case ScrollbarButtonBgColor: {
+        const std::wstring s =
+            ColorUtil::ToRGBAString(element->GetScrollbarButtonBgColor(),
+                                    element->GetScrollbarButtonBgAlpha());
+        return JS_NewString(ctx, Utils::ToString(s).c_str());
+      }
+      case ScrollbarButtonHoverBgColor: {
+        const std::wstring s =
+            ColorUtil::ToRGBAString(element->GetScrollbarButtonHoverBgColor(),
+                                    element->GetScrollbarButtonHoverBgAlpha());
+        return JS_NewString(ctx, Utils::ToString(s).c_str());
+      }
+      case DropTarget:
+        return JS_NewBool(ctx, element->IsDropTarget() ? 1 : 0);
+      case DragArea:
+        return JS_NewBool(ctx, element->IsDragArea() ? 1 : 0);
+      default:
+        break;
+      }
+    }
+  }
+
+  if (element->GetType() == ELEMENT_TEXT) {
+    auto *t = static_cast<TextElement *>(element);
+    if (prop == "text")
+      return JS_NewString(ctx, Utils::ToString(t->GetText()).c_str());
+    if (prop == "fontFace")
+      return JS_NewString(ctx, Utils::ToString(t->GetFontFace()).c_str());
+    if (prop == "fontSize")
+      return JS_NewInt32(ctx, t->GetFontSize());
+    if (prop == "fontColor") {
+      const std::wstring color =
+          ColorUtil::ToRGBAString(t->GetFontColor(), t->GetFontAlpha());
+      return JS_NewString(ctx, Utils::ToString(color).c_str());
+    }
+    if (prop == "fontWeight")
+      return JS_NewInt32(ctx, t->GetFontWeight());
+    if (prop == "italic")
+      return JS_NewBool(ctx, t->IsItalic() ? 1 : 0);
+    if (prop == "underLine")
+      return JS_NewBool(ctx, t->GetUnderline() ? 1 : 0);
+    if (prop == "strikeThrough")
+      return JS_NewBool(ctx, t->GetStrikethrough() ? 1 : 0);
+    if (prop == "letterSpacing")
+      return JS_NewFloat64(ctx, t->GetLetterSpacing());
+    if (prop == "fontPath")
+      return JS_NewString(ctx, Utils::ToString(t->GetFontPath()).c_str());
+    if (prop == "backdropFilter") {
+      const auto &filter = t->GetBackdropFilter();
+      JSValue result = JS_NewObject(ctx);
+      JS_SetPropertyStr(ctx, result, "blur", JS_NewFloat64(ctx, filter.blur));
+      JS_SetPropertyStr(ctx, result, "brightness",
+                        JS_NewFloat64(ctx, filter.brightness));
+      JS_SetPropertyStr(ctx, result, "contrast",
+                        JS_NewFloat64(ctx, filter.contrast));
+      JS_SetPropertyStr(ctx, result, "greyScale",
+                        JS_NewFloat64(ctx, filter.grayscale));
+      JS_SetPropertyStr(ctx, result, "saturate",
+                        JS_NewFloat64(ctx, filter.saturate));
+      JS_SetPropertyStr(ctx, result, "sepia", JS_NewFloat64(ctx, filter.sepia));
+      JS_SetPropertyStr(ctx, result, "hueRotate",
+                        JS_NewFloat64(ctx, filter.hueRotate));
+      JS_SetPropertyStr(ctx, result, "invert",
+                        JS_NewFloat64(ctx, filter.invert));
+      JS_SetPropertyStr(ctx, result, "opacity",
+                        JS_NewFloat64(ctx, filter.opacity));
+      return result;
+    }
+
+    if (prop == "textAlign") {
+      const char *alStr = "left-top";
+      switch (t->GetTextAlign()) {
+      case TEXT_ALIGN_LEFT_TOP:
+        alStr = "left-top";
+        break;
+      case TEXT_ALIGN_CENTER_TOP:
+        alStr = "center-top";
+        break;
+      case TEXT_ALIGN_RIGHT_TOP:
+        alStr = "right-top";
+        break;
+      case TEXT_ALIGN_LEFT_CENTER:
+        alStr = "left-center";
+        break;
+      case TEXT_ALIGN_CENTER_CENTER:
+        alStr = "center-center";
+        break;
+      case TEXT_ALIGN_RIGHT_CENTER:
+        alStr = "right-center";
+        break;
+      case TEXT_ALIGN_LEFT_BOTTOM:
+        alStr = "left-bottom";
+        break;
+      case TEXT_ALIGN_CENTER_BOTTOM:
+        alStr = "center-bottom";
+        break;
+      case TEXT_ALIGN_RIGHT_BOTTOM:
+        alStr = "right-bottom";
+        break;
+      default:
+        break;
+      }
+      return JS_NewString(ctx, alStr);
+    }
+    if (prop == "textClip") {
+      const char *clipStr = "none";
+      switch (t->GettextClip()) {
+      case TEXT_CLIP_ON:
+        clipStr = "clip";
+        break;
+      case TEXT_CLIP_ELLIPSIS:
+        clipStr = "ellipsis";
+        break;
+      case TEXT_CLIP_WRAP:
+        clipStr = "wrap";
+        break;
+      default:
+        break;
+      }
+      return JS_NewString(ctx, clipStr);
+    }
+    if (prop == "case") {
+      const char *caseStr = "normal";
+      switch (t->GetTextCase()) {
+      case TEXT_CASE_UPPER:
+        caseStr = "upper";
+        break;
+      case TEXT_CASE_LOWER:
+        caseStr = "lower";
+        break;
+      case TEXT_CASE_CAPITALIZE:
+        caseStr = "capitalize";
+        break;
+      case TEXT_CASE_SENTENCE:
+        caseStr = "sentence";
+        break;
+      default:
+        break;
+      }
+      return JS_NewString(ctx, caseStr);
+    }
+    if (prop == "fontShadow") {
+      JSValue arr = JS_NewArray(ctx);
+      const auto &shadows = t->GetShadows();
+      for (uint32_t i = 0; i < static_cast<uint32_t>(shadows.size()); ++i) {
+        JSValue sh = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, sh, "x", JS_NewFloat64(ctx, shadows[i].offsetX));
+        JS_SetPropertyStr(ctx, sh, "y", JS_NewFloat64(ctx, shadows[i].offsetY));
+        JS_SetPropertyStr(ctx, sh, "blur", JS_NewFloat64(ctx, shadows[i].blur));
+        const std::wstring c =
+            ColorUtil::ToRGBAString(shadows[i].color, shadows[i].alpha);
+        JS_SetPropertyStr(ctx, sh, "color",
+                          JS_NewString(ctx, Utils::ToString(c).c_str()));
+        JS_SetPropertyUint32(ctx, arr, i, sh);
+      }
+      return arr;
+    }
+  } else if (element->GetType() == ELEMENT_IMAGE) {
+    auto *img = static_cast<ImageElement *>(element);
+    if (prop == "path")
+      return JS_NewString(ctx, Utils::ToString(img->GetImagePath()).c_str());
+    if (prop == "preserveAspectRatio") {
+      const char *aspect = "stretch";
+      switch (img->GetPreserveAspectRatio()) {
+      case IMAGE_ASPECT_PRESERVE:
+        aspect = "preserve";
+        break;
+      case IMAGE_ASPECT_CROP:
+        aspect = "crop";
+        break;
+      default:
+        break;
+      }
+      return JS_NewString(ctx, aspect);
+    }
+    if (prop == "scaleMargins") {
+      if (!img->HasScaleMargins()) {
+        return JS_UNDEFINED;
+      }
+      JSValue arr = JS_NewArray(ctx);
+      JS_SetPropertyUint32(ctx, arr, 0,
+                           JS_NewFloat64(ctx, img->GetScaleMarginLeft()));
+      JS_SetPropertyUint32(ctx, arr, 1,
+                           JS_NewFloat64(ctx, img->GetScaleMarginTop()));
+      JS_SetPropertyUint32(ctx, arr, 2,
+                           JS_NewFloat64(ctx, img->GetScaleMarginRight()));
+      JS_SetPropertyUint32(ctx, arr, 3,
+                           JS_NewFloat64(ctx, img->GetScaleMarginBottom()));
+      return arr;
+    }
+    if (prop == "tile")
+      return JS_NewBool(ctx, img->IsTile() ? 1 : 0);
+
+    return GetGeneralImagePropertyValue(ctx, element, prop);
+  } else if (element->GetType() == ELEMENT_BUTTON) {
+    auto *btn = static_cast<ButtonElement *>(element);
+    if (prop == "buttonImageName")
+      return JS_NewString(ctx, Utils::ToString(btn->GetImagePath()).c_str());
+
+    return GetGeneralImagePropertyValue(ctx, element, prop);
+  } else if (element->GetType() == ELEMENT_BITMAP) {
+    auto *bitmap = static_cast<BitmapElement *>(element);
+    if (prop == "value")
+      return JS_NewFloat64(ctx, bitmap->GetValue());
+    if (prop == "bitmapImageName")
+      return JS_NewString(ctx, Utils::ToString(bitmap->GetImagePath()).c_str());
+    if (prop == "bitmapFrames")
+      return JS_NewInt32(ctx, bitmap->GetBitmapFrames());
+    if (prop == "bitmapZeroFrame")
+      return JS_NewBool(ctx, bitmap->GetBitmapZeroFrame() ? 1 : 0);
+    if (prop == "bitmapExtend")
+      return JS_NewBool(ctx, bitmap->GetBitmapExtend() ? 1 : 0);
+    if (prop == "minValue")
+      return JS_NewFloat64(ctx, bitmap->GetMinValue());
+    if (prop == "maxValue")
+      return JS_NewFloat64(ctx, bitmap->GetMaxValue());
+    if (prop == "bitmapOrientation")
+      return JS_NewString(
+          ctx, Utils::ToString(bitmap->GetBitmapOrientation()).c_str());
+    if (prop == "bitmapDigits")
+      return JS_NewInt32(ctx, bitmap->GetBitmapDigits());
+    if (prop == "bitmapSeparation")
+      return JS_NewInt32(ctx, bitmap->GetBitmapSeparation());
+    if (prop == "bitmapAlign") {
+      const char *align = "left";
+      switch (bitmap->GetBitmapAlign()) {
+      case BITMAP_ALIGN_CENTER:
+        align = "center";
+        break;
+      case BITMAP_ALIGN_RIGHT:
+        align = "right";
+        break;
+      default:
+        break;
+      }
+      return JS_NewString(ctx, align);
+    }
+
+    return GetGeneralImagePropertyValue(ctx, element, prop);
+  } else if (element->GetType() == ELEMENT_AREA_GRAPH) {
+    auto *graph = static_cast<AreaGraphElement *>(element);
+    if (prop == "data") {
+      JSValue arr = JS_NewArray(ctx);
+      const auto &data = graph->GetData();
+      for (uint32_t i = 0; i < static_cast<uint32_t>(data.size()); ++i) {
+        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, data[i]));
+      }
+      return arr;
+    }
+    if (prop == "minValue")
+      return JS_NewFloat64(ctx, graph->GetMinValue());
+    if (prop == "maxValue")
+      return JS_NewFloat64(ctx, graph->GetMaxValue());
+    if (prop == "autoRange")
+      return JS_NewBool(ctx, graph->GetAutoRange() ? 1 : 0);
+    if (prop == "lineColor")
+      return JS_NewString(ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                                                   graph->GetLineColor(), 255))
+                                   .c_str());
+    if (prop == "lineWidth")
+      return JS_NewFloat64(ctx, graph->GetLineWidth());
+    if (prop == "fillColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(graph->GetFillColor(),
+                                                       graph->GetFillAlpha()))
+                   .c_str());
+    if (prop == "fillAlpha")
+      return JS_NewInt32(ctx, graph->GetFillAlpha());
+    if (prop == "maxPoints")
+      return JS_NewInt32(ctx, graph->GetMaxPoints());
+    if (prop == "gridColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(graph->GetGridColor(),
+                                                       graph->GetGridAlpha()))
+                   .c_str());
+    if (prop == "gridAlpha")
+      return JS_NewInt32(ctx, graph->GetGridAlpha());
+    if (prop == "gridVisible")
+      return JS_NewBool(ctx, graph->GetGridVisible() ? 1 : 0);
+    if (prop == "gridX")
+      return JS_NewInt32(ctx, graph->GetGridXSpacing());
+    if (prop == "gridY")
+      return JS_NewInt32(ctx, graph->GetGridYSpacing());
+    if (prop == "graphStart")
+      return JS_NewString(ctx, graph->GetGraphStartLeft() ? "left" : "right");
+    if (prop == "flip")
+      return JS_NewBool(ctx, graph->GetFlip() ? 1 : 0);
+  } else if (element->GetType() == ELEMENT_ROTATOR) {
+    auto *rotator = static_cast<RotatorElement *>(element);
+    if (prop == "value")
+      return JS_NewFloat64(ctx, rotator->GetValue());
+    if (prop == "rotatorImageName")
+      return JS_NewString(ctx,
+                          Utils::ToString(rotator->GetImagePath()).c_str());
+    if (prop == "offsetX")
+      return JS_NewFloat64(ctx, rotator->GetOffsetX());
+    if (prop == "offsetY")
+      return JS_NewFloat64(ctx, rotator->GetOffsetY());
+    if (prop == "startAngle")
+      return JS_NewFloat64(ctx, rotator->GetStartAngle());
+    if (prop == "rotationAngle")
+      return JS_NewFloat64(ctx, rotator->GetRotationAngle());
+    if (prop == "valueRemainder")
+      return JS_NewInt32(ctx, rotator->GetValueRemainder());
+    if (prop == "minValue")
+      return JS_NewFloat64(ctx, rotator->GetMinValue());
+    if (prop == "maxValue")
+      return JS_NewFloat64(ctx, rotator->GetMaxValue());
+
+    return GetGeneralImagePropertyValue(ctx, element, prop);
+  } else if (element->GetType() == ELEMENT_BAR) {
+    auto *bar = static_cast<BarElement *>(element);
+    if (prop == "value")
+      return JS_NewFloat64(ctx, bar->GetValue());
+    if (prop == "barCornerRadius")
+      return JS_NewInt32(ctx, bar->GetBarCornerRadius());
+    if (prop == "orientation")
+      return JS_NewString(ctx, bar->GetOrientation() == BAR_VERTICAL
+                                   ? "vertical"
+                                   : "horizontal");
+    if (prop == "barColor" && bar->HasBarColor()) {
+      const std::wstring c =
+          ColorUtil::ToRGBAString(bar->GetBarColor(), bar->GetBarAlpha());
+      return JS_NewString(ctx, Utils::ToString(c).c_str());
+    }
+  } else if (element->GetType() == ELEMENT_ROUNDLINE) {
+    auto *rl = static_cast<RoundLineElement *>(element);
+    if (prop == "value")
+      return JS_NewFloat64(ctx, rl->GetValue());
+    if (prop == "radius")
+      return JS_NewInt32(ctx, rl->GetRadius());
+    if (prop == "thickness")
+      return JS_NewInt32(ctx, rl->GetThickness());
+    if (prop == "startAngle")
+      return JS_NewFloat64(ctx, rl->GetStartAngle());
+    if (prop == "totalAngle")
+      return JS_NewFloat64(ctx, rl->GetTotalAngle());
+    if (prop == "clockwise")
+      return JS_NewBool(ctx, rl->IsClockwise() ? 1 : 0);
+    if (prop == "endThickness")
+      return JS_NewInt32(ctx, rl->GetEndThickness());
+    if (prop == "ticks")
+      return JS_NewInt32(ctx, rl->GetTicks());
+    if (prop == "capType")
+      return JS_NewString(
+          ctx, rl->GetCapType() == ROUNDLINE_CAP_ROUND ? "round" : "flat");
+    if (prop == "lineColor" && rl->HasLineColor()) {
+      const std::wstring c =
+          ColorUtil::ToRGBAString(rl->GetLineColor(), rl->GetLineAlpha());
+      return JS_NewString(ctx, Utils::ToString(c).c_str());
+    }
+    if (prop == "lineColorBg" && rl->HasLineColorBg()) {
+      const std::wstring c =
+          ColorUtil::ToRGBAString(rl->GetLineColorBg(), rl->GetLineAlphaBg());
+      return JS_NewString(ctx, Utils::ToString(c).c_str());
+    }
+  } else if (element->GetType() == ELEMENT_LINE) {
+    auto *line = static_cast<LineElement *>(element);
+    if (prop == "lineCount")
+      return JS_NewInt32(ctx, line->GetLineCount());
+    if (prop == "lineWidth")
+      return JS_NewFloat64(ctx, line->GetLineWidth());
+    if (prop == "maxPoints")
+      return JS_NewInt32(ctx, line->GetMaxPoints());
+    if (prop == "horizontalLines")
+      return JS_NewBool(ctx, line->GetHorizontalLines() ? 1 : 0);
+    if (prop == "horizontalLineColor") {
+      const std::wstring c = ColorUtil::ToRGBAString(
+          line->GetHorizontalLineColor(), line->GetHorizontalLineAlpha());
+      return JS_NewString(ctx, Utils::ToString(c).c_str());
+    }
+    if (prop == "graphStart")
+      return JS_NewString(ctx, line->GetGraphStartLeft() ? "left" : "right");
+    if (prop == "graphOrientation")
+      return JS_NewString(ctx, line->GetGraphHorizontalOrientation()
+                                   ? "horizontal"
+                                   : "vertical");
+    if (prop == "flip")
+      return JS_NewBool(ctx, line->GetFlip() ? 1 : 0);
+    if (prop == "transformStroke")
+      return JS_NewString(ctx, line->GetStrokeTransformType() ==
+                                       D2D1_STROKE_TRANSFORM_TYPE_FIXED
+                                   ? "fixed"
+                                   : "normal");
+    if (prop == "autoRange")
+      return JS_NewBool(ctx, line->GetAutoRange() ? 1 : 0);
+    if (prop == "rangeMin")
+      return JS_NewFloat64(ctx, line->GetScaleMin());
+    if (prop == "rangeMax")
+      return JS_NewFloat64(ctx, line->GetScaleMax());
+
+    if (prop == "data") {
+      JSValue arr = JS_NewArray(ctx);
+      const auto &dataSets = line->GetDataSets();
+      if (!dataSets.empty()) {
+        for (uint32_t i = 0; i < static_cast<uint32_t>(dataSets[0].size());
+             ++i) {
+          JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, dataSets[0][i]));
+        }
+      }
+      return arr;
+    }
+
+    for (int i = 0; i < line->GetLineCount(); ++i) {
+      std::string colorKey =
+          (i == 0) ? "lineColor" : ("lineColor" + std::to_string(i + 1));
+      if (prop == colorKey) {
+        const auto &colors = line->GetLineColors();
+        const auto &alphas = line->GetLineAlphas();
+        if (i < (int)colors.size() && i < (int)alphas.size()) {
+          const std::wstring c =
+              ColorUtil::ToRGBAString(colors[(size_t)i], alphas[(size_t)i]);
+          return JS_NewString(ctx, Utils::ToString(c).c_str());
+        }
+      }
+
+      std::string scaleKey =
+          (i == 0) ? "lineScale" : ("lineScale" + std::to_string(i + 1));
+      if (prop == scaleKey) {
+        const auto &scales = line->GetScaleValues();
+        if (i < (int)scales.size()) {
+          return JS_NewFloat64(ctx, scales[(size_t)i]);
+        }
+      }
+
+      std::string dataKey =
+          (i == 0) ? "data" : ("data" + std::to_string(i + 1));
+      if (prop == dataKey) {
+        JSValue arr = JS_NewArray(ctx);
+        const auto &dataSets = line->GetDataSets();
+        if (i < (int)dataSets.size()) {
+          for (uint32_t k = 0;
+               k < static_cast<uint32_t>(dataSets[(size_t)i].size()); ++k) {
+            JS_SetPropertyUint32(ctx, arr, k,
+                                 JS_NewFloat64(ctx, dataSets[(size_t)i][k]));
+          }
+        }
+        return arr;
+      }
+    }
+  } else if (element->GetType() == ELEMENT_HISTOGRAM) {
+    auto *histogram = static_cast<HistogramElement *>(element);
+    if (prop == "data") {
+      JSValue arr = JS_NewArray(ctx);
+      const auto &data = histogram->GetData();
+      for (uint32_t i = 0; i < static_cast<uint32_t>(data.size()); ++i) {
+        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, data[i]));
+      }
+      return arr;
+    }
+    if (prop == "data2") {
+      JSValue arr = JS_NewArray(ctx);
+      const auto &data = histogram->GetData2();
+      for (uint32_t i = 0; i < static_cast<uint32_t>(data.size()); ++i) {
+        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, data[i]));
+      }
+      return arr;
+    }
+    if (prop == "autoRange")
+      return JS_NewBool(ctx, histogram->GetAutoRange() ? 1 : 0);
+    if (prop == "graphStart")
+      return JS_NewString(ctx,
+                          histogram->GetGraphStartLeft() ? "left" : "right");
+    if (prop == "graphOrientation")
+      return JS_NewString(ctx, histogram->GetGraphHorizontalOrientation()
+                                   ? "horizontal"
+                                   : "vertical");
+    if (prop == "flip")
+      return JS_NewBool(ctx, histogram->GetFlip() ? 1 : 0);
+    if (prop == "primaryColor") {
+      const std::wstring c = ColorUtil::ToRGBAString(
+          histogram->GetPrimaryColor(), histogram->GetPrimaryAlpha());
+      return JS_NewString(ctx, Utils::ToString(c).c_str());
+    }
+    if (prop == "secondaryColor") {
+      const std::wstring c = ColorUtil::ToRGBAString(
+          histogram->GetSecondaryColor(), histogram->GetSecondaryAlpha());
+      return JS_NewString(ctx, Utils::ToString(c).c_str());
+    }
+    if (prop == "bothColor") {
+      const std::wstring c = ColorUtil::ToRGBAString(histogram->GetBothColor(),
+                                                     histogram->GetBothAlpha());
+      return JS_NewString(ctx, Utils::ToString(c).c_str());
+    }
+  } else if (element->GetType() == ELEMENT_SHAPE ||
+             element->GetType() == ELEMENT_LAYOUT_BOX) {
+    auto *shape = static_cast<ShapeElement *>(element);
+    ElementLayoutBox *layoutBox = (element->GetType() == ELEMENT_LAYOUT_BOX)
+                                      ? static_cast<ElementLayoutBox *>(element)
+                                      : nullptr;
+    PropertyParser::LayoutBoxOptions layoutPrefill;
+    if (layoutBox)
+      PropertyParser::PreFillLayoutBoxOptions(layoutPrefill, layoutBox);
+
+    auto capToStr = [](D2D1_CAP_STYLE cap) -> const char * {
+      switch (cap) {
+      case D2D1_CAP_STYLE_ROUND:
+        return "Round";
+      case D2D1_CAP_STYLE_SQUARE:
+        return "Square";
+      case D2D1_CAP_STYLE_TRIANGLE:
+        return "Triangle";
+      default:
+        return "Flat";
+      }
+    };
+    auto joinToStr = [](D2D1_LINE_JOIN join) -> const char * {
+      switch (join) {
+      case D2D1_LINE_JOIN_BEVEL:
+        return "Bevel";
+      case D2D1_LINE_JOIN_ROUND:
+        return "Round";
+      case D2D1_LINE_JOIN_MITER_OR_BEVEL:
+        return "MiterOrBevel";
+      default:
+        return "Miter";
+      }
+    };
+
+    if (prop == "shapeType") {
+      if (dynamic_cast<RectangleShape *>(shape))
+        return JS_NewString(ctx, "rectangle");
+      if (dynamic_cast<EllipseShape *>(shape))
+        return JS_NewString(ctx, "ellipse");
+      if (dynamic_cast<LineShape *>(shape))
+        return JS_NewString(ctx, "line");
+      if (dynamic_cast<ArcShape *>(shape))
+        return JS_NewString(ctx, "arc");
+      if (dynamic_cast<CurveShape *>(shape))
+        return JS_NewString(ctx, "curve");
+      if (dynamic_cast<PathShape *>(shape))
+        return JS_NewString(ctx, "path");
+    }
+
+    if (prop == "strokeWidth")
+      return JS_NewFloat64(ctx, shape->GetStrokeWidth());
+    if (prop == "strokeColor" && shape->HasStroke()) {
+      const std::wstring c = ColorUtil::ToRGBAString(shape->GetStrokeColor(),
+                                                     shape->GetStrokeAlpha());
+      return JS_NewString(ctx, Utils::ToString(c).c_str());
+    }
+    if (prop == "fillColor" && shape->HasFill()) {
+      const std::wstring c =
+          ToGradientOrRGBAString(shape->GetFillGradient(),
+                                 shape->GetFillColor(), shape->GetFillAlpha());
+      return JS_NewString(ctx, Utils::ToString(c).c_str());
+    }
+
+    if (prop == "radiusX")
+      return JS_NewFloat64(ctx, shape->GetRadiusX());
+    if (prop == "radiusY")
+      return JS_NewFloat64(ctx, shape->GetRadiusY());
+    if (prop == "startX")
+      return JS_NewFloat64(ctx, shape->GetStartX());
+    if (prop == "startY")
+      return JS_NewFloat64(ctx, shape->GetStartY());
+    if (prop == "endX")
+      return JS_NewFloat64(ctx, shape->GetEndX());
+    if (prop == "endY")
+      return JS_NewFloat64(ctx, shape->GetEndY());
+    if (prop == "curveType")
+      return JS_NewString(ctx, Utils::ToString(shape->GetCurveType()).c_str());
+    if (prop == "controlX")
+      return JS_NewFloat64(ctx, shape->GetControlX());
+    if (prop == "controlY")
+      return JS_NewFloat64(ctx, shape->GetControlY());
+    if (prop == "control2X")
+      return JS_NewFloat64(ctx, shape->GetControl2X());
+    if (prop == "control2Y")
+      return JS_NewFloat64(ctx, shape->GetControl2Y());
+    if (prop == "startAngle")
+      return JS_NewFloat64(ctx, shape->GetStartAngle());
+    if (prop == "endAngle")
+      return JS_NewFloat64(ctx, shape->GetEndAngle());
+    if (prop == "clockwise")
+      return JS_NewBool(ctx, shape->IsClockwise() ? 1 : 0);
+    if (prop == "pathData")
+      return JS_NewString(ctx, Utils::ToString(shape->GetPathData()).c_str());
+
+    if (prop == "strokeStartCap")
+      return JS_NewString(ctx, capToStr(shape->GetStrokeStartCap()));
+    if (prop == "strokeEndCap")
+      return JS_NewString(ctx, capToStr(shape->GetStrokeEndCap()));
+    if (prop == "strokeDashCap")
+      return JS_NewString(ctx, capToStr(shape->GetStrokeDashCap()));
+    if (prop == "strokeLineJoin")
+      return JS_NewString(ctx, joinToStr(shape->GetStrokeLineJoin()));
+    if (prop == "strokeDashOffset")
+      return JS_NewFloat64(ctx, shape->GetStrokeDashOffset());
+    if (prop == "strokeDashes") {
+      JSValue arr = JS_NewArray(ctx);
+      const auto &dashes = shape->GetStrokeDashes();
+      for (uint32_t i = 0; i < static_cast<uint32_t>(dashes.size()); ++i) {
+        JS_SetPropertyUint32(ctx, arr, i, JS_NewFloat64(ctx, dashes[i]));
+      }
+      return arr;
+    }
+
+    if (layoutBox) {
+      if (prop == "display") {
+        auto displayToStr =
+            [](ElementLayoutBox::DisplayType d) -> const char * {
+          switch (d) {
+          case ElementLayoutBox::DisplayType::Flex:
+            return "flex";
+          case ElementLayoutBox::DisplayType::None:
+            return "none";
+          case ElementLayoutBox::DisplayType::ListItem:
+            return "list-item";
+          default:
+            return "flex";
+          }
         };
+        return JS_NewString(ctx, displayToStr(layoutBox->GetDisplayType()));
+      }
+      if (prop == "listStyleType") {
+        auto styleToStr =
+            [](ElementLayoutBox::ListStyleType t) -> const char * {
+          switch (t) {
+          case ElementLayoutBox::ListStyleType::Disc:
+            return "disc";
+          case ElementLayoutBox::ListStyleType::Circle:
+            return "circle";
+          case ElementLayoutBox::ListStyleType::Square:
+            return "square";
+          case ElementLayoutBox::ListStyleType::UpperRoman:
+            return "upper-roman";
+          case ElementLayoutBox::ListStyleType::LowerRoman:
+            return "lower-roman";
+          case ElementLayoutBox::ListStyleType::Decimal:
+            return "decimal";
+          case ElementLayoutBox::ListStyleType::LowerAlpha:
+            return "lower-alpha";
+          case ElementLayoutBox::ListStyleType::UpperAlpha:
+            return "upper-alpha";
+          case ElementLayoutBox::ListStyleType::None:
+            return "none";
+          default:
+            return "disc";
+          }
+        };
+        return JS_NewString(ctx, styleToStr(layoutBox->GetListStyleType()));
+      }
 
-        bool RunWidgetUiScriptImpl(JSContext *ctx, Widget *widget, const std::wstring &scriptPath)
-        {
-            if (!widget || scriptPath.empty())
-                return true;
-
-            {
-                std::wstring lower = scriptPath;
-                std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
-                const std::wstring requiredSuffix = L".ui.js";
-                if (lower.size() < requiredSuffix.size() ||
-                    lower.compare(lower.size() - requiredSuffix.size(), requiredSuffix.size(), requiredSuffix) != 0)
-                {
-                    Logging::Log(LogLevel::Error, L"[novadesk] widget ui script must end with '.ui.js': %s", scriptPath.c_str());
-                    return false;
-                }
-            }
-
-            std::wstring absPath;
-            std::wstring baseDir;
-            if (PathUtils::IsURL(scriptPath))
-            {
-                absPath = scriptPath;
-            }
-            else if (PathUtils::IsPathRelative(scriptPath))
-            {
-                baseDir = PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath, JSEngine::GetEntryScriptDir());
-                absPath = PathUtils::ResolvePath(
-                    scriptPath,
-                    baseDir.empty() ? PathUtils::GetWidgetsDir() : baseDir);
-            }
-            else
-            {
-                absPath = PathUtils::NormalizePath(scriptPath);
-            }
-
-            // Refresh can re-run the same .ui.js before old callbacks are fully gone.
-            // Ensure stale ipcRenderer listeners from prior UI instances are detached.
-            JSEngine::ClearUiIpcForScript(absPath);
-
-            const std::string scriptSource = FileUtils::ReadFileOrUrlContent(absPath);
-            if (scriptSource.empty())
-            {
-                Logging::Log(LogLevel::Error, L"[novadesk] Failed to load widget ui script: %s", absPath.c_str());
-                return false;
-            }
-
-            JSRuntime *rt = JS_GetRuntime(ctx);
-            if (g_widgetUiClassId == 0)
-            {
-                JS_NewClassID(rt, &g_widgetUiClassId);
-            }
-            if (g_widgetUiClassRuntime != rt)
-            {
-                JSClassDef uiCls{};
-                uiCls.class_name = "WidgetUiBridge";
-                uiCls.finalizer = JsWidgetFinalizer;
-                JS_NewClass(rt, g_widgetUiClassId, &uiCls);
-                JSValue uiProto = JS_NewObject(ctx);
-                JS_SetPropertyFunctionList(ctx, uiProto, kWidgetProtoFuncs, sizeof(kWidgetProtoFuncs) / sizeof(kWidgetProtoFuncs[0]));
-                JS_SetClassProto(ctx, g_widgetUiClassId, uiProto);
-                g_widgetUiClassRuntime = rt;
-            }
-
-            JSValue uiObj = JS_NewObjectClass(ctx, g_widgetUiClassId);
-            if (JS_IsException(uiObj))
-                return false;
-            JS_SetOpaque(uiObj, new WidgetWrapper{widget, widget->GetInstanceId()});
-
-            JSValue global = JS_GetGlobalObject(ctx);
-            JSValue ipcObj = JSEngine::CreateUiIpcObject(ctx);
-            JS_SetPropertyStr(ctx, global, "ui", JS_DupValue(ctx, uiObj));
-            JS_SetPropertyStr(ctx, global, "ipcRenderer", JS_DupValue(ctx, ipcObj));
-            const std::string fileName = Utils::ToString(absPath);
-            const std::string dirName = Utils::ToString(PathUtils::GetParentDir(absPath));
-            const std::string widgetDirName = Utils::ToString(PathUtils::GetWidgetsDir());
-            const std::string addonsPathName = Utils::ToString(PathUtils::GetAddonsDir());
-            JS_SetPropertyStr(ctx, global, "__filename", JS_NewString(ctx, fileName.c_str()));
-            JS_SetPropertyStr(ctx, global, "__dirname", JS_NewString(ctx, dirName.c_str()));
-            JS_SetPropertyStr(ctx, global, "__widgetDir", JS_NewString(ctx, widgetDirName.c_str()));
-            JS_SetPropertyStr(ctx, global, "__addonsPath", JS_NewString(ctx, addonsPathName.c_str()));
-            JS_FreeValue(ctx, global);
-
-            const std::string scriptPrelude =
-                "(function(ui, ipcRenderer, __filename, __dirname, __widgetDir){\n"
-                "const setTimeout = undefined;\n"
-                "const setInterval = undefined;\n"
-                "const clearTimeout = undefined;\n"
-                "const clearInterval = undefined;\n";
-            const std::string scriptSuffix =
-                "\n})(globalThis.ui, globalThis.ipcRenderer, globalThis.__filename, globalThis.__dirname, globalThis.__widgetDir);\n";
-            const std::string scriptSourceWithPrelude = scriptPrelude + scriptSource + scriptSuffix;
-
-            JSValue evalResult = JS_Eval(ctx, scriptSourceWithPrelude.c_str(), scriptSourceWithPrelude.size(), fileName.c_str(), JS_EVAL_TYPE_GLOBAL);
-
-            JSValue global2 = JS_GetGlobalObject(ctx);
-            JSAtom uiAtom = JS_NewAtom(ctx, "ui");
-            JS_DeleteProperty(ctx, global2, uiAtom, 0);
-            JS_FreeAtom(ctx, uiAtom);
-            JSAtom ipcAtom = JS_NewAtom(ctx, "ipcRenderer");
-            JS_DeleteProperty(ctx, global2, ipcAtom, 0);
-            JS_FreeAtom(ctx, ipcAtom);
-            JSAtom filename2Atom = JS_NewAtom(ctx, "__filename");
-            JS_DeleteProperty(ctx, global2, filename2Atom, 0);
-            JS_FreeAtom(ctx, filename2Atom);
-            JSAtom dirname2Atom = JS_NewAtom(ctx, "__dirname");
-            JS_DeleteProperty(ctx, global2, dirname2Atom, 0);
-            JS_FreeAtom(ctx, dirname2Atom);
-            JSAtom widgetDirAtom = JS_NewAtom(ctx, "__widgetDir");
-            JS_DeleteProperty(ctx, global2, widgetDirAtom, 0);
-            JS_FreeAtom(ctx, widgetDirAtom);
-            JSAtom addonsPathAtom = JS_NewAtom(ctx, "__addonsPath");
-            JS_DeleteProperty(ctx, global2, addonsPathAtom, 0);
-            JS_FreeAtom(ctx, addonsPathAtom);
-            JS_FreeValue(ctx, global2);
-            JS_FreeValue(ctx, uiObj);
-            JS_FreeValue(ctx, ipcObj);
-
-            if (JS_IsException(evalResult))
-            {
-                JSValue ex = JS_GetException(ctx);
-                const char *msg = JS_ToCString(ctx, ex);
-                if (msg)
-                {
-                    Logging::Log(LogLevel::Error, L"[novadesk] ui script error (%s): %S", absPath.c_str(), msg);
-                    JS_FreeCString(ctx, msg);
-                }
-                else
-                {
-                    Logging::Log(LogLevel::Error, L"[novadesk] ui script error (%s)", absPath.c_str());
-                }
-                JS_FreeValue(ctx, ex);
-                JS_FreeValue(ctx, evalResult);
-                return false;
-            }
-
-            JS_FreeValue(ctx, evalResult);
-            return true;
+      // Layout configuration properties
+      Widget::LayoutConfig cfg{};
+      if (widget->TryGetLayoutConfig(element->GetId(), cfg)) {
+        if (prop == "direction") {
+          return JS_NewString(ctx, Utils::ToString(cfg.direction).c_str());
         }
+        if (prop == "flexDirection") {
+          return JS_NewString(ctx, Utils::ToString(cfg.flexDirection).c_str());
+        }
+        if (prop == "gap") {
+          return JS_NewInt32(ctx, cfg.gap);
+        }
+        if (prop == "alignItems" || prop == "align") {
+          return JS_NewString(ctx, Utils::ToString(cfg.align).c_str());
+        }
+        if (prop == "justifyContent" || prop == "justify") {
+          return JS_NewString(ctx, Utils::ToString(cfg.justify).c_str());
+        }
+      }
+      if (prop == "borderStyle") {
+        auto styleToStr = [](ElementLayoutBox::BorderStyle s) -> const char * {
+          switch (s) {
+          case ElementLayoutBox::BorderStyle::None:
+            return "none";
+          case ElementLayoutBox::BorderStyle::Hidden:
+            return "hidden";
+          case ElementLayoutBox::BorderStyle::Inset:
+            return "inset";
+          case ElementLayoutBox::BorderStyle::Outset:
+            return "outset";
+          case ElementLayoutBox::BorderStyle::Groove:
+            return "groove";
+          case ElementLayoutBox::BorderStyle::Ridge:
+            return "ridge";
+          case ElementLayoutBox::BorderStyle::Dotted:
+            return "dotted";
+          case ElementLayoutBox::BorderStyle::Dashed:
+            return "dashed";
+          case ElementLayoutBox::BorderStyle::Double:
+            return "double";
+          default:
+            return "solid";
+          }
+        };
+        JSValue arr = JS_NewArray(ctx);
+        JS_SetPropertyUint32(
+            ctx, arr, 0,
+            JS_NewString(ctx, styleToStr(layoutPrefill.borderTop)));
+        JS_SetPropertyUint32(
+            ctx, arr, 1,
+            JS_NewString(ctx, styleToStr(layoutPrefill.borderRight)));
+        JS_SetPropertyUint32(
+            ctx, arr, 2,
+            JS_NewString(ctx, styleToStr(layoutPrefill.borderBottom)));
+        JS_SetPropertyUint32(
+            ctx, arr, 3,
+            JS_NewString(ctx, styleToStr(layoutPrefill.borderLeft)));
+        return arr;
+      }
+      if (prop == "boxShadow") {
+        JSValue arr = JS_NewArray(ctx);
+        for (uint32_t i = 0;
+             i < static_cast<uint32_t>(layoutPrefill.boxShadows.size()); ++i) {
+          const auto &sh = layoutPrefill.boxShadows[i];
+          JSValue item = JS_NewObject(ctx);
+          JS_SetPropertyStr(ctx, item, "x", JS_NewFloat64(ctx, sh.x));
+          JS_SetPropertyStr(ctx, item, "y", JS_NewFloat64(ctx, sh.y));
+          JS_SetPropertyStr(ctx, item, "blur", JS_NewFloat64(ctx, sh.blur));
+          JS_SetPropertyStr(ctx, item, "spread", JS_NewFloat64(ctx, sh.spread));
+          const std::wstring c = ColorUtil::ToRGBAString(sh.color, sh.alpha);
+          JS_SetPropertyStr(ctx, item, "color",
+                            JS_NewString(ctx, Utils::ToString(c).c_str()));
+          JS_SetPropertyStr(ctx, item, "inset",
+                            JS_NewBool(ctx, sh.inset ? 1 : 0));
+          JS_SetPropertyUint32(ctx, arr, i, item);
+        }
+        return arr;
+      }
+      if (prop == "backdropFilter") {
+        const auto &filter = layoutPrefill.shape.backdropFilter;
+        JSValue result = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, result, "blur", JS_NewFloat64(ctx, filter.blur));
+        JS_SetPropertyStr(ctx, result, "brightness",
+                          JS_NewFloat64(ctx, filter.brightness));
+        JS_SetPropertyStr(ctx, result, "contrast",
+                          JS_NewFloat64(ctx, filter.contrast));
+        JS_SetPropertyStr(ctx, result, "greyScale",
+                          JS_NewFloat64(ctx, filter.grayscale));
+        JS_SetPropertyStr(ctx, result, "saturate",
+                          JS_NewFloat64(ctx, filter.saturate));
+        JS_SetPropertyStr(ctx, result, "sepia",
+                          JS_NewFloat64(ctx, filter.sepia));
+        JS_SetPropertyStr(ctx, result, "hueRotate",
+                          JS_NewFloat64(ctx, filter.hueRotate));
+        JS_SetPropertyStr(ctx, result, "invert",
+                          JS_NewFloat64(ctx, filter.invert));
+        JS_SetPropertyStr(ctx, result, "opacity",
+                          JS_NewFloat64(ctx, filter.opacity));
+        return result;
+      }
     }
 
-    void SetWidgetUiDebug(bool debug)
+    if (auto *pathShape = dynamic_cast<PathShape *>(shape)) {
+      if (prop == "isCombine")
+        return JS_NewBool(ctx, pathShape->IsCombineShape() ? 1 : 0);
+      if (prop == "combineBaseId" || prop == "combineConsumeAll" ||
+          prop == "combineOps") {
+        std::wstring baseId;
+        std::vector<PathShape::CombineOp> ops;
+        bool consumeBase = false;
+        pathShape->GetCombineData(baseId, ops, consumeBase);
+        if (prop == "combineBaseId")
+          return JS_NewString(ctx, Utils::ToString(baseId).c_str());
+        if (prop == "combineConsumeAll")
+          return JS_NewBool(ctx, consumeBase ? 1 : 0);
+        JSValue arr = JS_NewArray(ctx);
+        for (uint32_t i = 0; i < static_cast<uint32_t>(ops.size()); ++i) {
+          JSValue op = JS_NewObject(ctx);
+          JS_SetPropertyStr(
+              ctx, op, "id",
+              JS_NewString(ctx, Utils::ToString(ops[i].id).c_str()));
+          const char *mode = "union";
+          switch (ops[i].mode) {
+          case D2D1_COMBINE_MODE_INTERSECT:
+            mode = "intersect";
+            break;
+          case D2D1_COMBINE_MODE_XOR:
+            mode = "xor";
+            break;
+          case D2D1_COMBINE_MODE_EXCLUDE:
+            mode = "exclude";
+            break;
+          default:
+            break;
+          }
+          JS_SetPropertyStr(ctx, op, "mode", JS_NewString(ctx, mode));
+          JS_SetPropertyStr(ctx, op, "consume",
+                            JS_NewBool(ctx, ops[i].consume ? 1 : 0));
+          JS_SetPropertyUint32(ctx, arr, i, op);
+        }
+        return arr;
+      }
+    }
+  } else if (element->GetType() == ELEMENT_INPUT_BOX) {
+    auto *input = static_cast<InputBoxElement *>(element);
+    if (prop == "text")
+      return JS_NewString(ctx, Utils::ToString(input->GetText()).c_str());
+    if (prop == "placeholder")
+      return JS_NewString(ctx,
+                          Utils::ToString(input->GetPlaceholder()).c_str());
+    if (prop == "focused")
+      return JS_NewBool(ctx, input->IsFocused() ? 1 : 0);
+    if (prop == "selectedText")
+      return JS_NewString(ctx,
+                          Utils::ToString(input->GetSelectedText()).c_str());
+    if (prop == "hasSelection")
+      return JS_NewBool(ctx, input->HasSelection() ? 1 : 0);
+    if (prop == "canUndo")
+      return JS_NewBool(ctx, input->CanUndo() ? 1 : 0);
+    if (prop == "canRedo")
+      return JS_NewBool(ctx, input->CanRedo() ? 1 : 0);
+    if (prop == "fontFace")
+      return JS_NewString(ctx, Utils::ToString(input->GetFontFace()).c_str());
+    if (prop == "fontSize")
+      return JS_NewInt32(ctx, input->GetFontSize());
+    if (prop == "fontColor" || prop == "textColor" || prop == "color")
+      return JS_NewString(
+          ctx, Utils::ToString(ToGradientOrRGBAString(input->GetFontGradient(),
+                                                      input->GetFontColor(),
+                                                      input->GetFontAlpha()))
+                   .c_str());
+    if (prop == "placeholderColor")
+      return JS_NewString(
+          ctx, Utils::ToString(
+                   ToGradientOrRGBAString(input->GetPlaceholderGradient(),
+                                          input->GetPlaceholderColor(),
+                                          input->GetPlaceholderAlpha()))
+                   .c_str());
+    if (prop == "caretColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ToGradientOrRGBAString(input->GetCaretGradient(),
+                                                      input->GetCaretColor(),
+                                                      input->GetCaretAlpha()))
+                   .c_str());
+    if (prop == "selectionColor")
+      return JS_NewString(
+          ctx,
+          Utils::ToString(ToGradientOrRGBAString(input->GetSelectionGradient(),
+                                                 input->GetSelectionColor(),
+                                                 input->GetSelectionAlpha()))
+              .c_str());
+    if (prop == "password")
+      return JS_NewBool(ctx, input->IsPasswordMode() ? 1 : 0);
+    if (prop == "maxLength")
+      return JS_NewInt32(ctx, input->GetMaxLength());
+    if (prop == "multiline")
+      return JS_NewBool(ctx, input->IsMultiline() ? 1 : 0);
+    if (prop == "inputType") {
+      const char *typeName = "any";
+      switch (input->GetInputType()) {
+      case InputType::Integer:
+        typeName = "integer";
+        break;
+      case InputType::Float:
+        typeName = "float";
+        break;
+      case InputType::Letters:
+        typeName = "letters";
+        break;
+      case InputType::Alphanumeric:
+        typeName = "alphanumeric";
+        break;
+      case InputType::Hex:
+        typeName = "hex";
+        break;
+      case InputType::Email:
+        typeName = "email";
+        break;
+      case InputType::Custom:
+        typeName = "custom";
+        break;
+      default:
+        typeName = "any";
+        break;
+      }
+      return JS_NewString(ctx, typeName);
+    }
+    if (prop == "allowedChars")
+      return JS_NewString(ctx,
+                          Utils::ToString(input->GetAllowedChars()).c_str());
+    if (prop == "fontPath")
+      return JS_NewString(ctx, Utils::ToString(input->GetFontPath()).c_str());
+
+    if (prop == "borderColor")
+      return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(
+                                                   input->GetBorderGradient(),
+                                                   input->GetBorderColor(),
+                                                   input->GetBorderAlpha()))
+                                   .c_str());
+    if (prop == "borderWidth")
+      return JS_NewInt32(ctx, (int)input->GetBorderWidth());
+    if (prop == "borderRadius")
+      return JS_NewInt32(ctx, (int)input->GetBorderRadius());
+    if (prop == "fillColor" || prop == "backgroundColor" || prop == "bgColor") {
+      if (input->HasFillColor() ||
+          input->GetFillGradient().type != GRADIENT_NONE)
+        return JS_NewString(ctx, Utils::ToString(ToGradientOrRGBAString(
+                                                     input->GetFillGradient(),
+                                                     input->GetFillColor(),
+                                                     input->GetFillAlpha()))
+                                     .c_str());
+      return JS_UNDEFINED;
+    }
+    if (prop == "borderFocusColor") {
+      if (input->HasBorderFocusColor() ||
+          input->GetBorderFocusGradient().type != GRADIENT_NONE)
+        return JS_NewString(
+            ctx, Utils::ToString(
+                     ToGradientOrRGBAString(input->GetBorderFocusGradient(),
+                                            input->GetBorderFocusColor(),
+                                            input->GetBorderFocusAlpha()))
+                     .c_str());
+      return JS_UNDEFINED;
+    }
+  }
+
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetGetElementProperty(JSContext *ctx, JSValueConst thisVal,
+                                   int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 2)
+    return ThrowTypeError(ctx, "getElementProperty",
+                          "expected (id, propertyName)");
+
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  const char *propUtf8 = JS_ToCString(ctx, argv[1]);
+  if (!idUtf8 || !propUtf8) {
+    if (idUtf8)
+      JS_FreeCString(ctx, idUtf8);
+    if (propUtf8)
+      JS_FreeCString(ctx, propUtf8);
+    return JS_EXCEPTION;
+  }
+
+  const std::wstring id = Utils::ToWString(idUtf8);
+  const std::string prop = propUtf8;
+  JS_FreeCString(ctx, idUtf8);
+  JS_FreeCString(ctx, propUtf8);
+
+  Element *element = widget->FindElementById(id);
+  if (!element) {
+    return JS_NULL;
+  }
+  return GetElementPropertyValue(ctx, widget, element, prop);
+}
+
+// -------------------------------------------------------------
+// ColorPicker Element Methods
+// -------------------------------------------------------------
+
+JSValue JsWidgetOpenColorPicker(JSContext *ctx, JSValueConst thisVal, int argc,
+                                JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "openColorPicker", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *picker = dynamic_cast<ColorPickerElement *>(elem);
+  if (!picker)
+    return JS_NewBool(ctx, 0);
+  widget->OpenColorPicker(picker);
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetCloseColorPicker(JSContext *ctx, JSValueConst thisVal, int,
+                                 JSValueConst *) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  widget->CloseColorPicker();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetIsColorPickerOpen(JSContext *ctx, JSValueConst thisVal,
+                                  int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
+    const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+    if (!idUtf8)
+      return JS_EXCEPTION;
+    std::wstring id = Utils::ToWString(idUtf8);
+    JS_FreeCString(ctx, idUtf8);
+    Element *elem = widget->FindElementById(id);
+    auto *picker = dynamic_cast<ColorPickerElement *>(elem);
+    return JS_NewBool(ctx, widget->IsColorPickerOpen(picker) ? 1 : 0);
+  }
+  return JS_NewBool(ctx, widget->IsColorPickerOpen() ? 1 : 0);
+}
+
+JSValue JsWidgetSetColorPickerColor(JSContext *ctx, JSValueConst thisVal,
+                                    int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 2)
+    return ThrowTypeError(ctx, "setColorPickerColor", "expected (id, color)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  const char *colorUtf8 = JS_ToCString(ctx, argv[1]);
+  if (!idUtf8 || !colorUtf8) {
+    if (idUtf8)
+      JS_FreeCString(ctx, idUtf8);
+    if (colorUtf8)
+      JS_FreeCString(ctx, colorUtf8);
+    return JS_EXCEPTION;
+  }
+  std::wstring id = Utils::ToWString(idUtf8);
+  std::wstring colorStr = Utils::ToWString(colorUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  JS_FreeCString(ctx, colorUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *picker = dynamic_cast<ColorPickerElement *>(elem);
+  if (!picker)
+    return JS_NewBool(ctx, 0);
+  COLORREF c = picker->GetColor();
+  BYTE a = 255;
+  ColorUtil::ParseRGBA(colorStr, c, a);
+  picker->SetColor(c);
+  widget->Redraw();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetGetColorPickerColor(JSContext *ctx, JSValueConst thisVal,
+                                    int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NULL;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getColorPickerColor", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *picker = dynamic_cast<ColorPickerElement *>(elem);
+  if (!picker)
+    return JS_NULL;
+  wchar_t value[8];
+  const COLORREF color = picker->GetColor();
+  swprintf_s(value, L"#%02X%02X%02X", GetRValue(color), GetGValue(color),
+             GetBValue(color));
+  return JS_NewString(ctx, Utils::ToString(value).c_str());
+}
+
+JSValue JsWidgetOpenColorPickerEyedropper(JSContext *ctx, JSValueConst thisVal,
+                                          int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  ColorPickerElement *picker = nullptr;
+  if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
+    const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+    if (!idUtf8)
+      return JS_EXCEPTION;
+    std::wstring id = Utils::ToWString(idUtf8);
+    JS_FreeCString(ctx, idUtf8);
+    Element *elem = widget->FindElementById(id);
+    picker = dynamic_cast<ColorPickerElement *>(elem);
+  }
+  widget->OpenColorPickerEyedropper(picker);
+  return JS_NewBool(ctx, 1);
+}
+
+// -------------------------------------------------------------
+// InputBox Element Methods
+// -------------------------------------------------------------
+
+JSValue JsWidgetFocusInputBox(JSContext *ctx, JSValueConst thisVal, int argc,
+                              JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "focusInputBox", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *input = dynamic_cast<InputBoxElement *>(elem);
+  if (!input)
+    return JS_NewBool(ctx, 0);
+  widget->FocusInputBox(input);
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetBlurInputBox(JSContext *ctx, JSValueConst thisVal, int argc,
+                             JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  InputBoxElement *input = nullptr;
+  if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
+    const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+    if (!idUtf8)
+      return JS_EXCEPTION;
+    std::wstring id = Utils::ToWString(idUtf8);
+    JS_FreeCString(ctx, idUtf8);
+    Element *elem = widget->FindElementById(id);
+    input = dynamic_cast<InputBoxElement *>(elem);
+  }
+  widget->BlurInputBox(input);
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetIsInputBoxFocused(JSContext *ctx, JSValueConst thisVal,
+                                  int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "isInputBoxFocused", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *input = dynamic_cast<InputBoxElement *>(elem);
+  if (!input)
+    return JS_NewBool(ctx, 0);
+  return JS_NewBool(ctx, input->IsFocused() ? 1 : 0);
+}
+
+JSValue JsWidgetSetInputBoxText(JSContext *ctx, JSValueConst thisVal, int argc,
+                                JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 2)
+    return ThrowTypeError(ctx, "setInputBoxText", "expected (id, text)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  const char *textUtf8 = JS_ToCString(ctx, argv[1]);
+  if (!idUtf8 || !textUtf8) {
+    if (idUtf8)
+      JS_FreeCString(ctx, idUtf8);
+    if (textUtf8)
+      JS_FreeCString(ctx, textUtf8);
+    return JS_EXCEPTION;
+  }
+  std::wstring id = Utils::ToWString(idUtf8);
+  std::wstring text = Utils::ToWString(textUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  JS_FreeCString(ctx, textUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *input = dynamic_cast<InputBoxElement *>(elem);
+  if (!input)
+    return JS_NewBool(ctx, 0);
+  input->SetText(text);
+  widget->Redraw();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetGetInputBoxText(JSContext *ctx, JSValueConst thisVal, int argc,
+                                JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NULL;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getInputBoxText", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *input = dynamic_cast<InputBoxElement *>(elem);
+  if (!input)
+    return JS_NULL;
+  return JS_NewString(ctx, Utils::ToString(input->GetText()).c_str());
+}
+
+JSValue JsWidgetClearInputBox(JSContext *ctx, JSValueConst thisVal, int argc,
+                              JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "clearInputBox", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *input = dynamic_cast<InputBoxElement *>(elem);
+  if (!input)
+    return JS_NewBool(ctx, 0);
+  input->SetText(L"");
+  widget->Redraw();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetSelectInputBoxText(JSContext *ctx, JSValueConst thisVal,
+                                   int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "selectInputBoxText", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *input = dynamic_cast<InputBoxElement *>(elem);
+  if (!input)
+    return JS_NewBool(ctx, 0);
+  input->SelectAll();
+  widget->Redraw();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetClearInputBoxSelection(JSContext *ctx, JSValueConst thisVal,
+                                       int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "clearInputBoxSelection", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *input = dynamic_cast<InputBoxElement *>(elem);
+  if (!input)
+    return JS_NewBool(ctx, 0);
+  input->ClearSelection();
+  widget->Redraw();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetGetInputBoxSelectedText(JSContext *ctx, JSValueConst thisVal,
+                                        int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NULL;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getInputBoxSelectedText", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *input = dynamic_cast<InputBoxElement *>(elem);
+  if (!input)
+    return JS_NULL;
+  return JS_NewString(ctx, Utils::ToString(input->GetSelectedText()).c_str());
+}
+
+JSValue JsWidgetReplaceInputBoxSelection(JSContext *ctx, JSValueConst thisVal,
+                                         int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 2)
+    return ThrowTypeError(ctx, "replaceInputBoxSelection",
+                          "expected (id, text)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  const char *textUtf8 = JS_ToCString(ctx, argv[1]);
+  if (!idUtf8 || !textUtf8) {
+    if (idUtf8)
+      JS_FreeCString(ctx, idUtf8);
+    if (textUtf8)
+      JS_FreeCString(ctx, textUtf8);
+    return JS_EXCEPTION;
+  }
+  std::wstring id = Utils::ToWString(idUtf8);
+  std::wstring text = Utils::ToWString(textUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  JS_FreeCString(ctx, textUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *input = dynamic_cast<InputBoxElement *>(elem);
+  if (!input)
+    return JS_NewBool(ctx, 0);
+  input->ReplaceSelection(text);
+  widget->Redraw();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetUndoInputBox(JSContext *ctx, JSValueConst thisVal, int argc,
+                             JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "undoInputBox", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *input = dynamic_cast<InputBoxElement *>(elem);
+  if (!input)
+    return JS_NewBool(ctx, 0);
+  bool res = input->Undo();
+  if (res)
+    widget->Redraw();
+  return JS_NewBool(ctx, res ? 1 : 0);
+}
+
+JSValue JsWidgetRedoInputBox(JSContext *ctx, JSValueConst thisVal, int argc,
+                             JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "redoInputBox", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *input = dynamic_cast<InputBoxElement *>(elem);
+  if (!input)
+    return JS_NewBool(ctx, 0);
+  bool res = input->Redo();
+  if (res)
+    widget->Redraw();
+  return JS_NewBool(ctx, res ? 1 : 0);
+}
+
+JSValue JsWidgetCanUndoInputBox(JSContext *ctx, JSValueConst thisVal, int argc,
+                                JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "canUndoInputBox", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *input = dynamic_cast<InputBoxElement *>(elem);
+  if (!input)
+    return JS_NewBool(ctx, 0);
+  return JS_NewBool(ctx, input->CanUndo() ? 1 : 0);
+}
+
+JSValue JsWidgetCanRedoInputBox(JSContext *ctx, JSValueConst thisVal, int argc,
+                                JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "canRedoInputBox", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *elem = widget->FindElementById(id);
+  auto *input = dynamic_cast<InputBoxElement *>(elem);
+  if (!input)
+    return JS_NewBool(ctx, 0);
+  return JS_NewBool(ctx, input->CanRedo() ? 1 : 0);
+}
+
+JSValue JsUiOn(JSContext *ctx, JSValueConst thisVal, int argc,
+               JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+
+  if (argc < 2 || !JS_IsFunction(ctx, argv[1])) {
+    return ThrowTypeError(ctx, "on", "expected (eventName, callback)");
+  }
+
+  const char *eventName = JS_ToCString(ctx, argv[0]);
+  if (!eventName || !*eventName) {
+    if (eventName)
+      JS_FreeCString(ctx, eventName);
+    return ThrowTypeError(ctx, "on", "eventName must be non-empty string");
+  }
+
+  const std::string event(eventName);
+  JS_FreeCString(ctx, eventName);
+
+  if (!JSEngine::RegisterWidgetEventListener(ctx, widget, event, argv[1])) {
+    return JS_ThrowInternalError(ctx,
+                                 "failed to register widget event listener");
+  }
+
+  return JS_DupValue(ctx, thisVal);
+}
+
+JSValue JsUiGetSize(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NULL;
+  HWND hWnd = widget->GetWindow();
+  if (!hWnd)
+    return JS_NULL;
+  RECT rc{};
+  if (!GetWindowRect(hWnd, &rc))
+    return JS_NULL;
+  JSValue out = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, out, "width", JS_NewInt32(ctx, rc.right - rc.left));
+  JS_SetPropertyStr(ctx, out, "height", JS_NewInt32(ctx, rc.bottom - rc.top));
+  return out;
+}
+
+JSValue JsUiGetBounds(JSContext *ctx, JSValueConst thisVal, int,
+                      JSValueConst *) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NULL;
+  HWND hWnd = widget->GetWindow();
+  if (!hWnd)
+    return JS_NULL;
+  RECT rc{};
+  if (!GetWindowRect(hWnd, &rc))
+    return JS_NULL;
+  JSValue out = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, out, "x", JS_NewInt32(ctx, rc.left));
+  JS_SetPropertyStr(ctx, out, "y", JS_NewInt32(ctx, rc.top));
+  JS_SetPropertyStr(ctx, out, "width", JS_NewInt32(ctx, rc.right - rc.left));
+  JS_SetPropertyStr(ctx, out, "height", JS_NewInt32(ctx, rc.bottom - rc.top));
+  return out;
+}
+
+JSValue JsUiIsMaximized(JSContext *ctx, JSValueConst thisVal, int,
+                        JSValueConst *) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  return JS_NewBool(ctx, widget->IsMaximized() ? 1 : 0);
+}
+
+JSValue JsUiIsMinimized(JSContext *ctx, JSValueConst thisVal, int,
+                        JSValueConst *) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  return JS_NewBool(ctx, widget->IsMinimized() ? 1 : 0);
+}
+
+JSValue JsWidgetScrollTo(JSContext *ctx, JSValueConst thisVal, int argc,
+                         JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 2)
+    return ThrowTypeError(ctx, "scrollTo", "expected (id, { x, y })");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *element = widget->FindElementById(id);
+  if (!element)
+    return JS_UNDEFINED;
+  if (JS_IsObject(argv[1])) {
+    int32_t x = 0, y = 0;
+    JSValue vx = JS_GetPropertyStr(ctx, argv[1], "x");
+    if (!JS_IsUndefined(vx) && !JS_IsNull(vx)) {
+      if (JS_ToInt32(ctx, &x, vx) == 0)
+        element->SetScrollX(x);
+    }
+    JS_FreeValue(ctx, vx);
+    JSValue vy = JS_GetPropertyStr(ctx, argv[1], "y");
+    if (!JS_IsUndefined(vy) && !JS_IsNull(vy)) {
+      if (JS_ToInt32(ctx, &y, vy) == 0)
+        element->SetScrollY(y);
+    }
+    JS_FreeValue(ctx, vy);
+    widget->Redraw();
+  }
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetGetScroll(JSContext *ctx, JSValueConst thisVal, int argc,
+                          JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NULL;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getScroll", "expected (id)");
+  const char *idUtf8 = JS_ToCString(ctx, argv[0]);
+  if (!idUtf8)
+    return JS_EXCEPTION;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  Element *element = widget->FindElementById(id);
+  if (!element)
+    return JS_NULL;
+  element->RecalcContentExtents();
+  JSValue out = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, out, "scrollX",
+                    JS_NewInt32(ctx, element->GetScrollX()));
+  JS_SetPropertyStr(ctx, out, "scrollY",
+                    JS_NewInt32(ctx, element->GetScrollY()));
+  JS_SetPropertyStr(ctx, out, "maxScrollX",
+                    JS_NewInt32(ctx, element->GetMaxScrollX()));
+  JS_SetPropertyStr(ctx, out, "maxScrollY",
+                    JS_NewInt32(ctx, element->GetMaxScrollY()));
+  JS_SetPropertyStr(ctx, out, "contentWidth",
+                    JS_NewInt32(ctx, element->GetContentWidth()));
+  JS_SetPropertyStr(ctx, out, "contentHeight",
+                    JS_NewInt32(ctx, element->GetContentHeight()));
+  return out;
+}
+
+void JsWidgetFinalizer(JSRuntime *, JSValue val) {
+  WidgetWrapper *wrapper =
+      static_cast<WidgetWrapper *>(JS_GetOpaque(val, g_widgetWindowClassId));
+  if (!wrapper) {
+    wrapper =
+        static_cast<WidgetWrapper *>(JS_GetOpaque(val, g_widgetUiClassId));
+  }
+  delete wrapper;
+}
+
+const JSCFunctionListEntry kWidgetProtoFuncs[] = {
+    JS_CFUNC_DEF("on", 2, JsUiOn),
+    JS_CFUNC_DEF("getSize", 0, JsUiGetSize),
+    JS_CFUNC_DEF("getBounds", 0, JsUiGetBounds),
+    JS_CFUNC_DEF("isMaximized", 0, JsUiIsMaximized),
+    JS_CFUNC_DEF("isMinimized", 0, JsUiIsMinimized),
+    JS_CFUNC_DEF("scrollTo", 2, JsWidgetScrollTo),
+    JS_CFUNC_DEF("getScroll", 1, JsWidgetGetScroll),
+    JS_CFUNC_DEF("addImage", 1, JsWidgetAddImage),
+    JS_CFUNC_DEF("addButton", 1, JsWidgetAddButton),
+    JS_CFUNC_DEF("addText", 1, JsWidgetAddText),
+    JS_CFUNC_DEF("addInputBox", 1, JsWidgetAddInputBox),
+    JS_CFUNC_DEF("addColorPicker", 1, JsWidgetAddColorPicker),
+    JS_CFUNC_DEF("addBar", 1, JsWidgetAddBar),
+    JS_CFUNC_DEF("addLine", 1, JsWidgetAddLine),
+    JS_CFUNC_DEF("addHistogram", 1, JsWidgetAddHistogram),
+    JS_CFUNC_DEF("addRoundLine", 1, JsWidgetAddRoundLine),
+    JS_CFUNC_DEF("addShape", 1, JsWidgetAddShape),
+    JS_CFUNC_DEF("addBitmap", 1, JsWidgetAddBitmap),
+    JS_CFUNC_DEF("addRotator", 1, JsWidgetAddRotator),
+    JS_CFUNC_DEF("addAreaGraph", 1, JsWidgetAddAreaGraph),
+    JS_CFUNC_DEF("addLayout", 1, JsWidgetAddLayout),
+    JS_CFUNC_DEF("addLayoutBox", 1, JsWidgetAddLayoutBox),
+    JS_CFUNC_DEF("animate", 1, JsWidgetAnimate),
+    JS_CFUNC_DEF("setElementProperty", 3, JsWidgetSetElementProperty),
+    JS_CFUNC_DEF("setElementProperties", 2, JsWidgetSetElementProperties),
+    JS_CFUNC_DEF("setElementPropertyByGroup", 2,
+                 JsWidgetSetElementPropertiesByGroup),
+    JS_CFUNC_DEF("setElementPropertiesByGroup", 2,
+                 JsWidgetSetElementPropertiesByGroup),
+    JS_CFUNC_DEF("getElementProperty", 2, JsWidgetGetElementProperty),
+    JS_CFUNC_DEF("isElementExist", 1, JsWidgetIsElementExist),
+    JS_CFUNC_DEF("removeElements", 1, JsWidgetRemoveElements),
+    JS_CFUNC_DEF("removeElementById", 1, JsWidgetRemoveElementById),
+    JS_CFUNC_DEF("removeElementsByGroup", 1, JsWidgetRemoveElementsByGroup),
+    JS_CFUNC_DEF("beginUpdate", 0, JsWidgetBeginUpdate),
+    JS_CFUNC_DEF("endUpdate", 0, JsWidgetEndUpdate),
+
+    // ColorPicker
+    JS_CFUNC_DEF("openColorPicker", 1, JsWidgetOpenColorPicker),
+    JS_CFUNC_DEF("closeColorPicker", 0, JsWidgetCloseColorPicker),
+    JS_CFUNC_DEF("isColorPickerOpen", 1, JsWidgetIsColorPickerOpen),
+    JS_CFUNC_DEF("setColorPickerColor", 2, JsWidgetSetColorPickerColor),
+    JS_CFUNC_DEF("getColorPickerColor", 1, JsWidgetGetColorPickerColor),
+    JS_CFUNC_DEF("openColorPickerEyedropper", 1,
+                 JsWidgetOpenColorPickerEyedropper),
+
+    // InputBox
+    JS_CFUNC_DEF("focusInputBox", 1, JsWidgetFocusInputBox),
+    JS_CFUNC_DEF("blurInputBox", 1, JsWidgetBlurInputBox),
+    JS_CFUNC_DEF("isInputBoxFocused", 1, JsWidgetIsInputBoxFocused),
+    JS_CFUNC_DEF("setInputBoxText", 2, JsWidgetSetInputBoxText),
+    JS_CFUNC_DEF("getInputBoxText", 1, JsWidgetGetInputBoxText),
+    JS_CFUNC_DEF("clearInputBox", 1, JsWidgetClearInputBox),
+    JS_CFUNC_DEF("selectInputBoxText", 1, JsWidgetSelectInputBoxText),
+    JS_CFUNC_DEF("clearInputBoxSelection", 1, JsWidgetClearInputBoxSelection),
+    JS_CFUNC_DEF("getInputBoxSelectedText", 1, JsWidgetGetInputBoxSelectedText),
+    JS_CFUNC_DEF("replaceInputBoxSelection", 2,
+                 JsWidgetReplaceInputBoxSelection),
+    JS_CFUNC_DEF("undoInputBox", 1, JsWidgetUndoInputBox),
+    JS_CFUNC_DEF("redoInputBox", 1, JsWidgetRedoInputBox),
+    JS_CFUNC_DEF("canUndoInputBox", 1, JsWidgetCanUndoInputBox),
+    JS_CFUNC_DEF("canRedoInputBox", 1, JsWidgetCanRedoInputBox),
+};
+
+bool RunWidgetUiScriptImpl(JSContext *ctx, Widget *widget,
+                           const std::wstring &scriptPath) {
+  if (!widget || scriptPath.empty())
+    return true;
+
+  {
+    std::wstring lower = scriptPath;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
+    const std::wstring requiredSuffix = L".ui.js";
+    if (lower.size() < requiredSuffix.size() ||
+        lower.compare(lower.size() - requiredSuffix.size(),
+                      requiredSuffix.size(), requiredSuffix) != 0) {
+      Logging::Log(LogLevel::Error,
+                   L"[novadesk] widget ui script must end with '.ui.js': %s",
+                   scriptPath.c_str());
+      return false;
+    }
+  }
+
+  std::wstring absPath;
+  std::wstring baseDir;
+  if (PathUtils::IsURL(scriptPath)) {
+    absPath = scriptPath;
+  } else if (PathUtils::IsPathRelative(scriptPath)) {
+    baseDir = PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                          JSEngine::GetEntryScriptDir());
+    absPath = PathUtils::ResolvePath(
+        scriptPath, baseDir.empty() ? PathUtils::GetWidgetsDir() : baseDir);
+  } else {
+    absPath = PathUtils::NormalizePath(scriptPath);
+  }
+
+  // Refresh can re-run the same .ui.js before old callbacks are fully gone.
+  // Ensure stale ipcRenderer listeners from prior UI instances are detached.
+  JSEngine::ClearUiIpcForScript(absPath);
+
+  const std::string scriptSource = FileUtils::ReadFileOrUrlContent(absPath);
+  if (scriptSource.empty()) {
+    Logging::Log(LogLevel::Error,
+                 L"[novadesk] Failed to load widget ui script: %s",
+                 absPath.c_str());
+    return false;
+  }
+
+  JSRuntime *rt = JS_GetRuntime(ctx);
+  if (g_widgetUiClassId == 0) {
+    JS_NewClassID(rt, &g_widgetUiClassId);
+  }
+  if (g_widgetUiClassRuntime != rt) {
+    JSClassDef uiCls{};
+    uiCls.class_name = "WidgetUiBridge";
+    uiCls.finalizer = JsWidgetFinalizer;
+    JS_NewClass(rt, g_widgetUiClassId, &uiCls);
+    JSValue uiProto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, uiProto, kWidgetProtoFuncs,
+                               sizeof(kWidgetProtoFuncs) /
+                                   sizeof(kWidgetProtoFuncs[0]));
+    JS_SetClassProto(ctx, g_widgetUiClassId, uiProto);
+    g_widgetUiClassRuntime = rt;
+  }
+
+  JSValue uiObj = JS_NewObjectClass(ctx, g_widgetUiClassId);
+  if (JS_IsException(uiObj))
+    return false;
+  JS_SetOpaque(uiObj, new WidgetWrapper{widget, widget->GetInstanceId()});
+
+  JSValue global = JS_GetGlobalObject(ctx);
+  JSValue ipcObj = JSEngine::CreateUiIpcObject(ctx);
+  JS_SetPropertyStr(ctx, global, "ui", JS_DupValue(ctx, uiObj));
+  JS_SetPropertyStr(ctx, global, "ipcRenderer", JS_DupValue(ctx, ipcObj));
+  const std::string fileName = Utils::ToString(absPath);
+  const std::string dirName = Utils::ToString(PathUtils::GetParentDir(absPath));
+  const std::string widgetDirName = Utils::ToString(PathUtils::GetWidgetsDir());
+  const std::string addonsPathName = Utils::ToString(PathUtils::GetAddonsDir());
+  JS_SetPropertyStr(ctx, global, "__filename",
+                    JS_NewString(ctx, fileName.c_str()));
+  JS_SetPropertyStr(ctx, global, "__dirname",
+                    JS_NewString(ctx, dirName.c_str()));
+  JS_SetPropertyStr(ctx, global, "__widgetDir",
+                    JS_NewString(ctx, widgetDirName.c_str()));
+  JS_SetPropertyStr(ctx, global, "__addonsPath",
+                    JS_NewString(ctx, addonsPathName.c_str()));
+  JS_FreeValue(ctx, global);
+
+  const std::string scriptPrelude =
+      "(function(ui, ipcRenderer, __filename, __dirname, __widgetDir){\n"
+      "const setTimeout = undefined;\n"
+      "const setInterval = undefined;\n"
+      "const clearTimeout = undefined;\n"
+      "const clearInterval = undefined;\n";
+  const std::string scriptSuffix =
+      "\n})(globalThis.ui, globalThis.ipcRenderer, globalThis.__filename, "
+      "globalThis.__dirname, globalThis.__widgetDir);\n";
+  const std::string scriptSourceWithPrelude =
+      scriptPrelude + scriptSource + scriptSuffix;
+
+  JSValue evalResult = JS_Eval(ctx, scriptSourceWithPrelude.c_str(),
+                               scriptSourceWithPrelude.size(), fileName.c_str(),
+                               JS_EVAL_TYPE_GLOBAL);
+
+  JSValue global2 = JS_GetGlobalObject(ctx);
+  JSAtom uiAtom = JS_NewAtom(ctx, "ui");
+  JS_DeleteProperty(ctx, global2, uiAtom, 0);
+  JS_FreeAtom(ctx, uiAtom);
+  JSAtom ipcAtom = JS_NewAtom(ctx, "ipcRenderer");
+  JS_DeleteProperty(ctx, global2, ipcAtom, 0);
+  JS_FreeAtom(ctx, ipcAtom);
+  JSAtom filename2Atom = JS_NewAtom(ctx, "__filename");
+  JS_DeleteProperty(ctx, global2, filename2Atom, 0);
+  JS_FreeAtom(ctx, filename2Atom);
+  JSAtom dirname2Atom = JS_NewAtom(ctx, "__dirname");
+  JS_DeleteProperty(ctx, global2, dirname2Atom, 0);
+  JS_FreeAtom(ctx, dirname2Atom);
+  JSAtom widgetDirAtom = JS_NewAtom(ctx, "__widgetDir");
+  JS_DeleteProperty(ctx, global2, widgetDirAtom, 0);
+  JS_FreeAtom(ctx, widgetDirAtom);
+  JSAtom addonsPathAtom = JS_NewAtom(ctx, "__addonsPath");
+  JS_DeleteProperty(ctx, global2, addonsPathAtom, 0);
+  JS_FreeAtom(ctx, addonsPathAtom);
+  JS_FreeValue(ctx, global2);
+  JS_FreeValue(ctx, uiObj);
+  JS_FreeValue(ctx, ipcObj);
+
+  if (JS_IsException(evalResult)) {
+    JSValue ex = JS_GetException(ctx);
+    const char *msg = JS_ToCString(ctx, ex);
+    if (msg) {
+      Logging::Log(LogLevel::Error, L"[novadesk] ui script error (%s): %S",
+                   absPath.c_str(), msg);
+      JS_FreeCString(ctx, msg);
+    } else {
+      Logging::Log(LogLevel::Error, L"[novadesk] ui script error (%s)",
+                   absPath.c_str());
+    }
+    JS_FreeValue(ctx, ex);
+    JS_FreeValue(ctx, evalResult);
+    return false;
+  }
+
+  JS_FreeValue(ctx, evalResult);
+  return true;
+}
+} // namespace
+
+void SetWidgetUiDebug(bool debug) { g_widgetUiDebug = debug; }
+
+JSClassID EnsureWidgetWindowClass(JSContext *ctx) {
+  JSRuntime *rt = JS_GetRuntime(ctx);
+  if (g_widgetWindowClassId == 0) {
+    JS_NewClassID(rt, &g_widgetWindowClassId);
+  }
+  if (g_widgetWindowClassRuntime != rt) {
+    JSClassDef cls{};
+    cls.class_name = "widgetWindow";
+    cls.finalizer = JsWidgetFinalizer;
+    JS_NewClass(rt, g_widgetWindowClassId, &cls);
+    InitWidgetWindowEventBindings(g_widgetWindowClassId);
+
+    JSValue proto = JS_NewObject(ctx);
+    AttachWidgetWindowEventMethods(ctx, proto);
+    JS_SetClassProto(ctx, g_widgetWindowClassId, proto);
+    g_widgetWindowClassRuntime = rt;
+  }
+  return g_widgetWindowClassId;
+}
+
+JSValue JsWidgetWindowCtor(JSContext *ctx, JSValueConst, int argc,
+                           JSValueConst *argv) {
+  parser::WidgetWindowOptions parsed;
+  if (argc > 0 && JS_IsObject(argv[0])) {
+    parser::ParseWidgetWindowOptions(ctx, argv[0], parsed);
+  }
+
+  WidgetOptions options;
+  options.id = parsed.id;
+
+  if (!options.id.empty()) {
+    Widget *existing = nullptr;
     {
-        g_widgetUiDebug = debug;
+      std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
+      auto existingIt =
+          std::find_if(widgets.begin(), widgets.end(), [&](Widget *w) {
+            return w && w->GetOptions().id == options.id;
+          });
+
+      if (existingIt != widgets.end()) {
+        existing = *existingIt;
+        widgets.erase(existingIt);
+      }
     }
+    // Lock released before delete: the destructor calls DestroyWindow
+    // which dispatches WM_DESTROY synchronously; holding the lock there
+    // would deadlock.
+    delete existing;
+  }
 
-    JSClassID EnsureWidgetWindowClass(JSContext *ctx)
-    {
-        JSRuntime *rt = JS_GetRuntime(ctx);
-        if (g_widgetWindowClassId == 0)
-        {
-            JS_NewClassID(rt, &g_widgetWindowClassId);
-        }
-        if (g_widgetWindowClassRuntime != rt)
-        {
-            JSClassDef cls{};
-            cls.class_name = "widgetWindow";
-            cls.finalizer = JsWidgetFinalizer;
-            JS_NewClass(rt, g_widgetWindowClassId, &cls);
-            InitWidgetWindowEventBindings(g_widgetWindowClassId);
+  if (!options.id.empty()) {
+    Settings::LoadWidget(options.id, options);
+  }
 
-            JSValue proto = JS_NewObject(ctx);
-            AttachWidgetWindowEventMethods(ctx, proto);
-            JS_SetClassProto(ctx, g_widgetWindowClassId, proto);
-            g_widgetWindowClassRuntime = rt;
-        }
-        return g_widgetWindowClassId;
+  if (parsed.hasX)
+    options.x = parsed.x;
+  if (parsed.hasY)
+    options.y = parsed.y;
+
+  if (parsed.hasWidth) {
+    options.width = parsed.width;
+    options.m_WDefined = (parsed.width > 0);
+  } else {
+    options.width = 0;
+    options.m_WDefined = false;
+  }
+  if (parsed.hasHeight) {
+    options.height = parsed.height;
+    options.m_HDefined = (parsed.height > 0);
+  } else {
+    options.height = 0;
+    options.m_HDefined = false;
+  }
+
+  if (parsed.hasMinWidth)
+    options.minWidth = (std::max)(0, parsed.minWidth);
+  if (parsed.hasMinHeight)
+    options.minHeight = (std::max)(0, parsed.minHeight);
+
+  if (options.m_WDefined && options.minWidth > 0 &&
+      options.width < options.minWidth)
+    options.width = options.minWidth;
+  if (options.m_HDefined && options.minHeight > 0 &&
+      options.height < options.minHeight)
+    options.height = options.minHeight;
+
+  if (parsed.hasShow)
+    options.show = parsed.show;
+  if (parsed.hasScriptPath)
+    options.scriptPath = parsed.scriptPath;
+  if (!options.scriptPath.empty()) {
+    if (PathUtils::IsPathRelative(options.scriptPath)) {
+      std::wstring base = JSEngine::GetCurrentScriptDir();
+      if (base.empty()) {
+        base = JSEngine::GetEntryScriptDir();
+      }
+      if (!base.empty()) {
+        options.scriptPath = PathUtils::ResolvePath(options.scriptPath, base);
+      } else {
+        options.scriptPath = PathUtils::ResolvePath(options.scriptPath,
+                                                    PathUtils::GetWidgetsDir());
+      }
+    } else {
+      options.scriptPath = PathUtils::NormalizePath(options.scriptPath);
     }
-
-    JSValue JsWidgetWindowCtor(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-    {
-        parser::WidgetWindowOptions parsed;
-        if (argc > 0 && JS_IsObject(argv[0]))
-        {
-            parser::ParseWidgetWindowOptions(ctx, argv[0], parsed);
-        }
-
-        WidgetOptions options;
-        options.id = parsed.id;
-
-        if (!options.id.empty())
-        {
-            Widget *existing = nullptr;
-            {
-                std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
-                auto existingIt = std::find_if(
-                    widgets.begin(),
-                    widgets.end(),
-                    [&](Widget *w)
-                    {
-                        return w && w->GetOptions().id == options.id;
-                    });
-
-                if (existingIt != widgets.end())
-                {
-                    existing = *existingIt;
-                    widgets.erase(existingIt);
-                }
-            }
-            // Lock released before delete: the destructor calls DestroyWindow
-            // which dispatches WM_DESTROY synchronously; holding the lock there
-            // would deadlock.
-            delete existing;
-        }
-
-        if (!options.id.empty())
-        {
-            Settings::LoadWidget(options.id, options);
-        }
-
-        if (parsed.hasX)
-            options.x = parsed.x;
-        if (parsed.hasY)
-            options.y = parsed.y;
-
-        if (parsed.hasWidth)
-        {
-            options.width = parsed.width;
-            options.m_WDefined = (parsed.width > 0);
-        }
-        else
-        {
-            options.width = 0;
-            options.m_WDefined = false;
-        }
-        if (parsed.hasHeight)
-        {
-            options.height = parsed.height;
-            options.m_HDefined = (parsed.height > 0);
-        }
-        else
-        {
-            options.height = 0;
-            options.m_HDefined = false;
-        }
-
-        if (parsed.hasMinWidth)
-            options.minWidth = (std::max)(0, parsed.minWidth);
-        if (parsed.hasMinHeight)
-            options.minHeight = (std::max)(0, parsed.minHeight);
-
-        if (options.m_WDefined && options.minWidth > 0 && options.width < options.minWidth)
-            options.width = options.minWidth;
-        if (options.m_HDefined && options.minHeight > 0 && options.height < options.minHeight)
-            options.height = options.minHeight;
-
-        if (parsed.hasShow)
-            options.show = parsed.show;
-        if (parsed.hasScriptPath)
-            options.scriptPath = parsed.scriptPath;
-        if (!options.scriptPath.empty())
-        {
-            if (PathUtils::IsPathRelative(options.scriptPath))
-            {
-                std::wstring base = JSEngine::GetCurrentScriptDir();
-                if (base.empty())
-                {
-                    base = JSEngine::GetEntryScriptDir();
-                }
-                if (!base.empty())
-                {
-                    options.scriptPath = PathUtils::ResolvePath(options.scriptPath, base);
-                }
-                else
-                {
-                    options.scriptPath = PathUtils::ResolvePath(options.scriptPath, PathUtils::GetWidgetsDir());
-                }
-            }
-            else
-            {
-                options.scriptPath = PathUtils::NormalizePath(options.scriptPath);
-            }
-        }
-        if (parsed.hasDraggable)
-            options.draggable = parsed.draggable;
-        if (parsed.hasResizable)
-            options.resizable = parsed.resizable;
-        if (parsed.hasClickThrough)
-            options.clickThrough = parsed.clickThrough;
-        if (parsed.hasKeepOnScreen)
-            options.keepOnScreen = parsed.keepOnScreen;
-        if (parsed.hasSnapEdges)
-            options.snapEdges = parsed.snapEdges;
-        if (parsed.hasShowInToolbar)
-            options.showInToolbar = parsed.showInToolbar;
-        if (parsed.hasToolbarTitle)
-            options.toolbarTitle = parsed.toolbarTitle;
-        if (parsed.hasToolbarIcon)
-            options.toolbarIcon = parsed.toolbarIcon;
-        if (parsed.hasBackgroundColor)
-        {
-            options.backgroundColor = parsed.backgroundColor;
-            options.color = parsed.color;
-            options.bgAlpha = parsed.bgAlpha;
-            options.bgGradient = parsed.bgGradient;
-        }
-        if (parsed.hasBackgroundImage)
-            options.backgroundImage = parsed.backgroundImage;
-        if (parsed.hasBackgroundImageFallback)
-            options.backgroundImageFallback = parsed.backgroundImageFallback;
-        if (parsed.hasBackgroundImageSize)
-        {
-            if (parsed.backgroundImageSizeIsExplicit)
-            {
-                options.backgroundImageSize.type = BackgroundImageSize::Type::Explicit;
-                options.backgroundImageSize.width = parsed.backgroundImageSizeWidth;
-                options.backgroundImageSize.height = parsed.backgroundImageSizeHeight;
-                options.backgroundImageSize.hasWidth = parsed.backgroundImageSizeHasWidth;
-                options.backgroundImageSize.hasHeight = parsed.backgroundImageSizeHasHeight;
-            }
-            else if (parsed.backgroundImageSize == L"contain")
-                options.backgroundImageSize.type = BackgroundImageSize::Type::Contain;
-            else if (parsed.backgroundImageSize == L"stretch")
-                options.backgroundImageSize.type = BackgroundImageSize::Type::Stretch;
-            else
-                options.backgroundImageSize.type = BackgroundImageSize::Type::Cover;
-        }
-        if (parsed.hasBackgroundImagePosition)
-        {
-            if (parsed.backgroundImagePositionIsExplicit)
-            {
-                options.backgroundImagePosition.type = BackgroundImagePosition::Type::Explicit;
-                options.backgroundImagePosition.x = parsed.backgroundImagePositionX;
-                options.backgroundImagePosition.y = parsed.backgroundImagePositionY;
-            }
-            else
-            {
-                options.backgroundImagePosition.type = BackgroundImagePosition::Type::Keyword;
-                options.backgroundImagePosition.keyword = parsed.backgroundImagePosition;
-            }
-        }
-        if (parsed.hasWindowOpacity)
-            options.windowOpacity = parsed.windowOpacity;
-        if (parsed.hasZPos)
-        {
-            options.zPos = static_cast<ZPOSITION>(parsed.zPos);
-        }
-
-        if (!options.toolbarIcon.empty())
-        {
-            if (PathUtils::IsPathRelative(options.toolbarIcon))
-            {
-                std::wstring base = JSEngine::GetCurrentScriptDir();
-                if (base.empty())
-                {
-                    base = JSEngine::GetEntryScriptDir();
-                }
-                if (!base.empty())
-                {
-                    options.toolbarIcon = PathUtils::ResolvePath(options.toolbarIcon, base);
-                }
-                else
-                {
-                    options.toolbarIcon = PathUtils::ResolvePath(options.toolbarIcon, PathUtils::GetWidgetsDir());
-                }
-            }
-            else
-            {
-                options.toolbarIcon = PathUtils::NormalizePath(options.toolbarIcon);
-            }
-        }
-
-        Widget *widget = new Widget(options);
-        if (!widget->Create())
-        {
-            delete widget;
-            return JS_ThrowInternalError(ctx, "Failed to create widget window");
-        }
-
-        if (options.show)
-        {
-            widget->Show();
-        }
-        {
-            std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
-            widgets.push_back(widget);
-        }
-        JSEngine::RegisterWidgetOwner(widget, JSEngine::GetCurrentScriptPath());
-
-        if (g_widgetUiDebug)
-        {
-            Logging::Log(LogLevel::Debug, L"[novadesk] JsCreateWindow id=%s width=%d height=%d", options.id.c_str(), options.width, options.height);
-        }
-
-        JSValue obj = JS_NewObjectClass(ctx, EnsureWidgetWindowClass(ctx));
-        if (JS_IsException(obj))
-            return obj;
-        JS_SetOpaque(obj, new WidgetWrapper{widget, widget->GetInstanceId()});
-
-        if (!options.scriptPath.empty())
-        {
-            RunWidgetUiScriptImpl(ctx, widget, options.scriptPath);
-        }
-        return obj;
+  }
+  if (parsed.hasDraggable)
+    options.draggable = parsed.draggable;
+  if (parsed.hasResizable)
+    options.resizable = parsed.resizable;
+  if (parsed.hasClickThrough)
+    options.clickThrough = parsed.clickThrough;
+  if (parsed.hasKeepOnScreen)
+    options.keepOnScreen = parsed.keepOnScreen;
+  if (parsed.hasSnapEdges)
+    options.snapEdges = parsed.snapEdges;
+  if (parsed.hasShowInToolbar)
+    options.showInToolbar = parsed.showInToolbar;
+  if (parsed.hasToolbarTitle)
+    options.toolbarTitle = parsed.toolbarTitle;
+  if (parsed.hasToolbarIcon)
+    options.toolbarIcon = parsed.toolbarIcon;
+  if (parsed.hasBackgroundColor) {
+    options.backgroundColor = parsed.backgroundColor;
+    options.color = parsed.color;
+    options.bgAlpha = parsed.bgAlpha;
+    options.bgGradient = parsed.bgGradient;
+  }
+  if (parsed.hasBackgroundImage)
+    options.backgroundImage = parsed.backgroundImage;
+  if (parsed.hasBackgroundImageFallback)
+    options.backgroundImageFallback = parsed.backgroundImageFallback;
+  if (parsed.hasBackgroundImageSize) {
+    if (parsed.backgroundImageSizeIsExplicit) {
+      options.backgroundImageSize.type = BackgroundImageSize::Type::Explicit;
+      options.backgroundImageSize.width = parsed.backgroundImageSizeWidth;
+      options.backgroundImageSize.height = parsed.backgroundImageSizeHeight;
+      options.backgroundImageSize.hasWidth = parsed.backgroundImageSizeHasWidth;
+      options.backgroundImageSize.hasHeight =
+          parsed.backgroundImageSizeHasHeight;
+    } else if (parsed.backgroundImageSize == L"contain")
+      options.backgroundImageSize.type = BackgroundImageSize::Type::Contain;
+    else if (parsed.backgroundImageSize == L"stretch")
+      options.backgroundImageSize.type = BackgroundImageSize::Type::Stretch;
+    else
+      options.backgroundImageSize.type = BackgroundImageSize::Type::Cover;
+  }
+  if (parsed.hasBackgroundImagePosition) {
+    if (parsed.backgroundImagePositionIsExplicit) {
+      options.backgroundImagePosition.type =
+          BackgroundImagePosition::Type::Explicit;
+      options.backgroundImagePosition.x = parsed.backgroundImagePositionX;
+      options.backgroundImagePosition.y = parsed.backgroundImagePositionY;
+    } else {
+      options.backgroundImagePosition.type =
+          BackgroundImagePosition::Type::Keyword;
+      options.backgroundImagePosition.keyword = parsed.backgroundImagePosition;
     }
+  }
+  if (parsed.hasWindowOpacity)
+    options.windowOpacity = parsed.windowOpacity;
+  if (parsed.hasZPos) {
+    options.zPos = static_cast<ZPOSITION>(parsed.zPos);
+  }
 
-    bool ExecuteWidgetUiScript(JSContext *ctx, Widget *widget, const std::wstring &scriptPath)
-    {
-        return RunWidgetUiScriptImpl(ctx, widget, scriptPath);
+  if (!options.toolbarIcon.empty()) {
+    if (PathUtils::IsPathRelative(options.toolbarIcon)) {
+      std::wstring base = JSEngine::GetCurrentScriptDir();
+      if (base.empty()) {
+        base = JSEngine::GetEntryScriptDir();
+      }
+      if (!base.empty()) {
+        options.toolbarIcon = PathUtils::ResolvePath(options.toolbarIcon, base);
+      } else {
+        options.toolbarIcon = PathUtils::ResolvePath(
+            options.toolbarIcon, PathUtils::GetWidgetsDir());
+      }
+    } else {
+      options.toolbarIcon = PathUtils::NormalizePath(options.toolbarIcon);
     }
+  }
+
+  Widget *widget = new Widget(options);
+  if (!widget->Create()) {
+    delete widget;
+    return JS_ThrowInternalError(ctx, "Failed to create widget window");
+  }
+
+  if (options.show) {
+    widget->Show();
+  }
+  {
+    std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
+    widgets.push_back(widget);
+  }
+  JSEngine::RegisterWidgetOwner(widget, JSEngine::GetCurrentScriptPath());
+
+  if (g_widgetUiDebug) {
+    Logging::Log(LogLevel::Debug,
+                 L"[novadesk] JsCreateWindow id=%s width=%d height=%d",
+                 options.id.c_str(), options.width, options.height);
+  }
+
+  JSValue obj = JS_NewObjectClass(ctx, EnsureWidgetWindowClass(ctx));
+  if (JS_IsException(obj))
+    return obj;
+  JS_SetOpaque(obj, new WidgetWrapper{widget, widget->GetInstanceId()});
+
+  if (!options.scriptPath.empty()) {
+    RunWidgetUiScriptImpl(ctx, widget, options.scriptPath);
+  }
+  return obj;
+}
+
+bool ExecuteWidgetUiScript(JSContext *ctx, Widget *widget,
+                           const std::wstring &scriptPath) {
+  return RunWidgetUiScriptImpl(ctx, widget, scriptPath);
+}
 } // namespace novadesk::scripting::quickjs

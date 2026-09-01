@@ -26,844 +26,816 @@
 #include "../../../render/InputBoxElement.h"
 #include "../../../render/ColorPickerElement.h"
 
-namespace PropertyParser
-{
-    struct ElementOptions
-    {
-        std::wstring id;
-        int x = 0;
-        int y = 0;
-        int width = 0;
-        int height = 0;
-        bool hasSolidColor = false;
-        COLORREF solidColor = 0;
-        BYTE solidAlpha = 0;
-        int solidColorRadius = 0;
-        GradientInfo solidGradient;
-        int bevelType = 0;
-        int bevelWidth = 0;
-        COLORREF bevelColor = RGB(255, 255, 255);
-        BYTE bevelAlpha = 200;
-        GradientInfo bevelGradient;
-        COLORREF bevelColor2 = RGB(0, 0, 0);
-        BYTE bevelAlpha2 = 150;
-        GradientInfo bevelGradient2;
-        int paddingLeft = 0;
-        int paddingTop = 0;
-        int paddingRight = 0;
-        int paddingBottom = 0;
-        bool antialias = true;
-        bool hasPixelHitTest = false;
-        bool pixelHitTest = false;
-        bool show = true;
-        std::wstring containerId;
-        std::wstring groupId;
-        bool mouseEventCursor = true;
-        std::wstring mouseEventCursorName;
-        std::wstring cursorsDir;
-        float rotate = 0.0f;
-        bool hasTransformMatrix = false;
-        std::vector<float> transformMatrix;
-        int onLeftMouseUpCallbackId = -1;
-        int onLeftMouseDownCallbackId = -1;
-        int onLeftDoubleClickCallbackId = -1;
-        int onRightMouseUpCallbackId = -1;
-        int onRightMouseDownCallbackId = -1;
-        int onRightDoubleClickCallbackId = -1;
-        int onMiddleMouseUpCallbackId = -1;
-        int onMiddleMouseDownCallbackId = -1;
-        int onMiddleDoubleClickCallbackId = -1;
-        int onX1MouseUpCallbackId = -1;
-        int onX1MouseDownCallbackId = -1;
-        int onX1DoubleClickCallbackId = -1;
-        int onX2MouseUpCallbackId = -1;
-        int onX2MouseDownCallbackId = -1;
-        int onX2DoubleClickCallbackId = -1;
-        int onScrollUpCallbackId = -1;
-        int onScrollDownCallbackId = -1;
-        int onScrollLeftCallbackId = -1;
-        int onScrollRightCallbackId = -1;
-        int onMouseOverCallbackId = -1;
-        int onMouseLeaveCallbackId = -1;
-        int onDragStartCallbackId = -1;
-        int onDragCallbackId = -1;
-        int onDragEndCallbackId = -1;
-        int onDropCallbackId = -1;
-        int onDragEnterCallbackId = -1;
-        int onDragOverCallbackId = -1;
-        int onDragLeaveCallbackId = -1;
-        bool hasDropTarget = false;
-        bool dropTarget = false;
-        bool hasDragArea = false;
-        bool dragArea = false;
-        std::wstring tooltipText;
-        std::wstring tooltipTitle;
-        std::wstring tooltipIcon;
-        int tooltipMaxWidth = 0;
-        int tooltipMaxHeight = 0;
-        bool tooltipBalloon = false;
-        bool tooltipDisabled = false;
-        BackdropFilter backdropFilter;
+namespace PropertyParser {
+struct ElementOptions {
+  std::wstring id;
+  int x = 0;
+  int y = 0;
+  int width = 0;
+  int height = 0;
+  bool hasSolidColor = false;
+  COLORREF solidColor = 0;
+  BYTE solidAlpha = 0;
+  int solidColorRadius = 0;
+  GradientInfo solidGradient;
+  int bevelType = 0;
+  int bevelWidth = 0;
+  COLORREF bevelColor = RGB(255, 255, 255);
+  BYTE bevelAlpha = 200;
+  GradientInfo bevelGradient;
+  COLORREF bevelColor2 = RGB(0, 0, 0);
+  BYTE bevelAlpha2 = 150;
+  GradientInfo bevelGradient2;
+  int paddingLeft = 0;
+  int paddingTop = 0;
+  int paddingRight = 0;
+  int paddingBottom = 0;
+  bool antialias = true;
+  bool hasPixelHitTest = false;
+  bool pixelHitTest = false;
+  bool show = true;
+  std::wstring containerId;
+  std::wstring groupId;
+  bool mouseEventCursor = true;
+  std::wstring mouseEventCursorName;
+  std::wstring cursorsDir;
+  float rotate = 0.0f;
+  bool hasTransformMatrix = false;
+  std::vector<float> transformMatrix;
+  int onLeftMouseUpCallbackId = -1;
+  int onLeftMouseDownCallbackId = -1;
+  int onLeftDoubleClickCallbackId = -1;
+  int onRightMouseUpCallbackId = -1;
+  int onRightMouseDownCallbackId = -1;
+  int onRightDoubleClickCallbackId = -1;
+  int onMiddleMouseUpCallbackId = -1;
+  int onMiddleMouseDownCallbackId = -1;
+  int onMiddleDoubleClickCallbackId = -1;
+  int onX1MouseUpCallbackId = -1;
+  int onX1MouseDownCallbackId = -1;
+  int onX1DoubleClickCallbackId = -1;
+  int onX2MouseUpCallbackId = -1;
+  int onX2MouseDownCallbackId = -1;
+  int onX2DoubleClickCallbackId = -1;
+  int onScrollUpCallbackId = -1;
+  int onScrollDownCallbackId = -1;
+  int onScrollLeftCallbackId = -1;
+  int onScrollRightCallbackId = -1;
+  int onMouseOverCallbackId = -1;
+  int onMouseLeaveCallbackId = -1;
+  int onDragStartCallbackId = -1;
+  int onDragCallbackId = -1;
+  int onDragEndCallbackId = -1;
+  int onDropCallbackId = -1;
+  int onDragEnterCallbackId = -1;
+  int onDragOverCallbackId = -1;
+  int onDragLeaveCallbackId = -1;
+  bool hasDropTarget = false;
+  bool dropTarget = false;
+  bool hasDragArea = false;
+  bool dragArea = false;
+  std::wstring tooltipText;
+  std::wstring tooltipTitle;
+  std::wstring tooltipIcon;
+  int tooltipMaxWidth = 0;
+  int tooltipMaxHeight = 0;
+  bool tooltipBalloon = false;
+  bool tooltipDisabled = false;
+  BackdropFilter backdropFilter;
 
-        // Scroll & Overflow
-        bool hasScrollX = false;
-        int scrollX = 0;
-        bool hasScrollY = false;
-        int scrollY = 0;
-        bool hasScrollStep = false;
-        int scrollStep = 24;
-        bool hasOverflow = false;
-        std::wstring overflow;
-        bool hasOverflowX = false;
-        std::wstring overflowX;
-        bool hasOverflowY = false;
-        std::wstring overflowY;
-        bool hasShowScrollbar = false;
-        bool showScrollbar = true;
-        bool hasShowScrollbarX = false;
-        bool showScrollbarX = true;
-        bool hasShowScrollbarY = false;
-        bool showScrollbarY = true;
-        bool hasScrollbarWidth = false;
-        int scrollbarWidth = 6;
-        bool hasScrollbarHoverWidth = false;
-        int scrollbarHoverWidth = -1;
-        bool hasScrollbarRadius = false;
-        float scrollbarRadius = 3.0f;
-        bool hasScrollbarTrackRadius = false;
-        float scrollbarTrackRadius = -1.0f;
-        bool hasScrollbarInset = false;
-        float scrollbarInset = 2.0f;
-        bool hasScrollbarMinThumbLength = false;
-        float scrollbarMinThumbLength = 20.0f;
-        bool hasScrollbarColor = false;
-        COLORREF scrollbarColor = RGB(255, 255, 255);
-        BYTE scrollbarAlpha = 100;
-        bool hasScrollbarHoverColor = false;
-        COLORREF scrollbarHoverColor = RGB(255, 255, 255);
-        BYTE scrollbarHoverAlpha = 180;
-        bool hasScrollbarActiveColor = false;
-        COLORREF scrollbarActiveColor = RGB(255, 255, 255);
-        BYTE scrollbarActiveAlpha = 240;
-        bool hasScrollbarTrackColor = false;
-        COLORREF scrollbarTrackColor = RGB(0, 0, 0);
-        BYTE scrollbarTrackAlpha = 0;
-        bool hasShowScrollbarButtons = false;
-        bool showScrollbarButtons = false;
-        bool hasScrollbarButtonSize = false;
-        float scrollbarButtonSize = 14.0f;
-        bool hasScrollbarButtonRadius = false;
-        float scrollbarButtonRadius = 2.0f;
-        bool hasScrollbarArrowColor = false;
-        COLORREF scrollbarArrowColor = RGB(255, 255, 255);
-        BYTE scrollbarArrowAlpha = 150;
-        bool hasScrollbarArrowHoverColor = false;
-        COLORREF scrollbarArrowHoverColor = RGB(255, 255, 255);
-        BYTE scrollbarArrowHoverAlpha = 220;
-        bool hasScrollbarArrowActiveColor = false;
-        COLORREF scrollbarArrowActiveColor = RGB(255, 255, 255);
-        BYTE scrollbarArrowActiveAlpha = 255;
-        bool hasScrollbarButtonBgColor = false;
-        COLORREF scrollbarButtonBgColor = RGB(0, 0, 0);
-        BYTE scrollbarButtonBgAlpha = 0;
-        bool hasScrollbarButtonHoverBgColor = false;
-        COLORREF scrollbarButtonHoverBgColor = RGB(255, 255, 255);
-        BYTE scrollbarButtonHoverBgAlpha = 30;
-    };
+  // Scroll & Overflow
+  bool hasScrollX = false;
+  int scrollX = 0;
+  bool hasScrollY = false;
+  int scrollY = 0;
+  bool hasScrollStep = false;
+  int scrollStep = 24;
+  bool hasOverflow = false;
+  std::wstring overflow;
+  bool hasOverflowX = false;
+  std::wstring overflowX;
+  bool hasOverflowY = false;
+  std::wstring overflowY;
+  bool hasShowScrollbar = false;
+  bool showScrollbar = true;
+  bool hasShowScrollbarX = false;
+  bool showScrollbarX = true;
+  bool hasShowScrollbarY = false;
+  bool showScrollbarY = true;
+  bool hasScrollbarWidth = false;
+  int scrollbarWidth = 6;
+  bool hasScrollbarHoverWidth = false;
+  int scrollbarHoverWidth = -1;
+  bool hasScrollbarRadius = false;
+  float scrollbarRadius = 3.0f;
+  bool hasScrollbarTrackRadius = false;
+  float scrollbarTrackRadius = -1.0f;
+  bool hasScrollbarInset = false;
+  float scrollbarInset = 2.0f;
+  bool hasScrollbarMinThumbLength = false;
+  float scrollbarMinThumbLength = 20.0f;
+  bool hasScrollbarColor = false;
+  COLORREF scrollbarColor = RGB(255, 255, 255);
+  BYTE scrollbarAlpha = 100;
+  bool hasScrollbarHoverColor = false;
+  COLORREF scrollbarHoverColor = RGB(255, 255, 255);
+  BYTE scrollbarHoverAlpha = 180;
+  bool hasScrollbarActiveColor = false;
+  COLORREF scrollbarActiveColor = RGB(255, 255, 255);
+  BYTE scrollbarActiveAlpha = 240;
+  bool hasScrollbarTrackColor = false;
+  COLORREF scrollbarTrackColor = RGB(0, 0, 0);
+  BYTE scrollbarTrackAlpha = 0;
+  bool hasShowScrollbarButtons = false;
+  bool showScrollbarButtons = false;
+  bool hasScrollbarButtonSize = false;
+  float scrollbarButtonSize = 14.0f;
+  bool hasScrollbarButtonRadius = false;
+  float scrollbarButtonRadius = 2.0f;
+  bool hasScrollbarArrowColor = false;
+  COLORREF scrollbarArrowColor = RGB(255, 255, 255);
+  BYTE scrollbarArrowAlpha = 150;
+  bool hasScrollbarArrowHoverColor = false;
+  COLORREF scrollbarArrowHoverColor = RGB(255, 255, 255);
+  BYTE scrollbarArrowHoverAlpha = 220;
+  bool hasScrollbarArrowActiveColor = false;
+  COLORREF scrollbarArrowActiveColor = RGB(255, 255, 255);
+  BYTE scrollbarArrowActiveAlpha = 255;
+  bool hasScrollbarButtonBgColor = false;
+  COLORREF scrollbarButtonBgColor = RGB(0, 0, 0);
+  BYTE scrollbarButtonBgAlpha = 0;
+  bool hasScrollbarButtonHoverBgColor = false;
+  COLORREF scrollbarButtonHoverBgColor = RGB(255, 255, 255);
+  BYTE scrollbarButtonHoverBgAlpha = 30;
+};
 
-    struct GeneralImageOptions : public ElementOptions
-    {
-        std::wstring fallbackPath;
-        ImageFlipMode imageFlip = IMAGE_FLIP_NONE;
-        bool hasImageCrop = false;
-        float imageCropX = 0.0f;
-        float imageCropY = 0.0f;
-        float imageCropW = 0.0f;
-        float imageCropH = 0.0f;
-        ImageCropOrigin imageCropOrigin = IMAGE_CROP_ORIGIN_TOP_LEFT;
-        bool useExifOrientation = false;
-        BYTE imageAlpha = 255;
-        bool grayscale = false;
-        bool hasColorMatrix = false;
-        std::array<float, 20> colorMatrix{};
-        bool hasImageTint = false;
-        COLORREF imageTint = RGB(255, 255, 255);
-        BYTE imageTintAlpha = 255;
-    };
+struct GeneralImageOptions : public ElementOptions {
+  std::wstring fallbackPath;
+  ImageFlipMode imageFlip = IMAGE_FLIP_NONE;
+  bool hasImageCrop = false;
+  float imageCropX = 0.0f;
+  float imageCropY = 0.0f;
+  float imageCropW = 0.0f;
+  float imageCropH = 0.0f;
+  ImageCropOrigin imageCropOrigin = IMAGE_CROP_ORIGIN_TOP_LEFT;
+  bool useExifOrientation = false;
+  BYTE imageAlpha = 255;
+  bool grayscale = false;
+  bool hasColorMatrix = false;
+  std::array<float, 20> colorMatrix{};
+  bool hasImageTint = false;
+  COLORREF imageTint = RGB(255, 255, 255);
+  BYTE imageTintAlpha = 255;
+};
 
-    struct ImageOptions : public GeneralImageOptions
-    {
-        std::wstring path;
-        ImageAspectRatio preserveAspectRatio = IMAGE_ASPECT_STRETCH;
-        bool hasScaleMargins = false;
-        float scaleMarginLeft = 0.0f;
-        float scaleMarginTop = 0.0f;
-        float scaleMarginRight = 0.0f;
-        float scaleMarginBottom = 0.0f;
-        bool tile = false;
-    };
+struct ImageOptions : public GeneralImageOptions {
+  std::wstring path;
+  ImageAspectRatio preserveAspectRatio = IMAGE_ASPECT_STRETCH;
+  bool hasScaleMargins = false;
+  float scaleMarginLeft = 0.0f;
+  float scaleMarginTop = 0.0f;
+  float scaleMarginRight = 0.0f;
+  float scaleMarginBottom = 0.0f;
+  bool tile = false;
+};
 
-    struct ButtonOptions : public GeneralImageOptions
-    {
-        std::wstring buttonImageName;
-        int buttonActionCallbackId = -1;
-    };
+struct ButtonOptions : public GeneralImageOptions {
+  std::wstring buttonImageName;
+  int buttonActionCallbackId = -1;
+};
 
-    struct BitmapOptions : public GeneralImageOptions
-    {
-        double value = 0.0;
-        std::wstring bitmapImageName;
-        int bitmapFrames = 1;
-        bool bitmapZeroFrame = false;
-        bool bitmapExtend = false;
-        double minValue = 0.0;
-        double maxValue = 1.0;
-        std::wstring bitmapOrientation = L"auto";
-        int bitmapDigits = 0;
-        BitmapAlign bitmapAlign = BITMAP_ALIGN_LEFT;
-        int bitmapSeparation = 0;
-    };
+struct BitmapOptions : public GeneralImageOptions {
+  double value = 0.0;
+  std::wstring bitmapImageName;
+  int bitmapFrames = 1;
+  bool bitmapZeroFrame = false;
+  bool bitmapExtend = false;
+  double minValue = 0.0;
+  double maxValue = 1.0;
+  std::wstring bitmapOrientation = L"auto";
+  int bitmapDigits = 0;
+  BitmapAlign bitmapAlign = BITMAP_ALIGN_LEFT;
+  int bitmapSeparation = 0;
+};
 
-    struct RotatorOptions : public GeneralImageOptions
-    {
-        double value = 0.0;
-        std::wstring rotatorImageName;
-        double minValue = 0.0;
-        double maxValue = 1.0;
-        double offsetX = 0.0;
-        double offsetY = 0.0;
-        double startAngle = 0.0;
-        double rotationAngle = 6.283185307179586; // 2 * PI
-        int valueRemainder = 0;
-    };
-    
-    struct AreaGraphOptions : public ElementOptions
-    {
-        std::vector<float> data;
-        float minValue = 0.0f;
-        float maxValue = 1.0f;
-        bool autoRange = false;
-        COLORREF lineColor = RGB(0, 180, 255);
-        GradientInfo lineGradient;
-        float lineWidth = 1.0f;
-        COLORREF fillColor = RGB(0, 180, 255);
-        BYTE fillAlpha = 50;
-        GradientInfo fillGradient;
-        int maxPoints = 0;
-        COLORREF gridColor = RGB(100, 100, 100);
-        BYTE gridAlpha = 100;
-        GradientInfo gridGradient;
-        bool gridVisible = true;
-        int gridX = 20;
-        int gridY = 20;
-        bool graphStartLeft = false;
-        bool flip = false;
-    };
+struct RotatorOptions : public GeneralImageOptions {
+  double value = 0.0;
+  std::wstring rotatorImageName;
+  double minValue = 0.0;
+  double maxValue = 1.0;
+  double offsetX = 0.0;
+  double offsetY = 0.0;
+  double startAngle = 0.0;
+  double rotationAngle = 6.283185307179586; // 2 * PI
+  int valueRemainder = 0;
+};
 
-    struct TextOptions : public ElementOptions
-    {
-        std::wstring text;
-        std::wstring fontFace = L"Arial";
-        int fontSize = 12;
-        COLORREF fontColor = RGB(0, 0, 0);
-        BYTE alpha = 255;
-        int fontWeight = 400;
-        bool italic = false;
-        TextAlignment textAlign = TEXT_ALIGN_LEFT_TOP;
-        TextClip clip = TEXT_CLIP_NONE;
-        std::wstring fontPath;
-        std::vector<TextShadow> shadows;
-        GradientInfo fontGradient;
-        float letterSpacing = 0.0f;
-        bool underLine = false;
-        bool strikeThrough = false;
-        TextCase textCase = TEXT_CASE_NORMAL;
-        bool textSelection = false;
-        COLORREF selectionBackgroundColor = 0xFF9033; // #3390FF selection blue
-        BYTE selectionBackgroundAlpha = 120;          
-        bool hasSelectionTextColor = false;
-        COLORREF selectionTextColor = RGB(255, 255, 255);
-        BYTE selectionTextAlpha = 255;
-    };
+struct AreaGraphOptions : public ElementOptions {
+  std::vector<float> data;
+  float minValue = 0.0f;
+  float maxValue = 1.0f;
+  bool autoRange = false;
+  COLORREF lineColor = RGB(0, 180, 255);
+  GradientInfo lineGradient;
+  float lineWidth = 1.0f;
+  COLORREF fillColor = RGB(0, 180, 255);
+  BYTE fillAlpha = 50;
+  GradientInfo fillGradient;
+  int maxPoints = 0;
+  COLORREF gridColor = RGB(100, 100, 100);
+  BYTE gridAlpha = 100;
+  GradientInfo gridGradient;
+  bool gridVisible = true;
+  int gridX = 20;
+  int gridY = 20;
+  bool graphStartLeft = false;
+  bool flip = false;
+};
 
-    // Options for the Direct2D-rendered input box element.
-    struct InputBoxOptions : public ElementOptions
-    {
-        std::wstring text;
-        std::wstring placeholder;
-        std::wstring fontFace = L"Segoe UI";
-        int fontSize = 14;
-        COLORREF fontColor = RGB(240, 240, 240);
-        BYTE fontAlpha = 255;
-        int fontWeight = 400;
-        bool italic = false;
-        TextAlignment textAlign = TEXT_ALIGN_LEFT_CENTER;
-        std::wstring fontPath;
+struct TextOptions : public ElementOptions {
+  std::wstring text;
+  std::wstring fontFace = L"Arial";
+  int fontSize = 12;
+  COLORREF fontColor = RGB(0, 0, 0);
+  BYTE alpha = 255;
+  int fontWeight = 400;
+  bool italic = false;
+  TextAlignment textAlign = TEXT_ALIGN_LEFT_TOP;
+  TextClip clip = TEXT_CLIP_NONE;
+  std::wstring fontPath;
+  std::vector<TextShadow> shadows;
+  GradientInfo fontGradient;
+  float letterSpacing = 0.0f;
+  bool underLine = false;
+  bool strikeThrough = false;
+  TextCase textCase = TEXT_CASE_NORMAL;
+  bool textSelection = false;
+  COLORREF selectionBackgroundColor = 0xFF9033; // #3390FF selection blue
+  BYTE selectionBackgroundAlpha = 120;
+  bool hasSelectionTextColor = false;
+  COLORREF selectionTextColor = RGB(255, 255, 255);
+  BYTE selectionTextAlpha = 255;
+};
 
-        COLORREF placeholderColor = RGB(150, 150, 150);
-        BYTE placeholderAlpha = 255;
-        COLORREF caretColor = RGB(255, 255, 255);
-        BYTE caretAlpha = 255;
-        COLORREF selectionColor = RGB(135, 206, 235);
-        BYTE selectionAlpha = 128;
+// Options for the Direct2D-rendered input box element.
+struct InputBoxOptions : public ElementOptions {
+  std::wstring text;
+  std::wstring placeholder;
+  std::wstring fontFace = L"Segoe UI";
+  int fontSize = 14;
+  COLORREF fontColor = RGB(240, 240, 240);
+  BYTE fontAlpha = 255;
+  int fontWeight = 400;
+  bool italic = false;
+  TextAlignment textAlign = TEXT_ALIGN_LEFT_CENTER;
+  std::wstring fontPath;
 
-        bool hasFillColor = true;
-        COLORREF fillColor = RGB(30, 30, 34);
-        BYTE fillAlpha = 255;
+  COLORREF placeholderColor = RGB(150, 150, 150);
+  BYTE placeholderAlpha = 255;
+  COLORREF caretColor = RGB(255, 255, 255);
+  BYTE caretAlpha = 255;
+  COLORREF selectionColor = RGB(135, 206, 235);
+  BYTE selectionAlpha = 128;
 
-        bool password = false;
-        int maxLength = 0;
-        bool multiline = false;
-        InputType inputType = InputType::Any;
-        std::wstring allowedChars; // used when inputType == Custom
+  bool hasFillColor = true;
+  COLORREF fillColor = RGB(30, 30, 34);
+  BYTE fillAlpha = 255;
 
-        // Border (solid only)
-        float borderWidth = 1.0f;
-        float borderRadius = 8.0f;
-        COLORREF borderColor = RGB(0, 0, 0);
-        BYTE borderColorAlpha = 255;
-        bool hasBorderFocusColor = false;
-        COLORREF borderFocusColor = RGB(0, 0, 0);
-        BYTE borderFocusColorAlpha = 255;
+  bool password = false;
+  int maxLength = 0;
+  bool multiline = false;
+  InputType inputType = InputType::Any;
+  std::wstring allowedChars; // used when inputType == Custom
 
-        // Gradients
-        GradientInfo fontGradient;
-        GradientInfo placeholderGradient;
-        GradientInfo caretGradient;
-        GradientInfo selectionGradient;
-        GradientInfo fillGradient;
-        GradientInfo borderGradient;
-        GradientInfo borderFocusGradient;
+  // Border (solid only)
+  float borderWidth = 1.0f;
+  float borderRadius = 8.0f;
+  COLORREF borderColor = RGB(0, 0, 0);
+  BYTE borderColorAlpha = 255;
+  bool hasBorderFocusColor = false;
+  COLORREF borderFocusColor = RGB(0, 0, 0);
+  BYTE borderFocusColorAlpha = 255;
 
-        // JS callback ids (resolved via GetEventCallbackProp).
-        int onTextChangeCallbackId = -1;
-        int onEnterCallbackId = -1;
-        int onFocusCallbackId = -1;
-        int onBlurCallbackId = -1;
-        int onInvalidInputCallbackId = -1; // fired when a typed char is rejected by inputType
-    };
+  // Gradients
+  GradientInfo fontGradient;
+  GradientInfo placeholderGradient;
+  GradientInfo caretGradient;
+  GradientInfo selectionGradient;
+  GradientInfo fillGradient;
+  GradientInfo borderGradient;
+  GradientInfo borderFocusGradient;
 
-    struct ColorPickerOptions : public ElementOptions
-    {
-        // color
-        COLORREF color = RGB(0, 0, 0);
+  // JS callback ids (resolved via GetEventCallbackProp).
+  int onTextChangeCallbackId = -1;
+  int onEnterCallbackId = -1;
+  int onFocusCallbackId = -1;
+  int onBlurCallbackId = -1;
+  int onInvalidInputCallbackId =
+      -1; // fired when a typed char is rejected by inputType
+};
 
-        // swatch styling
-        float    borderRadius    = 0.0f;
-        float    borderWidth     = 0.0f;
-        COLORREF borderColor     = RGB(0, 0, 0);
-        BYTE     borderAlpha     = 255;
-        float    opacity         = 1.0f;
-        bool     circleShape     = false;
+struct ColorPickerOptions : public ElementOptions {
+  // color
+  COLORREF color = RGB(0, 0, 0);
 
-        // popup appearance
-        COLORREF popupBackground          = RGB(255, 255, 255);
-        BYTE     popupBackgroundAlpha     = 255;
-        COLORREF popupAccentColor         = RGB(0, 0, 0);
-        BYTE     popupAccentAlpha         = 255;
-        COLORREF popupBorderColor         = RGB(0, 0, 0);
-        BYTE     popupBorderAlpha         = 255;
-        COLORREF popupInputBackground      = RGB(255, 255, 255);
-        BYTE     popupInputBackgroundAlpha = 255;
-        bool     hasPopupInputBackground  = false;
-        COLORREF popupInputColor          = RGB(0, 0, 0);
-        BYTE     popupInputColorAlpha     = 255;
-        bool     hasPopupInputColor       = false;
+  // swatch styling
+  float borderRadius = 0.0f;
+  float borderWidth = 0.0f;
+  COLORREF borderColor = RGB(0, 0, 0);
+  BYTE borderAlpha = 255;
+  float opacity = 1.0f;
+  bool circleShape = false;
 
-        // popup behavior
-        bool showEyedropper   = true;
-        bool showFormatToggle = true;
-        bool defaultHexMode   = false;
+  // popup appearance
+  COLORREF popupBackground = RGB(255, 255, 255);
+  BYTE popupBackgroundAlpha = 255;
+  COLORREF popupAccentColor = RGB(0, 0, 0);
+  BYTE popupAccentAlpha = 255;
+  COLORREF popupBorderColor = RGB(0, 0, 0);
+  BYTE popupBorderAlpha = 255;
+  COLORREF popupInputBackground = RGB(255, 255, 255);
+  BYTE popupInputBackgroundAlpha = 255;
+  bool hasPopupInputBackground = false;
+  COLORREF popupInputColor = RGB(0, 0, 0);
+  BYTE popupInputColorAlpha = 255;
+  bool hasPopupInputColor = false;
 
-        // callbacks
-        int onChangeCallbackId       = -1;
-        int onOpenCallbackId         = -1;
-        int onCloseCallbackId        = -1;
-        int onCancelCallbackId       = -1;
-        int onEyedropperOpenCallbackId = -1;
-        int onEyedropperPickCallbackId = -1;
-    };
+  // popup behavior
+  bool showEyedropper = true;
+  bool showFormatToggle = true;
+  bool defaultHexMode = false;
 
-    struct BarOptions : public ElementOptions
-    {
-        float value = 0.0f;
-        BarOrientation orientation = BAR_HORIZONTAL;
-        int barCornerRadius = 0;
-        bool hasBarColor = false;
-        COLORREF barColor = RGB(0, 255, 0);
-        BYTE barAlpha = 255;
-        GradientInfo barGradient;
-    };
+  // callbacks
+  int onChangeCallbackId = -1;
+  int onOpenCallbackId = -1;
+  int onCloseCallbackId = -1;
+  int onCancelCallbackId = -1;
+  int onEyedropperOpenCallbackId = -1;
+  int onEyedropperPickCallbackId = -1;
+};
 
-    struct RoundLineOptions : public ElementOptions
-    {
-        float value = 0.0f;
-        int radius = 0;
-        int thickness = 2;
-        int endThickness = -1;
-        float startAngle = 0.0f;
-        float totalAngle = 360.0f;
-        bool clockwise = true;
-        RoundLineCap startCap = ROUNDLINE_CAP_FLAT;
-        RoundLineCap endCap = ROUNDLINE_CAP_FLAT;
-        std::vector<float> dashArray;
-        int ticks = 0;
-        bool hasLineColor = false;
-        COLORREF lineColor = RGB(0, 255, 0);
-        BYTE lineAlpha = 255;
-        bool hasLineColorBg = false;
-        COLORREF lineColorBg = RGB(50, 50, 50);
-        BYTE lineAlphaBg = 255;
-        GradientInfo lineGradient;
-        GradientInfo lineGradientBg;
-    };
+struct BarOptions : public ElementOptions {
+  float value = 0.0f;
+  BarOrientation orientation = BAR_HORIZONTAL;
+  int barCornerRadius = 0;
+  bool hasBarColor = false;
+  COLORREF barColor = RGB(0, 255, 0);
+  BYTE barAlpha = 255;
+  GradientInfo barGradient;
+};
 
-    struct LineOptions : public ElementOptions
-    {
-        int lineCount = 1;
-        std::vector<std::vector<float>> dataSets;
-        std::vector<COLORREF> lineColors;
-        std::vector<BYTE> lineAlphas;
-        std::vector<GradientInfo> lineGradients;
-        std::vector<float> scaleValues;
-        float lineWidth = 1.0f;
-        int maxPoints = 0;
-        bool horizontalLines = false;
-        COLORREF horizontalLineColor = RGB(0, 0, 0);
-        BYTE horizontalLineAlpha = 255;
-        GradientInfo horizontalLineGradient;
-        bool graphStartLeft = false;               // false = right
-        bool graphHorizontalOrientation = false;   // false = vertical
-        bool flip = false;
-        D2D1_STROKE_TRANSFORM_TYPE transformStroke = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
-        bool autoRange = false;
-        float scaleMin = 0.0f;
-        float scaleMax = 100.0f;
-    };
+struct RoundLineOptions : public ElementOptions {
+  float value = 0.0f;
+  int radius = 0;
+  int thickness = 2;
+  int endThickness = -1;
+  float startAngle = 0.0f;
+  float totalAngle = 360.0f;
+  bool clockwise = true;
+  RoundLineCap startCap = ROUNDLINE_CAP_FLAT;
+  RoundLineCap endCap = ROUNDLINE_CAP_FLAT;
+  std::vector<float> dashArray;
+  int ticks = 0;
+  bool hasLineColor = false;
+  COLORREF lineColor = RGB(0, 255, 0);
+  BYTE lineAlpha = 255;
+  bool hasLineColorBg = false;
+  COLORREF lineColorBg = RGB(50, 50, 50);
+  BYTE lineAlphaBg = 255;
+  GradientInfo lineGradient;
+  GradientInfo lineGradientBg;
+};
 
-    struct HistogramOptions : public ElementOptions
-    {
-        std::vector<float> data;
-        std::vector<float> data2;
-        bool autoRange = false;
-        bool graphStartLeft = false;             // false = right
-        bool graphHorizontalOrientation = false; // false = vertical
-        bool flip = false;
+struct LineOptions : public ElementOptions {
+  int lineCount = 1;
+  std::vector<std::vector<float>> dataSets;
+  std::vector<COLORREF> lineColors;
+  std::vector<BYTE> lineAlphas;
+  std::vector<GradientInfo> lineGradients;
+  std::vector<float> scaleValues;
+  float lineWidth = 1.0f;
+  int maxPoints = 0;
+  bool horizontalLines = false;
+  COLORREF horizontalLineColor = RGB(0, 0, 0);
+  BYTE horizontalLineAlpha = 255;
+  GradientInfo horizontalLineGradient;
+  bool graphStartLeft = false;             // false = right
+  bool graphHorizontalOrientation = false; // false = vertical
+  bool flip = false;
+  D2D1_STROKE_TRANSFORM_TYPE transformStroke =
+      D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
+  bool autoRange = false;
+  float scaleMin = 0.0f;
+  float scaleMax = 100.0f;
+};
 
-        COLORREF primaryColor = RGB(0, 128, 0);
-        BYTE primaryAlpha = 255;
-        GradientInfo primaryGradient;
-        COLORREF secondaryColor = RGB(255, 0, 0);
-        BYTE secondaryAlpha = 255;
-        GradientInfo secondaryGradient;
-        COLORREF bothColor = RGB(255, 255, 0);
-        BYTE bothAlpha = 255;
-        GradientInfo bothGradient;
-    };
+struct HistogramOptions : public ElementOptions {
+  std::vector<float> data;
+  std::vector<float> data2;
+  bool autoRange = false;
+  bool graphStartLeft = false;             // false = right
+  bool graphHorizontalOrientation = false; // false = vertical
+  bool flip = false;
 
-    struct ShapeCombineOp
-    {
-        std::wstring id;
-        D2D1_COMBINE_MODE mode = D2D1_COMBINE_MODE_UNION;
-        bool hasConsume = false;
-        bool consume = false;
-    };
+  COLORREF primaryColor = RGB(0, 128, 0);
+  BYTE primaryAlpha = 255;
+  GradientInfo primaryGradient;
+  COLORREF secondaryColor = RGB(255, 0, 0);
+  BYTE secondaryAlpha = 255;
+  GradientInfo secondaryGradient;
+  COLORREF bothColor = RGB(255, 255, 0);
+  BYTE bothAlpha = 255;
+  GradientInfo bothGradient;
+};
 
-    struct ShapeOptions : public ElementOptions
-    {
-        bool isCombine = false;
-        std::wstring shapeType;
-        float strokeWidth = 1.0f;
-        COLORREF strokeColor = RGB(0, 0, 0);
-        BYTE strokeAlpha = 255;
-        GradientInfo strokeGradient;
-        COLORREF fillColor = RGB(255, 255, 255);
-        BYTE fillAlpha = 255;
-        GradientInfo fillGradient;
-        float radiusX = 0.0f;
-        float radiusY = 0.0f;
-        float startX = 0.0f;
-        float startY = 0.0f;
-        float endX = 0.0f;
-        float endY = 0.0f;
-        std::wstring curveType = L"quadratic";
-        float controlX = 0.0f;
-        float controlY = 0.0f;
-        float control2X = 0.0f;
-        float control2Y = 0.0f;
-        float startArcAngle = 0.0f;
-        float endArcAngle = 90.0f;
-        bool arcClockwise = true;
-        std::wstring pathData;
-        D2D1_CAP_STYLE strokeStartCap = D2D1_CAP_STYLE_FLAT;
-        D2D1_CAP_STYLE strokeEndCap = D2D1_CAP_STYLE_FLAT;
-        D2D1_CAP_STYLE strokeDashCap = D2D1_CAP_STYLE_FLAT;
-        D2D1_LINE_JOIN strokeLineJoin = D2D1_LINE_JOIN_MITER;
-        float strokeDashOffset = 0.0f;
-        std::vector<float> strokeDashes;
-        std::wstring combineBaseId;
-        std::vector<ShapeCombineOp> combineOps;
-        bool hasCombineConsumeAll = false;
-        bool combineConsumeAll = false;
-    };
+struct ShapeCombineOp {
+  std::wstring id;
+  D2D1_COMBINE_MODE mode = D2D1_COMBINE_MODE_UNION;
+  bool hasConsume = false;
+  bool consume = false;
+};
 
-    struct LayoutBoxShadowOptions
-    {
-        float x = 0.0f;
-        float y = 0.0f;
-        float blur = 0.0f;
-        float spread = 0.0f;
-        COLORREF color = RGB(0, 0, 0);
-        BYTE alpha = 255;
-        bool inset = false;
-    };
+struct ShapeOptions : public ElementOptions {
+  bool isCombine = false;
+  std::wstring shapeType;
+  float strokeWidth = 1.0f;
+  COLORREF strokeColor = RGB(0, 0, 0);
+  BYTE strokeAlpha = 255;
+  GradientInfo strokeGradient;
+  COLORREF fillColor = RGB(255, 255, 255);
+  BYTE fillAlpha = 255;
+  GradientInfo fillGradient;
+  float radiusX = 0.0f;
+  float radiusY = 0.0f;
+  float startX = 0.0f;
+  float startY = 0.0f;
+  float endX = 0.0f;
+  float endY = 0.0f;
+  std::wstring curveType = L"quadratic";
+  float controlX = 0.0f;
+  float controlY = 0.0f;
+  float control2X = 0.0f;
+  float control2Y = 0.0f;
+  float startArcAngle = 0.0f;
+  float endArcAngle = 90.0f;
+  bool arcClockwise = true;
+  std::wstring pathData;
+  D2D1_CAP_STYLE strokeStartCap = D2D1_CAP_STYLE_FLAT;
+  D2D1_CAP_STYLE strokeEndCap = D2D1_CAP_STYLE_FLAT;
+  D2D1_CAP_STYLE strokeDashCap = D2D1_CAP_STYLE_FLAT;
+  D2D1_LINE_JOIN strokeLineJoin = D2D1_LINE_JOIN_MITER;
+  float strokeDashOffset = 0.0f;
+  std::vector<float> strokeDashes;
+  std::wstring combineBaseId;
+  std::vector<ShapeCombineOp> combineOps;
+  bool hasCombineConsumeAll = false;
+  bool combineConsumeAll = false;
+};
 
-    struct LayoutBoxOptions
-    {
-        ShapeOptions shape;
-        bool hasBorderStyle = false;
-        ElementLayoutBox::BorderStyle borderTop = ElementLayoutBox::BorderStyle::Solid;
-        ElementLayoutBox::BorderStyle borderRight = ElementLayoutBox::BorderStyle::Solid;
-        ElementLayoutBox::BorderStyle borderBottom = ElementLayoutBox::BorderStyle::Solid;
-        ElementLayoutBox::BorderStyle borderLeft = ElementLayoutBox::BorderStyle::Solid;
-        std::vector<LayoutBoxShadowOptions> boxShadows;
-        bool hasBoxShadowError = false;
-        std::wstring boxShadowError;
+struct LayoutBoxShadowOptions {
+  float x = 0.0f;
+  float y = 0.0f;
+  float blur = 0.0f;
+  float spread = 0.0f;
+  COLORREF color = RGB(0, 0, 0);
+  BYTE alpha = 255;
+  bool inset = false;
+};
 
-        std::wstring direction = L"ltr";
-        std::wstring flexDirection = L"row";
-        int gap = 0;
-        std::wstring align;
-        std::wstring justify;
-        int paddingLeft = 0;
-        int paddingTop = 0;
-        int paddingRight = 0;
-        int paddingBottom = 0;
-        ElementLayoutBox::DisplayType displayType = ElementLayoutBox::DisplayType::Flex;
-        ElementLayoutBox::ListStyleType listStyleType = ElementLayoutBox::ListStyleType::Disc;
-    };
+struct LayoutBoxOptions {
+  ShapeOptions shape;
+  bool hasBorderStyle = false;
+  ElementLayoutBox::BorderStyle borderTop =
+      ElementLayoutBox::BorderStyle::Solid;
+  ElementLayoutBox::BorderStyle borderRight =
+      ElementLayoutBox::BorderStyle::Solid;
+  ElementLayoutBox::BorderStyle borderBottom =
+      ElementLayoutBox::BorderStyle::Solid;
+  ElementLayoutBox::BorderStyle borderLeft =
+      ElementLayoutBox::BorderStyle::Solid;
+  std::vector<LayoutBoxShadowOptions> boxShadows;
+  bool hasBoxShadowError = false;
+  std::wstring boxShadowError;
 
-    struct AnimationKeyframeOptions
-    {
-        float offset = 0.0f;
-        bool hasOffset = false;
-        std::wstring easing;
-        bool hasX = false;
-        bool hasY = false;
-        bool hasWidth = false;
-        bool hasHeight = false;
-        bool hasRotate = false;
-        float x = 0.0f;
-        float y = 0.0f;
-        float width = 0.0f;
-        float height = 0.0f;
-        float rotate = 0.0f;
-        bool hasFontSize = false;
-        bool hasFontWeight = false;
-        bool hasLetterSpacing = false;
-        bool hasFontColor = false;
-        float fontSize = 12.0f;
-        float fontWeight = 400.0f;
-        float letterSpacing = 0.0f;
-        float fontColorR = 0.0f;
-        float fontColorG = 0.0f;
-        float fontColorB = 0.0f;
-        float fontAlpha = 255.0f;
+  std::wstring direction = L"ltr";
+  std::wstring flexDirection = L"row";
+  int gap = 0;
+  std::wstring align;
+  std::wstring justify;
+  int paddingLeft = 0;
+  int paddingTop = 0;
+  int paddingRight = 0;
+  int paddingBottom = 0;
+  ElementLayoutBox::DisplayType displayType =
+      ElementLayoutBox::DisplayType::Flex;
+  ElementLayoutBox::ListStyleType listStyleType =
+      ElementLayoutBox::ListStyleType::Disc;
+};
 
-        bool hasXExpr = false;
-        std::wstring xExpr;
-        bool hasYExpr = false;
-        std::wstring yExpr;
+struct AnimationKeyframeOptions {
+  float offset = 0.0f;
+  bool hasOffset = false;
+  std::wstring easing;
+  bool hasX = false;
+  bool hasY = false;
+  bool hasWidth = false;
+  bool hasHeight = false;
+  bool hasRotate = false;
+  float x = 0.0f;
+  float y = 0.0f;
+  float width = 0.0f;
+  float height = 0.0f;
+  float rotate = 0.0f;
+  bool hasFontSize = false;
+  bool hasFontWeight = false;
+  bool hasLetterSpacing = false;
+  bool hasFontColor = false;
+  float fontSize = 12.0f;
+  float fontWeight = 400.0f;
+  float letterSpacing = 0.0f;
+  float fontColorR = 0.0f;
+  float fontColorG = 0.0f;
+  float fontColorB = 0.0f;
+  float fontAlpha = 255.0f;
 
-        bool HasAnyProps() const
-        {
-            return hasX || hasY || hasWidth || hasHeight || hasRotate ||
-                   hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor ||
-                   hasXExpr || hasYExpr;
-        }
+  bool hasXExpr = false;
+  std::wstring xExpr;
+  bool hasYExpr = false;
+  std::wstring yExpr;
 
-        bool HasTextProps() const
-        {
-            return hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor;
-        }
-    };
+  bool HasAnyProps() const {
+    return hasX || hasY || hasWidth || hasHeight || hasRotate || hasFontSize ||
+           hasFontWeight || hasLetterSpacing || hasFontColor || hasXExpr ||
+           hasYExpr;
+  }
 
-    struct AnimationOptions
-    {
-        std::wstring id;
-        int duration = 250;
-        std::wstring easing = L"linear";
-        int iterationCount = 1;
-        bool iterationInfinite = false;
-        bool hasIterationCount = false;
-        bool iterationCountInvalid = false;
-        bool hasKeyframes = false;
-        bool keyframesInvalid = false;
-        std::wstring keyframesError;
-        bool tweenInvalid = false;
-        std::wstring tweenError;
-        std::vector<AnimationKeyframeOptions> keyframes;
-        bool hasX = false;
-        bool hasY = false;
-        bool hasWidth = false;
-        bool hasHeight = false;
-        bool hasRotate = false;
-        float x = 0.0f;
-        float y = 0.0f;
-        float width = 0.0f;
-        float height = 0.0f;
-        float rotate = 0.0f;
-        bool hasXExpr = false;
-        std::wstring xExpr;
-        bool hasYExpr = false;
-        std::wstring yExpr;
-        bool fromHasX = false;
-        bool fromHasY = false;
-        bool fromHasWidth = false;
-        bool fromHasHeight = false;
-        bool fromHasRotate = false;
-        float fromX = 0.0f;
-        float fromY = 0.0f;
-        float fromWidth = 0.0f;
-        float fromHeight = 0.0f;
-        float fromRotate = 0.0f;
-        bool fromHasXExpr = false;
-        std::wstring fromXExpr;
-        bool fromHasYExpr = false;
-        std::wstring fromYExpr;
-        bool hasFontSize = false;
-        bool hasFontWeight = false;
-        bool hasLetterSpacing = false;
-        bool hasFontColor = false;
-        float fontSize = 12.0f;
-        float fontWeight = 400.0f;
-        float letterSpacing = 0.0f;
-        float fontColorR = 0.0f;
-        float fontColorG = 0.0f;
-        float fontColorB = 0.0f;
-        float fontAlpha = 255.0f;
-        bool fromHasFontSize = false;
-        bool fromHasFontWeight = false;
-        bool fromHasLetterSpacing = false;
-        bool fromHasFontColor = false;
-        float fromFontSize = 12.0f;
-        float fromFontWeight = 400.0f;
-        float fromLetterSpacing = 0.0f;
-        float fromFontColorR = 0.0f;
-        float fromFontColorG = 0.0f;
-        float fromFontColorB = 0.0f;
-        float fromFontAlpha = 255.0f;
+  bool HasTextProps() const {
+    return hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor;
+  }
+};
 
-        bool HasAnyToProps() const
-        {
-            if (hasKeyframes)
-            {
-                for (const AnimationKeyframeOptions &kf : keyframes)
-                {
-                    if (kf.HasAnyProps())
-                        return true;
-                }
-                return false;
-            }
-            return hasX || hasY || hasWidth || hasHeight || hasRotate || hasXExpr || hasYExpr;
-        }
+struct AnimationOptions {
+  std::wstring id;
+  int duration = 250;
+  std::wstring easing = L"linear";
+  int iterationCount = 1;
+  bool iterationInfinite = false;
+  bool hasIterationCount = false;
+  bool iterationCountInvalid = false;
+  bool hasKeyframes = false;
+  bool keyframesInvalid = false;
+  std::wstring keyframesError;
+  bool tweenInvalid = false;
+  std::wstring tweenError;
+  std::vector<AnimationKeyframeOptions> keyframes;
+  bool hasX = false;
+  bool hasY = false;
+  bool hasWidth = false;
+  bool hasHeight = false;
+  bool hasRotate = false;
+  float x = 0.0f;
+  float y = 0.0f;
+  float width = 0.0f;
+  float height = 0.0f;
+  float rotate = 0.0f;
+  bool hasXExpr = false;
+  std::wstring xExpr;
+  bool hasYExpr = false;
+  std::wstring yExpr;
+  bool fromHasX = false;
+  bool fromHasY = false;
+  bool fromHasWidth = false;
+  bool fromHasHeight = false;
+  bool fromHasRotate = false;
+  float fromX = 0.0f;
+  float fromY = 0.0f;
+  float fromWidth = 0.0f;
+  float fromHeight = 0.0f;
+  float fromRotate = 0.0f;
+  bool fromHasXExpr = false;
+  std::wstring fromXExpr;
+  bool fromHasYExpr = false;
+  std::wstring fromYExpr;
+  bool hasFontSize = false;
+  bool hasFontWeight = false;
+  bool hasLetterSpacing = false;
+  bool hasFontColor = false;
+  float fontSize = 12.0f;
+  float fontWeight = 400.0f;
+  float letterSpacing = 0.0f;
+  float fontColorR = 0.0f;
+  float fontColorG = 0.0f;
+  float fontColorB = 0.0f;
+  float fontAlpha = 255.0f;
+  bool fromHasFontSize = false;
+  bool fromHasFontWeight = false;
+  bool fromHasLetterSpacing = false;
+  bool fromHasFontColor = false;
+  float fromFontSize = 12.0f;
+  float fromFontWeight = 400.0f;
+  float fromLetterSpacing = 0.0f;
+  float fromFontColorR = 0.0f;
+  float fromFontColorG = 0.0f;
+  float fromFontColorB = 0.0f;
+  float fromFontAlpha = 255.0f;
 
-        bool HasAnyTextToProps() const
-        {
-            for (const AnimationKeyframeOptions &kf : keyframes)
-            {
-                if (kf.HasTextProps())
-                    return true;
-            }
-            return false;
-        }
+  bool HasAnyToProps() const {
+    if (hasKeyframes) {
+      for (const AnimationKeyframeOptions &kf : keyframes) {
+        if (kf.HasAnyProps())
+          return true;
+      }
+      return false;
+    }
+    return hasX || hasY || hasWidth || hasHeight || hasRotate || hasXExpr ||
+           hasYExpr;
+  }
 
-        bool UsesTweenMode() const
-        {
-            return !hasKeyframes;
-        }
-    };
+  bool HasAnyTextToProps() const {
+    for (const AnimationKeyframeOptions &kf : keyframes) {
+      if (kf.HasTextProps())
+        return true;
+    }
+    return false;
+  }
 
-    struct WindowAnimationKeyframeOptions
-    {
-        float offset = 0.0f;
-        bool hasOffset = false;
-        std::wstring easing;
-        bool hasX = false;
-        bool hasY = false;
-        bool hasWidth = false;
-        bool hasHeight = false;
-        float x = 0.0f;
-        float y = 0.0f;
-        float width = 0.0f;
-        float height = 0.0f;
-        bool hasOpacity = false;
-        float opacity = 1.0f; // 0.0 to 1.0
-        bool hasBackgroundColor = false;
-        float bgColorR = 0.0f;
-        float bgColorG = 0.0f;
-        float bgColorB = 0.0f;
-        float bgAlpha = 255.0f;
+  bool UsesTweenMode() const { return !hasKeyframes; }
+};
 
-        bool hasXExpr = false;
-        std::wstring xExpr;
-        bool hasYExpr = false;
-        std::wstring yExpr;
-        bool hasPosition = false;
-        std::wstring position;
-        float offsetX = 0.0f;
-        float offsetY = 0.0f;
+struct WindowAnimationKeyframeOptions {
+  float offset = 0.0f;
+  bool hasOffset = false;
+  std::wstring easing;
+  bool hasX = false;
+  bool hasY = false;
+  bool hasWidth = false;
+  bool hasHeight = false;
+  float x = 0.0f;
+  float y = 0.0f;
+  float width = 0.0f;
+  float height = 0.0f;
+  bool hasOpacity = false;
+  float opacity = 1.0f; // 0.0 to 1.0
+  bool hasBackgroundColor = false;
+  float bgColorR = 0.0f;
+  float bgColorG = 0.0f;
+  float bgColorB = 0.0f;
+  float bgAlpha = 255.0f;
 
-        bool HasAnyProps() const
-        {
-            return hasX || hasY || hasWidth || hasHeight || hasOpacity || hasBackgroundColor || hasXExpr || hasYExpr || hasPosition;
-        }
-    };
+  bool hasXExpr = false;
+  std::wstring xExpr;
+  bool hasYExpr = false;
+  std::wstring yExpr;
+  bool hasPosition = false;
+  std::wstring position;
+  float offsetX = 0.0f;
+  float offsetY = 0.0f;
 
-    struct WindowAnimationOptions
-    {
-        int duration = 250;
-        std::wstring easing = L"linear";
-        int iterationCount = 1;
-        bool iterationInfinite = false;
-        bool hasIterationCount = false;
-        bool iterationCountInvalid = false;
-        bool hasKeyframes = false;
-        bool keyframesInvalid = false;
-        std::wstring keyframesError;
-        bool tweenInvalid = false;
-        std::wstring tweenError;
-        std::vector<WindowAnimationKeyframeOptions> keyframes;
+  bool HasAnyProps() const {
+    return hasX || hasY || hasWidth || hasHeight || hasOpacity ||
+           hasBackgroundColor || hasXExpr || hasYExpr || hasPosition;
+  }
+};
 
-        // 'to' properties
-        bool hasX = false;
-        bool hasY = false;
-        bool hasWidth = false;
-        bool hasHeight = false;
-        float x = 0.0f;
-        float y = 0.0f;
-        float width = 0.0f;
-        float height = 0.0f;
-        bool hasOpacity = false;
-        float opacity = 1.0f;
-        bool hasBackgroundColor = false;
-        float bgColorR = 0.0f;
-        float bgColorG = 0.0f;
-        float bgColorB = 0.0f;
-        float bgAlpha = 255.0f;
+struct WindowAnimationOptions {
+  int duration = 250;
+  std::wstring easing = L"linear";
+  int iterationCount = 1;
+  bool iterationInfinite = false;
+  bool hasIterationCount = false;
+  bool iterationCountInvalid = false;
+  bool hasKeyframes = false;
+  bool keyframesInvalid = false;
+  std::wstring keyframesError;
+  bool tweenInvalid = false;
+  std::wstring tweenError;
+  std::vector<WindowAnimationKeyframeOptions> keyframes;
 
-        bool hasXExpr = false;
-        std::wstring xExpr;
-        bool hasYExpr = false;
-        std::wstring yExpr;
-        bool hasPosition = false;
-        std::wstring position;
-        float offsetX = 0.0f;
-        float offsetY = 0.0f;
+  // 'to' properties
+  bool hasX = false;
+  bool hasY = false;
+  bool hasWidth = false;
+  bool hasHeight = false;
+  float x = 0.0f;
+  float y = 0.0f;
+  float width = 0.0f;
+  float height = 0.0f;
+  bool hasOpacity = false;
+  float opacity = 1.0f;
+  bool hasBackgroundColor = false;
+  float bgColorR = 0.0f;
+  float bgColorG = 0.0f;
+  float bgColorB = 0.0f;
+  float bgAlpha = 255.0f;
 
-        // 'from' properties
-        bool fromHasX = false;
-        bool fromHasY = false;
-        bool fromHasWidth = false;
-        bool fromHasHeight = false;
-        float fromX = 0.0f;
-        float fromY = 0.0f;
-        float fromWidth = 0.0f;
-        float fromHeight = 0.0f;
-        bool fromHasOpacity = false;
-        float fromOpacity = 1.0f;
-        bool fromHasBackgroundColor = false;
-        float fromBgColorR = 0.0f;
-        float fromBgColorG = 0.0f;
-        float fromBgColorB = 0.0f;
-        float fromBgAlpha = 255.0f;
+  bool hasXExpr = false;
+  std::wstring xExpr;
+  bool hasYExpr = false;
+  std::wstring yExpr;
+  bool hasPosition = false;
+  std::wstring position;
+  float offsetX = 0.0f;
+  float offsetY = 0.0f;
 
-        bool fromHasXExpr = false;
-        std::wstring fromXExpr;
-        bool fromHasYExpr = false;
-        std::wstring fromYExpr;
-        bool fromHasPosition = false;
-        std::wstring fromPosition;
-        float fromOffsetX = 0.0f;
-        float fromOffsetY = 0.0f;
+  // 'from' properties
+  bool fromHasX = false;
+  bool fromHasY = false;
+  bool fromHasWidth = false;
+  bool fromHasHeight = false;
+  float fromX = 0.0f;
+  float fromY = 0.0f;
+  float fromWidth = 0.0f;
+  float fromHeight = 0.0f;
+  bool fromHasOpacity = false;
+  float fromOpacity = 1.0f;
+  bool fromHasBackgroundColor = false;
+  float fromBgColorR = 0.0f;
+  float fromBgColorG = 0.0f;
+  float fromBgColorB = 0.0f;
+  float fromBgAlpha = 255.0f;
 
-        bool HasAnyToProps() const
-        {
-            if (hasKeyframes)
-            {
-                for (const WindowAnimationKeyframeOptions &kf : keyframes)
-                {
-                    if (kf.HasAnyProps())
-                        return true;
-                }
-                return false;
-            }
-            return hasX || hasY || hasWidth || hasHeight || hasOpacity || hasBackgroundColor || hasXExpr || hasYExpr || hasPosition;
-        }
-    };
+  bool fromHasXExpr = false;
+  std::wstring fromXExpr;
+  bool fromHasYExpr = false;
+  std::wstring fromYExpr;
+  bool fromHasPosition = false;
+  std::wstring fromPosition;
+  float fromOffsetX = 0.0f;
+  float fromOffsetY = 0.0f;
+
+  bool HasAnyToProps() const {
+    if (hasKeyframes) {
+      for (const WindowAnimationKeyframeOptions &kf : keyframes) {
+        if (kf.HasAnyProps())
+          return true;
+      }
+      return false;
+    }
+    return hasX || hasY || hasWidth || hasHeight || hasOpacity ||
+           hasBackgroundColor || hasXExpr || hasYExpr || hasPosition;
+  }
+};
 } // namespace PropertyParser
 
-namespace novadesk::scripting::quickjs::parser
-{
-    struct WidgetWindowOptions
-    {
-        std::wstring id = L"widget";
-        int width = 0;
-        int height = 0;
-        bool hasWidth = false;
-        bool hasHeight = false;
-        int minWidth = 0;
-        int minHeight = 0;
-        bool hasMinWidth = false;
-        bool hasMinHeight = false;
-        int x = 0;
-        int y = 0;
-        bool hasX = false;
-        bool hasY = false;
-        bool draggable = true;
-        bool hasDraggable = false;
-        bool resizable = false;
-        bool hasResizable = false;
-        bool clickThrough = false;
-        bool hasClickThrough = false;
-        bool keepOnScreen = false;
-        bool hasKeepOnScreen = false;
-        bool snapEdges = true;
-        bool hasSnapEdges = false;
-        bool showInToolbar = false;
-        bool hasShowInToolbar = false;
-        std::wstring toolbarIcon;
-        bool hasToolbarIcon = false;
-        std::wstring toolbarTitle;
-        bool hasToolbarTitle = false;
-        bool show = true;
-        bool hasShow = false;
-        std::wstring backgroundColor = L"rgba(0,0,0,0)";
-        COLORREF color = RGB(0, 0, 0);
-        BYTE bgAlpha = 0;
-        GradientInfo bgGradient;
-        bool hasBackgroundColor = false;
-        std::wstring backgroundImage;
-        bool hasBackgroundImage = false;
-        std::wstring backgroundImageFallback;
-        bool hasBackgroundImageFallback = false;
-        bool backgroundImageSizeIsExplicit = false;
-        float backgroundImageSizeWidth = 0.0f;
-        float backgroundImageSizeHeight = 0.0f;
-        bool backgroundImageSizeHasWidth = false;
-        bool backgroundImageSizeHasHeight = false;
-        std::wstring backgroundImageSize = L"cover";
-        bool hasBackgroundImageSize = false;
-        bool backgroundImagePositionIsExplicit = false;
-        float backgroundImagePositionX = 0.0f;
-        float backgroundImagePositionY = 0.0f;
-        std::wstring backgroundImagePosition = L"center";
-        bool hasBackgroundImagePosition = false;
-        BYTE windowOpacity = 255;
-        bool hasWindowOpacity = false;
-        int zPos = -1;
-        bool hasZPos = false;
-        std::wstring scriptPath;
-        bool hasScriptPath = false;
-    };
+namespace novadesk::scripting::quickjs::parser {
+struct WidgetWindowOptions {
+  std::wstring id = L"widget";
+  int width = 0;
+  int height = 0;
+  bool hasWidth = false;
+  bool hasHeight = false;
+  int minWidth = 0;
+  int minHeight = 0;
+  bool hasMinWidth = false;
+  bool hasMinHeight = false;
+  int x = 0;
+  int y = 0;
+  bool hasX = false;
+  bool hasY = false;
+  bool draggable = true;
+  bool hasDraggable = false;
+  bool resizable = false;
+  bool hasResizable = false;
+  bool clickThrough = false;
+  bool hasClickThrough = false;
+  bool keepOnScreen = false;
+  bool hasKeepOnScreen = false;
+  bool snapEdges = true;
+  bool hasSnapEdges = false;
+  bool showInToolbar = false;
+  bool hasShowInToolbar = false;
+  std::wstring toolbarIcon;
+  bool hasToolbarIcon = false;
+  std::wstring toolbarTitle;
+  bool hasToolbarTitle = false;
+  bool show = true;
+  bool hasShow = false;
+  std::wstring backgroundColor = L"rgba(0,0,0,0)";
+  COLORREF color = RGB(0, 0, 0);
+  BYTE bgAlpha = 0;
+  GradientInfo bgGradient;
+  bool hasBackgroundColor = false;
+  std::wstring backgroundImage;
+  bool hasBackgroundImage = false;
+  std::wstring backgroundImageFallback;
+  bool hasBackgroundImageFallback = false;
+  bool backgroundImageSizeIsExplicit = false;
+  float backgroundImageSizeWidth = 0.0f;
+  float backgroundImageSizeHeight = 0.0f;
+  bool backgroundImageSizeHasWidth = false;
+  bool backgroundImageSizeHasHeight = false;
+  std::wstring backgroundImageSize = L"cover";
+  bool hasBackgroundImageSize = false;
+  bool backgroundImagePositionIsExplicit = false;
+  float backgroundImagePositionX = 0.0f;
+  float backgroundImagePositionY = 0.0f;
+  std::wstring backgroundImagePosition = L"center";
+  bool hasBackgroundImagePosition = false;
+  BYTE windowOpacity = 255;
+  bool hasWindowOpacity = false;
+  int zPos = -1;
+  bool hasZPos = false;
+  std::wstring scriptPath;
+  bool hasScriptPath = false;
+};
 } // namespace novadesk::scripting::quickjs::parser

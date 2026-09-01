@@ -4,16 +4,15 @@
  * License; either version 2 of the License, or (at your option) any later
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
- 
+
 #pragma once
 
 #include <string>
 #include "quickjs.h"
 
-namespace novadesk::scripting::quickjs
-{
-    JSModuleDef *EnsureSystemModule(JSContext *ctx, const char *moduleName);
-    void DispatchWebFetchResult(void *payload);
-    void ClearWebFetchRequests(JSContext *ctx = nullptr);
-    void ClearWebFetchRequestsForScript(const std::wstring &scriptPath);
-}
+namespace novadesk::scripting::quickjs {
+JSModuleDef *EnsureSystemModule(JSContext *ctx, const char *moduleName);
+void DispatchWebFetchResult(void *payload);
+void ClearWebFetchRequests(JSContext *ctx = nullptr);
+void ClearWebFetchRequestsForScript(const std::wstring &scriptPath);
+} // namespace novadesk::scripting::quickjs

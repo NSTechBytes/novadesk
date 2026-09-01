@@ -14,35 +14,34 @@
 
 class Element;
 
-class Tooltip
-{
+class Tooltip {
 public:
-    Tooltip();
-    ~Tooltip();
+  Tooltip();
+  ~Tooltip();
 
-    bool Initialize(HWND parentHWnd, HINSTANCE hInstance);
-    void Update(Element* element);
-    void Move();
-    void Destroy();
-    
-    bool IsActive() const { return m_ActiveToolTipHWnd != nullptr; }
-    HWND GetActiveHWnd() const { return m_ActiveToolTipHWnd; }
+  bool Initialize(HWND parentHWnd, HINSTANCE hInstance);
+  void Update(Element *element);
+  void Move();
+  void Destroy();
+
+  bool IsActive() const { return m_ActiveToolTipHWnd != nullptr; }
+  HWND GetActiveHWnd() const { return m_ActiveToolTipHWnd; }
 
 private:
-    HWND m_ParentHWnd = nullptr;
-    HWND m_ToolTipHWnd = nullptr;
-    HWND m_ToolTipBalloonHWnd = nullptr;
-    HWND m_ActiveToolTipHWnd = nullptr;
-    DWORD m_LastMoveTime = 0;
-    UINT m_ToolInfoSize = 0;
-    POINT m_LastPos = { -1, -1 };
-    
-    // Hybrid tracking state
-    POINT m_PendingPos = { -1, -1 };
-    DWORD m_PendingMoveTime = 0;
-    bool m_IsMovePending = false;
+  HWND m_ParentHWnd = nullptr;
+  HWND m_ToolTipHWnd = nullptr;
+  HWND m_ToolTipBalloonHWnd = nullptr;
+  HWND m_ActiveToolTipHWnd = nullptr;
+  DWORD m_LastMoveTime = 0;
+  UINT m_ToolInfoSize = 0;
+  POINT m_LastPos = {-1, -1};
 
-    void InitializeToolTip(HWND hwnd);
+  // Hybrid tracking state
+  POINT m_PendingPos = {-1, -1};
+  DWORD m_PendingMoveTime = 0;
+  bool m_IsMovePending = false;
+
+  void InitializeToolTip(HWND hwnd);
 };
 
 #endif

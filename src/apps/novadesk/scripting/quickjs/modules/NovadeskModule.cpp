@@ -4,7 +4,7 @@
  * License; either version 2 of the License, or (at your option) any later
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
- 
+
 #include "NovadeskModule.h"
 
 #include <algorithm>
@@ -31,2476 +31,2321 @@
 #include "ModuleSystem.h"
 #include "WidgetUiBindings.h"
 
-namespace novadesk::scripting::quickjs
-{
-    namespace
-    {
-        using novadesk_context = void *;
-
-        struct NovadeskHostAPI
-        {
-            void (*RegisterString)(novadesk_context ctx, const char *name, const char *value);
-            void (*RegisterNumber)(novadesk_context ctx, const char *name, double value);
-            void (*RegisterBool)(novadesk_context ctx, const char *name, int value);
-            void (*RegisterObjectStart)(novadesk_context ctx, const char *name);
-            void (*RegisterObjectEnd)(novadesk_context ctx, const char *name);
-            void (*RegisterArrayString)(novadesk_context ctx, const char *name, const char **values, size_t count);
-            void (*RegisterArrayNumber)(novadesk_context ctx, const char *name, const double *values, size_t count);
-            void (*RegisterFunction)(novadesk_context ctx, const char *name, int (*func)(novadesk_context ctx), int nargs);
-            void (*PushString)(novadesk_context ctx, const char *value);
-            void (*PushNumber)(novadesk_context ctx, double value);
-            void (*PushBool)(novadesk_context ctx, int value);
-            void (*PushNull)(novadesk_context ctx);
-            void (*PushObject)(novadesk_context ctx);
-            void (*PushArray)(novadesk_context ctx);
-            double (*GetNumber)(novadesk_context ctx, int index);
-            const char *(*GetString)(novadesk_context ctx, int index);
-            int (*GetBool)(novadesk_context ctx, int index);
-            int (*IsNumber)(novadesk_context ctx, int index);
-            int (*IsString)(novadesk_context ctx, int index);
-            int (*IsBool)(novadesk_context ctx, int index);
-            int (*IsObject)(novadesk_context ctx, int index);
-            int (*IsFunction)(novadesk_context ctx, int index);
-            int (*IsNull)(novadesk_context ctx, int index);
-            int (*GetProperty)(novadesk_context ctx, int objIndex, const char *name);
-            int (*GetTop)(novadesk_context ctx);
-            void (*Pop)(novadesk_context ctx);
-            void (*PopN)(novadesk_context ctx, int n);
-            void (*ThrowError)(novadesk_context ctx, const char *message);
-            void *(*JsGetFunctionPtr)(novadesk_context ctx, int index);
-            void (*JsCallFunction)(novadesk_context ctx, void *funcPtr, int nargs);
-            void (*JsCallFunctionNoArgs)(novadesk_context ctx, void *funcPtr);
-            void (*ArrayPushObject)(novadesk_context ctx);
-        };
-
-        using NovadeskAddonInitFn = void (*)(novadesk_context ctx, HWND hMsgWnd, const NovadeskHostAPI *host);
-        using NovadeskAddonUnloadFn = void (*)();
-
-        bool g_moduleDebug = false;
-        int g_nextTrayCommandId = 1;
-        std::wstring g_lastToastError;
-        std::vector<std::wstring> g_appArgv;    // normalized [exePath, scriptPath, ...userArgs] (Node.js style)
-        std::vector<std::wstring> g_rawAppArgv; // exact raw argv from command line
-
-        struct AddonInfo
-        {
-            int id = 0;
-            HMODULE handle = nullptr;
-            NovadeskAddonUnloadFn unloadFn = nullptr;
-            std::vector<int> registeredFunctionIds;
-            std::vector<void *> functionHandles;
-            JSContext *exportCtx = nullptr;
-            JSValue exportObject = JS_UNDEFINED;
-        };
-
-        std::recursive_mutex g_addonMutex;
-        std::map<std::wstring, AddonInfo> g_loadedAddons;
-        std::unordered_map<int, std::wstring> g_addonPathById;
-        int g_nextAddonId = 1;
-        int g_nextAddonRegisteredFnId = 1;
-        constexpr const char *kAddonIdKey = "__novadesk_addon_id";
-
-        struct AddonRegisteredFunction
-        {
-            int (*fn)(novadesk_context) = nullptr;
-            AddonInfo *addon = nullptr;
-        };
-
-        std::unordered_map<int, AddonRegisteredFunction> g_registeredAddonFunctions;
-
-        struct JsFunctionHandle
-        {
-            JSContext *ctx = nullptr;
-            JSValue fn = JS_UNDEFINED;
-        };
-
-        struct AddonCallContext
-        {
-            JSContext *ctx = nullptr;
-            AddonInfo *addon = nullptr;
-            std::vector<JSValue> args;
-            std::vector<JSValue> stack;
-            std::deque<std::string> tempStrings;
-            std::string throwMessage;
-            bool hasThrow = false;
-        };
-
-        std::wstring GetVersionProperty(const std::wstring &propertyName);
-
-        struct ToastCallbackIds
-        {
-            int activated = -1;
-            int action = -1;
-            int input = -1;
-            int dismissed = -1;
-            int failed = -1;
-        };
-
-        class ToastHandler final : public WinToastLib::IWinToastHandler
-        {
-        public:
-            explicit ToastHandler(const ToastCallbackIds &callbacks)
-                : m_Callbacks(callbacks)
-            {
-            }
-
-            void SetToastId(INT64 toastId)
-            {
-                m_ToastId.store(toastId);
-            }
-
-            void toastActivated() const override
-            {
-                Logging::Log(LogLevel::Info, L"[novadesk.toast] activated");
-                Dispatch(m_Callbacks.activated, "activated");
-            }
-
-            void toastActivated(int actionIndex) const override
-            {
-                Logging::Log(LogLevel::Info, L"[novadesk.toast] action activated: %d", actionIndex);
-                JSEngine::ToastEventData data{};
-                data.toastId = m_ToastId.load();
-                data.type = "action";
-                data.actionIndex = actionIndex;
-                JSEngine::DispatchToastEventAsync(m_Callbacks.action, data);
-            }
-
-            void toastActivated(std::wstring response) const override
-            {
-                Logging::Log(LogLevel::Info, L"[novadesk.toast] input submitted: %s", response.c_str());
-                JSEngine::ToastEventData data{};
-                data.toastId = m_ToastId.load();
-                data.type = "input";
-                data.input = response;
-                JSEngine::DispatchToastEventAsync(m_Callbacks.input, data);
-            }
-
-            void toastDismissed(WinToastDismissalReason state) const override
-            {
-                Logging::Log(LogLevel::Info, L"[novadesk.toast] dismissed: %d", static_cast<int>(state));
-                JSEngine::ToastEventData data{};
-                data.toastId = m_ToastId.load();
-                data.type = "dismissed";
-                data.dismissalReason = DismissalReasonToString(state);
-                JSEngine::DispatchToastEventAsync(m_Callbacks.dismissed, data);
-            }
-
-            void toastFailed() const override
-            {
-                Logging::Log(LogLevel::Warn, L"[novadesk.toast] failed");
-                Dispatch(m_Callbacks.failed, "failed");
-            }
-
-        private:
-            static std::string DismissalReasonToString(WinToastDismissalReason state)
-            {
-                switch (state)
-                {
-                case WinToastLib::IWinToastHandler::UserCanceled:
-                    return "userCanceled";
-                case WinToastLib::IWinToastHandler::ApplicationHidden:
-                    return "applicationHidden";
-                case WinToastLib::IWinToastHandler::TimedOut:
-                    return "timedOut";
-                default:
-                    return "unknown";
-                }
-            }
-
-            void Dispatch(int callbackId, const std::string &type) const
-            {
-                JSEngine::ToastEventData data{};
-                data.toastId = m_ToastId.load();
-                data.type = type;
-                JSEngine::DispatchToastEventAsync(callbackId, data);
-            }
-
-            ToastCallbackIds m_Callbacks;
-            std::atomic<INT64> m_ToastId = 0;
-        };
-
-        std::wstring JsValueToWString(JSContext *ctx, JSValueConst value)
-        {
-            const char *s = JS_ToCString(ctx, value);
-            if (!s)
-                return L"";
-            std::wstring out = Utils::ToWString(s);
-            JS_FreeCString(ctx, s);
-            return out;
-        }
-
-        std::wstring ToLower(std::wstring value)
-        {
-            std::transform(value.begin(), value.end(), value.begin(), ::towlower);
-            return value;
-        }
-
-        bool GetObjectString(JSContext *ctx, JSValueConst obj, const char *name, std::wstring &out)
-        {
-            JSValue value = JS_GetPropertyStr(ctx, obj, name);
-            if (JS_IsUndefined(value) || JS_IsNull(value))
-            {
-                JS_FreeValue(ctx, value);
-                return false;
-            }
-            out = JsValueToWString(ctx, value);
-            JS_FreeValue(ctx, value);
-            return !out.empty();
-        }
-
-        bool GetObjectBool(JSContext *ctx, JSValueConst obj, const char *name, bool &out)
-        {
-            JSValue value = JS_GetPropertyStr(ctx, obj, name);
-            if (JS_IsUndefined(value) || JS_IsNull(value))
-            {
-                JS_FreeValue(ctx, value);
-                return false;
-            }
-            int b = JS_ToBool(ctx, value);
-            JS_FreeValue(ctx, value);
-            if (b < 0)
-                return false;
-            out = (b != 0);
-            return true;
-        }
-
-        bool GetObjectInt64(JSContext *ctx, JSValueConst obj, const char *name, int64_t &out)
-        {
-            JSValue value = JS_GetPropertyStr(ctx, obj, name);
-            if (JS_IsUndefined(value) || JS_IsNull(value))
-            {
-                JS_FreeValue(ctx, value);
-                return false;
-            }
-            const bool ok = (JS_ToInt64(ctx, &out, value) == 0);
-            JS_FreeValue(ctx, value);
-            return ok;
-        }
-
-        std::wstring ResolveToastAssetPath(const std::wstring &inputPath)
-        {
-            if (inputPath.empty())
-                return inputPath;
-
-            if (PathUtils::IsPathRelative(inputPath))
-            {
-                std::wstring baseDir = PathUtils::GetParentDir(JSEngine::GetCurrentScriptPath());
-                if (baseDir.empty())
-                    baseDir = JSEngine::GetEntryScriptDir();
-                if (baseDir.empty())
-                    baseDir = PathUtils::GetWidgetsDir();
-                return PathUtils::ResolvePath(inputPath, baseDir);
-            }
-
-            return PathUtils::NormalizePath(inputPath);
-        }
-
-        void SetToastError(const std::wstring &message)
-        {
-            g_lastToastError = message;
-            if (!message.empty())
-                Logging::Log(LogLevel::Warn, L"[novadesk.toast] %s", message.c_str());
-        }
-
-        bool EnsureToastInitialized(JSContext *ctx, JSValueConst options = JS_UNDEFINED)
-        {
-            auto *instance = WinToastLib::WinToast::instance();
-            if (!instance)
-            {
-                SetToastError(L"WinToast instance is unavailable");
-                return false;
-            }
-
-            if (instance->isInitialized())
-                return true;
-
-            std::wstring appName = GetVersionProperty(L"FileDescription");
-            std::wstring companyName = GetVersionProperty(L"CompanyName");
-            std::wstring productName = GetVersionProperty(L"ProductName");
-            std::wstring productVersion = GetVersionProperty(L"ProductVersion");
-            std::wstring aumi;
-            if (appName.empty())
-                appName = productName;
-            if (appName.empty())
-                appName = L"Novadesk";
-            if (companyName.empty())
-                companyName = L"OfficialNovadesk";
-            if (productName.empty())
-                productName = appName;
-            if (productVersion.empty())
-                productVersion = Utils::ToWString(std::string(NOVADESK_VERSION));
-
-            if (JS_IsObject(options))
-            {
-                GetObjectString(ctx, options, "appName", appName);
-                GetObjectString(ctx, options, "companyName", companyName);
-                GetObjectString(ctx, options, "productName", productName);
-                GetObjectString(ctx, options, "aumi", aumi);
-
-                std::wstring shortcutPolicy;
-                if (GetObjectString(ctx, options, "shortcutPolicy", shortcutPolicy))
-                {
-                    shortcutPolicy = ToLower(shortcutPolicy);
-                    if (shortcutPolicy == L"ignore")
-                        instance->setShortcutPolicy(WinToastLib::WinToast::SHORTCUT_POLICY_IGNORE);
-                    else if (shortcutPolicy == L"require")
-                        instance->setShortcutPolicy(WinToastLib::WinToast::SHORTCUT_POLICY_REQUIRE_NO_CREATE);
-                    else
-                        instance->setShortcutPolicy(WinToastLib::WinToast::SHORTCUT_POLICY_REQUIRE_CREATE);
-                }
-            }
-
-            if (aumi.empty())
-            {
-                aumi = WinToastLib::WinToast::configureAUMI(companyName, productName, L"", productVersion);
-            }
-
-            instance->setAppName(appName);
-            instance->setAppUserModelId(aumi);
-
-            WinToastLib::WinToast::WinToastError error = WinToastLib::WinToast::NoError;
-            if (!instance->initialize(&error))
-            {
-                SetToastError(WinToastLib::WinToast::strerror(error));
-                return false;
-            }
-
-            SetToastError(L"");
-            return true;
-        }
-
-        static JSValue AddonRegisteredFunctionBridge(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv, int magic)
-        {
-            int (*fn)(novadesk_context) = nullptr;
-            AddonInfo *addon = nullptr;
-            {
-                std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
-                auto it = g_registeredAddonFunctions.find(magic);
-                if (it == g_registeredAddonFunctions.end() || !it->second.fn)
-                {
-                    return JS_UNDEFINED;
-                }
-                fn = it->second.fn;
-                addon = it->second.addon;
-            }
-
-            AddonCallContext call{};
-            call.ctx = ctx;
-            call.addon = addon;
-            call.args.reserve(argc);
-            for (int i = 0; i < argc; ++i)
-            {
-                call.args.push_back(JS_DupValue(ctx, argv[i]));
-            }
-
-            fn(reinterpret_cast<novadesk_context>(&call));
-
-            for (JSValue &v : call.args)
-            {
-                JS_FreeValue(ctx, v);
-            }
-
-            if (call.hasThrow)
-            {
-                for (JSValue &v : call.stack)
-                {
-                    JS_FreeValue(ctx, v);
-                }
-                return JS_ThrowInternalError(ctx, "%s", call.throwMessage.c_str());
-            }
-
-            if (!call.stack.empty())
-            {
-                JSValue ret = call.stack.back();
-                call.stack.pop_back();
-                for (JSValue &v : call.stack)
-                {
-                    JS_FreeValue(ctx, v);
-                }
-                return ret;
-            }
-
-            return JS_UNDEFINED;
-        }
-
-        static JSValue *ResolveByIndex(AddonCallContext *call, int index)
-        {
-            if (!call)
-                return nullptr;
-            if (index >= 0)
-            {
-                if (index < static_cast<int>(call->args.size()))
-                {
-                    return &call->args[static_cast<size_t>(index)];
-                }
-                return nullptr;
-            }
-
-            const int pos = static_cast<int>(call->stack.size()) + index;
-            if (pos >= 0 && pos < static_cast<int>(call->stack.size()))
-            {
-                return &call->stack[static_cast<size_t>(pos)];
-            }
-            return nullptr;
-        }
-
-        static void host_RegisterString(novadesk_context c, const char *name, const char *value)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call || call->stack.empty() || !name)
-                return;
-            JSValue v = value ? JS_NewString(call->ctx, value) : JS_NULL;
-            JS_SetPropertyStr(call->ctx, call->stack.back(), name, v);
-        }
-
-        static void host_RegisterNumber(novadesk_context c, const char *name, double value)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call || call->stack.empty() || !name)
-                return;
-            JS_SetPropertyStr(call->ctx, call->stack.back(), name, JS_NewFloat64(call->ctx, value));
-        }
-
-        static void host_RegisterBool(novadesk_context c, const char *name, int value)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call || call->stack.empty() || !name)
-                return;
-            JS_SetPropertyStr(call->ctx, call->stack.back(), name, JS_NewBool(call->ctx, value ? 1 : 0));
-        }
-
-        static void host_RegisterObjectStart(novadesk_context c, const char *)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call)
-                return;
-            call->stack.push_back(JS_NewObject(call->ctx));
-        }
-
-        static void host_RegisterObjectEnd(novadesk_context c, const char *name)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call || call->stack.size() < 2 || !name)
-                return;
-            JSValue child = call->stack.back();
-            call->stack.pop_back();
-            JS_SetPropertyStr(call->ctx, call->stack.back(), name, child);
-        }
-
-        static void host_RegisterArrayString(novadesk_context c, const char *name, const char **values, size_t count)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call || call->stack.empty() || !name)
-                return;
-            JSValue arr = JS_NewArray(call->ctx);
-            for (uint32_t i = 0; i < static_cast<uint32_t>(count); ++i)
-            {
-                JS_SetPropertyUint32(call->ctx, arr, i, JS_NewString(call->ctx, values[i] ? values[i] : ""));
-            }
-            JS_SetPropertyStr(call->ctx, call->stack.back(), name, arr);
-        }
-
-        static void host_RegisterArrayNumber(novadesk_context c, const char *name, const double *values, size_t count)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call || call->stack.empty() || !name)
-                return;
-            JSValue arr = JS_NewArray(call->ctx);
-            for (uint32_t i = 0; i < static_cast<uint32_t>(count); ++i)
-            {
-                JS_SetPropertyUint32(call->ctx, arr, i, JS_NewFloat64(call->ctx, values[i]));
-            }
-            JS_SetPropertyStr(call->ctx, call->stack.back(), name, arr);
-        }
-
-        static void host_RegisterFunction(novadesk_context c, const char *name, int (*func)(novadesk_context), int nargs)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call || call->stack.empty() || !name || !func)
-                return;
-            std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
-            const int id = g_nextAddonRegisteredFnId++;
-            g_registeredAddonFunctions[id] = AddonRegisteredFunction{func, call->addon};
-            if (call->addon)
-            {
-                call->addon->registeredFunctionIds.push_back(id);
-            }
-            JSValue fn = JS_NewCFunctionMagic(call->ctx, AddonRegisteredFunctionBridge, name, nargs, JS_CFUNC_generic_magic, id);
-            JS_SetPropertyStr(call->ctx, call->stack.back(), name, fn);
-        }
-
-        static void host_PushString(novadesk_context c, const char *value)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call)
-                return;
-            call->stack.push_back(JS_NewString(call->ctx, value ? value : ""));
-        }
-
-        static void host_PushNumber(novadesk_context c, double value)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call)
-                return;
-            call->stack.push_back(JS_NewFloat64(call->ctx, value));
-        }
-
-        static void host_PushBool(novadesk_context c, int value)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call)
-                return;
-            call->stack.push_back(JS_NewBool(call->ctx, value ? 1 : 0));
-        }
-
-        static void host_PushNull(novadesk_context c)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call)
-                return;
-            call->stack.push_back(JS_NULL);
-        }
-
-        static void host_PushObject(novadesk_context c)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call)
-                return;
-            call->stack.push_back(JS_NewObject(call->ctx));
-        }
-
-        static void host_PushArray(novadesk_context c)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call)
-                return;
-            call->stack.push_back(JS_NewArray(call->ctx));
-        }
-
-        static double host_GetNumber(novadesk_context c, int index)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            JSValue *v = ResolveByIndex(call, index);
-            if (!v)
-                return 0.0;
-            double n = 0.0;
-            JS_ToFloat64(call->ctx, &n, *v);
-            return n;
-        }
-
-        static const char *host_GetString(novadesk_context c, int index)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            JSValue *v = ResolveByIndex(call, index);
-            if (!call || !v)
-                return nullptr;
-            const char *s = JS_ToCString(call->ctx, *v);
-            if (!s)
-                return nullptr;
-            call->tempStrings.emplace_back(s);
-            JS_FreeCString(call->ctx, s);
-            return call->tempStrings.back().c_str();
-        }
-
-        static int host_GetBool(novadesk_context c, int index)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            JSValue *v = ResolveByIndex(call, index);
-            if (!v)
-                return 0;
-            return JS_ToBool(call->ctx, *v) == 1 ? 1 : 0;
-        }
-
-        static int host_IsNumber(novadesk_context c, int index)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            JSValue *v = ResolveByIndex(call, index);
-            return v && JS_IsNumber(*v);
-        }
-
-        static int host_IsString(novadesk_context c, int index)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            JSValue *v = ResolveByIndex(call, index);
-            return v && JS_IsString(*v);
-        }
-
-        static int host_IsBool(novadesk_context c, int index)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            JSValue *v = ResolveByIndex(call, index);
-            return v && JS_IsBool(*v);
-        }
-
-        static int host_IsObject(novadesk_context c, int index)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            JSValue *v = ResolveByIndex(call, index);
-            return v && JS_IsObject(*v);
-        }
-
-        static int host_IsFunction(novadesk_context c, int index)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            JSValue *v = ResolveByIndex(call, index);
-            return v && JS_IsFunction(call->ctx, *v);
-        }
-
-        static int host_IsNull(novadesk_context c, int index)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            JSValue *v = ResolveByIndex(call, index);
-            return v && (JS_IsNull(*v) || JS_IsUndefined(*v));
-        }
-
-        static int host_GetProperty(novadesk_context c, int objIndex, const char *name)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call || !name)
-                return 0;
-            JSValue *obj = ResolveByIndex(call, objIndex);
-            if (!obj || !JS_IsObject(*obj))
-                return 0;
-
-            JSValue value = JS_GetPropertyStr(call->ctx, *obj, name);
-            if (JS_IsException(value))
-            {
-                JSValue exc = JS_GetException(call->ctx);
-                if (JS_IsObject(exc))
-                {
-                    JSValue msgV = JS_GetPropertyStr(call->ctx, exc, "message");
-                    if (!JS_IsUndefined(msgV) && !JS_IsNull(msgV))
-                    {
-                        const char *msg = JS_ToCString(call->ctx, msgV);
-                        if (msg)
-                        {
-                            call->throwMessage = msg;
-                            JS_FreeCString(call->ctx, msg);
-                        }
-                        JS_FreeValue(call->ctx, msgV);
-                    }
-                }
-                JS_FreeValue(call->ctx, exc);
-                if (call->throwMessage.empty())
-                    call->throwMessage = "GetProperty failed";
-                call->hasThrow = true;
-                return 0;
-            }
-
-            call->stack.push_back(value);
-            return JS_IsUndefined(value) ? 0 : 1;
-        }
-
-        static int host_GetTop(novadesk_context c)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call)
-                return 0;
-            return static_cast<int>(call->args.size() + call->stack.size());
-        }
-
-        static void host_Pop(novadesk_context c)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call || call->stack.empty())
-                return;
-            JS_FreeValue(call->ctx, call->stack.back());
-            call->stack.pop_back();
-        }
-
-        static void host_PopN(novadesk_context c, int n)
-        {
-            for (int i = 0; i < n; ++i)
-                host_Pop(c);
-        }
-
-        static void host_ThrowError(novadesk_context c, const char *message)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call)
-                return;
-            call->hasThrow = true;
-            call->throwMessage = message ? message : "Addon error";
-        }
-
-        static void *host_JsGetFunctionPtr(novadesk_context c, int index)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            JSValue *v = ResolveByIndex(call, index);
-            if (!call || !v || !JS_IsFunction(call->ctx, *v))
-                return nullptr;
-            auto *handle = new JsFunctionHandle{};
-            handle->ctx = call->ctx;
-            handle->fn = JS_DupValue(call->ctx, *v);
-            if (call->addon)
-            {
-                call->addon->functionHandles.push_back(handle);
-            }
-            return handle;
-        }
-
-        static void host_JsCallFunction(novadesk_context c, void *funcPtr, int nargs)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            auto *handle = reinterpret_cast<JsFunctionHandle *>(funcPtr);
-            if (!call || !handle || !JS_IsFunction(handle->ctx, handle->fn))
-                return;
-
-            if (nargs < 0 || nargs > static_cast<int>(call->stack.size()))
-            {
-                return;
-            }
-
-            std::vector<JSValue> argv(static_cast<size_t>(nargs));
-            const int base = static_cast<int>(call->stack.size()) - nargs;
-            for (int i = 0; i < nargs; ++i)
-            {
-                argv[static_cast<size_t>(i)] = JS_DupValue(call->ctx, call->stack[static_cast<size_t>(base + i)]);
-            }
-
-            JSValue ret = JS_Call(call->ctx, handle->fn, JS_UNDEFINED, nargs, argv.data());
-            for (JSValue &a : argv)
-                JS_FreeValue(call->ctx, a);
-            for (int i = 0; i < nargs; ++i)
-            {
-                JS_FreeValue(call->ctx, call->stack.back());
-                call->stack.pop_back();
-            }
-
-            if (JS_IsException(ret))
-            {
-                JSValue exc = JS_GetException(call->ctx);
-                if (JS_IsObject(exc))
-                {
-                    JSValue msgV = JS_GetPropertyStr(call->ctx, exc, "message");
-                    if (!JS_IsUndefined(msgV) && !JS_IsNull(msgV))
-                    {
-                        const char *msg = JS_ToCString(call->ctx, msgV);
-                        if (msg)
-                        {
-                            call->throwMessage = msg;
-                            JS_FreeCString(call->ctx, msg);
-                        }
-                        JS_FreeValue(call->ctx, msgV);
-                    }
-                }
-                JS_FreeValue(call->ctx, exc);
-                if (call->throwMessage.empty())
-                    call->throwMessage = "JsCallFunction failed";
-                call->hasThrow = true;
-                return;
-            }
-
-            call->stack.push_back(ret);
-        }
-
-        static void host_JsCallFunctionNoArgs(novadesk_context, void *funcPtr)
-        {
-            auto *handle = reinterpret_cast<JsFunctionHandle *>(funcPtr);
-            if (!handle || !JS_IsFunction(handle->ctx, handle->fn))
-                return;
-
-            JSValue ret = JS_Call(handle->ctx, handle->fn, JS_UNDEFINED, 0, nullptr);
-            if (!JS_IsException(ret))
-            {
-                JS_FreeValue(handle->ctx, ret);
-            }
-            else
-            {
-                JSValue exc = JS_GetException(handle->ctx);
-                JS_FreeValue(handle->ctx, exc);
-            }
-        }
-
-        static void host_ArrayPushObject(novadesk_context c)
-        {
-            auto *call = reinterpret_cast<AddonCallContext *>(c);
-            if (!call || call->stack.empty())
-                return;
-            JSValue *arr = &call->stack.back();
-            if (!JS_IsArray(*arr))
-                return;
-
-            uint32_t len = 0;
-            JSValue lenV = JS_GetPropertyStr(call->ctx, *arr, "length");
-            JS_ToUint32(call->ctx, &len, lenV);
-            JS_FreeValue(call->ctx, lenV);
-
-            JSValue obj = JS_NewObject(call->ctx);
-            JS_SetPropertyUint32(call->ctx, *arr, len, JS_DupValue(call->ctx, obj));
-            call->stack.push_back(obj);
-        }
-
-        const NovadeskHostAPI g_hostApi = {
-            host_RegisterString,
-            host_RegisterNumber,
-            host_RegisterBool,
-            host_RegisterObjectStart,
-            host_RegisterObjectEnd,
-            host_RegisterArrayString,
-            host_RegisterArrayNumber,
-            host_RegisterFunction,
-            host_PushString,
-            host_PushNumber,
-            host_PushBool,
-            host_PushNull,
-            host_PushObject,
-            host_PushArray,
-            host_GetNumber,
-            host_GetString,
-            host_GetBool,
-            host_IsNumber,
-            host_IsString,
-            host_IsBool,
-            host_IsObject,
-            host_IsFunction,
-            host_IsNull,
-            host_GetProperty,
-            host_GetTop,
-            host_Pop,
-            host_PopN,
-            host_ThrowError,
-            host_JsGetFunctionPtr,
-            host_JsCallFunction,
-            host_JsCallFunctionNoArgs,
-            host_ArrayPushObject};
-
-        bool UnloadAddonById(int addonId)
-        {
-            std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
-            auto pit = g_addonPathById.find(addonId);
-            if (pit == g_addonPathById.end())
-            {
-                return false;
-            }
-            auto it = g_loadedAddons.find(pit->second);
-            if (it == g_loadedAddons.end())
-            {
-                return false;
-            }
-
-            if (it->second.unloadFn)
-            {
-                try
-                {
-                    it->second.unloadFn();
-                }
-                catch (...)
-                {
-                    Logging::Log(LogLevel::Error, L"Crash in NovadeskAddonUnload");
-                }
-            }
-
-            for (int id : it->second.registeredFunctionIds)
-            {
-                g_registeredAddonFunctions.erase(id);
-            }
-            for (void *p : it->second.functionHandles)
-            {
-                auto *h = reinterpret_cast<JsFunctionHandle *>(p);
-                if (h)
-                {
-                    if (!JS_IsUndefined(h->fn))
-                        JS_FreeValue(h->ctx, h->fn);
-                    delete h;
-                }
-            }
-            if (!JS_IsUndefined(it->second.exportObject) && it->second.exportCtx)
-            {
-                JS_FreeValue(it->second.exportCtx, it->second.exportObject);
-                it->second.exportObject = JS_UNDEFINED;
-            }
-
-            g_addonPathById.erase(it->second.id);
-            FreeLibrary(it->second.handle);
-            g_loadedAddons.erase(it);
-            return true;
-        }
-
-        void UnloadAllAddonsInternal()
-        {
-            std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
-            std::vector<int> addonIds;
-            addonIds.reserve(g_addonPathById.size());
-            for (const auto &kv : g_addonPathById)
-            {
-                addonIds.push_back(kv.first);
-            }
-            for (int id : addonIds)
-            {
-                UnloadAddonById(id);
-            }
-        }
-
-        std::wstring GetVersionProperty(const std::wstring &propertyName)
-        {
-            std::wstring exePath = PathUtils::GetExePath();
-            DWORD handle = 0;
-            DWORD size = GetFileVersionInfoSizeW(exePath.c_str(), &handle);
-            if (size == 0)
-                return L"";
-
-            std::vector<BYTE> buffer(size);
-            if (!GetFileVersionInfoW(exePath.c_str(), handle, size, buffer.data()))
-            {
-                return L"";
-            }
-
-            struct LANGANDCODEPAGE
-            {
-                WORD wLanguage;
-                WORD wCodePage;
-            } *translate = nullptr;
-            UINT cbTranslate = 0;
-            if (!VerQueryValueW(buffer.data(), L"\\VarFileInfo\\Translation", reinterpret_cast<LPVOID *>(&translate), &cbTranslate) ||
-                cbTranslate < sizeof(LANGANDCODEPAGE))
-            {
-                return L"";
-            }
-
-            wchar_t subBlock[128];
-            swprintf_s(subBlock, L"\\StringFileInfo\\%04x%04x\\%s",
-                       translate[0].wLanguage, translate[0].wCodePage, propertyName.c_str());
-
-            LPWSTR value = nullptr;
-            UINT sizeOut = 0;
-            if (VerQueryValueW(buffer.data(), subBlock, reinterpret_cast<LPVOID *>(&value), &sizeOut) && value)
-            {
-                return value;
-            }
-            return L"";
-        }
-
-        bool ParseTrayMenuItems(JSContext *ctx, int trayId, JSValueConst arr, std::vector<MenuItem> &out)
-        {
-            if (!JS_IsArray(arr))
-                return false;
-            uint32_t len = 0;
-            JSValue lenV = JS_GetPropertyStr(ctx, arr, "length");
-            if (JS_ToUint32(ctx, &len, lenV) != 0)
-            {
-                JS_FreeValue(ctx, lenV);
-                return false;
-            }
-            JS_FreeValue(ctx, lenV);
-
-            for (uint32_t i = 0; i < len; ++i)
-            {
-                JSValue itemV = JS_GetPropertyUint32(ctx, arr, i);
-                if (!JS_IsObject(itemV))
-                {
-                    JS_FreeValue(ctx, itemV);
-                    continue;
-                }
-
-                MenuItem item{};
-                item.id = 0;
-
-                JSValue typeV = JS_GetPropertyStr(ctx, itemV, "type");
-                const char *typeS = JS_ToCString(ctx, typeV);
-                if (typeS && std::string(typeS) == "separator")
-                    item.isSeparator = true;
-                if (typeS)
-                    JS_FreeCString(ctx, typeS);
-                JS_FreeValue(ctx, typeV);
-
-                if (!item.isSeparator)
-                {
-                    JSValue textV = JS_GetPropertyStr(ctx, itemV, "text");
-                    const char *textS = JS_ToCString(ctx, textV);
-                    if (textS)
-                    {
-                        item.text = Utils::ToWString(textS);
-                        JS_FreeCString(ctx, textS);
-                    }
-                    JS_FreeValue(ctx, textV);
-
-                    JSValue checkedV = JS_GetPropertyStr(ctx, itemV, "checked");
-                    int checked = JS_ToBool(ctx, checkedV);
-                    if (checked >= 0)
-                        item.checked = (checked != 0);
-                    JS_FreeValue(ctx, checkedV);
-
-                    JSValue actionV = JS_GetPropertyStr(ctx, itemV, "action");
-                    if (JS_IsFunction(ctx, actionV))
-                    {
-                        item.id = 2000 + g_nextTrayCommandId++;
-                        JSEngine::RegisterTrayCommandCallback(ctx, trayId, item.id, actionV);
-                    }
-                    JS_FreeValue(ctx, actionV);
-
-                    JSValue childV = JS_GetPropertyStr(ctx, itemV, "items");
-                    if (JS_IsArray(childV))
-                    {
-                        ParseTrayMenuItems(ctx, trayId, childV, item.children);
-                    }
-                    JS_FreeValue(ctx, childV);
-                }
-
-                out.push_back(std::move(item));
-                JS_FreeValue(ctx, itemV);
-            }
-
-            return true;
-        }
-
-        JSValue JsAddonUnload(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv);
-
-        // Returns app.argv — an array of command-line arguments normalized to Node.js process.argv:
-        // argv[0]: executable path (Novadesk.exe)
-        // argv[1]: entry script path (index.js)
-        // argv[2...]: user-supplied arguments
-        JSValue JsAppGetArgv(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            JSValue arr = JS_NewArray(ctx);
-            uint32_t idx = 0;
-            for (const std::wstring &arg : g_appArgv)
-            {
-                const std::string argUtf8 = Utils::ToString(arg);
-                JS_SetPropertyUint32(ctx, arr, idx++, JS_NewString(ctx, argUtf8.c_str()));
-            }
-            return arr;
-        }
-
-        // Returns app.rawArgv — the exact, unparsed command-line arguments passed to the process.
-        JSValue JsAppGetRawArgv(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            JSValue arr = JS_NewArray(ctx);
-            uint32_t idx = 0;
-            for (const std::wstring &arg : g_rawAppArgv)
-            {
-                const std::string argUtf8 = Utils::ToString(arg);
-                JS_SetPropertyUint32(ctx, arr, idx++, JS_NewString(ctx, argUtf8.c_str()));
-            }
-            return arr;
-        }
-
-        JSValue JsAppReload(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            (void)ctx;
-            JSEngine::Reload();
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsAppRefresh(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            (void)ctx;
-            JSEngine::Reload();
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsAppExit(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            (void)ctx;
-            PostQuitMessage(0);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsAppRequestSingleInstanceLock(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewBool(ctx, RequestSingleInstanceLock() ? 1 : 0);
-        }
-
-        JSValue JsAppReleaseSingleInstanceLock(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            ReleaseSingleInstanceLock();
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsAppSaveLogToFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-            {
-                return JS_ThrowTypeError(ctx, "app.saveLogToFile(enable) requires boolean");
-            }
-            int b = JS_ToBool(ctx, argv[0]);
-            if (b < 0)
-            {
-                return JS_ThrowTypeError(ctx, "app.saveLogToFile(enable) expects boolean");
-            }
-
-            const bool enable = (b != 0);
-            Settings::SetGlobalBool("saveLogToFile", enable);
-            if (enable)
-            {
-                std::wstring logPath = PathUtils::GetAppDataPath() + L"logs.log";
-                Logging::SetFileLogging(logPath, false);
-            }
-            else
-            {
-                Logging::SetFileLogging(L"");
-            }
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsAppDisableLogging(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-            {
-                return JS_ThrowTypeError(ctx, "app.disableLogging(disable) requires boolean");
-            }
-            int b = JS_ToBool(ctx, argv[0]);
-            if (b < 0)
-            {
-                return JS_ThrowTypeError(ctx, "app.disableLogging(disable) expects boolean");
-            }
-
-            const bool disable = (b != 0);
-            Settings::SetGlobalBool("disableLogging", disable);
-            Logging::SetConsoleLogging(!disable);
-            if (disable)
-            {
-                Logging::SetFileLogging(L"");
-            }
-            else if (Settings::GetGlobalBool("saveLogToFile", false))
-            {
-                std::wstring logPath = PathUtils::GetAppDataPath() + L"logs.log";
-                Logging::SetFileLogging(logPath, false);
-            }
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsAppUseHardwareAcceleration(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-            {
-                return JS_ThrowTypeError(ctx, "app.useHardwareAcceleration(enable) requires boolean");
-            }
-            int b = JS_ToBool(ctx, argv[0]);
-            if (b < 0)
-            {
-                return JS_ThrowTypeError(ctx, "app.useHardwareAcceleration(enable) expects boolean");
-            }
-
-            Settings::SetGlobalBool("useHardwareAcceleration", (b != 0));
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsAppGetProductVersion(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewString(ctx, Utils::ToString(GetVersionProperty(L"ProductVersion")).c_str());
-        }
-
-        JSValue JsAppGetFileVersion(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewString(ctx, Utils::ToString(GetVersionProperty(L"FileVersion")).c_str());
-        }
-
-        JSValue JsAppGetNovadeskVersion(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewString(ctx, NOVADESK_VERSION);
-        }
-
-        JSValue JsAppGetAppDataPath(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewString(ctx, Utils::ToString(PathUtils::GetAppDataPath()).c_str());
-        }
-
-        JSValue JsAppGetSettingsFilePath(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewString(ctx, Utils::ToString(Settings::GetSettingsPath()).c_str());
-        }
-
-        JSValue JsAppGetLogPath(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewString(ctx, Utils::ToString(Settings::GetLogPath()).c_str());
-        }
-
-        JSValue JsAppIsPortable(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewBool(ctx, PathUtils::IsPortableEnvironment() ? 1 : 0);
-        }
-
-        JSValue JsAppIsFirstRun(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewBool(ctx, Settings::IsFirstRun() ? 1 : 0);
-        }
-
-        static std::wstring GetStorageFilePath()
-        {
-            return PathUtils::GetAppDataPath() + L"storage.json";
-        }
-
-        static JSValue LoadStorageObject(JSContext *ctx)
-        {
-            const std::wstring storagePath = GetStorageFilePath();
-            std::string text;
-            if (!::novadesk::shared::system::JsonReadTextFile(storagePath, text))
-            {
-                return JS_NewObject(ctx);
-            }
-
-            if (text.find_first_not_of(" \t\r\n") == std::string::npos)
-            {
-                return JS_NewObject(ctx);
-            }
-
-            JSValue parsed = JS_ParseJSON(ctx, text.c_str(), text.size(), Utils::ToString(storagePath).c_str());
-            if (JS_IsException(parsed) || !JS_IsObject(parsed))
-            {
-                if (JS_IsException(parsed))
-                {
-                    JS_FreeValue(ctx, JS_GetException(ctx));
-                }
-                else
-                {
-                    JS_FreeValue(ctx, parsed);
-                }
-                return JS_NewObject(ctx);
-            }
-            return parsed;
-        }
-
-        static bool SaveStorageObject(JSContext *ctx, JSValueConst storageObj)
-        {
-            JSValue indent = JS_NewInt32(ctx, 2);
-            JSValue serialized = JS_JSONStringify(ctx, storageObj, JS_UNDEFINED, indent);
-            JS_FreeValue(ctx, indent);
-            if (JS_IsException(serialized))
-            {
-                JS_FreeValue(ctx, JS_GetException(ctx));
-                return false;
-            }
-
-            const char *text = JS_ToCString(ctx, serialized);
-            if (!text)
-            {
-                JS_FreeValue(ctx, serialized);
-                return false;
-            }
-
-            const bool ok = ::novadesk::shared::system::JsonWriteTextFile(GetStorageFilePath(), text);
-            JS_FreeCString(ctx, text);
-            JS_FreeValue(ctx, serialized);
-            return ok;
-        }
-
-        JSValue JsAppStorageGet(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1 || !JS_IsString(argv[0]))
-            {
-                return JS_ThrowTypeError(ctx, "app.storage.get(key[, defaultValue]) requires string key");
-            }
-
-            JSValue storageObj = LoadStorageObject(ctx);
-            const char *key = JS_ToCString(ctx, argv[0]);
-            if (!key)
-            {
-                JS_FreeValue(ctx, storageObj);
-                return JS_EXCEPTION;
-            }
-
-            JSValue out = JS_GetPropertyStr(ctx, storageObj, key);
-            JS_FreeCString(ctx, key);
-            JS_FreeValue(ctx, storageObj);
-
-            if (JS_IsUndefined(out) && argc > 1)
-            {
-                JS_FreeValue(ctx, out);
-                return JS_DupValue(ctx, argv[1]);
-            }
-            return out;
-        }
-
-        JSValue JsAppStorageSet(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2 || !JS_IsString(argv[0]))
-            {
-                return JS_ThrowTypeError(ctx, "app.storage.set(key, value) requires string key");
-            }
-
-            JSValue storageObj = LoadStorageObject(ctx);
-            const char *key = JS_ToCString(ctx, argv[0]);
-            if (!key)
-            {
-                JS_FreeValue(ctx, storageObj);
-                return JS_EXCEPTION;
-            }
-
-            JS_SetPropertyStr(ctx, storageObj, key, JS_DupValue(ctx, argv[1]));
-            JS_FreeCString(ctx, key);
-
-            const bool ok = SaveStorageObject(ctx, storageObj);
-            JS_FreeValue(ctx, storageObj);
-            return JS_NewBool(ctx, ok ? 1 : 0);
-        }
-
-        JSValue JsAppStorageRemove(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1 || !JS_IsString(argv[0]))
-            {
-                return JS_ThrowTypeError(ctx, "app.storage.remove(key) requires string key");
-            }
-
-            JSValue storageObj = LoadStorageObject(ctx);
-            const char *key = JS_ToCString(ctx, argv[0]);
-            if (!key)
-            {
-                JS_FreeValue(ctx, storageObj);
-                return JS_EXCEPTION;
-            }
-
-            JSAtom keyAtom = JS_NewAtom(ctx, key);
-            const int deleted = JS_DeleteProperty(ctx, storageObj, keyAtom, 0);
-            JS_FreeAtom(ctx, keyAtom);
-            JS_FreeCString(ctx, key);
-
-            const bool saved = SaveStorageObject(ctx, storageObj);
-            JS_FreeValue(ctx, storageObj);
-            return JS_NewBool(ctx, (deleted == 1 && saved) ? 1 : 0);
-        }
-
-        static bool IsTrayEventName(const std::string &name)
-        {
-            static const std::unordered_set<std::string> kNames = {
-                "click",
-                "right-click",
-                "double-click",
-                "scroll-up",
-                "scroll-down",
-            };
-            return kNames.find(name) != kNames.end();
-        }
-
-        static const char *kTrayIdKey = "__trayId";
-
-        bool GetTrayId(JSContext *ctx, JSValueConst thisVal, int &outId)
-        {
-            if (!JS_IsObject(thisVal))
-                return false;
-            JSValue idV = JS_GetPropertyStr(ctx, thisVal, kTrayIdKey);
-            if (JS_IsUndefined(idV) || JS_IsNull(idV))
-            {
-                JS_FreeValue(ctx, idV);
-                return false;
-            }
-            int32_t id = 0;
-            const bool ok = (JS_ToInt32(ctx, &id, idV) == 0);
-            JS_FreeValue(ctx, idV);
-            if (!ok || id <= 0)
-                return false;
-            outId = id;
-            return true;
-        }
-
-        std::wstring ResolveTrayImagePath(const std::wstring &inputPath)
-        {
-            if (inputPath.empty())
-                return inputPath;
-
-            if (PathUtils::IsPathRelative(inputPath))
-            {
-                std::wstring baseDir = PathUtils::GetParentDir(JSEngine::GetCurrentScriptPath());
-                if (baseDir.empty())
-                    baseDir = JSEngine::GetEntryScriptDir();
-                if (baseDir.empty())
-                    baseDir = PathUtils::GetWidgetsDir();
-                return PathUtils::ResolvePath(inputPath, baseDir);
-            }
-
-            return PathUtils::NormalizePath(inputPath);
-        }
-
-        JSValue JsTrayOn(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsFunction(ctx, argv[1]))
-            {
-                return JS_ThrowTypeError(ctx, "tray.on(event, handler) requires event string and function");
-            }
-            int trayId = 0;
-            if (!GetTrayId(ctx, thisVal, trayId))
-            {
-                return JS_ThrowTypeError(ctx, "tray.on called on invalid tray instance");
-            }
-            const char *nameC = JS_ToCString(ctx, argv[0]);
-            if (!nameC)
-            {
-                return JS_EXCEPTION;
-            }
-            std::string name = nameC;
-            JS_FreeCString(ctx, nameC);
-            if (!IsTrayEventName(name))
-            {
-                return JS_ThrowTypeError(ctx, "tray.on: unknown event");
-            }
-            JSEngine::RegisterTrayEventCallback(ctx, trayId, name, argv[1]);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsTrayDestroy(JSContext *ctx, JSValueConst thisVal, int, JSValueConst *)
-        {
-            (void)ctx;
-            int trayId = 0;
-            if (!GetTrayId(ctx, thisVal, trayId))
-            {
-                return JS_ThrowTypeError(ctx, "tray.destroy called on invalid tray instance");
-            }
-            TrayDestroy(trayId);
-            JSEngine::ClearTrayEventCallbacks(trayId);
-            JSEngine::ClearTrayCommandCallbacks(trayId);
-            JSEngine::UnregisterTrayOwner(trayId);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsTraySetImage(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            if (argc < 1 || !JS_IsString(argv[0]))
-            {
-                return JS_ThrowTypeError(ctx, "tray.setImage(path) requires image path");
-            }
-            int trayId = 0;
-            if (!GetTrayId(ctx, thisVal, trayId))
-            {
-                return JS_ThrowTypeError(ctx, "tray.setImage called on invalid tray instance");
-            }
-            const char *pathC = JS_ToCString(ctx, argv[0]);
-            if (!pathC)
-            {
-                return JS_EXCEPTION;
-            }
-            std::wstring path = Utils::ToWString(pathC);
-            JS_FreeCString(ctx, pathC);
-            TraySetImage(trayId, ResolveTrayImagePath(path));
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsTraySetToolTip(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            if (argc < 1 || !JS_IsString(argv[0]))
-            {
-                return JS_ThrowTypeError(ctx, "tray.setToolTip(text) requires text");
-            }
-            int trayId = 0;
-            if (!GetTrayId(ctx, thisVal, trayId))
-            {
-                return JS_ThrowTypeError(ctx, "tray.setToolTip called on invalid tray instance");
-            }
-            const char *textC = JS_ToCString(ctx, argv[0]);
-            if (!textC)
-            {
-                return JS_EXCEPTION;
-            }
-            std::wstring text = Utils::ToWString(textC);
-            JS_FreeCString(ctx, textC);
-            TraySetToolTip(trayId, text);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsTraySetContextMenu(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            if (argc < 1 || !JS_IsArray(argv[0]))
-            {
-                return JS_ThrowTypeError(ctx, "tray.setContextMenu: expected items array");
-            }
-            int trayId = 0;
-            if (!GetTrayId(ctx, thisVal, trayId))
-            {
-                return JS_ThrowTypeError(ctx, "tray.setContextMenu called on invalid tray instance");
-            }
-            JSEngine::ClearTrayCommandCallbacks(trayId);
-            std::vector<MenuItem> menu;
-            if (!ParseTrayMenuItems(ctx, trayId, argv[0], menu))
-            {
-                return JS_ThrowTypeError(ctx, "tray.setContextMenu: invalid items");
-            }
-            TraySetContextMenu(trayId, menu);
-            return JS_UNDEFINED;
-        }
-
-        JSValue JsTrayCtor(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            std::wstring imagePath;
-            if (argc > 0 && !JS_IsNull(argv[0]) && !JS_IsUndefined(argv[0]))
-            {
-                if (!JS_IsString(argv[0]))
-                {
-                    return JS_ThrowTypeError(ctx, "new tray(image) expects image path or null");
-                }
-                const char *pathC = JS_ToCString(ctx, argv[0]);
-                if (!pathC)
-                {
-                    return JS_EXCEPTION;
-                }
-                imagePath = Utils::ToWString(pathC);
-                JS_FreeCString(ctx, pathC);
-                imagePath = ResolveTrayImagePath(imagePath);
-            }
-
-            const int trayId = TrayCreate(imagePath);
-            JSValue tray = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, tray, kTrayIdKey, JS_NewInt32(ctx, trayId));
-            JS_SetPropertyStr(ctx, tray, "setImage", JS_NewCFunction(ctx, JsTraySetImage, "setImage", 1));
-            JS_SetPropertyStr(ctx, tray, "setToolTip", JS_NewCFunction(ctx, JsTraySetToolTip, "setToolTip", 1));
-            JS_SetPropertyStr(ctx, tray, "setContextMenu", JS_NewCFunction(ctx, JsTraySetContextMenu, "setContextMenu", 1));
-            JS_SetPropertyStr(ctx, tray, "on", JS_NewCFunction(ctx, JsTrayOn, "on", 2));
-            JS_SetPropertyStr(ctx, tray, "destroy", JS_NewCFunction(ctx, JsTrayDestroy, "destroy", 0));
-            JSEngine::RegisterTrayOwner(trayId, JSEngine::GetCurrentScriptPath());
-            return tray;
-        }
-
-        JSValue JsAppEnableDebugging(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-            {
-                return JS_ThrowTypeError(ctx, "app.enableDebugging(enable) requires boolean");
-            }
-
-            int b = JS_ToBool(ctx, argv[0]);
-            if (b < 0)
-            {
-                return JS_ThrowTypeError(ctx, "app.enableDebugging(enable) expects boolean");
-            }
-
-            const bool enable = (b != 0);
-            Settings::SetGlobalBool("enableDebugging", enable);
-            Logging::SetLogLevel(enable ? LogLevel::Debug : LogLevel::Info);
-            SetModuleDebug(enable);
-            SetModuleSystemDebug(enable);
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsAddonLoad(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-            {
-                return JS_ThrowTypeError(ctx, "addon.load(path) requires path");
-            }
-
-            const char *pathC = JS_ToCString(ctx, argv[0]);
-            if (!pathC)
-            {
-                return JS_EXCEPTION;
-            }
-
-            std::wstring addonPath = Utils::ToWString(pathC);
-            JS_FreeCString(ctx, pathC);
-
-            if (PathUtils::IsPathRelative(addonPath))
-            {
-                std::wstring base = JSEngine::GetCurrentScriptDir();
-                if (base.empty())
-                    base = JSEngine::GetEntryScriptDir();
-                if (base.empty())
-                    base = PathUtils::GetWidgetsDir();
-                addonPath = PathUtils::ResolvePath(addonPath, base);
-            }
-            else
-            {
-                addonPath = PathUtils::NormalizePath(addonPath);
-            }
-
-            std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
-
-            auto it = g_loadedAddons.find(addonPath);
-            if (it != g_loadedAddons.end())
-            {
-                if (it->second.exportCtx == ctx && !JS_IsUndefined(it->second.exportObject))
-                {
-                    return JS_DupValue(ctx, it->second.exportObject);
-                }
-                return JS_NewInt32(ctx, it->second.id);
-            }
-
-            HMODULE module = LoadLibraryW(addonPath.c_str());
-            if (!module)
-            {
-                Logging::Log(LogLevel::Error, L"Failed to load addon: %s (Error: %d)", addonPath.c_str(), GetLastError());
-                return JS_NULL;
-            }
-
-            auto initFn = reinterpret_cast<NovadeskAddonInitFn>(GetProcAddress(module, "NovadeskAddonInit"));
-            if (!initFn)
-            {
-                Logging::Log(LogLevel::Error, L"Addon %s is missing NovadeskAddonInit export", addonPath.c_str());
-                FreeLibrary(module);
-                return JS_NULL;
-            }
-
-            AddonInfo info{};
-            info.id = g_nextAddonId++;
-            info.handle = module;
-            info.unloadFn = reinterpret_cast<NovadeskAddonUnloadFn>(GetProcAddress(module, "NovadeskAddonUnload"));
-            info.exportCtx = ctx;
-            auto [insIt, _ok] = g_loadedAddons.emplace(addonPath, std::move(info));
-            AddonInfo &stored = insIt->second;
-            g_addonPathById[stored.id] = addonPath;
-
-            AddonCallContext call{};
-            call.ctx = ctx;
-            call.addon = &stored;
-            JSValue rootExports = JS_NewObject(ctx);
-            call.stack.push_back(JS_DupValue(ctx, rootExports));
-
-            initFn(reinterpret_cast<novadesk_context>(&call), JSEngine::GetMessageWindow(), &g_hostApi);
-
-            if (call.hasThrow)
-            {
-                for (JSValue &v : call.args)
-                    JS_FreeValue(ctx, v);
-                for (JSValue &v : call.stack)
-                    JS_FreeValue(ctx, v);
-                if (stored.unloadFn)
-                {
-                    try
-                    {
-                        stored.unloadFn();
-                    }
-                    catch (...)
-                    {
-                    }
-                }
-                FreeLibrary(stored.handle);
-                g_addonPathById.erase(stored.id);
-                g_loadedAddons.erase(insIt);
-                return JS_ThrowInternalError(ctx, "%s", call.throwMessage.c_str());
-            }
-
-            JSValue addonHandle = JS_UNDEFINED;
-            if (!call.stack.empty() && JS_IsObject(call.stack.back()))
-            {
-                addonHandle = JS_DupValue(ctx, call.stack.back());
-            }
-            else if (!call.stack.empty())
-            {
-                addonHandle = JS_DupValue(ctx, rootExports);
-                JS_SetPropertyStr(ctx, addonHandle, "value", JS_DupValue(ctx, call.stack.back()));
-            }
-            else
-            {
-                addonHandle = JS_DupValue(ctx, rootExports);
-            }
-
-            JS_SetPropertyStr(ctx, addonHandle, kAddonIdKey, JS_NewInt32(ctx, stored.id));
-            JSValue unloadFn = JS_NewCFunction(ctx, JsAddonUnload, "unload", 0);
-            JS_SetPropertyStr(ctx, addonHandle, "unload", unloadFn);
-            stored.exportObject = JS_DupValue(ctx, addonHandle);
-
-            for (size_t i = 0; i < call.stack.size(); ++i)
-            {
-                JS_FreeValue(ctx, call.stack[i]);
-            }
-            JS_FreeValue(ctx, rootExports);
-            return addonHandle;
-        }
-
-        JSValue JsAddonUnload(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv)
-        {
-            JSValueConst target = JS_UNDEFINED;
-            if (argc >= 1)
-            {
-                target = argv[0];
-            }
-            else
-            {
-                // Support handle.unload() with no args.
-                target = thisVal;
-            }
-
-            int32_t addonId = 0;
-            if (JS_IsObject(target))
-            {
-                JSValue idV = JS_GetPropertyStr(ctx, target, kAddonIdKey);
-                const bool ok = (JS_ToInt32(ctx, &addonId, idV) == 0);
-                JS_FreeValue(ctx, idV);
-                if (!ok)
-                {
-                    return JS_ThrowTypeError(ctx, "addon.unload(addonObject): invalid addon object");
-                }
-            }
-            else
-            {
-                if (JS_ToInt32(ctx, &addonId, target) != 0)
-                {
-                    return JS_ThrowTypeError(ctx, "addon.unload(addonObject|addonId) expects object or number");
-                }
-            }
-
-            return JS_NewBool(ctx, UnloadAddonById(static_cast<int>(addonId)) ? 1 : 0);
-        }
-
-        WinToastLib::WinToastTemplate::Duration ParseToastDuration(const std::wstring &duration)
-        {
-            const std::wstring lower = ToLower(duration);
-            if (lower == L"short")
-                return WinToastLib::WinToastTemplate::Short;
-            if (lower == L"long")
-                return WinToastLib::WinToastTemplate::Long;
-            return WinToastLib::WinToastTemplate::System;
-        }
-
-        WinToastLib::WinToastTemplate::Scenario ParseToastScenario(const std::wstring &scenario)
-        {
-            const std::wstring lower = ToLower(scenario);
-            if (lower == L"alarm")
-                return WinToastLib::WinToastTemplate::Scenario::Alarm;
-            if (lower == L"incomingcall" || lower == L"incoming-call")
-                return WinToastLib::WinToastTemplate::Scenario::IncomingCall;
-            if (lower == L"reminder")
-                return WinToastLib::WinToastTemplate::Scenario::Reminder;
-            return WinToastLib::WinToastTemplate::Scenario::Default;
-        }
-
-        WinToastLib::WinToastTemplate::AudioSystemFile ParseToastAudioSystemFile(const std::wstring &audio)
-        {
-            const std::wstring lower = ToLower(audio);
-            if (lower == L"im")
-                return WinToastLib::WinToastTemplate::IM;
-            if (lower == L"mail")
-                return WinToastLib::WinToastTemplate::Mail;
-            if (lower == L"reminder")
-                return WinToastLib::WinToastTemplate::Reminder;
-            if (lower == L"sms")
-                return WinToastLib::WinToastTemplate::SMS;
-            if (lower == L"alarm")
-                return WinToastLib::WinToastTemplate::Alarm;
-            if (lower == L"call")
-                return WinToastLib::WinToastTemplate::Call;
-            return WinToastLib::WinToastTemplate::DefaultSound;
-        }
-
-        JSValue JsToastInitialize(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            JSValueConst options = (argc > 0 && JS_IsObject(argv[0])) ? argv[0] : JS_UNDEFINED;
-            return JS_NewBool(ctx, EnsureToastInitialized(ctx, options) ? 1 : 0);
-        }
-
-        JSValue JsToastIsCompatible(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewBool(ctx, WinToastLib::WinToast::isCompatible() ? 1 : 0);
-        }
-
-        JSValue JsToastIsInitialized(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            auto *instance = WinToastLib::WinToast::instance();
-            return JS_NewBool(ctx, (instance && instance->isInitialized()) ? 1 : 0);
-        }
-
-        JSValue JsToastGetLastError(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewString(ctx, Utils::ToString(g_lastToastError).c_str());
-        }
-
-        JSValue JsToastHide(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-            {
-                return JS_ThrowTypeError(ctx, "toast.hide(id) requires toast id");
-            }
-            int64_t id = 0;
-            if (JS_ToInt64(ctx, &id, argv[0]) != 0)
-            {
-                return JS_ThrowTypeError(ctx, "toast.hide(id) requires numeric toast id");
-            }
-            auto *instance = WinToastLib::WinToast::instance();
-            return JS_NewBool(ctx, (instance && instance->hideToast(id)) ? 1 : 0);
-        }
-
-        JSValue JsToastClear(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            (void)ctx;
-            auto *instance = WinToastLib::WinToast::instance();
-            if (instance)
-                instance->clear();
-            return JS_UNDEFINED;
-        }
-
-        bool AddToastActions(JSContext *ctx, JSValueConst options, WinToastLib::WinToastTemplate &templ)
-        {
-            JSValue actions = JS_GetPropertyStr(ctx, options, "actions");
-            if (!JS_IsArray(actions))
-            {
-                JS_FreeValue(ctx, actions);
-                return true;
-            }
-
-            uint32_t length = 0;
-            JSValue lengthV = JS_GetPropertyStr(ctx, actions, "length");
-            JS_ToUint32(ctx, &length, lengthV);
-            JS_FreeValue(ctx, lengthV);
-
-            for (uint32_t i = 0; i < length; ++i)
-            {
-                JSValue action = JS_GetPropertyUint32(ctx, actions, i);
-                std::wstring label;
-                if (JS_IsString(action))
-                {
-                    label = JsValueToWString(ctx, action);
-                }
-                else if (JS_IsObject(action))
-                {
-                    GetObjectString(ctx, action, "label", label);
-                    if (label.empty())
-                        GetObjectString(ctx, action, "text", label);
-                }
-                JS_FreeValue(ctx, action);
-
-                if (!label.empty())
-                    templ.addAction(label);
-            }
-
-            JS_FreeValue(ctx, actions);
-            return true;
-        }
-
-        void RegisterToastCallbackProp(JSContext *ctx, JSValueConst options, const char *name, int &callbackId)
-        {
-            if (callbackId > 0)
-                return;
-            JSValue value = JS_GetPropertyStr(ctx, options, name);
-            if (JS_IsFunction(ctx, value))
-                callbackId = JSEngine::RegisterToastCallback(ctx, value);
-            JS_FreeValue(ctx, value);
-        }
-
-        ToastCallbackIds ParseToastCallbacks(JSContext *ctx, JSValueConst options)
-        {
-            ToastCallbackIds callbacks{};
-            RegisterToastCallbackProp(ctx, options, "onActivated", callbacks.activated);
-            RegisterToastCallbackProp(ctx, options, "onActivate", callbacks.activated);
-            RegisterToastCallbackProp(ctx, options, "onClick", callbacks.activated);
-            RegisterToastCallbackProp(ctx, options, "onAction", callbacks.action);
-            RegisterToastCallbackProp(ctx, options, "onInput", callbacks.input);
-            RegisterToastCallbackProp(ctx, options, "onDismissed", callbacks.dismissed);
-            RegisterToastCallbackProp(ctx, options, "onDismiss", callbacks.dismissed);
-            RegisterToastCallbackProp(ctx, options, "onFailed", callbacks.failed);
-            RegisterToastCallbackProp(ctx, options, "onFail", callbacks.failed);
-            return callbacks;
-        }
-
-        JSValue JsToastShow(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-            {
-                return JS_ThrowTypeError(ctx, "toast.show(options | title[, message]) requires options or title");
-            }
-
-            JSValueConst options = JS_UNDEFINED;
-            std::wstring title;
-            std::wstring message;
-            std::wstring thirdLine;
-            std::wstring attribution;
-            std::wstring imagePath;
-            std::wstring heroImagePath;
-            std::wstring audioPath;
-            std::wstring audio;
-            std::wstring duration;
-            std::wstring scenario;
-            std::wstring crop;
-            bool inlineHeroImage = false;
-            bool silent = false;
-            bool loop = false;
-            bool input = false;
-            int64_t expiration = 0;
-            ToastCallbackIds callbacks{};
-
-            if (JS_IsObject(argv[0]) && !JS_IsArray(argv[0]))
-            {
-                options = argv[0];
-                callbacks = ParseToastCallbacks(ctx, options);
-                GetObjectString(ctx, options, "title", title);
-                GetObjectString(ctx, options, "message", message);
-                if (message.empty())
-                    GetObjectString(ctx, options, "body", message);
-                GetObjectString(ctx, options, "thirdLine", thirdLine);
-                GetObjectString(ctx, options, "attribution", attribution);
-                GetObjectString(ctx, options, "image", imagePath);
-                if (imagePath.empty())
-                    GetObjectString(ctx, options, "imagePath", imagePath);
-                GetObjectString(ctx, options, "heroImage", heroImagePath);
-                if (heroImagePath.empty())
-                    GetObjectString(ctx, options, "heroImagePath", heroImagePath);
-                GetObjectString(ctx, options, "audioPath", audioPath);
-                GetObjectString(ctx, options, "audio", audio);
-                GetObjectString(ctx, options, "duration", duration);
-                GetObjectString(ctx, options, "scenario", scenario);
-                GetObjectString(ctx, options, "crop", crop);
-                GetObjectBool(ctx, options, "inlineHeroImage", inlineHeroImage);
-                GetObjectBool(ctx, options, "silent", silent);
-                GetObjectBool(ctx, options, "loop", loop);
-                GetObjectBool(ctx, options, "input", input);
-                GetObjectInt64(ctx, options, "expiration", expiration);
-            }
-            else
-            {
-                title = JsValueToWString(ctx, argv[0]);
-                if (argc > 1)
-                    message = JsValueToWString(ctx, argv[1]);
-            }
-
-            if (title.empty() && message.empty())
-            {
-                return JS_ThrowTypeError(ctx, "toast.show requires non-empty title or message");
-            }
-
-            if (!EnsureToastInitialized(ctx, options))
-                return JS_NULL;
-
-            const bool hasImage = !imagePath.empty();
-            WinToastLib::WinToastTemplate::WinToastTemplateType type = hasImage
-                ? WinToastLib::WinToastTemplate::ImageAndText02
-                : (thirdLine.empty() ? WinToastLib::WinToastTemplate::Text02 : WinToastLib::WinToastTemplate::Text03);
-            WinToastLib::WinToastTemplate templ(type);
-            templ.setFirstLine(title);
-            templ.setSecondLine(message);
-            if (!thirdLine.empty())
-                templ.setThirdLine(thirdLine);
-            if (!attribution.empty())
-                templ.setAttributionText(attribution);
-            if (!duration.empty())
-                templ.setDuration(ParseToastDuration(duration));
-            if (!scenario.empty())
-                templ.setScenario(ParseToastScenario(scenario));
-            if (expiration > 0)
-                templ.setExpiration(expiration);
-            if (JS_IsObject(options) && !input)
-                AddToastActions(ctx, options, templ);
-            if (input)
-                templ.addInput();
-
-            if (hasImage)
-            {
-                templ.setImagePath(
-                    ResolveToastAssetPath(imagePath),
-                    ToLower(crop) == L"circle" ? WinToastLib::WinToastTemplate::Circle : WinToastLib::WinToastTemplate::Square);
-            }
-            if (!heroImagePath.empty())
-                templ.setHeroImagePath(ResolveToastAssetPath(heroImagePath), inlineHeroImage);
-
-            if (silent)
-            {
-                templ.setAudioOption(WinToastLib::WinToastTemplate::Silent);
-            }
-            else
-            {
-                if (loop)
-                    templ.setAudioOption(WinToastLib::WinToastTemplate::Loop);
-                if (!audioPath.empty())
-                    templ.setAudioPath(ResolveToastAssetPath(audioPath));
-                else if (!audio.empty())
-                    templ.setAudioPath(ParseToastAudioSystemFile(audio));
-            }
-
-            WinToastLib::WinToast::WinToastError error = WinToastLib::WinToast::NoError;
-            auto *handler = new ToastHandler(callbacks);
-            INT64 id = WinToastLib::WinToast::instance()->showToast(templ, handler, &error);
-            if (id < 0)
-            {
-                delete handler;
-                SetToastError(WinToastLib::WinToast::strerror(error));
-                return JS_NULL;
-            }
-            handler->SetToastId(id);
-
-            SetToastError(L"");
-            return JS_NewInt64(ctx, id);
-        }
-
-        JSValue JsDialogShow(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1 || !JS_IsObject(argv[0]))
-            {
-                return JS_ThrowTypeError(ctx, "dialog.show(options) requires an options object");
-            }
-
-            JSValueConst options = argv[0];
-            novadesk::shared::system::MessageBoxOptions opts;
-
-            // Extract properties from the options object
-            GetObjectString(ctx, options, "title", opts.title);
-            GetObjectString(ctx, options, "message", opts.message);
-            GetObjectString(ctx, options, "type", opts.type);
-            GetObjectString(ctx, options, "buttons", opts.buttons);
-
-            // Default to "info" and "ok" if not specified
-            if (opts.type.empty())
-            {
-                opts.type = L"info";
-            }
-            if (opts.buttons.empty())
-            {
-                opts.buttons = L"ok";
-            }
-
-            // Call the native message box
-            std::string result = novadesk::shared::system::ShowMessageBox(opts);
-
-            // Return the result as a JS string
-            return JS_NewString(ctx, result.c_str());
-        }
-
-        void ParseFileFilters(JSContext *ctx, JSValueConst filtersVal, std::vector<novadesk::shared::system::FileFilter> &outFilters)
-        {
-            if (!JS_IsArray(filtersVal))
-                return;
-
-            uint32_t len = 0;
-            JSValue lenVal = JS_GetPropertyStr(ctx, filtersVal, "length");
-            JS_ToUint32(ctx, &len, lenVal);
-            JS_FreeValue(ctx, lenVal);
-
-            for (uint32_t i = 0; i < len; ++i)
-            {
-                JSValue item = JS_GetPropertyUint32(ctx, filtersVal, i);
-                if (JS_IsObject(item))
-                {
-                    novadesk::shared::system::FileFilter filter;
-                    GetObjectString(ctx, item, "name", filter.name);
-
-                    JSValue extsVal = JS_GetPropertyStr(ctx, item, "extensions");
-                    if (JS_IsArray(extsVal))
-                    {
-                        uint32_t extLen = 0;
-                        JSValue extLenVal = JS_GetPropertyStr(ctx, extsVal, "length");
-                        JS_ToUint32(ctx, &extLen, extLenVal);
-                        JS_FreeValue(ctx, extLenVal);
-
-                        for (uint32_t j = 0; j < extLen; ++j)
-                        {
-                            JSValue ext = JS_GetPropertyUint32(ctx, extsVal, j);
-                            const char *extStr = JS_ToCString(ctx, ext);
-                            if (extStr)
-                            {
-                                filter.extensions.push_back(Utils::ToWString(extStr));
-                                JS_FreeCString(ctx, extStr);
-                            }
-                            JS_FreeValue(ctx, ext);
-                        }
-                    }
-                    JS_FreeValue(ctx, extsVal);
-                    outFilters.push_back(filter);
-                }
-                JS_FreeValue(ctx, item);
-            }
-        }
-
-        void ParseDialogProperties(JSContext *ctx, JSValueConst propsVal, bool &outMulti, bool &outDir, bool &outHidden)
-        {
-            if (!JS_IsArray(propsVal))
-                return;
-
-            uint32_t len = 0;
-            JSValue lenVal = JS_GetPropertyStr(ctx, propsVal, "length");
-            JS_ToUint32(ctx, &len, lenVal);
-            JS_FreeValue(ctx, lenVal);
-
-            for (uint32_t i = 0; i < len; ++i)
-            {
-                JSValue item = JS_GetPropertyUint32(ctx, propsVal, i);
-                const char *s = JS_ToCString(ctx, item);
-                if (s)
-                {
-                    std::string str(s);
-                    JS_FreeCString(ctx, s);
-                    if (str == "multiSelections" || str == "multiSelection" || str == "multiple")
-                        outMulti = true;
-                    else if (str == "openDirectory" || str == "directory" || str == "folder")
-                        outDir = true;
-                    else if (str == "showHiddenFiles" || str == "hidden")
-                        outHidden = true;
-                }
-                JS_FreeValue(ctx, item);
-            }
-        }
-
-        JSValue JsDialogShowOpenDialog(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            novadesk::shared::system::OpenFileDialogOptions opts;
-            if (argc > 0 && JS_IsObject(argv[0]))
-            {
-                JSValueConst options = argv[0];
-                GetObjectString(ctx, options, "title", opts.title);
-                GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
-                GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
-                GetObjectBool(ctx, options, "multiSelections", opts.multiSelections);
-                GetObjectBool(ctx, options, "openDirectory", opts.openDirectory);
-                GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
-
-                JSValue filtersVal = JS_GetPropertyStr(ctx, options, "filters");
-                if (!JS_IsUndefined(filtersVal))
-                {
-                    ParseFileFilters(ctx, filtersVal, opts.filters);
-                    JS_FreeValue(ctx, filtersVal);
-                }
-
-                JSValue propsVal = JS_GetPropertyStr(ctx, options, "properties");
-                if (!JS_IsUndefined(propsVal))
-                {
-                    ParseDialogProperties(ctx, propsVal, opts.multiSelections, opts.openDirectory, opts.showHiddenFiles);
-                    JS_FreeValue(ctx, propsVal);
-                }
-            }
-
-            auto res = novadesk::shared::system::ShowOpenFileDialog(opts);
-
-            JSValue ret = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, ret, "canceled", JS_NewBool(ctx, res.canceled ? 1 : 0));
-
-            JSValue pathsArr = JS_NewArray(ctx);
-            for (uint32_t i = 0; i < static_cast<uint32_t>(res.filePaths.size()); ++i)
-            {
-                std::string pathStr = Utils::ToString(res.filePaths[i]);
-                JS_SetPropertyUint32(ctx, pathsArr, i, JS_NewString(ctx, pathStr.c_str()));
-            }
-            JS_SetPropertyStr(ctx, ret, "filePaths", pathsArr);
-
-            return ret;
-        }
-
-        JSValue JsDialogShowSaveDialog(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            novadesk::shared::system::SaveFileDialogOptions opts;
-            if (argc > 0 && JS_IsObject(argv[0]))
-            {
-                JSValueConst options = argv[0];
-                GetObjectString(ctx, options, "title", opts.title);
-                GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
-                GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
-                GetObjectString(ctx, options, "defaultExtension", opts.defaultExtension);
-                GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
-
-                JSValue filtersVal = JS_GetPropertyStr(ctx, options, "filters");
-                if (!JS_IsUndefined(filtersVal))
-                {
-                    ParseFileFilters(ctx, filtersVal, opts.filters);
-                    JS_FreeValue(ctx, filtersVal);
-                }
-            }
-
-            auto res = novadesk::shared::system::ShowSaveFileDialog(opts);
-
-            JSValue ret = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, ret, "canceled", JS_NewBool(ctx, res.canceled ? 1 : 0));
-            std::string pathStr = res.canceled ? "" : Utils::ToString(res.filePath);
-            JS_SetPropertyStr(ctx, ret, "filePath", JS_NewString(ctx, pathStr.c_str()));
-
-            return ret;
-        }
-
-        JSValue JsDialogShowFileExplorerDialog(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
-        {
-            std::wstring type = L"open";
-            if (argc > 0 && JS_IsObject(argv[0]))
-            {
-                GetObjectString(ctx, argv[0], "type", type);
-                std::transform(type.begin(), type.end(), type.begin(), ::towlower);
-            }
-
-            if (type == L"save")
-            {
-                return JsDialogShowSaveDialog(ctx, this_val, argc, argv);
-            }
-            else if (type == L"directory" || type == L"folder")
-            {
-                novadesk::shared::system::OpenFileDialogOptions opts;
-                if (argc > 0 && JS_IsObject(argv[0]))
-                {
-                    JSValueConst options = argv[0];
-                    GetObjectString(ctx, options, "title", opts.title);
-                    GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
-                    GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
-                }
-                opts.openDirectory = true;
-                auto res = novadesk::shared::system::ShowOpenFileDialog(opts);
-                JSValue ret = JS_NewObject(ctx);
-                JS_SetPropertyStr(ctx, ret, "canceled", JS_NewBool(ctx, res.canceled ? 1 : 0));
-                JSValue pathsArr = JS_NewArray(ctx);
-                for (uint32_t i = 0; i < static_cast<uint32_t>(res.filePaths.size()); ++i)
-                {
-                    std::string pathStr = Utils::ToString(res.filePaths[i]);
-                    JS_SetPropertyUint32(ctx, pathsArr, i, JS_NewString(ctx, pathStr.c_str()));
-                }
-                JS_SetPropertyStr(ctx, ret, "filePaths", pathsArr);
-                std::string singlePath = res.filePaths.empty() ? "" : Utils::ToString(res.filePaths[0]);
-                JS_SetPropertyStr(ctx, ret, "filePath", JS_NewString(ctx, singlePath.c_str()));
-                return ret;
-            }
-            else
-            {
-                return JsDialogShowOpenDialog(ctx, this_val, argc, argv);
-            }
-        }
-
-        JSValue JsDialogOpenFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            novadesk::shared::system::OpenFileDialogOptions opts;
-            opts.openDirectory = false;
-            if (argc > 0 && JS_IsObject(argv[0]))
-            {
-                JSValueConst options = argv[0];
-                GetObjectString(ctx, options, "title", opts.title);
-                GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
-                GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
-                GetObjectBool(ctx, options, "multiSelections", opts.multiSelections);
-                GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
-
-                JSValue filtersVal = JS_GetPropertyStr(ctx, options, "filters");
-                if (!JS_IsUndefined(filtersVal))
-                {
-                    ParseFileFilters(ctx, filtersVal, opts.filters);
-                    JS_FreeValue(ctx, filtersVal);
-                }
-
-                JSValue propsVal = JS_GetPropertyStr(ctx, options, "properties");
-                if (!JS_IsUndefined(propsVal))
-                {
-                    bool unusedDir = false;
-                    ParseDialogProperties(ctx, propsVal, opts.multiSelections, unusedDir, opts.showHiddenFiles);
-                    JS_FreeValue(ctx, propsVal);
-                }
-            }
-
-            auto res = novadesk::shared::system::ShowOpenFileDialog(opts);
-            if (res.canceled || res.filePaths.empty())
-            {
-                return JS_NULL;
-            }
-
-            if (opts.multiSelections)
-            {
-                JSValue pathsArr = JS_NewArray(ctx);
-                for (uint32_t i = 0; i < static_cast<uint32_t>(res.filePaths.size()); ++i)
-                {
-                    std::string pathStr = Utils::ToString(res.filePaths[i]);
-                    JS_SetPropertyUint32(ctx, pathsArr, i, JS_NewString(ctx, pathStr.c_str()));
-                }
-                return pathsArr;
-            }
-
-            return JS_NewString(ctx, Utils::ToString(res.filePaths[0]).c_str());
-        }
-
-        JSValue JsDialogSaveFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            novadesk::shared::system::SaveFileDialogOptions opts;
-            if (argc > 0 && JS_IsObject(argv[0]))
-            {
-                JSValueConst options = argv[0];
-                GetObjectString(ctx, options, "title", opts.title);
-                GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
-                GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
-                GetObjectString(ctx, options, "defaultExtension", opts.defaultExtension);
-                GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
-
-                JSValue filtersVal = JS_GetPropertyStr(ctx, options, "filters");
-                if (!JS_IsUndefined(filtersVal))
-                {
-                    ParseFileFilters(ctx, filtersVal, opts.filters);
-                    JS_FreeValue(ctx, filtersVal);
-                }
-            }
-
-            auto res = novadesk::shared::system::ShowSaveFileDialog(opts);
-            if (res.canceled || res.filePath.empty())
-            {
-                return JS_NULL;
-            }
-
-            return JS_NewString(ctx, Utils::ToString(res.filePath).c_str());
-        }
-
-        JSValue JsDialogOpenDirectory(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            novadesk::shared::system::OpenFileDialogOptions opts;
-            opts.openDirectory = true;
-            if (argc > 0 && JS_IsObject(argv[0]))
-            {
-                JSValueConst options = argv[0];
-                GetObjectString(ctx, options, "title", opts.title);
-                GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
-                GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
-                GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
-            }
-
-            auto res = novadesk::shared::system::ShowOpenFileDialog(opts);
-            if (res.canceled || res.filePaths.empty())
-            {
-                return JS_NULL;
-            }
-
-            return JS_NewString(ctx, Utils::ToString(res.filePaths[0]).c_str());
-        }
-
-        int InitAppExport(JSContext *ctx, JSModuleDef *m)
-        {
-            JSValue app = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, app, "argv", JsAppGetArgv(ctx, JS_UNDEFINED, 0, nullptr));
-            JS_SetPropertyStr(ctx, app, "rawArgv", JsAppGetRawArgv(ctx, JS_UNDEFINED, 0, nullptr));
-            JS_SetPropertyStr(ctx, app, "reload", JS_NewCFunction(ctx, JsAppReload, "reload", 0));
-            JS_SetPropertyStr(ctx, app, "refresh", JS_NewCFunction(ctx, JsAppRefresh, "refresh", 0));
-            JS_SetPropertyStr(ctx, app, "exit", JS_NewCFunction(ctx, JsAppExit, "exit", 0));
-            JS_SetPropertyStr(ctx, app, "requestSingleInstanceLock", JS_NewCFunction(ctx, JsAppRequestSingleInstanceLock, "requestSingleInstanceLock", 0));
-            JS_SetPropertyStr(ctx, app, "releaseSingleInstanceLock", JS_NewCFunction(ctx, JsAppReleaseSingleInstanceLock, "releaseSingleInstanceLock", 0));
-            JS_SetPropertyStr(ctx, app, "saveLogToFile", JS_NewCFunction(ctx, JsAppSaveLogToFile, "saveLogToFile", 1));
-            JS_SetPropertyStr(ctx, app, "disableLogging", JS_NewCFunction(ctx, JsAppDisableLogging, "disableLogging", 1));
-            JS_SetPropertyStr(ctx, app, "useHardwareAcceleration", JS_NewCFunction(ctx, JsAppUseHardwareAcceleration, "useHardwareAcceleration", 1));
-            JS_SetPropertyStr(ctx, app, "getProductVersion", JS_NewCFunction(ctx, JsAppGetProductVersion, "getProductVersion", 0));
-            JS_SetPropertyStr(ctx, app, "getFileVersion", JS_NewCFunction(ctx, JsAppGetFileVersion, "getFileVersion", 0));
-            JS_SetPropertyStr(ctx, app, "getNovadeskVersion", JS_NewCFunction(ctx, JsAppGetNovadeskVersion, "getNovadeskVersion", 0));
-            JS_SetPropertyStr(ctx, app, "getAppDataPath", JS_NewCFunction(ctx, JsAppGetAppDataPath, "getAppDataPath", 0));
-            JS_SetPropertyStr(ctx, app, "getSettingsFilePath", JS_NewCFunction(ctx, JsAppGetSettingsFilePath, "getSettingsFilePath", 0));
-            JS_SetPropertyStr(ctx, app, "getLogPath", JS_NewCFunction(ctx, JsAppGetLogPath, "getLogPath", 0));
-            JS_SetPropertyStr(ctx, app, "isPortable", JS_NewCFunction(ctx, JsAppIsPortable, "isPortable", 0));
-            JS_SetPropertyStr(ctx, app, "isFirstRun", JS_NewCFunction(ctx, JsAppIsFirstRun, "isFirstRun", 0));
-            JS_SetPropertyStr(ctx, app, "enableDebugging", JS_NewCFunction(ctx, JsAppEnableDebugging, "enableDebugging", 1));
-            JSValue storage = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, storage, "get", JS_NewCFunction(ctx, JsAppStorageGet, "get", 2));
-            JS_SetPropertyStr(ctx, storage, "set", JS_NewCFunction(ctx, JsAppStorageSet, "set", 2));
-            JS_SetPropertyStr(ctx, storage, "remove", JS_NewCFunction(ctx, JsAppStorageRemove, "remove", 1));
-            JS_SetPropertyStr(ctx, app, "storage", storage);
-            JS_SetModuleExport(ctx, m, "app", app);
-
-            JSValue addon = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, addon, "load", JS_NewCFunction(ctx, JsAddonLoad, "load", 1));
-            JS_SetPropertyStr(ctx, addon, "unload", JS_NewCFunction(ctx, JsAddonUnload, "unload", 1));
-            JS_SetModuleExport(ctx, m, "addon", addon);
-
-            JSValue toast = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, toast, "initialize", JS_NewCFunction(ctx, JsToastInitialize, "initialize", 1));
-            JS_SetPropertyStr(ctx, toast, "show", JS_NewCFunction(ctx, JsToastShow, "show", 2));
-            JS_SetPropertyStr(ctx, toast, "hide", JS_NewCFunction(ctx, JsToastHide, "hide", 1));
-            JS_SetPropertyStr(ctx, toast, "clear", JS_NewCFunction(ctx, JsToastClear, "clear", 0));
-            JS_SetPropertyStr(ctx, toast, "isCompatible", JS_NewCFunction(ctx, JsToastIsCompatible, "isCompatible", 0));
-            JS_SetPropertyStr(ctx, toast, "isInitialized", JS_NewCFunction(ctx, JsToastIsInitialized, "isInitialized", 0));
-            JS_SetPropertyStr(ctx, toast, "getLastError", JS_NewCFunction(ctx, JsToastGetLastError, "getLastError", 0));
-            JS_SetModuleExport(ctx, m, "toast", toast);
-
-            JSValue dialog = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, dialog, "show", JS_NewCFunction(ctx, JsDialogShow, "show", 1));
-            JS_SetPropertyStr(ctx, dialog, "showOpenDialog", JS_NewCFunction(ctx, JsDialogShowOpenDialog, "showOpenDialog", 1));
-            JS_SetPropertyStr(ctx, dialog, "showSaveDialog", JS_NewCFunction(ctx, JsDialogShowSaveDialog, "showSaveDialog", 1));
-            JS_SetPropertyStr(ctx, dialog, "showFileExplorerDialog", JS_NewCFunction(ctx, JsDialogShowFileExplorerDialog, "showFileExplorerDialog", 1));
-            JS_SetPropertyStr(ctx, dialog, "showFileExplorer", JS_NewCFunction(ctx, JsDialogShowFileExplorerDialog, "showFileExplorer", 1));
-            JS_SetPropertyStr(ctx, dialog, "openFile", JS_NewCFunction(ctx, JsDialogOpenFile, "openFile", 1));
-            JS_SetPropertyStr(ctx, dialog, "saveFile", JS_NewCFunction(ctx, JsDialogSaveFile, "saveFile", 1));
-            JS_SetPropertyStr(ctx, dialog, "openDirectory", JS_NewCFunction(ctx, JsDialogOpenDirectory, "openDirectory", 1));
-            JS_SetModuleExport(ctx, m, "dialog", dialog);
-
-            return 0;
-        }
-
-        int NovadeskModuleInit(JSContext *ctx, JSModuleDef *m)
-        {
-            EnsureWidgetWindowClass(ctx);
-            JSValue ctor = JS_NewCFunction2(ctx, JsWidgetWindowCtor, "widgetWindow", 1, JS_CFUNC_constructor, 0);
-            JSValue proto = JS_GetClassProto(ctx, EnsureWidgetWindowClass(ctx));
-            JS_SetConstructor(ctx, ctor, proto);
-            JS_SetModuleExport(ctx, m, "widgetWindow", ctor);
-            JS_FreeValue(ctx, proto);
-            InitAppExport(ctx, m);
-            JSValue trayCtor = JS_NewCFunction2(ctx, JsTrayCtor, "tray", 1, JS_CFUNC_constructor, 0);
-            JS_SetModuleExport(ctx, m, "tray", trayCtor);
-            return 0;
-        }
-    } // namespace
-
-    void SetModuleDebug(bool debug)
-    {
-        g_moduleDebug = debug;
-        SetWidgetUiDebug(debug);
+namespace novadesk::scripting::quickjs {
+namespace {
+using novadesk_context = void *;
+
+struct NovadeskHostAPI {
+  void (*RegisterString)(novadesk_context ctx, const char *name,
+                         const char *value);
+  void (*RegisterNumber)(novadesk_context ctx, const char *name, double value);
+  void (*RegisterBool)(novadesk_context ctx, const char *name, int value);
+  void (*RegisterObjectStart)(novadesk_context ctx, const char *name);
+  void (*RegisterObjectEnd)(novadesk_context ctx, const char *name);
+  void (*RegisterArrayString)(novadesk_context ctx, const char *name,
+                              const char **values, size_t count);
+  void (*RegisterArrayNumber)(novadesk_context ctx, const char *name,
+                              const double *values, size_t count);
+  void (*RegisterFunction)(novadesk_context ctx, const char *name,
+                           int (*func)(novadesk_context ctx), int nargs);
+  void (*PushString)(novadesk_context ctx, const char *value);
+  void (*PushNumber)(novadesk_context ctx, double value);
+  void (*PushBool)(novadesk_context ctx, int value);
+  void (*PushNull)(novadesk_context ctx);
+  void (*PushObject)(novadesk_context ctx);
+  void (*PushArray)(novadesk_context ctx);
+  double (*GetNumber)(novadesk_context ctx, int index);
+  const char *(*GetString)(novadesk_context ctx, int index);
+  int (*GetBool)(novadesk_context ctx, int index);
+  int (*IsNumber)(novadesk_context ctx, int index);
+  int (*IsString)(novadesk_context ctx, int index);
+  int (*IsBool)(novadesk_context ctx, int index);
+  int (*IsObject)(novadesk_context ctx, int index);
+  int (*IsFunction)(novadesk_context ctx, int index);
+  int (*IsNull)(novadesk_context ctx, int index);
+  int (*GetProperty)(novadesk_context ctx, int objIndex, const char *name);
+  int (*GetTop)(novadesk_context ctx);
+  void (*Pop)(novadesk_context ctx);
+  void (*PopN)(novadesk_context ctx, int n);
+  void (*ThrowError)(novadesk_context ctx, const char *message);
+  void *(*JsGetFunctionPtr)(novadesk_context ctx, int index);
+  void (*JsCallFunction)(novadesk_context ctx, void *funcPtr, int nargs);
+  void (*JsCallFunctionNoArgs)(novadesk_context ctx, void *funcPtr);
+  void (*ArrayPushObject)(novadesk_context ctx);
+};
+
+using NovadeskAddonInitFn = void (*)(novadesk_context ctx, HWND hMsgWnd,
+                                     const NovadeskHostAPI *host);
+using NovadeskAddonUnloadFn = void (*)();
+
+bool g_moduleDebug = false;
+int g_nextTrayCommandId = 1;
+std::wstring g_lastToastError;
+std::vector<std::wstring>
+    g_appArgv; // normalized [exePath, scriptPath, ...userArgs] (Node.js style)
+std::vector<std::wstring> g_rawAppArgv; // exact raw argv from command line
+
+struct AddonInfo {
+  int id = 0;
+  HMODULE handle = nullptr;
+  NovadeskAddonUnloadFn unloadFn = nullptr;
+  std::vector<int> registeredFunctionIds;
+  std::vector<void *> functionHandles;
+  JSContext *exportCtx = nullptr;
+  JSValue exportObject = JS_UNDEFINED;
+};
+
+std::recursive_mutex g_addonMutex;
+std::map<std::wstring, AddonInfo> g_loadedAddons;
+std::unordered_map<int, std::wstring> g_addonPathById;
+int g_nextAddonId = 1;
+int g_nextAddonRegisteredFnId = 1;
+constexpr const char *kAddonIdKey = "__novadesk_addon_id";
+
+struct AddonRegisteredFunction {
+  int (*fn)(novadesk_context) = nullptr;
+  AddonInfo *addon = nullptr;
+};
+
+std::unordered_map<int, AddonRegisteredFunction> g_registeredAddonFunctions;
+
+struct JsFunctionHandle {
+  JSContext *ctx = nullptr;
+  JSValue fn = JS_UNDEFINED;
+};
+
+struct AddonCallContext {
+  JSContext *ctx = nullptr;
+  AddonInfo *addon = nullptr;
+  std::vector<JSValue> args;
+  std::vector<JSValue> stack;
+  std::deque<std::string> tempStrings;
+  std::string throwMessage;
+  bool hasThrow = false;
+};
+
+std::wstring GetVersionProperty(const std::wstring &propertyName);
+
+struct ToastCallbackIds {
+  int activated = -1;
+  int action = -1;
+  int input = -1;
+  int dismissed = -1;
+  int failed = -1;
+};
+
+class ToastHandler final : public WinToastLib::IWinToastHandler {
+public:
+  explicit ToastHandler(const ToastCallbackIds &callbacks)
+      : m_Callbacks(callbacks) {}
+
+  void SetToastId(INT64 toastId) { m_ToastId.store(toastId); }
+
+  void toastActivated() const override {
+    Logging::Log(LogLevel::Info, L"[novadesk.toast] activated");
+    Dispatch(m_Callbacks.activated, "activated");
+  }
+
+  void toastActivated(int actionIndex) const override {
+    Logging::Log(LogLevel::Info, L"[novadesk.toast] action activated: %d",
+                 actionIndex);
+    JSEngine::ToastEventData data{};
+    data.toastId = m_ToastId.load();
+    data.type = "action";
+    data.actionIndex = actionIndex;
+    JSEngine::DispatchToastEventAsync(m_Callbacks.action, data);
+  }
+
+  void toastActivated(std::wstring response) const override {
+    Logging::Log(LogLevel::Info, L"[novadesk.toast] input submitted: %s",
+                 response.c_str());
+    JSEngine::ToastEventData data{};
+    data.toastId = m_ToastId.load();
+    data.type = "input";
+    data.input = response;
+    JSEngine::DispatchToastEventAsync(m_Callbacks.input, data);
+  }
+
+  void toastDismissed(WinToastDismissalReason state) const override {
+    Logging::Log(LogLevel::Info, L"[novadesk.toast] dismissed: %d",
+                 static_cast<int>(state));
+    JSEngine::ToastEventData data{};
+    data.toastId = m_ToastId.load();
+    data.type = "dismissed";
+    data.dismissalReason = DismissalReasonToString(state);
+    JSEngine::DispatchToastEventAsync(m_Callbacks.dismissed, data);
+  }
+
+  void toastFailed() const override {
+    Logging::Log(LogLevel::Warn, L"[novadesk.toast] failed");
+    Dispatch(m_Callbacks.failed, "failed");
+  }
+
+private:
+  static std::string DismissalReasonToString(WinToastDismissalReason state) {
+    switch (state) {
+    case WinToastLib::IWinToastHandler::UserCanceled:
+      return "userCanceled";
+    case WinToastLib::IWinToastHandler::ApplicationHidden:
+      return "applicationHidden";
+    case WinToastLib::IWinToastHandler::TimedOut:
+      return "timedOut";
+    default:
+      return "unknown";
+    }
+  }
+
+  void Dispatch(int callbackId, const std::string &type) const {
+    JSEngine::ToastEventData data{};
+    data.toastId = m_ToastId.load();
+    data.type = type;
+    JSEngine::DispatchToastEventAsync(callbackId, data);
+  }
+
+  ToastCallbackIds m_Callbacks;
+  std::atomic<INT64> m_ToastId = 0;
+};
+
+std::wstring JsValueToWString(JSContext *ctx, JSValueConst value) {
+  const char *s = JS_ToCString(ctx, value);
+  if (!s)
+    return L"";
+  std::wstring out = Utils::ToWString(s);
+  JS_FreeCString(ctx, s);
+  return out;
+}
+
+std::wstring ToLower(std::wstring value) {
+  std::transform(value.begin(), value.end(), value.begin(), ::towlower);
+  return value;
+}
+
+bool GetObjectString(JSContext *ctx, JSValueConst obj, const char *name,
+                     std::wstring &out) {
+  JSValue value = JS_GetPropertyStr(ctx, obj, name);
+  if (JS_IsUndefined(value) || JS_IsNull(value)) {
+    JS_FreeValue(ctx, value);
+    return false;
+  }
+  out = JsValueToWString(ctx, value);
+  JS_FreeValue(ctx, value);
+  return !out.empty();
+}
+
+bool GetObjectBool(JSContext *ctx, JSValueConst obj, const char *name,
+                   bool &out) {
+  JSValue value = JS_GetPropertyStr(ctx, obj, name);
+  if (JS_IsUndefined(value) || JS_IsNull(value)) {
+    JS_FreeValue(ctx, value);
+    return false;
+  }
+  int b = JS_ToBool(ctx, value);
+  JS_FreeValue(ctx, value);
+  if (b < 0)
+    return false;
+  out = (b != 0);
+  return true;
+}
+
+bool GetObjectInt64(JSContext *ctx, JSValueConst obj, const char *name,
+                    int64_t &out) {
+  JSValue value = JS_GetPropertyStr(ctx, obj, name);
+  if (JS_IsUndefined(value) || JS_IsNull(value)) {
+    JS_FreeValue(ctx, value);
+    return false;
+  }
+  const bool ok = (JS_ToInt64(ctx, &out, value) == 0);
+  JS_FreeValue(ctx, value);
+  return ok;
+}
+
+std::wstring ResolveToastAssetPath(const std::wstring &inputPath) {
+  if (inputPath.empty())
+    return inputPath;
+
+  if (PathUtils::IsPathRelative(inputPath)) {
+    std::wstring baseDir =
+        PathUtils::GetParentDir(JSEngine::GetCurrentScriptPath());
+    if (baseDir.empty())
+      baseDir = JSEngine::GetEntryScriptDir();
+    if (baseDir.empty())
+      baseDir = PathUtils::GetWidgetsDir();
+    return PathUtils::ResolvePath(inputPath, baseDir);
+  }
+
+  return PathUtils::NormalizePath(inputPath);
+}
+
+void SetToastError(const std::wstring &message) {
+  g_lastToastError = message;
+  if (!message.empty())
+    Logging::Log(LogLevel::Warn, L"[novadesk.toast] %s", message.c_str());
+}
+
+bool EnsureToastInitialized(JSContext *ctx,
+                            JSValueConst options = JS_UNDEFINED) {
+  auto *instance = WinToastLib::WinToast::instance();
+  if (!instance) {
+    SetToastError(L"WinToast instance is unavailable");
+    return false;
+  }
+
+  if (instance->isInitialized())
+    return true;
+
+  std::wstring appName = GetVersionProperty(L"FileDescription");
+  std::wstring companyName = GetVersionProperty(L"CompanyName");
+  std::wstring productName = GetVersionProperty(L"ProductName");
+  std::wstring productVersion = GetVersionProperty(L"ProductVersion");
+  std::wstring aumi;
+  if (appName.empty())
+    appName = productName;
+  if (appName.empty())
+    appName = L"Novadesk";
+  if (companyName.empty())
+    companyName = L"OfficialNovadesk";
+  if (productName.empty())
+    productName = appName;
+  if (productVersion.empty())
+    productVersion = Utils::ToWString(std::string(NOVADESK_VERSION));
+
+  if (JS_IsObject(options)) {
+    GetObjectString(ctx, options, "appName", appName);
+    GetObjectString(ctx, options, "companyName", companyName);
+    GetObjectString(ctx, options, "productName", productName);
+    GetObjectString(ctx, options, "aumi", aumi);
+
+    std::wstring shortcutPolicy;
+    if (GetObjectString(ctx, options, "shortcutPolicy", shortcutPolicy)) {
+      shortcutPolicy = ToLower(shortcutPolicy);
+      if (shortcutPolicy == L"ignore")
+        instance->setShortcutPolicy(
+            WinToastLib::WinToast::SHORTCUT_POLICY_IGNORE);
+      else if (shortcutPolicy == L"require")
+        instance->setShortcutPolicy(
+            WinToastLib::WinToast::SHORTCUT_POLICY_REQUIRE_NO_CREATE);
+      else
+        instance->setShortcutPolicy(
+            WinToastLib::WinToast::SHORTCUT_POLICY_REQUIRE_CREATE);
+    }
+  }
+
+  if (aumi.empty()) {
+    aumi = WinToastLib::WinToast::configureAUMI(companyName, productName, L"",
+                                                productVersion);
+  }
+
+  instance->setAppName(appName);
+  instance->setAppUserModelId(aumi);
+
+  WinToastLib::WinToast::WinToastError error = WinToastLib::WinToast::NoError;
+  if (!instance->initialize(&error)) {
+    SetToastError(WinToastLib::WinToast::strerror(error));
+    return false;
+  }
+
+  SetToastError(L"");
+  return true;
+}
+
+static JSValue AddonRegisteredFunctionBridge(JSContext *ctx, JSValueConst,
+                                             int argc, JSValueConst *argv,
+                                             int magic) {
+  int (*fn)(novadesk_context) = nullptr;
+  AddonInfo *addon = nullptr;
+  {
+    std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
+    auto it = g_registeredAddonFunctions.find(magic);
+    if (it == g_registeredAddonFunctions.end() || !it->second.fn) {
+      return JS_UNDEFINED;
+    }
+    fn = it->second.fn;
+    addon = it->second.addon;
+  }
+
+  AddonCallContext call{};
+  call.ctx = ctx;
+  call.addon = addon;
+  call.args.reserve(argc);
+  for (int i = 0; i < argc; ++i) {
+    call.args.push_back(JS_DupValue(ctx, argv[i]));
+  }
+
+  fn(reinterpret_cast<novadesk_context>(&call));
+
+  for (JSValue &v : call.args) {
+    JS_FreeValue(ctx, v);
+  }
+
+  if (call.hasThrow) {
+    for (JSValue &v : call.stack) {
+      JS_FreeValue(ctx, v);
+    }
+    return JS_ThrowInternalError(ctx, "%s", call.throwMessage.c_str());
+  }
+
+  if (!call.stack.empty()) {
+    JSValue ret = call.stack.back();
+    call.stack.pop_back();
+    for (JSValue &v : call.stack) {
+      JS_FreeValue(ctx, v);
+    }
+    return ret;
+  }
+
+  return JS_UNDEFINED;
+}
+
+static JSValue *ResolveByIndex(AddonCallContext *call, int index) {
+  if (!call)
+    return nullptr;
+  if (index >= 0) {
+    if (index < static_cast<int>(call->args.size())) {
+      return &call->args[static_cast<size_t>(index)];
+    }
+    return nullptr;
+  }
+
+  const int pos = static_cast<int>(call->stack.size()) + index;
+  if (pos >= 0 && pos < static_cast<int>(call->stack.size())) {
+    return &call->stack[static_cast<size_t>(pos)];
+  }
+  return nullptr;
+}
+
+static void host_RegisterString(novadesk_context c, const char *name,
+                                const char *value) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call || call->stack.empty() || !name)
+    return;
+  JSValue v = value ? JS_NewString(call->ctx, value) : JS_NULL;
+  JS_SetPropertyStr(call->ctx, call->stack.back(), name, v);
+}
+
+static void host_RegisterNumber(novadesk_context c, const char *name,
+                                double value) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call || call->stack.empty() || !name)
+    return;
+  JS_SetPropertyStr(call->ctx, call->stack.back(), name,
+                    JS_NewFloat64(call->ctx, value));
+}
+
+static void host_RegisterBool(novadesk_context c, const char *name, int value) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call || call->stack.empty() || !name)
+    return;
+  JS_SetPropertyStr(call->ctx, call->stack.back(), name,
+                    JS_NewBool(call->ctx, value ? 1 : 0));
+}
+
+static void host_RegisterObjectStart(novadesk_context c, const char *) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call)
+    return;
+  call->stack.push_back(JS_NewObject(call->ctx));
+}
+
+static void host_RegisterObjectEnd(novadesk_context c, const char *name) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call || call->stack.size() < 2 || !name)
+    return;
+  JSValue child = call->stack.back();
+  call->stack.pop_back();
+  JS_SetPropertyStr(call->ctx, call->stack.back(), name, child);
+}
+
+static void host_RegisterArrayString(novadesk_context c, const char *name,
+                                     const char **values, size_t count) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call || call->stack.empty() || !name)
+    return;
+  JSValue arr = JS_NewArray(call->ctx);
+  for (uint32_t i = 0; i < static_cast<uint32_t>(count); ++i) {
+    JS_SetPropertyUint32(call->ctx, arr, i,
+                         JS_NewString(call->ctx, values[i] ? values[i] : ""));
+  }
+  JS_SetPropertyStr(call->ctx, call->stack.back(), name, arr);
+}
+
+static void host_RegisterArrayNumber(novadesk_context c, const char *name,
+                                     const double *values, size_t count) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call || call->stack.empty() || !name)
+    return;
+  JSValue arr = JS_NewArray(call->ctx);
+  for (uint32_t i = 0; i < static_cast<uint32_t>(count); ++i) {
+    JS_SetPropertyUint32(call->ctx, arr, i,
+                         JS_NewFloat64(call->ctx, values[i]));
+  }
+  JS_SetPropertyStr(call->ctx, call->stack.back(), name, arr);
+}
+
+static void host_RegisterFunction(novadesk_context c, const char *name,
+                                  int (*func)(novadesk_context), int nargs) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call || call->stack.empty() || !name || !func)
+    return;
+  std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
+  const int id = g_nextAddonRegisteredFnId++;
+  g_registeredAddonFunctions[id] = AddonRegisteredFunction{func, call->addon};
+  if (call->addon) {
+    call->addon->registeredFunctionIds.push_back(id);
+  }
+  JSValue fn = JS_NewCFunctionMagic(call->ctx, AddonRegisteredFunctionBridge,
+                                    name, nargs, JS_CFUNC_generic_magic, id);
+  JS_SetPropertyStr(call->ctx, call->stack.back(), name, fn);
+}
+
+static void host_PushString(novadesk_context c, const char *value) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call)
+    return;
+  call->stack.push_back(JS_NewString(call->ctx, value ? value : ""));
+}
+
+static void host_PushNumber(novadesk_context c, double value) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call)
+    return;
+  call->stack.push_back(JS_NewFloat64(call->ctx, value));
+}
+
+static void host_PushBool(novadesk_context c, int value) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call)
+    return;
+  call->stack.push_back(JS_NewBool(call->ctx, value ? 1 : 0));
+}
+
+static void host_PushNull(novadesk_context c) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call)
+    return;
+  call->stack.push_back(JS_NULL);
+}
+
+static void host_PushObject(novadesk_context c) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call)
+    return;
+  call->stack.push_back(JS_NewObject(call->ctx));
+}
+
+static void host_PushArray(novadesk_context c) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call)
+    return;
+  call->stack.push_back(JS_NewArray(call->ctx));
+}
+
+static double host_GetNumber(novadesk_context c, int index) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  JSValue *v = ResolveByIndex(call, index);
+  if (!v)
+    return 0.0;
+  double n = 0.0;
+  JS_ToFloat64(call->ctx, &n, *v);
+  return n;
+}
+
+static const char *host_GetString(novadesk_context c, int index) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  JSValue *v = ResolveByIndex(call, index);
+  if (!call || !v)
+    return nullptr;
+  const char *s = JS_ToCString(call->ctx, *v);
+  if (!s)
+    return nullptr;
+  call->tempStrings.emplace_back(s);
+  JS_FreeCString(call->ctx, s);
+  return call->tempStrings.back().c_str();
+}
+
+static int host_GetBool(novadesk_context c, int index) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  JSValue *v = ResolveByIndex(call, index);
+  if (!v)
+    return 0;
+  return JS_ToBool(call->ctx, *v) == 1 ? 1 : 0;
+}
+
+static int host_IsNumber(novadesk_context c, int index) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  JSValue *v = ResolveByIndex(call, index);
+  return v && JS_IsNumber(*v);
+}
+
+static int host_IsString(novadesk_context c, int index) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  JSValue *v = ResolveByIndex(call, index);
+  return v && JS_IsString(*v);
+}
+
+static int host_IsBool(novadesk_context c, int index) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  JSValue *v = ResolveByIndex(call, index);
+  return v && JS_IsBool(*v);
+}
+
+static int host_IsObject(novadesk_context c, int index) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  JSValue *v = ResolveByIndex(call, index);
+  return v && JS_IsObject(*v);
+}
+
+static int host_IsFunction(novadesk_context c, int index) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  JSValue *v = ResolveByIndex(call, index);
+  return v && JS_IsFunction(call->ctx, *v);
+}
+
+static int host_IsNull(novadesk_context c, int index) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  JSValue *v = ResolveByIndex(call, index);
+  return v && (JS_IsNull(*v) || JS_IsUndefined(*v));
+}
+
+static int host_GetProperty(novadesk_context c, int objIndex,
+                            const char *name) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call || !name)
+    return 0;
+  JSValue *obj = ResolveByIndex(call, objIndex);
+  if (!obj || !JS_IsObject(*obj))
+    return 0;
+
+  JSValue value = JS_GetPropertyStr(call->ctx, *obj, name);
+  if (JS_IsException(value)) {
+    JSValue exc = JS_GetException(call->ctx);
+    if (JS_IsObject(exc)) {
+      JSValue msgV = JS_GetPropertyStr(call->ctx, exc, "message");
+      if (!JS_IsUndefined(msgV) && !JS_IsNull(msgV)) {
+        const char *msg = JS_ToCString(call->ctx, msgV);
+        if (msg) {
+          call->throwMessage = msg;
+          JS_FreeCString(call->ctx, msg);
+        }
+        JS_FreeValue(call->ctx, msgV);
+      }
+    }
+    JS_FreeValue(call->ctx, exc);
+    if (call->throwMessage.empty())
+      call->throwMessage = "GetProperty failed";
+    call->hasThrow = true;
+    return 0;
+  }
+
+  call->stack.push_back(value);
+  return JS_IsUndefined(value) ? 0 : 1;
+}
+
+static int host_GetTop(novadesk_context c) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call)
+    return 0;
+  return static_cast<int>(call->args.size() + call->stack.size());
+}
+
+static void host_Pop(novadesk_context c) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call || call->stack.empty())
+    return;
+  JS_FreeValue(call->ctx, call->stack.back());
+  call->stack.pop_back();
+}
+
+static void host_PopN(novadesk_context c, int n) {
+  for (int i = 0; i < n; ++i)
+    host_Pop(c);
+}
+
+static void host_ThrowError(novadesk_context c, const char *message) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call)
+    return;
+  call->hasThrow = true;
+  call->throwMessage = message ? message : "Addon error";
+}
+
+static void *host_JsGetFunctionPtr(novadesk_context c, int index) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  JSValue *v = ResolveByIndex(call, index);
+  if (!call || !v || !JS_IsFunction(call->ctx, *v))
+    return nullptr;
+  auto *handle = new JsFunctionHandle{};
+  handle->ctx = call->ctx;
+  handle->fn = JS_DupValue(call->ctx, *v);
+  if (call->addon) {
+    call->addon->functionHandles.push_back(handle);
+  }
+  return handle;
+}
+
+static void host_JsCallFunction(novadesk_context c, void *funcPtr, int nargs) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  auto *handle = reinterpret_cast<JsFunctionHandle *>(funcPtr);
+  if (!call || !handle || !JS_IsFunction(handle->ctx, handle->fn))
+    return;
+
+  if (nargs < 0 || nargs > static_cast<int>(call->stack.size())) {
+    return;
+  }
+
+  std::vector<JSValue> argv(static_cast<size_t>(nargs));
+  const int base = static_cast<int>(call->stack.size()) - nargs;
+  for (int i = 0; i < nargs; ++i) {
+    argv[static_cast<size_t>(i)] =
+        JS_DupValue(call->ctx, call->stack[static_cast<size_t>(base + i)]);
+  }
+
+  JSValue ret =
+      JS_Call(call->ctx, handle->fn, JS_UNDEFINED, nargs, argv.data());
+  for (JSValue &a : argv)
+    JS_FreeValue(call->ctx, a);
+  for (int i = 0; i < nargs; ++i) {
+    JS_FreeValue(call->ctx, call->stack.back());
+    call->stack.pop_back();
+  }
+
+  if (JS_IsException(ret)) {
+    JSValue exc = JS_GetException(call->ctx);
+    if (JS_IsObject(exc)) {
+      JSValue msgV = JS_GetPropertyStr(call->ctx, exc, "message");
+      if (!JS_IsUndefined(msgV) && !JS_IsNull(msgV)) {
+        const char *msg = JS_ToCString(call->ctx, msgV);
+        if (msg) {
+          call->throwMessage = msg;
+          JS_FreeCString(call->ctx, msg);
+        }
+        JS_FreeValue(call->ctx, msgV);
+      }
+    }
+    JS_FreeValue(call->ctx, exc);
+    if (call->throwMessage.empty())
+      call->throwMessage = "JsCallFunction failed";
+    call->hasThrow = true;
+    return;
+  }
+
+  call->stack.push_back(ret);
+}
+
+static void host_JsCallFunctionNoArgs(novadesk_context, void *funcPtr) {
+  auto *handle = reinterpret_cast<JsFunctionHandle *>(funcPtr);
+  if (!handle || !JS_IsFunction(handle->ctx, handle->fn))
+    return;
+
+  JSValue ret = JS_Call(handle->ctx, handle->fn, JS_UNDEFINED, 0, nullptr);
+  if (!JS_IsException(ret)) {
+    JS_FreeValue(handle->ctx, ret);
+  } else {
+    JSValue exc = JS_GetException(handle->ctx);
+    JS_FreeValue(handle->ctx, exc);
+  }
+}
+
+static void host_ArrayPushObject(novadesk_context c) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  if (!call || call->stack.empty())
+    return;
+  JSValue *arr = &call->stack.back();
+  if (!JS_IsArray(*arr))
+    return;
+
+  uint32_t len = 0;
+  JSValue lenV = JS_GetPropertyStr(call->ctx, *arr, "length");
+  JS_ToUint32(call->ctx, &len, lenV);
+  JS_FreeValue(call->ctx, lenV);
+
+  JSValue obj = JS_NewObject(call->ctx);
+  JS_SetPropertyUint32(call->ctx, *arr, len, JS_DupValue(call->ctx, obj));
+  call->stack.push_back(obj);
+}
+
+const NovadeskHostAPI g_hostApi = {host_RegisterString,
+                                   host_RegisterNumber,
+                                   host_RegisterBool,
+                                   host_RegisterObjectStart,
+                                   host_RegisterObjectEnd,
+                                   host_RegisterArrayString,
+                                   host_RegisterArrayNumber,
+                                   host_RegisterFunction,
+                                   host_PushString,
+                                   host_PushNumber,
+                                   host_PushBool,
+                                   host_PushNull,
+                                   host_PushObject,
+                                   host_PushArray,
+                                   host_GetNumber,
+                                   host_GetString,
+                                   host_GetBool,
+                                   host_IsNumber,
+                                   host_IsString,
+                                   host_IsBool,
+                                   host_IsObject,
+                                   host_IsFunction,
+                                   host_IsNull,
+                                   host_GetProperty,
+                                   host_GetTop,
+                                   host_Pop,
+                                   host_PopN,
+                                   host_ThrowError,
+                                   host_JsGetFunctionPtr,
+                                   host_JsCallFunction,
+                                   host_JsCallFunctionNoArgs,
+                                   host_ArrayPushObject};
+
+bool UnloadAddonById(int addonId) {
+  std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
+  auto pit = g_addonPathById.find(addonId);
+  if (pit == g_addonPathById.end()) {
+    return false;
+  }
+  auto it = g_loadedAddons.find(pit->second);
+  if (it == g_loadedAddons.end()) {
+    return false;
+  }
+
+  if (it->second.unloadFn) {
+    try {
+      it->second.unloadFn();
+    } catch (...) {
+      Logging::Log(LogLevel::Error, L"Crash in NovadeskAddonUnload");
+    }
+  }
+
+  for (int id : it->second.registeredFunctionIds) {
+    g_registeredAddonFunctions.erase(id);
+  }
+  for (void *p : it->second.functionHandles) {
+    auto *h = reinterpret_cast<JsFunctionHandle *>(p);
+    if (h) {
+      if (!JS_IsUndefined(h->fn))
+        JS_FreeValue(h->ctx, h->fn);
+      delete h;
+    }
+  }
+  if (!JS_IsUndefined(it->second.exportObject) && it->second.exportCtx) {
+    JS_FreeValue(it->second.exportCtx, it->second.exportObject);
+    it->second.exportObject = JS_UNDEFINED;
+  }
+
+  g_addonPathById.erase(it->second.id);
+  FreeLibrary(it->second.handle);
+  g_loadedAddons.erase(it);
+  return true;
+}
+
+void UnloadAllAddonsInternal() {
+  std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
+  std::vector<int> addonIds;
+  addonIds.reserve(g_addonPathById.size());
+  for (const auto &kv : g_addonPathById) {
+    addonIds.push_back(kv.first);
+  }
+  for (int id : addonIds) {
+    UnloadAddonById(id);
+  }
+}
+
+std::wstring GetVersionProperty(const std::wstring &propertyName) {
+  std::wstring exePath = PathUtils::GetExePath();
+  DWORD handle = 0;
+  DWORD size = GetFileVersionInfoSizeW(exePath.c_str(), &handle);
+  if (size == 0)
+    return L"";
+
+  std::vector<BYTE> buffer(size);
+  if (!GetFileVersionInfoW(exePath.c_str(), handle, size, buffer.data())) {
+    return L"";
+  }
+
+  struct LANGANDCODEPAGE {
+    WORD wLanguage;
+    WORD wCodePage;
+  } *translate = nullptr;
+  UINT cbTranslate = 0;
+  if (!VerQueryValueW(buffer.data(), L"\\VarFileInfo\\Translation",
+                      reinterpret_cast<LPVOID *>(&translate), &cbTranslate) ||
+      cbTranslate < sizeof(LANGANDCODEPAGE)) {
+    return L"";
+  }
+
+  wchar_t subBlock[128];
+  swprintf_s(subBlock, L"\\StringFileInfo\\%04x%04x\\%s",
+             translate[0].wLanguage, translate[0].wCodePage,
+             propertyName.c_str());
+
+  LPWSTR value = nullptr;
+  UINT sizeOut = 0;
+  if (VerQueryValueW(buffer.data(), subBlock,
+                     reinterpret_cast<LPVOID *>(&value), &sizeOut) &&
+      value) {
+    return value;
+  }
+  return L"";
+}
+
+bool ParseTrayMenuItems(JSContext *ctx, int trayId, JSValueConst arr,
+                        std::vector<MenuItem> &out) {
+  if (!JS_IsArray(arr))
+    return false;
+  uint32_t len = 0;
+  JSValue lenV = JS_GetPropertyStr(ctx, arr, "length");
+  if (JS_ToUint32(ctx, &len, lenV) != 0) {
+    JS_FreeValue(ctx, lenV);
+    return false;
+  }
+  JS_FreeValue(ctx, lenV);
+
+  for (uint32_t i = 0; i < len; ++i) {
+    JSValue itemV = JS_GetPropertyUint32(ctx, arr, i);
+    if (!JS_IsObject(itemV)) {
+      JS_FreeValue(ctx, itemV);
+      continue;
     }
 
-    JSModuleDef *EnsureNovadeskModule(JSContext *ctx, const char *moduleName)
-    {
-        JSModuleDef *m = JS_NewCModule(ctx, moduleName, NovadeskModuleInit);
-        if (!m)
-        {
-            return nullptr;
-        }
-        // Register all exports. Failures here are extremely rare
-        // (OOM for the export name string). The module is already
-        // registered with the context by JS_NewCModule, so returning
-        // nullptr on partial failure would orphan it — the caller has
-        // no handle to finalize it. Always return the module so it
-        // is cleaned up normally when the context is destroyed.
-        JS_AddModuleExport(ctx, m, "widgetWindow");
-        JS_AddModuleExport(ctx, m, "app");
-        JS_AddModuleExport(ctx, m, "tray");
-        JS_AddModuleExport(ctx, m, "addon");
-        JS_AddModuleExport(ctx, m, "toast");
-        JS_AddModuleExport(ctx, m, "dialog");
-        return m;
+    MenuItem item{};
+    item.id = 0;
+
+    JSValue typeV = JS_GetPropertyStr(ctx, itemV, "type");
+    const char *typeS = JS_ToCString(ctx, typeV);
+    if (typeS && std::string(typeS) == "separator")
+      item.isSeparator = true;
+    if (typeS)
+      JS_FreeCString(ctx, typeS);
+    JS_FreeValue(ctx, typeV);
+
+    if (!item.isSeparator) {
+      JSValue textV = JS_GetPropertyStr(ctx, itemV, "text");
+      const char *textS = JS_ToCString(ctx, textV);
+      if (textS) {
+        item.text = Utils::ToWString(textS);
+        JS_FreeCString(ctx, textS);
+      }
+      JS_FreeValue(ctx, textV);
+
+      JSValue checkedV = JS_GetPropertyStr(ctx, itemV, "checked");
+      int checked = JS_ToBool(ctx, checkedV);
+      if (checked >= 0)
+        item.checked = (checked != 0);
+      JS_FreeValue(ctx, checkedV);
+
+      JSValue actionV = JS_GetPropertyStr(ctx, itemV, "action");
+      if (JS_IsFunction(ctx, actionV)) {
+        item.id = 2000 + g_nextTrayCommandId++;
+        JSEngine::RegisterTrayCommandCallback(ctx, trayId, item.id, actionV);
+      }
+      JS_FreeValue(ctx, actionV);
+
+      JSValue childV = JS_GetPropertyStr(ctx, itemV, "items");
+      if (JS_IsArray(childV)) {
+        ParseTrayMenuItems(ctx, trayId, childV, item.children);
+      }
+      JS_FreeValue(ctx, childV);
     }
 
-    void UnloadAllAddons()
-    {
-        UnloadAllAddonsInternal();
+    out.push_back(std::move(item));
+    JS_FreeValue(ctx, itemV);
+  }
+
+  return true;
+}
+
+JSValue JsAddonUnload(JSContext *ctx, JSValueConst, int argc,
+                      JSValueConst *argv);
+
+// Returns app.argv — an array of command-line arguments normalized to Node.js
+// process.argv: argv[0]: executable path (Novadesk.exe) argv[1]: entry script
+// path (index.js) argv[2...]: user-supplied arguments
+JSValue JsAppGetArgv(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  JSValue arr = JS_NewArray(ctx);
+  uint32_t idx = 0;
+  for (const std::wstring &arg : g_appArgv) {
+    const std::string argUtf8 = Utils::ToString(arg);
+    JS_SetPropertyUint32(ctx, arr, idx++, JS_NewString(ctx, argUtf8.c_str()));
+  }
+  return arr;
+}
+
+// Returns app.rawArgv — the exact, unparsed command-line arguments passed to
+// the process.
+JSValue JsAppGetRawArgv(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  JSValue arr = JS_NewArray(ctx);
+  uint32_t idx = 0;
+  for (const std::wstring &arg : g_rawAppArgv) {
+    const std::string argUtf8 = Utils::ToString(arg);
+    JS_SetPropertyUint32(ctx, arr, idx++, JS_NewString(ctx, argUtf8.c_str()));
+  }
+  return arr;
+}
+
+JSValue JsAppReload(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  (void)ctx;
+  JSEngine::Reload();
+  return JS_UNDEFINED;
+}
+
+JSValue JsAppRefresh(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  (void)ctx;
+  JSEngine::Reload();
+  return JS_UNDEFINED;
+}
+
+JSValue JsAppExit(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  (void)ctx;
+  PostQuitMessage(0);
+  return JS_UNDEFINED;
+}
+
+JSValue JsAppRequestSingleInstanceLock(JSContext *ctx, JSValueConst, int,
+                                       JSValueConst *) {
+  return JS_NewBool(ctx, RequestSingleInstanceLock() ? 1 : 0);
+}
+
+JSValue JsAppReleaseSingleInstanceLock(JSContext *ctx, JSValueConst, int,
+                                       JSValueConst *) {
+  ReleaseSingleInstanceLock();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsAppSaveLogToFile(JSContext *ctx, JSValueConst, int argc,
+                           JSValueConst *argv) {
+  if (argc < 1) {
+    return JS_ThrowTypeError(ctx, "app.saveLogToFile(enable) requires boolean");
+  }
+  int b = JS_ToBool(ctx, argv[0]);
+  if (b < 0) {
+    return JS_ThrowTypeError(ctx, "app.saveLogToFile(enable) expects boolean");
+  }
+
+  const bool enable = (b != 0);
+  Settings::SetGlobalBool("saveLogToFile", enable);
+  if (enable) {
+    std::wstring logPath = PathUtils::GetAppDataPath() + L"logs.log";
+    Logging::SetFileLogging(logPath, false);
+  } else {
+    Logging::SetFileLogging(L"");
+  }
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsAppDisableLogging(JSContext *ctx, JSValueConst, int argc,
+                            JSValueConst *argv) {
+  if (argc < 1) {
+    return JS_ThrowTypeError(ctx,
+                             "app.disableLogging(disable) requires boolean");
+  }
+  int b = JS_ToBool(ctx, argv[0]);
+  if (b < 0) {
+    return JS_ThrowTypeError(ctx,
+                             "app.disableLogging(disable) expects boolean");
+  }
+
+  const bool disable = (b != 0);
+  Settings::SetGlobalBool("disableLogging", disable);
+  Logging::SetConsoleLogging(!disable);
+  if (disable) {
+    Logging::SetFileLogging(L"");
+  } else if (Settings::GetGlobalBool("saveLogToFile", false)) {
+    std::wstring logPath = PathUtils::GetAppDataPath() + L"logs.log";
+    Logging::SetFileLogging(logPath, false);
+  }
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsAppUseHardwareAcceleration(JSContext *ctx, JSValueConst, int argc,
+                                     JSValueConst *argv) {
+  if (argc < 1) {
+    return JS_ThrowTypeError(
+        ctx, "app.useHardwareAcceleration(enable) requires boolean");
+  }
+  int b = JS_ToBool(ctx, argv[0]);
+  if (b < 0) {
+    return JS_ThrowTypeError(
+        ctx, "app.useHardwareAcceleration(enable) expects boolean");
+  }
+
+  Settings::SetGlobalBool("useHardwareAcceleration", (b != 0));
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsAppGetProductVersion(JSContext *ctx, JSValueConst, int,
+                               JSValueConst *) {
+  return JS_NewString(
+      ctx, Utils::ToString(GetVersionProperty(L"ProductVersion")).c_str());
+}
+
+JSValue JsAppGetFileVersion(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  return JS_NewString(
+      ctx, Utils::ToString(GetVersionProperty(L"FileVersion")).c_str());
+}
+
+JSValue JsAppGetNovadeskVersion(JSContext *ctx, JSValueConst, int,
+                                JSValueConst *) {
+  return JS_NewString(ctx, NOVADESK_VERSION);
+}
+
+JSValue JsAppGetAppDataPath(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  return JS_NewString(ctx,
+                      Utils::ToString(PathUtils::GetAppDataPath()).c_str());
+}
+
+JSValue JsAppGetSettingsFilePath(JSContext *ctx, JSValueConst, int,
+                                 JSValueConst *) {
+  return JS_NewString(ctx,
+                      Utils::ToString(Settings::GetSettingsPath()).c_str());
+}
+
+JSValue JsAppGetLogPath(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  return JS_NewString(ctx, Utils::ToString(Settings::GetLogPath()).c_str());
+}
+
+JSValue JsAppIsPortable(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  return JS_NewBool(ctx, PathUtils::IsPortableEnvironment() ? 1 : 0);
+}
+
+JSValue JsAppIsFirstRun(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  return JS_NewBool(ctx, Settings::IsFirstRun() ? 1 : 0);
+}
+
+static std::wstring GetStorageFilePath() {
+  return PathUtils::GetAppDataPath() + L"storage.json";
+}
+
+static JSValue LoadStorageObject(JSContext *ctx) {
+  const std::wstring storagePath = GetStorageFilePath();
+  std::string text;
+  if (!::novadesk::shared::system::JsonReadTextFile(storagePath, text)) {
+    return JS_NewObject(ctx);
+  }
+
+  if (text.find_first_not_of(" \t\r\n") == std::string::npos) {
+    return JS_NewObject(ctx);
+  }
+
+  JSValue parsed = JS_ParseJSON(ctx, text.c_str(), text.size(),
+                                Utils::ToString(storagePath).c_str());
+  if (JS_IsException(parsed) || !JS_IsObject(parsed)) {
+    if (JS_IsException(parsed)) {
+      JS_FreeValue(ctx, JS_GetException(ctx));
+    } else {
+      JS_FreeValue(ctx, parsed);
+    }
+    return JS_NewObject(ctx);
+  }
+  return parsed;
+}
+
+static bool SaveStorageObject(JSContext *ctx, JSValueConst storageObj) {
+  JSValue indent = JS_NewInt32(ctx, 2);
+  JSValue serialized = JS_JSONStringify(ctx, storageObj, JS_UNDEFINED, indent);
+  JS_FreeValue(ctx, indent);
+  if (JS_IsException(serialized)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+    return false;
+  }
+
+  const char *text = JS_ToCString(ctx, serialized);
+  if (!text) {
+    JS_FreeValue(ctx, serialized);
+    return false;
+  }
+
+  const bool ok =
+      ::novadesk::shared::system::JsonWriteTextFile(GetStorageFilePath(), text);
+  JS_FreeCString(ctx, text);
+  JS_FreeValue(ctx, serialized);
+  return ok;
+}
+
+JSValue JsAppStorageGet(JSContext *ctx, JSValueConst, int argc,
+                        JSValueConst *argv) {
+  if (argc < 1 || !JS_IsString(argv[0])) {
+    return JS_ThrowTypeError(
+        ctx, "app.storage.get(key[, defaultValue]) requires string key");
+  }
+
+  JSValue storageObj = LoadStorageObject(ctx);
+  const char *key = JS_ToCString(ctx, argv[0]);
+  if (!key) {
+    JS_FreeValue(ctx, storageObj);
+    return JS_EXCEPTION;
+  }
+
+  JSValue out = JS_GetPropertyStr(ctx, storageObj, key);
+  JS_FreeCString(ctx, key);
+  JS_FreeValue(ctx, storageObj);
+
+  if (JS_IsUndefined(out) && argc > 1) {
+    JS_FreeValue(ctx, out);
+    return JS_DupValue(ctx, argv[1]);
+  }
+  return out;
+}
+
+JSValue JsAppStorageSet(JSContext *ctx, JSValueConst, int argc,
+                        JSValueConst *argv) {
+  if (argc < 2 || !JS_IsString(argv[0])) {
+    return JS_ThrowTypeError(ctx,
+                             "app.storage.set(key, value) requires string key");
+  }
+
+  JSValue storageObj = LoadStorageObject(ctx);
+  const char *key = JS_ToCString(ctx, argv[0]);
+  if (!key) {
+    JS_FreeValue(ctx, storageObj);
+    return JS_EXCEPTION;
+  }
+
+  JS_SetPropertyStr(ctx, storageObj, key, JS_DupValue(ctx, argv[1]));
+  JS_FreeCString(ctx, key);
+
+  const bool ok = SaveStorageObject(ctx, storageObj);
+  JS_FreeValue(ctx, storageObj);
+  return JS_NewBool(ctx, ok ? 1 : 0);
+}
+
+JSValue JsAppStorageRemove(JSContext *ctx, JSValueConst, int argc,
+                           JSValueConst *argv) {
+  if (argc < 1 || !JS_IsString(argv[0])) {
+    return JS_ThrowTypeError(ctx,
+                             "app.storage.remove(key) requires string key");
+  }
+
+  JSValue storageObj = LoadStorageObject(ctx);
+  const char *key = JS_ToCString(ctx, argv[0]);
+  if (!key) {
+    JS_FreeValue(ctx, storageObj);
+    return JS_EXCEPTION;
+  }
+
+  JSAtom keyAtom = JS_NewAtom(ctx, key);
+  const int deleted = JS_DeleteProperty(ctx, storageObj, keyAtom, 0);
+  JS_FreeAtom(ctx, keyAtom);
+  JS_FreeCString(ctx, key);
+
+  const bool saved = SaveStorageObject(ctx, storageObj);
+  JS_FreeValue(ctx, storageObj);
+  return JS_NewBool(ctx, (deleted == 1 && saved) ? 1 : 0);
+}
+
+static bool IsTrayEventName(const std::string &name) {
+  static const std::unordered_set<std::string> kNames = {
+      "click", "right-click", "double-click", "scroll-up", "scroll-down",
+  };
+  return kNames.find(name) != kNames.end();
+}
+
+static const char *kTrayIdKey = "__trayId";
+
+bool GetTrayId(JSContext *ctx, JSValueConst thisVal, int &outId) {
+  if (!JS_IsObject(thisVal))
+    return false;
+  JSValue idV = JS_GetPropertyStr(ctx, thisVal, kTrayIdKey);
+  if (JS_IsUndefined(idV) || JS_IsNull(idV)) {
+    JS_FreeValue(ctx, idV);
+    return false;
+  }
+  int32_t id = 0;
+  const bool ok = (JS_ToInt32(ctx, &id, idV) == 0);
+  JS_FreeValue(ctx, idV);
+  if (!ok || id <= 0)
+    return false;
+  outId = id;
+  return true;
+}
+
+std::wstring ResolveTrayImagePath(const std::wstring &inputPath) {
+  if (inputPath.empty())
+    return inputPath;
+
+  if (PathUtils::IsPathRelative(inputPath)) {
+    std::wstring baseDir =
+        PathUtils::GetParentDir(JSEngine::GetCurrentScriptPath());
+    if (baseDir.empty())
+      baseDir = JSEngine::GetEntryScriptDir();
+    if (baseDir.empty())
+      baseDir = PathUtils::GetWidgetsDir();
+    return PathUtils::ResolvePath(inputPath, baseDir);
+  }
+
+  return PathUtils::NormalizePath(inputPath);
+}
+
+JSValue JsTrayOn(JSContext *ctx, JSValueConst thisVal, int argc,
+                 JSValueConst *argv) {
+  if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsFunction(ctx, argv[1])) {
+    return JS_ThrowTypeError(
+        ctx, "tray.on(event, handler) requires event string and function");
+  }
+  int trayId = 0;
+  if (!GetTrayId(ctx, thisVal, trayId)) {
+    return JS_ThrowTypeError(ctx, "tray.on called on invalid tray instance");
+  }
+  const char *nameC = JS_ToCString(ctx, argv[0]);
+  if (!nameC) {
+    return JS_EXCEPTION;
+  }
+  std::string name = nameC;
+  JS_FreeCString(ctx, nameC);
+  if (!IsTrayEventName(name)) {
+    return JS_ThrowTypeError(ctx, "tray.on: unknown event");
+  }
+  JSEngine::RegisterTrayEventCallback(ctx, trayId, name, argv[1]);
+  return JS_UNDEFINED;
+}
+
+JSValue JsTrayDestroy(JSContext *ctx, JSValueConst thisVal, int,
+                      JSValueConst *) {
+  (void)ctx;
+  int trayId = 0;
+  if (!GetTrayId(ctx, thisVal, trayId)) {
+    return JS_ThrowTypeError(ctx,
+                             "tray.destroy called on invalid tray instance");
+  }
+  TrayDestroy(trayId);
+  JSEngine::ClearTrayEventCallbacks(trayId);
+  JSEngine::ClearTrayCommandCallbacks(trayId);
+  JSEngine::UnregisterTrayOwner(trayId);
+  return JS_UNDEFINED;
+}
+
+JSValue JsTraySetImage(JSContext *ctx, JSValueConst thisVal, int argc,
+                       JSValueConst *argv) {
+  if (argc < 1 || !JS_IsString(argv[0])) {
+    return JS_ThrowTypeError(ctx, "tray.setImage(path) requires image path");
+  }
+  int trayId = 0;
+  if (!GetTrayId(ctx, thisVal, trayId)) {
+    return JS_ThrowTypeError(ctx,
+                             "tray.setImage called on invalid tray instance");
+  }
+  const char *pathC = JS_ToCString(ctx, argv[0]);
+  if (!pathC) {
+    return JS_EXCEPTION;
+  }
+  std::wstring path = Utils::ToWString(pathC);
+  JS_FreeCString(ctx, pathC);
+  TraySetImage(trayId, ResolveTrayImagePath(path));
+  return JS_UNDEFINED;
+}
+
+JSValue JsTraySetToolTip(JSContext *ctx, JSValueConst thisVal, int argc,
+                         JSValueConst *argv) {
+  if (argc < 1 || !JS_IsString(argv[0])) {
+    return JS_ThrowTypeError(ctx, "tray.setToolTip(text) requires text");
+  }
+  int trayId = 0;
+  if (!GetTrayId(ctx, thisVal, trayId)) {
+    return JS_ThrowTypeError(ctx,
+                             "tray.setToolTip called on invalid tray instance");
+  }
+  const char *textC = JS_ToCString(ctx, argv[0]);
+  if (!textC) {
+    return JS_EXCEPTION;
+  }
+  std::wstring text = Utils::ToWString(textC);
+  JS_FreeCString(ctx, textC);
+  TraySetToolTip(trayId, text);
+  return JS_UNDEFINED;
+}
+
+JSValue JsTraySetContextMenu(JSContext *ctx, JSValueConst thisVal, int argc,
+                             JSValueConst *argv) {
+  if (argc < 1 || !JS_IsArray(argv[0])) {
+    return JS_ThrowTypeError(ctx, "tray.setContextMenu: expected items array");
+  }
+  int trayId = 0;
+  if (!GetTrayId(ctx, thisVal, trayId)) {
+    return JS_ThrowTypeError(
+        ctx, "tray.setContextMenu called on invalid tray instance");
+  }
+  JSEngine::ClearTrayCommandCallbacks(trayId);
+  std::vector<MenuItem> menu;
+  if (!ParseTrayMenuItems(ctx, trayId, argv[0], menu)) {
+    return JS_ThrowTypeError(ctx, "tray.setContextMenu: invalid items");
+  }
+  TraySetContextMenu(trayId, menu);
+  return JS_UNDEFINED;
+}
+
+JSValue JsTrayCtor(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
+  std::wstring imagePath;
+  if (argc > 0 && !JS_IsNull(argv[0]) && !JS_IsUndefined(argv[0])) {
+    if (!JS_IsString(argv[0])) {
+      return JS_ThrowTypeError(ctx,
+                               "new tray(image) expects image path or null");
+    }
+    const char *pathC = JS_ToCString(ctx, argv[0]);
+    if (!pathC) {
+      return JS_EXCEPTION;
+    }
+    imagePath = Utils::ToWString(pathC);
+    JS_FreeCString(ctx, pathC);
+    imagePath = ResolveTrayImagePath(imagePath);
+  }
+
+  const int trayId = TrayCreate(imagePath);
+  JSValue tray = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, tray, kTrayIdKey, JS_NewInt32(ctx, trayId));
+  JS_SetPropertyStr(ctx, tray, "setImage",
+                    JS_NewCFunction(ctx, JsTraySetImage, "setImage", 1));
+  JS_SetPropertyStr(ctx, tray, "setToolTip",
+                    JS_NewCFunction(ctx, JsTraySetToolTip, "setToolTip", 1));
+  JS_SetPropertyStr(
+      ctx, tray, "setContextMenu",
+      JS_NewCFunction(ctx, JsTraySetContextMenu, "setContextMenu", 1));
+  JS_SetPropertyStr(ctx, tray, "on", JS_NewCFunction(ctx, JsTrayOn, "on", 2));
+  JS_SetPropertyStr(ctx, tray, "destroy",
+                    JS_NewCFunction(ctx, JsTrayDestroy, "destroy", 0));
+  JSEngine::RegisterTrayOwner(trayId, JSEngine::GetCurrentScriptPath());
+  return tray;
+}
+
+JSValue JsAppEnableDebugging(JSContext *ctx, JSValueConst, int argc,
+                             JSValueConst *argv) {
+  if (argc < 1) {
+    return JS_ThrowTypeError(ctx,
+                             "app.enableDebugging(enable) requires boolean");
+  }
+
+  int b = JS_ToBool(ctx, argv[0]);
+  if (b < 0) {
+    return JS_ThrowTypeError(ctx,
+                             "app.enableDebugging(enable) expects boolean");
+  }
+
+  const bool enable = (b != 0);
+  Settings::SetGlobalBool("enableDebugging", enable);
+  Logging::SetLogLevel(enable ? LogLevel::Debug : LogLevel::Info);
+  SetModuleDebug(enable);
+  SetModuleSystemDebug(enable);
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsAddonLoad(JSContext *ctx, JSValueConst, int argc,
+                    JSValueConst *argv) {
+  if (argc < 1) {
+    return JS_ThrowTypeError(ctx, "addon.load(path) requires path");
+  }
+
+  const char *pathC = JS_ToCString(ctx, argv[0]);
+  if (!pathC) {
+    return JS_EXCEPTION;
+  }
+
+  std::wstring addonPath = Utils::ToWString(pathC);
+  JS_FreeCString(ctx, pathC);
+
+  if (PathUtils::IsPathRelative(addonPath)) {
+    std::wstring base = JSEngine::GetCurrentScriptDir();
+    if (base.empty())
+      base = JSEngine::GetEntryScriptDir();
+    if (base.empty())
+      base = PathUtils::GetWidgetsDir();
+    addonPath = PathUtils::ResolvePath(addonPath, base);
+  } else {
+    addonPath = PathUtils::NormalizePath(addonPath);
+  }
+
+  std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
+
+  auto it = g_loadedAddons.find(addonPath);
+  if (it != g_loadedAddons.end()) {
+    if (it->second.exportCtx == ctx &&
+        !JS_IsUndefined(it->second.exportObject)) {
+      return JS_DupValue(ctx, it->second.exportObject);
+    }
+    return JS_NewInt32(ctx, it->second.id);
+  }
+
+  HMODULE module = LoadLibraryW(addonPath.c_str());
+  if (!module) {
+    Logging::Log(LogLevel::Error, L"Failed to load addon: %s (Error: %d)",
+                 addonPath.c_str(), GetLastError());
+    return JS_NULL;
+  }
+
+  auto initFn = reinterpret_cast<NovadeskAddonInitFn>(
+      GetProcAddress(module, "NovadeskAddonInit"));
+  if (!initFn) {
+    Logging::Log(LogLevel::Error,
+                 L"Addon %s is missing NovadeskAddonInit export",
+                 addonPath.c_str());
+    FreeLibrary(module);
+    return JS_NULL;
+  }
+
+  AddonInfo info{};
+  info.id = g_nextAddonId++;
+  info.handle = module;
+  info.unloadFn = reinterpret_cast<NovadeskAddonUnloadFn>(
+      GetProcAddress(module, "NovadeskAddonUnload"));
+  info.exportCtx = ctx;
+  auto [insIt, _ok] = g_loadedAddons.emplace(addonPath, std::move(info));
+  AddonInfo &stored = insIt->second;
+  g_addonPathById[stored.id] = addonPath;
+
+  AddonCallContext call{};
+  call.ctx = ctx;
+  call.addon = &stored;
+  JSValue rootExports = JS_NewObject(ctx);
+  call.stack.push_back(JS_DupValue(ctx, rootExports));
+
+  initFn(reinterpret_cast<novadesk_context>(&call),
+         JSEngine::GetMessageWindow(), &g_hostApi);
+
+  if (call.hasThrow) {
+    for (JSValue &v : call.args)
+      JS_FreeValue(ctx, v);
+    for (JSValue &v : call.stack)
+      JS_FreeValue(ctx, v);
+    if (stored.unloadFn) {
+      try {
+        stored.unloadFn();
+      } catch (...) {
+      }
+    }
+    FreeLibrary(stored.handle);
+    g_addonPathById.erase(stored.id);
+    g_loadedAddons.erase(insIt);
+    return JS_ThrowInternalError(ctx, "%s", call.throwMessage.c_str());
+  }
+
+  JSValue addonHandle = JS_UNDEFINED;
+  if (!call.stack.empty() && JS_IsObject(call.stack.back())) {
+    addonHandle = JS_DupValue(ctx, call.stack.back());
+  } else if (!call.stack.empty()) {
+    addonHandle = JS_DupValue(ctx, rootExports);
+    JS_SetPropertyStr(ctx, addonHandle, "value",
+                      JS_DupValue(ctx, call.stack.back()));
+  } else {
+    addonHandle = JS_DupValue(ctx, rootExports);
+  }
+
+  JS_SetPropertyStr(ctx, addonHandle, kAddonIdKey, JS_NewInt32(ctx, stored.id));
+  JSValue unloadFn = JS_NewCFunction(ctx, JsAddonUnload, "unload", 0);
+  JS_SetPropertyStr(ctx, addonHandle, "unload", unloadFn);
+  stored.exportObject = JS_DupValue(ctx, addonHandle);
+
+  for (size_t i = 0; i < call.stack.size(); ++i) {
+    JS_FreeValue(ctx, call.stack[i]);
+  }
+  JS_FreeValue(ctx, rootExports);
+  return addonHandle;
+}
+
+JSValue JsAddonUnload(JSContext *ctx, JSValueConst thisVal, int argc,
+                      JSValueConst *argv) {
+  JSValueConst target = JS_UNDEFINED;
+  if (argc >= 1) {
+    target = argv[0];
+  } else {
+    // Support handle.unload() with no args.
+    target = thisVal;
+  }
+
+  int32_t addonId = 0;
+  if (JS_IsObject(target)) {
+    JSValue idV = JS_GetPropertyStr(ctx, target, kAddonIdKey);
+    const bool ok = (JS_ToInt32(ctx, &addonId, idV) == 0);
+    JS_FreeValue(ctx, idV);
+    if (!ok) {
+      return JS_ThrowTypeError(
+          ctx, "addon.unload(addonObject): invalid addon object");
+    }
+  } else {
+    if (JS_ToInt32(ctx, &addonId, target) != 0) {
+      return JS_ThrowTypeError(
+          ctx, "addon.unload(addonObject|addonId) expects object or number");
+    }
+  }
+
+  return JS_NewBool(ctx, UnloadAddonById(static_cast<int>(addonId)) ? 1 : 0);
+}
+
+WinToastLib::WinToastTemplate::Duration
+ParseToastDuration(const std::wstring &duration) {
+  const std::wstring lower = ToLower(duration);
+  if (lower == L"short")
+    return WinToastLib::WinToastTemplate::Short;
+  if (lower == L"long")
+    return WinToastLib::WinToastTemplate::Long;
+  return WinToastLib::WinToastTemplate::System;
+}
+
+WinToastLib::WinToastTemplate::Scenario
+ParseToastScenario(const std::wstring &scenario) {
+  const std::wstring lower = ToLower(scenario);
+  if (lower == L"alarm")
+    return WinToastLib::WinToastTemplate::Scenario::Alarm;
+  if (lower == L"incomingcall" || lower == L"incoming-call")
+    return WinToastLib::WinToastTemplate::Scenario::IncomingCall;
+  if (lower == L"reminder")
+    return WinToastLib::WinToastTemplate::Scenario::Reminder;
+  return WinToastLib::WinToastTemplate::Scenario::Default;
+}
+
+WinToastLib::WinToastTemplate::AudioSystemFile
+ParseToastAudioSystemFile(const std::wstring &audio) {
+  const std::wstring lower = ToLower(audio);
+  if (lower == L"im")
+    return WinToastLib::WinToastTemplate::IM;
+  if (lower == L"mail")
+    return WinToastLib::WinToastTemplate::Mail;
+  if (lower == L"reminder")
+    return WinToastLib::WinToastTemplate::Reminder;
+  if (lower == L"sms")
+    return WinToastLib::WinToastTemplate::SMS;
+  if (lower == L"alarm")
+    return WinToastLib::WinToastTemplate::Alarm;
+  if (lower == L"call")
+    return WinToastLib::WinToastTemplate::Call;
+  return WinToastLib::WinToastTemplate::DefaultSound;
+}
+
+JSValue JsToastInitialize(JSContext *ctx, JSValueConst, int argc,
+                          JSValueConst *argv) {
+  JSValueConst options =
+      (argc > 0 && JS_IsObject(argv[0])) ? argv[0] : JS_UNDEFINED;
+  return JS_NewBool(ctx, EnsureToastInitialized(ctx, options) ? 1 : 0);
+}
+
+JSValue JsToastIsCompatible(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  return JS_NewBool(ctx, WinToastLib::WinToast::isCompatible() ? 1 : 0);
+}
+
+JSValue JsToastIsInitialized(JSContext *ctx, JSValueConst, int,
+                             JSValueConst *) {
+  auto *instance = WinToastLib::WinToast::instance();
+  return JS_NewBool(ctx, (instance && instance->isInitialized()) ? 1 : 0);
+}
+
+JSValue JsToastGetLastError(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  return JS_NewString(ctx, Utils::ToString(g_lastToastError).c_str());
+}
+
+JSValue JsToastHide(JSContext *ctx, JSValueConst, int argc,
+                    JSValueConst *argv) {
+  if (argc < 1) {
+    return JS_ThrowTypeError(ctx, "toast.hide(id) requires toast id");
+  }
+  int64_t id = 0;
+  if (JS_ToInt64(ctx, &id, argv[0]) != 0) {
+    return JS_ThrowTypeError(ctx, "toast.hide(id) requires numeric toast id");
+  }
+  auto *instance = WinToastLib::WinToast::instance();
+  return JS_NewBool(ctx, (instance && instance->hideToast(id)) ? 1 : 0);
+}
+
+JSValue JsToastClear(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  (void)ctx;
+  auto *instance = WinToastLib::WinToast::instance();
+  if (instance)
+    instance->clear();
+  return JS_UNDEFINED;
+}
+
+bool AddToastActions(JSContext *ctx, JSValueConst options,
+                     WinToastLib::WinToastTemplate &templ) {
+  JSValue actions = JS_GetPropertyStr(ctx, options, "actions");
+  if (!JS_IsArray(actions)) {
+    JS_FreeValue(ctx, actions);
+    return true;
+  }
+
+  uint32_t length = 0;
+  JSValue lengthV = JS_GetPropertyStr(ctx, actions, "length");
+  JS_ToUint32(ctx, &length, lengthV);
+  JS_FreeValue(ctx, lengthV);
+
+  for (uint32_t i = 0; i < length; ++i) {
+    JSValue action = JS_GetPropertyUint32(ctx, actions, i);
+    std::wstring label;
+    if (JS_IsString(action)) {
+      label = JsValueToWString(ctx, action);
+    } else if (JS_IsObject(action)) {
+      GetObjectString(ctx, action, "label", label);
+      if (label.empty())
+        GetObjectString(ctx, action, "text", label);
+    }
+    JS_FreeValue(ctx, action);
+
+    if (!label.empty())
+      templ.addAction(label);
+  }
+
+  JS_FreeValue(ctx, actions);
+  return true;
+}
+
+void RegisterToastCallbackProp(JSContext *ctx, JSValueConst options,
+                               const char *name, int &callbackId) {
+  if (callbackId > 0)
+    return;
+  JSValue value = JS_GetPropertyStr(ctx, options, name);
+  if (JS_IsFunction(ctx, value))
+    callbackId = JSEngine::RegisterToastCallback(ctx, value);
+  JS_FreeValue(ctx, value);
+}
+
+ToastCallbackIds ParseToastCallbacks(JSContext *ctx, JSValueConst options) {
+  ToastCallbackIds callbacks{};
+  RegisterToastCallbackProp(ctx, options, "onActivated", callbacks.activated);
+  RegisterToastCallbackProp(ctx, options, "onActivate", callbacks.activated);
+  RegisterToastCallbackProp(ctx, options, "onClick", callbacks.activated);
+  RegisterToastCallbackProp(ctx, options, "onAction", callbacks.action);
+  RegisterToastCallbackProp(ctx, options, "onInput", callbacks.input);
+  RegisterToastCallbackProp(ctx, options, "onDismissed", callbacks.dismissed);
+  RegisterToastCallbackProp(ctx, options, "onDismiss", callbacks.dismissed);
+  RegisterToastCallbackProp(ctx, options, "onFailed", callbacks.failed);
+  RegisterToastCallbackProp(ctx, options, "onFail", callbacks.failed);
+  return callbacks;
+}
+
+JSValue JsToastShow(JSContext *ctx, JSValueConst, int argc,
+                    JSValueConst *argv) {
+  if (argc < 1) {
+    return JS_ThrowTypeError(
+        ctx,
+        "toast.show(options | title[, message]) requires options or title");
+  }
+
+  JSValueConst options = JS_UNDEFINED;
+  std::wstring title;
+  std::wstring message;
+  std::wstring thirdLine;
+  std::wstring attribution;
+  std::wstring imagePath;
+  std::wstring heroImagePath;
+  std::wstring audioPath;
+  std::wstring audio;
+  std::wstring duration;
+  std::wstring scenario;
+  std::wstring crop;
+  bool inlineHeroImage = false;
+  bool silent = false;
+  bool loop = false;
+  bool input = false;
+  int64_t expiration = 0;
+  ToastCallbackIds callbacks{};
+
+  if (JS_IsObject(argv[0]) && !JS_IsArray(argv[0])) {
+    options = argv[0];
+    callbacks = ParseToastCallbacks(ctx, options);
+    GetObjectString(ctx, options, "title", title);
+    GetObjectString(ctx, options, "message", message);
+    if (message.empty())
+      GetObjectString(ctx, options, "body", message);
+    GetObjectString(ctx, options, "thirdLine", thirdLine);
+    GetObjectString(ctx, options, "attribution", attribution);
+    GetObjectString(ctx, options, "image", imagePath);
+    if (imagePath.empty())
+      GetObjectString(ctx, options, "imagePath", imagePath);
+    GetObjectString(ctx, options, "heroImage", heroImagePath);
+    if (heroImagePath.empty())
+      GetObjectString(ctx, options, "heroImagePath", heroImagePath);
+    GetObjectString(ctx, options, "audioPath", audioPath);
+    GetObjectString(ctx, options, "audio", audio);
+    GetObjectString(ctx, options, "duration", duration);
+    GetObjectString(ctx, options, "scenario", scenario);
+    GetObjectString(ctx, options, "crop", crop);
+    GetObjectBool(ctx, options, "inlineHeroImage", inlineHeroImage);
+    GetObjectBool(ctx, options, "silent", silent);
+    GetObjectBool(ctx, options, "loop", loop);
+    GetObjectBool(ctx, options, "input", input);
+    GetObjectInt64(ctx, options, "expiration", expiration);
+  } else {
+    title = JsValueToWString(ctx, argv[0]);
+    if (argc > 1)
+      message = JsValueToWString(ctx, argv[1]);
+  }
+
+  if (title.empty() && message.empty()) {
+    return JS_ThrowTypeError(ctx,
+                             "toast.show requires non-empty title or message");
+  }
+
+  if (!EnsureToastInitialized(ctx, options))
+    return JS_NULL;
+
+  const bool hasImage = !imagePath.empty();
+  WinToastLib::WinToastTemplate::WinToastTemplateType type =
+      hasImage ? WinToastLib::WinToastTemplate::ImageAndText02
+               : (thirdLine.empty() ? WinToastLib::WinToastTemplate::Text02
+                                    : WinToastLib::WinToastTemplate::Text03);
+  WinToastLib::WinToastTemplate templ(type);
+  templ.setFirstLine(title);
+  templ.setSecondLine(message);
+  if (!thirdLine.empty())
+    templ.setThirdLine(thirdLine);
+  if (!attribution.empty())
+    templ.setAttributionText(attribution);
+  if (!duration.empty())
+    templ.setDuration(ParseToastDuration(duration));
+  if (!scenario.empty())
+    templ.setScenario(ParseToastScenario(scenario));
+  if (expiration > 0)
+    templ.setExpiration(expiration);
+  if (JS_IsObject(options) && !input)
+    AddToastActions(ctx, options, templ);
+  if (input)
+    templ.addInput();
+
+  if (hasImage) {
+    templ.setImagePath(ResolveToastAssetPath(imagePath),
+                       ToLower(crop) == L"circle"
+                           ? WinToastLib::WinToastTemplate::Circle
+                           : WinToastLib::WinToastTemplate::Square);
+  }
+  if (!heroImagePath.empty())
+    templ.setHeroImagePath(ResolveToastAssetPath(heroImagePath),
+                           inlineHeroImage);
+
+  if (silent) {
+    templ.setAudioOption(WinToastLib::WinToastTemplate::Silent);
+  } else {
+    if (loop)
+      templ.setAudioOption(WinToastLib::WinToastTemplate::Loop);
+    if (!audioPath.empty())
+      templ.setAudioPath(ResolveToastAssetPath(audioPath));
+    else if (!audio.empty())
+      templ.setAudioPath(ParseToastAudioSystemFile(audio));
+  }
+
+  WinToastLib::WinToast::WinToastError error = WinToastLib::WinToast::NoError;
+  auto *handler = new ToastHandler(callbacks);
+  INT64 id =
+      WinToastLib::WinToast::instance()->showToast(templ, handler, &error);
+  if (id < 0) {
+    delete handler;
+    SetToastError(WinToastLib::WinToast::strerror(error));
+    return JS_NULL;
+  }
+  handler->SetToastId(id);
+
+  SetToastError(L"");
+  return JS_NewInt64(ctx, id);
+}
+
+JSValue JsDialogShow(JSContext *ctx, JSValueConst, int argc,
+                     JSValueConst *argv) {
+  if (argc < 1 || !JS_IsObject(argv[0])) {
+    return JS_ThrowTypeError(ctx,
+                             "dialog.show(options) requires an options object");
+  }
+
+  JSValueConst options = argv[0];
+  novadesk::shared::system::MessageBoxOptions opts;
+
+  // Extract properties from the options object
+  GetObjectString(ctx, options, "title", opts.title);
+  GetObjectString(ctx, options, "message", opts.message);
+  GetObjectString(ctx, options, "type", opts.type);
+  GetObjectString(ctx, options, "buttons", opts.buttons);
+
+  // Default to "info" and "ok" if not specified
+  if (opts.type.empty()) {
+    opts.type = L"info";
+  }
+  if (opts.buttons.empty()) {
+    opts.buttons = L"ok";
+  }
+
+  // Call the native message box
+  std::string result = novadesk::shared::system::ShowMessageBox(opts);
+
+  // Return the result as a JS string
+  return JS_NewString(ctx, result.c_str());
+}
+
+void ParseFileFilters(
+    JSContext *ctx, JSValueConst filtersVal,
+    std::vector<novadesk::shared::system::FileFilter> &outFilters) {
+  if (!JS_IsArray(filtersVal))
+    return;
+
+  uint32_t len = 0;
+  JSValue lenVal = JS_GetPropertyStr(ctx, filtersVal, "length");
+  JS_ToUint32(ctx, &len, lenVal);
+  JS_FreeValue(ctx, lenVal);
+
+  for (uint32_t i = 0; i < len; ++i) {
+    JSValue item = JS_GetPropertyUint32(ctx, filtersVal, i);
+    if (JS_IsObject(item)) {
+      novadesk::shared::system::FileFilter filter;
+      GetObjectString(ctx, item, "name", filter.name);
+
+      JSValue extsVal = JS_GetPropertyStr(ctx, item, "extensions");
+      if (JS_IsArray(extsVal)) {
+        uint32_t extLen = 0;
+        JSValue extLenVal = JS_GetPropertyStr(ctx, extsVal, "length");
+        JS_ToUint32(ctx, &extLen, extLenVal);
+        JS_FreeValue(ctx, extLenVal);
+
+        for (uint32_t j = 0; j < extLen; ++j) {
+          JSValue ext = JS_GetPropertyUint32(ctx, extsVal, j);
+          const char *extStr = JS_ToCString(ctx, ext);
+          if (extStr) {
+            filter.extensions.push_back(Utils::ToWString(extStr));
+            JS_FreeCString(ctx, extStr);
+          }
+          JS_FreeValue(ctx, ext);
+        }
+      }
+      JS_FreeValue(ctx, extsVal);
+      outFilters.push_back(filter);
+    }
+    JS_FreeValue(ctx, item);
+  }
+}
+
+void ParseDialogProperties(JSContext *ctx, JSValueConst propsVal,
+                           bool &outMulti, bool &outDir, bool &outHidden) {
+  if (!JS_IsArray(propsVal))
+    return;
+
+  uint32_t len = 0;
+  JSValue lenVal = JS_GetPropertyStr(ctx, propsVal, "length");
+  JS_ToUint32(ctx, &len, lenVal);
+  JS_FreeValue(ctx, lenVal);
+
+  for (uint32_t i = 0; i < len; ++i) {
+    JSValue item = JS_GetPropertyUint32(ctx, propsVal, i);
+    const char *s = JS_ToCString(ctx, item);
+    if (s) {
+      std::string str(s);
+      JS_FreeCString(ctx, s);
+      if (str == "multiSelections" || str == "multiSelection" ||
+          str == "multiple")
+        outMulti = true;
+      else if (str == "openDirectory" || str == "directory" || str == "folder")
+        outDir = true;
+      else if (str == "showHiddenFiles" || str == "hidden")
+        outHidden = true;
+    }
+    JS_FreeValue(ctx, item);
+  }
+}
+
+JSValue JsDialogShowOpenDialog(JSContext *ctx, JSValueConst, int argc,
+                               JSValueConst *argv) {
+  novadesk::shared::system::OpenFileDialogOptions opts;
+  if (argc > 0 && JS_IsObject(argv[0])) {
+    JSValueConst options = argv[0];
+    GetObjectString(ctx, options, "title", opts.title);
+    GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
+    GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
+    GetObjectBool(ctx, options, "multiSelections", opts.multiSelections);
+    GetObjectBool(ctx, options, "openDirectory", opts.openDirectory);
+    GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
+
+    JSValue filtersVal = JS_GetPropertyStr(ctx, options, "filters");
+    if (!JS_IsUndefined(filtersVal)) {
+      ParseFileFilters(ctx, filtersVal, opts.filters);
+      JS_FreeValue(ctx, filtersVal);
     }
 
-    namespace
-    {
-        bool IsInternalEngineArg(const std::wstring &arg)
-        {
-            return arg == L"--new-instance" ||
-                   arg == L"--request-single-instance-lock" ||
-                   arg == L"--enable-hardware-acceleration" ||
-                   arg == L"--disable-hardware-acceleration" ||
-                   arg == L"--enable-debugging" ||
-                   arg == L"--disable-debugging" ||
-                   arg == L"--enable-logging" ||
-                   arg == L"--disable-logging" ||
-                   arg == L"--enable-save-log-to-file" ||
-                   arg == L"--disable-save-log-to-file" ||
-                   arg == L"--refresh" ||
-                   arg == L"--refresh-all" ||
-                   arg == L"--unload";
-        }
+    JSValue propsVal = JS_GetPropertyStr(ctx, options, "properties");
+    if (!JS_IsUndefined(propsVal)) {
+      ParseDialogProperties(ctx, propsVal, opts.multiSelections,
+                            opts.openDirectory, opts.showHiddenFiles);
+      JS_FreeValue(ctx, propsVal);
+    }
+  }
+
+  auto res = novadesk::shared::system::ShowOpenFileDialog(opts);
+
+  JSValue ret = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, ret, "canceled",
+                    JS_NewBool(ctx, res.canceled ? 1 : 0));
+
+  JSValue pathsArr = JS_NewArray(ctx);
+  for (uint32_t i = 0; i < static_cast<uint32_t>(res.filePaths.size()); ++i) {
+    std::string pathStr = Utils::ToString(res.filePaths[i]);
+    JS_SetPropertyUint32(ctx, pathsArr, i, JS_NewString(ctx, pathStr.c_str()));
+  }
+  JS_SetPropertyStr(ctx, ret, "filePaths", pathsArr);
+
+  return ret;
+}
+
+JSValue JsDialogShowSaveDialog(JSContext *ctx, JSValueConst, int argc,
+                               JSValueConst *argv) {
+  novadesk::shared::system::SaveFileDialogOptions opts;
+  if (argc > 0 && JS_IsObject(argv[0])) {
+    JSValueConst options = argv[0];
+    GetObjectString(ctx, options, "title", opts.title);
+    GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
+    GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
+    GetObjectString(ctx, options, "defaultExtension", opts.defaultExtension);
+    GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
+
+    JSValue filtersVal = JS_GetPropertyStr(ctx, options, "filters");
+    if (!JS_IsUndefined(filtersVal)) {
+      ParseFileFilters(ctx, filtersVal, opts.filters);
+      JS_FreeValue(ctx, filtersVal);
+    }
+  }
+
+  auto res = novadesk::shared::system::ShowSaveFileDialog(opts);
+
+  JSValue ret = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, ret, "canceled",
+                    JS_NewBool(ctx, res.canceled ? 1 : 0));
+  std::string pathStr = res.canceled ? "" : Utils::ToString(res.filePath);
+  JS_SetPropertyStr(ctx, ret, "filePath", JS_NewString(ctx, pathStr.c_str()));
+
+  return ret;
+}
+
+JSValue JsDialogShowFileExplorerDialog(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv) {
+  std::wstring type = L"open";
+  if (argc > 0 && JS_IsObject(argv[0])) {
+    GetObjectString(ctx, argv[0], "type", type);
+    std::transform(type.begin(), type.end(), type.begin(), ::towlower);
+  }
+
+  if (type == L"save") {
+    return JsDialogShowSaveDialog(ctx, this_val, argc, argv);
+  } else if (type == L"directory" || type == L"folder") {
+    novadesk::shared::system::OpenFileDialogOptions opts;
+    if (argc > 0 && JS_IsObject(argv[0])) {
+      JSValueConst options = argv[0];
+      GetObjectString(ctx, options, "title", opts.title);
+      GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
+      GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
+    }
+    opts.openDirectory = true;
+    auto res = novadesk::shared::system::ShowOpenFileDialog(opts);
+    JSValue ret = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, ret, "canceled",
+                      JS_NewBool(ctx, res.canceled ? 1 : 0));
+    JSValue pathsArr = JS_NewArray(ctx);
+    for (uint32_t i = 0; i < static_cast<uint32_t>(res.filePaths.size()); ++i) {
+      std::string pathStr = Utils::ToString(res.filePaths[i]);
+      JS_SetPropertyUint32(ctx, pathsArr, i,
+                           JS_NewString(ctx, pathStr.c_str()));
+    }
+    JS_SetPropertyStr(ctx, ret, "filePaths", pathsArr);
+    std::string singlePath =
+        res.filePaths.empty() ? "" : Utils::ToString(res.filePaths[0]);
+    JS_SetPropertyStr(ctx, ret, "filePath",
+                      JS_NewString(ctx, singlePath.c_str()));
+    return ret;
+  } else {
+    return JsDialogShowOpenDialog(ctx, this_val, argc, argv);
+  }
+}
+
+JSValue JsDialogOpenFile(JSContext *ctx, JSValueConst, int argc,
+                         JSValueConst *argv) {
+  novadesk::shared::system::OpenFileDialogOptions opts;
+  opts.openDirectory = false;
+  if (argc > 0 && JS_IsObject(argv[0])) {
+    JSValueConst options = argv[0];
+    GetObjectString(ctx, options, "title", opts.title);
+    GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
+    GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
+    GetObjectBool(ctx, options, "multiSelections", opts.multiSelections);
+    GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
+
+    JSValue filtersVal = JS_GetPropertyStr(ctx, options, "filters");
+    if (!JS_IsUndefined(filtersVal)) {
+      ParseFileFilters(ctx, filtersVal, opts.filters);
+      JS_FreeValue(ctx, filtersVal);
     }
 
-    void SetAppArgv(const std::vector<std::wstring> &argv)
-    {
-        g_rawAppArgv = argv;
-        g_appArgv.clear();
-        if (argv.empty())
-        {
-            return;
-        }
-
-        // argv[0] is executable path
-        g_appArgv.push_back(argv[0]);
-
-        std::wstring scriptPath;
-        std::vector<std::wstring> userArgs;
-
-        for (size_t i = 1; i < argv.size(); ++i)
-        {
-            const std::wstring &arg = argv[i];
-            if (arg == L"--load" && i + 1 < argv.size())
-            {
-                if (scriptPath.empty())
-                {
-                    scriptPath = argv[++i];
-                }
-                else
-                {
-                    userArgs.push_back(argv[++i]);
-                }
-                continue;
-            }
-            if (IsInternalEngineArg(arg))
-            {
-                continue;
-            }
-            if (scriptPath.empty() && !arg.empty() && arg[0] != L'-')
-            {
-                scriptPath = arg;
-                continue;
-            }
-            userArgs.push_back(arg);
-        }
-
-        if (scriptPath.empty())
-        {
-            scriptPath = JSEngine::GetCurrentScriptPath();
-            if (scriptPath.empty())
-            {
-                scriptPath = JSEngine::GetEntryScriptDir();
-            }
-        }
-
-        g_appArgv.push_back(scriptPath);
-        for (const auto &u : userArgs)
-        {
-            g_appArgv.push_back(u);
-        }
+    JSValue propsVal = JS_GetPropertyStr(ctx, options, "properties");
+    if (!JS_IsUndefined(propsVal)) {
+      bool unusedDir = false;
+      ParseDialogProperties(ctx, propsVal, opts.multiSelections, unusedDir,
+                            opts.showHiddenFiles);
+      JS_FreeValue(ctx, propsVal);
     }
+  }
+
+  auto res = novadesk::shared::system::ShowOpenFileDialog(opts);
+  if (res.canceled || res.filePaths.empty()) {
+    return JS_NULL;
+  }
+
+  if (opts.multiSelections) {
+    JSValue pathsArr = JS_NewArray(ctx);
+    for (uint32_t i = 0; i < static_cast<uint32_t>(res.filePaths.size()); ++i) {
+      std::string pathStr = Utils::ToString(res.filePaths[i]);
+      JS_SetPropertyUint32(ctx, pathsArr, i,
+                           JS_NewString(ctx, pathStr.c_str()));
+    }
+    return pathsArr;
+  }
+
+  return JS_NewString(ctx, Utils::ToString(res.filePaths[0]).c_str());
+}
+
+JSValue JsDialogSaveFile(JSContext *ctx, JSValueConst, int argc,
+                         JSValueConst *argv) {
+  novadesk::shared::system::SaveFileDialogOptions opts;
+  if (argc > 0 && JS_IsObject(argv[0])) {
+    JSValueConst options = argv[0];
+    GetObjectString(ctx, options, "title", opts.title);
+    GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
+    GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
+    GetObjectString(ctx, options, "defaultExtension", opts.defaultExtension);
+    GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
+
+    JSValue filtersVal = JS_GetPropertyStr(ctx, options, "filters");
+    if (!JS_IsUndefined(filtersVal)) {
+      ParseFileFilters(ctx, filtersVal, opts.filters);
+      JS_FreeValue(ctx, filtersVal);
+    }
+  }
+
+  auto res = novadesk::shared::system::ShowSaveFileDialog(opts);
+  if (res.canceled || res.filePath.empty()) {
+    return JS_NULL;
+  }
+
+  return JS_NewString(ctx, Utils::ToString(res.filePath).c_str());
+}
+
+JSValue JsDialogOpenDirectory(JSContext *ctx, JSValueConst, int argc,
+                              JSValueConst *argv) {
+  novadesk::shared::system::OpenFileDialogOptions opts;
+  opts.openDirectory = true;
+  if (argc > 0 && JS_IsObject(argv[0])) {
+    JSValueConst options = argv[0];
+    GetObjectString(ctx, options, "title", opts.title);
+    GetObjectString(ctx, options, "defaultPath", opts.defaultPath);
+    GetObjectString(ctx, options, "buttonLabel", opts.buttonLabel);
+    GetObjectBool(ctx, options, "showHiddenFiles", opts.showHiddenFiles);
+  }
+
+  auto res = novadesk::shared::system::ShowOpenFileDialog(opts);
+  if (res.canceled || res.filePaths.empty()) {
+    return JS_NULL;
+  }
+
+  return JS_NewString(ctx, Utils::ToString(res.filePaths[0]).c_str());
+}
+
+int InitAppExport(JSContext *ctx, JSModuleDef *m) {
+  JSValue app = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, app, "argv",
+                    JsAppGetArgv(ctx, JS_UNDEFINED, 0, nullptr));
+  JS_SetPropertyStr(ctx, app, "rawArgv",
+                    JsAppGetRawArgv(ctx, JS_UNDEFINED, 0, nullptr));
+  JS_SetPropertyStr(ctx, app, "reload",
+                    JS_NewCFunction(ctx, JsAppReload, "reload", 0));
+  JS_SetPropertyStr(ctx, app, "refresh",
+                    JS_NewCFunction(ctx, JsAppRefresh, "refresh", 0));
+  JS_SetPropertyStr(ctx, app, "exit",
+                    JS_NewCFunction(ctx, JsAppExit, "exit", 0));
+  JS_SetPropertyStr(ctx, app, "requestSingleInstanceLock",
+                    JS_NewCFunction(ctx, JsAppRequestSingleInstanceLock,
+                                    "requestSingleInstanceLock", 0));
+  JS_SetPropertyStr(ctx, app, "releaseSingleInstanceLock",
+                    JS_NewCFunction(ctx, JsAppReleaseSingleInstanceLock,
+                                    "releaseSingleInstanceLock", 0));
+  JS_SetPropertyStr(
+      ctx, app, "saveLogToFile",
+      JS_NewCFunction(ctx, JsAppSaveLogToFile, "saveLogToFile", 1));
+  JS_SetPropertyStr(
+      ctx, app, "disableLogging",
+      JS_NewCFunction(ctx, JsAppDisableLogging, "disableLogging", 1));
+  JS_SetPropertyStr(ctx, app, "useHardwareAcceleration",
+                    JS_NewCFunction(ctx, JsAppUseHardwareAcceleration,
+                                    "useHardwareAcceleration", 1));
+  JS_SetPropertyStr(
+      ctx, app, "getProductVersion",
+      JS_NewCFunction(ctx, JsAppGetProductVersion, "getProductVersion", 0));
+  JS_SetPropertyStr(
+      ctx, app, "getFileVersion",
+      JS_NewCFunction(ctx, JsAppGetFileVersion, "getFileVersion", 0));
+  JS_SetPropertyStr(
+      ctx, app, "getNovadeskVersion",
+      JS_NewCFunction(ctx, JsAppGetNovadeskVersion, "getNovadeskVersion", 0));
+  JS_SetPropertyStr(
+      ctx, app, "getAppDataPath",
+      JS_NewCFunction(ctx, JsAppGetAppDataPath, "getAppDataPath", 0));
+  JS_SetPropertyStr(
+      ctx, app, "getSettingsFilePath",
+      JS_NewCFunction(ctx, JsAppGetSettingsFilePath, "getSettingsFilePath", 0));
+  JS_SetPropertyStr(ctx, app, "getLogPath",
+                    JS_NewCFunction(ctx, JsAppGetLogPath, "getLogPath", 0));
+  JS_SetPropertyStr(ctx, app, "isPortable",
+                    JS_NewCFunction(ctx, JsAppIsPortable, "isPortable", 0));
+  JS_SetPropertyStr(ctx, app, "isFirstRun",
+                    JS_NewCFunction(ctx, JsAppIsFirstRun, "isFirstRun", 0));
+  JS_SetPropertyStr(
+      ctx, app, "enableDebugging",
+      JS_NewCFunction(ctx, JsAppEnableDebugging, "enableDebugging", 1));
+  JSValue storage = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, storage, "get",
+                    JS_NewCFunction(ctx, JsAppStorageGet, "get", 2));
+  JS_SetPropertyStr(ctx, storage, "set",
+                    JS_NewCFunction(ctx, JsAppStorageSet, "set", 2));
+  JS_SetPropertyStr(ctx, storage, "remove",
+                    JS_NewCFunction(ctx, JsAppStorageRemove, "remove", 1));
+  JS_SetPropertyStr(ctx, app, "storage", storage);
+  JS_SetModuleExport(ctx, m, "app", app);
+
+  JSValue addon = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, addon, "load",
+                    JS_NewCFunction(ctx, JsAddonLoad, "load", 1));
+  JS_SetPropertyStr(ctx, addon, "unload",
+                    JS_NewCFunction(ctx, JsAddonUnload, "unload", 1));
+  JS_SetModuleExport(ctx, m, "addon", addon);
+
+  JSValue toast = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, toast, "initialize",
+                    JS_NewCFunction(ctx, JsToastInitialize, "initialize", 1));
+  JS_SetPropertyStr(ctx, toast, "show",
+                    JS_NewCFunction(ctx, JsToastShow, "show", 2));
+  JS_SetPropertyStr(ctx, toast, "hide",
+                    JS_NewCFunction(ctx, JsToastHide, "hide", 1));
+  JS_SetPropertyStr(ctx, toast, "clear",
+                    JS_NewCFunction(ctx, JsToastClear, "clear", 0));
+  JS_SetPropertyStr(
+      ctx, toast, "isCompatible",
+      JS_NewCFunction(ctx, JsToastIsCompatible, "isCompatible", 0));
+  JS_SetPropertyStr(
+      ctx, toast, "isInitialized",
+      JS_NewCFunction(ctx, JsToastIsInitialized, "isInitialized", 0));
+  JS_SetPropertyStr(
+      ctx, toast, "getLastError",
+      JS_NewCFunction(ctx, JsToastGetLastError, "getLastError", 0));
+  JS_SetModuleExport(ctx, m, "toast", toast);
+
+  JSValue dialog = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, dialog, "show",
+                    JS_NewCFunction(ctx, JsDialogShow, "show", 1));
+  JS_SetPropertyStr(
+      ctx, dialog, "showOpenDialog",
+      JS_NewCFunction(ctx, JsDialogShowOpenDialog, "showOpenDialog", 1));
+  JS_SetPropertyStr(
+      ctx, dialog, "showSaveDialog",
+      JS_NewCFunction(ctx, JsDialogShowSaveDialog, "showSaveDialog", 1));
+  JS_SetPropertyStr(ctx, dialog, "showFileExplorerDialog",
+                    JS_NewCFunction(ctx, JsDialogShowFileExplorerDialog,
+                                    "showFileExplorerDialog", 1));
+  JS_SetPropertyStr(ctx, dialog, "showFileExplorer",
+                    JS_NewCFunction(ctx, JsDialogShowFileExplorerDialog,
+                                    "showFileExplorer", 1));
+  JS_SetPropertyStr(ctx, dialog, "openFile",
+                    JS_NewCFunction(ctx, JsDialogOpenFile, "openFile", 1));
+  JS_SetPropertyStr(ctx, dialog, "saveFile",
+                    JS_NewCFunction(ctx, JsDialogSaveFile, "saveFile", 1));
+  JS_SetPropertyStr(
+      ctx, dialog, "openDirectory",
+      JS_NewCFunction(ctx, JsDialogOpenDirectory, "openDirectory", 1));
+  JS_SetModuleExport(ctx, m, "dialog", dialog);
+
+  return 0;
+}
+
+int NovadeskModuleInit(JSContext *ctx, JSModuleDef *m) {
+  EnsureWidgetWindowClass(ctx);
+  JSValue ctor = JS_NewCFunction2(ctx, JsWidgetWindowCtor, "widgetWindow", 1,
+                                  JS_CFUNC_constructor, 0);
+  JSValue proto = JS_GetClassProto(ctx, EnsureWidgetWindowClass(ctx));
+  JS_SetConstructor(ctx, ctor, proto);
+  JS_SetModuleExport(ctx, m, "widgetWindow", ctor);
+  JS_FreeValue(ctx, proto);
+  InitAppExport(ctx, m);
+  JSValue trayCtor =
+      JS_NewCFunction2(ctx, JsTrayCtor, "tray", 1, JS_CFUNC_constructor, 0);
+  JS_SetModuleExport(ctx, m, "tray", trayCtor);
+  return 0;
+}
+} // namespace
+
+void SetModuleDebug(bool debug) {
+  g_moduleDebug = debug;
+  SetWidgetUiDebug(debug);
+}
+
+JSModuleDef *EnsureNovadeskModule(JSContext *ctx, const char *moduleName) {
+  JSModuleDef *m = JS_NewCModule(ctx, moduleName, NovadeskModuleInit);
+  if (!m) {
+    return nullptr;
+  }
+  // Register all exports. Failures here are extremely rare
+  // (OOM for the export name string). The module is already
+  // registered with the context by JS_NewCModule, so returning
+  // nullptr on partial failure would orphan it — the caller has
+  // no handle to finalize it. Always return the module so it
+  // is cleaned up normally when the context is destroyed.
+  JS_AddModuleExport(ctx, m, "widgetWindow");
+  JS_AddModuleExport(ctx, m, "app");
+  JS_AddModuleExport(ctx, m, "tray");
+  JS_AddModuleExport(ctx, m, "addon");
+  JS_AddModuleExport(ctx, m, "toast");
+  JS_AddModuleExport(ctx, m, "dialog");
+  return m;
+}
+
+void UnloadAllAddons() { UnloadAllAddonsInternal(); }
+
+namespace {
+bool IsInternalEngineArg(const std::wstring &arg) {
+  return arg == L"--new-instance" || arg == L"--request-single-instance-lock" ||
+         arg == L"--enable-hardware-acceleration" ||
+         arg == L"--disable-hardware-acceleration" ||
+         arg == L"--enable-debugging" || arg == L"--disable-debugging" ||
+         arg == L"--enable-logging" || arg == L"--disable-logging" ||
+         arg == L"--enable-save-log-to-file" ||
+         arg == L"--disable-save-log-to-file" || arg == L"--refresh" ||
+         arg == L"--refresh-all" || arg == L"--unload";
+}
+} // namespace
+
+void SetAppArgv(const std::vector<std::wstring> &argv) {
+  g_rawAppArgv = argv;
+  g_appArgv.clear();
+  if (argv.empty()) {
+    return;
+  }
+
+  // argv[0] is executable path
+  g_appArgv.push_back(argv[0]);
+
+  std::wstring scriptPath;
+  std::vector<std::wstring> userArgs;
+
+  for (size_t i = 1; i < argv.size(); ++i) {
+    const std::wstring &arg = argv[i];
+    if (arg == L"--load" && i + 1 < argv.size()) {
+      if (scriptPath.empty()) {
+        scriptPath = argv[++i];
+      } else {
+        userArgs.push_back(argv[++i]);
+      }
+      continue;
+    }
+    if (IsInternalEngineArg(arg)) {
+      continue;
+    }
+    if (scriptPath.empty() && !arg.empty() && arg[0] != L'-') {
+      scriptPath = arg;
+      continue;
+    }
+    userArgs.push_back(arg);
+  }
+
+  if (scriptPath.empty()) {
+    scriptPath = JSEngine::GetCurrentScriptPath();
+    if (scriptPath.empty()) {
+      scriptPath = JSEngine::GetEntryScriptDir();
+    }
+  }
+
+  g_appArgv.push_back(scriptPath);
+  for (const auto &u : userArgs) {
+    g_appArgv.push_back(u);
+  }
+}
 } // namespace novadesk::scripting::quickjs

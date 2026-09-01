@@ -19,30 +19,32 @@
 #include "../../../render/TextElement.h"
 #include "PropertyParserTypes.h"
 
-namespace PropertyParser
-{
-    namespace Js
-    {
-        bool TrySplitByComma(const std::wstring &s, std::vector<std::wstring> &parts);
-        std::vector<std::wstring> SplitByComma(const std::wstring &s);
-        JSValue GetGlobalProperty(JSContext *ctx, const char *key);
+namespace PropertyParser {
+namespace Js {
+bool TrySplitByComma(const std::wstring &s, std::vector<std::wstring> &parts);
+std::vector<std::wstring> SplitByComma(const std::wstring &s);
+JSValue GetGlobalProperty(JSContext *ctx, const char *key);
 
-        std::wstring GetStringProp(JSContext *ctx, JSValueConst obj, const char *key);
-        bool GetIntProp(JSContext *ctx, JSValueConst obj, const char *key, int &out);
-        bool GetFloatProp(JSContext *ctx, JSValueConst obj, const char *key, float &out);
-        bool GetBoolProp(JSContext *ctx, JSValueConst obj, const char *key, bool &out);
-        bool GetFloatArrayProp(JSContext *ctx, JSValueConst obj, const char *key, std::vector<float> &out, int minSize);
-        bool GetEventCallbackProp(JSContext *ctx, JSValueConst obj, const char *key, int &outId);
+std::wstring GetStringProp(JSContext *ctx, JSValueConst obj, const char *key);
+bool GetIntProp(JSContext *ctx, JSValueConst obj, const char *key, int &out);
+bool GetFloatProp(JSContext *ctx, JSValueConst obj, const char *key,
+                  float &out);
+bool GetBoolProp(JSContext *ctx, JSValueConst obj, const char *key, bool &out);
+bool GetFloatArrayProp(JSContext *ctx, JSValueConst obj, const char *key,
+                       std::vector<float> &out, int minSize);
+bool GetEventCallbackProp(JSContext *ctx, JSValueConst obj, const char *key,
+                          int &outId);
 
-        void ParseGradientOrColor(const std::wstring &v, COLORREF &color, BYTE &alpha, GradientInfo &gradient, bool &hasColor);
-        D2D1_COMBINE_MODE ParseCombineMode(const std::wstring &s);
-        bool GetFloatArrayPropAllowEmpty(JSContext *ctx, JSValueConst obj, const char *key, std::vector<float> &out);
+void ParseGradientOrColor(const std::wstring &v, COLORREF &color, BYTE &alpha,
+                          GradientInfo &gradient, bool &hasColor);
+D2D1_COMBINE_MODE ParseCombineMode(const std::wstring &s);
+bool GetFloatArrayPropAllowEmpty(JSContext *ctx, JSValueConst obj,
+                                 const char *key, std::vector<float> &out);
 
-        void ParsePrefixedGeneralImageOptions(
-            JSContext *ctx,
-            JSValueConst obj,
-            const std::string &prefix,
-            GeneralImageOptions &out);
-        void ParseTextShadows(JSContext *ctx, JSValueConst obj, std::vector<TextShadow> &shadows);
-    } // namespace Js
+void ParsePrefixedGeneralImageOptions(JSContext *ctx, JSValueConst obj,
+                                      const std::string &prefix,
+                                      GeneralImageOptions &out);
+void ParseTextShadows(JSContext *ctx, JSValueConst obj,
+                      std::vector<TextShadow> &shadows);
+} // namespace Js
 } // namespace PropertyParser

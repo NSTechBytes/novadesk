@@ -15,28 +15,27 @@
 
 using json = nlohmann::json;
 
-class Settings
-{
+class Settings {
 public:
-    static void Initialize();
-    static void SaveWidget(const std::wstring& id, const WidgetOptions& options);
-    static bool LoadWidget(const std::wstring& id, WidgetOptions& outOptions);
-    static void ApplyGlobalSettings();
-    static void Save();
-    static void Flush();  // force pending writes to disk immediately
-    static std::wstring GetSettingsPath();
-    static std::wstring GetLogPath();
-    static bool IsFirstRun();
+  static void Initialize();
+  static void SaveWidget(const std::wstring &id, const WidgetOptions &options);
+  static bool LoadWidget(const std::wstring &id, WidgetOptions &outOptions);
+  static void ApplyGlobalSettings();
+  static void Save();
+  static void Flush(); // force pending writes to disk immediately
+  static std::wstring GetSettingsPath();
+  static std::wstring GetLogPath();
+  static bool IsFirstRun();
 
-    static void SetGlobalBool(const std::string& key, bool value);
-    static bool GetGlobalBool(const std::string& key, bool defaultValue);
+  static void SetGlobalBool(const std::string &key, bool value);
+  static bool GetGlobalBool(const std::string &key, bool defaultValue);
 
 private:
-    static void Load();
-    static json s_Data;
-    static bool s_Dirty;
-    static bool s_IsFirstRun;
-    static DWORD s_LastSaveTick;  // for debounce
+  static void Load();
+  static json s_Data;
+  static bool s_Dirty;
+  static bool s_IsFirstRun;
+  static DWORD s_LastSaveTick; // for debounce
 };
 
 #endif

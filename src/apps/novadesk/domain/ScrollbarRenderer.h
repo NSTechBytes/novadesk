@@ -16,34 +16,28 @@
 // Forward declaration
 class Widget;
 
-class ScrollbarRenderer
-{
+class ScrollbarRenderer {
 public:
-    /**
-     * Render the scrollbars (tracks, thumbs, and arrow buttons) for a container element.
-     * @param widget The widget instance owning this container
-     * @param container The scrollable container element
-     * @param context Direct2D render target
-     * @param bounds Container bounds
-     */
-    static void DrawScrollbars(
-        const Widget &widget,
-        Element *container,
-        ID2D1RenderTarget *context,
-        const GfxRect &bounds);
+  /**
+   * Render the scrollbars (tracks, thumbs, and arrow buttons) for a container
+   * element.
+   * @param widget The widget instance owning this container
+   * @param container The scrollable container element
+   * @param context Direct2D render target
+   * @param bounds Container bounds
+   */
+  static void DrawScrollbars(const Widget &widget, Element *container,
+                             ID2D1RenderTarget *context, const GfxRect &bounds);
 
-    /**
-     * Helper to render a crisp vector arrow triangle.
-     */
-    static void DrawArrowTriangle(
-        ID2D1RenderTarget *context,
-        D2D1_POINT_2F p1,
-        D2D1_POINT_2F p2,
-        D2D1_POINT_2F p3,
-        ID2D1Brush *brush);
+  /**
+   * Helper to render a crisp vector arrow triangle.
+   */
+  static void DrawArrowTriangle(ID2D1RenderTarget *context, D2D1_POINT_2F p1,
+                                D2D1_POINT_2F p2, D2D1_POINT_2F p3,
+                                ID2D1Brush *brush);
 
 private:
-    ScrollbarRenderer() = delete;
+  ScrollbarRenderer() = delete;
 };
 
 #endif // __NOVADESK_SCROLLBAR_RENDERER_H__

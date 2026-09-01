@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 OfficialNovadesk 
+/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -11,5 +11,5 @@
 #include "MenuItem.h"
 
 namespace MenuUtils {
-    void BuildMenu(HMENU hMenu, const std::vector<MenuItem>& items);
+void BuildMenu(HMENU hMenu, const std::vector<MenuItem> &items);
 }

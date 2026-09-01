@@ -23,1230 +23,1207 @@
 #include "../../shared/Logging.h"
 #include "../engine/JSEngine.h"
 
-namespace novadesk::scripting::quickjs
-{
-    namespace
-    {
-        shared::system::NetworkStats g_cachedNetworkStats{};
-        std::chrono::steady_clock::time_point g_cachedNetworkAt = std::chrono::steady_clock::time_point::min();
-        shared::system::DiskIoStats g_cachedDiskIoStats{};
-        std::chrono::steady_clock::time_point g_cachedDiskIoAt = std::chrono::steady_clock::time_point::min();
-        uint64_t g_nextWebFetchId = 1;
+namespace novadesk::scripting::quickjs {
+namespace {
+shared::system::NetworkStats g_cachedNetworkStats{};
+std::chrono::steady_clock::time_point g_cachedNetworkAt =
+    std::chrono::steady_clock::time_point::min();
+shared::system::DiskIoStats g_cachedDiskIoStats{};
+std::chrono::steady_clock::time_point g_cachedDiskIoAt =
+    std::chrono::steady_clock::time_point::min();
+uint64_t g_nextWebFetchId = 1;
 
-        struct WebFetchRequest
-        {
-            uint64_t id = 0;
-            JSContext *ctx = nullptr;
-            JSValue resolve = JS_UNDEFINED;
-            JSValue reject = JS_UNDEFINED;
-            std::wstring owner;
-            bool ok = false;
-            std::string data;
-            std::string error;
-        };
+struct WebFetchRequest {
+  uint64_t id = 0;
+  JSContext *ctx = nullptr;
+  JSValue resolve = JS_UNDEFINED;
+  JSValue reject = JS_UNDEFINED;
+  std::wstring owner;
+  bool ok = false;
+  std::string data;
+  std::string error;
+};
 
-        std::mutex g_webFetchMutex;
-        std::unordered_map<uint64_t, std::unique_ptr<WebFetchRequest>> g_webFetchRequests;
-    } // close anonymous namespace
+std::mutex g_webFetchMutex;
+std::unordered_map<uint64_t, std::unique_ptr<WebFetchRequest>>
+    g_webFetchRequests;
+} // namespace
 
-    void DispatchWebFetchResult(void *payload)
-    {
-        std::unique_ptr<uint64_t> requestId(static_cast<uint64_t *>(payload));
-        if (!requestId)
-        {
-            return;
-        }
+void DispatchWebFetchResult(void *payload) {
+  std::unique_ptr<uint64_t> requestId(static_cast<uint64_t *>(payload));
+  if (!requestId) {
+    return;
+  }
 
-        std::unique_ptr<WebFetchRequest> req;
-        {
-            std::lock_guard<std::mutex> lock(g_webFetchMutex);
-            auto it = g_webFetchRequests.find(*requestId);
-            if (it == g_webFetchRequests.end())
-            {
-                return;
-            }
-            req = std::move(it->second);
-            g_webFetchRequests.erase(it);
-        }
+  std::unique_ptr<WebFetchRequest> req;
+  {
+    std::lock_guard<std::mutex> lock(g_webFetchMutex);
+    auto it = g_webFetchRequests.find(*requestId);
+    if (it == g_webFetchRequests.end()) {
+      return;
+    }
+    req = std::move(it->second);
+    g_webFetchRequests.erase(it);
+  }
 
-        if (!req || !req->ctx)
-        {
-            return;
-        }
+  if (!req || !req->ctx) {
+    return;
+  }
 
-        JSValue arg = req->ok
-                          ? JS_NewStringLen(req->ctx, req->data.data(), req->data.size())
-                          : JS_NewString(req->ctx, req->error.empty() ? "webFetch failed" : req->error.c_str());
-        JSValue fn = req->ok ? req->resolve : req->reject;
-        JSValue ret = JS_Call(req->ctx, fn, JS_UNDEFINED, 1, &arg);
-        JS_FreeValue(req->ctx, arg);
-        if (JS_IsException(ret))
-        {
-            JS_FreeValue(req->ctx, JS_GetException(req->ctx));
-        }
-        else
-        {
-            JS_FreeValue(req->ctx, ret);
-        }
+  JSValue arg =
+      req->ok ? JS_NewStringLen(req->ctx, req->data.data(), req->data.size())
+              : JS_NewString(req->ctx, req->error.empty() ? "webFetch failed"
+                                                          : req->error.c_str());
+  JSValue fn = req->ok ? req->resolve : req->reject;
+  JSValue ret = JS_Call(req->ctx, fn, JS_UNDEFINED, 1, &arg);
+  JS_FreeValue(req->ctx, arg);
+  if (JS_IsException(ret)) {
+    JS_FreeValue(req->ctx, JS_GetException(req->ctx));
+  } else {
+    JS_FreeValue(req->ctx, ret);
+  }
 
-        JS_FreeValue(req->ctx, req->resolve);
-        JS_FreeValue(req->ctx, req->reject);
+  JS_FreeValue(req->ctx, req->resolve);
+  JS_FreeValue(req->ctx, req->reject);
 
-        JSRuntime *runtime = JS_GetRuntime(req->ctx);
-        JSContext *jobCtx = nullptr;
-        while (runtime && JS_IsJobPending(runtime))
-        {
-            int err = JS_ExecutePendingJob(runtime, &jobCtx);
-            if (err < 0)
-            {
-                if (jobCtx)
-                {
-                    JS_FreeValue(jobCtx, JS_GetException(jobCtx));
-                }
-                break;
-            }
-        }
+  JSRuntime *runtime = JS_GetRuntime(req->ctx);
+  JSContext *jobCtx = nullptr;
+  while (runtime && JS_IsJobPending(runtime)) {
+    int err = JS_ExecutePendingJob(runtime, &jobCtx);
+    if (err < 0) {
+      if (jobCtx) {
+        JS_FreeValue(jobCtx, JS_GetException(jobCtx));
+      }
+      break;
+    }
+  }
+}
+
+namespace { // reopen anonymous namespace
+
+bool ReadNetworkCached(shared::system::NetworkStats &out) {
+  const auto now = std::chrono::steady_clock::now();
+  constexpr auto kMinResample = std::chrono::milliseconds(400);
+
+  if (g_cachedNetworkAt == std::chrono::steady_clock::time_point::min() ||
+      (now - g_cachedNetworkAt) >= kMinResample) {
+    if (!shared::system::GetNetworkStats(g_cachedNetworkStats)) {
+      return false;
+    }
+    g_cachedNetworkAt = now;
+  }
+
+  out = g_cachedNetworkStats;
+  return true;
+}
+
+bool ReadDiskIoCached(shared::system::DiskIoStats &out) {
+  const auto now = std::chrono::steady_clock::now();
+  constexpr auto kMinResample = std::chrono::milliseconds(400);
+
+  if (g_cachedDiskIoAt == std::chrono::steady_clock::time_point::min() ||
+      (now - g_cachedDiskIoAt) >= kMinResample) {
+    if (!shared::system::GetDiskIoStats(g_cachedDiskIoStats)) {
+      return false;
+    }
+    g_cachedDiskIoAt = now;
+  }
+
+  out = g_cachedDiskIoStats;
+  return true;
+}
+
+JSValue JsClipboardSetText(JSContext *ctx, JSValueConst, int argc,
+                           JSValueConst *argv) {
+  if (argc < 1)
+    return JS_ThrowTypeError(ctx, "clipboard.setText(text) requires text");
+  const char *s = JS_ToCString(ctx, argv[0]);
+  if (!s)
+    return JS_EXCEPTION;
+  std::wstring text = Utils::ToWString(s);
+  JS_FreeCString(ctx, s);
+  return JS_NewBool(ctx, shared::system::ClipboardSetText(text) ? 1 : 0);
+}
+
+JSValue JsClipboardGetText(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  std::wstring text;
+  if (!shared::system::ClipboardGetText(text)) {
+    return JS_NewString(ctx, "");
+  }
+  return JS_NewString(ctx, Utils::ToString(text).c_str());
+}
+
+JSValue JsWallpaperSet(JSContext *ctx, JSValueConst, int argc,
+                       JSValueConst *argv) {
+  if (argc < 1)
+    return JS_ThrowTypeError(ctx, "wallpaper.set(path[, style]) requires path");
+  const char *p = JS_ToCString(ctx, argv[0]);
+  if (!p)
+    return JS_EXCEPTION;
+  std::wstring path = Utils::ToWString(p);
+  JS_FreeCString(ctx, p);
+  std::wstring style = L"fill";
+  if (argc > 1) {
+    const char *st = JS_ToCString(ctx, argv[1]);
+    if (st) {
+      style = Utils::ToWString(st);
+      JS_FreeCString(ctx, st);
+    }
+  }
+  return JS_NewBool(ctx, shared::system::SetWallpaper(path, style) ? 1 : 0);
+}
+
+JSValue JsWallpaperGet(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  std::wstring p;
+  if (!shared::system::GetCurrentWallpaperPath(p))
+    return JS_NewString(ctx, "");
+  return JS_NewString(ctx, Utils::ToString(p).c_str());
+}
+
+JSValue JsPowerGetStatus(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  shared::system::PowerStatus status;
+  if (!shared::system::GetPowerStatus(status))
+    return JS_NULL;
+  JSValue out = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, out, "acline", JS_NewInt32(ctx, status.acline));
+  JS_SetPropertyStr(ctx, out, "status", JS_NewInt32(ctx, status.status));
+  JS_SetPropertyStr(ctx, out, "status2", JS_NewInt32(ctx, status.status2));
+  JS_SetPropertyStr(ctx, out, "lifetime", JS_NewFloat64(ctx, status.lifetime));
+  JS_SetPropertyStr(ctx, out, "percent", JS_NewInt32(ctx, status.percent));
+  JS_SetPropertyStr(ctx, out, "mhz", JS_NewFloat64(ctx, status.mhz));
+  JS_SetPropertyStr(ctx, out, "hz", JS_NewFloat64(ctx, status.hz));
+  return out;
+}
+
+JSValue JsCpuUsage(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  shared::system::CpuStats stats;
+  if (!shared::system::GetCpuStats(stats)) {
+    return JS_NewFloat64(ctx, 0.0);
+  }
+  return JS_NewFloat64(ctx, stats.usage);
+}
+
+JSValue JsGetCpuUpTime(JSContext *ctx, JSValueConst, int argc,
+                       JSValueConst *argv) {
+  shared::system::UptimeStats stats;
+  if (!shared::system::GetSystemUptime(stats))
+    return JS_NULL;
+
+  if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
+    const char *fmt = JS_ToCString(ctx, argv[0]);
+    if (fmt) {
+      std::string format = fmt;
+      JS_FreeCString(ctx, fmt);
+      std::string out = shared::system::FormatUptime(stats, format);
+      return JS_NewString(ctx, out.c_str());
+    }
+  }
+
+  return JS_NewFloat64(ctx, stats.seconds);
+}
+
+JSValue JsMemoryTotalBytes(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  shared::system::MemoryStats stats;
+  if (!shared::system::GetMemoryStats(stats))
+    return JS_NewFloat64(ctx, 0.0);
+  return JS_NewFloat64(ctx, stats.total);
+}
+
+JSValue JsMemoryAvailableBytes(JSContext *ctx, JSValueConst, int,
+                               JSValueConst *) {
+  shared::system::MemoryStats stats;
+  if (!shared::system::GetMemoryStats(stats))
+    return JS_NewFloat64(ctx, 0.0);
+  return JS_NewFloat64(ctx, stats.available);
+}
+
+JSValue JsMemoryUsedBytes(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  shared::system::MemoryStats stats;
+  if (!shared::system::GetMemoryStats(stats))
+    return JS_NewFloat64(ctx, 0.0);
+  return JS_NewFloat64(ctx, stats.used);
+}
+
+JSValue JsMemoryUsagePercent(JSContext *ctx, JSValueConst, int,
+                             JSValueConst *) {
+  shared::system::MemoryStats stats;
+  if (!shared::system::GetMemoryStats(stats))
+    return JS_NewInt32(ctx, 0);
+  return JS_NewInt32(ctx, stats.percent);
+}
+
+JSValue JsNetworkRxSpeed(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  shared::system::NetworkStats stats;
+  if (!ReadNetworkCached(stats))
+    return JS_NewFloat64(ctx, 0.0);
+  return JS_NewFloat64(ctx, stats.netIn);
+}
+
+JSValue JsNetworkTxSpeed(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  shared::system::NetworkStats stats;
+  if (!ReadNetworkCached(stats))
+    return JS_NewFloat64(ctx, 0.0);
+  return JS_NewFloat64(ctx, stats.netOut);
+}
+
+JSValue JsNetworkBytesReceived(JSContext *ctx, JSValueConst, int,
+                               JSValueConst *) {
+  shared::system::NetworkStats stats;
+  if (!ReadNetworkCached(stats))
+    return JS_NewFloat64(ctx, 0.0);
+  return JS_NewFloat64(ctx, stats.totalIn);
+}
+
+JSValue JsNetworkBytesSent(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  shared::system::NetworkStats stats;
+  if (!ReadNetworkCached(stats))
+    return JS_NewFloat64(ctx, 0.0);
+  return JS_NewFloat64(ctx, stats.totalOut);
+}
+
+std::wstring ReadOptionalPathArg(JSContext *ctx, int argc, JSValueConst *argv) {
+  if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0])) {
+    return L"";
+  }
+  const char *s = JS_ToCString(ctx, argv[0]);
+  if (!s)
+    return L"";
+  std::wstring out = Utils::ToWString(s);
+  JS_FreeCString(ctx, s);
+  return out;
+}
+
+JSValue JsDiskTotalBytes(JSContext *ctx, JSValueConst, int argc,
+                         JSValueConst *argv) {
+  shared::system::DiskStats stats;
+  if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv),
+                                    stats))
+    return JS_NewFloat64(ctx, 0.0);
+  return JS_NewFloat64(ctx, stats.total);
+}
+
+JSValue JsDiskAvailableBytes(JSContext *ctx, JSValueConst, int argc,
+                             JSValueConst *argv) {
+  shared::system::DiskStats stats;
+  if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv),
+                                    stats))
+    return JS_NewFloat64(ctx, 0.0);
+  return JS_NewFloat64(ctx, stats.available);
+}
+
+JSValue JsDiskUsedBytes(JSContext *ctx, JSValueConst, int argc,
+                        JSValueConst *argv) {
+  shared::system::DiskStats stats;
+  if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv),
+                                    stats))
+    return JS_NewFloat64(ctx, 0.0);
+  return JS_NewFloat64(ctx, stats.used);
+}
+
+JSValue JsDiskUsagePercent(JSContext *ctx, JSValueConst, int argc,
+                           JSValueConst *argv) {
+  shared::system::DiskStats stats;
+  if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv),
+                                    stats))
+    return JS_NewInt32(ctx, 0);
+  return JS_NewInt32(ctx, stats.percent);
+}
+
+JSValue JsDiskReadSpeed(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  shared::system::DiskIoStats stats;
+  if (!ReadDiskIoCached(stats))
+    return JS_NewFloat64(ctx, 0.0);
+  return JS_NewFloat64(ctx, stats.readSpeed);
+}
+
+JSValue JsDiskWriteSpeed(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  shared::system::DiskIoStats stats;
+  if (!ReadDiskIoCached(stats))
+    return JS_NewFloat64(ctx, 0.0);
+  return JS_NewFloat64(ctx, stats.writeSpeed);
+}
+
+JSValue JsRecycleBinOpenBin(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  return JS_NewBool(ctx, shared::system::OpenRecycleBin() ? 1 : 0);
+}
+
+JSValue JsRecycleBinEmptyBin(JSContext *ctx, JSValueConst, int,
+                             JSValueConst *) {
+  return JS_NewBool(ctx, shared::system::EmptyRecycleBin(false) ? 1 : 0);
+}
+
+JSValue JsRecycleBinEmptyBinSilent(JSContext *ctx, JSValueConst, int,
+                                   JSValueConst *) {
+  return JS_NewBool(ctx, shared::system::EmptyRecycleBin(true) ? 1 : 0);
+}
+
+JSValue JsRecycleBinGetStats(JSContext *ctx, JSValueConst, int,
+                             JSValueConst *) {
+  shared::system::RecycleBinStats stats;
+  if (!shared::system::GetRecycleBinStats(stats))
+    return JS_NULL;
+
+  JSValue out = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, out, "count", JS_NewFloat64(ctx, stats.count));
+  JS_SetPropertyStr(ctx, out, "size", JS_NewFloat64(ctx, stats.size));
+  return out;
+}
+
+JSValue JsFileIconExtractIcon(JSContext *ctx, JSValueConst, int argc,
+                              JSValueConst *argv) {
+  if (argc < 2)
+    return JS_ThrowTypeError(
+        ctx, "fileIcon.extractIcon(filePath, outIcoPath[, size])");
+  const char *p1 = JS_ToCString(ctx, argv[0]);
+  const char *p2 = JS_ToCString(ctx, argv[1]);
+  if (!p1 || !p2) {
+    if (p1)
+      JS_FreeCString(ctx, p1);
+    if (p2)
+      JS_FreeCString(ctx, p2);
+    return JS_EXCEPTION;
+  }
+  std::wstring filePath = Utils::ToWString(p1);
+  std::wstring outPath = Utils::ToWString(p2);
+  JS_FreeCString(ctx, p1);
+  JS_FreeCString(ctx, p2);
+  int32_t size = 48;
+  if (argc > 2)
+    JS_ToInt32(ctx, &size, argv[2]);
+  return JS_NewBool(ctx, Utils::ExtractFileIconToIco(filePath, outPath,
+                                                     static_cast<int>(size))
+                             ? 1
+                             : 0);
+}
+
+JSValue JsDisplayMetricsGetMetrics(JSContext *ctx, JSValueConst, int,
+                                   JSValueConst *) {
+  const auto &mm = shared::system::GetDisplayMetrics();
+  JSValue out = JS_NewObject(ctx);
+
+  auto makeArea = [&](int left, int top, int right, int bottom) -> JSValue {
+    JSValue area = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, area, "x", JS_NewInt32(ctx, left));
+    JS_SetPropertyStr(ctx, area, "y", JS_NewInt32(ctx, top));
+    JS_SetPropertyStr(ctx, area, "width", JS_NewInt32(ctx, right - left));
+    JS_SetPropertyStr(ctx, area, "height", JS_NewInt32(ctx, bottom - top));
+    return area;
+  };
+
+  JSValue virtualScreen = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, virtualScreen, "x", JS_NewInt32(ctx, mm.virtualLeft));
+  JS_SetPropertyStr(ctx, virtualScreen, "y", JS_NewInt32(ctx, mm.virtualTop));
+  JS_SetPropertyStr(ctx, virtualScreen, "width",
+                    JS_NewInt32(ctx, mm.virtualWidth));
+  JS_SetPropertyStr(ctx, virtualScreen, "height",
+                    JS_NewInt32(ctx, mm.virtualHeight));
+  JS_SetPropertyStr(ctx, out, "virtualScreen", virtualScreen);
+
+  JSValue arr = JS_NewArray(ctx);
+  uint32_t i = 0;
+  for (const auto &m : mm.monitors) {
+    JSValue mo = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, mo, "id", JS_NewInt32(ctx, m.id));
+    JS_SetPropertyStr(
+        ctx, mo, "workArea",
+        makeArea(m.work.left, m.work.top, m.work.right, m.work.bottom));
+    JS_SetPropertyStr(
+        ctx, mo, "screenArea",
+        makeArea(m.screen.left, m.screen.top, m.screen.right, m.screen.bottom));
+    JS_SetPropertyUint32(ctx, arr, i++, mo);
+  }
+  JS_SetPropertyStr(ctx, out, "monitors", arr);
+
+  JSValue primary = JS_NewObject(ctx);
+  if (mm.primaryIndex >= 0 &&
+      mm.primaryIndex < static_cast<int>(mm.monitors.size())) {
+    const auto &pm = mm.monitors[mm.primaryIndex];
+    JS_SetPropertyStr(
+        ctx, primary, "workArea",
+        makeArea(pm.work.left, pm.work.top, pm.work.right, pm.work.bottom));
+    JS_SetPropertyStr(ctx, primary, "screenArea",
+                      makeArea(pm.screen.left, pm.screen.top, pm.screen.right,
+                               pm.screen.bottom));
+  } else {
+    JS_SetPropertyStr(ctx, primary, "workArea", makeArea(0, 0, 0, 0));
+    JS_SetPropertyStr(ctx, primary, "screenArea", makeArea(0, 0, 0, 0));
+  }
+  JS_SetPropertyStr(ctx, out, "primary", primary);
+
+  return out;
+}
+
+JSValue JsAudioSetVolume(JSContext *ctx, JSValueConst, int argc,
+                         JSValueConst *argv) {
+  if (argc < 1)
+    return JS_ThrowTypeError(ctx, "audio.setVolume(value) requires value");
+  int32_t value = 0;
+  JS_ToInt32(ctx, &value, argv[0]);
+  return JS_NewBool(
+      ctx, shared::system::AudioSetVolume(static_cast<int>(value)) ? 1 : 0);
+}
+
+JSValue JsAudioGetVolume(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  return JS_NewInt32(ctx, shared::system::AudioGetVolume());
+}
+
+JSValue JsAudioPlaySound(JSContext *ctx, JSValueConst, int argc,
+                         JSValueConst *argv) {
+  if (argc < 1)
+    return JS_ThrowTypeError(ctx,
+                             "audio.playSound(path[, loop]) requires path");
+  const char *s = JS_ToCString(ctx, argv[0]);
+  if (!s)
+    return JS_EXCEPTION;
+  std::wstring path = Utils::ToWString(s);
+  JS_FreeCString(ctx, s);
+  int loop = 0;
+  if (argc > 1) {
+    loop = JS_ToBool(ctx, argv[1]);
+  }
+  return JS_NewBool(ctx,
+                    shared::system::AudioPlaySound(path, loop != 0) ? 1 : 0);
+}
+
+JSValue JsAudioStopSound(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  shared::system::AudioStopSound();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsRegistryReadData(JSContext *ctx, JSValueConst, int argc,
+                           JSValueConst *argv) {
+  if (argc < 2)
+    return JS_ThrowTypeError(ctx, "registry.readData(path, valueName)");
+  const char *p = JS_ToCString(ctx, argv[0]);
+  const char *v = JS_ToCString(ctx, argv[1]);
+  if (!p || !v) {
+    if (p)
+      JS_FreeCString(ctx, p);
+    if (v)
+      JS_FreeCString(ctx, v);
+    return JS_EXCEPTION;
+  }
+
+  std::wstring fullPath = Utils::ToWString(p);
+  std::wstring valueName = Utils::ToWString(v);
+  JS_FreeCString(ctx, p);
+  JS_FreeCString(ctx, v);
+
+  shared::system::RegistryValue out;
+  if (!shared::system::RegistryReadData(fullPath, valueName, out)) {
+    return JS_NULL;
+  }
+
+  if (out.type == shared::system::RegistryValueType::String) {
+    return JS_NewString(ctx, Utils::ToString(out.stringValue).c_str());
+  }
+  if (out.type == shared::system::RegistryValueType::Number) {
+    return JS_NewFloat64(ctx, out.numberValue);
+  }
+  return JS_NULL;
+}
+
+JSValue JsRegistryWriteData(JSContext *ctx, JSValueConst, int argc,
+                            JSValueConst *argv) {
+  if (argc < 3)
+    return JS_ThrowTypeError(ctx, "registry.writeData(path, valueName, value)");
+  const char *p = JS_ToCString(ctx, argv[0]);
+  const char *v = JS_ToCString(ctx, argv[1]);
+  if (!p || !v) {
+    if (p)
+      JS_FreeCString(ctx, p);
+    if (v)
+      JS_FreeCString(ctx, v);
+    return JS_EXCEPTION;
+  }
+
+  std::wstring fullPath = Utils::ToWString(p);
+  std::wstring valueName = Utils::ToWString(v);
+  JS_FreeCString(ctx, p);
+  JS_FreeCString(ctx, v);
+
+  bool ok = false;
+  if (JS_IsString(argv[2])) {
+    const char *s = JS_ToCString(ctx, argv[2]);
+    if (!s)
+      return JS_EXCEPTION;
+    ok = shared::system::RegistryWriteString(fullPath, valueName,
+                                             Utils::ToWString(s));
+    JS_FreeCString(ctx, s);
+  } else {
+    double n = 0;
+    if (JS_ToFloat64(ctx, &n, argv[2]) == 0) {
+      ok = shared::system::RegistryWriteNumber(fullPath, valueName, n);
+    }
+  }
+
+  return JS_NewBool(ctx, ok ? 1 : 0);
+}
+
+std::wstring ResolveModulePath(JSContext *ctx, JSValueConst v) {
+  const char *s = JS_ToCString(ctx, v);
+  if (!s)
+    return L"";
+  std::wstring path = Utils::ToWString(s);
+  JS_FreeCString(ctx, s);
+  if (!PathUtils::IsPathRelative(path))
+    return PathUtils::NormalizePath(path);
+  std::wstring base = JSEngine::GetCurrentScriptDir();
+  if (base.empty()) {
+    base = JSEngine::GetEntryScriptDir();
+  }
+  if (base.empty()) {
+    base = PathUtils::GetWidgetsDir();
+  }
+  return PathUtils::ResolvePath(path, base);
+}
+
+JSValue JsJsonParse(JSContext *ctx, JSValueConst, int argc,
+                    JSValueConst *argv) {
+  if (argc < 1)
+    return JS_ThrowTypeError(ctx, "json.parse(text)");
+  const char *text = JS_ToCString(ctx, argv[0]);
+  if (!text)
+    return JS_EXCEPTION;
+  size_t len = std::strlen(text);
+  JSValue out = JS_ParseJSON(ctx, text, len, "<json.parse>");
+  JS_FreeCString(ctx, text);
+  return out;
+}
+
+JSValue JsJsonStringify(JSContext *ctx, JSValueConst, int argc,
+                        JSValueConst *argv) {
+  if (argc < 1)
+    return JS_ThrowTypeError(ctx, "json.stringify(value[, space])");
+  JSValue space = JS_UNDEFINED;
+  if (argc > 1)
+    space = JS_DupValue(ctx, argv[1]);
+  JSValue s = JS_JSONStringify(ctx, argv[0], JS_UNDEFINED, space);
+  if (!JS_IsUndefined(space))
+    JS_FreeValue(ctx, space);
+  return s;
+}
+
+JSValue JsJsonRead(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
+  if (argc < 1)
+    return JS_ThrowTypeError(ctx, "json.read(path)");
+  const std::wstring path = ResolveModulePath(ctx, argv[0]);
+  if (path.empty())
+    return JS_ThrowTypeError(ctx, "json.read invalid path");
+
+  std::string text;
+  if (!shared::system::JsonReadTextFile(path, text)) {
+    return JS_NULL;
+  }
+  if (text.find_first_not_of(" \t\r\n") == std::string::npos) {
+    return JS_NewObject(ctx);
+  }
+  return JS_ParseJSON(ctx, text.c_str(), text.size(),
+                      Utils::ToString(path).c_str());
+}
+
+JSValue JsJsonWrite(JSContext *ctx, JSValueConst, int argc,
+                    JSValueConst *argv) {
+  if (argc < 2)
+    return JS_ThrowTypeError(ctx, "json.write(path, value[, merge])");
+  const std::wstring path = ResolveModulePath(ctx, argv[0]);
+  if (path.empty())
+    return JS_ThrowTypeError(ctx, "json.write invalid path");
+
+  int merge = 0;
+  if (argc > 2)
+    merge = JS_ToBool(ctx, argv[2]);
+
+  JSValue indent = JS_NewInt32(ctx, 4);
+  JSValue s = JS_JSONStringify(ctx, argv[1], JS_UNDEFINED, indent);
+  JS_FreeValue(ctx, indent);
+  if (JS_IsException(s))
+    return s;
+  const char *text = JS_ToCString(ctx, s);
+  if (!text) {
+    JS_FreeValue(ctx, s);
+    return JS_EXCEPTION;
+  }
+
+  bool ok = false;
+  if (merge != 0)
+    ok = shared::system::JsonMergePatchFile(path, text);
+  else
+    ok = shared::system::JsonWriteTextFile(path, text);
+
+  JS_FreeCString(ctx, text);
+  JS_FreeValue(ctx, s);
+  return JS_NewBool(ctx, ok ? 1 : 0);
+}
+
+JSValue JsGetEnv(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
+  if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0])) {
+    JSValue all = JS_NewObject(ctx);
+    const auto vars = shared::system::GetAllEnv();
+    for (const auto &kv : vars) {
+      const std::string key = Utils::ToString(kv.first);
+      const std::string val = Utils::ToString(kv.second);
+      JS_SetPropertyStr(ctx, all, key.c_str(), JS_NewString(ctx, val.c_str()));
+    }
+    return all;
+  }
+
+  const char *n = JS_ToCString(ctx, argv[0]);
+  if (!n)
+    return JS_EXCEPTION;
+  std::wstring name = Utils::ToWString(n);
+  JS_FreeCString(ctx, n);
+
+  std::wstring value = shared::system::GetEnv(name);
+  if (value.empty() && argc > 1 && !JS_IsUndefined(argv[1]) &&
+      !JS_IsNull(argv[1])) {
+    const char *d = JS_ToCString(ctx, argv[1]);
+    if (d) {
+      value = Utils::ToWString(d);
+      JS_FreeCString(ctx, d);
+    }
+  }
+
+  return JS_NewString(ctx, Utils::ToString(value).c_str());
+}
+
+JSValue JsExecute(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
+  if (argc < 1)
+    return JS_ThrowTypeError(ctx,
+                             "execute(target[, parameters, workingDir, show])");
+
+  const char *t = JS_ToCString(ctx, argv[0]);
+  if (!t)
+    return JS_EXCEPTION;
+  std::wstring target = Utils::ToWString(t);
+  JS_FreeCString(ctx, t);
+
+  std::wstring parameters;
+  std::wstring workingDir;
+  int32_t show = SW_SHOWNORMAL;
+
+  if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1])) {
+    const char *p = JS_ToCString(ctx, argv[1]);
+    if (p) {
+      parameters = Utils::ToWString(p);
+      JS_FreeCString(ctx, p);
+    }
+  }
+  if (argc > 2 && !JS_IsUndefined(argv[2]) && !JS_IsNull(argv[2])) {
+    const char *w = JS_ToCString(ctx, argv[2]);
+    if (w) {
+      workingDir = Utils::ToWString(w);
+      JS_FreeCString(ctx, w);
+    }
+  }
+  if (argc > 3 && !JS_IsUndefined(argv[3]) && !JS_IsNull(argv[3])) {
+    JS_ToInt32(ctx, &show, argv[3]);
+  }
+
+  bool ok = shared::system::Execute(target, parameters, workingDir,
+                                    static_cast<int>(show));
+  return JS_NewBool(ctx, ok ? 1 : 0);
+}
+
+// Validate that a URL is safe to fetch: only http/https schemes, no
+// private/loopback IPs.
+bool IsAllowedWebFetchUrl(const std::wstring &url) {
+  // Must start with http:// or https://
+  std::wstring lower = url;
+  std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
+
+  if (lower.rfind(L"http://", 0) != 0 && lower.rfind(L"https://", 0) != 0)
+    return false;
+
+  // Extract host from the URL for SSRF checks.
+  // Format: http(s)://host[:port]/...
+  size_t schemeEnd = lower.find(L"://");
+  if (schemeEnd == std::wstring::npos)
+    return false;
+  size_t hostStart = schemeEnd + 3;
+  size_t hostEnd = lower.find(L'/', hostStart);
+  if (hostEnd == std::wstring::npos)
+    hostEnd = lower.length();
+
+  std::wstring host = lower.substr(hostStart, hostEnd - hostStart);
+
+  // Strip port if present
+  size_t colonPos = host.rfind(L':');
+  if (colonPos != std::wstring::npos)
+    host = host.substr(0, colonPos);
+
+  // Reject IPv6 bracket notation and IPv6 loopback
+  if (host.size() >= 2 && host.front() == L'[' && host.back() == L']')
+    host = host.substr(1, host.size() - 2);
+  if (host == L"::1" || host == L"0:0:0:0:0:0:0:1" ||
+      host == L"0000:0000:0000:0000:0000:0000:0000:0001")
+    return false;
+
+  // Reject localhost
+  if (host == L"localhost")
+    return false;
+
+  // Parse IPv4 if the host looks like a numeric address
+  auto isDigit = [](wchar_t c) -> bool { return c >= L'0' && c <= L'9'; };
+  size_t dotCount = 0;
+  for (wchar_t c : host) {
+    if (c == L'.')
+      dotCount++;
+    else if (!isDigit(c) && c != L'x' && c != L'X') {
+      dotCount = 0;
+      break;
+    }
+  }
+
+  if (dotCount == 3) {
+    // Likely IPv4 — parse octets
+    int octets[4] = {0, 0, 0, 0};
+    int idx = 0;
+    std::wistringstream iss(host);
+    std::wstring token;
+    while (std::getline(iss, token, L'.') && idx < 4) {
+      // Handle hex/octal prefixed numbers (e.g. 0x7f) as decimal for safety
+      if (token.size() > 1 &&
+          (token[0] == L'0' && (token[1] == L'x' || token[1] == L'X'))) {
+        // Reject obfuscated hex addresses to be safe
+        return false;
+      }
+      try {
+        int val = std::stoi(token);
+        if (val < 0 || val > 255)
+          return false;
+        octets[idx++] = val;
+      } catch (...) {
+        return false;
+      }
+    }
+    if (idx != 4)
+      return false;
+
+    // 127.0.0.0/8
+    if (octets[0] == 127)
+      return false;
+    // 10.0.0.0/8
+    if (octets[0] == 10)
+      return false;
+    // 172.16.0.0/12
+    if (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31)
+      return false;
+    // 192.168.0.0/16
+    if (octets[0] == 192 && octets[1] == 168)
+      return false;
+    // 169.254.0.0/16 (link-local / AWS metadata)
+    if (octets[0] == 169 && octets[1] == 254)
+      return false;
+    // 0.0.0.0/8
+    if (octets[0] == 0)
+      return false;
+  }
+  // Non-numeric hostnames pass (e.g. api.example.com).
+  // They could resolve to private IPs at DNS level, but that requires
+  // a more sophisticated resolver-level block which is outside this scope.
+
+  return true;
+}
+
+JSValue JsWebFetch(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
+  if (argc < 1)
+    return JS_ThrowTypeError(ctx, "webFetch(urlOrPath)");
+
+  const char *s = JS_ToCString(ctx, argv[0]);
+  if (!s)
+    return JS_EXCEPTION;
+  std::wstring pathOrUrl = Utils::ToWString(s);
+  JS_FreeCString(ctx, s);
+  if (pathOrUrl.empty())
+    return JS_ThrowTypeError(ctx, "webFetch invalid url/path");
+  if (PathUtils::IsPathRelative(pathOrUrl) &&
+      pathOrUrl.rfind(L"http://", 0) != 0 &&
+      pathOrUrl.rfind(L"https://", 0) != 0) {
+    std::wstring base = JSEngine::GetCurrentScriptDir();
+    if (base.empty())
+      base = JSEngine::GetEntryScriptDir();
+    if (base.empty())
+      base = PathUtils::GetWidgetsDir();
+    pathOrUrl = PathUtils::ResolvePath(pathOrUrl, base);
+  }
+
+  if (!IsAllowedWebFetchUrl(pathOrUrl)) {
+    return JS_ThrowTypeError(
+        ctx, "webFetch: only http and https URLs are allowed; file:// and "
+             "internal/private network addresses are blocked");
+  }
+
+  JSValue funcs[2] = {JS_UNDEFINED, JS_UNDEFINED};
+  JSValue promise = JS_NewPromiseCapability(ctx, funcs);
+  if (JS_IsException(promise)) {
+    if (!JS_IsUndefined(funcs[0]))
+      JS_FreeValue(ctx, funcs[0]);
+    if (!JS_IsUndefined(funcs[1]))
+      JS_FreeValue(ctx, funcs[1]);
+    return JS_EXCEPTION;
+  }
+
+  auto req = std::make_unique<WebFetchRequest>();
+  req->id = g_nextWebFetchId++;
+  req->ctx = ctx;
+  req->resolve = JS_DupValue(ctx, funcs[0]);
+  req->reject = JS_DupValue(ctx, funcs[1]);
+  req->owner = JSEngine::GetCurrentScriptPath();
+
+  JS_FreeValue(ctx, funcs[0]);
+  JS_FreeValue(ctx, funcs[1]);
+
+  const uint64_t requestId = req->id;
+  {
+    std::lock_guard<std::mutex> lock(g_webFetchMutex);
+    g_webFetchRequests[requestId] = std::move(req);
+  }
+
+  std::thread([requestId, pathOrUrl]() {
+    bool ok = false;
+    std::string data;
+    std::string error;
+
+    ok = shared::system::WebFetch(pathOrUrl, data);
+    if (!ok) {
+      error = "webFetch failed";
     }
 
-    namespace
-    { // reopen anonymous namespace
-
-        bool ReadNetworkCached(shared::system::NetworkStats &out)
-        {
-            const auto now = std::chrono::steady_clock::now();
-            constexpr auto kMinResample = std::chrono::milliseconds(400);
-
-            if (g_cachedNetworkAt == std::chrono::steady_clock::time_point::min() ||
-                (now - g_cachedNetworkAt) >= kMinResample)
-            {
-                if (!shared::system::GetNetworkStats(g_cachedNetworkStats))
-                {
-                    return false;
-                }
-                g_cachedNetworkAt = now;
-            }
-
-            out = g_cachedNetworkStats;
-            return true;
-        }
-
-        bool ReadDiskIoCached(shared::system::DiskIoStats &out)
-        {
-            const auto now = std::chrono::steady_clock::now();
-            constexpr auto kMinResample = std::chrono::milliseconds(400);
-
-            if (g_cachedDiskIoAt == std::chrono::steady_clock::time_point::min() ||
-                (now - g_cachedDiskIoAt) >= kMinResample)
-            {
-                if (!shared::system::GetDiskIoStats(g_cachedDiskIoStats))
-                {
-                    return false;
-                }
-                g_cachedDiskIoAt = now;
-            }
-
-            out = g_cachedDiskIoStats;
-            return true;
-        }
-
-        JSValue JsClipboardSetText(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "clipboard.setText(text) requires text");
-            const char *s = JS_ToCString(ctx, argv[0]);
-            if (!s)
-                return JS_EXCEPTION;
-            std::wstring text = Utils::ToWString(s);
-            JS_FreeCString(ctx, s);
-            return JS_NewBool(ctx, shared::system::ClipboardSetText(text) ? 1 : 0);
-        }
-
-        JSValue JsClipboardGetText(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            std::wstring text;
-            if (!shared::system::ClipboardGetText(text))
-            {
-                return JS_NewString(ctx, "");
-            }
-            return JS_NewString(ctx, Utils::ToString(text).c_str());
-        }
-
-        JSValue JsWallpaperSet(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "wallpaper.set(path[, style]) requires path");
-            const char *p = JS_ToCString(ctx, argv[0]);
-            if (!p)
-                return JS_EXCEPTION;
-            std::wstring path = Utils::ToWString(p);
-            JS_FreeCString(ctx, p);
-            std::wstring style = L"fill";
-            if (argc > 1)
-            {
-                const char *st = JS_ToCString(ctx, argv[1]);
-                if (st)
-                {
-                    style = Utils::ToWString(st);
-                    JS_FreeCString(ctx, st);
-                }
-            }
-            return JS_NewBool(ctx, shared::system::SetWallpaper(path, style) ? 1 : 0);
-        }
-
-        JSValue JsWallpaperGet(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            std::wstring p;
-            if (!shared::system::GetCurrentWallpaperPath(p))
-                return JS_NewString(ctx, "");
-            return JS_NewString(ctx, Utils::ToString(p).c_str());
-        }
-
-        JSValue JsPowerGetStatus(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::PowerStatus status;
-            if (!shared::system::GetPowerStatus(status))
-                return JS_NULL;
-            JSValue out = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, out, "acline", JS_NewInt32(ctx, status.acline));
-            JS_SetPropertyStr(ctx, out, "status", JS_NewInt32(ctx, status.status));
-            JS_SetPropertyStr(ctx, out, "status2", JS_NewInt32(ctx, status.status2));
-            JS_SetPropertyStr(ctx, out, "lifetime", JS_NewFloat64(ctx, status.lifetime));
-            JS_SetPropertyStr(ctx, out, "percent", JS_NewInt32(ctx, status.percent));
-            JS_SetPropertyStr(ctx, out, "mhz", JS_NewFloat64(ctx, status.mhz));
-            JS_SetPropertyStr(ctx, out, "hz", JS_NewFloat64(ctx, status.hz));
-            return out;
-        }
-
-        JSValue JsCpuUsage(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::CpuStats stats;
-            if (!shared::system::GetCpuStats(stats))
-            {
-                return JS_NewFloat64(ctx, 0.0);
-            }
-            return JS_NewFloat64(ctx, stats.usage);
-        }
-
-        JSValue JsGetCpuUpTime(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            shared::system::UptimeStats stats;
-            if (!shared::system::GetSystemUptime(stats))
-                return JS_NULL;
-
-            if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0]))
-            {
-                const char *fmt = JS_ToCString(ctx, argv[0]);
-                if (fmt)
-                {
-                    std::string format = fmt;
-                    JS_FreeCString(ctx, fmt);
-                    std::string out = shared::system::FormatUptime(stats, format);
-                    return JS_NewString(ctx, out.c_str());
-                }
-            }
-
-            return JS_NewFloat64(ctx, stats.seconds);
-        }
-
-        JSValue JsMemoryTotalBytes(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::MemoryStats stats;
-            if (!shared::system::GetMemoryStats(stats))
-                return JS_NewFloat64(ctx, 0.0);
-            return JS_NewFloat64(ctx, stats.total);
-        }
-
-        JSValue JsMemoryAvailableBytes(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::MemoryStats stats;
-            if (!shared::system::GetMemoryStats(stats))
-                return JS_NewFloat64(ctx, 0.0);
-            return JS_NewFloat64(ctx, stats.available);
-        }
-
-        JSValue JsMemoryUsedBytes(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::MemoryStats stats;
-            if (!shared::system::GetMemoryStats(stats))
-                return JS_NewFloat64(ctx, 0.0);
-            return JS_NewFloat64(ctx, stats.used);
-        }
-
-        JSValue JsMemoryUsagePercent(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::MemoryStats stats;
-            if (!shared::system::GetMemoryStats(stats))
-                return JS_NewInt32(ctx, 0);
-            return JS_NewInt32(ctx, stats.percent);
-        }
-
-        JSValue JsNetworkRxSpeed(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::NetworkStats stats;
-            if (!ReadNetworkCached(stats))
-                return JS_NewFloat64(ctx, 0.0);
-            return JS_NewFloat64(ctx, stats.netIn);
-        }
-
-        JSValue JsNetworkTxSpeed(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::NetworkStats stats;
-            if (!ReadNetworkCached(stats))
-                return JS_NewFloat64(ctx, 0.0);
-            return JS_NewFloat64(ctx, stats.netOut);
-        }
-
-        JSValue JsNetworkBytesReceived(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::NetworkStats stats;
-            if (!ReadNetworkCached(stats))
-                return JS_NewFloat64(ctx, 0.0);
-            return JS_NewFloat64(ctx, stats.totalIn);
-        }
-
-        JSValue JsNetworkBytesSent(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::NetworkStats stats;
-            if (!ReadNetworkCached(stats))
-                return JS_NewFloat64(ctx, 0.0);
-            return JS_NewFloat64(ctx, stats.totalOut);
-        }
-
-        std::wstring ReadOptionalPathArg(JSContext *ctx, int argc, JSValueConst *argv)
-        {
-            if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
-            {
-                return L"";
-            }
-            const char *s = JS_ToCString(ctx, argv[0]);
-            if (!s)
-                return L"";
-            std::wstring out = Utils::ToWString(s);
-            JS_FreeCString(ctx, s);
-            return out;
-        }
-
-        JSValue JsDiskTotalBytes(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            shared::system::DiskStats stats;
-            if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv), stats))
-                return JS_NewFloat64(ctx, 0.0);
-            return JS_NewFloat64(ctx, stats.total);
-        }
-
-        JSValue JsDiskAvailableBytes(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            shared::system::DiskStats stats;
-            if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv), stats))
-                return JS_NewFloat64(ctx, 0.0);
-            return JS_NewFloat64(ctx, stats.available);
-        }
-
-        JSValue JsDiskUsedBytes(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            shared::system::DiskStats stats;
-            if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv), stats))
-                return JS_NewFloat64(ctx, 0.0);
-            return JS_NewFloat64(ctx, stats.used);
-        }
-
-        JSValue JsDiskUsagePercent(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            shared::system::DiskStats stats;
-            if (!shared::system::GetDiskStats(ReadOptionalPathArg(ctx, argc, argv), stats))
-                return JS_NewInt32(ctx, 0);
-            return JS_NewInt32(ctx, stats.percent);
-        }
-
-        JSValue JsDiskReadSpeed(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::DiskIoStats stats;
-            if (!ReadDiskIoCached(stats))
-                return JS_NewFloat64(ctx, 0.0);
-            return JS_NewFloat64(ctx, stats.readSpeed);
-        }
-
-        JSValue JsDiskWriteSpeed(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::DiskIoStats stats;
-            if (!ReadDiskIoCached(stats))
-                return JS_NewFloat64(ctx, 0.0);
-            return JS_NewFloat64(ctx, stats.writeSpeed);
-        }
-
-        JSValue JsRecycleBinOpenBin(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewBool(ctx, shared::system::OpenRecycleBin() ? 1 : 0);
-        }
-
-        JSValue JsRecycleBinEmptyBin(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewBool(ctx, shared::system::EmptyRecycleBin(false) ? 1 : 0);
-        }
-
-        JSValue JsRecycleBinEmptyBinSilent(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewBool(ctx, shared::system::EmptyRecycleBin(true) ? 1 : 0);
-        }
-
-        JSValue JsRecycleBinGetStats(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::RecycleBinStats stats;
-            if (!shared::system::GetRecycleBinStats(stats))
-                return JS_NULL;
-
-            JSValue out = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, out, "count", JS_NewFloat64(ctx, stats.count));
-            JS_SetPropertyStr(ctx, out, "size", JS_NewFloat64(ctx, stats.size));
-            return out;
-        }
-
-        JSValue JsFileIconExtractIcon(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-                return JS_ThrowTypeError(ctx, "fileIcon.extractIcon(filePath, outIcoPath[, size])");
-            const char *p1 = JS_ToCString(ctx, argv[0]);
-            const char *p2 = JS_ToCString(ctx, argv[1]);
-            if (!p1 || !p2)
-            {
-                if (p1)
-                    JS_FreeCString(ctx, p1);
-                if (p2)
-                    JS_FreeCString(ctx, p2);
-                return JS_EXCEPTION;
-            }
-            std::wstring filePath = Utils::ToWString(p1);
-            std::wstring outPath = Utils::ToWString(p2);
-            JS_FreeCString(ctx, p1);
-            JS_FreeCString(ctx, p2);
-            int32_t size = 48;
-            if (argc > 2)
-                JS_ToInt32(ctx, &size, argv[2]);
-            return JS_NewBool(ctx, Utils::ExtractFileIconToIco(filePath, outPath, static_cast<int>(size)) ? 1 : 0);
-        }
-
-        JSValue JsDisplayMetricsGetMetrics(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            const auto &mm = shared::system::GetDisplayMetrics();
-            JSValue out = JS_NewObject(ctx);
-
-            auto makeArea = [&](int left, int top, int right, int bottom) -> JSValue
-            {
-                JSValue area = JS_NewObject(ctx);
-                JS_SetPropertyStr(ctx, area, "x", JS_NewInt32(ctx, left));
-                JS_SetPropertyStr(ctx, area, "y", JS_NewInt32(ctx, top));
-                JS_SetPropertyStr(ctx, area, "width", JS_NewInt32(ctx, right - left));
-                JS_SetPropertyStr(ctx, area, "height", JS_NewInt32(ctx, bottom - top));
-                return area;
-            };
-
-            JSValue virtualScreen = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, virtualScreen, "x", JS_NewInt32(ctx, mm.virtualLeft));
-            JS_SetPropertyStr(ctx, virtualScreen, "y", JS_NewInt32(ctx, mm.virtualTop));
-            JS_SetPropertyStr(ctx, virtualScreen, "width", JS_NewInt32(ctx, mm.virtualWidth));
-            JS_SetPropertyStr(ctx, virtualScreen, "height", JS_NewInt32(ctx, mm.virtualHeight));
-            JS_SetPropertyStr(ctx, out, "virtualScreen", virtualScreen);
-
-            JSValue arr = JS_NewArray(ctx);
-            uint32_t i = 0;
-            for (const auto &m : mm.monitors)
-            {
-                JSValue mo = JS_NewObject(ctx);
-                JS_SetPropertyStr(ctx, mo, "id", JS_NewInt32(ctx, m.id));
-                JS_SetPropertyStr(ctx, mo, "workArea", makeArea(m.work.left, m.work.top, m.work.right, m.work.bottom));
-                JS_SetPropertyStr(ctx, mo, "screenArea", makeArea(m.screen.left, m.screen.top, m.screen.right, m.screen.bottom));
-                JS_SetPropertyUint32(ctx, arr, i++, mo);
-            }
-            JS_SetPropertyStr(ctx, out, "monitors", arr);
-
-            JSValue primary = JS_NewObject(ctx);
-            if (mm.primaryIndex >= 0 && mm.primaryIndex < static_cast<int>(mm.monitors.size()))
-            {
-                const auto &pm = mm.monitors[mm.primaryIndex];
-                JS_SetPropertyStr(ctx, primary, "workArea", makeArea(pm.work.left, pm.work.top, pm.work.right, pm.work.bottom));
-                JS_SetPropertyStr(ctx, primary, "screenArea", makeArea(pm.screen.left, pm.screen.top, pm.screen.right, pm.screen.bottom));
-            }
-            else
-            {
-                JS_SetPropertyStr(ctx, primary, "workArea", makeArea(0, 0, 0, 0));
-                JS_SetPropertyStr(ctx, primary, "screenArea", makeArea(0, 0, 0, 0));
-            }
-            JS_SetPropertyStr(ctx, out, "primary", primary);
-
-            return out;
-        }
-
-        JSValue JsAudioSetVolume(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "audio.setVolume(value) requires value");
-            int32_t value = 0;
-            JS_ToInt32(ctx, &value, argv[0]);
-            return JS_NewBool(ctx, shared::system::AudioSetVolume(static_cast<int>(value)) ? 1 : 0);
-        }
-
-        JSValue JsAudioGetVolume(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewInt32(ctx, shared::system::AudioGetVolume());
-        }
-
-        JSValue JsAudioPlaySound(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "audio.playSound(path[, loop]) requires path");
-            const char *s = JS_ToCString(ctx, argv[0]);
-            if (!s)
-                return JS_EXCEPTION;
-            std::wstring path = Utils::ToWString(s);
-            JS_FreeCString(ctx, s);
-            int loop = 0;
-            if (argc > 1)
-            {
-                loop = JS_ToBool(ctx, argv[1]);
-            }
-            return JS_NewBool(ctx, shared::system::AudioPlaySound(path, loop != 0) ? 1 : 0);
-        }
-
-        JSValue JsAudioStopSound(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            shared::system::AudioStopSound();
-            return JS_NewBool(ctx, 1);
-        }
-
-        JSValue JsRegistryReadData(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-                return JS_ThrowTypeError(ctx, "registry.readData(path, valueName)");
-            const char *p = JS_ToCString(ctx, argv[0]);
-            const char *v = JS_ToCString(ctx, argv[1]);
-            if (!p || !v)
-            {
-                if (p)
-                    JS_FreeCString(ctx, p);
-                if (v)
-                    JS_FreeCString(ctx, v);
-                return JS_EXCEPTION;
-            }
-
-            std::wstring fullPath = Utils::ToWString(p);
-            std::wstring valueName = Utils::ToWString(v);
-            JS_FreeCString(ctx, p);
-            JS_FreeCString(ctx, v);
-
-            shared::system::RegistryValue out;
-            if (!shared::system::RegistryReadData(fullPath, valueName, out))
-            {
-                return JS_NULL;
-            }
-
-            if (out.type == shared::system::RegistryValueType::String)
-            {
-                return JS_NewString(ctx, Utils::ToString(out.stringValue).c_str());
-            }
-            if (out.type == shared::system::RegistryValueType::Number)
-            {
-                return JS_NewFloat64(ctx, out.numberValue);
-            }
-            return JS_NULL;
-        }
-
-        JSValue JsRegistryWriteData(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 3)
-                return JS_ThrowTypeError(ctx, "registry.writeData(path, valueName, value)");
-            const char *p = JS_ToCString(ctx, argv[0]);
-            const char *v = JS_ToCString(ctx, argv[1]);
-            if (!p || !v)
-            {
-                if (p)
-                    JS_FreeCString(ctx, p);
-                if (v)
-                    JS_FreeCString(ctx, v);
-                return JS_EXCEPTION;
-            }
-
-            std::wstring fullPath = Utils::ToWString(p);
-            std::wstring valueName = Utils::ToWString(v);
-            JS_FreeCString(ctx, p);
-            JS_FreeCString(ctx, v);
-
-            bool ok = false;
-            if (JS_IsString(argv[2]))
-            {
-                const char *s = JS_ToCString(ctx, argv[2]);
-                if (!s)
-                    return JS_EXCEPTION;
-                ok = shared::system::RegistryWriteString(fullPath, valueName, Utils::ToWString(s));
-                JS_FreeCString(ctx, s);
-            }
-            else
-            {
-                double n = 0;
-                if (JS_ToFloat64(ctx, &n, argv[2]) == 0)
-                {
-                    ok = shared::system::RegistryWriteNumber(fullPath, valueName, n);
-                }
-            }
-
-            return JS_NewBool(ctx, ok ? 1 : 0);
-        }
-
-        std::wstring ResolveModulePath(JSContext *ctx, JSValueConst v)
-        {
-            const char *s = JS_ToCString(ctx, v);
-            if (!s)
-                return L"";
-            std::wstring path = Utils::ToWString(s);
-            JS_FreeCString(ctx, s);
-            if (!PathUtils::IsPathRelative(path))
-                return PathUtils::NormalizePath(path);
-            std::wstring base = JSEngine::GetCurrentScriptDir();
-            if (base.empty())
-            {
-                base = JSEngine::GetEntryScriptDir();
-            }
-            if (base.empty())
-            {
-                base = PathUtils::GetWidgetsDir();
-            }
-            return PathUtils::ResolvePath(path, base);
-        }
-
-        JSValue JsJsonParse(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "json.parse(text)");
-            const char *text = JS_ToCString(ctx, argv[0]);
-            if (!text)
-                return JS_EXCEPTION;
-            size_t len = std::strlen(text);
-            JSValue out = JS_ParseJSON(ctx, text, len, "<json.parse>");
-            JS_FreeCString(ctx, text);
-            return out;
-        }
-
-        JSValue JsJsonStringify(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "json.stringify(value[, space])");
-            JSValue space = JS_UNDEFINED;
-            if (argc > 1)
-                space = JS_DupValue(ctx, argv[1]);
-            JSValue s = JS_JSONStringify(ctx, argv[0], JS_UNDEFINED, space);
-            if (!JS_IsUndefined(space))
-                JS_FreeValue(ctx, space);
-            return s;
-        }
-
-        JSValue JsJsonRead(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "json.read(path)");
-            const std::wstring path = ResolveModulePath(ctx, argv[0]);
-            if (path.empty())
-                return JS_ThrowTypeError(ctx, "json.read invalid path");
-
-            std::string text;
-            if (!shared::system::JsonReadTextFile(path, text))
-            {
-                return JS_NULL;
-            }
-            if (text.find_first_not_of(" \t\r\n") == std::string::npos)
-            {
-                return JS_NewObject(ctx);
-            }
-            return JS_ParseJSON(ctx, text.c_str(), text.size(), Utils::ToString(path).c_str());
-        }
-
-        JSValue JsJsonWrite(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-                return JS_ThrowTypeError(ctx, "json.write(path, value[, merge])");
-            const std::wstring path = ResolveModulePath(ctx, argv[0]);
-            if (path.empty())
-                return JS_ThrowTypeError(ctx, "json.write invalid path");
-
-            int merge = 0;
-            if (argc > 2)
-                merge = JS_ToBool(ctx, argv[2]);
-
-            JSValue indent = JS_NewInt32(ctx, 4);
-            JSValue s = JS_JSONStringify(ctx, argv[1], JS_UNDEFINED, indent);
-            JS_FreeValue(ctx, indent);
-            if (JS_IsException(s))
-                return s;
-            const char *text = JS_ToCString(ctx, s);
-            if (!text)
-            {
-                JS_FreeValue(ctx, s);
-                return JS_EXCEPTION;
-            }
-
-            bool ok = false;
-            if (merge != 0)
-                ok = shared::system::JsonMergePatchFile(path, text);
-            else
-                ok = shared::system::JsonWriteTextFile(path, text);
-
-            JS_FreeCString(ctx, text);
-            JS_FreeValue(ctx, s);
-            return JS_NewBool(ctx, ok ? 1 : 0);
-        }
-
-        JSValue JsGetEnv(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1 || JS_IsUndefined(argv[0]) || JS_IsNull(argv[0]))
-            {
-                JSValue all = JS_NewObject(ctx);
-                const auto vars = shared::system::GetAllEnv();
-                for (const auto &kv : vars)
-                {
-                    const std::string key = Utils::ToString(kv.first);
-                    const std::string val = Utils::ToString(kv.second);
-                    JS_SetPropertyStr(ctx, all, key.c_str(), JS_NewString(ctx, val.c_str()));
-                }
-                return all;
-            }
-
-            const char *n = JS_ToCString(ctx, argv[0]);
-            if (!n)
-                return JS_EXCEPTION;
-            std::wstring name = Utils::ToWString(n);
-            JS_FreeCString(ctx, n);
-
-            std::wstring value = shared::system::GetEnv(name);
-            if (value.empty() && argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1]))
-            {
-                const char *d = JS_ToCString(ctx, argv[1]);
-                if (d)
-                {
-                    value = Utils::ToWString(d);
-                    JS_FreeCString(ctx, d);
-                }
-            }
-
-            return JS_NewString(ctx, Utils::ToString(value).c_str());
-        }
-
-        JSValue JsExecute(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "execute(target[, parameters, workingDir, show])");
-
-            const char *t = JS_ToCString(ctx, argv[0]);
-            if (!t)
-                return JS_EXCEPTION;
-            std::wstring target = Utils::ToWString(t);
-            JS_FreeCString(ctx, t);
-
-            std::wstring parameters;
-            std::wstring workingDir;
-            int32_t show = SW_SHOWNORMAL;
-
-            if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1]))
-            {
-                const char *p = JS_ToCString(ctx, argv[1]);
-                if (p)
-                {
-                    parameters = Utils::ToWString(p);
-                    JS_FreeCString(ctx, p);
-                }
-            }
-            if (argc > 2 && !JS_IsUndefined(argv[2]) && !JS_IsNull(argv[2]))
-            {
-                const char *w = JS_ToCString(ctx, argv[2]);
-                if (w)
-                {
-                    workingDir = Utils::ToWString(w);
-                    JS_FreeCString(ctx, w);
-                }
-            }
-            if (argc > 3 && !JS_IsUndefined(argv[3]) && !JS_IsNull(argv[3]))
-            {
-                JS_ToInt32(ctx, &show, argv[3]);
-            }
-
-            bool ok = shared::system::Execute(target, parameters, workingDir, static_cast<int>(show));
-            return JS_NewBool(ctx, ok ? 1 : 0);
-        }
-
-        // Validate that a URL is safe to fetch: only http/https schemes, no private/loopback IPs.
-        bool IsAllowedWebFetchUrl(const std::wstring &url)
-        {
-            // Must start with http:// or https://
-            std::wstring lower = url;
-            std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
-
-            if (lower.rfind(L"http://", 0) != 0 && lower.rfind(L"https://", 0) != 0)
-                return false;
-
-            // Extract host from the URL for SSRF checks.
-            // Format: http(s)://host[:port]/...
-            size_t schemeEnd = lower.find(L"://");
-            if (schemeEnd == std::wstring::npos)
-                return false;
-            size_t hostStart = schemeEnd + 3;
-            size_t hostEnd = lower.find(L'/', hostStart);
-            if (hostEnd == std::wstring::npos)
-                hostEnd = lower.length();
-
-            std::wstring host = lower.substr(hostStart, hostEnd - hostStart);
-
-            // Strip port if present
-            size_t colonPos = host.rfind(L':');
-            if (colonPos != std::wstring::npos)
-                host = host.substr(0, colonPos);
-
-            // Reject IPv6 bracket notation and IPv6 loopback
-            if (host.size() >= 2 && host.front() == L'[' && host.back() == L']')
-                host = host.substr(1, host.size() - 2);
-            if (host == L"::1" || host == L"0:0:0:0:0:0:0:1" ||
-                host == L"0000:0000:0000:0000:0000:0000:0000:0001")
-                return false;
-
-            // Reject localhost
-            if (host == L"localhost")
-                return false;
-
-            // Parse IPv4 if the host looks like a numeric address
-            auto isDigit = [](wchar_t c) -> bool { return c >= L'0' && c <= L'9'; };
-            size_t dotCount = 0;
-            for (wchar_t c : host)
-            {
-                if (c == L'.')
-                    dotCount++;
-                else if (!isDigit(c) && c != L'x' && c != L'X')
-                {
-                    dotCount = 0;
-                    break;
-                }
-            }
-
-            if (dotCount == 3)
-            {
-                // Likely IPv4 — parse octets
-                int octets[4] = {0, 0, 0, 0};
-                int idx = 0;
-                std::wistringstream iss(host);
-                std::wstring token;
-                while (std::getline(iss, token, L'.') && idx < 4)
-                {
-                    // Handle hex/octal prefixed numbers (e.g. 0x7f) as decimal for safety
-                    if (token.size() > 1 && (token[0] == L'0' && (token[1] == L'x' || token[1] == L'X')))
-                    {
-                        // Reject obfuscated hex addresses to be safe
-                        return false;
-                    }
-                    try
-                    {
-                        int val = std::stoi(token);
-                        if (val < 0 || val > 255)
-                            return false;
-                        octets[idx++] = val;
-                    }
-                    catch (...)
-                    {
-                        return false;
-                    }
-                }
-                if (idx != 4)
-                    return false;
-
-                // 127.0.0.0/8
-                if (octets[0] == 127)
-                    return false;
-                // 10.0.0.0/8
-                if (octets[0] == 10)
-                    return false;
-                // 172.16.0.0/12
-                if (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31)
-                    return false;
-                // 192.168.0.0/16
-                if (octets[0] == 192 && octets[1] == 168)
-                    return false;
-                // 169.254.0.0/16 (link-local / AWS metadata)
-                if (octets[0] == 169 && octets[1] == 254)
-                    return false;
-                // 0.0.0.0/8
-                if (octets[0] == 0)
-                    return false;
-            }
-            // Non-numeric hostnames pass (e.g. api.example.com).
-            // They could resolve to private IPs at DNS level, but that requires
-            // a more sophisticated resolver-level block which is outside this scope.
-
-            return true;
-        }
-
-        JSValue JsWebFetch(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 1)
-                return JS_ThrowTypeError(ctx, "webFetch(urlOrPath)");
-
-            const char *s = JS_ToCString(ctx, argv[0]);
-            if (!s)
-                return JS_EXCEPTION;
-            std::wstring pathOrUrl = Utils::ToWString(s);
-            JS_FreeCString(ctx, s);
-            if (pathOrUrl.empty())
-                return JS_ThrowTypeError(ctx, "webFetch invalid url/path");
-            if (PathUtils::IsPathRelative(pathOrUrl) &&
-                pathOrUrl.rfind(L"http://", 0) != 0 &&
-                pathOrUrl.rfind(L"https://", 0) != 0)
-            {
-                std::wstring base = JSEngine::GetCurrentScriptDir();
-                if (base.empty())
-                    base = JSEngine::GetEntryScriptDir();
-                if (base.empty())
-                    base = PathUtils::GetWidgetsDir();
-                pathOrUrl = PathUtils::ResolvePath(pathOrUrl, base);
-            }
-
-            if (!IsAllowedWebFetchUrl(pathOrUrl))
-            {
-                return JS_ThrowTypeError(ctx, "webFetch: only http and https URLs are allowed; file:// and internal/private network addresses are blocked");
-            }
-
-            JSValue funcs[2] = {JS_UNDEFINED, JS_UNDEFINED};
-            JSValue promise = JS_NewPromiseCapability(ctx, funcs);
-            if (JS_IsException(promise))
-            {
-                if (!JS_IsUndefined(funcs[0]))
-                    JS_FreeValue(ctx, funcs[0]);
-                if (!JS_IsUndefined(funcs[1]))
-                    JS_FreeValue(ctx, funcs[1]);
-                return JS_EXCEPTION;
-            }
-
-            auto req = std::make_unique<WebFetchRequest>();
-            req->id = g_nextWebFetchId++;
-            req->ctx = ctx;
-            req->resolve = JS_DupValue(ctx, funcs[0]);
-            req->reject = JS_DupValue(ctx, funcs[1]);
-            req->owner = JSEngine::GetCurrentScriptPath();
-
-            JS_FreeValue(ctx, funcs[0]);
-            JS_FreeValue(ctx, funcs[1]);
-
-            const uint64_t requestId = req->id;
-            {
-                std::lock_guard<std::mutex> lock(g_webFetchMutex);
-                g_webFetchRequests[requestId] = std::move(req);
-            }
-
-            std::thread([requestId, pathOrUrl]()
-                        {
-                            bool ok = false;
-                            std::string data;
-                            std::string error;
-
-                            ok = shared::system::WebFetch(pathOrUrl, data);
-                            if (!ok)
-                            {
-                                error = "webFetch failed";
-                            }
-
-                            {
-                                std::lock_guard<std::mutex> lock(g_webFetchMutex);
-                                auto it = g_webFetchRequests.find(requestId);
-                                if (it == g_webFetchRequests.end() || !it->second)
-                                {
-                                    return;
-                                }
-                                it->second->ok = ok;
-                                if (ok)
-                                {
-                                    it->second->data = std::move(data);
-                                }
-                                else
-                                {
-                                    it->second->error = std::move(error);
-                                }
-                            }
-
-                            HWND hwnd = JSEngine::GetMessageWindow();
-                            if (!hwnd)
-                            {
-                                return;
-                            }
-
-                            auto *payload = new uint64_t(requestId);
-                            if (!PostMessageW(
-                                    hwnd,
-                                    JSEngine::WM_NOVADESK_DISPATCH,
-                                    JSEngine::DISPATCH_WEBFETCH,
-                                    reinterpret_cast<LPARAM>(payload)))
-                            {
-                                delete payload;
-                                std::lock_guard<std::mutex> lock(g_webFetchMutex);
-                                g_webFetchRequests.erase(requestId);
-                            } })
-                .detach();
-
-            return promise;
-        }
-
-        std::string ReadOptionalStringArg(JSContext *ctx, int argc, JSValueConst *argv, int index, const std::string &fallback = "")
-        {
-            if (index >= argc || JS_IsUndefined(argv[index]) || JS_IsNull(argv[index]))
-            {
-                return fallback;
-            }
-            const char *s = JS_ToCString(ctx, argv[index]);
-            if (!s)
-            {
-                return fallback;
-            }
-            std::string out = s;
-            JS_FreeCString(ctx, s);
-            return out;
-        }
-
-        JSValue JsTimeNow(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            const std::string format = ReadOptionalStringArg(ctx, argc, argv, 0, "%H:%M:%S");
-            const std::string localeName = ReadOptionalStringArg(ctx, argc, argv, 1, "");
-            const std::string out = shared::system::FormatCurrentTime(format, localeName);
-            return JS_NewStringLen(ctx, out.data(), out.size());
-        }
-
-        JSValue JsTimeStamp(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewFloat64(ctx, shared::system::CurrentUnixTimestamp());
-        }
-
-        JSValue JsTimeStampFormat(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 2)
-            {
-                return JS_ThrowTypeError(ctx, "timeStampFormat(timestamp, format[, locale])");
-            }
-
-            double timestamp = 0.0;
-            if (JS_ToFloat64(ctx, &timestamp, argv[0]) < 0)
-            {
-                return JS_EXCEPTION;
-            }
-            const std::string format = ReadOptionalStringArg(ctx, argc, argv, 1, "%H:%M:%S");
-            const std::string localeName = ReadOptionalStringArg(ctx, argc, argv, 2, "");
-            const std::string out = shared::system::FormatTimestamp(timestamp, format, localeName);
-            return JS_NewStringLen(ctx, out.data(), out.size());
-        }
-
-        JSValue JsTimeStampLocale(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 3)
-            {
-                return JS_ThrowTypeError(ctx, "timeStampLocale(text, format, locale)");
-            }
-
-            const std::string text = ReadOptionalStringArg(ctx, argc, argv, 0, "");
-            const std::string format = ReadOptionalStringArg(ctx, argc, argv, 1, "");
-            const std::string localeName = ReadOptionalStringArg(ctx, argc, argv, 2, "");
-            double parsed = 0.0;
-            if (!shared::system::ParseTimestamp(text, format, localeName, parsed))
-            {
-                return JS_NULL;
-            }
-            return JS_NewFloat64(ctx, parsed);
-        }
-
-        JSValue JsFormatLocale(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
-        {
-            if (argc < 3)
-            {
-                return JS_ThrowTypeError(ctx, "formatLocale(timestamp, format, locale)");
-            }
-
-            double timestamp = 0.0;
-            if (JS_ToFloat64(ctx, &timestamp, argv[0]) < 0)
-            {
-                return JS_EXCEPTION;
-            }
-            const std::string format = ReadOptionalStringArg(ctx, argc, argv, 1, "");
-            const std::string localeName = ReadOptionalStringArg(ctx, argc, argv, 2, "");
-            const std::string out = shared::system::FormatTimestamp(timestamp, format.empty() ? "%H:%M:%S" : format, localeName);
-            return JS_NewStringLen(ctx, out.data(), out.size());
-        }
-
-        JSValue JsDaylightSavingTime(JSContext *ctx, JSValueConst, int, JSValueConst *)
-        {
-            return JS_NewBool(ctx, shared::system::IsDaylightSavingTimeNow() ? 1 : 0);
-        }
-
-        int SystemModuleInit(JSContext *ctx, JSModuleDef *m)
-        {
-            JSValue clipboard = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, clipboard, "setText", JS_NewCFunction(ctx, JsClipboardSetText, "setText", 1));
-            JS_SetPropertyStr(ctx, clipboard, "getText", JS_NewCFunction(ctx, JsClipboardGetText, "getText", 0));
-            JS_SetModuleExport(ctx, m, "clipboard", clipboard);
-
-            JSValue wallpaper = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, wallpaper, "set", JS_NewCFunction(ctx, JsWallpaperSet, "set", 2));
-            JS_SetPropertyStr(ctx, wallpaper, "getCurrentPath", JS_NewCFunction(ctx, JsWallpaperGet, "getCurrentPath", 0));
-            JS_SetModuleExport(ctx, m, "wallpaper", wallpaper);
-
-            JSValue power = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, power, "getStatus", JS_NewCFunction(ctx, JsPowerGetStatus, "getStatus", 0));
-            JS_SetModuleExport(ctx, m, "power", power);
-
-            JSValue cpu = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, cpu, "usage", JS_NewCFunction(ctx, JsCpuUsage, "usage", 0));
-            JS_SetPropertyStr(ctx, cpu, "getUpTime", JS_NewCFunction(ctx, JsGetCpuUpTime, "getUpTime", 1));
-            JS_SetModuleExport(ctx, m, "cpu", cpu);
-
-            JSValue memory = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, memory, "totalBytes", JS_NewCFunction(ctx, JsMemoryTotalBytes, "totalBytes", 0));
-            JS_SetPropertyStr(ctx, memory, "availableBytes", JS_NewCFunction(ctx, JsMemoryAvailableBytes, "availableBytes", 0));
-            JS_SetPropertyStr(ctx, memory, "usedBytes", JS_NewCFunction(ctx, JsMemoryUsedBytes, "usedBytes", 0));
-            JS_SetPropertyStr(ctx, memory, "usagePercent", JS_NewCFunction(ctx, JsMemoryUsagePercent, "usagePercent", 0));
-            JS_SetModuleExport(ctx, m, "memory", memory);
-
-            JSValue network = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, network, "rxSpeed", JS_NewCFunction(ctx, JsNetworkRxSpeed, "rxSpeed", 0));
-            JS_SetPropertyStr(ctx, network, "txSpeed", JS_NewCFunction(ctx, JsNetworkTxSpeed, "txSpeed", 0));
-            JS_SetPropertyStr(ctx, network, "bytesReceived", JS_NewCFunction(ctx, JsNetworkBytesReceived, "bytesReceived", 0));
-            JS_SetPropertyStr(ctx, network, "bytesSent", JS_NewCFunction(ctx, JsNetworkBytesSent, "bytesSent", 0));
-            JS_SetModuleExport(ctx, m, "network", network);
-
-            JSValue disk = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, disk, "totalBytes", JS_NewCFunction(ctx, JsDiskTotalBytes, "totalBytes", 1));
-            JS_SetPropertyStr(ctx, disk, "availableBytes", JS_NewCFunction(ctx, JsDiskAvailableBytes, "availableBytes", 1));
-            JS_SetPropertyStr(ctx, disk, "usedBytes", JS_NewCFunction(ctx, JsDiskUsedBytes, "usedBytes", 1));
-            JS_SetPropertyStr(ctx, disk, "usagePercent", JS_NewCFunction(ctx, JsDiskUsagePercent, "usagePercent", 1));
-            JS_SetPropertyStr(ctx, disk, "readSpeed", JS_NewCFunction(ctx, JsDiskReadSpeed, "readSpeed", 0));
-            JS_SetPropertyStr(ctx, disk, "writeSpeed", JS_NewCFunction(ctx, JsDiskWriteSpeed, "writeSpeed", 0));
-            JS_SetModuleExport(ctx, m, "disk", disk);
-
-            JSValue recycleBin = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, recycleBin, "openBin", JS_NewCFunction(ctx, JsRecycleBinOpenBin, "openBin", 0));
-            JS_SetPropertyStr(ctx, recycleBin, "emptyBin", JS_NewCFunction(ctx, JsRecycleBinEmptyBin, "emptyBin", 0));
-            JS_SetPropertyStr(ctx, recycleBin, "emptyBinSilent", JS_NewCFunction(ctx, JsRecycleBinEmptyBinSilent, "emptyBinSilent", 0));
-            JS_SetPropertyStr(ctx, recycleBin, "getStats", JS_NewCFunction(ctx, JsRecycleBinGetStats, "getStats", 0));
-            JS_SetModuleExport(ctx, m, "recycleBin", recycleBin);
-
-            JSValue time = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, time, "time", JS_NewCFunction(ctx, JsTimeNow, "time", 2));
-            JS_SetPropertyStr(ctx, time, "timeStamp", JS_NewCFunction(ctx, JsTimeStamp, "timeStamp", 0));
-            JS_SetPropertyStr(ctx, time, "timeStampFormat", JS_NewCFunction(ctx, JsTimeStampFormat, "timeStampFormat", 3));
-            JS_SetPropertyStr(ctx, time, "timeStampLocale", JS_NewCFunction(ctx, JsTimeStampLocale, "timeStampLocale", 3));
-            JS_SetPropertyStr(ctx, time, "formatLocale", JS_NewCFunction(ctx, JsFormatLocale, "formatLocale", 3));
-            JS_SetPropertyStr(ctx, time, "daylightSavingTime", JS_NewCFunction(ctx, JsDaylightSavingTime, "daylightSavingTime", 0));
-            JS_SetModuleExport(ctx, m, "time", time);
-
-            JSValue audio = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, audio, "setVolume", JS_NewCFunction(ctx, JsAudioSetVolume, "setVolume", 1));
-            JS_SetPropertyStr(ctx, audio, "getVolume", JS_NewCFunction(ctx, JsAudioGetVolume, "getVolume", 0));
-            JS_SetPropertyStr(ctx, audio, "playSound", JS_NewCFunction(ctx, JsAudioPlaySound, "playSound", 2));
-            JS_SetPropertyStr(ctx, audio, "stopSound", JS_NewCFunction(ctx, JsAudioStopSound, "stopSound", 0));
-            JS_SetModuleExport(ctx, m, "audio", audio);
-
-            JSValue fileIcon = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, fileIcon, "extractIcon", JS_NewCFunction(ctx, JsFileIconExtractIcon, "extractIcon", 3));
-            JS_SetPropertyStr(ctx, fileIcon, "extractFileIcon", JS_NewCFunction(ctx, JsFileIconExtractIcon, "extractFileIcon", 3));
-            JS_SetModuleExport(ctx, m, "fileIcon", fileIcon);
-
-            JSValue displayMetrics = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, displayMetrics, "getMetrics", JS_NewCFunction(ctx, JsDisplayMetricsGetMetrics, "getMetrics", 0));
-            JS_SetPropertyStr(ctx, displayMetrics, "get", JS_NewCFunction(ctx, JsDisplayMetricsGetMetrics, "get", 0));
-            JS_SetModuleExport(ctx, m, "displayMetrics", displayMetrics);
-
-            JSValue registry = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, registry, "readData", JS_NewCFunction(ctx, JsRegistryReadData, "readData", 2));
-            JS_SetPropertyStr(ctx, registry, "writeData", JS_NewCFunction(ctx, JsRegistryWriteData, "writeData", 3));
-            JS_SetModuleExport(ctx, m, "registry", registry);
-
-            JSValue json = JS_NewObject(ctx);
-            JS_SetPropertyStr(ctx, json, "parse", JS_NewCFunction(ctx, JsJsonParse, "parse", 1));
-            JS_SetPropertyStr(ctx, json, "stringify", JS_NewCFunction(ctx, JsJsonStringify, "stringify", 2));
-            JS_SetPropertyStr(ctx, json, "read", JS_NewCFunction(ctx, JsJsonRead, "read", 1));
-            JS_SetPropertyStr(ctx, json, "write", JS_NewCFunction(ctx, JsJsonWrite, "write", 3));
-            JS_SetModuleExport(ctx, m, "json", json);
-
-            JS_SetModuleExport(ctx, m, "getEnv", JS_NewCFunction(ctx, JsGetEnv, "getEnv", 2));
-            JS_SetModuleExport(ctx, m, "execute", JS_NewCFunction(ctx, JsExecute, "execute", 4));
-            JS_SetModuleExport(ctx, m, "webFetch", JS_NewCFunction(ctx, JsWebFetch, "webFetch", 1));
-
-            return 0;
-        }
-    } // namespace
-
-    JSModuleDef *EnsureSystemModule(JSContext *ctx, const char *moduleName)
     {
-        JSModuleDef *m = JS_NewCModule(ctx, moduleName, SystemModuleInit);
-        if (!m)
-            return nullptr;
-        // Register all exports. Failures here are extremely rare
-        // (OOM for the export name string). The module is already
-        // registered with the context by JS_NewCModule, so returning
-        // nullptr on partial failure would orphan it — the caller has
-        // no handle to finalize it. Always return the module so it
-        // is cleaned up normally when the context is destroyed.
-        JS_AddModuleExport(ctx, m, "clipboard");
-        JS_AddModuleExport(ctx, m, "wallpaper");
-        JS_AddModuleExport(ctx, m, "power");
-        JS_AddModuleExport(ctx, m, "cpu");
-        JS_AddModuleExport(ctx, m, "memory");
-        JS_AddModuleExport(ctx, m, "network");
-        JS_AddModuleExport(ctx, m, "disk");
-        JS_AddModuleExport(ctx, m, "recycleBin");
-        JS_AddModuleExport(ctx, m, "time");
-        JS_AddModuleExport(ctx, m, "audio");
-        JS_AddModuleExport(ctx, m, "fileIcon");
-        JS_AddModuleExport(ctx, m, "displayMetrics");
-        JS_AddModuleExport(ctx, m, "registry");
-        JS_AddModuleExport(ctx, m, "json");
-        JS_AddModuleExport(ctx, m, "getEnv");
-        JS_AddModuleExport(ctx, m, "execute");
-        JS_AddModuleExport(ctx, m, "webFetch");
-        return m;
+      std::lock_guard<std::mutex> lock(g_webFetchMutex);
+      auto it = g_webFetchRequests.find(requestId);
+      if (it == g_webFetchRequests.end() || !it->second) {
+        return;
+      }
+      it->second->ok = ok;
+      if (ok) {
+        it->second->data = std::move(data);
+      } else {
+        it->second->error = std::move(error);
+      }
     }
 
-    void ClearWebFetchRequests(JSContext *ctx)
-    {
-        std::lock_guard<std::mutex> lock(g_webFetchMutex);
-        for (auto it = g_webFetchRequests.begin(); it != g_webFetchRequests.end();)
-        {
-            if (!ctx || it->second->ctx == ctx)
-            {
-                if (it->second->ctx)
-                {
-                    JS_FreeValue(it->second->ctx, it->second->resolve);
-                    JS_FreeValue(it->second->ctx, it->second->reject);
-                    it->second->resolve = JS_UNDEFINED;
-                    it->second->reject = JS_UNDEFINED;
-                    it->second->ctx = nullptr;
-                }
-                it = g_webFetchRequests.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
-        }
+    HWND hwnd = JSEngine::GetMessageWindow();
+    if (!hwnd) {
+      return;
     }
 
-    void ClearWebFetchRequestsForScript(const std::wstring &scriptPath)
-    {
-        std::lock_guard<std::mutex> lock(g_webFetchMutex);
-        for (auto it = g_webFetchRequests.begin(); it != g_webFetchRequests.end();)
-        {
-            if (it->second->owner == scriptPath)
-            {
-                if (it->second->ctx)
-                {
-                    JS_FreeValue(it->second->ctx, it->second->resolve);
-                    JS_FreeValue(it->second->ctx, it->second->reject);
-                    it->second->resolve = JS_UNDEFINED;
-                    it->second->reject = JS_UNDEFINED;
-                    it->second->ctx = nullptr;
-                }
-                it = g_webFetchRequests.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
-        }
+    auto *payload = new uint64_t(requestId);
+    if (!PostMessageW(hwnd, JSEngine::WM_NOVADESK_DISPATCH,
+                      JSEngine::DISPATCH_WEBFETCH,
+                      reinterpret_cast<LPARAM>(payload))) {
+      delete payload;
+      std::lock_guard<std::mutex> lock(g_webFetchMutex);
+      g_webFetchRequests.erase(requestId);
     }
+  }).detach();
+
+  return promise;
+}
+
+std::string ReadOptionalStringArg(JSContext *ctx, int argc, JSValueConst *argv,
+                                  int index, const std::string &fallback = "") {
+  if (index >= argc || JS_IsUndefined(argv[index]) || JS_IsNull(argv[index])) {
+    return fallback;
+  }
+  const char *s = JS_ToCString(ctx, argv[index]);
+  if (!s) {
+    return fallback;
+  }
+  std::string out = s;
+  JS_FreeCString(ctx, s);
+  return out;
+}
+
+JSValue JsTimeNow(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
+  const std::string format =
+      ReadOptionalStringArg(ctx, argc, argv, 0, "%H:%M:%S");
+  const std::string localeName = ReadOptionalStringArg(ctx, argc, argv, 1, "");
+  const std::string out = shared::system::FormatCurrentTime(format, localeName);
+  return JS_NewStringLen(ctx, out.data(), out.size());
+}
+
+JSValue JsTimeStamp(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  return JS_NewFloat64(ctx, shared::system::CurrentUnixTimestamp());
+}
+
+JSValue JsTimeStampFormat(JSContext *ctx, JSValueConst, int argc,
+                          JSValueConst *argv) {
+  if (argc < 2) {
+    return JS_ThrowTypeError(ctx,
+                             "timeStampFormat(timestamp, format[, locale])");
+  }
+
+  double timestamp = 0.0;
+  if (JS_ToFloat64(ctx, &timestamp, argv[0]) < 0) {
+    return JS_EXCEPTION;
+  }
+  const std::string format =
+      ReadOptionalStringArg(ctx, argc, argv, 1, "%H:%M:%S");
+  const std::string localeName = ReadOptionalStringArg(ctx, argc, argv, 2, "");
+  const std::string out =
+      shared::system::FormatTimestamp(timestamp, format, localeName);
+  return JS_NewStringLen(ctx, out.data(), out.size());
+}
+
+JSValue JsTimeStampLocale(JSContext *ctx, JSValueConst, int argc,
+                          JSValueConst *argv) {
+  if (argc < 3) {
+    return JS_ThrowTypeError(ctx, "timeStampLocale(text, format, locale)");
+  }
+
+  const std::string text = ReadOptionalStringArg(ctx, argc, argv, 0, "");
+  const std::string format = ReadOptionalStringArg(ctx, argc, argv, 1, "");
+  const std::string localeName = ReadOptionalStringArg(ctx, argc, argv, 2, "");
+  double parsed = 0.0;
+  if (!shared::system::ParseTimestamp(text, format, localeName, parsed)) {
+    return JS_NULL;
+  }
+  return JS_NewFloat64(ctx, parsed);
+}
+
+JSValue JsFormatLocale(JSContext *ctx, JSValueConst, int argc,
+                       JSValueConst *argv) {
+  if (argc < 3) {
+    return JS_ThrowTypeError(ctx, "formatLocale(timestamp, format, locale)");
+  }
+
+  double timestamp = 0.0;
+  if (JS_ToFloat64(ctx, &timestamp, argv[0]) < 0) {
+    return JS_EXCEPTION;
+  }
+  const std::string format = ReadOptionalStringArg(ctx, argc, argv, 1, "");
+  const std::string localeName = ReadOptionalStringArg(ctx, argc, argv, 2, "");
+  const std::string out = shared::system::FormatTimestamp(
+      timestamp, format.empty() ? "%H:%M:%S" : format, localeName);
+  return JS_NewStringLen(ctx, out.data(), out.size());
+}
+
+JSValue JsDaylightSavingTime(JSContext *ctx, JSValueConst, int,
+                             JSValueConst *) {
+  return JS_NewBool(ctx, shared::system::IsDaylightSavingTimeNow() ? 1 : 0);
+}
+
+int SystemModuleInit(JSContext *ctx, JSModuleDef *m) {
+  JSValue clipboard = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, clipboard, "setText",
+                    JS_NewCFunction(ctx, JsClipboardSetText, "setText", 1));
+  JS_SetPropertyStr(ctx, clipboard, "getText",
+                    JS_NewCFunction(ctx, JsClipboardGetText, "getText", 0));
+  JS_SetModuleExport(ctx, m, "clipboard", clipboard);
+
+  JSValue wallpaper = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, wallpaper, "set",
+                    JS_NewCFunction(ctx, JsWallpaperSet, "set", 2));
+  JS_SetPropertyStr(ctx, wallpaper, "getCurrentPath",
+                    JS_NewCFunction(ctx, JsWallpaperGet, "getCurrentPath", 0));
+  JS_SetModuleExport(ctx, m, "wallpaper", wallpaper);
+
+  JSValue power = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, power, "getStatus",
+                    JS_NewCFunction(ctx, JsPowerGetStatus, "getStatus", 0));
+  JS_SetModuleExport(ctx, m, "power", power);
+
+  JSValue cpu = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, cpu, "usage",
+                    JS_NewCFunction(ctx, JsCpuUsage, "usage", 0));
+  JS_SetPropertyStr(ctx, cpu, "getUpTime",
+                    JS_NewCFunction(ctx, JsGetCpuUpTime, "getUpTime", 1));
+  JS_SetModuleExport(ctx, m, "cpu", cpu);
+
+  JSValue memory = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, memory, "totalBytes",
+                    JS_NewCFunction(ctx, JsMemoryTotalBytes, "totalBytes", 0));
+  JS_SetPropertyStr(
+      ctx, memory, "availableBytes",
+      JS_NewCFunction(ctx, JsMemoryAvailableBytes, "availableBytes", 0));
+  JS_SetPropertyStr(ctx, memory, "usedBytes",
+                    JS_NewCFunction(ctx, JsMemoryUsedBytes, "usedBytes", 0));
+  JS_SetPropertyStr(
+      ctx, memory, "usagePercent",
+      JS_NewCFunction(ctx, JsMemoryUsagePercent, "usagePercent", 0));
+  JS_SetModuleExport(ctx, m, "memory", memory);
+
+  JSValue network = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, network, "rxSpeed",
+                    JS_NewCFunction(ctx, JsNetworkRxSpeed, "rxSpeed", 0));
+  JS_SetPropertyStr(ctx, network, "txSpeed",
+                    JS_NewCFunction(ctx, JsNetworkTxSpeed, "txSpeed", 0));
+  JS_SetPropertyStr(
+      ctx, network, "bytesReceived",
+      JS_NewCFunction(ctx, JsNetworkBytesReceived, "bytesReceived", 0));
+  JS_SetPropertyStr(ctx, network, "bytesSent",
+                    JS_NewCFunction(ctx, JsNetworkBytesSent, "bytesSent", 0));
+  JS_SetModuleExport(ctx, m, "network", network);
+
+  JSValue disk = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, disk, "totalBytes",
+                    JS_NewCFunction(ctx, JsDiskTotalBytes, "totalBytes", 1));
+  JS_SetPropertyStr(
+      ctx, disk, "availableBytes",
+      JS_NewCFunction(ctx, JsDiskAvailableBytes, "availableBytes", 1));
+  JS_SetPropertyStr(ctx, disk, "usedBytes",
+                    JS_NewCFunction(ctx, JsDiskUsedBytes, "usedBytes", 1));
+  JS_SetPropertyStr(
+      ctx, disk, "usagePercent",
+      JS_NewCFunction(ctx, JsDiskUsagePercent, "usagePercent", 1));
+  JS_SetPropertyStr(ctx, disk, "readSpeed",
+                    JS_NewCFunction(ctx, JsDiskReadSpeed, "readSpeed", 0));
+  JS_SetPropertyStr(ctx, disk, "writeSpeed",
+                    JS_NewCFunction(ctx, JsDiskWriteSpeed, "writeSpeed", 0));
+  JS_SetModuleExport(ctx, m, "disk", disk);
+
+  JSValue recycleBin = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, recycleBin, "openBin",
+                    JS_NewCFunction(ctx, JsRecycleBinOpenBin, "openBin", 0));
+  JS_SetPropertyStr(ctx, recycleBin, "emptyBin",
+                    JS_NewCFunction(ctx, JsRecycleBinEmptyBin, "emptyBin", 0));
+  JS_SetPropertyStr(
+      ctx, recycleBin, "emptyBinSilent",
+      JS_NewCFunction(ctx, JsRecycleBinEmptyBinSilent, "emptyBinSilent", 0));
+  JS_SetPropertyStr(ctx, recycleBin, "getStats",
+                    JS_NewCFunction(ctx, JsRecycleBinGetStats, "getStats", 0));
+  JS_SetModuleExport(ctx, m, "recycleBin", recycleBin);
+
+  JSValue time = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, time, "time",
+                    JS_NewCFunction(ctx, JsTimeNow, "time", 2));
+  JS_SetPropertyStr(ctx, time, "timeStamp",
+                    JS_NewCFunction(ctx, JsTimeStamp, "timeStamp", 0));
+  JS_SetPropertyStr(
+      ctx, time, "timeStampFormat",
+      JS_NewCFunction(ctx, JsTimeStampFormat, "timeStampFormat", 3));
+  JS_SetPropertyStr(
+      ctx, time, "timeStampLocale",
+      JS_NewCFunction(ctx, JsTimeStampLocale, "timeStampLocale", 3));
+  JS_SetPropertyStr(ctx, time, "formatLocale",
+                    JS_NewCFunction(ctx, JsFormatLocale, "formatLocale", 3));
+  JS_SetPropertyStr(
+      ctx, time, "daylightSavingTime",
+      JS_NewCFunction(ctx, JsDaylightSavingTime, "daylightSavingTime", 0));
+  JS_SetModuleExport(ctx, m, "time", time);
+
+  JSValue audio = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, audio, "setVolume",
+                    JS_NewCFunction(ctx, JsAudioSetVolume, "setVolume", 1));
+  JS_SetPropertyStr(ctx, audio, "getVolume",
+                    JS_NewCFunction(ctx, JsAudioGetVolume, "getVolume", 0));
+  JS_SetPropertyStr(ctx, audio, "playSound",
+                    JS_NewCFunction(ctx, JsAudioPlaySound, "playSound", 2));
+  JS_SetPropertyStr(ctx, audio, "stopSound",
+                    JS_NewCFunction(ctx, JsAudioStopSound, "stopSound", 0));
+  JS_SetModuleExport(ctx, m, "audio", audio);
+
+  JSValue fileIcon = JS_NewObject(ctx);
+  JS_SetPropertyStr(
+      ctx, fileIcon, "extractIcon",
+      JS_NewCFunction(ctx, JsFileIconExtractIcon, "extractIcon", 3));
+  JS_SetPropertyStr(
+      ctx, fileIcon, "extractFileIcon",
+      JS_NewCFunction(ctx, JsFileIconExtractIcon, "extractFileIcon", 3));
+  JS_SetModuleExport(ctx, m, "fileIcon", fileIcon);
+
+  JSValue displayMetrics = JS_NewObject(ctx);
+  JS_SetPropertyStr(
+      ctx, displayMetrics, "getMetrics",
+      JS_NewCFunction(ctx, JsDisplayMetricsGetMetrics, "getMetrics", 0));
+  JS_SetPropertyStr(ctx, displayMetrics, "get",
+                    JS_NewCFunction(ctx, JsDisplayMetricsGetMetrics, "get", 0));
+  JS_SetModuleExport(ctx, m, "displayMetrics", displayMetrics);
+
+  JSValue registry = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, registry, "readData",
+                    JS_NewCFunction(ctx, JsRegistryReadData, "readData", 2));
+  JS_SetPropertyStr(ctx, registry, "writeData",
+                    JS_NewCFunction(ctx, JsRegistryWriteData, "writeData", 3));
+  JS_SetModuleExport(ctx, m, "registry", registry);
+
+  JSValue json = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, json, "parse",
+                    JS_NewCFunction(ctx, JsJsonParse, "parse", 1));
+  JS_SetPropertyStr(ctx, json, "stringify",
+                    JS_NewCFunction(ctx, JsJsonStringify, "stringify", 2));
+  JS_SetPropertyStr(ctx, json, "read",
+                    JS_NewCFunction(ctx, JsJsonRead, "read", 1));
+  JS_SetPropertyStr(ctx, json, "write",
+                    JS_NewCFunction(ctx, JsJsonWrite, "write", 3));
+  JS_SetModuleExport(ctx, m, "json", json);
+
+  JS_SetModuleExport(ctx, m, "getEnv",
+                     JS_NewCFunction(ctx, JsGetEnv, "getEnv", 2));
+  JS_SetModuleExport(ctx, m, "execute",
+                     JS_NewCFunction(ctx, JsExecute, "execute", 4));
+  JS_SetModuleExport(ctx, m, "webFetch",
+                     JS_NewCFunction(ctx, JsWebFetch, "webFetch", 1));
+
+  return 0;
+}
+} // namespace
+
+JSModuleDef *EnsureSystemModule(JSContext *ctx, const char *moduleName) {
+  JSModuleDef *m = JS_NewCModule(ctx, moduleName, SystemModuleInit);
+  if (!m)
+    return nullptr;
+  // Register all exports. Failures here are extremely rare
+  // (OOM for the export name string). The module is already
+  // registered with the context by JS_NewCModule, so returning
+  // nullptr on partial failure would orphan it — the caller has
+  // no handle to finalize it. Always return the module so it
+  // is cleaned up normally when the context is destroyed.
+  JS_AddModuleExport(ctx, m, "clipboard");
+  JS_AddModuleExport(ctx, m, "wallpaper");
+  JS_AddModuleExport(ctx, m, "power");
+  JS_AddModuleExport(ctx, m, "cpu");
+  JS_AddModuleExport(ctx, m, "memory");
+  JS_AddModuleExport(ctx, m, "network");
+  JS_AddModuleExport(ctx, m, "disk");
+  JS_AddModuleExport(ctx, m, "recycleBin");
+  JS_AddModuleExport(ctx, m, "time");
+  JS_AddModuleExport(ctx, m, "audio");
+  JS_AddModuleExport(ctx, m, "fileIcon");
+  JS_AddModuleExport(ctx, m, "displayMetrics");
+  JS_AddModuleExport(ctx, m, "registry");
+  JS_AddModuleExport(ctx, m, "json");
+  JS_AddModuleExport(ctx, m, "getEnv");
+  JS_AddModuleExport(ctx, m, "execute");
+  JS_AddModuleExport(ctx, m, "webFetch");
+  return m;
+}
+
+void ClearWebFetchRequests(JSContext *ctx) {
+  std::lock_guard<std::mutex> lock(g_webFetchMutex);
+  for (auto it = g_webFetchRequests.begin(); it != g_webFetchRequests.end();) {
+    if (!ctx || it->second->ctx == ctx) {
+      if (it->second->ctx) {
+        JS_FreeValue(it->second->ctx, it->second->resolve);
+        JS_FreeValue(it->second->ctx, it->second->reject);
+        it->second->resolve = JS_UNDEFINED;
+        it->second->reject = JS_UNDEFINED;
+        it->second->ctx = nullptr;
+      }
+      it = g_webFetchRequests.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+void ClearWebFetchRequestsForScript(const std::wstring &scriptPath) {
+  std::lock_guard<std::mutex> lock(g_webFetchMutex);
+  for (auto it = g_webFetchRequests.begin(); it != g_webFetchRequests.end();) {
+    if (it->second->owner == scriptPath) {
+      if (it->second->ctx) {
+        JS_FreeValue(it->second->ctx, it->second->resolve);
+        JS_FreeValue(it->second->ctx, it->second->reject);
+        it->second->resolve = JS_UNDEFINED;
+        it->second->reject = JS_UNDEFINED;
+        it->second->ctx = nullptr;
+      }
+      it = g_webFetchRequests.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
 } // namespace novadesk::scripting::quickjs

@@ -24,37 +24,36 @@
 **   // If not yet downloaded, start async download:
 **   FontDownloader::RequestAsync(url, widgetInstanceId, elementId);
 */
-namespace FontDownloader
-{
-    /*
-    ** Returns `url` if the font is already downloaded and loaded in-memory,
-    ** or an empty string if not yet loaded.
-    ** Safe to call from any thread.
-    */
-    std::wstring GetCachedDir(const std::wstring &url);
+namespace FontDownloader {
+/*
+** Returns `url` if the font is already downloaded and loaded in-memory,
+** or an empty string if not yet loaded.
+** Safe to call from any thread.
+*/
+std::wstring GetCachedDir(const std::wstring &url);
 
-    /*
-    ** Starts an asynchronous font download for `url`.
-    ** On completion, registers the in-memory font with FontManager,
-    ** then posts WM_NOVADESK_DISPATCH back to the main thread which causes
-    ** the engine to call SetElementFontPath(elementId, url) + Redraw().
-    ** If url is already downloading or loaded, this is a no-op.
-    */
-    void RequestAsync(const std::wstring &url, uint64_t widgetInstanceId, const std::wstring &elementId);
+/*
+** Starts an asynchronous font download for `url`.
+** On completion, registers the in-memory font with FontManager,
+** then posts WM_NOVADESK_DISPATCH back to the main thread which causes
+** the engine to call SetElementFontPath(elementId, url) + Redraw().
+** If url is already downloading or loaded, this is a no-op.
+*/
+void RequestAsync(const std::wstring &url, uint64_t widgetInstanceId,
+                  const std::wstring &elementId);
 
-    // Stops accepting work and joins all active downloads before the engine
-    // message window is destroyed.
-    void Shutdown();
+// Stops accepting work and joins all active downloads before the engine
+// message window is destroyed.
+void Shutdown();
 
-    /*
-    ** Dispatch callback — called on the main thread from the JS engine dispatcher.
-    ** payload must be a FontReadyPayload* allocated with new.
-    */
-    struct FontReadyPayload
-    {
-        uint64_t widgetInstanceId;   // stable across HWND reuse
-        std::wstring elementId;
-        std::wstring cachedDir;      // holds the URL on success, empty on failure
-    };
-    void DispatchFontReady(void *payload);
-}
+/*
+** Dispatch callback — called on the main thread from the JS engine dispatcher.
+** payload must be a FontReadyPayload* allocated with new.
+*/
+struct FontReadyPayload {
+  uint64_t widgetInstanceId; // stable across HWND reuse
+  std::wstring elementId;
+  std::wstring cachedDir; // holds the URL on success, empty on failure
+};
+void DispatchFontReady(void *payload);
+} // namespace FontDownloader

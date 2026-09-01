@@ -4,12 +4,11 @@
  * License; either version 2 of the License, or (at your option) any later
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
- 
+
 #pragma once
 
 #include "quickjs.h"
 
-namespace novadesk::scripting::quickjs
-{
-    JSModuleDef *EnsureFsModule(JSContext *ctx, const char *moduleName);
+namespace novadesk::scripting::quickjs {
+JSModuleDef *EnsureFsModule(JSContext *ctx, const char *moduleName);
 }

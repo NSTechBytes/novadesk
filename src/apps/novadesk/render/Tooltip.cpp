@@ -11,203 +11,191 @@
 #include <algorithm>
 #include <windowsx.h>
 
-Tooltip::Tooltip()
-{
+Tooltip::Tooltip() {}
+
+Tooltip::~Tooltip() { Destroy(); }
+
+bool Tooltip::Initialize(HWND parentHWnd, HINSTANCE hInstance) {
+  m_ParentHWnd = parentHWnd;
+
+  m_ToolTipHWnd = CreateWindowExW(
+      WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED, TOOLTIPS_CLASSW,
+      nullptr, WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP, CW_USEDEFAULT,
+      CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, m_ParentHWnd, nullptr,
+      hInstance, nullptr);
+
+  m_ToolTipBalloonHWnd = CreateWindowExW(
+      WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED, TOOLTIPS_CLASSW,
+      nullptr, WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP | TTS_BALLOON,
+      CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, m_ParentHWnd,
+      nullptr, hInstance, nullptr);
+
+  InitializeToolTip(m_ToolTipHWnd);
+  InitializeToolTip(m_ToolTipBalloonHWnd);
+
+  if (m_ToolTipHWnd || m_ToolTipBalloonHWnd) {
+    return true;
+  }
+
+  Logging::Log(LogLevel::Error,
+               L"Tooltip::Initialize failed to create tooltip controls");
+  return false;
 }
 
-Tooltip::~Tooltip()
-{
-    Destroy();
-}
+void Tooltip::InitializeToolTip(HWND hwnd) {
+  if (!hwnd)
+    return;
 
-bool Tooltip::Initialize(HWND parentHWnd, HINSTANCE hInstance)
-{
-    m_ParentHWnd = parentHWnd;
+  TOOLINFOW ti = {0};
+  ti.uFlags = TTF_TRACK | TTF_ABSOLUTE | TTF_TRANSPARENT;
+  ti.hwnd = m_ParentHWnd;
+  ti.uId = 0;
+  ti.lpszText = (LPWSTR)L" ";
+  ti.rect = {0, 0, 0, 0};
 
-    m_ToolTipHWnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED, TOOLTIPS_CLASSW, nullptr,
-        WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
-        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-        m_ParentHWnd, nullptr, hInstance, nullptr);
+  UINT sizes[] = {sizeof(TOOLINFOW), 44, 48};
+  BOOL added = FALSE;
+  UINT appliedSize = 0;
 
-    m_ToolTipBalloonHWnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED, TOOLTIPS_CLASSW, nullptr,
-        WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP | TTS_BALLOON,
-        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-        m_ParentHWnd, nullptr, hInstance, nullptr);
-
-    InitializeToolTip(m_ToolTipHWnd);
-    InitializeToolTip(m_ToolTipBalloonHWnd);
-
-    if (m_ToolTipHWnd || m_ToolTipBalloonHWnd)
-    {
-        return true;
+  for (UINT size : sizes) {
+    ti.cbSize = size;
+    if (SendMessageW(hwnd, TTM_ADDTOOLW, 0, (LPARAM)&ti)) {
+      added = TRUE;
+      appliedSize = size;
+      m_ToolInfoSize = size;
+      break;
     }
+  }
 
-    Logging::Log(LogLevel::Error, L"Tooltip::Initialize failed to create tooltip controls");
-    return false;
+  DWORD lastError = 0;
+  if (!added)
+    lastError = GetLastError();
+
+  SendMessageW(hwnd, TTM_SETDELAYTIME, TTDT_INITIAL, 0);
+
+  SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+
+  SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+               SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
-void Tooltip::InitializeToolTip(HWND hwnd)
-{
-    if (!hwnd) return;
+void Tooltip::Update(Element *element) {
+  if (element && element->HasToolTip()) {
 
-    TOOLINFOW ti = { 0 };
-    ti.uFlags = TTF_TRACK | TTF_ABSOLUTE | TTF_TRANSPARENT;
+    HWND targetTT =
+        element->GetToolTipBalloon() ? m_ToolTipBalloonHWnd : m_ToolTipHWnd;
+    if (!targetTT)
+      return;
+
+    HWND previousTT = m_ActiveToolTipHWnd;
+
+    TOOLINFOW ti = {0};
+    ti.cbSize = m_ToolInfoSize;
     ti.hwnd = m_ParentHWnd;
     ti.uId = 0;
-    ti.lpszText = (LPWSTR)L" ";
-    ti.rect = { 0, 0, 0, 0 };
 
-    UINT sizes[] = { sizeof(TOOLINFOW), 44 , 48  };
-    BOOL added = FALSE;
-    UINT appliedSize = 0;
+    ti.lpszText = (LPWSTR)element->GetToolTipText().c_str();
+    SendMessageW(targetTT, TTM_UPDATETIPTEXTW, 0, (LPARAM)&ti);
 
-    for (UINT size : sizes)
-    {
-        ti.cbSize = size;
-        if (SendMessageW(hwnd, TTM_ADDTOOLW, 0, (LPARAM)&ti))
-        {
-            added = TRUE;
-            appliedSize = size;
-            m_ToolInfoSize = size;
-            break;
-        }
+    HICON hIcon = nullptr;
+    std::wstring tipIcon = element->GetToolTipIcon();
+
+    if (tipIcon == L"info")
+      hIcon = (HICON)TTI_INFO;
+    else if (tipIcon == L"error")
+      hIcon = (HICON)TTI_ERROR;
+    else if (tipIcon == L"warning")
+      hIcon = (HICON)TTI_WARNING;
+
+    SendMessageW(targetTT, TTM_SETTITLEW, (WPARAM)hIcon,
+                 (LPARAM)element->GetToolTipTitle().c_str());
+
+    int maxWidth = element->GetToolTipMaxWidth() > 0
+                       ? element->GetToolTipMaxWidth()
+                       : 1000;
+    SendMessageW(targetTT, TTM_SETMAXTIPWIDTH, 0, maxWidth);
+
+    POINT pt;
+    if (GetCursorPos(&pt)) {
+      SendMessageW(targetTT, TTM_TRACKPOSITION, 0,
+                   MAKELPARAM(pt.x + 20, pt.y + 20));
+      m_LastPos = pt;
     }
 
-    DWORD lastError = 0;
-    if (!added) lastError = GetLastError();
+    m_IsMovePending = false;
 
-    SendMessageW(hwnd, TTM_SETDELAYTIME, TTDT_INITIAL, 0);
+    BOOL visible = IsWindowVisible(targetTT);
 
-    SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+    if (previousTT != targetTT || !visible) {
+      if (previousTT && previousTT != targetTT) {
+        SendMessageW(previousTT, TTM_TRACKACTIVATE, FALSE, (LPARAM)&ti);
+      }
+      SendMessageW(targetTT, TTM_TRACKACTIVATE, TRUE, (LPARAM)&ti);
+      SetWindowPos(targetTT, HWND_TOPMOST, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    } else {
+      SetWindowPos(targetTT, HWND_TOPMOST, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    }
 
-    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    m_ActiveToolTipHWnd = targetTT;
+  } else {
+    if (m_ToolTipHWnd) {
+      TOOLINFOW ti = {0};
+      ti.cbSize = m_ToolInfoSize;
+      ti.hwnd = m_ParentHWnd;
+      ti.uId = 0;
+      SendMessageW(m_ToolTipHWnd, TTM_TRACKACTIVATE, FALSE, (LPARAM)&ti);
+    }
+    if (m_ToolTipBalloonHWnd) {
+      TOOLINFOW ti = {0};
+      ti.cbSize = m_ToolInfoSize;
+      ti.hwnd = m_ParentHWnd;
+      ti.uId = 0;
+      SendMessageW(m_ToolTipBalloonHWnd, TTM_TRACKACTIVATE, FALSE, (LPARAM)&ti);
+    }
+    m_ActiveToolTipHWnd = nullptr;
+  }
 }
 
-void Tooltip::Update(Element* element)
-{
-    if (element && element->HasToolTip())
-    {
+void Tooltip::Move() {
+  if (m_ActiveToolTipHWnd) {
+    POINT pt;
+    GetCursorPos(&pt);
 
-        HWND targetTT = element->GetToolTipBalloon() ? m_ToolTipBalloonHWnd : m_ToolTipHWnd;
-        if (!targetTT) return;
+    int dx = pt.x - m_LastPos.x;
+    int dy = pt.y - m_LastPos.y;
+    DWORD now = GetTickCount();
 
-        HWND previousTT = m_ActiveToolTipHWnd;
+    if (dx * dx + dy * dy >= 10) {
+      if (!m_IsMovePending) {
+        m_IsMovePending = true;
+        m_PendingPos = pt;
+        m_PendingMoveTime = now;
+      } else {
 
-        TOOLINFOW ti = { 0 };
-        ti.cbSize = m_ToolInfoSize;
-        ti.hwnd = m_ParentHWnd;
-        ti.uId = 0;
-
-        ti.lpszText = (LPWSTR)element->GetToolTipText().c_str();
-        SendMessageW(targetTT, TTM_UPDATETIPTEXTW, 0, (LPARAM)&ti);
-
-        HICON hIcon = nullptr;
-        std::wstring tipIcon = element->GetToolTipIcon();
-
-        if (tipIcon == L"info") hIcon = (HICON)TTI_INFO;
-        else if (tipIcon == L"error") hIcon = (HICON)TTI_ERROR;
-        else if (tipIcon == L"warning") hIcon = (HICON)TTI_WARNING;
-
-        SendMessageW(targetTT, TTM_SETTITLEW, (WPARAM)hIcon, (LPARAM)element->GetToolTipTitle().c_str());
-
-        int maxWidth = element->GetToolTipMaxWidth() > 0 ? element->GetToolTipMaxWidth() : 1000;
-        SendMessageW(targetTT, TTM_SETMAXTIPWIDTH, 0, maxWidth);
-
-        POINT pt;
-        if (GetCursorPos(&pt))
-        {
-            SendMessageW(targetTT, TTM_TRACKPOSITION, 0, MAKELPARAM(pt.x + 20, pt.y + 20));
-            m_LastPos = pt;
+        if (now - m_PendingMoveTime > 50) {
+          SendMessageW(m_ActiveToolTipHWnd, TTM_TRACKPOSITION, 0,
+                       MAKELPARAM(pt.x + 20, pt.y + 20));
+          SetWindowPos(m_ActiveToolTipHWnd, HWND_TOPMOST, 0, 0, 0, 0,
+                       SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE |
+                           SWP_SHOWWINDOW);
+          m_LastPos = pt;
+          m_IsMovePending = false;
         }
-
-        m_IsMovePending = false; 
-
-        BOOL visible = IsWindowVisible(targetTT);
-
-        if (previousTT != targetTT || !visible)
-        {
-            if (previousTT && previousTT != targetTT)
-            {
-                SendMessageW(previousTT, TTM_TRACKACTIVATE, FALSE, (LPARAM)&ti);
-            }
-            SendMessageW(targetTT, TTM_TRACKACTIVATE, TRUE, (LPARAM)&ti);
-            SetWindowPos(targetTT, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-        }
-        else
-        {
-            SetWindowPos(targetTT, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-        }
-
-        m_ActiveToolTipHWnd = targetTT;
+      }
+    } else {
     }
-    else
-    {
-        if (m_ToolTipHWnd) {
-            TOOLINFOW ti = { 0 };
-            ti.cbSize = m_ToolInfoSize;
-            ti.hwnd = m_ParentHWnd;
-            ti.uId = 0;
-            SendMessageW(m_ToolTipHWnd, TTM_TRACKACTIVATE, FALSE, (LPARAM)&ti);
-        }
-        if (m_ToolTipBalloonHWnd) {
-            TOOLINFOW ti = { 0 };
-            ti.cbSize = m_ToolInfoSize;
-            ti.hwnd = m_ParentHWnd;
-            ti.uId = 0;
-            SendMessageW(m_ToolTipBalloonHWnd, TTM_TRACKACTIVATE, FALSE, (LPARAM)&ti);
-        }
-        m_ActiveToolTipHWnd = nullptr;
-    }
+  }
 }
 
-void Tooltip::Move()
-{
-    if (m_ActiveToolTipHWnd)
-    {
-        POINT pt;
-        GetCursorPos(&pt);
-
-        int dx = pt.x - m_LastPos.x;
-        int dy = pt.y - m_LastPos.y;
-        DWORD now = GetTickCount();
-
-        if (dx * dx + dy * dy >= 10)
-        {
-            if (!m_IsMovePending)
-            {
-                m_IsMovePending = true;
-                m_PendingPos = pt;
-                m_PendingMoveTime = now;
-            }
-            else
-            {
-
-                if (now - m_PendingMoveTime > 50)
-                {
-                    SendMessageW(m_ActiveToolTipHWnd, TTM_TRACKPOSITION, 0, MAKELPARAM(pt.x + 20, pt.y + 20));
-                    SetWindowPos(m_ActiveToolTipHWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-                    m_LastPos = pt;
-                    m_IsMovePending = false;
-                }
-            }
-        }
-        else
-        {
-        }
-    }
+void Tooltip::Destroy() {
+  if (m_ToolTipHWnd) {
+    DestroyWindow(m_ToolTipHWnd);
+    m_ToolTipHWnd = nullptr;
+  }
+  if (m_ToolTipBalloonHWnd) {
+    DestroyWindow(m_ToolTipBalloonHWnd);
+    m_ToolTipBalloonHWnd = nullptr;
+  }
 }
-
-void Tooltip::Destroy()
-{
-    if (m_ToolTipHWnd)
-    {
-        DestroyWindow(m_ToolTipHWnd);
-        m_ToolTipHWnd = nullptr;
-    }
-    if (m_ToolTipBalloonHWnd)
-    {
-        DestroyWindow(m_ToolTipBalloonHWnd);
-        m_ToolTipBalloonHWnd = nullptr;
-    }
-}
-

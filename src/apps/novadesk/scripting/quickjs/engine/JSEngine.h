@@ -4,7 +4,7 @@
  * License; either version 2 of the License, or (at your option) any later
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
- 
+
 #pragma once
 
 #include <string>
@@ -18,95 +18,101 @@ using duk_context = duk_hthread;
 
 class Widget;
 
-namespace JSEngine
-{
-    struct MouseEventData
-    {
-        int clientX = 0;
-        int clientY = 0;
-        int screenX = 0;
-        int screenY = 0;
-        int offsetX = 0;
-        int offsetY = 0;
-        int offsetXPercent = 0;
-        int offsetYPercent = 0;
-    };
+namespace JSEngine {
+struct MouseEventData {
+  int clientX = 0;
+  int clientY = 0;
+  int screenX = 0;
+  int screenY = 0;
+  int offsetX = 0;
+  int offsetY = 0;
+  int offsetXPercent = 0;
+  int offsetYPercent = 0;
+};
 
-    struct DropEventData
-    {
-        std::vector<std::wstring> files;
-        int clientX = 0;
-        int clientY = 0;
-        int screenX = 0;
-        int screenY = 0;
-        int offsetX = 0;
-        int offsetY = 0;
-        int offsetXPercent = 0;
-        int offsetYPercent = 0;
-        std::string effect = "copy";
-    };
+struct DropEventData {
+  std::vector<std::wstring> files;
+  int clientX = 0;
+  int clientY = 0;
+  int screenX = 0;
+  int screenY = 0;
+  int offsetX = 0;
+  int offsetY = 0;
+  int offsetXPercent = 0;
+  int offsetYPercent = 0;
+  std::string effect = "copy";
+};
 
-    struct ToastEventData
-    {
-        int64_t toastId = 0;
-        std::string type;
-        int actionIndex = -1;
-        std::wstring input;
-        std::string dismissalReason;
-    };
+struct ToastEventData {
+  int64_t toastId = 0;
+  std::string type;
+  int actionIndex = -1;
+  std::wstring input;
+  std::string dismissalReason;
+};
 
-    void InitializeJavaScriptAPI(duk_context *ctx);
-    bool LoadAndExecuteScript(duk_context *ctx, const std::wstring &scriptPath = L"");
-    bool LoadAndExecuteScripts(duk_context *ctx, const std::vector<std::wstring> &scriptPaths);
-    std::wstring GetEntryScriptDir();
-    std::wstring GetCurrentScriptDir();
-    std::wstring GetCurrentScriptPath();
-    void RegisterWidgetOwner(Widget *widget, const std::wstring &scriptPath);
-    void UnregisterWidgetOwner(Widget *widget);
-    void RegisterTrayOwner(int trayId, const std::wstring &scriptPath);
-    void UnregisterTrayOwner(int trayId);
-    void Reload();
-    bool AddScript(const std::wstring &scriptPath);
-    bool RemoveScript(const std::wstring &scriptPath);
-    bool RefreshScript(const std::wstring &scriptPath);
-    std::vector<std::wstring> GetLoadedScripts();
+void InitializeJavaScriptAPI(duk_context *ctx);
+bool LoadAndExecuteScript(duk_context *ctx,
+                          const std::wstring &scriptPath = L"");
+bool LoadAndExecuteScripts(duk_context *ctx,
+                           const std::vector<std::wstring> &scriptPaths);
+std::wstring GetEntryScriptDir();
+std::wstring GetCurrentScriptDir();
+std::wstring GetCurrentScriptPath();
+void RegisterWidgetOwner(Widget *widget, const std::wstring &scriptPath);
+void UnregisterWidgetOwner(Widget *widget);
+void RegisterTrayOwner(int trayId, const std::wstring &scriptPath);
+void UnregisterTrayOwner(int trayId);
+void Reload();
+bool AddScript(const std::wstring &scriptPath);
+bool RemoveScript(const std::wstring &scriptPath);
+bool RefreshScript(const std::wstring &scriptPath);
+std::vector<std::wstring> GetLoadedScripts();
 
-    void OnTimer(UINT_PTR id);
-    void OnMessage(UINT message, WPARAM wParam, LPARAM lParam);
-    void SetMessageWindow(HWND hWnd);
-    HWND GetMessageWindow();
+void OnTimer(UINT_PTR id);
+void OnMessage(UINT message, WPARAM wParam, LPARAM lParam);
+void SetMessageWindow(HWND hWnd);
+HWND GetMessageWindow();
 
-    void OnTrayCommand(int commandId);
-    void DispatchTrayEvent(int trayId, const std::string &eventName);
-    void OnWidgetContextCommand(const std::wstring &widgetId, int commandId);
+void OnTrayCommand(int commandId);
+void DispatchTrayEvent(int trayId, const std::string &eventName);
+void OnWidgetContextCommand(const std::wstring &widgetId, int commandId);
 
-    void TriggerWidgetEvent(Widget *widget, const char *eventName, const MouseEventData *data = nullptr);
-    void ClearWidgetEventListeners(Widget *widget);
-    void CallEventCallback(int callbackId, Widget *widget = nullptr, const MouseEventData *data = nullptr);
-    void CallEventCallbackWithText(int callbackId, Widget *widget, const std::wstring &text);
-    void CallDropCallback(int callbackId, Widget *widget, const DropEventData *data);
-    int RegisterEventCallback(JSContext *ctx, JSValueConst fn);
-    bool RegisterWidgetEventListener(JSContext *ctx, Widget *widget, const std::string &eventName, JSValueConst fn);
-    bool RegisterWidgetContextMenuCallback(JSContext *ctx, const std::wstring &widgetId, int commandId, JSValueConst fn);
-    void ClearWidgetContextMenuCallbacks(const std::wstring &widgetId);
-    bool RegisterTrayCommandCallback(JSContext *ctx, int trayId, int commandId, JSValueConst fn);
-    void ClearTrayCommandCallbacks(int trayId);
-    void ClearAllTrayCommandCallbacks();
-    bool RegisterTrayEventCallback(JSContext *ctx, int trayId, const std::string &eventName, JSValueConst fn);
-    void ClearTrayEventCallbacks(int trayId);
-    void ClearAllTrayEventCallbacks();
-    int RegisterToastCallback(JSContext *ctx, JSValueConst fn);
-    void DispatchToastEventAsync(int callbackId, const ToastEventData &data);
-    void ClearUiIpcForScript(const std::wstring &scriptPath);
-    bool ExecuteWidgetScript(Widget *widget);
-    JSValue CreateUiIpcObject(JSContext *ctx);
+void TriggerWidgetEvent(Widget *widget, const char *eventName,
+                        const MouseEventData *data = nullptr);
+void ClearWidgetEventListeners(Widget *widget);
+void CallEventCallback(int callbackId, Widget *widget = nullptr,
+                       const MouseEventData *data = nullptr);
+void CallEventCallbackWithText(int callbackId, Widget *widget,
+                               const std::wstring &text);
+void CallDropCallback(int callbackId, Widget *widget,
+                      const DropEventData *data);
+int RegisterEventCallback(JSContext *ctx, JSValueConst fn);
+bool RegisterWidgetEventListener(JSContext *ctx, Widget *widget,
+                                 const std::string &eventName, JSValueConst fn);
+bool RegisterWidgetContextMenuCallback(JSContext *ctx,
+                                       const std::wstring &widgetId,
+                                       int commandId, JSValueConst fn);
+void ClearWidgetContextMenuCallbacks(const std::wstring &widgetId);
+bool RegisterTrayCommandCallback(JSContext *ctx, int trayId, int commandId,
+                                 JSValueConst fn);
+void ClearTrayCommandCallbacks(int trayId);
+void ClearAllTrayCommandCallbacks();
+bool RegisterTrayEventCallback(JSContext *ctx, int trayId,
+                               const std::string &eventName, JSValueConst fn);
+void ClearTrayEventCallbacks(int trayId);
+void ClearAllTrayEventCallbacks();
+int RegisterToastCallback(JSContext *ctx, JSValueConst fn);
+void DispatchToastEventAsync(int callbackId, const ToastEventData &data);
+void ClearUiIpcForScript(const std::wstring &scriptPath);
+bool ExecuteWidgetScript(Widget *widget);
+JSValue CreateUiIpcObject(JSContext *ctx);
 
-    static const UINT WM_NOVADESK_DISPATCH = WM_USER + 101;
+static const UINT WM_NOVADESK_DISPATCH = WM_USER + 101;
 
-    enum DispatchType : WPARAM
-    {
-        DISPATCH_TOAST = 1,
-        DISPATCH_WEBFETCH = 2,
-        DISPATCH_FONT_READY = 3,
-    };
+enum DispatchType : WPARAM {
+  DISPATCH_TOAST = 1,
+  DISPATCH_WEBFETCH = 2,
+  DISPATCH_FONT_READY = 3,
+};
 } // namespace JSEngine

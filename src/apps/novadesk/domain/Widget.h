@@ -47,541 +47,550 @@ class ScrollbarRenderer;
 class WidgetDropTarget;
 class ColorPickerPopup;
 
-namespace PropertyParser
-{
-    struct ImageOptions;
-    struct TextOptions;
-    struct ButtonOptions;
-    struct BitmapOptions;
-    struct RotatorOptions;
-    struct BarOptions;
-    struct LineOptions;
-    struct HistogramOptions;
-    struct RoundLineOptions;
-    struct ShapeOptions;
-    struct AreaGraphOptions;
-    struct InputBoxOptions;
-    struct ColorPickerOptions;
-}
+namespace PropertyParser {
+struct ImageOptions;
+struct TextOptions;
+struct ButtonOptions;
+struct BitmapOptions;
+struct RotatorOptions;
+struct BarOptions;
+struct LineOptions;
+struct HistogramOptions;
+struct RoundLineOptions;
+struct ShapeOptions;
+struct AreaGraphOptions;
+struct InputBoxOptions;
+struct ColorPickerOptions;
+} // namespace PropertyParser
 
 #include "MenuItem.h"
 
-enum class WidgetResizeEdge
-{
-    None = 0,
-    Left = 1,
-    Right = 2,
-    Top = 4,
-    Bottom = 8,
-    TopLeft = 5,
-    TopRight = 6,
-    BottomLeft = 9,
-    BottomRight = 10
+enum class WidgetResizeEdge {
+  None = 0,
+  Left = 1,
+  Right = 2,
+  Top = 4,
+  Bottom = 8,
+  TopLeft = 5,
+  TopRight = 6,
+  BottomLeft = 9,
+  BottomRight = 10
 };
 
-struct WidgetRect4
-{
-    int x = 0;
-    int y = 0;
-    int w = 0;
-    int h = 0;
+struct WidgetRect4 {
+  int x = 0;
+  int y = 0;
+  int w = 0;
+  int h = 0;
 };
 
-struct BackgroundImageSize
-{
-    enum class Type
-    {
-        Cover,
-        Contain,
-        Stretch,
-        Explicit
-    };
+struct BackgroundImageSize {
+  enum class Type { Cover, Contain, Stretch, Explicit };
 
-    Type type = Type::Cover;
-    float width = 0.0f;
-    float height = 0.0f;
+  Type type = Type::Cover;
+  float width = 0.0f;
+  float height = 0.0f;
+  bool hasWidth = false;
+  bool hasHeight = false;
+
+  bool operator==(const BackgroundImageSize &other) const {
+    return type == other.type && width == other.width &&
+           height == other.height && hasWidth == other.hasWidth &&
+           hasHeight == other.hasHeight;
+  }
+  bool operator!=(const BackgroundImageSize &other) const {
+    return !(*this == other);
+  }
+};
+
+struct BackgroundImagePosition {
+  enum class Type { Keyword, Explicit };
+
+  Type type = Type::Keyword;
+  std::wstring keyword = L"center";
+  float x = 0.0f;
+  float y = 0.0f;
+
+  bool operator==(const BackgroundImagePosition &other) const {
+    return type == other.type && keyword == other.keyword && x == other.x &&
+           y == other.y;
+  }
+  bool operator!=(const BackgroundImagePosition &other) const {
+    return !(*this == other);
+  }
+};
+
+struct WidgetOptions {
+  std::wstring id;
+  int x = 0;
+  int y = 0;
+  int width = 0;
+  int height = 0;
+  int minWidth = 0;
+  int minHeight = 0;
+  std::wstring backgroundColor = L"rgba(0,0,0,0)";
+  ZPOSITION zPos = ZPOSITION_NORMAL;
+  BYTE bgAlpha = 0;         // Alpha component of background color (0-255)
+  BYTE windowOpacity = 255; // Overall window opacity (0-255)
+  COLORREF color = RGB(255, 255, 255);
+  GradientInfo bgGradient;
+  std::wstring backgroundImage;
+  std::wstring backgroundImageFallback;
+  BackgroundImageSize backgroundImageSize;
+  BackgroundImagePosition backgroundImagePosition;
+  bool draggable = true;
+  bool resizable = false;
+  bool clickThrough = false;
+  bool keepOnScreen = false;
+  bool snapEdges = true;
+  bool showInToolbar = false;
+  std::wstring toolbarIcon;
+  std::wstring toolbarTitle;
+  bool m_WDefined = false;
+  bool m_HDefined = false;
+  bool show = true;
+  std::wstring scriptPath;
+};
+
+class Widget {
+public:
+  // Use FlexLayoutConfig from FlexLayoutEngine
+  using LayoutConfig = FlexLayoutConfig;
+  struct AnimationTarget {
+    bool hasX = false;
+    bool hasY = false;
     bool hasWidth = false;
     bool hasHeight = false;
-
-    bool operator==(const BackgroundImageSize &other) const
-    {
-        return type == other.type && width == other.width && height == other.height &&
-               hasWidth == other.hasWidth && hasHeight == other.hasHeight;
-    }
-    bool operator!=(const BackgroundImageSize &other) const { return !(*this == other); }
-};
-
-struct BackgroundImagePosition
-{
-    enum class Type
-    {
-        Keyword,
-        Explicit
-    };
-
-    Type type = Type::Keyword;
-    std::wstring keyword = L"center";
+    bool hasRotate = false;
     float x = 0.0f;
     float y = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+    float rotate = 0.0f;
+    bool hasFontSize = false;
+    bool hasFontWeight = false;
+    bool hasLetterSpacing = false;
+    bool hasFontColor = false;
+    float fontSize = 12.0f;
+    float fontWeight = 400.0f;
+    float letterSpacing = 0.0f;
+    float fontColorR = 0.0f;
+    float fontColorG = 0.0f;
+    float fontColorB = 0.0f;
+    float fontAlpha = 255.0f;
 
-    bool operator==(const BackgroundImagePosition &other) const
-    {
-        return type == other.type && keyword == other.keyword && x == other.x && y == other.y;
+    bool HasTransformProps() const {
+      return hasX || hasY || hasWidth || hasHeight || hasRotate;
     }
-    bool operator!=(const BackgroundImagePosition &other) const { return !(*this == other); }
-};
 
-struct WidgetOptions
-{
+    bool HasTextProps() const {
+      return hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor;
+    }
+
+    bool HasAnyProps() const { return HasTransformProps() || HasTextProps(); }
+  };
+
+  struct AnimationKeyframe {
+    float offset = 0.0f;
+    std::wstring easing;
+    AnimationTarget values;
+  };
+
+  struct WindowAnimationTarget {
+    bool hasX = false;
+    bool hasY = false;
+    bool hasWidth = false;
+    bool hasHeight = false;
+    bool hasOpacity = false;
+    bool hasBackgroundColor = false;
+    float x = 0.0f;
+    float y = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+    float opacity = 1.0f;
+    float bgColorR = 0.0f;
+    float bgColorG = 0.0f;
+    float bgColorB = 0.0f;
+    float bgAlpha = 255.0f;
+
+    bool HasAnyProps() const {
+      return hasX || hasY || hasWidth || hasHeight || hasOpacity ||
+             hasBackgroundColor;
+    }
+  };
+
+  struct WindowAnimationKeyframe {
+    float offset = 0.0f;
+    std::wstring easing;
+    WindowAnimationTarget values;
+  };
+
+  Widget(const WidgetOptions &options);
+
+  ~Widget();
+
+  Widget(const Widget &) = delete;
+  Widget &operator=(const Widget &) = delete;
+
+  bool Create();
+
+  void Show();
+  void Hide();
+  void Refresh();
+  void SetFocus();
+  void UnFocus();
+  void Minimize();
+  void UnMinimize();
+  void Maximize();
+  void Restore();
+  void ToggleMaximize();
+  bool IsMaximized() const { return m_IsMaximized; }
+  bool IsMinimized() const { return m_IsMinimized; }
+  std::wstring GetTitle() const;
+
+  void ChangeZPos(ZPOSITION zPos, bool all = false);
+  void ChangeSingleZPos(ZPOSITION zPos, bool all = false);
+  void SetWindowPosition(int x, int y, int w, int h);
+  void SetWindowOpacity(BYTE opacity);
+  void SetBackgroundColor(const std::wstring &colorStr);
+  void SetBackgroundImage(const std::wstring &path,
+                          const BackgroundImageSize &size,
+                          const BackgroundImagePosition &position);
+  void SetBackgroundImageFallback(const std::wstring &path);
+  void SetDraggable(bool enable);
+  void SetResizable(bool enable);
+  bool IsResizable() const { return m_Options.resizable; }
+  void SetMinWidth(int minWidth);
+  int GetMinWidth() const { return m_Options.minWidth; }
+  void SetMinHeight(int minHeight);
+  int GetMinHeight() const { return m_Options.minHeight; }
+  void SetMinSize(int minWidth, int minHeight);
+  void SetClickThrough(bool enable);
+  void SetKeepOnScreen(bool enable);
+  void SetSnapEdges(bool enable);
+  void SetShowInToolbar(bool enable);
+  void SetToolbarIcon(const std::wstring &path);
+  void SetToolbarTitle(const std::wstring &title);
+
+  static std::mutex s_WidgetMutex;
+  static std::atomic<bool> s_IsMenuActive;
+  static std::atomic<int> s_ActiveColorPickerCount;
+  static bool IsMenuActive() {
+    return s_IsMenuActive.load(std::memory_order_relaxed) ||
+           s_ActiveColorPickerCount.load(std::memory_order_relaxed) > 0;
+  }
+  static void SetMenuActive(bool active) {
+    s_IsMenuActive.store(active, std::memory_order_relaxed);
+  }
+  static void IncrementColorPickerCount() {
+    s_ActiveColorPickerCount.fetch_add(1, std::memory_order_relaxed);
+  }
+  static void DecrementColorPickerCount() {
+    int prev;
+    do {
+      prev = s_ActiveColorPickerCount.load(std::memory_order_relaxed);
+    } while (prev > 0 && !s_ActiveColorPickerCount.compare_exchange_weak(
+                             prev, prev - 1, std::memory_order_relaxed));
+  }
+
+  const WidgetOptions &GetOptions() const { return m_Options; }
+  uint64_t GetInstanceId() const { return m_InstanceId; }
+  HWND GetWindow() const { return m_hWnd; }
+  ZPOSITION GetWindowZPosition() const { return m_WindowZPosition; }
+  ID2D1DeviceContext *GetDeviceContext() const { return m_pContext.Get(); }
+
+  void AddImage(const PropertyParser::ImageOptions &options);
+  void AddText(const PropertyParser::TextOptions &options);
+  void AddButton(const PropertyParser::ButtonOptions &options);
+  void AddBitmap(const PropertyParser::BitmapOptions &options);
+  void AddRotator(const PropertyParser::RotatorOptions &options);
+  void AddBar(const PropertyParser::BarOptions &options);
+  void AddLine(const PropertyParser::LineOptions &options);
+  void AddHistogram(const PropertyParser::HistogramOptions &options);
+  void AddRoundLine(const PropertyParser::RoundLineOptions &options);
+  void AddShape(const PropertyParser::ShapeOptions &options);
+  void AddAreaGraph(const PropertyParser::AreaGraphOptions &options);
+  void AddLayoutBox(const PropertyParser::ShapeOptions &options);
+  void AddInputBox(const PropertyParser::InputBoxOptions &options);
+  void AddColorPicker(const PropertyParser::ColorPickerOptions &options);
+
+  void SetElementProperties(const std::wstring &id, JSContext *ctx,
+                            JSValueConst options);
+  void SetGroupProperties(const std::wstring &group, JSContext *ctx,
+                          JSValueConst options);
+  void RemoveElementsByGroup(const std::wstring &group);
+  bool RemoveElements(const std::wstring &id = L"");
+  void RemoveElements(const std::vector<std::wstring> &ids);
+  // Context Menu
+  void SetContextMenu(const std::vector<MenuItem> &menu);
+  void ClearContextMenu();
+  void SetContextMenuDisabled(bool disabled) {
+    m_ContextMenuDisabled = disabled;
+  }
+  void SetShowDefaultContextMenuItems(bool show) {
+    m_ShowDefaultContextMenuItems = show;
+  }
+
+  InputBoxElement *GetFocusedInputBox() const { return m_FocusedInputBox; }
+  void SetFocusedInputBox(InputBoxElement *inputElem) {
+    m_FocusedInputBox = inputElem;
+  }
+  void FocusInputBox(InputBoxElement *inputElem);
+  void BlurInputBox(InputBoxElement *inputElem = nullptr);
+
+  void OpenColorPicker(ColorPickerElement *colorPicker);
+  void CloseColorPicker();
+  bool IsColorPickerOpen(const ColorPickerElement *colorPicker = nullptr) const;
+  bool IsColorPickerEyedropperActive() const;
+  void OpenColorPickerEyedropper(ColorPickerElement *colorPicker = nullptr);
+
+  void BeginUpdate();
+  void EndUpdate();
+
+  void Redraw();
+  void OnImageDownloaded(const std::wstring &url,
+                         const std::vector<BYTE> &buffer);
+
+  Element *FindElementById(const std::wstring &id);
+  static std::vector<Widget *>
+  GetAllWidgets();                          // returns a snapshot (thread-safe)
+  static void RemoveWidget(Widget *widget); // thread-safe removal
+  static void ClearAllWidgets();
+  static bool IsValid(Widget *pWidget);
+  void SetLayoutConfig(const std::wstring &id, const LayoutConfig &config);
+  bool TryGetLayoutConfig(const std::wstring &id, LayoutConfig &config) const;
+  bool IsLayoutContainer(const std::wstring &id) const;
+  void ReflowLayout(const std::wstring &id);
+  void StartElementAnimation(const std::wstring &id, const AnimationTarget &to,
+                             const AnimationTarget &from, int durationMs,
+                             const std::wstring &easing, int iterationCount);
+  void StartElementKeyframeAnimation(
+      const std::wstring &id, const std::vector<AnimationKeyframe> &keyframes,
+      int durationMs, const std::wstring &easing, int iterationCount);
+  void StartWindowAnimation(const WindowAnimationTarget &to,
+                            const WindowAnimationTarget &from, int durationMs,
+                            const std::wstring &easing, int iterationCount);
+  void StartWindowKeyframeAnimation(
+      const std::vector<WindowAnimationKeyframe> &keyframes, int durationMs,
+      const std::wstring &easing, int iterationCount);
+  void StopWindowAnimations();
+  static Widget *GetWidgetFromHWND(HWND hWnd);
+  static Widget *GetWidgetFromInstanceId(uint64_t instanceId);
+  void SetElementFontPath(const std::wstring &elementId,
+                          const std::wstring &fontDir);
+
+  const std::vector<std::unique_ptr<Element>> &GetElements() const {
+    return m_Elements;
+  }
+  HWND GetHwnd() const { return m_hWnd; }
+
+  friend class WidgetAnimationHelper;
+  friend class WidgetLayoutHelper;
+  friend class ScrollbarRenderer;
+  friend class WidgetDropTarget;
+
+private:
+  static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
+                                  LPARAM lParam);
+
+  static bool Register();
+
+  void UpdateLayeredWindowContent();
+
+  bool HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam);
+
+  void OnContextMenu();
+  bool BuildCombinedShapeGeometry(class PathShape *target,
+                                  const PropertyParser::ShapeOptions &options);
+  void ReleaseCombinedConsumes(class PathShape *target);
+  void ApplyParsedPropertiesToElement(Element *element, JSContext *ctx,
+                                      JSValueConst options);
+  void UpdateContainerForElement(Element *element,
+                                 const std::wstring &newContainerId);
+  void ClearElementReferences(Element *element);
+  bool WouldCreateContainerCycle(Element *element, Element *container) const;
+  void ApplyLayoutForContainer(Element *container);
+  void RenderContainerChildren(Element *container);
+  bool HitTestContainerChildren(Element *container, int x, int y,
+                                Element *&outElement);
+  bool HitTestContainerChildrenDetailed(Element *container, int x, int y,
+                                        UINT message, WPARAM wParam,
+                                        Element *&outHitElement,
+                                        Element *&outActionElement,
+                                        Element *&outMouseActionElement,
+                                        Element *&outToolTipElement);
+
+  bool IsTrackedElement(Element *el) const;
+  void StampInteractiveBounds(Element *element, int offsetX, int offsetY,
+                              BYTE *pvBits, int surfW, int surfH);
+  void UntrackButton(Element *el);
+
+private:
+  std::wstring m_Id;
+  std::wstring m_Name;
+  WidgetOptions m_Options;
+  HWND m_hWnd;
+  Tooltip m_Tooltip;
+  ZPOSITION m_WindowZPosition;
+  std::vector<std::unique_ptr<Element>> m_Elements;
+  std::unordered_set<Element *>
+      m_TrackedElements; // Flat set of all live element pointers for O(1)
+                         // IsTrackedElement
+  std::vector<ButtonElement *>
+      m_Buttons; // Cached button pointers for O(1) mouse-move iteration
+  std::unordered_map<std::wstring, Element *>
+      m_ElementIndex; // ID→pointer lookup; kept in sync with m_Elements
+  std::unordered_map<std::wstring, LayoutConfig> m_LayoutConfigs;
+
+  // Spatial grid for O(1) hit-testing instead of O(n) linear scan.
+  // Cell size chosen so typical widget (200-600px) spans 3-10 cells.
+  static const int GRID_CELL_SIZE = 64;
+  static const int GRID_THRESHOLD = 32; // Use grid only above this count
+  std::unordered_map<int64_t, std::vector<Element *>> m_SpatialGrid;
+  void RebuildSpatialGrid();
+  struct ElementAnimation {
     std::wstring id;
-    int x = 0;
-    int y = 0;
-    int width = 0;
-    int height = 0;
-    int minWidth = 0;
-    int minHeight = 0;
-    std::wstring backgroundColor = L"rgba(0,0,0,0)";
-    ZPOSITION zPos = ZPOSITION_NORMAL;
-    BYTE bgAlpha = 0;         // Alpha component of background color (0-255)
-    BYTE windowOpacity = 255; // Overall window opacity (0-255)
-    COLORREF color = RGB(255, 255, 255);
-    GradientInfo bgGradient;
-    std::wstring backgroundImage;
-    std::wstring backgroundImageFallback;
-    BackgroundImageSize backgroundImageSize;
-    BackgroundImagePosition backgroundImagePosition;
-    bool draggable = true;
-    bool resizable = false;
-    bool clickThrough = false;
-    bool keepOnScreen = false;
-    bool snapEdges = true;
-    bool showInToolbar = false;
-    std::wstring toolbarIcon;
-    std::wstring toolbarTitle;
-    bool m_WDefined = false;
-    bool m_HDefined = false;
-    bool show = true;
-    std::wstring scriptPath;
-};
+    std::wstring easing = L"linear";
+    DWORD startTick = 0;
+    int durationMs = 250;
+    int iterationCount = 1;
+    int completedIterations = 0;
+    bool useKeyframes = false;
+    std::vector<float> keyframeOffsets;
+    std::vector<std::wstring> keyframeEasings;
+    std::vector<AnimationTarget> resolvedStops;
+    AnimationTarget from;
+    AnimationTarget to;
+  };
 
-class Widget
-{
-public:
-    // Use FlexLayoutConfig from FlexLayoutEngine
-    using LayoutConfig = FlexLayoutConfig;
-    struct AnimationTarget
-    {
-        bool hasX = false;
-        bool hasY = false;
-        bool hasWidth = false;
-        bool hasHeight = false;
-        bool hasRotate = false;
-        float x = 0.0f;
-        float y = 0.0f;
-        float width = 0.0f;
-        float height = 0.0f;
-        float rotate = 0.0f;
-        bool hasFontSize = false;
-        bool hasFontWeight = false;
-        bool hasLetterSpacing = false;
-        bool hasFontColor = false;
-        float fontSize = 12.0f;
-        float fontWeight = 400.0f;
-        float letterSpacing = 0.0f;
-        float fontColorR = 0.0f;
-        float fontColorG = 0.0f;
-        float fontColorB = 0.0f;
-        float fontAlpha = 255.0f;
+  struct WindowAnimation {
+    std::wstring easing = L"linear";
+    DWORD startTick = 0;
+    int durationMs = 250;
+    int iterationCount = 1;
+    int completedIterations = 0;
+    bool useKeyframes = false;
+    std::vector<float> keyframeOffsets;
+    std::vector<std::wstring> keyframeEasings;
+    std::vector<WindowAnimationTarget> resolvedStops;
+    WindowAnimationTarget from;
+    WindowAnimationTarget to;
+  };
 
-        bool HasTransformProps() const
-        {
-            return hasX || hasY || hasWidth || hasHeight || hasRotate;
-        }
+  std::vector<ElementAnimation> m_Animations;
+  std::vector<WindowAnimation> m_WindowAnimations;
+  Element *m_MouseOverElement = nullptr;
+  Element *m_CursorElement = nullptr;
+  Element *m_TooltipElement = nullptr;
+  int m_IsBatchUpdating = 0;
 
-        bool HasTextProps() const
-        {
-            return hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor;
-        }
+  // Context Menu
+  std::vector<MenuItem> m_ContextMenu;
+  bool m_ShowDefaultContextMenuItems = true;
+  bool m_ContextMenuDisabled = false;
 
-        bool HasAnyProps() const
-        {
-            return HasTransformProps() || HasTextProps();
-        }
-    };
+  // Dragging State
+  bool m_IsDragging = false;
+  bool m_DragThresholdMet = false;
+  int m_DragThresholdX = 0; // cached SM_CXDRAG at drag start
+  int m_DragThresholdY = 0; // cached SM_CYDRAG at drag start
+  POINT m_DragStartCursor = {0, 0};
+  POINT m_DragStartWindow = {0, 0};
+  bool m_IsElementDragging = false;
+  Element *m_DragElement = nullptr;
 
-    struct AnimationKeyframe
-    {
-        float offset = 0.0f;
-        std::wstring easing;
-        AnimationTarget values;
-    };
+  // Scrollbar Dragging & Hover State
+  enum class ScrollbarHitPart {
+    None,
+    VerticalTopButton,
+    VerticalBottomButton,
+    VerticalThumb,
+    VerticalTrack,
+    HorizontalLeftButton,
+    HorizontalRightButton,
+    HorizontalThumb,
+    HorizontalTrack
+  };
+  struct ScrollbarHitResult {
+    Element *container = nullptr;
+    ScrollbarHitPart part = ScrollbarHitPart::None;
+    int trackLength = 0;
+    int thumbLength = 0;
+    int thumbOffset = 0;
+    int maxScroll = 0;
+  };
+  bool HitTestContainerScrollbar(int x, int y, ScrollbarHitResult &result);
+  bool m_IsScrollbarDragging = false;
+  Element *m_ScrollbarDragContainer = nullptr;
+  Element *m_ScrollbarHoverContainer = nullptr;
+  ScrollbarHitPart m_ScrollbarHoverPart = ScrollbarHitPart::None;
+  ScrollbarHitPart m_ScrollbarActivePart = ScrollbarHitPart::None;
+  bool m_ScrollbarDragIsVertical = true;
+  int m_ScrollbarDragStartMouse = 0;
+  int m_ScrollbarDragStartScroll = 0;
+  int m_ScrollbarDragTrackLength = 0;
+  int m_ScrollbarDragThumbLength = 0;
+  int m_ScrollbarDragMaxScroll = 0;
+  int m_ScrollbarDragGrabOffset = 0;
 
-    struct WindowAnimationTarget
-    {
-        bool hasX = false;
-        bool hasY = false;
-        bool hasWidth = false;
-        bool hasHeight = false;
-        bool hasOpacity = false;
-        bool hasBackgroundColor = false;
-        float x = 0.0f;
-        float y = 0.0f;
-        float width = 0.0f;
-        float height = 0.0f;
-        float opacity = 1.0f;
-        float bgColorR = 0.0f;
-        float bgColorG = 0.0f;
-        float bgColorB = 0.0f;
-        float bgAlpha = 255.0f;
+  // Container Swiping / Pan Dragging State
+  bool m_IsContainerSwiping = false;
+  Element *m_SwipeContainer = nullptr;
+  Element *m_SwipeTargetElement = nullptr;
+  POINT m_SwipeStartPos = {0, 0};
+  DWORD m_SwipeStartTime = 0;
+  int m_SwipeStartScrollX = 0;
+  int m_SwipeStartScrollY = 0;
 
-        bool HasAnyProps() const
-        {
-            return hasX || hasY || hasWidth || hasHeight || hasOpacity || hasBackgroundColor;
-        }
-    };
+  bool m_IsMouseOverWidget = false;
+  bool m_IsMinimized = false;
+  bool m_IsMaximized = false;
+  WidgetRect4 m_PreMaximizeBounds = {0, 0, 0, 0};
 
-    struct WindowAnimationKeyframe
-    {
-        float offset = 0.0f;
-        std::wstring easing;
-        WindowAnimationTarget values;
-    };
+  // Resizing State
+  bool m_IsResizing = false;
+  WidgetResizeEdge m_ResizeEdge = WidgetResizeEdge::None;
+  POINT m_ResizeStartCursor = {0, 0};
+  WidgetRect4 m_ResizeStartWindow = {0, 0, 0, 0};
+  static WidgetResizeEdge GetResizeEdgeAt(int x, int y, int w, int h);
+  static LPCWSTR GetCursorForResizeEdge(WidgetResizeEdge edge);
 
-    Widget(const WidgetOptions &options);
+  CursorManager m_CursorManager;
+  HICON m_ToolbarIconHandle = nullptr;
+  bool m_ToolbarIconOwned = false;
 
-    ~Widget();
+  // Text Selection State
+  TextElement *m_TextSelectionElement = nullptr;
 
-    Widget(const Widget &) = delete;
-    Widget &operator=(const Widget &) = delete;
+  uint64_t m_InstanceId = 0;
 
-    bool Create();
+  // Input box focus state
+  InputBoxElement *m_FocusedInputBox = nullptr;
+  std::unique_ptr<ColorPickerPopup> m_ColorPickerPopup;
+  Microsoft::WRL::ComPtr<WidgetDropTarget> m_DropTarget;
 
-    void Show();
-    void Hide();
-    void Refresh();
-    void SetFocus();
-    void UnFocus();
-    void Minimize();
-    void UnMinimize();
-    void Maximize();
-    void Restore();
-    void ToggleMaximize();
-    bool IsMaximized() const { return m_IsMaximized; }
-    bool IsMinimized() const { return m_IsMinimized; }
-    std::wstring GetTitle() const;
+  void ApplyToolbarStyle();
+  void ApplyToolbarIcon();
+  void ApplyToolbarTitle();
+  void DestroyToolbarIcon();
+  void ReleaseRenderSurface();
 
-    void ChangeZPos(ZPOSITION zPos, bool all = false);
-    void ChangeSingleZPos(ZPOSITION zPos, bool all = false);
-    void SetWindowPosition(int x, int y, int w, int h);
-    void SetWindowOpacity(BYTE opacity);
-    void SetBackgroundColor(const std::wstring &colorStr);
-    void SetBackgroundImage(const std::wstring &path, const BackgroundImageSize &size, const BackgroundImagePosition &position);
-    void SetBackgroundImageFallback(const std::wstring &path);
-    void SetDraggable(bool enable);
-    void SetResizable(bool enable);
-    bool IsResizable() const { return m_Options.resizable; }
-    void SetMinWidth(int minWidth);
-    int GetMinWidth() const { return m_Options.minWidth; }
-    void SetMinHeight(int minHeight);
-    int GetMinHeight() const { return m_Options.minHeight; }
-    void SetMinSize(int minWidth, int minHeight);
-    void SetClickThrough(bool enable);
-    void SetKeepOnScreen(bool enable);
-    void SetSnapEdges(bool enable);
-    void SetShowInToolbar(bool enable);
-    void SetToolbarIcon(const std::wstring &path);
-    void SetToolbarTitle(const std::wstring &title);
+  // Rendering
+  Microsoft::WRL::ComPtr<ID2D1DeviceContext> m_pContext;
+  GeneralImage m_BackgroundImage;
+  HDC m_hRenderMemDc = nullptr;
+  HBITMAP m_hRenderBitmap = nullptr;
+  HBITMAP m_hRenderOldBitmap = nullptr;
+  void *m_pRenderBitmapBits = nullptr;
+  int m_RenderBitmapW = 0;
+  int m_RenderBitmapH = 0;
 
-    static std::mutex s_WidgetMutex;
-    static std::atomic<bool> s_IsMenuActive;
-    static std::atomic<int> s_ActiveColorPickerCount;
-    static bool IsMenuActive() { return s_IsMenuActive.load(std::memory_order_relaxed) || s_ActiveColorPickerCount.load(std::memory_order_relaxed) > 0; }
-    static void SetMenuActive(bool active) { s_IsMenuActive.store(active, std::memory_order_relaxed); }
-    static void IncrementColorPickerCount() { s_ActiveColorPickerCount.fetch_add(1, std::memory_order_relaxed); }
-    static void DecrementColorPickerCount()
-    {
-        int prev;
-        do
-        {
-            prev = s_ActiveColorPickerCount.load(std::memory_order_relaxed);
-        } while (prev > 0 && !s_ActiveColorPickerCount.compare_exchange_weak(prev, prev - 1, std::memory_order_relaxed));
-    }
-
-    const WidgetOptions &GetOptions() const { return m_Options; }
-    uint64_t GetInstanceId() const { return m_InstanceId; }
-    HWND GetWindow() const { return m_hWnd; }
-    ZPOSITION GetWindowZPosition() const { return m_WindowZPosition; }
-    ID2D1DeviceContext *GetDeviceContext() const { return m_pContext.Get(); }
-
-    void AddImage(const PropertyParser::ImageOptions &options);
-    void AddText(const PropertyParser::TextOptions &options);
-    void AddButton(const PropertyParser::ButtonOptions &options);
-    void AddBitmap(const PropertyParser::BitmapOptions &options);
-    void AddRotator(const PropertyParser::RotatorOptions &options);
-    void AddBar(const PropertyParser::BarOptions &options);
-    void AddLine(const PropertyParser::LineOptions &options);
-    void AddHistogram(const PropertyParser::HistogramOptions &options);
-    void AddRoundLine(const PropertyParser::RoundLineOptions &options);
-    void AddShape(const PropertyParser::ShapeOptions &options);
-    void AddAreaGraph(const PropertyParser::AreaGraphOptions &options);
-    void AddLayoutBox(const PropertyParser::ShapeOptions &options);
-    void AddInputBox(const PropertyParser::InputBoxOptions &options);
-    void AddColorPicker(const PropertyParser::ColorPickerOptions &options);
-
-    void SetElementProperties(const std::wstring &id, JSContext *ctx, JSValueConst options);
-    void SetGroupProperties(const std::wstring &group, JSContext *ctx, JSValueConst options);
-    void RemoveElementsByGroup(const std::wstring &group);
-    bool RemoveElements(const std::wstring &id = L"");
-    void RemoveElements(const std::vector<std::wstring> &ids);
-    // Context Menu
-    void SetContextMenu(const std::vector<MenuItem> &menu);
-    void ClearContextMenu();
-    void SetContextMenuDisabled(bool disabled) { m_ContextMenuDisabled = disabled; }
-    void SetShowDefaultContextMenuItems(bool show) { m_ShowDefaultContextMenuItems = show; }
-
-    InputBoxElement *GetFocusedInputBox() const { return m_FocusedInputBox; }
-    void SetFocusedInputBox(InputBoxElement *inputElem) { m_FocusedInputBox = inputElem; }
-    void FocusInputBox(InputBoxElement *inputElem);
-    void BlurInputBox(InputBoxElement *inputElem = nullptr);
-
-    void OpenColorPicker(ColorPickerElement *colorPicker);
-    void CloseColorPicker();
-    bool IsColorPickerOpen(const ColorPickerElement *colorPicker = nullptr) const;
-    bool IsColorPickerEyedropperActive() const;
-    void OpenColorPickerEyedropper(ColorPickerElement *colorPicker = nullptr);
-
-    void BeginUpdate();
-    void EndUpdate();
-
-    void Redraw();
-    void OnImageDownloaded(const std::wstring &url, const std::vector<BYTE> &buffer);
-
-    Element *FindElementById(const std::wstring &id);
-    static std::vector<Widget *> GetAllWidgets(); // returns a snapshot (thread-safe)
-    static void RemoveWidget(Widget *widget);     // thread-safe removal
-    static void ClearAllWidgets();
-    static bool IsValid(Widget *pWidget);
-    void SetLayoutConfig(const std::wstring &id, const LayoutConfig &config);
-    bool TryGetLayoutConfig(const std::wstring &id, LayoutConfig &config) const;
-    bool IsLayoutContainer(const std::wstring &id) const;
-    void ReflowLayout(const std::wstring &id);
-    void StartElementAnimation(const std::wstring &id, const AnimationTarget &to, const AnimationTarget &from, int durationMs, const std::wstring &easing, int iterationCount);
-    void StartElementKeyframeAnimation(const std::wstring &id, const std::vector<AnimationKeyframe> &keyframes, int durationMs, const std::wstring &easing, int iterationCount);
-    void StartWindowAnimation(const WindowAnimationTarget &to, const WindowAnimationTarget &from, int durationMs, const std::wstring &easing, int iterationCount);
-    void StartWindowKeyframeAnimation(const std::vector<WindowAnimationKeyframe> &keyframes, int durationMs, const std::wstring &easing, int iterationCount);
-    void StopWindowAnimations();
-    static Widget *GetWidgetFromHWND(HWND hWnd);
-    static Widget *GetWidgetFromInstanceId(uint64_t instanceId);
-    void SetElementFontPath(const std::wstring &elementId, const std::wstring &fontDir);
-
-    const std::vector<std::unique_ptr<Element>> &GetElements() const { return m_Elements; }
-    HWND GetHwnd() const { return m_hWnd; }
-
-    friend class WidgetAnimationHelper;
-    friend class WidgetLayoutHelper;
-    friend class ScrollbarRenderer;
-    friend class WidgetDropTarget;
-
-private:
-    static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-
-    static bool Register();
-
-    void UpdateLayeredWindowContent();
-
-    bool HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam);
-
-    void OnContextMenu();
-    bool BuildCombinedShapeGeometry(class PathShape *target, const PropertyParser::ShapeOptions &options);
-    void ReleaseCombinedConsumes(class PathShape *target);
-    void ApplyParsedPropertiesToElement(Element *element, JSContext *ctx, JSValueConst options);
-    void UpdateContainerForElement(Element *element, const std::wstring &newContainerId);
-    void ClearElementReferences(Element *element);
-    bool WouldCreateContainerCycle(Element *element, Element *container) const;
-    void ApplyLayoutForContainer(Element *container);
-    void RenderContainerChildren(Element *container);
-    bool HitTestContainerChildren(Element *container, int x, int y, Element *&outElement);
-    bool HitTestContainerChildrenDetailed(
-        Element *container,
-        int x,
-        int y,
-        UINT message,
-        WPARAM wParam,
-        Element *&outHitElement,
-        Element *&outActionElement,
-        Element *&outMouseActionElement,
-        Element *&outToolTipElement);
-
-    bool IsTrackedElement(Element *el) const;
-    void StampInteractiveBounds(Element *element, int offsetX, int offsetY, BYTE *pvBits, int surfW, int surfH);
-    void UntrackButton(Element *el);
-
-private:
-    std::wstring m_Id;
-    std::wstring m_Name;
-    WidgetOptions m_Options;
-    HWND m_hWnd;
-    Tooltip m_Tooltip;
-    ZPOSITION m_WindowZPosition;
-    std::vector<std::unique_ptr<Element>> m_Elements;
-    std::unordered_set<Element *> m_TrackedElements;            // Flat set of all live element pointers for O(1) IsTrackedElement
-    std::vector<ButtonElement *> m_Buttons;                     // Cached button pointers for O(1) mouse-move iteration
-    std::unordered_map<std::wstring, Element *> m_ElementIndex; // ID→pointer lookup; kept in sync with m_Elements
-    std::unordered_map<std::wstring, LayoutConfig> m_LayoutConfigs;
-
-    // Spatial grid for O(1) hit-testing instead of O(n) linear scan.
-    // Cell size chosen so typical widget (200-600px) spans 3-10 cells.
-    static const int GRID_CELL_SIZE = 64;
-    static const int GRID_THRESHOLD = 32; // Use grid only above this count
-    std::unordered_map<int64_t, std::vector<Element *>> m_SpatialGrid;
-    void RebuildSpatialGrid();
-    struct ElementAnimation
-    {
-        std::wstring id;
-        std::wstring easing = L"linear";
-        DWORD startTick = 0;
-        int durationMs = 250;
-        int iterationCount = 1;
-        int completedIterations = 0;
-        bool useKeyframes = false;
-        std::vector<float> keyframeOffsets;
-        std::vector<std::wstring> keyframeEasings;
-        std::vector<AnimationTarget> resolvedStops;
-        AnimationTarget from;
-        AnimationTarget to;
-    };
-
-    struct WindowAnimation
-    {
-        std::wstring easing = L"linear";
-        DWORD startTick = 0;
-        int durationMs = 250;
-        int iterationCount = 1;
-        int completedIterations = 0;
-        bool useKeyframes = false;
-        std::vector<float> keyframeOffsets;
-        std::vector<std::wstring> keyframeEasings;
-        std::vector<WindowAnimationTarget> resolvedStops;
-        WindowAnimationTarget from;
-        WindowAnimationTarget to;
-    };
-
-    std::vector<ElementAnimation> m_Animations;
-    std::vector<WindowAnimation> m_WindowAnimations;
-    Element *m_MouseOverElement = nullptr;
-    Element *m_CursorElement = nullptr;
-    Element *m_TooltipElement = nullptr;
-    int m_IsBatchUpdating = 0;
-
-    // Context Menu
-    std::vector<MenuItem> m_ContextMenu;
-    bool m_ShowDefaultContextMenuItems = true;
-    bool m_ContextMenuDisabled = false;
-
-    // Dragging State
-    bool m_IsDragging = false;
-    bool m_DragThresholdMet = false;
-    int m_DragThresholdX = 0; // cached SM_CXDRAG at drag start
-    int m_DragThresholdY = 0; // cached SM_CYDRAG at drag start
-    POINT m_DragStartCursor = {0, 0};
-    POINT m_DragStartWindow = {0, 0};
-    bool m_IsElementDragging = false;
-    Element *m_DragElement = nullptr;
-
-    // Scrollbar Dragging & Hover State
-    enum class ScrollbarHitPart
-    {
-        None,
-        VerticalTopButton,
-        VerticalBottomButton,
-        VerticalThumb,
-        VerticalTrack,
-        HorizontalLeftButton,
-        HorizontalRightButton,
-        HorizontalThumb,
-        HorizontalTrack
-    };
-    struct ScrollbarHitResult
-    {
-        Element *container = nullptr;
-        ScrollbarHitPart part = ScrollbarHitPart::None;
-        int trackLength = 0;
-        int thumbLength = 0;
-        int thumbOffset = 0;
-        int maxScroll = 0;
-    };
-    bool HitTestContainerScrollbar(int x, int y, ScrollbarHitResult &result);
-    bool m_IsScrollbarDragging = false;
-    Element *m_ScrollbarDragContainer = nullptr;
-    Element *m_ScrollbarHoverContainer = nullptr;
-    ScrollbarHitPart m_ScrollbarHoverPart = ScrollbarHitPart::None;
-    ScrollbarHitPart m_ScrollbarActivePart = ScrollbarHitPart::None;
-    bool m_ScrollbarDragIsVertical = true;
-    int m_ScrollbarDragStartMouse = 0;
-    int m_ScrollbarDragStartScroll = 0;
-    int m_ScrollbarDragTrackLength = 0;
-    int m_ScrollbarDragThumbLength = 0;
-    int m_ScrollbarDragMaxScroll = 0;
-    int m_ScrollbarDragGrabOffset = 0;
-
-    // Container Swiping / Pan Dragging State
-    bool m_IsContainerSwiping = false;
-    Element *m_SwipeContainer = nullptr;
-    Element *m_SwipeTargetElement = nullptr;
-    POINT m_SwipeStartPos = {0, 0};
-    DWORD m_SwipeStartTime = 0;
-    int m_SwipeStartScrollX = 0;
-    int m_SwipeStartScrollY = 0;
-
-    bool m_IsMouseOverWidget = false;
-    bool m_IsMinimized = false;
-    bool m_IsMaximized = false;
-    WidgetRect4 m_PreMaximizeBounds = {0, 0, 0, 0};
-
-    // Resizing State
-    bool m_IsResizing = false;
-    WidgetResizeEdge m_ResizeEdge = WidgetResizeEdge::None;
-    POINT m_ResizeStartCursor = {0, 0};
-    WidgetRect4 m_ResizeStartWindow = {0, 0, 0, 0};
-    static WidgetResizeEdge GetResizeEdgeAt(int x, int y, int w, int h);
-    static LPCWSTR GetCursorForResizeEdge(WidgetResizeEdge edge);
-
-    CursorManager m_CursorManager;
-    HICON m_ToolbarIconHandle = nullptr;
-    bool m_ToolbarIconOwned = false;
-
-    // Text Selection State
-    TextElement *m_TextSelectionElement = nullptr;
-
-    uint64_t m_InstanceId = 0;
-
-    // Input box focus state
-    InputBoxElement *m_FocusedInputBox = nullptr;
-    std::unique_ptr<ColorPickerPopup> m_ColorPickerPopup;
-    Microsoft::WRL::ComPtr<WidgetDropTarget> m_DropTarget;
-
-    void ApplyToolbarStyle();
-    void ApplyToolbarIcon();
-    void ApplyToolbarTitle();
-    void DestroyToolbarIcon();
-    void ReleaseRenderSurface();
-
-    // Rendering
-    Microsoft::WRL::ComPtr<ID2D1DeviceContext> m_pContext;
-    GeneralImage m_BackgroundImage;
-    HDC m_hRenderMemDc = nullptr;
-    HBITMAP m_hRenderBitmap = nullptr;
-    HBITMAP m_hRenderOldBitmap = nullptr;
-    void *m_pRenderBitmapBits = nullptr;
-    int m_RenderBitmapW = 0;
-    int m_RenderBitmapH = 0;
-
-    static const UINT_PTR TIMER_TOPMOST = 2;
-    static const UINT_PTR TIMER_TOOLTIP = 3;
-    static const UINT_PTR TIMER_CTRL_OVERRIDE = 4;
-    static const UINT_PTR TIMER_CARET = 5;
-    static const UINT_PTR TIMER_ANIMATION = 6;
-    static const UINT_PTR TIMER_SCROLLBAR_BUTTON = 7;
+  static const UINT_PTR TIMER_TOPMOST = 2;
+  static const UINT_PTR TIMER_TOOLTIP = 3;
+  static const UINT_PTR TIMER_CTRL_OVERRIDE = 4;
+  static const UINT_PTR TIMER_CARET = 5;
+  static const UINT_PTR TIMER_ANIMATION = 6;
+  static const UINT_PTR TIMER_SCROLLBAR_BUTTON = 7;
 };
 
 #endif

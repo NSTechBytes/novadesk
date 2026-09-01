@@ -4,7 +4,7 @@
  * License; either version 2 of the License, or (at your option) any later
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
- 
+
 #pragma once
 
 #include <string>
@@ -12,16 +12,16 @@
 
 class Widget;
 
-namespace novadesk::scripting::quickjs
-{
-    struct WidgetWrapper
-    {
-        Widget *widget = nullptr;
-        uint64_t instanceId = 0;
-    };
+namespace novadesk::scripting::quickjs {
+struct WidgetWrapper {
+  Widget *widget = nullptr;
+  uint64_t instanceId = 0;
+};
 
-    void SetWidgetUiDebug(bool debug);
-    JSClassID EnsureWidgetWindowClass(JSContext *ctx);
-    JSValue JsWidgetWindowCtor(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv);
-    bool ExecuteWidgetUiScript(JSContext *ctx, Widget *widget, const std::wstring &scriptPath);
-}
+void SetWidgetUiDebug(bool debug);
+JSClassID EnsureWidgetWindowClass(JSContext *ctx);
+JSValue JsWidgetWindowCtor(JSContext *ctx, JSValueConst thisVal, int argc,
+                           JSValueConst *argv);
+bool ExecuteWidgetUiScript(JSContext *ctx, Widget *widget,
+                           const std::wstring &scriptPath);
+} // namespace novadesk::scripting::quickjs
