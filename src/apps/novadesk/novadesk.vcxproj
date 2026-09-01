@@ -154,6 +154,7 @@
     <ClCompile Include="domain\WidgetContextMenuHelper.cpp" />
     <ClCompile Include="domain\WidgetLayoutHelper.cpp" />
     <ClCompile Include="domain\ScrollbarRenderer.cpp" />
+    <ClCompile Include="domain\WidgetDropTarget.cpp" />
     <ClCompile Include="domain\WidgetWindowChromeHelper.cpp" />
     <ClCompile Include="domain\animation\AnimationEasing.cpp" />
     <ClCompile Include="domain\animation\WidgetAnimationHelper.cpp" />
@@ -236,6 +237,7 @@
     <ClInclude Include="domain\WidgetContextMenuHelper.h" />
     <ClInclude Include="domain\WidgetLayoutHelper.h" />
     <ClInclude Include="domain\ScrollbarRenderer.h" />
+    <ClInclude Include="domain\WidgetDropTarget.h" />
     <ClInclude Include="domain\WidgetWindowChromeHelper.h" />
     <ClInclude Include="domain\animation\AnimationEasing.h" />
     <ClInclude Include="domain\animation\WidgetAnimationHelper.h" />

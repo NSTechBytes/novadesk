@@ -180,6 +180,14 @@ bool Element::HasDragAction() const
            m_OnDragEndCallbackId != -1;
 }
 
+bool Element::HasDropAction() const
+{
+    return m_OnDropCallbackId != -1 ||
+           m_OnDragEnterCallbackId != -1 ||
+           m_OnDragOverCallbackId != -1 ||
+           m_OnDragLeaveCallbackId != -1;
+}
+
 /*
 ** Set the padding for the element.
 */

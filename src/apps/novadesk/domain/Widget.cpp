@@ -13,6 +13,7 @@
 #include "Utils.h"
 #include "../render/FlexLayoutEngine.h"
 #include "WidgetLayoutHelper.h"
+#include "WidgetDropTarget.h"
 #include <vector>
 #include <windowsx.h>
 #include <commdlg.h>
@@ -147,6 +148,12 @@ Widget::~Widget()
         }
 
         SetWindowLongPtr(m_hWnd, GWLP_USERDATA, 0);
+
+        if (m_DropTarget)
+        {
+            RevokeDragDrop(m_hWnd);
+            m_DropTarget.Reset();
+        }
     }
     WidgetAnimationHelper::ClearAllAnimations(*this);
 
@@ -292,6 +299,14 @@ bool Widget::Create()
     m_Tooltip.Initialize(m_hWnd, hInstance);
     // Poll Ctrl key to provide temporary runtime overrides
     SetTimer(m_hWnd, TIMER_CTRL_OVERRIDE, 50, nullptr);
+
+    // Initialize OLE Drag and Drop Target
+    OleInitialize(nullptr);
+    m_DropTarget = Microsoft::WRL::Make<WidgetDropTarget>(this);
+    if (m_DropTarget)
+    {
+        RegisterDragDrop(m_hWnd, m_DropTarget.Get());
+    }
 
     return true;
 }
@@ -1125,8 +1140,10 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
             const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
             const bool hasSwipeContainer = (widget->m_SwipeContainer != nullptr);
+            const bool isDragArea = (widget->m_MouseOverElement && widget->m_MouseOverElement->IsDragArea());
+            const bool canDragWindow = widget->m_Options.draggable || ctrlHeld || isDragArea;
 
-            if (!widget->m_IsElementDragging && !widget->m_IsScrollbarDragging && !hasSwipeContainer && !isSelectingText && !inputBoxFocused && (widget->m_Options.draggable || ctrlHeld))
+            if (!widget->m_IsElementDragging && !widget->m_IsScrollbarDragging && !hasSwipeContainer && !isSelectingText && !inputBoxFocused && canDragWindow)
             {
                 SetCapture(hWnd);
                 widget->m_IsDragging = true;

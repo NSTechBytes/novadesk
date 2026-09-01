@@ -326,6 +326,13 @@ public:
     bool HasAction(UINT message, WPARAM wParam) const;
     bool HasMouseAction() const;
     bool HasDragAction() const;
+    bool HasDropAction() const;
+
+    bool IsDropTarget() const { return m_IsDropTarget || HasDropAction(); }
+    void SetDropTarget(bool enable) { m_IsDropTarget = enable; }
+
+    bool IsDragArea() const { return m_IsDragArea; }
+    void SetDragArea(bool enable) { m_IsDragArea = enable; }
 
     // Tooltip properties
     void SetToolTip(const std::wstring& text, const std::wstring& title = L"", const std::wstring& icon = L"", int maxWidth = 0, int maxHeight = 0, bool balloon = false) {
@@ -375,6 +382,14 @@ public:
     int m_OnDragStartCallbackId = -1;
     int m_OnDragCallbackId = -1;
     int m_OnDragEndCallbackId = -1;
+
+    // Drop Target Actions
+    int m_OnDropCallbackId = -1;
+    int m_OnDragEnterCallbackId = -1;
+    int m_OnDragOverCallbackId = -1;
+    int m_OnDragLeaveCallbackId = -1;
+    bool m_IsDropTarget = false;
+    bool m_IsDragArea = false;
 
     bool m_IsMouseOver = false;
 

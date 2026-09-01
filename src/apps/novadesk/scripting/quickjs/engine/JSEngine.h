@@ -32,6 +32,20 @@ namespace JSEngine
         int offsetYPercent = 0;
     };
 
+    struct DropEventData
+    {
+        std::vector<std::wstring> files;
+        int clientX = 0;
+        int clientY = 0;
+        int screenX = 0;
+        int screenY = 0;
+        int offsetX = 0;
+        int offsetY = 0;
+        int offsetXPercent = 0;
+        int offsetYPercent = 0;
+        std::string effect = "copy";
+    };
+
     struct ToastEventData
     {
         int64_t toastId = 0;
@@ -70,6 +84,7 @@ namespace JSEngine
     void ClearWidgetEventListeners(Widget *widget);
     void CallEventCallback(int callbackId, Widget *widget = nullptr, const MouseEventData *data = nullptr);
     void CallEventCallbackWithText(int callbackId, Widget *widget, const std::wstring &text);
+    void CallDropCallback(int callbackId, Widget *widget, const DropEventData *data);
     int RegisterEventCallback(JSContext *ctx, JSValueConst fn);
     bool RegisterWidgetEventListener(JSContext *ctx, Widget *widget, const std::string &eventName, JSValueConst fn);
     bool RegisterWidgetContextMenuCallback(JSContext *ctx, const std::wstring &widgetId, int commandId, JSValueConst fn);

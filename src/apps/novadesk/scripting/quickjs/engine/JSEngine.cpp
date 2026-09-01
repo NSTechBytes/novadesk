@@ -2049,6 +2049,65 @@ namespace JSEngine
         }
     }
 
+    void CallDropCallback(int callbackId, Widget *widget, const DropEventData *data)
+    {
+        std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
+        if (!g_context || callbackId <= 0 || callbackId >= static_cast<int>(g_eventCallbacks.size()))
+        {
+            return;
+        }
+
+        JSValue callback = g_eventCallbacks[callbackId];
+        if (JS_IsUndefined(callback) || JS_IsNull(callback))
+        {
+            return;
+        }
+
+        JSValue arg = JS_NewObject(g_context);
+        if (data)
+        {
+            JS_SetProperty(g_context, arg, g_atom_clientX,        JS_NewInt32(g_context, data->clientX));
+            JS_SetProperty(g_context, arg, g_atom_clientY,        JS_NewInt32(g_context, data->clientY));
+            JS_SetProperty(g_context, arg, g_atom_screenX,        JS_NewInt32(g_context, data->screenX));
+            JS_SetProperty(g_context, arg, g_atom_screenY,        JS_NewInt32(g_context, data->screenY));
+            JS_SetProperty(g_context, arg, g_atom_offsetX,        JS_NewInt32(g_context, data->offsetX));
+            JS_SetProperty(g_context, arg, g_atom_offsetY,        JS_NewInt32(g_context, data->offsetY));
+            JS_SetProperty(g_context, arg, g_atom_offsetXPercent, JS_NewInt32(g_context, data->offsetXPercent));
+            JS_SetProperty(g_context, arg, g_atom_offsetYPercent, JS_NewInt32(g_context, data->offsetYPercent));
+            JS_SetPropertyStr(g_context, arg, "effect",           JS_NewString(g_context, data->effect.c_str()));
+
+            // Files array
+            JSValue filesArr = JS_NewArray(g_context);
+            for (uint32_t i = 0; i < static_cast<uint32_t>(data->files.size()); ++i)
+            {
+                std::string filePath = Utils::ToString(data->files[i]);
+                JS_SetPropertyUint32(g_context, filesArr, i, JS_NewString(g_context, filePath.c_str()));
+            }
+            JS_SetPropertyStr(g_context, arg, "files", filesArr);
+            JS_SetPropertyStr(g_context, arg, "totalFiles", JS_NewInt32(g_context, static_cast<int32_t>(data->files.size())));
+        }
+
+        if (widget)
+        {
+            JS_SetProperty(g_context, arg, g_atom_widgetId,
+                              JS_NewString(g_context, Utils::ToString(widget->GetOptions().id).c_str()));
+        }
+
+        JSValue argv[1] = {arg};
+        const std::wstring ownerScriptPath = GetWidgetOwnerScriptPath(widget);
+        ScriptExecutionScope scope(ownerScriptPath);
+        JSValue ret = JS_Call(g_context, callback, JS_UNDEFINED, 1, argv);
+        JS_FreeValue(g_context, arg);
+        if (JS_IsException(ret))
+        {
+            LogQuickJsException(g_context);
+        }
+        else
+        {
+            JS_FreeValue(g_context, ret);
+        }
+    }
+
     int RegisterEventCallback(JSContext *ctx, JSValueConst fn)
     {
         std::lock_guard<std::recursive_mutex> lock(g_engineMutex);

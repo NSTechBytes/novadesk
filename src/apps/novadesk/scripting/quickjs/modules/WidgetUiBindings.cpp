@@ -1446,6 +1446,8 @@ namespace novadesk::scripting::quickjs
                     ScrollbarArrowActiveColor,
                     ScrollbarButtonBgColor,
                     ScrollbarButtonHoverBgColor,
+                    DropTarget,
+                    DragArea,
                     NotFound = 0xFFFF
                 };
                 static const std::unordered_map<std::string_view, BaseProp> s_PropMap = {
@@ -1530,6 +1532,10 @@ namespace novadesk::scripting::quickjs
                     {"scrollbarArrowActiveColor", ScrollbarArrowActiveColor},
                     {"scrollbarButtonBgColor", ScrollbarButtonBgColor},
                     {"scrollbarButtonHoverBgColor", ScrollbarButtonHoverBgColor},
+                    {"dropTarget", DropTarget},
+                    {"isDropTarget", DropTarget},
+                    {"dragArea", DragArea},
+                    {"windowDrag", DragArea},
                 };
                 auto it = s_PropMap.find(prop);
                 if (it != s_PropMap.end())
@@ -1846,6 +1852,10 @@ namespace novadesk::scripting::quickjs
                         const std::wstring s = ColorUtil::ToRGBAString(element->GetScrollbarButtonHoverBgColor(), element->GetScrollbarButtonHoverBgAlpha());
                         return JS_NewString(ctx, Utils::ToString(s).c_str());
                     }
+                    case DropTarget:
+                        return JS_NewBool(ctx, element->IsDropTarget() ? 1 : 0);
+                    case DragArea:
+                        return JS_NewBool(ctx, element->IsDragArea() ? 1 : 0);
                     default:
                         break;
                     }

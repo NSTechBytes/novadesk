@@ -144,6 +144,21 @@ namespace PropertyParser
         GetEventCallbackProp(ctx, obj, "onDragStart", options.onDragStartCallbackId);
         GetEventCallbackProp(ctx, obj, "onDrag", options.onDragCallbackId);
         GetEventCallbackProp(ctx, obj, "onDragEnd", options.onDragEndCallbackId);
+        GetEventCallbackProp(ctx, obj, "onDrop", options.onDropCallbackId);
+        GetEventCallbackProp(ctx, obj, "onDragEnter", options.onDragEnterCallbackId);
+        GetEventCallbackProp(ctx, obj, "onDragOver", options.onDragOverCallbackId);
+        GetEventCallbackProp(ctx, obj, "onDragLeave", options.onDragLeaveCallbackId);
+
+        if (GetBoolProp(ctx, obj, "dropTarget", options.dropTarget) ||
+            GetBoolProp(ctx, obj, "isDropTarget", options.dropTarget))
+        {
+            options.hasDropTarget = true;
+        }
+        if (GetBoolProp(ctx, obj, "dragArea", options.dragArea) ||
+            GetBoolProp(ctx, obj, "windowDrag", options.dragArea))
+        {
+            options.hasDragArea = true;
+        }
 
         std::wstring tooltipText = GetStringProp(ctx, obj, "tooltipText");
         if (!tooltipText.empty())
@@ -392,6 +407,19 @@ namespace PropertyParser
             element->m_OnDragCallbackId = options.onDragCallbackId;
         if (options.onDragEndCallbackId != -1)
             element->m_OnDragEndCallbackId = options.onDragEndCallbackId;
+        if (options.onDropCallbackId != -1)
+            element->m_OnDropCallbackId = options.onDropCallbackId;
+        if (options.onDragEnterCallbackId != -1)
+            element->m_OnDragEnterCallbackId = options.onDragEnterCallbackId;
+        if (options.onDragOverCallbackId != -1)
+            element->m_OnDragOverCallbackId = options.onDragOverCallbackId;
+        if (options.onDragLeaveCallbackId != -1)
+            element->m_OnDragLeaveCallbackId = options.onDragLeaveCallbackId;
+
+        if (options.hasDropTarget)
+            element->SetDropTarget(options.dropTarget);
+        if (options.hasDragArea)
+            element->SetDragArea(options.dragArea);
 
         if (!options.tooltipText.empty())
         {
@@ -570,6 +598,10 @@ namespace PropertyParser
             for (int i = 0; i < 6; ++i) options.transformMatrix[i] = m[i];
         }
         options.tooltipDisabled = element->GetToolTipDisabled();
+        options.hasDropTarget = true;
+        options.dropTarget = element->IsDropTarget();
+        options.hasDragArea = true;
+        options.dragArea = element->IsDragArea();
 
         options.hasScrollX = true;
         options.scrollX = element->GetScrollX();

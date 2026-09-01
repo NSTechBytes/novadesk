@@ -44,6 +44,7 @@
 // Forward declarations
 class WidgetLayoutHelper;
 class ScrollbarRenderer;
+class WidgetDropTarget;
 class ColorPickerPopup;
 
 namespace PropertyParser {
@@ -365,9 +366,13 @@ public:
     static Widget* GetWidgetFromInstanceId(uint64_t instanceId);
     void SetElementFontPath(const std::wstring& elementId, const std::wstring& fontDir);
 
+    const std::vector<std::unique_ptr<Element>>& GetElements() const { return m_Elements; }
+    HWND GetHwnd() const { return m_hWnd; }
+
     friend class WidgetAnimationHelper;
     friend class WidgetLayoutHelper;
     friend class ScrollbarRenderer;
+    friend class WidgetDropTarget;
 
 private:
     static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -543,6 +548,7 @@ private:
     // Input box focus state
     InputBoxElement* m_FocusedInputBox = nullptr;
     std::unique_ptr<ColorPickerPopup> m_ColorPickerPopup;
+    Microsoft::WRL::ComPtr<WidgetDropTarget> m_DropTarget;
 
     void ApplyToolbarStyle();
     void ApplyToolbarIcon();

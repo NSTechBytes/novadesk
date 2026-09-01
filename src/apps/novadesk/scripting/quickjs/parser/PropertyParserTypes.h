@@ -88,6 +88,14 @@ namespace PropertyParser
         int onDragStartCallbackId = -1;
         int onDragCallbackId = -1;
         int onDragEndCallbackId = -1;
+        int onDropCallbackId = -1;
+        int onDragEnterCallbackId = -1;
+        int onDragOverCallbackId = -1;
+        int onDragLeaveCallbackId = -1;
+        bool hasDropTarget = false;
+        bool dropTarget = false;
+        bool hasDragArea = false;
+        bool dragArea = false;
         std::wstring tooltipText;
         std::wstring tooltipTitle;
         std::wstring tooltipIcon;
