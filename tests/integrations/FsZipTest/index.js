@@ -3,11 +3,11 @@ import * as fs from "fs";
 
 console.log("=== FS Zip Methods Integration Test ===");
 
-// 1. Setup sample test files — use __dirname so files land next to the test script
-const testDir = __dirname + "/tmp_test_dir";
-const testArchive = __dirname + "/tmp_test_archive.zip";
-const extractedDir = __dirname + "/tmp_extracted_dir";
-const singleZip = __dirname + "/tmp_single.zip";
+// 1. Setup sample test files — relative paths resolve to index.js's directory
+const testDir = "./tmp_test_dir";
+const testArchive = "./tmp_test_archive.zip";
+const extractedDir = "./tmp_extracted_dir";
+const singleZip = "./tmp_single.zip";
 
 fs.mkdir(testDir + "/nested/deep", true);
 fs.writeFile(testDir + "/sample.txt", "Hello Novadesk Zip System!\nLine 2 of test data.");

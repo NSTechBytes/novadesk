@@ -894,7 +894,12 @@ namespace novadesk::scripting::quickjs
                 pathOrUrl.rfind(L"http://", 0) != 0 &&
                 pathOrUrl.rfind(L"https://", 0) != 0)
             {
-                pathOrUrl = PathUtils::ResolvePath(pathOrUrl, JSEngine::GetEntryScriptDir());
+                std::wstring base = JSEngine::GetCurrentScriptDir();
+                if (base.empty())
+                    base = JSEngine::GetEntryScriptDir();
+                if (base.empty())
+                    base = PathUtils::GetWidgetsDir();
+                pathOrUrl = PathUtils::ResolvePath(pathOrUrl, base);
             }
 
             if (!IsAllowedWebFetchUrl(pathOrUrl))

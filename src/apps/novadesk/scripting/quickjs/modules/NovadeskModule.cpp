@@ -1546,7 +1546,12 @@ namespace novadesk::scripting::quickjs
 
             if (PathUtils::IsPathRelative(addonPath))
             {
-                addonPath = PathUtils::ResolvePath(addonPath, JSEngine::GetEntryScriptDir());
+                std::wstring base = JSEngine::GetCurrentScriptDir();
+                if (base.empty())
+                    base = JSEngine::GetEntryScriptDir();
+                if (base.empty())
+                    base = PathUtils::GetWidgetsDir();
+                addonPath = PathUtils::ResolvePath(addonPath, base);
             }
             else
             {

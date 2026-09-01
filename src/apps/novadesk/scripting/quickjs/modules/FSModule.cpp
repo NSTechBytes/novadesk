@@ -35,7 +35,11 @@ namespace novadesk::scripting::quickjs
                 return L"";
             if (!PathUtils::IsPathRelative(p))
                 return PathUtils::NormalizePath(p);
-            return PathUtils::ResolvePath(p, JSEngine::GetEntryScriptDir());
+            // Resolve relative to the currently-executing script's directory.
+            // This means index.js paths resolve to index.js's folder,
+            // and UI script paths resolve to that UI script's folder.
+            const std::wstring base = JSEngine::GetCurrentScriptDir();
+            return PathUtils::ResolvePath(p, base.empty() ? JSEngine::GetEntryScriptDir() : base);
         }
 
         JSValue JsFsReadFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
