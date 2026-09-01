@@ -27,20 +27,20 @@ public:
      * @param bounds Container bounds
      */
     static void DrawScrollbars(
-        const Widget& widget,
-        Element* container,
-        ID2D1RenderTarget* context,
-        const GfxRect& bounds);
+        const Widget &widget,
+        Element *container,
+        ID2D1RenderTarget *context,
+        const GfxRect &bounds);
 
     /**
      * Helper to render a crisp vector arrow triangle.
      */
     static void DrawArrowTriangle(
-        ID2D1RenderTarget* context,
+        ID2D1RenderTarget *context,
         D2D1_POINT_2F p1,
         D2D1_POINT_2F p2,
         D2D1_POINT_2F p3,
-        ID2D1Brush* brush);
+        ID2D1Brush *brush);
 
 private:
     ScrollbarRenderer() = delete;

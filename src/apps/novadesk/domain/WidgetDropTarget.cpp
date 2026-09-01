@@ -12,19 +12,19 @@
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "../shared/Logging.h"
 
-WidgetDropTarget::WidgetDropTarget(Widget* widget)
+WidgetDropTarget::WidgetDropTarget(Widget *widget)
     : m_Widget(widget)
 {
 }
 
-void WidgetDropTarget::ExtractFiles(IDataObject* pDataObj, std::vector<std::wstring>& outFiles)
+void WidgetDropTarget::ExtractFiles(IDataObject *pDataObj, std::vector<std::wstring> &outFiles)
 {
     outFiles.clear();
     if (!pDataObj)
         return;
 
-    FORMATETC fmt = { CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
-    STGMEDIUM stg = { 0 };
+    FORMATETC fmt = {CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
+    STGMEDIUM stg = {0};
 
     if (SUCCEEDED(pDataObj->GetData(&fmt, &stg)))
     {
@@ -51,7 +51,7 @@ void WidgetDropTarget::ExtractFiles(IDataObject* pDataObj, std::vector<std::wstr
     }
 }
 
-Element* WidgetDropTarget::HitTestDropTarget(int screenX, int screenY, int& outLocalX, int& outLocalY)
+Element *WidgetDropTarget::HitTestDropTarget(int screenX, int screenY, int &outLocalX, int &outLocalY)
 {
     outLocalX = 0;
     outLocalY = 0;
@@ -63,15 +63,15 @@ Element* WidgetDropTarget::HitTestDropTarget(int screenX, int screenY, int& outL
     if (!hWnd || !IsWindow(hWnd))
         return nullptr;
 
-    POINT clientPt = { screenX, screenY };
+    POINT clientPt = {screenX, screenY};
     ScreenToClient(hWnd, &clientPt);
     int x = clientPt.x;
     int y = clientPt.y;
 
-    const auto& elements = m_Widget->GetElements();
+    const auto &elements = m_Widget->GetElements();
     for (auto it = elements.rbegin(); it != elements.rend(); ++it)
     {
-        Element* elem = it->get();
+        Element *elem = it->get();
         if (!elem || !elem->IsVisible())
             continue;
         if (elem->IsContained())
@@ -79,15 +79,15 @@ Element* WidgetDropTarget::HitTestDropTarget(int screenX, int screenY, int& outL
 
         if (elem->IsContainer())
         {
-            Element* hitChild = nullptr;
-            Element* actionElem = nullptr;
-            Element* mouseActionElem = nullptr;
-            Element* tooltipElem = nullptr;
+            Element *hitChild = nullptr;
+            Element *actionElem = nullptr;
+            Element *mouseActionElem = nullptr;
+            Element *tooltipElem = nullptr;
             if (WidgetLayoutHelper::HitTestContainerChildrenDetailed(
                     *m_Widget, elem, x, y, WM_MOUSEMOVE, 0,
                     hitChild, actionElem, mouseActionElem, tooltipElem))
             {
-                Element* candidate = hitChild ? hitChild : elem;
+                Element *candidate = hitChild ? hitChild : elem;
                 while (candidate && !candidate->IsDropTarget())
                 {
                     candidate = candidate->GetContainer();
@@ -100,7 +100,7 @@ Element* WidgetDropTarget::HitTestDropTarget(int screenX, int screenY, int& outL
                     outLocalY = y - b.Y;
                     if (candidate->IsContained())
                     {
-                        Element* parentContainer = candidate->GetContainer();
+                        Element *parentContainer = candidate->GetContainer();
                         if (parentContainer)
                         {
                             outLocalX += parentContainer->GetScrollX();
@@ -124,7 +124,7 @@ Element* WidgetDropTarget::HitTestDropTarget(int screenX, int screenY, int& outL
     return nullptr;
 }
 
-STDMETHODIMP WidgetDropTarget::DragEnter(IDataObject* pDataObj, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect)
+STDMETHODIMP WidgetDropTarget::DragEnter(IDataObject *pDataObj, DWORD grfKeyState, POINTL pt, DWORD *pdwEffect)
 {
     if (!pdwEffect)
         return E_INVALIDARG;
@@ -133,7 +133,7 @@ STDMETHODIMP WidgetDropTarget::DragEnter(IDataObject* pDataObj, DWORD grfKeyStat
     m_AcceptsDrop = !m_CachedFiles.empty();
 
     int localX = 0, localY = 0;
-    Element* target = HitTestDropTarget(pt.x, pt.y, localX, localY);
+    Element *target = HitTestDropTarget(pt.x, pt.y, localX, localY);
     m_CurrentHoverElement = target;
 
     if (target && m_AcceptsDrop)
@@ -148,7 +148,7 @@ STDMETHODIMP WidgetDropTarget::DragEnter(IDataObject* pDataObj, DWORD grfKeyStat
             data.files = m_CachedFiles;
             data.screenX = pt.x;
             data.screenY = pt.y;
-            POINT clientPt = { pt.x, pt.y };
+            POINT clientPt = {pt.x, pt.y};
             if (m_Widget && m_Widget->GetWindow())
                 ScreenToClient(m_Widget->GetWindow(), &clientPt);
             data.clientX = clientPt.x;
@@ -172,13 +172,13 @@ STDMETHODIMP WidgetDropTarget::DragEnter(IDataObject* pDataObj, DWORD grfKeyStat
     return S_OK;
 }
 
-STDMETHODIMP WidgetDropTarget::DragOver(DWORD grfKeyState, POINTL pt, DWORD* pdwEffect)
+STDMETHODIMP WidgetDropTarget::DragOver(DWORD grfKeyState, POINTL pt, DWORD *pdwEffect)
 {
     if (!pdwEffect)
         return E_INVALIDARG;
 
     int localX = 0, localY = 0;
-    Element* target = HitTestDropTarget(pt.x, pt.y, localX, localY);
+    Element *target = HitTestDropTarget(pt.x, pt.y, localX, localY);
 
     if (target != m_CurrentHoverElement)
     {
@@ -189,7 +189,7 @@ STDMETHODIMP WidgetDropTarget::DragOver(DWORD grfKeyState, POINTL pt, DWORD* pdw
             data.files = m_CachedFiles;
             data.screenX = pt.x;
             data.screenY = pt.y;
-            POINT clientPt = { pt.x, pt.y };
+            POINT clientPt = {pt.x, pt.y};
             if (m_Widget && m_Widget->GetWindow())
                 ScreenToClient(m_Widget->GetWindow(), &clientPt);
             data.clientX = clientPt.x;
@@ -204,7 +204,7 @@ STDMETHODIMP WidgetDropTarget::DragOver(DWORD grfKeyState, POINTL pt, DWORD* pdw
             data.files = m_CachedFiles;
             data.screenX = pt.x;
             data.screenY = pt.y;
-            POINT clientPt = { pt.x, pt.y };
+            POINT clientPt = {pt.x, pt.y};
             if (m_Widget && m_Widget->GetWindow())
                 ScreenToClient(m_Widget->GetWindow(), &clientPt);
             data.clientX = clientPt.x;
@@ -235,7 +235,7 @@ STDMETHODIMP WidgetDropTarget::DragOver(DWORD grfKeyState, POINTL pt, DWORD* pdw
             data.files = m_CachedFiles;
             data.screenX = pt.x;
             data.screenY = pt.y;
-            POINT clientPt = { pt.x, pt.y };
+            POINT clientPt = {pt.x, pt.y};
             if (m_Widget && m_Widget->GetWindow())
                 ScreenToClient(m_Widget->GetWindow(), &clientPt);
             data.clientX = clientPt.x;
@@ -274,7 +274,7 @@ STDMETHODIMP WidgetDropTarget::DragLeave()
     return S_OK;
 }
 
-STDMETHODIMP WidgetDropTarget::Drop(IDataObject* pDataObj, DWORD grfKeyState, POINTL pt, DWORD* pdwEffect)
+STDMETHODIMP WidgetDropTarget::Drop(IDataObject *pDataObj, DWORD grfKeyState, POINTL pt, DWORD *pdwEffect)
 {
     if (!pdwEffect)
         return E_INVALIDARG;
@@ -282,7 +282,7 @@ STDMETHODIMP WidgetDropTarget::Drop(IDataObject* pDataObj, DWORD grfKeyState, PO
     ExtractFiles(pDataObj, m_CachedFiles);
 
     int localX = 0, localY = 0;
-    Element* target = HitTestDropTarget(pt.x, pt.y, localX, localY);
+    Element *target = HitTestDropTarget(pt.x, pt.y, localX, localY);
 
     if (target && !m_CachedFiles.empty())
     {
@@ -296,7 +296,7 @@ STDMETHODIMP WidgetDropTarget::Drop(IDataObject* pDataObj, DWORD grfKeyState, PO
             data.files = m_CachedFiles;
             data.screenX = pt.x;
             data.screenY = pt.y;
-            POINT clientPt = { pt.x, pt.y };
+            POINT clientPt = {pt.x, pt.y};
             if (m_Widget && m_Widget->GetWindow())
                 ScreenToClient(m_Widget->GetWindow(), &clientPt);
             data.clientX = clientPt.x;

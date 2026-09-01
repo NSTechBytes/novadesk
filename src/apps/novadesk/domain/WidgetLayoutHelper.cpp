@@ -15,71 +15,71 @@
 #include "ScrollbarRenderer.h"
 
 // Helper to access Widget's layout configs
-std::unordered_map<std::wstring, WidgetLayoutHelper::LayoutConfig>& 
-WidgetLayoutHelper::GetLayoutConfigs(Widget& widget)
+std::unordered_map<std::wstring, WidgetLayoutHelper::LayoutConfig> &
+WidgetLayoutHelper::GetLayoutConfigs(Widget &widget)
 {
     return widget.m_LayoutConfigs;
 }
 
-const std::unordered_map<std::wstring, WidgetLayoutHelper::LayoutConfig>& 
-WidgetLayoutHelper::GetLayoutConfigs(const Widget& widget)
+const std::unordered_map<std::wstring, WidgetLayoutHelper::LayoutConfig> &
+WidgetLayoutHelper::GetLayoutConfigs(const Widget &widget)
 {
     return widget.m_LayoutConfigs;
 }
 
-void WidgetLayoutHelper::SetLayoutConfig(Widget& widget, const std::wstring& id, const LayoutConfig& config)
+void WidgetLayoutHelper::SetLayoutConfig(Widget &widget, const std::wstring &id, const LayoutConfig &config)
 {
     if (id.empty())
         return;
-    
+
     GetLayoutConfigs(widget)[id] = config;
     ReflowLayout(widget, id);
 }
 
-bool WidgetLayoutHelper::TryGetLayoutConfig(const Widget& widget, const std::wstring& id, LayoutConfig& config)
+bool WidgetLayoutHelper::TryGetLayoutConfig(const Widget &widget, const std::wstring &id, LayoutConfig &config)
 {
-    const auto& configs = GetLayoutConfigs(widget);
+    const auto &configs = GetLayoutConfigs(widget);
     auto it = configs.find(id);
     if (it == configs.end())
         return false;
-    
+
     config = it->second;
     return true;
 }
 
-bool WidgetLayoutHelper::IsLayoutContainer(const Widget& widget, const std::wstring& id)
+bool WidgetLayoutHelper::IsLayoutContainer(const Widget &widget, const std::wstring &id)
 {
     if (id.empty())
         return false;
-    
-    const auto& configs = GetLayoutConfigs(widget);
+
+    const auto &configs = GetLayoutConfigs(widget);
     return configs.find(id) != configs.end();
 }
 
-void WidgetLayoutHelper::ReflowLayout(Widget& widget, const std::wstring& id)
+void WidgetLayoutHelper::ReflowLayout(Widget &widget, const std::wstring &id)
 {
     if (id.empty())
         return;
-    
-    Element* container = widget.FindElementById(id);
+
+    Element *container = widget.FindElementById(id);
     if (!container)
         return;
-    
+
     ApplyLayoutForContainer(widget, container);
 }
 
-void WidgetLayoutHelper::ApplyLayoutForContainer(const Widget& widget, Element* container)
+void WidgetLayoutHelper::ApplyLayoutForContainer(const Widget &widget, Element *container)
 {
     if (!container)
         return;
 
-    const auto& configs = GetLayoutConfigs(widget);
+    const auto &configs = GetLayoutConfigs(widget);
     auto cfgIt = configs.find(container->GetId());
     if (cfgIt == configs.end())
         return;
 
-    const LayoutConfig& cfg = cfgIt->second;
-    const auto& items = container->GetContainerItems();
+    const LayoutConfig &cfg = cfgIt->second;
+    const auto &items = container->GetContainerItems();
     if (items.empty())
         return;
 
@@ -87,13 +87,13 @@ void WidgetLayoutHelper::ApplyLayoutForContainer(const Widget& widget, Element* 
     FlexLayoutEngine::ApplyLayout(container, cfg);
 }
 
-void WidgetLayoutHelper::UpdateContainerForElement(Widget& widget, Element* element, const std::wstring& newContainerId)
+void WidgetLayoutHelper::UpdateContainerForElement(Widget &widget, Element *element, const std::wstring &newContainerId)
 {
     if (!element)
         return;
 
-    Element* currentContainer = element->GetContainer();
-    
+    Element *currentContainer = element->GetContainer();
+
     // Remove from container
     if (newContainerId.empty())
     {
@@ -118,7 +118,7 @@ void WidgetLayoutHelper::UpdateContainerForElement(Widget& widget, Element* elem
     }
 
     // Find new container
-    Element* newContainer = widget.FindElementById(newContainerId);
+    Element *newContainer = widget.FindElementById(newContainerId);
     if (!newContainer)
     {
         Logging::Log(LogLevel::Error, L"Invalid container: %s", newContainerId.c_str());
@@ -169,31 +169,31 @@ void WidgetLayoutHelper::UpdateContainerForElement(Widget& widget, Element* elem
     }
 }
 
-bool WidgetLayoutHelper::WouldCreateContainerCycle(const Element* element, const Element* container)
+bool WidgetLayoutHelper::WouldCreateContainerCycle(const Element *element, const Element *container)
 {
     if (!element || !container)
         return false;
-    
+
     if (element == container)
         return true;
 
-    const Element* cursor = container;
+    const Element *cursor = container;
     while (cursor)
     {
         if (cursor == element)
             return true;
         cursor = cursor->GetContainer();
     }
-    
+
     return false;
 }
 
-void WidgetLayoutHelper::RenderContainerChildren(const Widget& widget, Element* container)
+void WidgetLayoutHelper::RenderContainerChildren(const Widget &widget, Element *container)
 {
     if (!container || !container->IsContainer())
         return;
 
-    ID2D1DeviceContext* context = widget.GetDeviceContext();
+    ID2D1DeviceContext *context = widget.GetDeviceContext();
     if (!context)
         return;
 
@@ -219,17 +219,17 @@ void WidgetLayoutHelper::RenderContainerChildren(const Widget& widget, Element* 
         HRESULT hr = context->CreateCompatibleRenderTarget(
             D2D1::SizeF((FLOAT)bounds.Width, (FLOAT)bounds.Height),
             maskTarget.GetAddressOf());
-        
+
         if (SUCCEEDED(hr) && maskTarget)
         {
             maskTarget->BeginDraw();
             maskTarget->Clear(D2D1::ColorF(0, 0.0f));
             maskTarget->SetTransform(D2D1::Matrix3x2F::Translation(-(FLOAT)bounds.X, -(FLOAT)bounds.Y));
 
-            if (ShapeElement* shapeContainer = dynamic_cast<ShapeElement*>(container))
+            if (ShapeElement *shapeContainer = dynamic_cast<ShapeElement *>(container))
             {
                 Microsoft::WRL::ComPtr<ID2D1Geometry> geom;
-                ID2D1Factory1* factory = Direct2D::GetFactory();
+                ID2D1Factory1 *factory = Direct2D::GetFactory();
                 if (factory && shapeContainer->CreateGeometry(factory, geom))
                 {
                     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush;
@@ -263,7 +263,7 @@ void WidgetLayoutHelper::RenderContainerChildren(const Widget& widget, Element* 
     {
         context->PushLayer(
             D2D1::LayerParameters(clipRect, nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
-                                 D2D1::Matrix3x2F::Identity(), 1.0f, opacityBrush.Get()),
+                                  D2D1::Matrix3x2F::Identity(), 1.0f, opacityBrush.Get()),
             layer.Get());
     }
     else
@@ -283,7 +283,7 @@ void WidgetLayoutHelper::RenderContainerChildren(const Widget& widget, Element* 
     context->SetTransform(translate * originalTransform);
 
     // Render all children of this container (elements stored in widget's flat list)
-    for (Element* child : container->GetContainerItems())
+    for (Element *child : container->GetContainerItems())
     {
         if (!child || !child->IsVisible())
             continue;
@@ -311,15 +311,15 @@ void WidgetLayoutHelper::RenderContainerChildren(const Widget& widget, Element* 
     context->PopLayer();
 }
 
-bool WidgetLayoutHelper::HitTestContainerChildren(Element* container, int x, int y, Element*& outElement)
+bool WidgetLayoutHelper::HitTestContainerChildren(Element *container, int x, int y, Element *&outElement)
 {
     // Note: This overload exists for backwards compatibility
     // In practice, we need the Widget reference, so we pass through detailed version
     // The detailed version will handle the container hit testing logic
-    Element* outActionElement = nullptr;
-    Element* outMouseActionElement = nullptr;
-    Element* outToolTipElement = nullptr;
-    
+    Element *outActionElement = nullptr;
+    Element *outMouseActionElement = nullptr;
+    Element *outToolTipElement = nullptr;
+
     // For the simple version, we create a minimal hit test without Widget-specific features
     // This is safe because the basic hit testing doesn't require Widget state
     if (!container || !container->IsContainer() || !container->IsVisible())
@@ -330,7 +330,7 @@ bool WidgetLayoutHelper::HitTestContainerChildren(Element* container, int x, int
         y < bounds.Y || y >= bounds.Y + bounds.Height)
         return false;
 
-    if (ShapeElement* shapeContainer = dynamic_cast<ShapeElement*>(container))
+    if (ShapeElement *shapeContainer = dynamic_cast<ShapeElement *>(container))
     {
         if (!shapeContainer->HitTest(x, y))
             return false;
@@ -340,10 +340,10 @@ bool WidgetLayoutHelper::HitTestContainerChildren(Element* container, int x, int
     int localY = y - bounds.Y + container->GetScrollY();
     bool foundAny = false;
 
-    const auto& items = container->GetContainerItems();
+    const auto &items = container->GetContainerItems();
     for (auto it = items.rbegin(); it != items.rend(); ++it)
     {
-        Element* child = *it;
+        Element *child = *it;
         if (!child || !child->IsVisible())
             continue;
 
@@ -366,21 +366,21 @@ bool WidgetLayoutHelper::HitTestContainerChildren(Element* container, int x, int
 }
 
 bool WidgetLayoutHelper::HitTestContainerChildrenDetailed(
-    const Widget& widget,
-    Element* container,
+    const Widget &widget,
+    Element *container,
     int x, int y,
     UINT message,
     WPARAM wParam,
-    Element*& outHitElement,
-    Element*& outActionElement,
-    Element*& outMouseActionElement,
-    Element*& outToolTipElement)
+    Element *&outHitElement,
+    Element *&outActionElement,
+    Element *&outMouseActionElement,
+    Element *&outToolTipElement)
 {
     if (!container || !container->IsContainer() || !container->IsVisible())
         return false;
 
     GfxRect bounds = container->GetBounds();
-    
+
     // Check if point is within container bounds
     if (x < bounds.X || x >= bounds.X + bounds.Width ||
         y < bounds.Y || y >= bounds.Y + bounds.Height)
@@ -389,7 +389,7 @@ bool WidgetLayoutHelper::HitTestContainerChildrenDetailed(
     }
 
     // For shape containers, check shape geometry
-    if (ShapeElement* shapeContainer = dynamic_cast<ShapeElement*>(container))
+    if (ShapeElement *shapeContainer = dynamic_cast<ShapeElement *>(container))
     {
         if (!shapeContainer->HitTest(x, y))
         {
@@ -402,10 +402,10 @@ bool WidgetLayoutHelper::HitTestContainerChildrenDetailed(
     int localY = y - bounds.Y + container->GetScrollY();
     bool foundAny = false;
 
-    const auto& items = container->GetContainerItems();
+    const auto &items = container->GetContainerItems();
     for (auto it = items.rbegin(); it != items.rend(); ++it)
     {
-        Element* child = *it;
+        Element *child = *it;
         if (!child || !child->IsVisible())
             continue;
 

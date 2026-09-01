@@ -89,7 +89,8 @@ void InitTrayIcon(int trayId);
 void RemoveTrayIcon(int trayId);
 void RemoveAllTrayIcons();
 static TrayState *GetTrayState(int trayId);
-static void DispatchTrayMouseEvent(int trayId, const char *name);static RECT GetTrayIconRect(int trayId)
+static void DispatchTrayMouseEvent(int trayId, const char *name);
+static RECT GetTrayIconRect(int trayId)
 {
     TrayState *state = GetTrayState(trayId);
 

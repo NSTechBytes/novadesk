@@ -56,8 +56,6 @@
 #define ZPOS_FLAGS (SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOSENDCHANGING)
 #define SNAP_DISTANCE 10
 
-
-
 extern std::vector<Widget *> widgets; // Defined in Novadesk.cpp
 
 std::mutex Widget::s_WidgetMutex;
@@ -83,7 +81,7 @@ bool Widget::IsValid(Widget *pWidget)
 std::vector<Widget *> Widget::GetAllWidgets()
 {
     std::lock_guard<std::mutex> lock(s_WidgetMutex);
-    return widgets;  // returns a snapshot copy
+    return widgets; // returns a snapshot copy
 }
 
 void Widget::RemoveWidget(Widget *widget)
@@ -200,7 +198,7 @@ bool Widget::Register()
     static std::once_flag s_Flag;
     static std::atomic<bool> s_Registered{false};
     std::call_once(s_Flag, []()
-    {
+                   {
         HINSTANCE hInstance = GetModuleHandle(nullptr);
 
         WNDCLASSEXW wcex = {sizeof(WNDCLASSEX)};
@@ -211,8 +209,7 @@ bool Widget::Register()
         wcex.hbrBackground = nullptr; // We'll paint it ourselves
         wcex.lpszClassName = WIDGET_CLASS_NAME;
 
-        s_Registered.store(RegisterClassExW(&wcex) != 0, std::memory_order_release);
-    });
+        s_Registered.store(RegisterClassExW(&wcex) != 0, std::memory_order_release); });
     return s_Registered.load(std::memory_order_acquire);
 }
 
@@ -401,7 +398,7 @@ void Widget::Maximize()
 
     if (!m_IsMaximized)
     {
-        m_PreMaximizeBounds = { m_Options.x, m_Options.y, m_Options.width, m_Options.height };
+        m_PreMaximizeBounds = {m_Options.x, m_Options.y, m_Options.width, m_Options.height};
 
         HMONITOR hMon = MonitorFromWindow(m_hWnd, MONITOR_DEFAULTTONEAREST);
         MONITORINFO mi{};
@@ -801,7 +798,8 @@ void Widget::SetResizable(bool enable)
 */
 void Widget::SetMinWidth(int minWidth)
 {
-    if (minWidth < 0) minWidth = 0;
+    if (minWidth < 0)
+        minWidth = 0;
     if (m_Options.minWidth != minWidth)
     {
         m_Options.minWidth = minWidth;
@@ -817,7 +815,8 @@ void Widget::SetMinWidth(int minWidth)
 */
 void Widget::SetMinHeight(int minHeight)
 {
-    if (minHeight < 0) minHeight = 0;
+    if (minHeight < 0)
+        minHeight = 0;
     if (m_Options.minHeight != minHeight)
     {
         m_Options.minHeight = minHeight;
@@ -833,8 +832,10 @@ void Widget::SetMinHeight(int minHeight)
 */
 void Widget::SetMinSize(int minWidth, int minHeight)
 {
-    if (minWidth < 0) minWidth = 0;
-    if (minHeight < 0) minHeight = 0;
+    if (minWidth < 0)
+        minWidth = 0;
+    if (minHeight < 0)
+        minHeight = 0;
     if (m_Options.minWidth != minWidth || m_Options.minHeight != minHeight)
     {
         m_Options.minWidth = minWidth;
@@ -1031,8 +1032,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     {
     case WM_USER + 500:
     {
-        std::wstring* pUrl = reinterpret_cast<std::wstring*>(wParam);
-        AsyncImageResult* result = reinterpret_cast<AsyncImageResult*>(lParam);
+        std::wstring *pUrl = reinterpret_cast<std::wstring *>(wParam);
+        AsyncImageResult *result = reinterpret_cast<AsyncImageResult *>(lParam);
         if (pUrl && result)
         {
             if (widget)
@@ -1071,7 +1072,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 InputBoxElement *focusedInput = widget->m_FocusedInputBox;
                 const auto focusedElement = static_cast<Element *>(focusedInput);
                 const bool isTracked = std::find_if(widget->m_Elements.begin(), widget->m_Elements.end(),
-                    [&](const auto &u) { return u.get() == focusedElement; }) != widget->m_Elements.end();
+                                                    [&](const auto &u)
+                                                    { return u.get() == focusedElement; }) != widget->m_Elements.end();
                 if (isTracked)
                 {
                     const int onBlurCallbackId = focusedInput->m_OnBlurCallbackId;
@@ -1079,7 +1081,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         JSEngine::CallEventCallback(onBlurCallbackId, widget, nullptr);
 
                     const bool stillTracked = std::find_if(widget->m_Elements.begin(), widget->m_Elements.end(),
-                        [&](const auto &u) { return u.get() == focusedElement; }) != widget->m_Elements.end();
+                                                           [&](const auto &u)
+                                                           { return u.get() == focusedElement; }) != widget->m_Elements.end();
                     if (widget->m_FocusedInputBox == focusedInput && stillTracked)
                         focusedInput->SetFocus(false);
                 }
@@ -1118,7 +1121,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                     widget->m_IsResizing = true;
                     widget->m_ResizeEdge = edge;
                     widget->m_ResizeStartCursor = ptCursor;
-                    widget->m_ResizeStartWindow = { widget->m_Options.x, widget->m_Options.y, widget->m_Options.width, widget->m_Options.height };
+                    widget->m_ResizeStartWindow = {widget->m_Options.x, widget->m_Options.y, widget->m_Options.width, widget->m_Options.height};
                     return 0;
                 }
             }
@@ -1288,7 +1291,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
             // Show I-beam cursor for selectable text
             if (cursorElement && cursorElement->GetType() == ELEMENT_TEXT)
             {
-                TextElement *textElem = static_cast<TextElement*>(cursorElement);
+                TextElement *textElem = static_cast<TextElement *>(cursorElement);
                 if (textElem->GetTextSelection())
                 {
                     SetCursor(LoadCursorW(nullptr, IDC_IBEAM));
@@ -1333,7 +1336,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 if (edgeInt & static_cast<int>(WidgetResizeEdge::Left))
                 {
                     int desiredW = widget->m_ResizeStartWindow.w - dx;
-                    if (desiredW < minW) desiredW = minW;
+                    if (desiredW < minW)
+                        desiredW = minW;
                     newX = widget->m_ResizeStartWindow.x + (widget->m_ResizeStartWindow.w - desiredW);
                     newW = desiredW;
                 }
@@ -1345,7 +1349,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 if (edgeInt & static_cast<int>(WidgetResizeEdge::Top))
                 {
                     int desiredH = widget->m_ResizeStartWindow.h - dy;
-                    if (desiredH < minH) desiredH = minH;
+                    if (desiredH < minH)
+                        desiredH = minH;
                     newY = widget->m_ResizeStartWindow.y + (widget->m_ResizeStartWindow.h - desiredH);
                     newH = desiredH;
                 }
@@ -1415,7 +1420,6 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         }
         return 0;
 
-
     case WM_MOUSEACTIVATE:
         if (widget)
         {
@@ -1476,7 +1480,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                 {
                     const auto focused = static_cast<Element *>(widget->m_FocusedInputBox);
                     const bool isTracked = std::find_if(widget->m_Elements.begin(), widget->m_Elements.end(),
-                        [&](const auto &u) { return u.get() == focused; }) != widget->m_Elements.end();
+                                                        [&](const auto &u)
+                                                        { return u.get() == focused; }) != widget->m_Elements.end();
                     if (isTracked)
                     {
                         widget->Redraw();
@@ -1598,9 +1603,9 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
                         {
                             if (w == widget)
                                 continue;
-                            RECT otherRect = { w->m_Options.x, w->m_Options.y,
-                                w->m_Options.x + w->m_Options.width,
-                                w->m_Options.y + w->m_Options.height };
+                            RECT otherRect = {w->m_Options.x, w->m_Options.y,
+                                              w->m_Options.x + w->m_Options.width,
+                                              w->m_Options.y + w->m_Options.height};
 
                             // Vertical overlap -> Snap horizontally
                             if (wp->y < otherRect.bottom + SNAP_DISTANCE && wp->y + widget->m_Options.height > otherRect.top - SNAP_DISTANCE)
@@ -1826,8 +1831,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
     case WM_KEYDOWN:
         if (widget && widget->m_TextSelectionElement)
         {
-            TextElement* textElem = widget->m_TextSelectionElement;
-            
+            TextElement *textElem = widget->m_TextSelectionElement;
+
             // Handle Ctrl+C (Copy)
             if (wParam == 'C' && (GetAsyncKeyState(VK_CONTROL) & 0x8000))
             {
@@ -2119,7 +2124,6 @@ void Widget::AddRotator(const PropertyParser::RotatorOptions &options)
 
     Redraw();
 }
-
 
 /*
 ** Add a text content item to the widget.
@@ -2423,8 +2427,10 @@ void Widget::AddInputBox(const PropertyParser::InputBoxOptions &options)
 
 void Widget::AddColorPicker(const PropertyParser::ColorPickerOptions &options)
 {
-    if (options.id.empty()) return;
-    if (FindElementById(options.id)) RemoveElements(options.id);
+    if (options.id.empty())
+        return;
+    if (FindElementById(options.id))
+        RemoveElements(options.id);
     auto *element = new ColorPickerElement(options.id, options.x, options.y, options.width > 0 ? options.width : 32, options.height > 0 ? options.height : 32);
     PropertyParser::ApplyColorPickerOptions(element, options);
     m_Elements.push_back(std::unique_ptr<Element>(element));
@@ -2435,7 +2441,7 @@ void Widget::AddColorPicker(const PropertyParser::ColorPickerOptions &options)
     Redraw();
 }
 
-void Widget::OpenColorPicker(ColorPickerElement* colorPicker)
+void Widget::OpenColorPicker(ColorPickerElement *colorPicker)
 {
     if (!colorPicker)
         return;
@@ -2454,7 +2460,7 @@ void Widget::CloseColorPicker()
     }
 }
 
-bool Widget::IsColorPickerOpen(const ColorPickerElement* colorPicker) const
+bool Widget::IsColorPickerOpen(const ColorPickerElement *colorPicker) const
 {
     if (!m_ColorPickerPopup || !m_ColorPickerPopup->IsOpen())
         return false;
@@ -2468,7 +2474,7 @@ bool Widget::IsColorPickerEyedropperActive() const
     return m_ColorPickerPopup && m_ColorPickerPopup->IsEyedropperActive();
 }
 
-void Widget::OpenColorPickerEyedropper(ColorPickerElement* colorPicker)
+void Widget::OpenColorPickerEyedropper(ColorPickerElement *colorPicker)
 {
     if (colorPicker && (!m_ColorPickerPopup || m_ColorPickerPopup->GetPickerElement() != colorPicker))
     {
@@ -2480,7 +2486,7 @@ void Widget::OpenColorPickerEyedropper(ColorPickerElement* colorPicker)
     }
 }
 
-void Widget::FocusInputBox(InputBoxElement* inputElem)
+void Widget::FocusInputBox(InputBoxElement *inputElem)
 {
     if (!inputElem)
         return;
@@ -2504,7 +2510,7 @@ void Widget::FocusInputBox(InputBoxElement* inputElem)
     Redraw();
 }
 
-void Widget::BlurInputBox(InputBoxElement* inputElem)
+void Widget::BlurInputBox(InputBoxElement *inputElem)
 {
     if (!m_FocusedInputBox)
         return;
@@ -2785,12 +2791,12 @@ bool Widget::HitTestContainerChildrenDetailed(
         outHitElement, outActionElement, outMouseActionElement, outToolTipElement);
 }
 
-bool Widget::HitTestContainerScrollbar(int x, int y, ScrollbarHitResult& result)
+bool Widget::HitTestContainerScrollbar(int x, int y, ScrollbarHitResult &result)
 {
     const float hitMargin = 4.0f;
     for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it)
     {
-        Element* element = it->get();
+        Element *element = it->get();
         if (!element || !element->IsVisible() || !element->IsContainer() || !element->GetShowScrollbar())
             continue;
 
@@ -3028,7 +3034,7 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx, JS
             nextCfg.paddingRight = parsed.paddingRight;
             nextCfg.paddingBottom = parsed.paddingBottom;
             // Logging::Log(LogLevel::Debug, L"[PADDING] SetLayoutConfig for '%s': L=%d, T=%d, R=%d, B=%d, flexDirection='%s'",
-            //     element->GetId().c_str(), nextCfg.paddingLeft, nextCfg.paddingTop, 
+            //     element->GetId().c_str(), nextCfg.paddingLeft, nextCfg.paddingTop,
             //     nextCfg.paddingRight, nextCfg.paddingBottom, nextCfg.flexDirection.c_str());
             SetLayoutConfig(element->GetId(), nextCfg);
             UpdateContainerForElement(element, parsed.shape.containerId);
@@ -3159,18 +3165,18 @@ void Widget::RemoveElementsByGroup(const std::wstring &group)
         return;
 
     bool changed = false;
-    for (auto it = m_Elements.begin(); it != m_Elements.end(); )
+    for (auto it = m_Elements.begin(); it != m_Elements.end();)
     {
         Element *element = it->get();
         if (element->GetGroupId() == group)
         {
             ClearElementReferences(element);
-            
+
             if (PathShape *path = dynamic_cast<PathShape *>(element))
             {
                 ReleaseCombinedConsumes(path);
             }
-            
+
             if (element->IsContainer())
             {
                 for (Element *child : element->GetContainerItems())
@@ -3181,7 +3187,7 @@ void Widget::RemoveElementsByGroup(const std::wstring &group)
                 }
                 element->ClearContainerItems();
             }
-            
+
             UpdateContainerForElement(element, L"");
             if (!element->GetId().empty())
                 m_ElementIndex.erase(element->GetId());
@@ -3243,18 +3249,18 @@ bool Widget::RemoveElements(const std::wstring &id)
     }
 
     bool changed = false;
-    for (auto it = m_Elements.begin(); it != m_Elements.end(); )
+    for (auto it = m_Elements.begin(); it != m_Elements.end();)
     {
         Element *element = it->get();
         if (element->GetId() == id)
         {
             ClearElementReferences(element);
-            
+
             if (PathShape *path = dynamic_cast<PathShape *>(element))
             {
                 ReleaseCombinedConsumes(path);
             }
-            
+
             if (element->IsContainer())
             {
                 for (Element *child : element->GetContainerItems())
@@ -3265,7 +3271,7 @@ bool Widget::RemoveElements(const std::wstring &id)
                 }
                 element->ClearContainerItems();
             }
-            
+
             UpdateContainerForElement(element, L"");
             m_LayoutConfigs.erase(id);
             WidgetAnimationHelper::RemoveAnimationsForElement(*this, id);
@@ -3287,7 +3293,6 @@ bool Widget::RemoveElements(const std::wstring &id)
     }
     return changed;
 }
-
 
 /*
 ** Remove multiple elements by their IDs.
@@ -3360,7 +3365,7 @@ void Widget::Redraw()
     }
 }
 
-void Widget::OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer)
+void Widget::OnImageDownloaded(const std::wstring &url, const std::vector<BYTE> &buffer)
 {
     bool updated = false;
     if (m_Options.backgroundImage == url && !m_BackgroundImage.IsLoaded())
@@ -3384,13 +3389,13 @@ void Widget::OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>&
     }
 }
 
-void Widget::SetElementFontPath(const std::wstring& elementId, const std::wstring& fontDir)
+void Widget::SetElementFontPath(const std::wstring &elementId, const std::wstring &fontDir)
 {
-    Element* element = FindElementById(elementId);
+    Element *element = FindElementById(elementId);
     if (!element)
         return;
 
-    TextElement* textElem = dynamic_cast<TextElement*>(element);
+    TextElement *textElem = dynamic_cast<TextElement *>(element);
     if (textElem)
     {
         textElem->SetFontPath(fontDir);
@@ -3398,7 +3403,7 @@ void Widget::SetElementFontPath(const std::wstring& elementId, const std::wstrin
         return;
     }
 
-    InputBoxElement* inputElem = dynamic_cast<InputBoxElement*>(element);
+    InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(element);
     if (inputElem)
     {
         inputElem->SetFontPath(fontDir);
@@ -3625,31 +3630,35 @@ void Widget::UpdateLayeredWindowContent()
                         {
                             if (m_Options.backgroundImagePosition.type == BackgroundImagePosition::Type::Explicit)
                                 return D2D1::RectF(m_Options.backgroundImagePosition.x, m_Options.backgroundImagePosition.y,
-                                    m_Options.backgroundImagePosition.x + drawW, m_Options.backgroundImagePosition.y + drawH);
+                                                   m_Options.backgroundImagePosition.x + drawW, m_Options.backgroundImagePosition.y + drawH);
 
                             float x = 0.0f, y = 0.0f;
                             const std::wstring &position = m_Options.backgroundImagePosition.keyword;
-                            if (position.find(L"right") != std::wstring::npos) x = w - drawW;
-                            else if (position.find(L"left") == std::wstring::npos) x = (w - drawW) * 0.5f;
-                            if (position.find(L"bottom") != std::wstring::npos) y = h - drawH;
-                            else if (position.find(L"top") == std::wstring::npos) y = (h - drawH) * 0.5f;
+                            if (position.find(L"right") != std::wstring::npos)
+                                x = w - drawW;
+                            else if (position.find(L"left") == std::wstring::npos)
+                                x = (w - drawW) * 0.5f;
+                            if (position.find(L"bottom") != std::wstring::npos)
+                                y = h - drawH;
+                            else if (position.find(L"top") == std::wstring::npos)
+                                y = (h - drawH) * 0.5f;
                             return D2D1::RectF(x, y, x + drawW, y + drawH);
                         };
                         if (m_Options.backgroundImageSize.type == BackgroundImageSize::Type::Explicit)
                         {
                             const float drawW = m_Options.backgroundImageSize.hasWidth
-                                ? m_Options.backgroundImageSize.width
-                                : m_Options.backgroundImageSize.height * imageSize.width / imageSize.height;
+                                                    ? m_Options.backgroundImageSize.width
+                                                    : m_Options.backgroundImageSize.height * imageSize.width / imageSize.height;
                             const float drawH = m_Options.backgroundImageSize.hasHeight
-                                ? m_Options.backgroundImageSize.height
-                                : m_Options.backgroundImageSize.width * imageSize.height / imageSize.width;
+                                                    ? m_Options.backgroundImageSize.height
+                                                    : m_Options.backgroundImageSize.width * imageSize.height / imageSize.width;
                             dst = positionImage(drawW, drawH);
                         }
                         else if (m_Options.backgroundImageSize.type != BackgroundImageSize::Type::Stretch)
                         {
                             const float scale = m_Options.backgroundImageSize.type == BackgroundImageSize::Type::Contain
-                                ? (std::min)(static_cast<float>(w) / imageSize.width, static_cast<float>(h) / imageSize.height)
-                                : (std::max)(static_cast<float>(w) / imageSize.width, static_cast<float>(h) / imageSize.height);
+                                                    ? (std::min)(static_cast<float>(w) / imageSize.width, static_cast<float>(h) / imageSize.height)
+                                                    : (std::max)(static_cast<float>(w) / imageSize.width, static_cast<float>(h) / imageSize.height);
                             const float drawW = imageSize.width * scale;
                             const float drawH = imageSize.height * scale;
                             dst = positionImage(drawW, drawH);
@@ -3666,7 +3675,8 @@ void Widget::UpdateLayeredWindowContent()
             {
                 const auto focused = static_cast<Element *>(m_FocusedInputBox);
                 const bool isTracked = std::find_if(m_Elements.begin(), m_Elements.end(),
-                    [&](const auto &u) { return u.get() == focused; }) != m_Elements.end();
+                                                    [&](const auto &u)
+                                                    { return u.get() == focused; }) != m_Elements.end();
                 if (isTracked)
                 {
                     m_FocusedInputBox->UpdateBlink();
@@ -3814,7 +3824,7 @@ void Widget::RebuildSpatialGrid()
         GfxRect bounds = el->GetBounds();
         int minCX = bounds.X / GRID_CELL_SIZE;
         int minCY = bounds.Y / GRID_CELL_SIZE;
-        int maxCX = (bounds.X + bounds.Width  - 1) / GRID_CELL_SIZE;
+        int maxCX = (bounds.X + bounds.Width - 1) / GRID_CELL_SIZE;
         int maxCY = (bounds.Y + bounds.Height - 1) / GRID_CELL_SIZE;
         for (int cy = minCY; cy <= maxCY; ++cy)
         {
@@ -3964,18 +3974,20 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     if (message == WM_MOUSEMOVE || message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || message == WM_MOUSELEAVE)
     {
         bool isDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
-        if (message == WM_LBUTTONDOWN) isDown = true;
-        if (message == WM_LBUTTONUP) isDown = false;
-        
+        if (message == WM_LBUTTONDOWN)
+            isDown = true;
+        if (message == WM_LBUTTONUP)
+            isDown = false;
+
         for (ButtonElement *btn : m_Buttons)
         {
             ButtonState newState = BUTTON_STATE_NORMAL;
-            
+
             if (message != WM_MOUSELEAVE && btn->IsVisible() && btn->HitTest(x, y))
             {
                 newState = isDown ? BUTTON_STATE_CLICKED : BUTTON_STATE_HOVERED;
             }
-            
+
             if (btn->GetButtonState() != newState)
             {
                 btn->SetButtonState(newState);
@@ -4183,10 +4195,14 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 }
 
                 // If callback cleared the elements or deleted hoverElement/actionElement, handle it
-                if (!IsTrackedElement(hoverElement)) hoverElement = nullptr;
-                if (!IsTrackedElement(actionElement)) actionElement = nullptr;
-                if (!IsTrackedElement(mouseActionElement)) mouseActionElement = nullptr;
-                if (!IsTrackedElement(toolTipElement)) toolTipElement = nullptr;
+                if (!IsTrackedElement(hoverElement))
+                    hoverElement = nullptr;
+                if (!IsTrackedElement(actionElement))
+                    actionElement = nullptr;
+                if (!IsTrackedElement(mouseActionElement))
+                    mouseActionElement = nullptr;
+                if (!IsTrackedElement(toolTipElement))
+                    toolTipElement = nullptr;
 
                 if (m_Elements.empty())
                 {
@@ -4207,10 +4223,14 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 }
 
                 // Re-verify after callback
-                if (!IsTrackedElement(hoverElement)) hoverElement = nullptr;
-                if (!IsTrackedElement(actionElement)) actionElement = nullptr;
-                if (!IsTrackedElement(mouseActionElement)) mouseActionElement = nullptr;
-                if (!IsTrackedElement(toolTipElement)) toolTipElement = nullptr;
+                if (!IsTrackedElement(hoverElement))
+                    hoverElement = nullptr;
+                if (!IsTrackedElement(actionElement))
+                    actionElement = nullptr;
+                if (!IsTrackedElement(mouseActionElement))
+                    mouseActionElement = nullptr;
+                if (!IsTrackedElement(toolTipElement))
+                    toolTipElement = nullptr;
 
                 if (m_Elements.empty())
                 {
@@ -4227,12 +4247,12 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
                 TextElement *textSelElem = nullptr;
                 if (hitElement && hitElement->GetType() == ELEMENT_TEXT)
                 {
-                    TextElement *te = static_cast<TextElement*>(hitElement);
+                    TextElement *te = static_cast<TextElement *>(hitElement);
                     if (te->GetTextSelection())
                         textSelElem = te;
                 }
                 m_CursorElement = textSelElem ? textSelElem
-                    : (mouseActionElement ? mouseActionElement : hitElement);
+                                              : (mouseActionElement ? mouseActionElement : hitElement);
             }
 
             // Refresh cursor when element under mouse changes as it might have different action state
@@ -4249,7 +4269,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         if (!m_IsScrollbarDragging && !m_IsDragging && !m_IsContainerSwiping)
         {
             ScrollbarHitResult sbHoverHit;
-            Element* newHoverContainer = nullptr;
+            Element *newHoverContainer = nullptr;
             ScrollbarHitPart newHoverPart = ScrollbarHitPart::None;
             if (HitTestContainerScrollbar(x, y, sbHoverHit))
             {
@@ -4655,15 +4675,17 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
         if (!handled)
         {
             // Helper: container has overflow that permits scrolling (OverflowX or Y is not Hidden)
-            auto isScrollContainer = [](Element* el) -> bool {
-                if (!el || !el->IsContainer()) return false;
+            auto isScrollContainer = [](Element *el) -> bool
+            {
+                if (!el || !el->IsContainer())
+                    return false;
                 return el->GetOverflowX() != Element::OverflowMode::Hidden ||
                        el->GetOverflowY() != Element::OverflowMode::Hidden;
             };
 
             // Initialize container swipe tracking
-            Element* swipeTarget = hitElement;
-            Element* swipeCont = hitElement;
+            Element *swipeTarget = hitElement;
+            Element *swipeCont = hitElement;
 
             while (swipeCont)
             {
@@ -4675,14 +4697,15 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             {
                 for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it)
                 {
-                    Element* el = it->get();
+                    Element *el = it->get();
                     if (el && el->IsVisible() && isScrollContainer(el))
                     {
                         GfxRect b = el->GetBounds();
                         if (x >= b.X && x < b.X + b.Width && y >= b.Y && y < b.Y + b.Height)
                         {
                             swipeCont = el;
-                            if (!swipeTarget) swipeTarget = el;
+                            if (!swipeTarget)
+                                swipeTarget = el;
                             break;
                         }
                     }
@@ -4691,9 +4714,10 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             m_IsContainerSwiping = false;
             m_SwipeContainer = swipeCont;
             m_SwipeTargetElement = swipeTarget;
-            m_SwipeStartPos = { x, y };
+            m_SwipeStartPos = {x, y};
             m_SwipeStartTime = GetTickCount();
-            if (swipeCont) swipeCont->RecalcContentExtents();
+            if (swipeCont)
+                swipeCont->RecalcContentExtents();
             m_SwipeStartScrollX = swipeCont ? swipeCont->GetScrollX() : 0;
             m_SwipeStartScrollY = swipeCont ? swipeCont->GetScrollY() : 0;
 
@@ -4704,7 +4728,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             }
 
             // Handle text selection
-            TextElement* textElem = dynamic_cast<TextElement*>(hitElement);
+            TextElement *textElem = dynamic_cast<TextElement *>(hitElement);
             if (textElem && textElem->GetTextSelection())
             {
                 // Clear previous selection from other elements
@@ -4729,11 +4753,12 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             }
 
             // Input box focus + caret placement on click.
-            InputBoxElement* inputElem = dynamic_cast<InputBoxElement*>(hitElement);
-            ColorPickerElement* colorPicker = dynamic_cast<ColorPickerElement*>(hitElement);
+            InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(hitElement);
+            ColorPickerElement *colorPicker = dynamic_cast<ColorPickerElement *>(hitElement);
             if (colorPicker)
             {
-                if (m_ColorPickerPopup) m_ColorPickerPopup->Close();
+                if (m_ColorPickerPopup)
+                    m_ColorPickerPopup->Close();
                 m_ColorPickerPopup = std::make_unique<ColorPickerPopup>(this, colorPicker);
                 m_ColorPickerPopup->Show();
                 handled = true;
@@ -4795,7 +4820,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     else if (message == WM_LBUTTONDBLCLK)
     {
         // Handle double-click for word selection
-        TextElement* textElem = dynamic_cast<TextElement*>(hitElement);
+        TextElement *textElem = dynamic_cast<TextElement *>(hitElement);
         if (textElem && textElem->GetTextSelection())
         {
             m_TextSelectionElement = textElem;
@@ -4950,7 +4975,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
     }
     else if (message == WM_RBUTTONUP)
     {
-        InputBoxElement* inputElem = dynamic_cast<InputBoxElement*>(hitElement);
+        InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(hitElement);
         if (inputElem)
         {
             if (InputBoxContextMenuHelper::ShowInputBoxContextMenu(*this, inputElem, x, y))
@@ -4960,8 +4985,6 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam)
             handled = true;
         }
     }
-
-
 
     if (needRedraw && !m_IsBatchUpdating)
     {
@@ -4998,7 +5021,7 @@ void Widget::EndUpdate()
     m_IsBatchUpdating--;
     if (m_IsBatchUpdating < 0)
         m_IsBatchUpdating = 0;
-    
+
     if (m_IsBatchUpdating == 0)
     {
         Redraw();

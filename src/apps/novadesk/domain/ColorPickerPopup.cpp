@@ -4,7 +4,7 @@
  * License; either version 2 of the License, or (at your option) any later
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
- 
+
 #include "ColorPickerPopup.h"
 #include "DesktopManager.h"
 #include "Widget.h"
@@ -31,7 +31,7 @@ namespace
     constexpr UINT_PTR SHOW_DESKTOP_TIMER = 2;
     constexpr UINT OUTSIDE_CLICK_MESSAGE = WM_APP + 0x41;
     HHOOK g_OutsideClickHook = nullptr;
-    ColorPickerPopup* g_OutsideClickPopup = nullptr;
+    ColorPickerPopup *g_OutsideClickPopup = nullptr;
     float Clamp(float v) { return (std::max)(0.f, (std::min)(1.f, v)); }
 
     COLORREF HsvToColor(float hue, float saturation, float value)
@@ -310,7 +310,8 @@ void ColorPickerPopup::StartEyedropper()
 
 void ColorPickerPopup::InstallOutsideClickHook()
 {
-    if (g_OutsideClickPopup == this && g_OutsideClickHook) return;
+    if (g_OutsideClickPopup == this && g_OutsideClickHook)
+        return;
     if (g_OutsideClickHook)
     {
         UnhookWindowsHookEx(g_OutsideClickHook);
@@ -325,8 +326,10 @@ void ColorPickerPopup::InstallOutsideClickHook()
 
 void ColorPickerPopup::RemoveOutsideClickHook()
 {
-    if (g_OutsideClickPopup != this) return;
-    if (g_OutsideClickHook) UnhookWindowsHookEx(g_OutsideClickHook);
+    if (g_OutsideClickPopup != this)
+        return;
+    if (g_OutsideClickHook)
+        UnhookWindowsHookEx(g_OutsideClickHook);
     g_OutsideClickHook = nullptr;
     g_OutsideClickPopup = nullptr;
 }
@@ -623,16 +626,16 @@ void ColorPickerPopup::Paint(HDC targetDc)
 {
     RECT clientRect{};
     GetClientRect(m_hWnd, &clientRect);
-    const int clientWidth  = clientRect.right  - clientRect.left;
+    const int clientWidth = clientRect.right - clientRect.left;
     const int clientHeight = clientRect.bottom - clientRect.top;
     if (clientWidth <= 0 || clientHeight <= 0)
         return;
 
     // Read customisation from the picker element (with safe defaults).
-    const COLORREF bgColor     = m_Picker ? m_Picker->m_PopupBackground  : RGB(255, 255, 255);
+    const COLORREF bgColor = m_Picker ? m_Picker->m_PopupBackground : RGB(255, 255, 255);
     const COLORREF accentColor = m_Picker ? m_Picker->m_PopupAccentColor : RGB(0, 0, 0);
-    const bool showEyedropper  = !m_Picker || m_Picker->m_ShowEyedropper;
-    const bool showFormat      = !m_Picker || m_Picker->m_ShowFormatToggle;
+    const bool showEyedropper = !m_Picker || m_Picker->m_ShowEyedropper;
+    const bool showFormat = !m_Picker || m_Picker->m_ShowFormatToggle;
 
     HDC dc = CreateCompatibleDC(targetDc);
     if (!dc)
@@ -644,7 +647,7 @@ void ColorPickerPopup::Paint(HDC targetDc)
         return;
     }
     HGDIOBJ oldBitmap = SelectObject(dc, bitmap);
-    HGDIOBJ oldFont   = m_Font ? SelectObject(dc, m_Font) : nullptr;
+    HGDIOBJ oldFont = m_Font ? SelectObject(dc, m_Font) : nullptr;
 
     // ── Background ──────────────────────────────────────────────────
     RECT rc{0, 0, clientWidth, clientHeight};
@@ -655,11 +658,11 @@ void ColorPickerPopup::Paint(HDC targetDc)
     // ── Saturation / Value gradient surface ─────────────────────────
     EnsureSaturationValueBitmap();
     BITMAPINFO bitmapInfo{};
-    bitmapInfo.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-    bitmapInfo.bmiHeader.biWidth       = SV_WIDTH;
-    bitmapInfo.bmiHeader.biHeight      = -SV_HEIGHT;
-    bitmapInfo.bmiHeader.biPlanes      = 1;
-    bitmapInfo.bmiHeader.biBitCount    = 32;
+    bitmapInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bitmapInfo.bmiHeader.biWidth = SV_WIDTH;
+    bitmapInfo.bmiHeader.biHeight = -SV_HEIGHT;
+    bitmapInfo.bmiHeader.biPlanes = 1;
+    bitmapInfo.bmiHeader.biBitCount = 32;
     bitmapInfo.bmiHeader.biCompression = BI_RGB;
     StretchDIBits(dc, 0, 0, SV_WIDTH, SV_HEIGHT, 0, 0, SV_WIDTH, SV_HEIGHT,
                   m_SaturationValuePixels.data(), &bitmapInfo, DIB_RGB_COLORS, SRCCOPY);
@@ -695,7 +698,7 @@ void ColorPickerPopup::Paint(HDC targetDc)
     const int hueSelectorX = 120 + static_cast<int>(m_H * 179.0f);
     const int hueSelectorY = HUEY + 9;
     DrawSmoothEllipse(vectorTarget.Get(), hueSelectorX - 10.0f, hueSelectorY - 10.0f, 20.0f, 20.0f, RGB(255, 255, 255), RGB(0, 0, 0));
-    DrawSmoothEllipse(vectorTarget.Get(), hueSelectorX -  8.0f, hueSelectorY -  8.0f, 16.0f, 16.0f, HsvToColor(m_H, 1.0f, 1.0f), RGB(255, 255, 255));
+    DrawSmoothEllipse(vectorTarget.Get(), hueSelectorX - 8.0f, hueSelectorY - 8.0f, 16.0f, 16.0f, HsvToColor(m_H, 1.0f, 1.0f), RGB(255, 255, 255));
     // Current-color swatch circle
     COLORREF c = HSV();
     RECT sw{58, 201, 102, 245};
@@ -704,7 +707,7 @@ void ColorPickerPopup::Paint(HDC targetDc)
                       static_cast<float>(sw.right - sw.left), static_cast<float>(sw.bottom - sw.top),
                       c, c, 0.0f);
     // SV selector ring
-    const float saturationValueX = m_S * (SV_WIDTH  - 1.0f);
+    const float saturationValueX = m_S * (SV_WIDTH - 1.0f);
     const float saturationValueY = (1.0f - m_V) * (SV_HEIGHT - 1.0f);
     DrawSmoothEllipse(vectorTarget.Get(), saturationValueX - 8.0f, saturationValueY - 8.0f, 16.0f, 16.0f, RGB(255, 255, 255), RGB(0, 0, 0));
     // Eyedropper icon
@@ -722,15 +725,19 @@ void ColorPickerPopup::Paint(HDC targetDc)
             static_cast<BYTE>(GetGValue(accentColor) * 0.7f),
             static_cast<BYTE>(GetBValue(accentColor) * 0.7f));
         const COLORREF modeColor = m_FormatHover ? hoverAccent : accentColor;
-        const COLORREF oldTextColor   = SetTextColor(dc, modeColor);
-        const int      oldBackMode    = SetBkMode(dc, TRANSPARENT);
+        const COLORREF oldTextColor = SetTextColor(dc, modeColor);
+        const int oldBackMode = SetBkMode(dc, TRANSPARENT);
         const int modeTextLeft = m_HexMode ? 134 : 132;
         TextOutW(dc, modeTextLeft, 313, m_HexMode ? L"HEX" : L"RGB", 3);
         SetDCPenColor(dc, modeColor);
-        MoveToEx(dc, 272, 317, nullptr); LineTo(dc, 275, 314);
-        MoveToEx(dc, 275, 314, nullptr); LineTo(dc, 278, 317);
-        MoveToEx(dc, 272, 324, nullptr); LineTo(dc, 275, 327);
-        MoveToEx(dc, 275, 327, nullptr); LineTo(dc, 278, 324);
+        MoveToEx(dc, 272, 317, nullptr);
+        LineTo(dc, 275, 314);
+        MoveToEx(dc, 275, 314, nullptr);
+        LineTo(dc, 278, 317);
+        MoveToEx(dc, 272, 324, nullptr);
+        LineTo(dc, 275, 327);
+        MoveToEx(dc, 275, 327, nullptr);
+        LineTo(dc, 278, 324);
         SetBkMode(dc, oldBackMode);
         SetTextColor(dc, oldTextColor);
     }
@@ -761,7 +768,7 @@ LRESULT CALLBACK ColorPickerPopup::OutsideClickMouseHook(int code, WPARAM messag
 {
     if (code == HC_ACTION && message == WM_LBUTTONDOWN && g_OutsideClickPopup && !g_OutsideClickPopup->m_eye)
     {
-        const auto* mouse = reinterpret_cast<const MSLLHOOKSTRUCT*>(data);
+        const auto *mouse = reinterpret_cast<const MSLLHOOKSTRUCT *>(data);
         HWND clickedWindow = WindowFromPoint(mouse->pt);
         bool isInsidePicker = false;
         for (HWND window = clickedWindow; window; window = GetParent(window))

@@ -4,7 +4,7 @@
  * License; either version 2 of the License, or (at your option) any later
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
- 
+
 #pragma once
 #include <windows.h>
 #include <vector>
@@ -27,7 +27,7 @@ private:
     static LRESULT CALLBACK MagnifierWndProc(HWND, UINT, WPARAM, LPARAM);
     static LRESULT CALLBACK OutsideClickMouseHook(int, WPARAM, LPARAM);
     LRESULT Handle(UINT, WPARAM, LPARAM);
-    
+
     void Paint(HDC);
     void EnsureSaturationValueBitmap();
     void SetHSV(float h, float s, float v, bool notify = true);

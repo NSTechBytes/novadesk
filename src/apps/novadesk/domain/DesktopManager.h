@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 OfficialNovadesk 
+/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -71,31 +71,29 @@ public:
 	*/
 	static void SetShowDesktop(bool show) { c_ShowDesktop = show; }
 
-
 	static bool CheckDesktopState(HWND desktopIconsHostWindow);
 	static void ChangeZPosInOrder();
 
 	/*
 	** Get information about all monitors in the system.
 	*/
-	static const MultiMonitorInfo& GetMultiMonitorInfo() { return c_Monitors; }
+	static const MultiMonitorInfo &GetMultiMonitorInfo() { return c_Monitors; }
 
 	/*
 	** Get the number of monitors in the system.
 	*/
 	static size_t GetMonitorCount() { return c_Monitors.monitors.size(); }
-	
-	static bool Execute(const std::wstring& target, const std::wstring& parameters = L"", const std::wstring& workingDir = L"", int show = SW_SHOWNORMAL);
-	static bool SetWallpaper(const std::wstring& imagePath, const std::wstring& style = L"fill");
-	static bool GetCurrentWallpaperPath(std::wstring& outPath);
 
+	static bool Execute(const std::wstring &target, const std::wstring &parameters = L"", const std::wstring &workingDir = L"", int show = SW_SHOWNORMAL);
+	static bool SetWallpaper(const std::wstring &imagePath, const std::wstring &style = L"fill");
+	static bool GetCurrentWallpaperPath(std::wstring &outPath);
 
 	static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 private:
 	static HWND GetDefaultShellWindow();
 	static bool ShouldUseShellWindowAsDesktopIconsHost();
-	
+
 	static HWND c_Window;
 	static HWND c_HelperWindow;
 	static MultiMonitorInfo c_Monitors;
