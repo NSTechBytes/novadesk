@@ -60,9 +60,9 @@
     <ClCompile>
       <WarningLevel>TurnOffAllWarnings</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_UNICODE;UNICODE;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_UNICODE;UNICODE;NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>.;domain;domain\animation;shared;render;..\..\third_party\woff2\include;..\..\third_party\woff2\brotli\include;scripting\quickjs;scripting\quickjs\parser;..\..\third_party\quick-js;..\..\third_party\json;..\..\third_party\nanosvg;..\..\third_party\WinToast\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;domain;domain\animation;shared;render;..\..\third_party\woff2\include;..\..\third_party\woff2\brotli\include;..\..\third_party\zlib;..\..\third_party\zlib\minizip;scripting\quickjs;scripting\quickjs\parser;..\..\third_party\quick-js;..\..\third_party\json;..\..\third_party\nanosvg;..\..\third_party\WinToast\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -92,9 +92,9 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_UNICODE;UNICODE;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_UNICODE;UNICODE;NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>.;domain;domain\animation;shared;render;..\..\third_party\woff2\include;..\..\third_party\woff2\brotli\include;scripting\quickjs;scripting\quickjs\parser;..\..\third_party\quick-js;..\..\third_party\json;..\..\third_party\nanosvg;..\..\third_party\WinToast\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.;domain;domain\animation;shared;render;..\..\third_party\woff2\include;..\..\third_party\woff2\brotli\include;..\..\third_party\zlib;..\..\third_party\zlib\minizip;scripting\quickjs;scripting\quickjs\parser;..\..\third_party\quick-js;..\..\third_party\json;..\..\third_party\nanosvg;..\..\third_party\WinToast\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc11</LanguageStandard_C>
       <AdditionalOptions>/wd4146 /wd4703 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
@@ -212,6 +212,43 @@
     <ClCompile Include="shared\Settings.cpp" />
     <ClCompile Include="shared\System.cpp" />
     <ClCompile Include="shared\Utils.cpp" />
+    <ClCompile Include="shared\ZipUtils.cpp" />
+    <ClCompile Include="..\..\third_party\zlib\adler32.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\crc32.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\deflate.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\inflate.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\inftrees.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\inffast.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\trees.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\zutil.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\minizip\ioapi.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\minizip\mztools.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\minizip\unzip.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\minizip\zip.c">
+      <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
     <ClCompile Include="..\..\third_party\quick-js\quickjs.c">
       <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -229,6 +266,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="shared\ZipUtils.h" />
     <ClInclude Include="domain\DesktopManager.h" />
     <ClInclude Include="domain\InputBoxContextMenuHelper.h" />
     <ClInclude Include="domain\ColorPickerPopup.h" />

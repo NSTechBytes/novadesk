@@ -13,6 +13,7 @@
 
 #include "../../shared/PathUtils.h"
 #include "../../shared/Utils.h"
+#include "../../shared/ZipUtils.h"
 #include "../engine/JSEngine.h"
 
 namespace novadesk::scripting::quickjs
@@ -197,6 +198,138 @@ namespace novadesk::scripting::quickjs
             JS_SetPropertyStr(ctx, out, "mode", JS_NewInt32(ctx, static_cast<int32_t>(st.permissions())));
             return out;
         }
+
+        JSValue JsFsZip(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 2)
+                return JS_ThrowTypeError(ctx, "fs.zip(sourcePath, destinationZipPath[, options])");
+            const std::wstring src = ResolveFsPath(ctx, argv[0]);
+            const std::wstring dst = ResolveFsPath(ctx, argv[1]);
+            if (src.empty() || dst.empty())
+                return JS_ThrowTypeError(ctx, "invalid path");
+
+            novadesk::shared::ZipCompressOptions opts;
+            if (argc > 2 && JS_IsObject(argv[2]))
+            {
+                JSValue compVal = JS_GetPropertyStr(ctx, argv[2], "compressionLevel");
+                if (!JS_IsUndefined(compVal) && !JS_IsNull(compVal))
+                {
+                    int32_t lvl = 6;
+                    JS_ToInt32(ctx, &lvl, compVal);
+                    opts.compressionLevel = lvl;
+                }
+                JS_FreeValue(ctx, compVal);
+
+                JSValue overwVal = JS_GetPropertyStr(ctx, argv[2], "overwrite");
+                if (!JS_IsUndefined(overwVal) && !JS_IsNull(overwVal))
+                {
+                    opts.overwrite = (JS_ToBool(ctx, overwVal) != 0);
+                }
+                JS_FreeValue(ctx, overwVal);
+            }
+
+            std::string error;
+            bool ok = novadesk::shared::CompressToZip(fs::path(src), fs::path(dst), opts, error);
+            return JS_NewBool(ctx, ok ? 1 : 0);
+        }
+
+        JSValue JsFsUnzip(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 2)
+                return JS_ThrowTypeError(ctx, "fs.unzip(zipPath, destinationDir[, options])");
+            const std::wstring zipPath = ResolveFsPath(ctx, argv[0]);
+            const std::wstring destDir = ResolveFsPath(ctx, argv[1]);
+            if (zipPath.empty() || destDir.empty())
+                return JS_ThrowTypeError(ctx, "invalid path");
+
+            novadesk::shared::ZipExtractOptions opts;
+            if (argc > 2 && JS_IsObject(argv[2]))
+            {
+                JSValue overwVal = JS_GetPropertyStr(ctx, argv[2], "overwrite");
+                if (!JS_IsUndefined(overwVal) && !JS_IsNull(overwVal))
+                {
+                    opts.overwrite = (JS_ToBool(ctx, overwVal) != 0);
+                }
+                JS_FreeValue(ctx, overwVal);
+
+                JSValue entriesVal = JS_GetPropertyStr(ctx, argv[2], "entries");
+                if (JS_IsArray(entriesVal))
+                {
+                    uint32_t len = 0;
+                    JSValue lenVal = JS_GetPropertyStr(ctx, entriesVal, "length");
+                    JS_ToUint32(ctx, &len, lenVal);
+                    JS_FreeValue(ctx, lenVal);
+
+                    for (uint32_t i = 0; i < len; ++i)
+                    {
+                        JSValue item = JS_GetPropertyUint32(ctx, entriesVal, i);
+                        const char *s = JS_ToCString(ctx, item);
+                        if (s)
+                        {
+                            opts.selectedEntries.push_back(s);
+                            JS_FreeCString(ctx, s);
+                        }
+                        JS_FreeValue(ctx, item);
+                    }
+                }
+                JS_FreeValue(ctx, entriesVal);
+            }
+
+            std::string error;
+            bool ok = novadesk::shared::ExtractFromZip(fs::path(zipPath), fs::path(destDir), opts, error);
+            return JS_NewBool(ctx, ok ? 1 : 0);
+        }
+
+        JSValue JsFsListZip(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 1)
+                return JS_ThrowTypeError(ctx, "fs.listZip(zipPath)");
+            const std::wstring zipPath = ResolveFsPath(ctx, argv[0]);
+            if (zipPath.empty())
+                return JS_ThrowTypeError(ctx, "invalid path");
+
+            std::vector<novadesk::shared::ZipEntryInfo> entries;
+            std::string error;
+            bool ok = novadesk::shared::ListZipEntries(fs::path(zipPath), entries, error);
+            if (!ok)
+                return JS_NULL;
+
+            JSValue arr = JS_NewArray(ctx);
+            for (uint32_t i = 0; i < static_cast<uint32_t>(entries.size()); ++i)
+            {
+                JSValue obj = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, obj, "name", JS_NewString(ctx, entries[i].name.c_str()));
+                JS_SetPropertyStr(ctx, obj, "isDirectory", JS_NewBool(ctx, entries[i].isDirectory ? 1 : 0));
+                JS_SetPropertyStr(ctx, obj, "size", JS_NewFloat64(ctx, static_cast<double>(entries[i].size)));
+                JS_SetPropertyStr(ctx, obj, "compressedSize", JS_NewFloat64(ctx, static_cast<double>(entries[i].compressedSize)));
+                JS_SetPropertyStr(ctx, obj, "crc", JS_NewInt64(ctx, entries[i].crc));
+                JS_SetPropertyUint32(ctx, arr, i, obj);
+            }
+            return arr;
+        }
+
+        JSValue JsFsReadZipFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+        {
+            if (argc < 2)
+                return JS_ThrowTypeError(ctx, "fs.readZipFile(zipPath, entryName)");
+            const std::wstring zipPath = ResolveFsPath(ctx, argv[0]);
+            if (zipPath.empty())
+                return JS_ThrowTypeError(ctx, "invalid path");
+
+            const char *entryStr = JS_ToCString(ctx, argv[1]);
+            if (!entryStr)
+                return JS_ThrowTypeError(ctx, "invalid entry name");
+            std::string entryName(entryStr);
+            JS_FreeCString(ctx, entryStr);
+
+            std::string content;
+            std::string error;
+            bool ok = novadesk::shared::ReadZipEntryContent(fs::path(zipPath), entryName, content, error);
+            if (!ok)
+                return JS_NULL;
+
+            return JS_NewStringLen(ctx, content.data(), content.size());
+        }
     } // namespace
 
     static int FsModuleInit(JSContext *ctx, JSModuleDef *m)
@@ -210,6 +343,14 @@ namespace novadesk::scripting::quickjs
         JS_SetModuleExport(ctx, m, "rename", JS_NewCFunction(ctx, JsFsRename, "rename", 2));
         JS_SetModuleExport(ctx, m, "copyFile", JS_NewCFunction(ctx, JsFsCopyFile, "copyFile", 3));
         JS_SetModuleExport(ctx, m, "stat", JS_NewCFunction(ctx, JsFsStat, "stat", 1));
+
+        JS_SetModuleExport(ctx, m, "zip", JS_NewCFunction(ctx, JsFsZip, "zip", 3));
+        JS_SetModuleExport(ctx, m, "createZip", JS_NewCFunction(ctx, JsFsZip, "createZip", 3));
+        JS_SetModuleExport(ctx, m, "unzip", JS_NewCFunction(ctx, JsFsUnzip, "unzip", 3));
+        JS_SetModuleExport(ctx, m, "extractZip", JS_NewCFunction(ctx, JsFsUnzip, "extractZip", 3));
+        JS_SetModuleExport(ctx, m, "listZip", JS_NewCFunction(ctx, JsFsListZip, "listZip", 1));
+        JS_SetModuleExport(ctx, m, "readZipEntries", JS_NewCFunction(ctx, JsFsListZip, "readZipEntries", 1));
+        JS_SetModuleExport(ctx, m, "readZipFile", JS_NewCFunction(ctx, JsFsReadZipFile, "readZipFile", 2));
         return 0;
     }
 
@@ -233,6 +374,14 @@ namespace novadesk::scripting::quickjs
         JS_AddModuleExport(ctx, m, "rename");
         JS_AddModuleExport(ctx, m, "copyFile");
         JS_AddModuleExport(ctx, m, "stat");
+
+        JS_AddModuleExport(ctx, m, "zip");
+        JS_AddModuleExport(ctx, m, "createZip");
+        JS_AddModuleExport(ctx, m, "unzip");
+        JS_AddModuleExport(ctx, m, "extractZip");
+        JS_AddModuleExport(ctx, m, "listZip");
+        JS_AddModuleExport(ctx, m, "readZipEntries");
+        JS_AddModuleExport(ctx, m, "readZipFile");
         return m;
     }
 } // namespace novadesk::scripting::quickjs

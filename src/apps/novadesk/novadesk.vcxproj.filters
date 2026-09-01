@@ -243,6 +243,45 @@
     <ClCompile Include="shared\Utils.cpp">
       <Filter>shared</Filter>
     </ClCompile>
+    <ClCompile Include="shared\ZipUtils.cpp">
+      <Filter>shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\adler32.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\crc32.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\deflate.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\inflate.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\inftrees.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\inffast.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\trees.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\zutil.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\minizip\ioapi.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\minizip\mztools.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\minizip\unzip.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\minizip\zip.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\third_party\quick-js\quickjs.c">
       <Filter>third_party</Filter>
     </ClCompile>
@@ -260,6 +299,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="shared\ZipUtils.h">
+      <Filter>shared</Filter>
+    </ClInclude>
     <ClInclude Include="domain\DesktopManager.h">
       <Filter>domain</Filter>
     </ClInclude>
