@@ -169,10 +169,10 @@ private:
    * @brief Internal layout calculation for image rendering.
    */
   struct ImageLayout {
-    int contentX = 0; ///< Content X offset.
-    int contentY = 0; ///< Content Y offset.
-    int contentW = 0; ///< Content width.
-    int contentH = 0; ///< Content height.
+    int contentX = 0;                                ///< Content X offset.
+    int contentY = 0;                                ///< Content Y offset.
+    int contentW = 0;                                ///< Content width.
+    int contentH = 0;                                ///< Content height.
     D2D1_RECT_F finalRect = D2D1::RectF(0, 0, 0, 0); ///< Destination rect.
     D2D1_RECT_F srcRect = D2D1::RectF(0, 0, 0, 0);   ///< Source rect.
   };

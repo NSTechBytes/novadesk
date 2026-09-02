@@ -103,7 +103,7 @@ public:
   static bool GetGlobalBool(const std::string &key, bool defaultValue);
 
 private:
-  static void Load();           ///< Loads settings from disk.
+  static void Load();          ///< Loads settings from disk.
   static json s_Data;          ///< In-memory settings data.
   static bool s_Dirty;         ///< True if unsaved changes exist.
   static bool s_IsFirstRun;    ///< True if no settings file was found on init.

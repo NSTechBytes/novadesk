@@ -29,23 +29,23 @@ struct DisplayRect {
  * @brief Information about a single display monitor.
  */
 struct DisplayMonitorInfo {
-  int id = 0;                  ///< Monitor index.
-  bool active = false;         ///< True if this is the primary/active monitor.
-  std::wstring deviceName;     ///< Device name (e.g., "\\.\DISPLAY1").
-  std::wstring monitorName;    ///< Friendly monitor name from EDID.
-  DisplayRect work;            ///< Work area (excluding taskbar).
-  DisplayRect screen;          ///< Full screen bounds.
+  int id = 0;               ///< Monitor index.
+  bool active = false;      ///< True if this is the primary/active monitor.
+  std::wstring deviceName;  ///< Device name (e.g., "\\.\DISPLAY1").
+  std::wstring monitorName; ///< Friendly monitor name from EDID.
+  DisplayRect work;         ///< Work area (excluding taskbar).
+  DisplayRect screen;       ///< Full screen bounds.
 };
 
 /**
  * @brief Aggregate display metrics for all connected monitors.
  */
 struct DisplayMetrics {
-  int virtualTop = 0;      ///< Top of virtual screen.
-  int virtualLeft = 0;     ///< Left of virtual screen.
-  int virtualHeight = 0;   ///< Height of virtual screen.
-  int virtualWidth = 0;    ///< Width of virtual screen.
-  int primaryIndex = 0;    ///< Index of the primary monitor.
+  int virtualTop = 0;                       ///< Top of virtual screen.
+  int virtualLeft = 0;                      ///< Left of virtual screen.
+  int virtualHeight = 0;                    ///< Height of virtual screen.
+  int virtualWidth = 0;                     ///< Width of virtual screen.
+  int primaryIndex = 0;                     ///< Index of the primary monitor.
   std::vector<DisplayMonitorInfo> monitors; ///< List of connected monitors.
 };
 
@@ -53,13 +53,13 @@ struct DisplayMetrics {
  * @brief System power and battery status information.
  */
 struct PowerStatus {
-  int acline = 0;       ///< AC power status (0=battery, 1=plugged in).
-  int status = 0;       ///< Battery charge status flags.
-  int status2 = 0;      ///< Extended battery status.
+  int acline = 0;        ///< AC power status (0=battery, 1=plugged in).
+  int status = 0;        ///< Battery charge status flags.
+  int status2 = 0;       ///< Extended battery status.
   double lifetime = 0.0; ///< Estimated battery lifetime in seconds.
-  int percent = 0;      ///< Battery charge percentage.
-  double mhz = 0.0;     ///< Current CPU frequency in MHz.
-  double hz = 0.0;      ///< Current CPU frequency in Hz.
+  int percent = 0;       ///< Battery charge percentage.
+  double mhz = 0.0;      ///< Current CPU frequency in MHz.
+  double hz = 0.0;       ///< Current CPU frequency in Hz.
 };
 
 /**
@@ -73,19 +73,19 @@ struct CpuStats {
  * @brief System memory statistics.
  */
 struct MemoryStats {
-  double total = 0.0;    ///< Total physical memory in bytes.
+  double total = 0.0;     ///< Total physical memory in bytes.
   double available = 0.0; ///< Available physical memory in bytes.
-  double used = 0.0;     ///< Used physical memory in bytes.
-  int percent = 0;       ///< Memory usage percentage.
+  double used = 0.0;      ///< Used physical memory in bytes.
+  int percent = 0;        ///< Memory usage percentage.
 };
 
 /**
  * @brief Network traffic statistics.
  */
 struct NetworkStats {
-  double netIn = 0.0;   ///< Current download speed (bytes/sec).
-  double netOut = 0.0;  ///< Current upload speed (bytes/sec).
-  double totalIn = 0.0; ///< Total bytes downloaded since boot.
+  double netIn = 0.0;    ///< Current download speed (bytes/sec).
+  double netOut = 0.0;   ///< Current upload speed (bytes/sec).
+  double totalIn = 0.0;  ///< Total bytes downloaded since boot.
   double totalOut = 0.0; ///< Total bytes uploaded since boot.
 };
 
@@ -93,10 +93,10 @@ struct NetworkStats {
  * @brief Disk space statistics for a volume.
  */
 struct DiskStats {
-  double total = 0.0;   ///< Total disk space in bytes.
+  double total = 0.0;     ///< Total disk space in bytes.
   double available = 0.0; ///< Free disk space in bytes.
-  double used = 0.0;    ///< Used disk space in bytes.
-  int percent = 0;      ///< Disk usage percentage.
+  double used = 0.0;      ///< Used disk space in bytes.
+  int percent = 0;        ///< Disk usage percentage.
 };
 
 /**
@@ -118,7 +118,7 @@ struct RecycleBinStats {
 /**
  * @brief Registry value types.
  */
-enum class RegistryValueType { 
+enum class RegistryValueType {
   None = 0, ///< No value or unknown type.
   String,   ///< String (REG_SZ) value.
   Number    ///< Numeric (REG_DWORD/QWORD) value.
@@ -396,10 +396,10 @@ bool RegistryWriteNumber(const std::wstring &fullPath,
  */
 struct UptimeStats {
   double seconds = 0.0; ///< Total uptime in seconds.
-  int days = 0;        ///< Uptime days.
-  int hours = 0;       ///< Remaining hours.
-  int minutes = 0;     ///< Remaining minutes.
-  int secs = 0;        ///< Remaining seconds.
+  int days = 0;         ///< Uptime days.
+  int hours = 0;        ///< Remaining hours.
+  int minutes = 0;      ///< Remaining minutes.
+  int secs = 0;         ///< Remaining seconds.
 };
 
 /**
@@ -437,7 +437,8 @@ struct MessageBoxOptions {
  *
  * @param opts Configuration for the message box.
  *
- * @return The button label: "ok", "cancel", "yes", "no", "retry", "abort", "ignore".
+ * @return The button label: "ok", "cancel", "yes", "no", "retry", "abort",
+ * "ignore".
  */
 std::string ShowMessageBox(const MessageBoxOptions &opts);
 
@@ -445,30 +446,31 @@ std::string ShowMessageBox(const MessageBoxOptions &opts);
  * @brief File type filter for open/save dialogs.
  */
 struct FileFilter {
-  std::wstring name;                  ///< Display name (e.g., "Images").
-  std::vector<std::wstring> extensions; ///< Extensions (e.g., ["jpg", "png"] or ["*"]).
+  std::wstring name; ///< Display name (e.g., "Images").
+  std::vector<std::wstring>
+      extensions; ///< Extensions (e.g., ["jpg", "png"] or ["*"]).
 };
 
 /**
  * @brief Configuration for an open file dialog.
  */
 struct OpenFileDialogOptions {
-  std::wstring title;             ///< Dialog title.
-  std::wstring defaultPath;       ///< Initial directory.
-  std::wstring buttonLabel;       ///< Custom button text.
+  std::wstring title;              ///< Dialog title.
+  std::wstring defaultPath;        ///< Initial directory.
+  std::wstring buttonLabel;        ///< Custom button text.
   std::vector<FileFilter> filters; ///< File type filters.
-  bool multiSelections = false;   ///< Allow selecting multiple files.
-  bool openDirectory = false;     ///< Enable directory selection mode.
-  bool showHiddenFiles = false;   ///< Show hidden files.
-  HWND parent = nullptr;          ///< Optional owner window.
+  bool multiSelections = false;    ///< Allow selecting multiple files.
+  bool openDirectory = false;      ///< Enable directory selection mode.
+  bool showHiddenFiles = false;    ///< Show hidden files.
+  HWND parent = nullptr;           ///< Optional owner window.
 };
 
 /**
  * @brief Result of an open file dialog.
  */
 struct OpenFileDialogResult {
-  bool canceled = true;                   ///< True if user canceled.
-  std::vector<std::wstring> filePaths;    ///< Selected file paths.
+  bool canceled = true;                ///< True if user canceled.
+  std::vector<std::wstring> filePaths; ///< Selected file paths.
 };
 
 /**
@@ -497,8 +499,8 @@ struct SaveFileDialogOptions {
  * @brief Result of a save file dialog.
  */
 struct SaveFileDialogResult {
-  bool canceled = true;         ///< True if user canceled.
-  std::wstring filePath;        ///< Selected save path.
+  bool canceled = true;  ///< True if user canceled.
+  std::wstring filePath; ///< Selected save path.
 };
 
 /**

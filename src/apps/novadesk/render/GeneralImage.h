@@ -23,18 +23,18 @@
  * @brief Image flip modes for horizontal/vertical mirroring.
  */
 enum ImageFlipMode {
-  IMAGE_FLIP_NONE = 0,       ///< No flip applied.
-  IMAGE_FLIP_HORIZONTAL,     ///< Flip left-to-right.
-  IMAGE_FLIP_VERTICAL,       ///< Flip top-to-bottom.
-  IMAGE_FLIP_BOTH            ///< Flip both axes (180° rotation).
+  IMAGE_FLIP_NONE = 0,   ///< No flip applied.
+  IMAGE_FLIP_HORIZONTAL, ///< Flip left-to-right.
+  IMAGE_FLIP_VERTICAL,   ///< Flip top-to-bottom.
+  IMAGE_FLIP_BOTH        ///< Flip both axes (180° rotation).
 };
 
 /**
  * @brief Origin point for image crop operations.
  */
 enum ImageCropOrigin {
-  IMAGE_CROP_ORIGIN_TOP_LEFT = 0,    ///< Crop from top-left corner.
-  IMAGE_CROP_ORIGIN_TOP_RIGHT = 1,   ///< Crop from top-right corner.
+  IMAGE_CROP_ORIGIN_TOP_LEFT = 0,     ///< Crop from top-left corner.
+  IMAGE_CROP_ORIGIN_TOP_RIGHT = 1,    ///< Crop from top-right corner.
   IMAGE_CROP_ORIGIN_BOTTOM_RIGHT = 2, ///< Crop from bottom-right corner.
   IMAGE_CROP_ORIGIN_BOTTOM_LEFT = 3,  ///< Crop from bottom-left corner.
   IMAGE_CROP_ORIGIN_CENTER = 4        ///< Crop from center.
@@ -44,9 +44,9 @@ enum ImageCropOrigin {
  * @brief Decoded image data with raw pixel buffer.
  */
 struct DecodedImageData {
-  UINT width = 0;   ///< Image width in pixels.
-  UINT height = 0;  ///< Image height in pixels.
-  UINT stride = 0;  ///< Row stride in bytes (width * 4 for BGRA).
+  UINT width = 0;           ///< Image width in pixels.
+  UINT height = 0;          ///< Image height in pixels.
+  UINT stride = 0;          ///< Row stride in bytes (width * 4 for BGRA).
   std::vector<BYTE> pixels; ///< Raw BGRA pixel data.
 
   /// @return True if the image data is valid and complete.
@@ -59,8 +59,8 @@ struct DecodedImageData {
  * @brief Result of an asynchronous image download and decode operation.
  */
 struct AsyncImageResult {
-  std::vector<BYTE> encodedBytes;   ///< Original encoded image bytes.
-  DecodedImageData decodedImage;    ///< Decoded pixel data.
+  std::vector<BYTE> encodedBytes; ///< Original encoded image bytes.
+  DecodedImageData decodedImage;  ///< Decoded pixel data.
 };
 
 /**
@@ -221,10 +221,10 @@ private:
   // Image Source
   // ============================================================================
 
-  std::wstring m_ImagePath;      ///< Current image path.
-  std::wstring m_LoadedPath;     ///< Path of the actually loaded image.
-  std::wstring m_FallbackPath;   ///< Fallback image path.
-  HWND m_OwnerHWND = nullptr;   ///< Owning widget HWND.
+  std::wstring m_ImagePath;    ///< Current image path.
+  std::wstring m_LoadedPath;   ///< Path of the actually loaded image.
+  std::wstring m_FallbackPath; ///< Fallback image path.
+  HWND m_OwnerHWND = nullptr;  ///< Owning widget HWND.
 
   // ============================================================================
   // Async Download State
@@ -240,11 +240,14 @@ private:
 
   mutable std::recursive_mutex m_ImageStateMutex;
   bool m_IsFallbackShowing = false; ///< True while showing the fallback image.
-  std::vector<BYTE> m_DownloadedBuffer; ///< In-memory buffer for async downloads.
+  std::vector<BYTE>
+      m_DownloadedBuffer;          ///< In-memory buffer for async downloads.
   DecodedImageData m_DecodedImage; ///< Decoded pixel data.
   Microsoft::WRL::ComPtr<ID2D1Bitmap> m_D2DBitmap; ///< Cached Direct2D bitmap.
-  Microsoft::WRL::ComPtr<IWICBitmap> m_pWICBitmap; ///< WIC bitmap for pixel access.
-  ID2D1RenderTarget *m_pLastTarget = nullptr; ///< Last render target (for cache invalidation).
+  Microsoft::WRL::ComPtr<IWICBitmap>
+      m_pWICBitmap; ///< WIC bitmap for pixel access.
+  ID2D1RenderTarget *m_pLastTarget =
+      nullptr; ///< Last render target (for cache invalidation).
 
   // ============================================================================
   // Visual Effects

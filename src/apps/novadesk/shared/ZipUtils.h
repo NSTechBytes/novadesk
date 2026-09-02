@@ -19,15 +19,17 @@ namespace novadesk::shared {
  */
 struct ZipCompressOptions {
   int compressionLevel = 6; ///< Compression level from 0 (store) to 9 (best).
-  bool overwrite = true;    ///< Whether to overwrite an existing destination file.
+  bool overwrite = true; ///< Whether to overwrite an existing destination file.
 };
 
 /**
  * @brief Configuration options for zip extraction operations.
  */
 struct ZipExtractOptions {
-  bool overwrite = true; ///< Whether to overwrite existing files during extraction.
-  std::vector<std::string> selectedEntries; ///< Specific entries to extract; empty means extract all.
+  bool overwrite =
+      true; ///< Whether to overwrite existing files during extraction.
+  std::vector<std::string> selectedEntries; ///< Specific entries to extract;
+                                            ///< empty means extract all.
 };
 
 /**
@@ -44,14 +46,16 @@ struct ZipEntryInfo {
 /**
  * @brief Compresses a source directory or single file into a .zip archive.
  *
- * @param sourcePath Path to the file or directory to compress (absolute or relative).
+ * @param sourcePath Path to the file or directory to compress (absolute or
+ * relative).
  * @param destZipPath Output file path for the resulting archive.
  * @param opts Compression configuration (level, overwrite flag).
  * @param errorOut Receives an error message if compression fails.
  *
  * @return True if compression completed successfully; false otherwise.
  *
- * @note Recursively traverses subdirectories and preserves relative folder hierarchy.
+ * @note Recursively traverses subdirectories and preserves relative folder
+ * hierarchy.
  */
 bool CompressToZip(const std::filesystem::path &sourcePath,
                    const std::filesystem::path &destZipPath,
@@ -67,7 +71,8 @@ bool CompressToZip(const std::filesystem::path &sourcePath,
  *
  * @return True if extraction completed successfully; false otherwise.
  *
- * @warning Protects against Zip Slip vulnerabilities by rejecting entries with ".." paths.
+ * @warning Protects against Zip Slip vulnerabilities by rejecting entries with
+ * ".." paths.
  */
 bool ExtractFromZip(const std::filesystem::path &zipPath,
                     const std::filesystem::path &destDirPath,

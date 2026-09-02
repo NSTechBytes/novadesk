@@ -47,7 +47,8 @@ bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
     return false;
   }
 
-  // SAFETY: This writer only supports 16/32 bpp icon bitmaps for plugin compatibility
+  // SAFETY: This writer only supports 16/32 bpp icon bitmaps for plugin
+  // compatibility
   if (bmColor.bmBitsPixel != 16 && bmColor.bmBitsPixel != 32) {
     DeleteObject(iconInfo.hbmColor);
     DeleteObject(iconInfo.hbmMask);

@@ -20,26 +20,26 @@
  * @brief Style overrides for a single text segment (inline formatting).
  */
 struct TextSegmentStyle {
-  std::optional<int> fontWeight;       ///< Override font weight (100-900).
-  std::optional<bool> italic;          ///< Override italic style.
-  std::optional<bool> underline;       ///< Override underline decoration.
-  std::optional<bool> strikethrough;   ///< Override strikethrough decoration.
-  std::optional<COLORREF> color;       ///< Override text color.
-  std::optional<BYTE> alpha;           ///< Override text opacity.
-  std::optional<int> fontSize;         ///< Override font size.
+  std::optional<int> fontWeight;        ///< Override font weight (100-900).
+  std::optional<bool> italic;           ///< Override italic style.
+  std::optional<bool> underline;        ///< Override underline decoration.
+  std::optional<bool> strikethrough;    ///< Override strikethrough decoration.
+  std::optional<COLORREF> color;        ///< Override text color.
+  std::optional<BYTE> alpha;            ///< Override text opacity.
+  std::optional<int> fontSize;          ///< Override font size.
   std::optional<std::wstring> fontFace; ///< Override font family.
   std::optional<GradientInfo> gradient; ///< Override gradient fill.
-  std::optional<TextCase> textCase;    ///< Override text case transformation.
+  std::optional<TextCase> textCase;     ///< Override text case transformation.
 };
 
 /**
  * @brief A styled segment of text within a TextElement.
  */
 struct TextSegment {
-  std::wstring text;       ///< The text content of this segment.
-  TextSegmentStyle style;  ///< Style overrides for this segment.
-  UINT32 startPos;         ///< Start position in the original text.
-  UINT32 length;           ///< Length of this segment.
+  std::wstring text;      ///< The text content of this segment.
+  TextSegmentStyle style; ///< Style overrides for this segment.
+  UINT32 startPos;        ///< Start position in the original text.
+  UINT32 length;          ///< Length of this segment.
 };
 
 /**

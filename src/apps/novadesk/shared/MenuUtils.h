@@ -22,4 +22,4 @@ namespace MenuUtils {
  */
 void BuildMenu(HMENU hMenu, const std::vector<MenuItem> &items);
 
-}
+} // namespace MenuUtils

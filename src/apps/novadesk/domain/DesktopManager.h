@@ -40,13 +40,14 @@ struct MonitorInfo {
  */
 struct MultiMonitorInfo {
   int vsT, vsL, vsH, vsW; ///< Virtual screen top, left, height, width.
-  int primary;             ///< Primary monitor handle.
-  int primaryIndex;        ///< Index of the primary monitor.
+  int primary;            ///< Primary monitor handle.
+  int primaryIndex;       ///< Index of the primary monitor.
   std::vector<MonitorInfo> monitors; ///< List of all monitors.
 };
 
 /**
- * @brief Manages the desktop environment, monitor detection, and window layering.
+ * @brief Manages the desktop environment, monitor detection, and window
+ * layering.
  *
  * @note Must call Initialize() before use and Finalize() on shutdown.
  */
@@ -172,10 +173,10 @@ private:
   static HWND GetDefaultShellWindow();
   static bool ShouldUseShellWindowAsDesktopIconsHost();
 
-  static HWND c_Window;          ///< Main system window.
-  static HWND c_HelperWindow;    ///< Helper window for desktop integration.
+  static HWND c_Window;       ///< Main system window.
+  static HWND c_HelperWindow; ///< Helper window for desktop integration.
   static MultiMonitorInfo c_Monitors; ///< Monitor information cache.
-  static bool c_ShowDesktop;     ///< Current Show Desktop state.
+  static bool c_ShowDesktop;          ///< Current Show Desktop state.
 
   static const UINT_PTR TIMER_SHOWDESKTOP = 1;
   static const int INTERVAL_SHOWDESKTOP = 100;

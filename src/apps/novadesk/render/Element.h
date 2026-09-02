@@ -63,9 +63,9 @@ struct GfxRect {
  * @brief Configuration for rendering text drop shadows.
  */
 struct TextShadow {
-  float offsetX = 0; ///< Horizontal offset of the shadow.
-  float offsetY = 0; ///< Vertical offset of the shadow.
-  float blur = 0;    ///< Blur radius of the shadow.
+  float offsetX = 0;  ///< Horizontal offset of the shadow.
+  float offsetY = 0;  ///< Vertical offset of the shadow.
+  float blur = 0;     ///< Blur radius of the shadow.
   COLORREF color = 0; ///< Shadow color in COLORREF format.
   BYTE alpha = 255;   ///< Shadow opacity (0-255).
 };
@@ -82,7 +82,7 @@ struct GradientStop {
 /**
  * @brief Specifies the type of gradient fill.
  */
-enum GradientType { 
+enum GradientType {
   GRADIENT_NONE,   ///< No gradient applied.
   GRADIENT_LINEAR, ///< Linear gradient from start to end point.
   GRADIENT_RADIAL  ///< Radial gradient from center outward.
@@ -92,10 +92,10 @@ enum GradientType {
  * @brief Complete gradient configuration for fills and strokes.
  */
 struct GradientInfo {
-  GradientType type = GRADIENT_NONE;           ///< Gradient type.
-  std::vector<GradientStop> stops;             ///< Color stops along the gradient.
-  float angle = 0.0f;                          ///< Rotation angle (for linear gradients).
-  std::wstring shape = L"circle";              ///< Shape type (for radial gradients).
+  GradientType type = GRADIENT_NONE; ///< Gradient type.
+  std::vector<GradientStop> stops;   ///< Color stops along the gradient.
+  float angle = 0.0f;                ///< Rotation angle (for linear gradients).
+  std::wstring shape = L"circle";    ///< Shape type (for radial gradients).
 };
 
 /**
@@ -120,8 +120,8 @@ struct BackdropFilter {
   float saturate = 1.0f;   ///< Saturation multiplier (1.0 = normal).
   float sepia = 0.0f;      ///< Sepia tone intensity (0.0 = none, 1.0 = full).
   float hueRotate = 0.0f;  ///< Hue rotation in degrees.
-  float invert = 0.0f;     ///< Color inversion intensity (0.0 = none, 1.0 = full).
-  float opacity = 1.0f;    ///< Overall opacity (0.0 = transparent, 1.0 = opaque).
+  float invert = 0.0f;  ///< Color inversion intensity (0.0 = none, 1.0 = full).
+  float opacity = 1.0f; ///< Overall opacity (0.0 = transparent, 1.0 = opaque).
 
   /// @return True if any filter (other than default opacity) is active.
   bool IsActive() const;
@@ -297,7 +297,8 @@ public:
   /// @return The rotation angle in degrees.
   float GetRotate() const { return m_Rotate; }
 
-  /// Sets a 2D affine transformation matrix (6 floats: m11, m12, m21, m22, dx, dy).
+  /// Sets a 2D affine transformation matrix (6 floats: m11, m12, m21, m22, dx,
+  /// dy).
   void SetTransformMatrix(const float *matrix) {
     if (matrix) {
       memcpy(m_TransformMatrix, matrix, sizeof(float) * 6);
@@ -517,7 +518,8 @@ public:
   }
   void SetScrollbarButtonRadius(float r) { m_ScrollbarButtonRadius = r; }
 
-  /// Returns the scrollbar arrow color (defaults to scrollbar color if not set).
+  /// Returns the scrollbar arrow color (defaults to scrollbar color if not
+  /// set).
   COLORREF GetScrollbarArrowColor() const {
     return m_HasScrollbarArrowColor ? m_ScrollbarArrowColor
                                     : GetScrollbarColor();

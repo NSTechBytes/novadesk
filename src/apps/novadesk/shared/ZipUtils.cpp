@@ -46,7 +46,8 @@ bool AddFileToZipHandle(zipFile zf, const fs::path &filePath,
     return false;
   }
 
-  // Stream file contents in 64KB chunks to avoid loading entire file into memory
+  // Stream file contents in 64KB chunks to avoid loading entire file into
+  // memory
   std::vector<char> buffer(64 * 1024);
   while (in) {
     in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
@@ -227,7 +228,8 @@ bool ExtractFromZip(const fs::path &zipPath, const fs::path &destDirPath,
       continue;
     }
 
-    // WARNING: Reject entries with ".." to prevent Zip Slip path traversal attacks
+    // WARNING: Reject entries with ".." to prevent Zip Slip path traversal
+    // attacks
     if (entryName.find("..") != std::string::npos) {
       continue;
     }

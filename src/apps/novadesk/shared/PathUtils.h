@@ -164,7 +164,8 @@ PathParts Parse(const std::wstring &path);
 std::wstring Format(const PathParts &parts);
 
 /**
- * @brief Normalizes a path by resolving redundant separators and "." components.
+ * @brief Normalizes a path by resolving redundant separators and "."
+ * components.
  *
  * @param path The path to normalize.
  *

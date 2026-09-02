@@ -24,7 +24,8 @@ enum ButtonState {
 };
 
 /**
- * @brief Clickable button element with image states and transparent hit testing.
+ * @brief Clickable button element with image states and transparent hit
+ * testing.
  *
  * @note Supports normal, hovered, and clicked image states. Transparent
  *       areas of the image are ignored during hit testing.

@@ -14,7 +14,7 @@
 /**
  * @brief Severity levels for log messages.
  */
-enum class LogLevel { 
+enum class LogLevel {
   Debug = 0, ///< Verbose debug output for development.
   Info = 1,  ///< General informational messages.
   Warn = 2,  ///< Warning messages for recoverable issues.
@@ -61,10 +61,10 @@ public:
   static void SetLogLevel(LogLevel minLevel);
 
 private:
-  static bool s_ConsoleEnabled;    ///< Whether console logging is active.
-  static bool s_FileEnabled;       ///< Whether file logging is active.
+  static bool s_ConsoleEnabled;      ///< Whether console logging is active.
+  static bool s_FileEnabled;         ///< Whether file logging is active.
   static std::wstring s_LogFilePath; ///< Path to the log file.
-  static LogLevel s_MinLevel;      ///< Minimum severity level for output.
+  static LogLevel s_MinLevel;        ///< Minimum severity level for output.
 };
 
 #endif
