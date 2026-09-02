@@ -17,7 +17,22 @@
 
 namespace Utils {
 
+// ============================================================================
+// Internal Helpers
+// ============================================================================
+
 namespace {
+/**
+ * @brief Saves an HICON to an ICO file on disk.
+ *
+ * @param hIcon Handle to the icon to save.
+ * @param fp Open file pointer for writing.
+ *
+ * @return True if the icon was written successfully.
+ *
+ * @note Only supports 16/32 bpp icon bitmaps for plugin-safe serialization.
+ * @warning Caller must ensure fp is open in binary write mode.
+ */
 bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
   ICONINFO iconInfo = {};
   BITMAP bmColor = {};
@@ -32,8 +47,7 @@ bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
     return false;
   }
 
-  // Keep plugin-safe ICO serialization path:
-  // this writer only supports 16/32 bpp icon bitmaps.
+  // SAFETY: This writer only supports 16/32 bpp icon bitmaps for plugin compatibility
   if (bmColor.bmBitsPixel != 16 && bmColor.bmBitsPixel != 32) {
     DeleteObject(iconInfo.hbmColor);
     DeleteObject(iconInfo.hbmMask);
@@ -47,6 +61,7 @@ bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
     return false;
   }
 
+  // Extract color bits using GetDIBits
   BYTE bmiBytes[sizeof(BITMAPINFOHEADER) + 256 * sizeof(RGBQUAD)] = {};
   BITMAPINFO *bmi = (BITMAPINFO *)bmiBytes;
 
@@ -71,6 +86,7 @@ bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
     return false;
   }
 
+  // Extract mask bits
   memset(bmi, 0, sizeof(BITMAPINFO));
   bmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
   GetDIBits(dc, iconInfo.hbmMask, 0, bmMask.bmHeight, nullptr, bmi,
@@ -84,7 +100,7 @@ bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
     return false;
   }
   BYTE *maskBits = new BYTE[maskBytesCount];
-  if (!GetDIBits(dc, iconInfo.hbmMask, 0, bmMask.bmHeight, maskBits, bmi,
+  if (!GetDIBits(dc, iconInfo.hbmMask, 0, bmMask.mHeight, maskBits, bmi,
                  DIB_RGB_COLORS)) {
     delete[] colorBits;
     delete[] maskBits;
@@ -114,6 +130,7 @@ bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
   };
 #pragma pack(pop)
 
+  // Construct ICO file headers
   BITMAPINFOHEADER bmihIcon = {};
   bmihIcon.biSize = sizeof(BITMAPINFOHEADER);
   bmihIcon.biWidth = bmColor.bmWidth;
@@ -135,6 +152,7 @@ bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
   dir.idEntries[0].dwBytesInRes = sizeof(bmihIcon) + bmihIcon.biSizeImage;
   dir.idEntries[0].dwImageOffset = sizeof(ICONDIR_LOCAL);
 
+  // Write ICO file structure: directory, header, color bits, mask bits
   fwrite(&dir, 1, sizeof(dir), fp);
   fwrite(&bmihIcon, 1, sizeof(bmihIcon), fp);
   fwrite(colorBits, 1, colorBytesCount, fp);
@@ -148,15 +166,22 @@ bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
 }
 } // namespace
 
+// ============================================================================
+// Public API Implementation
+// ============================================================================
+
 bool ExtractFileIconToIco(const std::wstring &filePath,
                           const std::wstring &outIcoPath, int size) {
   if (filePath.empty() || outIcoPath.empty())
     return false;
+
+  // Clamp icon size to valid range
   if (size <= 0)
     size = 48;
   if (size > 256)
     size = 256;
 
+  // Try multiple sizes in priority order
   const int candidates[] = {size, 32, 48, 64};
   for (int s : candidates) {
     if (s <= 0 || s > 256)
@@ -166,6 +191,7 @@ bool ExtractFileIconToIco(const std::wstring &filePath,
     UINT extracted = PrivateExtractIconsW(filePath.c_str(), 0, s, s, &icon,
                                           nullptr, 1, LR_LOADTRANSPARENT);
 
+    // Fallback to shell icon if PrivateExtractIcons fails
     if (extracted == 0 || !icon) {
       SHFILEINFO shFileInfo = {};
       UINT flags = SHGFI_ICON;
@@ -192,6 +218,7 @@ bool ExtractFileIconToIco(const std::wstring &filePath,
       return true;
   }
 
+  // Create empty file as fallback to prevent repeated extraction attempts
   FILE *clearFp = nullptr;
   if (_wfopen_s(&clearFp, outIcoPath.c_str(), L"wb") == 0 && clearFp) {
     fwrite(outIcoPath.c_str(), 1, 1, clearFp);
@@ -200,15 +227,11 @@ bool ExtractFileIconToIco(const std::wstring &filePath,
   return false;
 }
 
-/*
-** Convert a UTF-8 encoded std::string to a wide character std::wstring.
-** Returns an empty wstring if the input string is empty.
-** Uses Windows MultiByteToWideChar for conversion.
-*/
-
 std::wstring ToWString(const std::string &str) {
   if (str.empty())
     return std::wstring();
+
+  // Determine required buffer size for wide character conversion
   int size_needed =
       MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
   std::wstring wstrTo(size_needed, 0);
@@ -217,14 +240,11 @@ std::wstring ToWString(const std::string &str) {
   return wstrTo;
 }
 
-/*
-** Convert a wide character std::wstring to a UTF-8 encoded std::string.
-** Returns an empty string if the input wstring is empty.
-*/
-
 std::string ToString(const std::wstring &wstr) {
   if (wstr.empty())
     return std::string();
+
+  // Determine required buffer size for UTF-8 conversion
   int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(),
                                         NULL, 0, NULL, NULL);
   std::string strTo(size_needed, 0);
@@ -234,13 +254,19 @@ std::string ToString(const std::wstring &wstr) {
 }
 
 std::wstring TrimUpper(const std::wstring &s) {
+  // Trim leading whitespace
   size_t a = 0;
   while (a < s.size() && iswspace(s[a]))
     ++a;
+
+  // Trim trailing whitespace
   size_t b = s.size();
   while (b > a && iswspace(s[b - 1]))
     --b;
+
   std::wstring out = s.substr(a, b - a);
+
+  // Convert to uppercase
   for (auto &ch : out)
     ch = towupper(ch);
   return out;
@@ -250,25 +276,33 @@ bool TrySplitByComma(const std::wstring &s, std::vector<std::wstring> &parts) {
   parts.clear();
   int depth = 0;
   size_t last = 0;
+
   for (size_t i = 0; i < s.length(); i++) {
     if (s[i] == L'(') {
       depth++;
     } else if (s[i] == L')') {
+      // Unbalanced parentheses detected
       if (depth == 0) {
         parts.clear();
         return false;
       }
       depth--;
     } else if (s[i] == L',' && depth == 0) {
+      // Split at top-level comma
       parts.push_back(s.substr(last, i - last));
       last = i + 1;
     }
   }
+
+  // Check for unbalanced parentheses
   if (depth != 0) {
     parts.clear();
     return false;
   }
+
   parts.push_back(s.substr(last));
+
+  // Trim whitespace from each part
   for (auto &p : parts) {
     p.erase(0, p.find_first_not_of(L' '));
     p.erase(p.find_last_not_of(L' ') + 1);

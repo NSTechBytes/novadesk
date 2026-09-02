@@ -29,8 +29,21 @@
 #define GetBValue(rgb) (LOBYTE((rgb) >> 16))
 #endif
 
+/**
+ * @brief Utility class for color parsing, conversion, and manipulation.
+ *
+ * @note Supports CSS color formats: rgba(), rgb(), hex (#RGB, #RGBA,
+ *       #RRGGBB, #RRGGBBAA), and named CSS colors.
+ */
 class ColorUtil {
 public:
+  /**
+   * @brief Clamps a float value to a BYTE (0-255).
+   *
+   * @param v The float value to clamp.
+   *
+   * @return Clamped byte value.
+   */
   static BYTE ClampByte(float v) {
     if (v < 0.0f)
       return 0;
@@ -39,28 +52,53 @@ public:
     return static_cast<BYTE>(std::lround(v));
   }
 
+  /**
+   * @brief Creates a COLORREF from float RGB values.
+   *
+   * @param r Red (0.0-255.0).
+   * @param g Green (0.0-255.0).
+   * @param b Blue (0.0-255.0).
+   *
+   * @return COLORREF value.
+   */
   static COLORREF FromFloatRGB(float r, float g, float b) {
     return RGB(ClampByte(r), ClampByte(g), ClampByte(b));
   }
 
+  /**
+   * @brief Creates a COLORREF and alpha from float RGBA values.
+   *
+   * @param r Red (0.0-255.0).
+   * @param g Green (0.0-255.0).
+   * @param b Blue (0.0-255.0).
+   * @param a Alpha (0.0-255.0).
+   * @param color Receives the COLORREF.
+   * @param alpha Receives the alpha byte.
+   */
   static void FromFloatRGBA(float r, float g, float b, float a, COLORREF &color,
                             BYTE &alpha) {
     color = FromFloatRGB(r, g, b);
     alpha = ClampByte(a);
   }
 
-  /*
-  ** Parse a color string and extract color and alpha values.
-  ** Supports formats: "rgba(r,g,b,a)", "#RRGGBB", "#RRGGBBAA", etc.
-  ** Values: r,g,b are 0-255, alpha is 0-255 (defaults to 255 if not specified).
-  ** Returns true on successful parse, false otherwise.
-  */
+  /**
+   * @brief Parses a CSS color string into COLORREF and alpha values.
+   *
+   * @param rgbaStr The color string to parse.
+   * @param color Receives the parsed COLORREF.
+   * @param alpha Receives the alpha value (0-255).
+   *
+   * @return True if parsing succeeded.
+   *
+   * @note Supports formats: "rgba(r,g,b,a)", "rgb(r,g,b)", "#RRGGBB",
+   *       "#RRGGBBAA", "#RGB", "#RGBA", and named CSS colors.
+   */
   static bool ParseRGBA(const std::wstring &rgbaStr, COLORREF &color,
                         BYTE &alpha) {
     if (rgbaStr.empty())
       return false;
 
-    // Strip whitespace for easier matching
+    // Strip whitespace and convert to lowercase for matching
     std::wstring s = rgbaStr;
     s.erase(std::remove_if(s.begin(), s.end(), isspace), s.end());
     std::transform(s.begin(), s.end(), s.begin(), ::towlower);
@@ -215,11 +253,14 @@ public:
         {L"whitesmoke", RGB(0xF5, 0xF5, 0xF5)},
         {L"yellow", RGB(0xFF, 0xFF, 0x00)},
         {L"yellowgreen", RGB(0x9A, 0xCD, 0x32)}};
+
+    // Handle "transparent" keyword
     if (s == L"transparent") {
       color = RGB(0, 0, 0);
       alpha = 0;
       return true;
     }
+
     auto named = kNamedColors.find(s);
     if (named != kNamedColors.end()) {
       color = named->second;
@@ -272,9 +313,7 @@ public:
 
     if (swscanf_s(s.c_str(), L"rgba(%d,%d,%d,%f)", &r, &g, &b, &af) == 4) {
       color = RGB(r, g, b);
-      // If af > 1.0, treat it as 0-255.
-      // This is a common pattern in desk-widgets where transparency is often
-      // 0-255.
+      // If af > 1.0, treat it as 0-255 range (common in desk-widgets)
       if (af > 1.1f)
         alpha = (BYTE)std::min(255.0f, af);
       else
@@ -289,9 +328,14 @@ public:
     return false;
   }
 
-  /*
-  ** Convert a COLORREF and alpha value to an "rgba(r,g,b,a)" string.
-  */
+  /**
+   * @brief Converts a COLORREF and alpha to an "rgba(r,g,b,a)" string.
+   *
+   * @param color The COLORREF value.
+   * @param alpha The alpha value (0-255).
+   *
+   * @return Formatted rgba() string.
+   */
   static std::wstring ToRGBAString(COLORREF color, BYTE alpha) {
     wchar_t buf[64];
     swprintf_s(buf, L"rgba(%d,%d,%d,%.2f)", GetRValue(color), GetGValue(color),

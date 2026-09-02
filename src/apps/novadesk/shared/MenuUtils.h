@@ -11,5 +11,15 @@
 #include "MenuItem.h"
 
 namespace MenuUtils {
+
+/**
+ * @brief Builds a Win32 HMENU from a vector of MenuItem definitions.
+ *
+ * @param hMenu The menu handle to populate.
+ * @param items Vector of MenuItem structures defining the menu layout.
+ *
+ * @note Recursively creates submenus for nested items.
+ */
 void BuildMenu(HMENU hMenu, const std::vector<MenuItem> &items);
+
 }

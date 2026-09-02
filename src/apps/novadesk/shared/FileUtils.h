@@ -9,6 +9,22 @@
 #include <string>
 
 namespace FileUtils {
+
+/**
+ * @brief Reads the entire content of a file as a string.
+ *
+ * @param path Path to the file to read.
+ *
+ * @return File content as a string; empty if file doesn't exist or read fails.
+ */
 std::string ReadFileContent(const std::wstring &path);
+
+/**
+ * @brief Reads content from a file path or URL.
+ *
+ * @param pathOrUrl Local file path or HTTP/HTTPS URL.
+ *
+ * @return Content as a string; empty if read fails.
+ */
 std::string ReadFileOrUrlContent(const std::wstring &pathOrUrl);
 } // namespace FileUtils

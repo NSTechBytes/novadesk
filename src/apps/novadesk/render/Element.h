@@ -26,101 +26,174 @@
 #define GetBValue(rgb) (LOBYTE((rgb) >> 16))
 #endif
 
+/**
+ * @brief Identifies the concrete type of a renderable element.
+ */
 enum ElementType {
-  ELEMENT_IMAGE,
-  ELEMENT_TEXT,
-  ELEMENT_BAR,
-  ELEMENT_LINE,
-  ELEMENT_ROUNDLINE,
-  ELEMENT_SHAPE,
-  ELEMENT_HISTOGRAM,
-  ELEMENT_BITMAP,
-  ELEMENT_BUTTON,
-  ELEMENT_ROTATOR,
-  ELEMENT_AREA_GRAPH,
-  ELEMENT_LAYOUT_BOX,
-  ELEMENT_INPUT_BOX,
-  ELEMENT_COLOR_PICKER
+  ELEMENT_IMAGE,       ///< Bitmap or remote image element.
+  ELEMENT_TEXT,        ///< Text label element.
+  ELEMENT_BAR,         ///< Horizontal/vertical bar gauge.
+  ELEMENT_LINE,        ///< Straight line segment.
+  ELEMENT_ROUNDLINE,   ///< Rounded line segment.
+  ELEMENT_SHAPE,       ///< Geometric shape (arc, curve, ellipse, etc.).
+  ELEMENT_HISTOGRAM,   ///< Histogram chart element.
+  ELEMENT_BITMAP,      ///< Raw bitmap element.
+  ELEMENT_BUTTON,      ///< Clickable button element.
+  ELEMENT_ROTATOR,     ///< Rotating knob or dial element.
+  ELEMENT_AREA_GRAPH,  ///< Area graph chart element.
+  ELEMENT_LAYOUT_BOX,  ///< Flexbox container element.
+  ELEMENT_INPUT_BOX,   ///< Text input field element.
+  ELEMENT_COLOR_PICKER ///< Color picker popup element.
 };
 
+/**
+ * @brief Axis-aligned rectangle with integer coordinates.
+ */
 struct GfxRect {
   int X, Y, Width, Height;
+
+  /// Default constructor initializes to zero rect.
   GfxRect() : X(0), Y(0), Width(0), Height(0) {}
+
+  /// Constructs a rect with specified position and dimensions.
   GfxRect(int x, int y, int w, int h) : X(x), Y(y), Width(w), Height(h) {}
 };
 
+/**
+ * @brief Configuration for rendering text drop shadows.
+ */
 struct TextShadow {
-  float offsetX = 0;
-  float offsetY = 0;
-  float blur = 0;
-  COLORREF color = 0;
-  BYTE alpha = 255;
+  float offsetX = 0; ///< Horizontal offset of the shadow.
+  float offsetY = 0; ///< Vertical offset of the shadow.
+  float blur = 0;    ///< Blur radius of the shadow.
+  COLORREF color = 0; ///< Shadow color in COLORREF format.
+  BYTE alpha = 255;   ///< Shadow opacity (0-255).
 };
 
+/**
+ * @brief A single color stop within a gradient definition.
+ */
 struct GradientStop {
-  COLORREF color;
-  BYTE alpha;
-  float position;
+  COLORREF color; ///< Color in COLORREF format.
+  BYTE alpha;     ///< Opacity (0-255).
+  float position; ///< Position along gradient line (0.0 to 1.0).
 };
 
-enum GradientType { GRADIENT_NONE, GRADIENT_LINEAR, GRADIENT_RADIAL };
+/**
+ * @brief Specifies the type of gradient fill.
+ */
+enum GradientType { 
+  GRADIENT_NONE,   ///< No gradient applied.
+  GRADIENT_LINEAR, ///< Linear gradient from start to end point.
+  GRADIENT_RADIAL  ///< Radial gradient from center outward.
+};
 
+/**
+ * @brief Complete gradient configuration for fills and strokes.
+ */
 struct GradientInfo {
-  GradientType type = GRADIENT_NONE;
-  std::vector<GradientStop> stops;
-  float angle = 0.0f;             // For linear
-  std::wstring shape = L"circle"; // For radial
+  GradientType type = GRADIENT_NONE;           ///< Gradient type.
+  std::vector<GradientStop> stops;             ///< Color stops along the gradient.
+  float angle = 0.0f;                          ///< Rotation angle (for linear gradients).
+  std::wstring shape = L"circle";              ///< Shape type (for radial gradients).
 };
 
+/**
+ * @brief Text case transformation mode.
+ */
 enum TextCase {
-  TEXT_CASE_NORMAL,
-  TEXT_CASE_UPPER,
-  TEXT_CASE_LOWER,
-  TEXT_CASE_CAPITALIZE,
-  TEXT_CASE_SENTENCE
+  TEXT_CASE_NORMAL,     ///< No transformation applied.
+  TEXT_CASE_UPPER,      ///< Convert to UPPERCASE.
+  TEXT_CASE_LOWER,      ///< Convert to lowercase.
+  TEXT_CASE_CAPITALIZE, ///< Capitalize first letter of each word.
+  TEXT_CASE_SENTENCE    ///< Capitalize first letter of each sentence.
 };
 
+/**
+ * @brief CSS-like backdrop filter configuration for blur and color effects.
+ */
 struct BackdropFilter {
-  float blur = 0.0f;
-  float brightness = 1.0f;
-  float contrast = 1.0f;
-  float grayscale = 0.0f;
-  float saturate = 1.0f;
-  float sepia = 0.0f;
-  float hueRotate = 0.0f;
-  float invert = 0.0f;
-  float opacity = 1.0f;
+  float blur = 0.0f;       ///< Gaussian blur radius.
+  float brightness = 1.0f; ///< Brightness multiplier (1.0 = normal).
+  float contrast = 1.0f;   ///< Contrast multiplier (1.0 = normal).
+  float grayscale = 0.0f;  ///< Grayscale intensity (0.0 = none, 1.0 = full).
+  float saturate = 1.0f;   ///< Saturation multiplier (1.0 = normal).
+  float sepia = 0.0f;      ///< Sepia tone intensity (0.0 = none, 1.0 = full).
+  float hueRotate = 0.0f;  ///< Hue rotation in degrees.
+  float invert = 0.0f;     ///< Color inversion intensity (0.0 = none, 1.0 = full).
+  float opacity = 1.0f;    ///< Overall opacity (0.0 = transparent, 1.0 = opaque).
 
+  /// @return True if any filter (other than default opacity) is active.
   bool IsActive() const;
 };
 
+/**
+ * @brief Base class for all renderable elements in Novadesk widgets.
+ *
+ * @note Instances are owned by Widget and must only be created/destroyed
+ *       on the main UI thread. Element handles Direct2D rendering, hit testing,
+ *       scroll behavior, and event callback dispatch.
+ */
 class Element {
 public:
   void SetBackdropFilter(const BackdropFilter &filter) {
     m_BackdropFilter = filter;
   }
   const BackdropFilter &GetBackdropFilter() const { return m_BackdropFilter; }
+
+  /**
+   * @brief Constructs an element with type, ID, and bounding rectangle.
+   *
+   * @param type The concrete element type.
+   * @param id Unique identifier for this element within the widget.
+   * @param x X-coordinate of the element's top-left corner.
+   * @param y Y-coordinate of the element's top-left corner.
+   * @param width Width in pixels (0 = auto-size).
+   * @param height Height in pixels (0 = auto-size).
+   */
   Element(ElementType type, const std::wstring &id, int x, int y, int width,
           int height);
+
   virtual ~Element();
 
+  /**
+   * @brief Renders the element using Direct2D.
+   *
+   * @param context The Direct2D device context for rendering.
+   */
   virtual void Render(ID2D1DeviceContext *context) = 0;
 
+  /// @return The concrete element type.
   ElementType GetType() const { return m_Type; }
+
+  /// @return The unique identifier for this element.
   const std::wstring &GetId() const { return m_Id; }
+
+  /// @return X-coordinate of the element's top-left corner.
   int GetX() const { return m_X; }
+
+  /// @return Y-coordinate of the element's top-left corner.
   int GetY() const { return m_Y; }
 
+  /// @return Width in pixels.
   int GetWidth();
+
+  /// @return Height in pixels.
   int GetHeight();
 
+  /// @return True if width was explicitly set (non-zero).
   bool IsWDefined() const { return m_WDefined; }
+
+  /// @return True if height was explicitly set (non-zero).
   bool IsHDefined() const { return m_HDefined; }
 
+  /// Sets the element's position.
   void SetPosition(int x, int y) {
     m_X = x;
     m_Y = y;
   }
+
+  /// Sets the element's size. Width/height <= 0 means auto-size.
   void SetSize(int w, int h) {
     m_Width = w;
     m_Height = h;
@@ -128,38 +201,64 @@ public:
     m_HDefined = (h > 0);
   }
 
+  /// @return Auto-calculated width based on content (0 if not supported).
   virtual int GetAutoWidth() { return 0; }
+
+  /// @return Auto-calculated height based on content (0 if not supported).
   virtual int GetAutoHeight() { return 0; }
 
+  /// Sets the owning widget's HWND for Win32 API calls.
   void SetOwnerHWND(HWND hWnd) {
     m_OwnerHWND = hWnd;
     OnOwnerHWNDSet();
   }
+
+  /// @return The owning widget's HWND.
   HWND GetOwnerHWND() const { return m_OwnerHWND; }
 
+  /// Called when the owner HWND is set; override for initialization.
   virtual void OnOwnerHWNDSet() {}
+
+  /// Called when an image download completes for this element.
   virtual void OnImageDownloaded(const std::wstring &url,
                                  const std::vector<BYTE> &buffer) {}
+
+  /// @return The image URL if this element loads remote images.
   virtual std::wstring GetImageUrl() const { return L""; }
 
+  /// @return The bounding rectangle of the element.
   virtual GfxRect GetBounds();
+
+  /// @return The background rendering bounds (may differ from content bounds).
   virtual GfxRect GetBackgroundBounds();
 
+  /**
+   * @brief Tests if a point falls within the element's hit area.
+   *
+   * @param x X-coordinate to test.
+   * @param y Y-coordinate to test.
+   *
+   * @return True if the point hits this element.
+   */
   virtual bool HitTest(int x, int y);
 
+  /// Sets the solid background color and alpha.
   void SetSolidColor(COLORREF color, BYTE alpha) {
     m_SolidColor = color;
     m_SolidAlpha = alpha;
     m_HasSolidColor = true;
   }
 
+  /// Sets a gradient background fill.
   void SetSolidGradient(const GradientInfo &gradient) {
     m_SolidGradient = gradient;
     m_HasSolidColor = true;
   }
 
+  /// Sets the corner radius for rounded rectangles.
   void SetCornerRadius(int radius) { m_CornerRadius = radius; }
 
+  /// Configures the bevel (3D edge) effect.
   void SetBevel(int type, int width, COLORREF color, BYTE alpha,
                 COLORREF color2, BYTE alpha2) {
     m_BevelType = type;
@@ -169,22 +268,36 @@ public:
     m_BevelColor2 = color2;
     m_BevelAlpha2 = alpha2;
   }
+
+  /// Sets the primary bevel gradient.
   void SetBevelGradient(const GradientInfo &gradient) {
     m_BevelGradient = gradient;
   }
+
+  /// Sets the secondary bevel gradient.
   void SetBevelGradient2(const GradientInfo &gradient) {
     m_BevelGradient2 = gradient;
   }
 
+  /// Enables or disables anti-aliasing for this element.
   void SetAntiAlias(bool enable) { m_AntiAlias = enable; }
+
+  /// Enables pixel-perfect hit testing (checks alpha channel).
   void SetPixelHitTest(bool enabled) { m_PixelHitTest = enabled; }
+
+  /// @return True if pixel-perfect hit testing is enabled.
   bool GetPixelHitTest() const { return m_PixelHitTest; }
 
+  /// Sets internal padding (space between border and content).
   void SetPadding(int left, int top, int right, int bottom);
 
+  /// Sets the rotation angle in degrees.
   void SetRotate(float angle) { m_Rotate = angle; }
+
+  /// @return The rotation angle in degrees.
   float GetRotate() const { return m_Rotate; }
 
+  /// Sets a 2D affine transformation matrix (6 floats: m11, m12, m21, m22, dx, dy).
   void SetTransformMatrix(const float *matrix) {
     if (matrix) {
       memcpy(m_TransformMatrix, matrix, sizeof(float) * 6);
@@ -193,7 +306,11 @@ public:
       m_HasTransformMatrix = false;
     }
   }
+
+  /// @return True if a custom transform matrix is set.
   bool HasTransformMatrix() const { return m_HasTransformMatrix; }
+
+  /// @return Pointer to the 6-float transform matrix.
   const float *GetTransformMatrix() const { return m_TransformMatrix; }
 
   bool HasSolidColor() const { return m_HasSolidColor; }
@@ -219,36 +336,66 @@ public:
 
   bool GetAntiAlias() const { return m_AntiAlias; }
 
+  /// Sets the element's visibility.
   void SetShow(bool show) { m_Show = show; }
+
+  /// @return True if the element is visible.
   bool IsVisible() const { return m_Show; }
 
+  /// Sets the container element ID for nested layouts.
   void SetContainerId(const std::wstring &id) { m_ContainerId = id; }
   const std::wstring &GetContainerId() const { return m_ContainerId; }
+
+  /// Sets the group ID for element grouping.
   void SetGroupId(const std::wstring &id) { m_GroupId = id; }
   const std::wstring &GetGroupId() const { return m_GroupId; }
+
+  /// Enables or disables the custom mouse cursor for this element.
   void SetMouseEventCursor(bool enabled) { m_MouseEventCursor = enabled; }
   bool GetMouseEventCursor() const { return m_MouseEventCursor; }
+
+  /// Sets the custom cursor name (loaded from cursors directory).
   void SetMouseEventCursorName(const std::wstring &name) {
     m_MouseEventCursorName = name;
   }
   const std::wstring &GetMouseEventCursorName() const {
     return m_MouseEventCursorName;
   }
+
+  /// Sets the base directory for cursor resources.
   void SetCursorsDir(const std::wstring &dir) { m_CursorsDir = dir; }
   const std::wstring &GetCursorsDir() const { return m_CursorsDir; }
+
+  /// Sets the parent container element.
   void SetContainer(Element *container) { m_ContainerElement = container; }
+
+  /// @return The parent container element, or nullptr if none.
   Element *GetContainer() const { return m_ContainerElement; }
+
+  /// @return True if this element is contained within another element.
   bool IsContained() const { return m_ContainerElement != nullptr; }
 
+  /// Adds a child element to this container.
   void AddContainerItem(Element *item) { m_ContainerItems.push_back(item); }
+
+  /// Removes a child element from this container.
   void RemoveContainerItem(Element *item);
+
+  /// Removes all child elements from this container.
   void ClearContainerItems();
+
+  /// @return Read-only access to the child elements.
   const std::vector<Element *> &GetContainerItems() const {
     return m_ContainerItems;
   }
+
+  /// @return True if this element contains child elements.
   bool IsContainer() const { return !m_ContainerItems.empty(); }
 
-  // Scroll properties
+  // ============================================================================
+  // Scroll Properties
+  // ============================================================================
+
   int GetScrollX() const { return m_ScrollX; }
   int GetScrollY() const { return m_ScrollY; }
   void SetScrollX(int x);
@@ -264,15 +411,19 @@ public:
   bool IsScrollableY() const;
   bool IsScrollable() const { return IsScrollableX() || IsScrollableY(); }
 
-  // Overflow
+  /// Overflow behavior mode.
   enum class OverflowMode { Hidden, Auto, Scroll };
+
   OverflowMode GetOverflowX() const { return m_OverflowX; }
   OverflowMode GetOverflowY() const { return m_OverflowY; }
   void SetOverflowX(OverflowMode mode) { m_OverflowX = mode; }
   void SetOverflowY(OverflowMode mode) { m_OverflowY = mode; }
   void SetOverflow(const std::wstring &value);
 
-  // Scrollbar appearance
+  // ============================================================================
+  // Scrollbar Appearance
+  // ============================================================================
+
   bool GetShowScrollbar() const { return m_ShowScrollbar; }
   void SetShowScrollbar(bool show) { m_ShowScrollbar = show; }
   bool GetShowScrollbarX() const { return m_ShowScrollbarX; }
@@ -300,12 +451,15 @@ public:
   void SetScrollbarMinThumbLength(float minLen) {
     m_ScrollbarMinThumbLength = (minLen >= 4.0f ? minLen : 4.0f);
   }
+
+  /// Returns the scrollbar thumb color.
   COLORREF GetScrollbarColor() const { return m_ScrollbarColor; }
   BYTE GetScrollbarAlpha() const { return m_ScrollbarAlpha; }
   void SetScrollbarColor(COLORREF color, BYTE alpha) {
     m_ScrollbarColor = color;
     m_ScrollbarAlpha = alpha;
   }
+
   bool HasScrollbarHoverColor() const { return m_HasScrollbarHoverColor; }
   COLORREF GetScrollbarHoverColor() const {
     return m_HasScrollbarHoverColor ? m_ScrollbarHoverColor : m_ScrollbarColor;
@@ -320,6 +474,7 @@ public:
     m_ScrollbarHoverAlpha = alpha;
     m_HasScrollbarHoverColor = true;
   }
+
   bool HasScrollbarActiveColor() const { return m_HasScrollbarActiveColor; }
   COLORREF GetScrollbarActiveColor() const {
     return m_HasScrollbarActiveColor ? m_ScrollbarActiveColor
@@ -335,6 +490,8 @@ public:
     m_ScrollbarActiveAlpha = alpha;
     m_HasScrollbarActiveColor = true;
   }
+
+  /// Returns the scrollbar track background color.
   COLORREF GetScrollbarTrackColor() const { return m_ScrollbarTrackColor; }
   BYTE GetScrollbarTrackAlpha() const { return m_ScrollbarTrackAlpha; }
   void SetScrollbarTrackColor(COLORREF color, BYTE alpha) {
@@ -342,7 +499,10 @@ public:
     m_ScrollbarTrackAlpha = alpha;
   }
 
+  // ============================================================================
   // Scrollbar Arrow Buttons
+  // ============================================================================
+
   bool GetShowScrollbarButtons() const { return m_ShowScrollbarButtons; }
   void SetShowScrollbarButtons(bool show) { m_ShowScrollbarButtons = show; }
   float GetScrollbarButtonSize() const {
@@ -356,6 +516,8 @@ public:
     return m_ScrollbarButtonRadius >= 0.0f ? m_ScrollbarButtonRadius : 0.0f;
   }
   void SetScrollbarButtonRadius(float r) { m_ScrollbarButtonRadius = r; }
+
+  /// Returns the scrollbar arrow color (defaults to scrollbar color if not set).
   COLORREF GetScrollbarArrowColor() const {
     return m_HasScrollbarArrowColor ? m_ScrollbarArrowColor
                                     : GetScrollbarColor();
@@ -369,6 +531,7 @@ public:
     m_ScrollbarArrowAlpha = alpha;
     m_HasScrollbarArrowColor = true;
   }
+
   COLORREF GetScrollbarArrowHoverColor() const {
     return m_HasScrollbarArrowHoverColor ? m_ScrollbarArrowHoverColor
                                          : GetScrollbarHoverColor();
@@ -382,6 +545,7 @@ public:
     m_ScrollbarArrowHoverAlpha = alpha;
     m_HasScrollbarArrowHoverColor = true;
   }
+
   COLORREF GetScrollbarArrowActiveColor() const {
     return m_HasScrollbarArrowActiveColor ? m_ScrollbarArrowActiveColor
                                           : GetScrollbarActiveColor();
@@ -395,6 +559,8 @@ public:
     m_ScrollbarArrowActiveAlpha = alpha;
     m_HasScrollbarArrowActiveColor = true;
   }
+
+  /// Returns the scrollbar button background color.
   COLORREF GetScrollbarButtonBgColor() const {
     return m_ScrollbarButtonBgColor;
   }
@@ -403,6 +569,8 @@ public:
     m_ScrollbarButtonBgColor = color;
     m_ScrollbarButtonBgAlpha = alpha;
   }
+
+  /// Returns the scrollbar button hover background color.
   COLORREF GetScrollbarButtonHoverBgColor() const {
     return m_ScrollbarButtonHoverBgColor;
   }
@@ -414,20 +582,34 @@ public:
     m_ScrollbarButtonHoverBgAlpha = alpha;
   }
 
+  /// Returns true if the element allows transparent (alpha=0) hit testing.
   virtual bool IsTransparentHit() const { return false; }
 
+  /// Checks if this element handles a specific Windows message.
   bool HasAction(UINT message, WPARAM wParam) const;
+
+  /// @return True if any mouse event callbacks are registered.
   bool HasMouseAction() const;
+
+  /// @return True if drag-start or drag callbacks are registered.
   bool HasDragAction() const;
+
+  /// @return True if drop callbacks are registered.
   bool HasDropAction() const;
 
+  /// @return True if this element is a drop target.
   bool IsDropTarget() const { return m_IsDropTarget || HasDropAction(); }
   void SetDropTarget(bool enable) { m_IsDropTarget = enable; }
 
+  /// @return True if this element is a drag source area.
   bool IsDragArea() const { return m_IsDragArea; }
   void SetDragArea(bool enable) { m_IsDragArea = enable; }
 
-  // Tooltip properties
+  // ============================================================================
+  // Tooltip Properties
+  // ============================================================================
+
+  /// Configures the tooltip displayed on hover.
   void SetToolTip(const std::wstring &text, const std::wstring &title = L"",
                   const std::wstring &icon = L"", int maxWidth = 0,
                   int maxHeight = 0, bool balloon = false) {
@@ -448,13 +630,15 @@ public:
   bool GetToolTipDisabled() const { return m_ToolTipDisabled; }
   void SetToolTipDisabled(bool disabled) { m_ToolTipDisabled = disabled; }
 
+  /// @return True if tooltip text is set and not disabled.
   bool HasToolTip() const {
     return !m_ToolTipText.empty() && !m_ToolTipDisabled;
   }
 
-  // Mouse Actions
+  // ============================================================================
+  // Mouse Event Callback IDs (initialized to -1 when unregistered)
+  // ============================================================================
 
-  // Callback IDs (initialized to -1)
   int m_OnLeftMouseUpCallbackId = -1;
   int m_OnLeftMouseDownCallbackId = -1;
   int m_OnLeftDoubleClickCallbackId = -1;
@@ -480,7 +664,10 @@ public:
   int m_OnDragCallbackId = -1;
   int m_OnDragEndCallbackId = -1;
 
-  // Drop Target Actions
+  // ============================================================================
+  // Drop Target Callback IDs
+  // ============================================================================
+
   int m_OnDropCallbackId = -1;
   int m_OnDragEnterCallbackId = -1;
   int m_OnDragOverCallbackId = -1;
@@ -491,6 +678,10 @@ public:
   bool m_IsMouseOver = false;
 
 protected:
+  // ============================================================================
+  // Core Properties
+  // ============================================================================
+
   BackdropFilter m_BackdropFilter;
   ElementType m_Type;
   std::wstring m_Id;
@@ -498,16 +689,22 @@ protected:
   int m_Width, m_Height;
   bool m_WDefined, m_HDefined;
 
-  // Background properties
+  // ============================================================================
+  // Background & Fill Properties
+  // ============================================================================
+
   bool m_HasSolidColor = false;
   COLORREF m_SolidColor = 0;
   BYTE m_SolidAlpha = 0;
   int m_CornerRadius = 0;
 
-  // Gradient properties
+  /// Gradient fill configuration.
   GradientInfo m_SolidGradient;
 
-  // Bevel properties
+  // ============================================================================
+  // Bevel (3D Edge) Properties
+  // ============================================================================
+
   int m_BevelType = 0;
   int m_BevelWidth = 0;
   COLORREF m_BevelColor = RGB(255, 255, 255);
@@ -517,10 +714,17 @@ protected:
   GradientInfo m_BevelGradient;
   GradientInfo m_BevelGradient2;
 
-  // Rendering properties
+  // ============================================================================
+  // Rendering Properties
+  // ============================================================================
+
   bool m_AntiAlias = true;
   bool m_PixelHitTest = false;
   bool m_Show = true;
+
+  // ============================================================================
+  // Container & Grouping
+  // ============================================================================
 
   std::wstring m_ContainerId;
   std::wstring m_GroupId;
@@ -530,7 +734,10 @@ protected:
   Element *m_ContainerElement = nullptr;
   std::vector<Element *> m_ContainerItems;
 
-  // Scroll state
+  // ============================================================================
+  // Scroll State
+  // ============================================================================
+
   int m_ScrollX = 0;
   int m_ScrollY = 0;
   int m_ScrollStep = 24;
@@ -538,6 +745,11 @@ protected:
   int m_ContentHeight = 0;
   OverflowMode m_OverflowX = OverflowMode::Hidden;
   OverflowMode m_OverflowY = OverflowMode::Hidden;
+
+  // ============================================================================
+  // Scrollbar Appearance State
+  // ============================================================================
+
   bool m_ShowScrollbar = true;
   bool m_ShowScrollbarX = true;
   bool m_ShowScrollbarY = true;
@@ -574,24 +786,36 @@ protected:
   COLORREF m_ScrollbarButtonHoverBgColor = RGB(255, 255, 255);
   BYTE m_ScrollbarButtonHoverBgAlpha = 30;
 
-  // Padding properties
+  // ============================================================================
+  // Padding
+  // ============================================================================
+
   int m_PaddingLeft = 0;
   int m_PaddingTop = 0;
   int m_PaddingRight = 0;
   int m_PaddingBottom = 0;
 
-  // Transformation properties
+  // ============================================================================
+  // Transform Properties
+  // ============================================================================
+
   float m_Rotate = 0.0f;
   bool m_HasTransformMatrix = false;
   float m_TransformMatrix[6] = {1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f};
 
-  // Backdrop filter cache — avoids per-frame GPU surface reallocation.
+  // ============================================================================
+  // Backdrop Filter Cache (avoids per-frame GPU surface reallocation)
+  // ============================================================================
+
   BackdropFilter m_BackdropFilterCache;
   GfxRect m_BackdropFilterBounds{};
   Microsoft::WRL::ComPtr<ID2D1BitmapRenderTarget> m_BackdropFilterTarget;
   Microsoft::WRL::ComPtr<ID2D1Bitmap> m_BackdropFilterBitmap;
 
-  // Tooltip properties
+  // ============================================================================
+  // Tooltip
+  // ============================================================================
+
   std::wstring m_ToolTipText;
   std::wstring m_ToolTipTitle;
   std::wstring m_ToolTipIcon;
@@ -599,6 +823,10 @@ protected:
   int m_ToolTipMaxHeight = 0;
   bool m_ToolTipBalloon = false;
   bool m_ToolTipDisabled = false;
+
+  // ============================================================================
+  // Internal Rendering Methods
+  // ============================================================================
 
   void RenderBackground(ID2D1DeviceContext *context);
   void RenderBackdropFilter(ID2D1DeviceContext *context);

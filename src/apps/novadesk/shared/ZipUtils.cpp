@@ -1,3 +1,10 @@
+/* Copyright (C) 2026 OfficialNovadesk
+ *
+ * This Source Code Form is subject to the terms of the GNU General Public
+ * License; either version 2 of the License, or (at your option) any later
+ * version. If a copy of the GPL was not distributed with this file, You can
+ * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
+
 #include "ZipUtils.h"
 
 #include <fstream>
@@ -11,7 +18,21 @@
 namespace novadesk::shared {
 namespace fs = std::filesystem;
 
+// ============================================================================
+// Internal Helpers
+// ============================================================================
+
 namespace {
+/**
+ * @brief Adds a single file to an open zip archive handle.
+ *
+ * @param zf Open zip file handle.
+ * @param filePath Path to the file on disk.
+ * @param zipEntryPath Entry name within the archive.
+ * @param level Compression level (0 = store, 1-9 = deflate).
+ *
+ * @return True if the file was added successfully.
+ */
 bool AddFileToZipHandle(zipFile zf, const fs::path &filePath,
                         const std::string &zipEntryPath, int level) {
   std::ifstream in(filePath, std::ios::binary);
@@ -25,6 +46,7 @@ bool AddFileToZipHandle(zipFile zf, const fs::path &filePath,
     return false;
   }
 
+  // Stream file contents in 64KB chunks to avoid loading entire file into memory
   std::vector<char> buffer(64 * 1024);
   while (in) {
     in.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
@@ -41,6 +63,14 @@ bool AddFileToZipHandle(zipFile zf, const fs::path &filePath,
   return zipCloseFileInZip(zf) == ZIP_OK;
 }
 
+/**
+ * @brief Adds a directory entry to an open zip archive handle.
+ *
+ * @param zf Open zip file handle.
+ * @param zipDirPath Directory path within the archive (will get trailing '/').
+ *
+ * @return True if the directory entry was added successfully.
+ */
 bool AddDirectoryEntryToZipHandle(zipFile zf, const std::string &zipDirPath) {
   zip_fileinfo zi = {};
   std::string dirEntry = zipDirPath;
@@ -55,6 +85,10 @@ bool AddDirectoryEntryToZipHandle(zipFile zf, const std::string &zipDirPath) {
 }
 } // namespace
 
+// ============================================================================
+// Public API Implementation
+// ============================================================================
+
 bool CompressToZip(const fs::path &sourcePath, const fs::path &destZipPath,
                    const ZipCompressOptions &opts, std::string &errorOut) {
   std::error_code ec;
@@ -68,6 +102,7 @@ bool CompressToZip(const fs::path &sourcePath, const fs::path &destZipPath,
     return false;
   }
 
+  // Ensure parent directory exists before creating the zip
   if (destZipPath.has_parent_path()) {
     fs::create_directories(destZipPath.parent_path(), ec);
   }
@@ -84,6 +119,7 @@ bool CompressToZip(const fs::path &sourcePath, const fs::path &destZipPath,
   bool success = true;
 
   if (fs::is_directory(sourcePath, ec)) {
+    // Recursively iterate directory and add each entry to the archive
     for (const auto &entry : fs::recursive_directory_iterator(
              sourcePath, fs::directory_options::skip_permission_denied, ec)) {
       if (ec)
@@ -162,6 +198,7 @@ bool ExtractFromZip(const fs::path &zipPath, const fs::path &destDirPath,
     return false;
   }
 
+  // Build filter set for selective extraction
   std::unordered_set<std::string> filterSet;
   for (const auto &item : opts.selectedEntries) {
     std::string norm = item;
@@ -185,11 +222,12 @@ bool ExtractFromZip(const fs::path &zipPath, const fs::path &destDirPath,
     std::string entryName(rawName);
     std::replace(entryName.begin(), entryName.end(), '\\', '/');
 
+    // Skip entries not in the filter set
     if (hasFilter && filterSet.find(entryName) == filterSet.end()) {
       continue;
     }
 
-    // Prevent Zip Slip vulnerability
+    // WARNING: Reject entries with ".." to prevent Zip Slip path traversal attacks
     if (entryName.find("..") != std::string::npos) {
       continue;
     }
@@ -204,6 +242,7 @@ bool ExtractFromZip(const fs::path &zipPath, const fs::path &destDirPath,
         fs::create_directories(targetPath.parent_path(), ec);
       }
 
+      // Skip existing files when overwrite is disabled
       if (fs::exists(targetPath, ec) && !opts.overwrite) {
         continue;
       }
@@ -224,6 +263,7 @@ bool ExtractFromZip(const fs::path &zipPath, const fs::path &destDirPath,
         return false;
       }
 
+      // Stream extracted data in 64KB chunks
       std::vector<char> buffer(64 * 1024);
       bool readError = false;
       while (true) {
@@ -279,6 +319,7 @@ bool ListZipEntries(const fs::path &zipPath,
     return false;
   }
 
+  // Iterate through all entries and collect metadata
   do {
     unz_file_info64 fileInfo = {};
     char rawName[1024] = {};
@@ -325,7 +366,7 @@ bool ReadZipEntryContent(const fs::path &zipPath, const std::string &entryName,
   std::string target = entryName;
   std::replace(target.begin(), target.end(), '\\', '/');
 
-  // Locate specific entry
+  // Locate the specific entry by name
   if (unzLocateFile(uf, target.c_str(), 2) != UNZ_OK) {
     unzClose(uf);
     errorOut = "Entry not found in zip archive: " + entryName;
@@ -347,6 +388,7 @@ bool ReadZipEntryContent(const fs::path &zipPath, const std::string &entryName,
     return false;
   }
 
+  // Pre-allocate output buffer based on uncompressed size
   outContent.clear();
   if (fileInfo.uncompressed_size > 0) {
     outContent.resize(static_cast<size_t>(fileInfo.uncompressed_size));
