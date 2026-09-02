@@ -1,3 +1,10 @@
+/* Copyright (C) 2026 OfficialNovadesk
+ *
+ * This Source Code Form is subject to the terms of the GNU General Public
+ * License; either version 2 of the License, or (at your option) any later
+ * version. If a copy of the GPL was not distributed with this file, You can
+ * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
+
 #include <windows.h>
 #include <winreg.h>
 #include <commctrl.h>
@@ -24,6 +31,10 @@
 namespace fs = std::filesystem;
 using Microsoft::WRL::ComPtr;
 
+// ============================================================================
+// Data Structures & Constants
+// ============================================================================
+
 static const std::string INSTALLER_MAGIC = "NWSFX1";
 
 #pragma pack(push, 1)
@@ -35,6 +46,10 @@ struct InstallerFooter {
 #pragma pack(pop)
 
 static_assert(sizeof(InstallerFooter) == 24, "InstallerFooter size mismatch");
+
+// ============================================================================
+// Utility Functions (String Conversion, Environment Expansion)
+// ============================================================================
 
 std::wstring ToWString(const std::string &str) {
   if (str.empty())
@@ -64,6 +79,8 @@ std::wstring ExpandEnv(const std::wstring &value) {
 
 bool ReadInstallerFooter(const fs::path &exePath, InstallerFooter &footer,
                          uint64_t &footerOffset) {
+  // Read the installer footer (magic + sizes) from the end of the executable.
+  // The footer indicates where embedded payload and manifest data reside.
   std::ifstream in(exePath, std::ios::binary | std::ios::ate);
   if (!in)
     return false;
@@ -78,6 +95,10 @@ bool ReadInstallerFooter(const fs::path &exePath, InstallerFooter &footer,
   return std::memcmp(footer.magic, INSTALLER_MAGIC.c_str(),
                      INSTALLER_MAGIC.size()) == 0;
 }
+
+// ============================================================================
+// Admin & Privilege Management
+// ============================================================================
 
 bool IsRunningAsAdmin() {
   BOOL isAdmin = FALSE;
@@ -110,6 +131,10 @@ bool RelaunchAsAdmin(const std::wstring &arguments) {
   }
   return true;
 }
+
+// ============================================================================
+// Shortcut & Registry Operations
+// ============================================================================
 
 bool CreateShortcut(const std::wstring &targetPath,
                     const std::wstring &shortcutPath,
@@ -154,6 +179,10 @@ bool ExtractEmbeddedStub(const fs::path &outPath) {
   return true;
 }
 
+// ============================================================================
+// Process & Installation Checks
+// ============================================================================
+
 bool IsProcessRunning(const std::wstring &exeName) {
   HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
   if (snapshot == INVALID_HANDLE_VALUE)
@@ -185,6 +214,10 @@ bool IsAppInstalled(const std::wstring &appName) {
 }
 
 namespace {
+// ============================================================================
+// UI Globals & State Management
+// ============================================================================
+
 HWND g_hwnd = nullptr;
 HWND g_title = nullptr;
 HWND g_status = nullptr;
@@ -211,6 +244,11 @@ std::wstring g_appNameUi = L"Installer";
 std::wstring g_launchExe;
 std::wstring g_launchDir;
 bool g_launchAfterInstall = false;
+
+// ============================================================================
+// UI Helper Functions
+// ============================================================================
+
 void UpdateStatus(const std::wstring &text) {
   std::lock_guard<std::mutex> lock(g_statusMutex);
   g_statusText = text;
@@ -238,6 +276,10 @@ void RefreshUi() {
   SetWindowTextW(g_status, g_statusText.c_str());
 }
 } // namespace
+
+// ============================================================================
+// Installation & Uninstallation Core
+// ============================================================================
 
 std::wstring LoadAppNameFromManifest() {
   wchar_t exePathBuf[MAX_PATH];
@@ -278,6 +320,8 @@ std::wstring LoadAppNameFromManifest() {
 }
 
 bool InstallFromSelf(bool skipInstalledCheck) {
+  // Extract embedded payload and manifest from self, then perform installation.
+  // NOTE: This function requires admin privileges to write to system directories.
   wchar_t exePathBuf[MAX_PATH];
   GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
   fs::path exePath = exePathBuf;
@@ -753,6 +797,10 @@ bool UninstallSelf() {
   UpdateStatus(L"Done");
   return true;
 }
+// ============================================================================
+// Window Message Handler & Main Entry Point
+// ============================================================================
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   switch (msg) {
   case WM_TIMER:

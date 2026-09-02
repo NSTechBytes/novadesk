@@ -16,39 +16,59 @@
 #include <string>
 #include <vector>
 
-// Restricts which characters the user may type into an InputBoxElement.
+/**
+ * @brief Input type restrictions for text entry.
+ */
 enum class InputType {
-  Any,          // No restriction (default)
-  Integer,      // Digits and optional leading '-'
-  Float,        // Digits, optional '-' and one '.'
-  Letters,      // Unicode alphabetic only
-  Alphanumeric, // Alphanumeric characters only
-  Hex,          // 0-9 a-f A-F
-  Email,        // alphanum + @ . - _ +
-  Custom,       // Only characters in the allowedChars set
+  Any,          ///< No restriction (default).
+  Integer,      ///< Digits and optional leading '-'.
+  Float,        ///< Digits, optional '-' and one '.'.
+  Letters,      ///< Unicode alphabetic only.
+  Alphanumeric, ///< Alphanumeric characters only.
+  Hex,          ///< 0-9 a-f A-F.
+  Email,        ///< Alphanum + @ . - _ +.
+  Custom,       ///< Only characters in the allowedChars set.
 };
 
-// A custom text input field rendered entirely with Direct2D/DirectWrite inside
-// the Widget paint loop. Because it lives in the same m_Elements list as every
-// other element, it composites between/over siblings in insertion order
-// (CSS-like document flow) without any dedicated z-index infrastructure.
+/**
+ * @brief Custom text input field rendered with Direct2D/DirectWrite.
+ *
+ * @note Lives in the same element list as other elements, compositing
+ *       in insertion order (CSS-like document flow). Supports undo/redo,
+ *       selection, password masking, and input type validation.
+ */
 class InputBoxElement : public Element {
 public:
+  /**
+   * @brief Constructs an input box element.
+   *
+   * @param id Unique element identifier.
+   * @param x X-coordinate.
+   * @param y Y-coordinate.
+   * @param width Width in pixels.
+   * @param height Height in pixels.
+   */
   InputBoxElement(const std::wstring &id, int x, int y, int width, int height);
   virtual ~InputBoxElement() {}
 
   virtual void Render(ID2D1DeviceContext *context) override;
-
   virtual int GetAutoWidth() override;
   virtual int GetAutoHeight() override;
   virtual GfxRect GetBounds() override;
   virtual bool HitTest(int x, int y) override;
 
-  // Text content
+  // ============================================================================
+  // Text Content
+  // ============================================================================
+
+  /// Sets the current text content.
   void SetText(const std::wstring &text);
   const std::wstring &GetText() const { return m_Text; }
 
+  // ============================================================================
   // Typography
+  // ============================================================================
+
   void SetFontFace(const std::wstring &font) { m_FontFace = font; }
   void SetFontSize(int size) { m_FontSize = size; }
   void SetFontColor(COLORREF color, BYTE alpha) {
@@ -59,7 +79,6 @@ public:
   void SetFontWeight(int weight) { m_FontWeight = weight; }
   void SetItalic(bool italic) { m_Italic = italic; }
   void SetFontPath(const std::wstring &path) { m_FontPath = path; }
-
   void SetTextAlign(TextAlignment align) { m_TextAlign = align; }
 
   const std::wstring &GetFontFace() const { return m_FontFace; }
@@ -71,7 +90,10 @@ public:
   TextAlignment GetTextAlign() const { return m_TextAlign; }
   const std::wstring &GetFontPath() const { return m_FontPath; }
 
+  // ============================================================================
   // Placeholder
+  // ============================================================================
+
   void SetPlaceholder(const std::wstring &placeholder) {
     m_Placeholder = placeholder;
   }
@@ -84,7 +106,10 @@ public:
   COLORREF GetPlaceholderColor() const { return m_PlaceholderColor; }
   BYTE GetPlaceholderAlpha() const { return m_PlaceholderAlpha; }
 
-  // Caret / selection colors
+  // ============================================================================
+  // Caret & Selection Colors
+  // ============================================================================
+
   void SetCaretColor(COLORREF color, BYTE alpha) {
     m_CaretColor = color;
     m_CaretAlpha = alpha;
@@ -101,7 +126,10 @@ public:
   COLORREF GetSelectionColor() const { return m_SelectionColor; }
   BYTE GetSelectionAlpha() const { return m_SelectionAlpha; }
 
-  // Fill color
+  // ============================================================================
+  // Fill & Border
+  // ============================================================================
+
   void SetFillColor(COLORREF color, BYTE alpha) {
     m_FillColor = color;
     m_FillAlpha = alpha;
@@ -116,7 +144,6 @@ public:
   COLORREF GetFillColor() const { return m_FillColor; }
   BYTE GetFillAlpha() const { return m_FillAlpha; }
 
-  // Border (solid only)
   void SetBorderColor(COLORREF color, BYTE alpha) {
     m_BorderColor = color;
     m_BorderAlpha = alpha;
@@ -143,7 +170,10 @@ public:
   COLORREF GetBorderFocusColor() const { return m_BorderFocusColor; }
   BYTE GetBorderFocusAlpha() const { return m_BorderFocusAlpha; }
 
-  // Gradients Setters & Getters
+  // ============================================================================
+  // Gradients
+  // ============================================================================
+
   void SetFillGradient(const GradientInfo &gradient) {
     m_FillGradient = gradient;
     m_HasFillColor = (gradient.type != GRADIENT_NONE);
@@ -187,44 +217,58 @@ public:
     return m_SelectionGradient;
   }
 
-  // Password masking (reserved for future; off by default)
+  // ============================================================================
+  // Input Configuration
+  // ============================================================================
+
+  /// Enables or disables password masking mode.
   void SetPasswordMode(bool enabled) { m_Password = enabled; }
   bool IsPasswordMode() const { return m_Password; }
 
-  // Input type filtering
+  /// Sets the input type restriction.
   void SetInputType(InputType type) { m_InputType = type; }
   InputType GetInputType() const { return m_InputType; }
 
-  // Allowed characters for Custom input type
+  /// Sets allowed characters for Custom input type.
   void SetAllowedChars(const std::wstring &chars) { m_AllowedChars = chars; }
   const std::wstring &GetAllowedChars() const { return m_AllowedChars; }
 
-  // Max length (reserved; 0 = unlimited)
+  /// Sets maximum character length (0 = unlimited).
   void SetMaxLength(int len) { m_MaxLength = len; }
   int GetMaxLength() const { return m_MaxLength; }
 
+  /// Enables or disables multiline mode.
   void SetMultiline(bool enabled) { m_Multiline = enabled; }
   bool IsMultiline() const { return m_Multiline; }
 
-  // Focus
+  // ============================================================================
+  // Focus & Editing
+  // ============================================================================
+
   bool IsFocused() const { return m_Focused; }
   void SetFocus(bool focused);
 
-  // Caret visibility toggles on a timer; the Widget calls this each repaint.
+  /// Updates caret blink state (called each repaint).
   void UpdateBlink();
 
-  // Editing mutations (called by Widget keyboard routing)
-  // Returns true if the content changed (so Widget can fire onChange + redraw).
-  // HandleChar returns HandleCharResult so the caller can also fire
-  // onInvalidInput.
+  /// Result of HandleChar for invalid input detection.
   enum class HandleCharResult { Ignored, Changed, Rejected };
+
+  /// Handles character input. Returns result for onChange/onInvalidInput.
   HandleCharResult HandleChar(wchar_t ch);
+
+  /// Handles key down events (backspace, delete, arrows, etc.).
   bool HandleKeyDown(WPARAM vk, bool shift, bool control);
+
+  /// Handles mouse click for caret positioning.
   void HandleMouseDown(int x, int y, bool shift);
   void HandleMouseMove(int x, int y);
   void HandleMouseUp();
 
-  // Caret / selection state
+  // ============================================================================
+  // Selection & Undo
+  // ============================================================================
+
   bool HasSelection() const { return m_SelectionStart != m_SelectionEnd; }
   void SelectAll();
   void ClearSelection();
@@ -236,44 +280,36 @@ public:
   bool Undo();
   bool Redo();
 
-  // Callback IDs (Widget fills these in from JS)
-  int m_OnTextChangeCallbackId = -1;
-  int m_OnEnterCallbackId = -1;
-  int m_OnFocusCallbackId = -1;
-  int m_OnBlurCallbackId = -1;
-  int m_OnInvalidInputCallbackId =
-      -1; // fired when a typed char is rejected by inputType
+  // ============================================================================
+  // Event Callbacks
+  // ============================================================================
+
+  int m_OnTextChangeCallbackId = -1;    ///< Text content changed.
+  int m_OnEnterCallbackId = -1;         ///< Enter key pressed.
+  int m_OnFocusCallbackId = -1;         ///< Input received focus.
+  int m_OnBlurCallbackId = -1;          ///< Input lost focus.
+  int m_OnInvalidInputCallbackId = -1;  ///< Typed char rejected by inputType.
 
 private:
-  // Build/retrieve a DirectWrite text layout for the currently rendered text.
-  // textOverride lets callers build a layout for the placeholder text.
   Microsoft::WRL::ComPtr<IDWriteTextLayout>
   CreateTextLayout(ID2D1DeviceContext *context, const std::wstring &text,
                    float layoutW, float layoutH) const;
-
-  // Resolve the local content rect (inside padding) used for drawing text.
   D2D1_RECT_F GetContentRect() const;
-
-  // Map a caret index to an x offset (in content-local coordinates).
   float CaretIndexToX(UINT32 index) const;
   void CaretIndexToXY(UINT32 index, float &outX, float &outY,
                       float &outH) const;
-  // Map a point (element-local) to a caret index.
   UINT32 PointToCaretIndex(int x, int y) const;
-
-  // Normalize selection so start <= end.
   void NormalizeSelection(UINT32 &outStart, UINT32 &outEnd) const;
-
-  // Recompute the horizontal scroll offset so the caret stays visible
-  // when the text is wider than the content area.
   void EnsureCaretVisible();
-
-  // Measure the rendered text width (in DIPs), accounting for password masking.
   float MeasureTextWidth() const;
+  void SaveUndoState();
+
+  // ============================================================================
+  // Text & Typography State
+  // ============================================================================
 
   std::wstring m_Text;
   std::wstring m_Placeholder;
-
   std::wstring m_FontFace = L"Segoe UI";
   int m_FontSize = 14;
   COLORREF m_FontColor = RGB(240, 240, 240);
@@ -283,6 +319,10 @@ private:
   TextAlignment m_TextAlign = TEXT_ALIGN_LEFT_CENTER;
   std::wstring m_FontPath;
 
+  // ============================================================================
+  // Colors
+  // ============================================================================
+
   COLORREF m_PlaceholderColor = RGB(150, 150, 150);
   BYTE m_PlaceholderAlpha = 255;
   COLORREF m_CaretColor = RGB(255, 255, 255);
@@ -290,11 +330,14 @@ private:
   COLORREF m_SelectionColor = RGB(135, 206, 235);
   BYTE m_SelectionAlpha = 128;
 
+  // ============================================================================
+  // Fill & Border State
+  // ============================================================================
+
   bool m_HasFillColor = true;
   COLORREF m_FillColor = RGB(30, 30, 34);
   BYTE m_FillAlpha = 255;
 
-  // Border (solid)
   float m_BorderWidth = 0.0f;
   float m_BorderRadius = 0.0f;
   COLORREF m_BorderColor = RGB(0, 0, 0);
@@ -303,7 +346,10 @@ private:
   COLORREF m_BorderFocusColor = RGB(0, 0, 0);
   BYTE m_BorderFocusAlpha = 255;
 
-  // Gradients
+  // ============================================================================
+  // Gradient State
+  // ============================================================================
+
   GradientInfo m_FillGradient;
   GradientInfo m_BorderGradient;
   GradientInfo m_BorderFocusGradient;
@@ -312,29 +358,35 @@ private:
   GradientInfo m_CaretGradient;
   GradientInfo m_SelectionGradient;
 
+  // ============================================================================
+  // Input Configuration
+  // ============================================================================
+
   bool m_Password = false;
   int m_MaxLength = 0;
   bool m_Multiline = false;
   InputType m_InputType = InputType::Any;
-  std::wstring m_AllowedChars; // used when m_InputType == InputType::Custom
+  std::wstring m_AllowedChars; ///< Characters allowed for Custom input type.
+
+  // ============================================================================
+  // Caret & Selection State
+  // ============================================================================
 
   bool m_Focused = false;
-
-  // Caret / selection state
-  UINT32 m_CaretPos = 0;        // Caret position (0..text.length())
-  UINT32 m_SelectionAnchor = 0; // Anchor for shift-click / drag selection
-  UINT32 m_SelectionStart = 0;  // Normalized selection start
-  UINT32 m_SelectionEnd = 0;    // Normalized selection end
+  UINT32 m_CaretPos = 0;        ///< Caret position (0..text.length()).
+  UINT32 m_SelectionAnchor = 0; ///< Anchor for shift-click/drag selection.
+  UINT32 m_SelectionStart = 0;  ///< Normalized selection start.
+  UINT32 m_SelectionEnd = 0;    ///< Normalized selection end.
   bool m_IsDragging = false;
 
   // Blink state
   DWORD m_LastBlinkTick = 0;
   bool m_CaretVisible = true;
 
-  // Horizontal scroll offset (positive = text shifted left). Applied so that
-  // the caret remains visible when the text overflows the content area.
+  /// Horizontal scroll offset (positive = text shifted left).
   float m_ScrollOffset = 0.0f;
 
+  // Undo/Redo state
   struct UndoState {
     std::wstring text;
     UINT32 caretPos;
@@ -343,8 +395,6 @@ private:
   };
   std::vector<UndoState> m_UndoStack;
   std::vector<UndoState> m_RedoStack;
-
-  void SaveUndoState();
 };
 
 #endif

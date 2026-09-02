@@ -10,9 +10,27 @@
 #include <string>
 #include "quickjs.h"
 
+/**
+ * @brief Widget window event bindings for QuickJS JavaScript runtime.
+ *
+ * @note Provides JavaScript methods for widget window events (mouse, drag,
+ *       context menu, etc.) that are attached to the WidgetWindow prototype.
+ */
 namespace novadesk::scripting::quickjs {
+
+/// Initializes the widget window event binding system.
 void InitWidgetWindowEventBindings(JSClassID widgetWindowClassId);
+
+/// Attaches event methods to the WidgetWindow JavaScript prototype.
 void AttachWidgetWindowEventMethods(JSContext *ctx, JSValue proto);
+
+/**
+ * @brief Invokes a widget context menu callback from JavaScript.
+ *
+ * @param widgetId The widget identifier.
+ * @param commandId The selected command ID.
+ */
 void InvokeWidgetContextMenuCallback(const std::wstring &widgetId,
                                      int commandId);
+
 } // namespace novadesk::scripting::quickjs

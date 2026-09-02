@@ -8,6 +8,11 @@
 #include "MenuUtils.h"
 
 namespace MenuUtils {
+
+// ============================================================================
+// Menu Building Utilities
+// ============================================================================
+
 void BuildMenu(HMENU hMenu, const std::vector<MenuItem> &items) {
   for (const auto &item : items) {
     if (item.isSeparator) {

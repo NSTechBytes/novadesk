@@ -11,49 +11,71 @@
 #include <string>
 #include <windows.h>
 
-/*
-** FontDownloader provides async font downloading from URLs (http/https).
-** Supports .ttf, .otf, and .woff2 (auto-converted to TTF) formats.
-** Downloaded fonts are registered and loaded entirely in-memory using
-** IDWriteInMemoryFontFileLoader (re-downloaded every application launch).
-**
-** Usage:
-**   // If already downloaded in memory, returns url immediately:
-**   std::wstring path = FontDownloader::GetCachedDir(url);
-**
-**   // If not yet downloaded, start async download:
-**   FontDownloader::RequestAsync(url, widgetInstanceId, elementId);
-*/
+/**
+ * @brief Provides async font downloading and in-memory registration.
+ *
+ * @note Supports .ttf, .otf, and .woff2 (auto-converted to TTF) formats.
+ *       Downloaded fonts are registered and loaded entirely in-memory using
+ *       IDWriteInMemoryFontFileLoader (re-downloaded every application launch).
+ *
+ * @usage
+ *   // If already downloaded in memory, returns url immediately:
+ *   std::wstring path = FontDownloader::GetCachedDir(url);
+ *
+ *   // If not yet downloaded, start async download:
+ *   FontDownloader::RequestAsync(url, widgetInstanceId, elementId);
+ */
 namespace FontDownloader {
-/*
-** Returns `url` if the font is already downloaded and loaded in-memory,
-** or an empty string if not yet loaded.
-** Safe to call from any thread.
-*/
+
+/**
+ * @brief Checks if a font URL is already downloaded and loaded in memory.
+ *
+ * @param url The font URL to check.
+ *
+ * @return The URL if loaded, or empty string if not yet loaded.
+ *
+ * @note Safe to call from any thread.
+ */
 std::wstring GetCachedDir(const std::wstring &url);
 
-/*
-** Starts an asynchronous font download for `url`.
-** On completion, registers the in-memory font with FontManager,
-** then posts WM_NOVADESK_DISPATCH back to the main thread which causes
-** the engine to call SetElementFontPath(elementId, url) + Redraw().
-** If url is already downloading or loaded, this is a no-op.
-*/
+/**
+ * @brief Starts an asynchronous font download.
+ *
+ * @param url The URL to download the font from.
+ * @param widgetInstanceId The widget instance ID for callback routing.
+ * @param elementId The element ID to update on completion.
+ *
+ * @note On completion, registers the in-memory font with FontManager,
+ *       then posts WM_NOVADESK_DISPATCH back to the main thread which causes
+ *       the engine to call SetElementFontPath(elementId, url) + Redraw().
+ *       If url is already downloading or loaded, this is a no-op.
+ */
 void RequestAsync(const std::wstring &url, uint64_t widgetInstanceId,
                   const std::wstring &elementId);
 
-// Stops accepting work and joins all active downloads before the engine
-// message window is destroyed.
+/**
+ * @brief Shuts down the font downloader and joins all active downloads.
+ *
+ * @note Must be called before the engine message window is destroyed.
+ */
 void Shutdown();
 
-/*
-** Dispatch callback — called on the main thread from the JS engine dispatcher.
-** payload must be a FontReadyPayload* allocated with new.
-*/
+/**
+ * @brief Payload for font-ready dispatch callback.
+ */
 struct FontReadyPayload {
-  uint64_t widgetInstanceId; // stable across HWND reuse
-  std::wstring elementId;
-  std::wstring cachedDir; // holds the URL on success, empty on failure
+  uint64_t widgetInstanceId; ///< Widget instance ID (stable across HWND reuse).
+  std::wstring elementId;    ///< Element to update.
+  std::wstring cachedDir;    ///< URL on success, empty on failure.
 };
+
+/**
+ * @brief Dispatch callback for font download completion.
+ *
+ * @param payload Pointer to FontReadyPayload (allocated with new).
+ *
+ * @note Called on the main thread from the JS engine dispatcher.
+ */
 void DispatchFontReady(void *payload);
+
 } // namespace FontDownloader

@@ -14,6 +14,10 @@ using namespace winrt::Windows::Storage;
 using namespace winrt::Windows::Storage::Streams;
 using namespace Gdiplus;
 
+// ============================================================================
+// Image Processing Utilities
+// ============================================================================
+
 namespace ImageUtils {
 hstring SaveCover(IRandomAccessStreamReference image) {
   try {
@@ -24,13 +28,14 @@ hstring SaveCover(IRandomAccessStreamReference image) {
 
     auto cover_buffer = Buffer(static_cast<uint32_t>(size));
 
-    // Get temp folder path
+    // Get temp folder path and ensure directory structure exists.
     wchar_t tempPath[MAX_PATH];
     GetTempPathW(MAX_PATH, tempPath);
     std::filesystem::path dir =
         std::filesystem::path(tempPath) / L"Novadesk" / L"NowPlaying";
     std::filesystem::create_directories(dir);
 
+    // Write stream data to temporary PNG file.
     auto temp_folder =
         StorageFolder::GetFolderFromPathAsync(dir.wstring()).get();
     auto cover_file =

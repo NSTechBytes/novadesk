@@ -16,11 +16,16 @@ using namespace winrt;
 using namespace winrt::Windows::Media::Control;
 using namespace winrt::Windows::Foundation;
 
+// ============================================================================
+// Construction & Initialization
+// ============================================================================
+
 MediaController::MediaController() {
-  // Initialize GDI+
+  // Initialize GDI+ for image processing (thumbnail encoding).
   Gdiplus::GdiplusStartupInput gdiplusStartupInput;
   Gdiplus::GdiplusStartup(&m_gdiToken, &gdiplusStartupInput, NULL);
 
+  // Launch background worker thread for polling SMTC events.
   m_worker = std::thread(&MediaController::WorkerThread, this);
 }
 
@@ -29,12 +34,18 @@ MediaController::~MediaController() {
     std::lock_guard<std::mutex> lock(m_actionMutex);
     m_stop = true;
   }
+  // Signal worker thread to wake up and exit.
   m_actionCv.notify_all();
   if (m_worker.joinable())
     m_worker.join();
 
+  // Shutdown GDI+ and clean up resources.
   Gdiplus::GdiplusShutdown(m_gdiToken);
 }
+
+// ============================================================================
+// Public API
+// ============================================================================
 
 MediaStats MediaController::GetStats() {
   std::lock_guard<std::mutex> lock(m_statsMutex);
@@ -49,8 +60,12 @@ void MediaController::QueueAction(MediaAction action, int value, bool flag) {
   m_actionCv.notify_one();
 }
 
+// ============================================================================
+// Background Worker Thread (SMTC Event Loop)
+// ============================================================================
+
 void MediaController::WorkerThread() {
-  // Initialize WinRT for this thread
+  // Initialize WinRT for this thread (required for async COM operations).
   winrt::init_apartment();
 
   try {

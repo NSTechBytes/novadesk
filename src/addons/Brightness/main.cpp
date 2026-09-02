@@ -17,9 +17,17 @@
 #include <cstdint>
 #include <vector>
 
+// ============================================================================
+// Globals
+// ============================================================================
+
 const NovadeskHostAPI *g_Host = nullptr;
 
 namespace {
+// ============================================================================
+// Data Structures
+// ============================================================================
+
 struct BrightnessInfo {
   uint32_t min = 0;
   uint32_t max = 100;
@@ -27,6 +35,10 @@ struct BrightnessInfo {
   int percent = 0;
   bool supported = false;
 };
+
+// ============================================================================
+// Brightness Control Engine (LCD IOCTL)
+// ============================================================================
 
 class BrightnessControl {
 public:
@@ -88,6 +100,7 @@ private:
 #define IOCTL_VIDEO_QUERY_SUPPORTED_BRIGHTNESS                                 \
   CTL_CODE(FILE_DEVICE_VIDEO, 0x125, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #endif
+    // Open the LCD device interface to query and set brightness levels.
     m_lcdDevice = CreateFileW(L"\\\\.\\LCD", GENERIC_READ | GENERIC_WRITE,
                               FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
                               OPEN_EXISTING, 0, nullptr);
@@ -95,6 +108,8 @@ private:
       return false;
     }
 
+    // Query the set of supported brightness levels from the device.
+    // The device returns an array of discrete brightness values.
     BYTE levels[256] = {};
     DWORD bytesReturned = 0;
     if (!DeviceIoControl(m_lcdDevice, IOCTL_VIDEO_QUERY_SUPPORTED_BRIGHTNESS,
@@ -106,6 +121,7 @@ private:
       return false;
     }
 
+    // Remove duplicates and sort levels for binary search and range mapping.
     m_laptopLevels.assign(levels, levels + bytesReturned);
     std::sort(m_laptopLevels.begin(), m_laptopLevels.end());
     m_laptopLevels.erase(
@@ -126,6 +142,8 @@ private:
     if (m_laptopLevels.empty())
       return raw;
 
+    // Find the supported brightness level closest to the requested raw value.
+    // This ensures we always set a valid hardware level.
     BYTE best = m_laptopLevels.front();
     int bestDiff = std::abs(static_cast<int>(best) - static_cast<int>(raw));
     for (BYTE level : m_laptopLevels) {
@@ -147,6 +165,7 @@ private:
     if (m_lcdDevice == INVALID_HANDLE_VALUE || m_laptopLevels.size() < 2)
       return false;
 
+    // Query current brightness: values array is [valid_bit, ac_brightness, battery_brightness].
     BYTE values[3] = {};
     DWORD bytesReturned = 0;
     if (!DeviceIoControl(m_lcdDevice, IOCTL_VIDEO_QUERY_DISPLAY_BRIGHTNESS,
@@ -156,6 +175,7 @@ private:
       return false;
     }
 
+    // Select appropriate brightness based on power state indicator (values[0]).
     const BYTE rawCurrent = (values[0] == 1) ? values[1] : values[2];
     const BYTE minRaw = m_laptopLevels.front();
     const BYTE maxRaw = m_laptopLevels.back();
@@ -166,6 +186,7 @@ private:
     outInfo.current = normalizedRaw;
     outInfo.supported = true;
 
+    // Map hardware level to 0..100 percentage range.
     if (maxRaw > minRaw) {
       outInfo.percent = static_cast<int>(
           (static_cast<double>(normalizedRaw - minRaw) * 100.0) /
@@ -194,6 +215,7 @@ private:
     if (percent > 100)
       percent = 100;
 
+    // Map percentage to hardware brightness level.
     const BYTE minRaw = m_laptopLevels.front();
     const BYTE maxRaw = m_laptopLevels.back();
     BYTE targetRaw = minRaw;
@@ -205,6 +227,7 @@ private:
     }
     targetRaw = FindClosestLaptopLevel(targetRaw);
 
+    // Format: [3, ac_brightness, battery_brightness]. Set both to same value.
     BYTE setValues[3] = {3, targetRaw, targetRaw};
     DWORD bytesReturned = 0;
     return DeviceIoControl(m_lcdDevice, IOCTL_VIDEO_SET_DISPLAY_BRIGHTNESS,
@@ -219,6 +242,10 @@ BrightnessControl &GetBrightnessControl(int displayIndex = 0) {
   static BrightnessControl s_Instance(displayIndex);
   return s_Instance;
 }
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
 bool GetBrightness(BrightnessInfo &outInfo, int displayIndex) {
   return GetBrightnessControl(displayIndex).GetBrightness(outInfo);
@@ -252,6 +279,10 @@ bool TryReadPropInt(novadesk_context ctx, const char *name, int &outValue,
   g_Host->Pop(ctx);
   return true;
 }
+
+// ============================================================================
+// JavaScript Binding Functions
+// ============================================================================
 
 int JsBrightnessGetValue(novadesk_context ctx) {
   int display = 0;
@@ -319,6 +350,10 @@ int JsBrightnessSetValue(novadesk_context ctx) {
   return 1;
 }
 } // namespace
+
+// ============================================================================
+// Addon Initialization
+// ============================================================================
 
 NOVADESK_ADDON_INIT(ctx, hMsgWnd, host) {
   (void)hMsgWnd;

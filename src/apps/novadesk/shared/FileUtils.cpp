@@ -17,6 +17,10 @@
 
 namespace FileUtils {
 
+// ============================================================================
+// File Reading Operations
+// ============================================================================
+
 /*
 ** Read the entire content of a file into a string.
 ** Supports UTF-16 file paths (std::wstring).
@@ -39,14 +43,16 @@ std::string ReadFileContent(const std::wstring &path) {
   if (!file.read(buffer.data(), size))
     return "";
 
-  // Check for UTF-16 LE BOM (0xFF 0xFE)
+  // NOTE: Check for UTF-16 LE BOM (0xFF 0xFE). Windows scripts may be encoded
+  // in UTF-16. If detected, decode the wide string and convert to UTF-8.
   if (size >= 2 && (unsigned char)buffer[0] == 0xFF &&
       (unsigned char)buffer[1] == 0xFE) {
     std::wstring wstr((wchar_t *)(buffer.data() + 2), (size - 2) / 2);
     return Utils::ToString(wstr);
   }
 
-  // Check for UTF-8 BOM (0xEF 0xBB 0xBF)
+  // NOTE: Check for UTF-8 BOM (0xEF 0xBB 0xBF). Skip BOM bytes if present
+  // to prevent BOM artifacts in parsed content (e.g., JSON parsing errors).
   if (size >= 3 && (unsigned char)buffer[0] == 0xEF &&
       (unsigned char)buffer[1] == 0xBB && (unsigned char)buffer[2] == 0xBF) {
     return std::string(buffer.data() + 3, (size_t)size - 3);
@@ -56,6 +62,8 @@ std::string ReadFileContent(const std::wstring &path) {
 }
 
 std::string ReadFileOrUrlContent(const std::wstring &pathOrUrl) {
+  // NOTE: Distinguish between file paths and URLs. If URL detected, fetch via
+  // WebFetch() which handles HTTPS/redirects. Otherwise, read from local disk.
   if (PathUtils::IsURL(pathOrUrl)) {
     std::string data;
     if (!novadesk::shared::system::WebFetch(pathOrUrl, data)) {

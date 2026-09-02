@@ -1,4 +1,11 @@
-﻿#include <NovadeskAPI/novadesk_addon.h>
+﻿/* Copyright (C) 2026 OfficialNovadesk
+ *
+ * This Source Code Form is subject to the terms of the GNU General Public
+ * License; either version 2 of the License, or (at your option) any later
+ * version. If a copy of the GPL was not distributed with this file, You can
+ * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
+
+#include <NovadeskAPI/novadesk_addon.h>
 
 #include <Windows.h>
 #include <VersionHelpers.h>
@@ -7,9 +14,17 @@
 #include <string>
 #include <cstring>
 
+// ============================================================================
+// Globals
+// ============================================================================
+
 const NovadeskHostAPI *g_Host = nullptr;
 HMODULE g_User32 = nullptr;
 HMODULE g_DwmApi = nullptr;
+
+// ============================================================================
+// Constants & Type Definitions (Windows Composition Effects)
+// ============================================================================
 
 static const int WCA_ACCENT_POLICY = 19;
 static const DWORD DWMWA_WINDOW_CORNER_PREFERENCE_VALUE = 33;
@@ -39,6 +54,10 @@ struct WINCOMPATTRDATA {
 typedef BOOL(WINAPI *pSetWindowCompositionAttribute)(HWND, WINCOMPATTRDATA *);
 typedef HRESULT(WINAPI *pDwmSetWindowAttribute)(HWND, DWORD, LPCVOID, DWORD);
 
+// ============================================================================
+// API Function Pointers
+// ============================================================================
+
 pSetWindowCompositionAttribute g_SetWindowCompositionAttribute = nullptr;
 pDwmSetWindowAttribute g_DwmSetWindowAttribute = nullptr;
 
@@ -46,6 +65,7 @@ static bool LoadApis() {
   if (!g_SetWindowCompositionAttribute) {
     g_User32 = LoadLibraryW(L"user32.dll");
     if (g_User32) {
+      // SetWindowCompositionAttribute is available on Windows 10+.
       g_SetWindowCompositionAttribute =
           (pSetWindowCompositionAttribute)GetProcAddress(
               g_User32, "SetWindowCompositionAttribute");
@@ -103,6 +123,8 @@ static bool SetAccent(HWND hwnd, int borderFlags, AccentState state) {
   data.pData = &policy;
   data.ulDataSize = sizeof(policy);
 
+  // NOTE: SetWindowCompositionAttribute applies accent policy immediately;
+  // transition animations are handled by the desktop window manager.
   return g_SetWindowCompositionAttribute(hwnd, &data) != FALSE;
 }
 
@@ -158,7 +180,7 @@ static uintptr_t ParseHandleString(const char *raw) {
   if (s.empty())
     return 0;
 
-  // Trim spaces
+  // Trim leading and trailing whitespace.
   while (!s.empty() && (s.front() == ' ' || s.front() == '\t' ||
                         s.front() == '\r' || s.front() == '\n'))
     s.erase(s.begin());
@@ -168,6 +190,7 @@ static uintptr_t ParseHandleString(const char *raw) {
   if (s.empty())
     return 0;
 
+  // Handle formats: 0x-prefixed hex, zero-padded hex, or decimal.
   // 0x-prefixed => hex
   if (s.size() > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
     return static_cast<uintptr_t>(_strtoui64(s.c_str(), nullptr, 16));
@@ -213,7 +236,8 @@ static HWND FindHwndArg(novadesk_context ctx, int *outIdx) {
 
 static int ResolveArgBase(novadesk_context ctx) {
   // Some host bindings pass method arguments starting at index 1 (index 0 =
-  // this).
+  // this). Detect whether to use index 0 or 1 by checking if index 0 is a
+  // handle (string/number) or something else (like 'this' object).
   if (g_Host->GetTop(ctx) >= 2 && !g_Host->IsString(ctx, 0) &&
       !g_Host->IsNumber(ctx, 0)) {
     return 1;
@@ -248,6 +272,10 @@ static DwmWindowCornerPreference ReadCornerArg(novadesk_context ctx, int idx) {
     return DWMWCP_DONOTROUND;
   return DWMWCP_DEFAULT;
 }
+
+// ============================================================================
+// JavaScript Binding Functions
+// ============================================================================
 
 static int JsApply(novadesk_context ctx) {
   if (g_Host->GetTop(ctx) > 0 && g_Host->IsObject(ctx, 0)) {
@@ -305,6 +333,10 @@ static int JsSetCorner(novadesk_context ctx) {
   g_Host->PushBool(ctx, ok ? 1 : 0);
   return 1;
 }
+
+// ============================================================================
+// Addon Initialization
+// ============================================================================
 
 NOVADESK_ADDON_INIT(ctx, hMsgWnd, host) {
   (void)hMsgWnd;

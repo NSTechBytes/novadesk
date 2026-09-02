@@ -26,18 +26,39 @@
 #include "../../../render/InputBoxElement.h"
 #include "../../../render/ColorPickerElement.h"
 
+/**
+ * @brief Property parser option structs for all element types.
+ *
+ * @note These structs are populated by parsing JavaScript objects and then
+ *       applied to C++ element instances. Each struct uses "has" flags to
+ *       distinguish between "not set" and "set to default value".
+ */
 namespace PropertyParser {
+
+/**
+ * @brief Base options common to all element types.
+ */
 struct ElementOptions {
-  std::wstring id;
-  int x = 0;
-  int y = 0;
-  int width = 0;
-  int height = 0;
-  bool hasSolidColor = false;
-  COLORREF solidColor = 0;
-  BYTE solidAlpha = 0;
-  int solidColorRadius = 0;
-  GradientInfo solidGradient;
+  std::wstring id; ///< Element identifier.
+  int x = 0;      ///< X-coordinate.
+  int y = 0;      ///< Y-coordinate.
+  int width = 0;  ///< Width in pixels (0 = auto).
+  int height = 0; ///< Height in pixels (0 = auto).
+
+  // ============================================================================
+  // Background & Fill
+  // ============================================================================
+
+  bool hasSolidColor = false; ///< Whether a solid background color is set.
+  COLORREF solidColor = 0;   ///< Background color.
+  BYTE solidAlpha = 0;       ///< Background opacity.
+  int solidColorRadius = 0;  ///< Corner radius.
+  GradientInfo solidGradient; ///< Gradient fill.
+
+  // ============================================================================
+  // Bevel (3D Edge)
+  // ============================================================================
+
   int bevelType = 0;
   int bevelWidth = 0;
   COLORREF bevelColor = RGB(255, 255, 255);
@@ -46,6 +67,11 @@ struct ElementOptions {
   COLORREF bevelColor2 = RGB(0, 0, 0);
   BYTE bevelAlpha2 = 150;
   GradientInfo bevelGradient2;
+
+  // ============================================================================
+  // Layout & Appearance
+  // ============================================================================
+
   int paddingLeft = 0;
   int paddingTop = 0;
   int paddingRight = 0;
@@ -62,6 +88,11 @@ struct ElementOptions {
   float rotate = 0.0f;
   bool hasTransformMatrix = false;
   std::vector<float> transformMatrix;
+
+  // ============================================================================
+  // Mouse Event Callbacks
+  // ============================================================================
+
   int onLeftMouseUpCallbackId = -1;
   int onLeftMouseDownCallbackId = -1;
   int onLeftDoubleClickCallbackId = -1;
@@ -86,6 +117,11 @@ struct ElementOptions {
   int onDragStartCallbackId = -1;
   int onDragCallbackId = -1;
   int onDragEndCallbackId = -1;
+
+  // ============================================================================
+  // Drop Target & Drag
+  // ============================================================================
+
   int onDropCallbackId = -1;
   int onDragEnterCallbackId = -1;
   int onDragOverCallbackId = -1;
@@ -94,6 +130,11 @@ struct ElementOptions {
   bool dropTarget = false;
   bool hasDragArea = false;
   bool dragArea = false;
+
+  // ============================================================================
+  // Tooltip
+  // ============================================================================
+
   std::wstring tooltipText;
   std::wstring tooltipTitle;
   std::wstring tooltipIcon;
@@ -101,74 +142,47 @@ struct ElementOptions {
   int tooltipMaxHeight = 0;
   bool tooltipBalloon = false;
   bool tooltipDisabled = false;
+
+  // ============================================================================
+  // Backdrop Filter
+  // ============================================================================
+
   BackdropFilter backdropFilter;
 
-  // Scroll & Overflow
-  bool hasScrollX = false;
-  int scrollX = 0;
-  bool hasScrollY = false;
-  int scrollY = 0;
-  bool hasScrollStep = false;
-  int scrollStep = 24;
-  bool hasOverflow = false;
-  std::wstring overflow;
-  bool hasOverflowX = false;
-  std::wstring overflowX;
-  bool hasOverflowY = false;
-  std::wstring overflowY;
-  bool hasShowScrollbar = false;
-  bool showScrollbar = true;
-  bool hasShowScrollbarX = false;
-  bool showScrollbarX = true;
-  bool hasShowScrollbarY = false;
-  bool showScrollbarY = true;
-  bool hasScrollbarWidth = false;
-  int scrollbarWidth = 6;
-  bool hasScrollbarHoverWidth = false;
-  int scrollbarHoverWidth = -1;
-  bool hasScrollbarRadius = false;
-  float scrollbarRadius = 3.0f;
-  bool hasScrollbarTrackRadius = false;
-  float scrollbarTrackRadius = -1.0f;
-  bool hasScrollbarInset = false;
-  float scrollbarInset = 2.0f;
-  bool hasScrollbarMinThumbLength = false;
-  float scrollbarMinThumbLength = 20.0f;
-  bool hasScrollbarColor = false;
-  COLORREF scrollbarColor = RGB(255, 255, 255);
-  BYTE scrollbarAlpha = 100;
-  bool hasScrollbarHoverColor = false;
-  COLORREF scrollbarHoverColor = RGB(255, 255, 255);
-  BYTE scrollbarHoverAlpha = 180;
-  bool hasScrollbarActiveColor = false;
-  COLORREF scrollbarActiveColor = RGB(255, 255, 255);
-  BYTE scrollbarActiveAlpha = 240;
-  bool hasScrollbarTrackColor = false;
-  COLORREF scrollbarTrackColor = RGB(0, 0, 0);
-  BYTE scrollbarTrackAlpha = 0;
-  bool hasShowScrollbarButtons = false;
-  bool showScrollbarButtons = false;
-  bool hasScrollbarButtonSize = false;
-  float scrollbarButtonSize = 14.0f;
-  bool hasScrollbarButtonRadius = false;
-  float scrollbarButtonRadius = 2.0f;
-  bool hasScrollbarArrowColor = false;
-  COLORREF scrollbarArrowColor = RGB(255, 255, 255);
-  BYTE scrollbarArrowAlpha = 150;
-  bool hasScrollbarArrowHoverColor = false;
-  COLORREF scrollbarArrowHoverColor = RGB(255, 255, 255);
-  BYTE scrollbarArrowHoverAlpha = 220;
-  bool hasScrollbarArrowActiveColor = false;
-  COLORREF scrollbarArrowActiveColor = RGB(255, 255, 255);
-  BYTE scrollbarArrowActiveAlpha = 255;
-  bool hasScrollbarButtonBgColor = false;
-  COLORREF scrollbarButtonBgColor = RGB(0, 0, 0);
-  BYTE scrollbarButtonBgAlpha = 0;
-  bool hasScrollbarButtonHoverBgColor = false;
-  COLORREF scrollbarButtonHoverBgColor = RGB(255, 255, 255);
-  BYTE scrollbarButtonHoverBgAlpha = 30;
+  // ============================================================================
+  // Scroll & Overflow (many properties — see Element.h for details)
+  // ============================================================================
+
+  bool hasScrollX = false; int scrollX = 0;
+  bool hasScrollY = false; int scrollY = 0;
+  bool hasScrollStep = false; int scrollStep = 24;
+  bool hasOverflow = false; std::wstring overflow;
+  bool hasOverflowX = false; std::wstring overflowX;
+  bool hasOverflowY = false; std::wstring overflowY;
+  bool hasShowScrollbar = false; bool showScrollbar = true;
+  bool hasShowScrollbarX = false; bool showScrollbarX = true;
+  bool hasShowScrollbarY = false; bool showScrollbarY = true;
+  bool hasScrollbarWidth = false; int scrollbarWidth = 6;
+  bool hasScrollbarHoverWidth = false; int scrollbarHoverWidth = -1;
+  bool hasScrollbarRadius = false; float scrollbarRadius = 3.0f;
+  bool hasScrollbarTrackRadius = false; float scrollbarTrackRadius = -1.0f;
+  bool hasScrollbarInset = false; float scrollbarInset = 2.0f;
+  bool hasScrollbarMinThumbLength = false; float scrollbarMinThumbLength = 20.0f;
+  bool hasScrollbarColor = false; COLORREF scrollbarColor = RGB(255, 255, 255); BYTE scrollbarAlpha = 100;
+  bool hasScrollbarHoverColor = false; COLORREF scrollbarHoverColor = RGB(255, 255, 255); BYTE scrollbarHoverAlpha = 180;
+  bool hasScrollbarActiveColor = false; COLORREF scrollbarActiveColor = RGB(255, 255, 255); BYTE scrollbarActiveAlpha = 240;
+  bool hasScrollbarTrackColor = false; COLORREF scrollbarTrackColor = RGB(0, 0, 0); BYTE scrollbarTrackAlpha = 0;
+  bool hasShowScrollbarButtons = false; bool showScrollbarButtons = false;
+  bool hasScrollbarButtonSize = false; float scrollbarButtonSize = 14.0f;
+  bool hasScrollbarButtonRadius = false; float scrollbarButtonRadius = 2.0f;
+  bool hasScrollbarArrowColor = false; COLORREF scrollbarArrowColor = RGB(255, 255, 255); BYTE scrollbarArrowAlpha = 150;
+  bool hasScrollbarArrowHoverColor = false; COLORREF scrollbarArrowHoverColor = RGB(255, 255, 255); BYTE scrollbarArrowHoverAlpha = 220;
+  bool hasScrollbarArrowActiveColor = false; COLORREF scrollbarArrowActiveColor = RGB(255, 255, 255); BYTE scrollbarArrowActiveAlpha = 255;
+  bool hasScrollbarButtonBgColor = false; COLORREF scrollbarButtonBgColor = RGB(0, 0, 0); BYTE scrollbarButtonBgAlpha = 0;
+  bool hasScrollbarButtonHoverBgColor = false; COLORREF scrollbarButtonHoverBgColor = RGB(255, 255, 255); BYTE scrollbarButtonHoverBgAlpha = 30;
 };
 
+/// Common image options (tint, flip, crop, color matrix, etc.).
 struct GeneralImageOptions : public ElementOptions {
   std::wstring fallbackPath;
   ImageFlipMode imageFlip = IMAGE_FLIP_NONE;
@@ -188,6 +202,7 @@ struct GeneralImageOptions : public ElementOptions {
   BYTE imageTintAlpha = 255;
 };
 
+/// Image element options (extends GeneralImageOptions).
 struct ImageOptions : public GeneralImageOptions {
   std::wstring path;
   ImageAspectRatio preserveAspectRatio = IMAGE_ASPECT_STRETCH;
@@ -199,11 +214,13 @@ struct ImageOptions : public GeneralImageOptions {
   bool tile = false;
 };
 
+/// Button element options.
 struct ButtonOptions : public GeneralImageOptions {
   std::wstring buttonImageName;
   int buttonActionCallbackId = -1;
 };
 
+/// Bitmap element options.
 struct BitmapOptions : public GeneralImageOptions {
   double value = 0.0;
   std::wstring bitmapImageName;
@@ -218,6 +235,7 @@ struct BitmapOptions : public GeneralImageOptions {
   int bitmapSeparation = 0;
 };
 
+/// Rotator element options.
 struct RotatorOptions : public GeneralImageOptions {
   double value = 0.0;
   std::wstring rotatorImageName;
@@ -226,10 +244,11 @@ struct RotatorOptions : public GeneralImageOptions {
   double offsetX = 0.0;
   double offsetY = 0.0;
   double startAngle = 0.0;
-  double rotationAngle = 6.283185307179586; // 2 * PI
+  double rotationAngle = 6.283185307179586; ///< Default: 2π (full circle).
   int valueRemainder = 0;
 };
 
+/// Area graph element options.
 struct AreaGraphOptions : public ElementOptions {
   std::vector<float> data;
   float minValue = 0.0f;
@@ -252,6 +271,7 @@ struct AreaGraphOptions : public ElementOptions {
   bool flip = false;
 };
 
+/// Text element options.
 struct TextOptions : public ElementOptions {
   std::wstring text;
   std::wstring fontFace = L"Arial";
@@ -270,14 +290,14 @@ struct TextOptions : public ElementOptions {
   bool strikeThrough = false;
   TextCase textCase = TEXT_CASE_NORMAL;
   bool textSelection = false;
-  COLORREF selectionBackgroundColor = 0xFF9033; // #3390FF selection blue
+  COLORREF selectionBackgroundColor = 0xFF9033;
   BYTE selectionBackgroundAlpha = 120;
   bool hasSelectionTextColor = false;
   COLORREF selectionTextColor = RGB(255, 255, 255);
   BYTE selectionTextAlpha = 255;
 };
 
-// Options for the Direct2D-rendered input box element.
+/// Input box element options.
 struct InputBoxOptions : public ElementOptions {
   std::wstring text;
   std::wstring placeholder;
@@ -305,9 +325,8 @@ struct InputBoxOptions : public ElementOptions {
   int maxLength = 0;
   bool multiline = false;
   InputType inputType = InputType::Any;
-  std::wstring allowedChars; // used when inputType == Custom
+  std::wstring allowedChars; ///< Characters allowed for Custom input type.
 
-  // Border (solid only)
   float borderWidth = 1.0f;
   float borderRadius = 8.0f;
   COLORREF borderColor = RGB(0, 0, 0);
@@ -316,7 +335,6 @@ struct InputBoxOptions : public ElementOptions {
   COLORREF borderFocusColor = RGB(0, 0, 0);
   BYTE borderFocusColorAlpha = 255;
 
-  // Gradients
   GradientInfo fontGradient;
   GradientInfo placeholderGradient;
   GradientInfo caretGradient;
@@ -325,28 +343,24 @@ struct InputBoxOptions : public ElementOptions {
   GradientInfo borderGradient;
   GradientInfo borderFocusGradient;
 
-  // JS callback ids (resolved via GetEventCallbackProp).
   int onTextChangeCallbackId = -1;
   int onEnterCallbackId = -1;
   int onFocusCallbackId = -1;
   int onBlurCallbackId = -1;
-  int onInvalidInputCallbackId =
-      -1; // fired when a typed char is rejected by inputType
+  int onInvalidInputCallbackId = -1; ///< Fired when a typed char is rejected.
 };
 
+/// Color picker element options.
 struct ColorPickerOptions : public ElementOptions {
-  // color
-  COLORREF color = RGB(0, 0, 0);
+  COLORREF color = RGB(0, 0, 0); ///< Initial color.
 
-  // swatch styling
   float borderRadius = 0.0f;
   float borderWidth = 0.0f;
   COLORREF borderColor = RGB(0, 0, 0);
   BYTE borderAlpha = 255;
   float opacity = 1.0f;
-  bool circleShape = false;
+  bool circleShape = false; ///< True = elliptical swatch.
 
-  // popup appearance
   COLORREF popupBackground = RGB(255, 255, 255);
   BYTE popupBackgroundAlpha = 255;
   COLORREF popupAccentColor = RGB(0, 0, 0);
@@ -360,12 +374,10 @@ struct ColorPickerOptions : public ElementOptions {
   BYTE popupInputColorAlpha = 255;
   bool hasPopupInputColor = false;
 
-  // popup behavior
   bool showEyedropper = true;
   bool showFormatToggle = true;
   bool defaultHexMode = false;
 
-  // callbacks
   int onChangeCallbackId = -1;
   int onOpenCallbackId = -1;
   int onCloseCallbackId = -1;
@@ -374,6 +386,7 @@ struct ColorPickerOptions : public ElementOptions {
   int onEyedropperPickCallbackId = -1;
 };
 
+/// Bar gauge element options.
 struct BarOptions : public ElementOptions {
   float value = 0.0f;
   BarOrientation orientation = BAR_HORIZONTAL;
@@ -384,11 +397,12 @@ struct BarOptions : public ElementOptions {
   GradientInfo barGradient;
 };
 
+/// Round line gauge element options.
 struct RoundLineOptions : public ElementOptions {
   float value = 0.0f;
   int radius = 0;
   int thickness = 2;
-  int endThickness = -1;
+  int endThickness = -1; ///< -1 = same as start thickness.
   float startAngle = 0.0f;
   float totalAngle = 360.0f;
   bool clockwise = true;
@@ -406,6 +420,7 @@ struct RoundLineOptions : public ElementOptions {
   GradientInfo lineGradientBg;
 };
 
+/// Line graph element options.
 struct LineOptions : public ElementOptions {
   int lineCount = 1;
   std::vector<std::vector<float>> dataSets;
@@ -419,22 +434,22 @@ struct LineOptions : public ElementOptions {
   COLORREF horizontalLineColor = RGB(0, 0, 0);
   BYTE horizontalLineAlpha = 255;
   GradientInfo horizontalLineGradient;
-  bool graphStartLeft = false;             // false = right
-  bool graphHorizontalOrientation = false; // false = vertical
+  bool graphStartLeft = false;
+  bool graphHorizontalOrientation = false;
   bool flip = false;
-  D2D1_STROKE_TRANSFORM_TYPE transformStroke =
-      D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
+  D2D1_STROKE_TRANSFORM_TYPE transformStroke = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
   bool autoRange = false;
   float scaleMin = 0.0f;
   float scaleMax = 100.0f;
 };
 
+/// Histogram element options.
 struct HistogramOptions : public ElementOptions {
   std::vector<float> data;
   std::vector<float> data2;
   bool autoRange = false;
-  bool graphStartLeft = false;             // false = right
-  bool graphHorizontalOrientation = false; // false = vertical
+  bool graphStartLeft = false;
+  bool graphHorizontalOrientation = false;
   bool flip = false;
 
   COLORREF primaryColor = RGB(0, 128, 0);
@@ -448,6 +463,7 @@ struct HistogramOptions : public ElementOptions {
   GradientInfo bothGradient;
 };
 
+/// Geometry combine operation for shapes.
 struct ShapeCombineOp {
   std::wstring id;
   D2D1_COMBINE_MODE mode = D2D1_COMBINE_MODE_UNION;
@@ -455,6 +471,7 @@ struct ShapeCombineOp {
   bool consume = false;
 };
 
+/// Shape element options (rect, ellipse, line, arc, curve, path).
 struct ShapeOptions : public ElementOptions {
   bool isCombine = false;
   std::wstring shapeType;
@@ -492,6 +509,7 @@ struct ShapeOptions : public ElementOptions {
   bool combineConsumeAll = false;
 };
 
+/// Box shadow options for layout containers.
 struct LayoutBoxShadowOptions {
   float x = 0.0f;
   float y = 0.0f;
@@ -502,17 +520,14 @@ struct LayoutBoxShadowOptions {
   bool inset = false;
 };
 
+/// Layout container options (extends ShapeOptions with flexbox and borders).
 struct LayoutBoxOptions {
-  ShapeOptions shape;
+  ShapeOptions shape; ///< Base shape options.
   bool hasBorderStyle = false;
-  ElementLayoutBox::BorderStyle borderTop =
-      ElementLayoutBox::BorderStyle::Solid;
-  ElementLayoutBox::BorderStyle borderRight =
-      ElementLayoutBox::BorderStyle::Solid;
-  ElementLayoutBox::BorderStyle borderBottom =
-      ElementLayoutBox::BorderStyle::Solid;
-  ElementLayoutBox::BorderStyle borderLeft =
-      ElementLayoutBox::BorderStyle::Solid;
+  ElementLayoutBox::BorderStyle borderTop = ElementLayoutBox::BorderStyle::Solid;
+  ElementLayoutBox::BorderStyle borderRight = ElementLayoutBox::BorderStyle::Solid;
+  ElementLayoutBox::BorderStyle borderBottom = ElementLayoutBox::BorderStyle::Solid;
+  ElementLayoutBox::BorderStyle borderLeft = ElementLayoutBox::BorderStyle::Solid;
   std::vector<LayoutBoxShadowOptions> boxShadows;
   bool hasBoxShadowError = false;
   std::wstring boxShadowError;
@@ -526,12 +541,11 @@ struct LayoutBoxOptions {
   int paddingTop = 0;
   int paddingRight = 0;
   int paddingBottom = 0;
-  ElementLayoutBox::DisplayType displayType =
-      ElementLayoutBox::DisplayType::Flex;
-  ElementLayoutBox::ListStyleType listStyleType =
-      ElementLayoutBox::ListStyleType::Disc;
+  ElementLayoutBox::DisplayType displayType = ElementLayoutBox::DisplayType::Flex;
+  ElementLayoutBox::ListStyleType listStyleType = ElementLayoutBox::ListStyleType::Disc;
 };
 
+/// Single keyframe for element animations.
 struct AnimationKeyframeOptions {
   float offset = 0.0f;
   bool hasOffset = false;
@@ -557,27 +571,29 @@ struct AnimationKeyframeOptions {
   float fontColorG = 0.0f;
   float fontColorB = 0.0f;
   float fontAlpha = 255.0f;
-
   bool hasXExpr = false;
   std::wstring xExpr;
   bool hasYExpr = false;
   std::wstring yExpr;
 
+  /// @return True if any animation properties are set.
   bool HasAnyProps() const {
     return hasX || hasY || hasWidth || hasHeight || hasRotate || hasFontSize ||
            hasFontWeight || hasLetterSpacing || hasFontColor || hasXExpr ||
            hasYExpr;
   }
 
+  /// @return True if any text-specific properties are set.
   bool HasTextProps() const {
     return hasFontSize || hasFontWeight || hasLetterSpacing || hasFontColor;
   }
 };
 
+/// Element animation options (tween or keyframe).
 struct AnimationOptions {
-  std::wstring id;
-  int duration = 250;
-  std::wstring easing = L"linear";
+  std::wstring id; ///< Target element ID.
+  int duration = 250; ///< Duration in milliseconds.
+  std::wstring easing = L"linear"; ///< Easing function name.
   int iterationCount = 1;
   bool iterationInfinite = false;
   bool hasIterationCount = false;
@@ -588,115 +604,88 @@ struct AnimationOptions {
   bool tweenInvalid = false;
   std::wstring tweenError;
   std::vector<AnimationKeyframeOptions> keyframes;
-  bool hasX = false;
-  bool hasY = false;
-  bool hasWidth = false;
-  bool hasHeight = false;
-  bool hasRotate = false;
-  float x = 0.0f;
-  float y = 0.0f;
-  float width = 0.0f;
-  float height = 0.0f;
-  float rotate = 0.0f;
-  bool hasXExpr = false;
-  std::wstring xExpr;
-  bool hasYExpr = false;
-  std::wstring yExpr;
-  bool fromHasX = false;
-  bool fromHasY = false;
-  bool fromHasWidth = false;
-  bool fromHasHeight = false;
-  bool fromHasRotate = false;
-  float fromX = 0.0f;
-  float fromY = 0.0f;
-  float fromWidth = 0.0f;
-  float fromHeight = 0.0f;
-  float fromRotate = 0.0f;
-  bool fromHasXExpr = false;
-  std::wstring fromXExpr;
-  bool fromHasYExpr = false;
-  std::wstring fromYExpr;
-  bool hasFontSize = false;
-  bool hasFontWeight = false;
-  bool hasLetterSpacing = false;
-  bool hasFontColor = false;
-  float fontSize = 12.0f;
-  float fontWeight = 400.0f;
+
+  // Tween 'to' properties
+  bool hasX = false; bool hasY = false;
+  bool hasWidth = false; bool hasHeight = false; bool hasRotate = false;
+  float x = 0.0f; float y = 0.0f;
+  float width = 0.0f; float height = 0.0f; float rotate = 0.0f;
+  bool hasXExpr = false; std::wstring xExpr;
+  bool hasYExpr = false; std::wstring yExpr;
+
+  // Tween 'from' properties
+  bool fromHasX = false; bool fromHasY = false;
+  bool fromHasWidth = false; bool fromHasHeight = false; bool fromHasRotate = false;
+  float fromX = 0.0f; float fromY = 0.0f;
+  float fromWidth = 0.0f; float fromHeight = 0.0f; float fromRotate = 0.0f;
+  bool fromHasXExpr = false; std::wstring fromXExpr;
+  bool fromHasYExpr = false; std::wstring fromYExpr;
+
+  // Text animation properties
+  bool hasFontSize = false; bool hasFontWeight = false;
+  bool hasLetterSpacing = false; bool hasFontColor = false;
+  float fontSize = 12.0f; float fontWeight = 400.0f;
   float letterSpacing = 0.0f;
-  float fontColorR = 0.0f;
-  float fontColorG = 0.0f;
-  float fontColorB = 0.0f;
+  float fontColorR = 0.0f; float fontColorG = 0.0f; float fontColorB = 0.0f;
   float fontAlpha = 255.0f;
-  bool fromHasFontSize = false;
-  bool fromHasFontWeight = false;
-  bool fromHasLetterSpacing = false;
-  bool fromHasFontColor = false;
-  float fromFontSize = 12.0f;
-  float fromFontWeight = 400.0f;
+  bool fromHasFontSize = false; bool fromHasFontWeight = false;
+  bool fromHasLetterSpacing = false; bool fromHasFontColor = false;
+  float fromFontSize = 12.0f; float fromFontWeight = 400.0f;
   float fromLetterSpacing = 0.0f;
-  float fromFontColorR = 0.0f;
-  float fromFontColorG = 0.0f;
-  float fromFontColorB = 0.0f;
+  float fromFontColorR = 0.0f; float fromFontColorG = 0.0f; float fromFontColorB = 0.0f;
   float fromFontAlpha = 255.0f;
 
+  /// @return True if any target properties are set.
   bool HasAnyToProps() const {
     if (hasKeyframes) {
       for (const AnimationKeyframeOptions &kf : keyframes) {
-        if (kf.HasAnyProps())
-          return true;
+        if (kf.HasAnyProps()) return true;
       }
       return false;
     }
-    return hasX || hasY || hasWidth || hasHeight || hasRotate || hasXExpr ||
-           hasYExpr;
+    return hasX || hasY || hasWidth || hasHeight || hasRotate || hasXExpr || hasYExpr;
   }
 
+  /// @return True if any text target properties are set.
   bool HasAnyTextToProps() const {
     for (const AnimationKeyframeOptions &kf : keyframes) {
-      if (kf.HasTextProps())
-        return true;
+      if (kf.HasTextProps()) return true;
     }
     return false;
   }
 
+  /// @return True if using tween mode (not keyframes).
   bool UsesTweenMode() const { return !hasKeyframes; }
 };
 
+/// Single keyframe for window animations.
 struct WindowAnimationKeyframeOptions {
   float offset = 0.0f;
   bool hasOffset = false;
   std::wstring easing;
-  bool hasX = false;
-  bool hasY = false;
-  bool hasWidth = false;
-  bool hasHeight = false;
-  float x = 0.0f;
-  float y = 0.0f;
-  float width = 0.0f;
-  float height = 0.0f;
+  bool hasX = false; bool hasY = false;
+  bool hasWidth = false; bool hasHeight = false;
+  float x = 0.0f; float y = 0.0f;
+  float width = 0.0f; float height = 0.0f;
   bool hasOpacity = false;
-  float opacity = 1.0f; // 0.0 to 1.0
+  float opacity = 1.0f; ///< 0.0 to 1.0.
   bool hasBackgroundColor = false;
-  float bgColorR = 0.0f;
-  float bgColorG = 0.0f;
-  float bgColorB = 0.0f;
+  float bgColorR = 0.0f; float bgColorG = 0.0f; float bgColorB = 0.0f;
   float bgAlpha = 255.0f;
-
-  bool hasXExpr = false;
-  std::wstring xExpr;
-  bool hasYExpr = false;
-  std::wstring yExpr;
+  bool hasXExpr = false; std::wstring xExpr;
+  bool hasYExpr = false; std::wstring yExpr;
   bool hasPosition = false;
   std::wstring position;
-  float offsetX = 0.0f;
-  float offsetY = 0.0f;
+  float offsetX = 0.0f; float offsetY = 0.0f;
 
+  /// @return True if any animation properties are set.
   bool HasAnyProps() const {
     return hasX || hasY || hasWidth || hasHeight || hasOpacity ||
            hasBackgroundColor || hasXExpr || hasYExpr || hasPosition;
   }
 };
 
+/// Window animation options (tween or keyframe).
 struct WindowAnimationOptions {
   int duration = 250;
   std::wstring easing = L"linear";
@@ -712,62 +701,40 @@ struct WindowAnimationOptions {
   std::vector<WindowAnimationKeyframeOptions> keyframes;
 
   // 'to' properties
-  bool hasX = false;
-  bool hasY = false;
-  bool hasWidth = false;
-  bool hasHeight = false;
-  float x = 0.0f;
-  float y = 0.0f;
-  float width = 0.0f;
-  float height = 0.0f;
-  bool hasOpacity = false;
-  float opacity = 1.0f;
+  bool hasX = false; bool hasY = false;
+  bool hasWidth = false; bool hasHeight = false;
+  float x = 0.0f; float y = 0.0f;
+  float width = 0.0f; float height = 0.0f;
+  bool hasOpacity = false; float opacity = 1.0f;
   bool hasBackgroundColor = false;
-  float bgColorR = 0.0f;
-  float bgColorG = 0.0f;
-  float bgColorB = 0.0f;
+  float bgColorR = 0.0f; float bgColorG = 0.0f; float bgColorB = 0.0f;
   float bgAlpha = 255.0f;
-
-  bool hasXExpr = false;
-  std::wstring xExpr;
-  bool hasYExpr = false;
-  std::wstring yExpr;
+  bool hasXExpr = false; std::wstring xExpr;
+  bool hasYExpr = false; std::wstring yExpr;
   bool hasPosition = false;
   std::wstring position;
-  float offsetX = 0.0f;
-  float offsetY = 0.0f;
+  float offsetX = 0.0f; float offsetY = 0.0f;
 
   // 'from' properties
-  bool fromHasX = false;
-  bool fromHasY = false;
-  bool fromHasWidth = false;
-  bool fromHasHeight = false;
-  float fromX = 0.0f;
-  float fromY = 0.0f;
-  float fromWidth = 0.0f;
-  float fromHeight = 0.0f;
-  bool fromHasOpacity = false;
-  float fromOpacity = 1.0f;
+  bool fromHasX = false; bool fromHasY = false;
+  bool fromHasWidth = false; bool fromHasHeight = false;
+  float fromX = 0.0f; float fromY = 0.0f;
+  float fromWidth = 0.0f; float fromHeight = 0.0f;
+  bool fromHasOpacity = false; float fromOpacity = 1.0f;
   bool fromHasBackgroundColor = false;
-  float fromBgColorR = 0.0f;
-  float fromBgColorG = 0.0f;
-  float fromBgColorB = 0.0f;
+  float fromBgColorR = 0.0f; float fromBgColorG = 0.0f; float fromBgColorB = 0.0f;
   float fromBgAlpha = 255.0f;
-
-  bool fromHasXExpr = false;
-  std::wstring fromXExpr;
-  bool fromHasYExpr = false;
-  std::wstring fromYExpr;
+  bool fromHasXExpr = false; std::wstring fromXExpr;
+  bool fromHasYExpr = false; std::wstring fromYExpr;
   bool fromHasPosition = false;
   std::wstring fromPosition;
-  float fromOffsetX = 0.0f;
-  float fromOffsetY = 0.0f;
+  float fromOffsetX = 0.0f; float fromOffsetY = 0.0f;
 
+  /// @return True if any target properties are set.
   bool HasAnyToProps() const {
     if (hasKeyframes) {
       for (const WindowAnimationKeyframeOptions &kf : keyframes) {
-        if (kf.HasAnyProps())
-          return true;
+        if (kf.HasAnyProps()) return true;
       }
       return false;
     }
@@ -775,46 +742,37 @@ struct WindowAnimationOptions {
            hasBackgroundColor || hasXExpr || hasYExpr || hasPosition;
   }
 };
+
 } // namespace PropertyParser
 
+/**
+ * @brief Widget window options parsed from JavaScript.
+ */
 namespace novadesk::scripting::quickjs::parser {
 struct WidgetWindowOptions {
   std::wstring id = L"widget";
-  int width = 0;
-  int height = 0;
-  bool hasWidth = false;
-  bool hasHeight = false;
-  int minWidth = 0;
-  int minHeight = 0;
-  bool hasMinWidth = false;
-  bool hasMinHeight = false;
-  int x = 0;
-  int y = 0;
-  bool hasX = false;
-  bool hasY = false;
-  bool draggable = true;
-  bool hasDraggable = false;
-  bool resizable = false;
-  bool hasResizable = false;
-  bool clickThrough = false;
-  bool hasClickThrough = false;
-  bool keepOnScreen = false;
-  bool hasKeepOnScreen = false;
-  bool snapEdges = true;
-  bool hasSnapEdges = false;
-  bool showInToolbar = false;
-  bool hasShowInToolbar = false;
-  std::wstring toolbarIcon;
-  bool hasToolbarIcon = false;
-  std::wstring toolbarTitle;
-  bool hasToolbarTitle = false;
-  bool show = true;
-  bool hasShow = false;
+  int width = 0; int height = 0;
+  bool hasWidth = false; bool hasHeight = false;
+  int minWidth = 0; int minHeight = 0;
+  bool hasMinWidth = false; bool hasMinHeight = false;
+  int x = 0; int y = 0;
+  bool hasX = false; bool hasY = false;
+  bool draggable = true; bool hasDraggable = false;
+  bool resizable = false; bool hasResizable = false;
+  bool clickThrough = false; bool hasClickThrough = false;
+  bool keepOnScreen = false; bool hasKeepOnScreen = false;
+  bool snapEdges = true; bool hasSnapEdges = false;
+  bool showInToolbar = false; bool hasShowInToolbar = false;
+  std::wstring toolbarIcon; bool hasToolbarIcon = false;
+  std::wstring toolbarTitle; bool hasToolbarTitle = false;
+  bool show = true; bool hasShow = false;
+
   std::wstring backgroundColor = L"rgba(0,0,0,0)";
   COLORREF color = RGB(0, 0, 0);
   BYTE bgAlpha = 0;
   GradientInfo bgGradient;
   bool hasBackgroundColor = false;
+
   std::wstring backgroundImage;
   bool hasBackgroundImage = false;
   std::wstring backgroundImageFallback;
@@ -831,6 +789,7 @@ struct WidgetWindowOptions {
   float backgroundImagePositionY = 0.0f;
   std::wstring backgroundImagePosition = L"center";
   bool hasBackgroundImagePosition = false;
+
   BYTE windowOpacity = 255;
   bool hasWindowOpacity = false;
   int zPos = -1;

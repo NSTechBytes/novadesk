@@ -10,8 +10,23 @@
 
 #include "ShapeElement.h"
 
+/**
+ * @brief Renders a rectangle shape with optional corner radii.
+ *
+ * @note The rectangle is inscribed within the element's bounding box.
+ *       Supports independent X and Y corner radii for rounded rectangles.
+ */
 class RectangleShape : public ShapeElement {
 public:
+  /**
+   * @brief Constructs a rectangle shape.
+   *
+   * @param id Unique element identifier.
+   * @param x X-coordinate.
+   * @param y Y-coordinate.
+   * @param width Bounding box width.
+   * @param height Bounding box height.
+   */
   RectangleShape(const std::wstring &id, int x, int y, int width, int height);
   virtual ~RectangleShape();
 
@@ -20,16 +35,19 @@ public:
   virtual bool CreateGeometry(
       ID2D1Factory *factory,
       Microsoft::WRL::ComPtr<ID2D1Geometry> &geometry) const override;
+
+  /// Sets the corner radii for rounded rectangles.
   virtual void SetRadii(float rx, float ry) override {
     m_RadiusX = rx;
     m_RadiusY = ry;
   }
+
   virtual float GetRadiusX() const override { return m_RadiusX; }
   virtual float GetRadiusY() const override { return m_RadiusY; }
 
 private:
-  float m_RadiusX = 0.0f;
-  float m_RadiusY = 0.0f;
+  float m_RadiusX = 0.0f; ///< Corner radius X.
+  float m_RadiusY = 0.0f; ///< Corner radius Y.
 };
 
 #endif

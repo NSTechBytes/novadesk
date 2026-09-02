@@ -21,10 +21,18 @@
 #include <unordered_map>
 #include <vector>
 
+// ============================================================================
+// Globals & Hook State
+// ============================================================================
+
 const NovadeskHostAPI *g_Host = nullptr;
 static HWND g_MessageWindow = nullptr;
 
 namespace {
+// ============================================================================
+// Data Structures
+// ============================================================================
+
 struct JsFunctionHandleMirror {
   void *ctx = nullptr;
   void *fn = nullptr;
@@ -49,6 +57,10 @@ struct DispatchEvent {
   bool down = false;
   uint64_t generation = 0;
 };
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
 
 std::wstring TrimUpperCopy(std::wstring s) {
   auto isSpace = [](wchar_t c) {
@@ -81,6 +93,8 @@ bool ParseHotkeyString(const std::wstring &hotkey, UINT &modifiers, UINT &vk) {
   modifiers = 0;
   vk = 0;
 
+  // Parse hotkey string: modifiers separated by '+', last token is the key.
+  // Example: "Ctrl+Alt+F1" or "Shift+A"
   size_t start = 0;
   while (start <= hotkey.size()) {
     size_t plus = hotkey.find(L'+', start);
@@ -149,6 +163,10 @@ bool IsModifierVk(UINT vk) {
          vk == VK_LSHIFT || vk == VK_RSHIFT || vk == VK_LWIN || vk == VK_RWIN;
 }
 
+// ============================================================================
+// Hotkey Detection & Dispatch Logic
+// ============================================================================
+
 bool IsDownWithEvent(UINT checkVk, UINT eventVk, bool eventDown) {
   if (checkVk == VK_CONTROL) {
     if (eventVk == VK_LCONTROL || eventVk == VK_RCONTROL ||
@@ -171,6 +189,7 @@ bool IsDownWithEvent(UINT checkVk, UINT eventVk, bool eventDown) {
       return eventDown;
     return (GetAsyncKeyState(checkVk) & 0x8000) != 0;
   }
+  // For regular keys, check the current async key state or the triggering event.
   if (eventVk == checkVk)
     return eventDown;
   return (GetAsyncKeyState(checkVk) & 0x8000) != 0;
@@ -197,9 +216,10 @@ void DispatchHotkey(void *data) {
   if (!evt)
     return;
 
-  // Discard events that were posted before the last ClearHotkeys/UnregisterAll.
-  // This prevents use-after-free when the JS context is destroyed or the addon
-  // is reloaded between posting and processing the event.
+  // SAFETY: Discard events that were posted before the last ClearHotkeys.
+  // This prevents use-after-free when the JS context is destroyed or addon
+  // is reloaded between posting and processing. Generation counter acts as
+  // a stale-event detector.
   if (evt->generation != g_hotkeyGeneration.load(std::memory_order_acquire)) {
     delete evt;
     return;
@@ -218,7 +238,7 @@ void DispatchHotkey(void *data) {
   auto *handle = reinterpret_cast<JsFunctionHandleMirror *>(fn);
   if (handle && handle->ctx) {
     // Re-check generation right before calling to ensure the handle
-    // is still valid.  Between the entry copy and this point,
+    // is still valid. Between the entry copy and this point,
     // ClearHotkeys may have bumped the generation and freed handles
     // via addon unload.
     uint64_t genNow = g_hotkeyGeneration.load(std::memory_order_acquire);
@@ -251,6 +271,8 @@ LRESULT CALLBACK KeyboardHookProc(int nCode, WPARAM wParam, LPARAM lParam) {
     const bool isDown = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
     const bool isUp = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
     if (isDown || isUp) {
+      // Only scan all hotkeys if this is a modifier key or if we might need it.
+      // For non-modifier keys, only hotkeys with that key as their main key apply.
       const bool relevant = IsModifierVk(vk);
       std::lock_guard<std::mutex> lock(g_hotkeyMutex);
       for (auto &kv : g_hotkeys) {
@@ -259,6 +281,7 @@ LRESULT CALLBACK KeyboardHookProc(int nCode, WPARAM wParam, LPARAM lParam) {
           continue;
         }
 
+        // Detect transition from not-pressed to pressed or vice versa.
         const bool nowPressed = IsHotkeyPressedNow(hk, vk, isDown);
         if (nowPressed && !hk.pressed) {
           hk.pressed = true;
@@ -323,10 +346,9 @@ void ClearHotkeys() {
   // posted before this point will be discarded when processed.
   g_hotkeyGeneration.fetch_add(1, std::memory_order_release);
 
-  // Unhook the keyboard hook directly.  MaybeRemoveKeyboardHook() is
-  // a no-op here because g_hotkeys is not yet empty.  We must unhook
-  // before the addon DLL is unloaded — otherwise the hook proc becomes
-  // a dangling function pointer on the next keyboard event.
+  // Unhook the keyboard hook directly. We must unhook before the addon DLL
+  // is unloaded — otherwise the hook proc becomes a dangling function pointer
+  // on the next keyboard event, causing a crash.
   if (g_keyboardHook) {
     UnhookWindowsHookEx(g_keyboardHook);
     g_keyboardHook = nullptr;
@@ -337,10 +359,10 @@ void ClearHotkeys() {
     g_hotkeys.clear();
   }
 
-  // Drain any pending WM_USER+101 messages that were posted by the
-  // hook before it was removed.  Without this, the host's WndProc
-  // would call through &DispatchHotkey (a function pointer inside the
-  // now-unloaded DLL) when processing these stale messages.
+  // Drain any pending WM_USER+101 messages that were posted by the hook
+  // before it was removed. Without this, the host's WndProc would call
+  // through &DispatchHotkey (a function pointer inside the now-unloaded DLL)
+  // when processing these stale messages, causing a crash.
   if (g_MessageWindow) {
     MSG msg;
     while (PeekMessageW(&msg, g_MessageWindow, WM_USER + 101, WM_USER + 101,
@@ -380,6 +402,10 @@ bool ReadHandler(novadesk_context ctx, int argIndex, void *&outDown,
 
   return outDown != nullptr || outUp != nullptr;
 }
+
+// ============================================================================
+// JavaScript Binding Functions
+// ============================================================================
 
 int JsHotkeyRegister(novadesk_context ctx) {
   const int top = g_Host->GetTop(ctx);
@@ -425,6 +451,10 @@ int JsHotkeyUnregister(novadesk_context ctx) {
   return 1;
 }
 } // namespace
+
+// ============================================================================
+// Addon Initialization
+// ============================================================================
 
 NOVADESK_ADDON_INIT(ctx, hMsgWnd, host) {
   g_Host = host;

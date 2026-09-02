@@ -10,8 +10,23 @@
 
 #include "ShapeElement.h"
 
+/**
+ * @brief Renders a straight line segment between two points.
+ *
+ * @note The line is defined by start and end coordinates relative to the
+ *       element's bounding box. Supports stroke styling and hit testing.
+ */
 class LineShape : public ShapeElement {
 public:
+  /**
+   * @brief Constructs a line shape.
+   *
+   * @param id Unique element identifier.
+   * @param x X-coordinate.
+   * @param y Y-coordinate.
+   * @param width Bounding box width.
+   * @param height Bounding box height.
+   */
   LineShape(const std::wstring &id, int x, int y, int width, int height);
   virtual ~LineShape();
 
@@ -21,22 +36,25 @@ public:
   virtual bool CreateGeometry(
       ID2D1Factory *factory,
       Microsoft::WRL::ComPtr<ID2D1Geometry> &geometry) const override;
+
+  /// Sets the start and end points of the line.
   virtual void SetLinePoints(float x1, float y1, float x2, float y2) override {
     m_StartX = x1;
     m_StartY = y1;
     m_EndX = x2;
     m_EndY = y2;
   }
+
   virtual float GetStartX() const override { return m_StartX; }
   virtual float GetStartY() const override { return m_StartY; }
   virtual float GetEndX() const override { return m_EndX; }
   virtual float GetEndY() const override { return m_EndY; }
 
 private:
-  float m_StartX = 0.0f;
-  float m_StartY = 0.0f;
-  float m_EndX = 0.0f;
-  float m_EndY = 0.0f;
+  float m_StartX = 0.0f; ///< Start point X.
+  float m_StartY = 0.0f; ///< Start point Y.
+  float m_EndX = 0.0f;   ///< End point X.
+  float m_EndY = 0.0f;   ///< End point Y.
 };
 
 #endif

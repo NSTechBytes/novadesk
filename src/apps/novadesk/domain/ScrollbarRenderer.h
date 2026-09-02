@@ -16,28 +16,40 @@
 // Forward declaration
 class Widget;
 
+/**
+ * @brief Renders scrollbar tracks, thumbs, and arrow buttons for scrollable containers.
+ *
+ * @note Static utility class; renders CSS-style scrollbars with customizable
+ *       appearance (width, colors, radius, hover/active states).
+ */
 class ScrollbarRenderer {
 public:
   /**
-   * Render the scrollbars (tracks, thumbs, and arrow buttons) for a container
-   * element.
-   * @param widget The widget instance owning this container
-   * @param container The scrollable container element
-   * @param context Direct2D render target
-   * @param bounds Container bounds
+   * @brief Renders the scrollbars for a container element.
+   *
+   * @param widget The widget instance owning this container.
+   * @param container The scrollable container element.
+   * @param context Direct2D render target.
+   * @param bounds Container bounds rectangle.
    */
   static void DrawScrollbars(const Widget &widget, Element *container,
                              ID2D1RenderTarget *context, const GfxRect &bounds);
 
   /**
-   * Helper to render a crisp vector arrow triangle.
+   * @brief Renders a crisp vector arrow triangle for scrollbar buttons.
+   *
+   * @param context Direct2D render target.
+   * @param p1 First vertex of the triangle.
+   * @param p2 Second vertex of the triangle.
+   * @param p3 Third vertex of the triangle.
+   * @param brush Fill brush for the triangle.
    */
   static void DrawArrowTriangle(ID2D1RenderTarget *context, D2D1_POINT_2F p1,
                                 D2D1_POINT_2F p2, D2D1_POINT_2F p3,
                                 ID2D1Brush *brush);
 
 private:
-  ScrollbarRenderer() = delete;
+  ScrollbarRenderer() = delete; // Static utility class; no instances.
 };
 
 #endif // __NOVADESK_SCROLLBAR_RENDERER_H__

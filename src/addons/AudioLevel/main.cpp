@@ -22,9 +22,17 @@
 
 #include "../../third_party/kiss_fft130/kiss_fftr.h"
 
+// ============================================================================
+// Globals
+// ============================================================================
+
 const NovadeskHostAPI *g_Host = nullptr;
 
 namespace {
+// ============================================================================
+// Data Structures & Configuration
+// ============================================================================
+
 struct AudioLevelStats {
   float rms[2] = {0.0f, 0.0f};
   float peak[2] = {0.0f, 0.0f};
@@ -54,6 +62,10 @@ struct AudioLevelConfig {
   double peakGain = 1.0;
 };
 
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
 static float Clamp01(float v) {
   if (v < 0.0f)
     return 0.0f;
@@ -72,6 +84,10 @@ static std::wstring Utf8ToWide(const char *s) {
   MultiByteToWideChar(CP_UTF8, 0, s, -1, out.data(), len);
   return out;
 }
+
+// ============================================================================
+// Audio Analysis Engine (Core Business Logic)
+// ============================================================================
 
 class AudioLevelAnalyzer {
 public:
@@ -157,6 +173,7 @@ private:
     const double sr =
         static_cast<double>(m_sampleRate <= 0 ? 48000 : m_sampleRate);
     const double t = static_cast<double>(ClampMs(ms)) * 0.001;
+    // Exponential smoothing coefficient: decay to 1% of error per time-constant.
     return static_cast<float>(std::exp(std::log10(0.01) / (sr * t)));
   }
 
@@ -184,6 +201,9 @@ private:
       Release();
     m_config = config;
 
+    // Initialize COM apartment model for audio device enumeration.
+    // NOTE: RPC_E_CHANGED_MODE means COM was already initialized in a different
+    // apartment model — we will not call CoUninitialize in this case.
     const HRESULT hrCom = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (hrCom == RPC_E_CHANGED_MODE) {
       m_comInit = false;
@@ -204,6 +224,8 @@ private:
       m_fftStride = m_fftSize / 2;
     m_fftCountdown = m_fftStride;
 
+    // Enumerate audio devices via WASAPI (Windows Audio Session API).
+    // NOTE: Must run on an STA thread for COM interfaces to work correctly.
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr,
                                   CLSCTX_ALL, __uuidof(IMMDeviceEnumerator),
                                   reinterpret_cast<void **>(&m_enumerator));
@@ -219,11 +241,13 @@ private:
     if (FAILED(hr) || !m_device)
       return false;
 
+    // Activate the audio client for the selected device.
     hr = m_device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
                             reinterpret_cast<void **>(&m_audioClient));
     if (FAILED(hr) || !m_audioClient)
       return false;
 
+    // Retrieve the mix format (sample rate, channels, bit depth) from device.
     hr = m_audioClient->GetMixFormat(&m_pwfx);
     if (FAILED(hr) || !m_pwfx)
       return false;
@@ -235,21 +259,26 @@ private:
     if (m_channels > 2)
       m_channels = 2;
 
+    // For render endpoints, use AUDCLNT_STREAMFLAGS_LOOPBACK to capture
+    // what is being played out (system audio).
     DWORD flags = (dataFlow == eRender) ? AUDCLNT_STREAMFLAGS_LOOPBACK : 0;
     hr = m_audioClient->Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 0, 0,
                                    m_pwfx, nullptr);
     if (FAILED(hr))
       return false;
 
+    // Get the capture client to read audio data from the device.
     hr = m_audioClient->GetService(__uuidof(IAudioCaptureClient),
                                    reinterpret_cast<void **>(&m_captureClient));
     if (FAILED(hr) || !m_captureClient)
       return false;
 
+    // Start the audio stream.
     hr = m_audioClient->Start();
     if (FAILED(hr))
       return false;
 
+    // Allocate FFT configuration and working buffers.
     m_fftCfg = kiss_fftr_alloc(m_fftSize, 0, nullptr, nullptr);
     if (!m_fftCfg)
       return false;
@@ -260,6 +289,7 @@ private:
     m_fftOut.resize(static_cast<size_t>(m_fftSize));
     m_spectrum.assign(static_cast<size_t>(m_fftSize / 2 + 1), 0.0f);
 
+    // Apply Hann window to reduce spectral leakage in FFT analysis.
     for (int i = 0; i < m_fftSize; ++i) {
       m_fftWindow[static_cast<size_t>(i)] =
           0.5f * (1.0f - std::cos(2.0f * 3.1415926535f * i /
@@ -320,11 +350,13 @@ private:
     if (m_ringFilled < m_fftSize)
       return;
     int idx = m_ringWrite;
+    // Copy ring buffer samples and apply Hann window function.
     for (int i = 0; i < m_fftSize; ++i) {
       m_fftIn[static_cast<size_t>(i)] = m_ring[static_cast<size_t>(idx)] *
                                         m_fftWindow[static_cast<size_t>(i)];
       idx = (idx + 1) % m_fftSize;
     }
+    // Run real FFT and compute magnitude spectrum with exponential smoothing.
     kiss_fftr(m_fftCfg, m_fftIn.data(), m_fftOut.data());
     const int outSize = m_fftSize / 2 + 1;
     const float scalar = 1.0f / std::sqrt(static_cast<float>(m_fftSize));
@@ -333,6 +365,7 @@ private:
       const float im = m_fftOut[static_cast<size_t>(i)].i;
       const float mag = std::sqrt(re * re + im * im) * scalar;
       float &old = m_spectrum[static_cast<size_t>(i)];
+      // Apply smoothing: attack when magnitude rises, decay when it falls.
       old = mag + m_kFFT[(mag < old)] * (old - mag);
     }
   }
@@ -348,6 +381,8 @@ private:
     const double sensitivity =
         (m_config.sensitivity <= 0.0) ? 35.0 : m_config.sensitivity;
 
+    // Distribute bands logarithmically across frequency range (auditory perception).
+    // Each band captures the maximum magnitude within its frequency range.
     for (int i = 0; i < bands; ++i) {
       const double f1 =
           freqMin * std::pow(freqMax / freqMin, static_cast<double>(i) /
@@ -369,6 +404,7 @@ private:
       for (int k = idx1; k <= idx2; ++k)
         maxVal = std::max(maxVal, m_spectrum[static_cast<size_t>(k)]);
       if (maxVal > 0.0f) {
+        // Convert magnitude to dB and normalize to 0..1 range.
         const float db = 20.0f * std::log10(maxVal);
         out[static_cast<size_t>(i)] =
             Clamp01(1.0f + db / static_cast<float>(sensitivity));
@@ -442,6 +478,7 @@ private:
       const float n = static_cast<float>(frameCount);
       const float rmsNow0 = std::sqrt(sumSq[0] / n);
       const float rmsNow1 = std::sqrt(sumSq[1] / n);
+      // Apply exponential smoothing: attack on rising energy, decay on falling.
       m_rms[0] = Clamp01(rmsNow0 +
                          m_kRMS[(rmsNow0 < m_rms[0])] * (m_rms[0] - rmsNow0));
       m_rms[1] = Clamp01(rmsNow1 +
@@ -451,6 +488,7 @@ private:
       m_peak[1] = Clamp01(peak[1] + m_kPeak[(peak[1] < m_peak[1])] *
                                         (m_peak[1] - peak[1]));
     } else {
+      // No audio: apply decay coefficients to both channels.
       m_rms[0] *= m_kRMS[1];
       m_rms[1] *= m_kRMS[1];
       m_peak[0] *= m_kPeak[1];
@@ -460,6 +498,10 @@ private:
 };
 
 AudioLevelAnalyzer g_audioLevelAnalyzer;
+
+// ============================================================================
+// JavaScript Binding Functions
+// ============================================================================
 
 int JsAudioLevelStats(novadesk_context ctx) {
   AudioLevelConfig cfg;
@@ -551,6 +593,10 @@ int JsAudioLevelStats(novadesk_context ctx) {
   return 1;
 }
 } // namespace
+
+// ============================================================================
+// Addon Initialization
+// ============================================================================
 
 NOVADESK_ADDON_INIT(ctx, hMsgWnd, host) {
   (void)hMsgWnd;

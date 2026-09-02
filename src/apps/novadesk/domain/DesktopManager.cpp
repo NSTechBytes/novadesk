@@ -36,10 +36,8 @@ static Widget *FindWidget(HWND hWnd) {
   return nullptr;
 }
 
-/*
-** Initialize the System module.
-** Sets up helper windows and initializes multi-monitor information.
-*/
+// Initialize the System module.
+// Sets up helper windows and initializes multi-monitor information.
 
 void System::Initialize(HINSTANCE instance) {
   // Initialize monitors from shared system metrics to keep a single monitor
@@ -89,10 +87,8 @@ void System::Initialize(HINSTANCE instance) {
   SetTimer(c_Window, TIMER_SHOWDESKTOP, INTERVAL_SHOWDESKTOP, nullptr);
 }
 
-/*
-** Finalize the System module.
-** Cleans up resources and destroys helper windows.
-*/
+// Finalize the System module.
+// Cleans up resources and destroys helper windows.
 
 void System::Finalize() {
   if (c_HelperWindow) {
@@ -105,15 +101,11 @@ void System::Finalize() {
   }
 }
 
-/*
-** Get the default shell window.
-*/
+// Get the default shell window.
 
 HWND System::GetDefaultShellWindow() { return GetShellWindow(); }
 
-/*
-** Determine if the shell window should be used as the desktop icons host.
-*/
+// Determine if the shell window should be used as the desktop icons host.
 
 bool System::ShouldUseShellWindowAsDesktopIconsHost() {
   // Check for the existence of GetCurrentMonitorTopologyId, which should be
@@ -123,10 +115,8 @@ bool System::ShouldUseShellWindowAsDesktopIconsHost() {
   return result;
 }
 
-/*
-** Get the window that hosts desktop icons.
-** This is typically the shell window or WorkerW window.
-*/
+// Get the window that hosts desktop icons.
+// This is typically the shell window or WorkerW window.
 
 HWND System::GetDesktopIconsHostWindow() {
   HWND shellW = GetDefaultShellWindow();
@@ -151,10 +141,8 @@ HWND System::GetDesktopIconsHostWindow() {
   return (defView != nullptr) ? workerW : nullptr;
 }
 
-/*
-** Prepare the helper window for desktop icon management.
-** Can optionally specify a custom desktop icons host window.
-*/
+// Prepare the helper window for desktop icon management.
+// Can optionally specify a custom desktop icons host window.
 
 void System::PrepareHelperWindow(HWND desktopIconsHostWindow) {
   if (!c_HelperWindow || !IsWindow(c_HelperWindow)) {
@@ -179,9 +167,7 @@ void System::PrepareHelperWindow(HWND desktopIconsHostWindow) {
   }
 }
 
-/*
-** Check if the desktop is currently being shown.
-*/
+// Check if the desktop is currently being shown.
 
 bool System::CheckDesktopState(HWND desktopIconsHostWindow) {
   HWND hwnd = nullptr;
@@ -207,10 +193,8 @@ bool System::CheckDesktopState(HWND desktopIconsHostWindow) {
   return stateChanged;
 }
 
-/*
-** Change z-order positions for all widgets in the correct order.
-** Ensures widgets maintain their relative z-order positions.
-*/
+// Change z-order positions for all widgets in the correct order.
+// Ensures widgets maintain their relative z-order positions.
 
 void System::ChangeZPosInOrder() {
   // Iterate known widgets directly instead of EnumWindows.
@@ -226,9 +210,7 @@ void System::ChangeZPosInOrder() {
   }
 }
 
-/*
-** Window procedure for the system helper window.
-*/
+// Window procedure for the system helper window.
 
 LRESULT CALLBACK System::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
                                  LPARAM lParam) {
@@ -242,10 +224,8 @@ LRESULT CALLBACK System::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
   return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 
-/*
-** Get the backmost top-level window.
-** Used for z-order management of desktop widgets.
-*/
+// Get the backmost top-level window.
+// Used for z-order management of desktop widgets.
 
 HWND System::GetBackmostTopWindow() {
   HWND winPos = c_HelperWindow;

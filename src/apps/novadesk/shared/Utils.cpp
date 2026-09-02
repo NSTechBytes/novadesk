@@ -101,7 +101,7 @@ bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
     return false;
   }
   BYTE *maskBits = new BYTE[maskBytesCount];
-  if (!GetDIBits(dc, iconInfo.hbmMask, 0, bmMask.mHeight, maskBits, bmi,
+  if (!GetDIBits(dc, iconInfo.hbmMask, 0, bmMask.bmHeight, maskBits, bmi,
                  DIB_RGB_COLORS)) {
     delete[] colorBits;
     delete[] maskBits;

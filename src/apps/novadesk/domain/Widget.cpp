@@ -64,9 +64,7 @@ std::mutex Widget::s_WidgetMutex;
 std::atomic<bool> Widget::s_IsMenuActive{false};
 std::atomic<int> Widget::s_ActiveColorPickerCount{0};
 
-/*
-** Check if a widget pointer is valid (exists in the global widgets list).
-*/
+// Check if a widget pointer is valid (exists in the global widgets list).
 bool Widget::IsValid(Widget *pWidget) {
   if (!pWidget)
     return false;
@@ -95,10 +93,8 @@ void Widget::ClearAllWidgets() {
   widgets.clear();
 }
 
-/*
-** Construct a new Widget with the specified options.
-** Options include size, position, colors, z-order, and behavior flags.
-*/
+// Construct a new Widget with the specified options.
+// Options include size, position, colors, z-order, and behavior flags.
 static std::atomic<uint64_t> s_NextInstanceId{1};
 
 Widget::Widget(const WidgetOptions &options)
@@ -125,9 +121,7 @@ Widget::Widget(const WidgetOptions &options)
   }
 }
 
-/*
-** Destructor. Cleans up window resources and removes from system tracking.
-*/
+// Destructor. Cleans up window resources and removes from system tracking.
 Widget::~Widget() {
   if (m_hWnd) {
     KillTimer(m_hWnd, WidgetAnimationHelper::kTimerId);
@@ -186,10 +180,8 @@ Widget::~Widget() {
   }
 }
 
-/*
-** Register the widget window class.
-** Only needs to be called once per application instance.
-*/
+// Register the widget window class.
+// Only needs to be called once per application instance.
 bool Widget::Register() {
   static std::once_flag s_Flag;
   static std::atomic<bool> s_Registered{false};
@@ -209,11 +201,9 @@ bool Widget::Register() {
   return s_Registered.load(std::memory_order_acquire);
 }
 
-/*
-** Create the widget window.
-** Registers the window class if needed and creates the actual window.
-** Returns true on success, false on failure.
-*/
+// Create the widget window.
+// Registers the window class if needed and creates the actual window.
+// Returns true on success, false on failure.
 bool Widget::Create() {
   if (!Register())
     return false;
@@ -293,10 +283,8 @@ bool Widget::Create() {
   return true;
 }
 
-/*
-** Show the widget window.
-** Makes the window visible and applies the configured z-order position.
-*/
+// Show the widget window.
+// Makes the window visible and applies the configured z-order position.
 void Widget::Show() {
   if (m_hWnd) {
     ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
@@ -421,10 +409,8 @@ std::wstring Widget::GetTitle() const {
   return std::wstring(buf.data());
 }
 
-/*
-** Change the z-order position of this widget.
-** If all is true, affects all widgets in the same z-order group.
-*/
+// Change the z-order position of this widget.
+// If all is true, affects all widgets in the same z-order group.
 void Widget::ChangeZPos(ZPOSITION zPos, bool all) {
   if (Widget::IsMenuActive())
     return;
@@ -433,8 +419,6 @@ void Widget::ChangeZPos(ZPOSITION zPos, bool all) {
   HWND winPos = HWND_NOTOPMOST;
 
   bool changed = (m_Options.zPos != zPos);
-  // Logging::Log(LogLevel::Debug, L"ChangeZPos: id=%s, current=%d, new=%d,
-  // changed=%d", m_Options.id.c_str(), m_Options.zPos, zPos, changed);
   m_Options.zPos = zPos;
   m_WindowZPosition = zPos;
 
@@ -515,10 +499,8 @@ timer_check:
   }
 }
 
-/*
-** Change the z-order position of a single widget.
-** Similar to ChangeZPos but only affects this specific widget.
-*/
+// Change the z-order position of a single widget.
+// Similar to ChangeZPos but only affects this specific widget.
 void Widget::ChangeSingleZPos(ZPOSITION zPos, bool all) {
   if (zPos == ZPOSITION_NORMAL && (!all || System::GetShowDesktop())) {
     m_WindowZPosition = zPos;
@@ -534,9 +516,7 @@ void Widget::ChangeSingleZPos(ZPOSITION zPos, bool all) {
   }
 }
 
-/*
-** Set window position and size.
-*/
+// Set window position and size.
 void Widget::SetWindowPosition(int x, int y, int w, int h) {
   if (x == CW_USEDEFAULT)
     x = m_Options.x;
@@ -593,9 +573,7 @@ void Widget::SetWindowPosition(int x, int y, int w, int h) {
   }
 }
 
-/*
-** Set overall window opacity (0-255).
-*/
+// Set overall window opacity (0-255).
 void Widget::SetWindowOpacity(BYTE opacity) {
   if (m_Options.windowOpacity != opacity) {
     m_Options.windowOpacity = opacity;
@@ -604,9 +582,7 @@ void Widget::SetWindowOpacity(BYTE opacity) {
   }
 }
 
-/*
-** Set background color and alpha.
-*/
+// Set background color and alpha.
 void Widget::SetBackgroundColor(const std::wstring &colorStr) {
   COLORREF color = m_Options.color;
   BYTE alpha = m_Options.bgAlpha;
@@ -693,9 +669,7 @@ void Widget::SetBackgroundImageFallback(const std::wstring &path) {
   Settings::SaveWidget(m_Options.id, m_Options);
 }
 
-/*
-** Enable/disable dragging.
-*/
+// Enable/disable dragging.
 void Widget::SetDraggable(bool enable) {
   if (m_Options.draggable != enable) {
     m_Options.draggable = enable;
@@ -703,14 +677,10 @@ void Widget::SetDraggable(bool enable) {
   }
 }
 
-/*
-** Enable/disable resizing.
-*/
+// Enable/disable resizing.
 void Widget::SetResizable(bool enable) { m_Options.resizable = enable; }
 
-/*
-** Set minimum width.
-*/
+// Set minimum width.
 void Widget::SetMinWidth(int minWidth) {
   if (minWidth < 0)
     minWidth = 0;
@@ -722,9 +692,7 @@ void Widget::SetMinWidth(int minWidth) {
   }
 }
 
-/*
-** Set minimum height.
-*/
+// Set minimum height.
 void Widget::SetMinHeight(int minHeight) {
   if (minHeight < 0)
     minHeight = 0;
@@ -736,9 +704,7 @@ void Widget::SetMinHeight(int minHeight) {
   }
 }
 
-/*
-** Set minimum size (both width and height).
-*/
+// Set minimum size (both width and height).
 void Widget::SetMinSize(int minWidth, int minHeight) {
   if (minWidth < 0)
     minWidth = 0;
@@ -794,9 +760,7 @@ LPCWSTR Widget::GetCursorForResizeEdge(WidgetResizeEdge edge) {
   }
 }
 
-/*
-** Enable/disable click-through.
-*/
+// Enable/disable click-through.
 void Widget::SetClickThrough(bool enable) {
   if (m_Options.clickThrough != enable) {
     m_Options.clickThrough = enable;
@@ -814,9 +778,7 @@ void Widget::SetClickThrough(bool enable) {
   }
 }
 
-/*
-** Enable/disable keeping on screen.
-*/
+// Enable/disable keeping on screen.
 void Widget::SetKeepOnScreen(bool enable) {
   if (m_Options.keepOnScreen != enable) {
     m_Options.keepOnScreen = enable;
@@ -824,9 +786,7 @@ void Widget::SetKeepOnScreen(bool enable) {
   }
 }
 
-/*
-** Enable/disable snap-to-edges.
-*/
+// Enable/disable snap-to-edges.
 void Widget::SetSnapEdges(bool enable) {
   if (m_Options.snapEdges != enable) {
     m_Options.snapEdges = enable;
@@ -879,9 +839,7 @@ void Widget::ApplyToolbarTitle() {
   WidgetWindowChromeHelper::ApplyToolbarTitle(m_hWnd, m_Options);
 }
 
-/*
-** Retrieve the Widget instance associated with a window handle.
-*/
+// Retrieve the Widget instance associated with a window handle.
 Widget *Widget::GetWidgetFromHWND(HWND hWnd) {
   std::lock_guard<std::mutex> lock(s_WidgetMutex);
   for (auto w : widgets) {
@@ -900,10 +858,8 @@ Widget *Widget::GetWidgetFromInstanceId(uint64_t instanceId) {
   return nullptr;
 }
 
-/*
-** Window procedure for handling widget window messages.
-** Handles painting, mouse input, dragging, and z-order management.
-*/
+// Window procedure for handling widget window messages.
+// Handles painting, mouse input, dragging, and z-order management.
 LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
                                  LPARAM lParam) {
   if (message == WM_CREATE) {
@@ -1789,10 +1745,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
 // Content Management Methods
 // ============================================================================
 
-/*
-** Add an image content item to the widget.
-** The image will be loaded and cached for rendering.
-*/
+// Add an image content item to the widget.
+// The image will be loaded and cached for rendering.
 void Widget::AddImage(const PropertyParser::ImageOptions &options) {
   if (options.id.empty()) {
     Logging::Log(LogLevel::Error,
@@ -1809,7 +1763,7 @@ void Widget::AddImage(const PropertyParser::ImageOptions &options) {
                        options.height, options.path);
 
   PropertyParser::ApplyImageOptions(
-      element, options); // Changed from ApplyElementOptions and moved
+      element, options);
 
   element->SetPreserveAspectRatio(options.preserveAspectRatio);
   element->SetImageAlpha(options.imageAlpha);
@@ -1837,9 +1791,7 @@ void Widget::AddImage(const PropertyParser::ImageOptions &options) {
   Redraw();
 }
 
-/*
-** Add a button content item to the widget.
-*/
+// Add a button content item to the widget.
 void Widget::AddButton(const PropertyParser::ButtonOptions &options) {
   if (options.id.empty()) {
     Logging::Log(LogLevel::Error,
@@ -1866,9 +1818,7 @@ void Widget::AddButton(const PropertyParser::ButtonOptions &options) {
   Redraw();
 }
 
-/*
-** Add a bitmap content item to the widget.
-*/
+// Add a bitmap content item to the widget.
 void Widget::AddBitmap(const PropertyParser::BitmapOptions &options) {
   if (options.id.empty()) {
     Logging::Log(LogLevel::Error,
@@ -1894,10 +1844,8 @@ void Widget::AddBitmap(const PropertyParser::BitmapOptions &options) {
   Redraw();
 }
 
-/*
-** Add a rotator content item to the widget.
-** The rotator rotates an image based on the measure value.
-*/
+// Add a rotator content item to the widget.
+// The rotator rotates an image based on the measure value.
 void Widget::AddRotator(const PropertyParser::RotatorOptions &options) {
   if (options.id.empty()) {
     Logging::Log(LogLevel::Error,
@@ -1922,10 +1870,8 @@ void Widget::AddRotator(const PropertyParser::RotatorOptions &options) {
   Redraw();
 }
 
-/*
-** Add a text content item to the widget.
-** Text will be rendered with the specified font and styling.
-*/
+// Add a text content item to the widget.
+// Text will be rendered with the specified font and styling.
 void Widget::AddText(const PropertyParser::TextOptions &options) {
   if (options.id.empty()) {
     Logging::Log(LogLevel::Error,
@@ -1950,12 +1896,7 @@ void Widget::AddText(const PropertyParser::TextOptions &options) {
   if (m_hWnd)
     element->SetOwnerHWND(m_hWnd);
 
-  // Logging::Log(LogLevel::Debug, L"Widget::AddText: Created TextElement
-  // id='%s', text='%s', x=%d, y=%d", element->GetId().c_str(),
-  // element->GetText().c_str(), element->GetX(), element->GetY());
-
-  PropertyParser::ApplyTextOptions(element,
-                                   options); // Changed from ApplyElementOptions
+  PropertyParser::ApplyTextOptions(element, options);
 
   m_Elements.push_back(std::unique_ptr<Element>(element));
   m_TrackedElements.insert(element);
@@ -1966,9 +1907,7 @@ void Widget::AddText(const PropertyParser::TextOptions &options) {
   Redraw();
 }
 
-/*
-** Add a bar content item to the widget.
-*/
+// Add a bar content item to the widget.
 void Widget::AddBar(const PropertyParser::BarOptions &options) {
   if (options.id.empty()) {
     Logging::Log(LogLevel::Error,
@@ -1984,8 +1923,7 @@ void Widget::AddBar(const PropertyParser::BarOptions &options) {
       new BarElement(options.id, options.x, options.y, options.width,
                      options.height, options.value, options.orientation);
 
-  PropertyParser::ApplyBarOptions(element,
-                                  options); // Changed from ApplyElementOptions
+  PropertyParser::ApplyBarOptions(element, options);
 
   m_Elements.push_back(std::unique_ptr<Element>(element));
   m_TrackedElements.insert(element);
@@ -1996,9 +1934,7 @@ void Widget::AddBar(const PropertyParser::BarOptions &options) {
   Redraw();
 }
 
-/*
-** Add a line graph content item to the widget.
-*/
+// Add a line graph content item to the widget.
 void Widget::AddLine(const PropertyParser::LineOptions &options) {
   if (options.id.empty()) {
     Logging::Log(LogLevel::Error,
@@ -2023,9 +1959,7 @@ void Widget::AddLine(const PropertyParser::LineOptions &options) {
   Redraw();
 }
 
-/*
-** Add a histogram content item to the widget.
-*/
+// Add a histogram content item to the widget.
 void Widget::AddHistogram(const PropertyParser::HistogramOptions &options) {
   if (options.id.empty()) {
     Logging::Log(LogLevel::Error,
@@ -2050,9 +1984,7 @@ void Widget::AddHistogram(const PropertyParser::HistogramOptions &options) {
   Redraw();
 }
 
-/*
-** Add a round line content item to the widget.
-*/
+// Add a round line content item to the widget.
 void Widget::AddRoundLine(const PropertyParser::RoundLineOptions &options) {
   if (options.id.empty()) {
     Logging::Log(LogLevel::Error,
@@ -2079,9 +2011,7 @@ void Widget::AddRoundLine(const PropertyParser::RoundLineOptions &options) {
   Redraw();
 }
 
-/*
-** Add shapes item to the widget.
-*/
+// Add shapes item to the widget.
 void Widget::AddShape(const PropertyParser::ShapeOptions &options) {
   if (options.id.empty()) {
     Logging::Log(LogLevel::Error,
@@ -2134,9 +2064,7 @@ void Widget::AddShape(const PropertyParser::ShapeOptions &options) {
   Redraw();
 }
 
-/*
-** Add an area graph content item to the widget.
-*/
+// Add an area graph content item to the widget.
 void Widget::AddAreaGraph(const PropertyParser::AreaGraphOptions &options) {
   if (options.id.empty()) {
     Logging::Log(LogLevel::Error,
@@ -2748,9 +2676,7 @@ bool Widget::HitTestContainerScrollbar(int x, int y,
   return false;
 }
 
-/*
-** Update properties of an existing element.
-*/
+// Update properties of an existing element.
 void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx,
                                             JSValueConst options) {
   if (!element || !ctx || !JS_IsObject(options))
@@ -2831,11 +2757,6 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx,
       nextCfg.paddingTop = parsed.paddingTop;
       nextCfg.paddingRight = parsed.paddingRight;
       nextCfg.paddingBottom = parsed.paddingBottom;
-      // Logging::Log(LogLevel::Debug, L"[PADDING] SetLayoutConfig for '%s':
-      // L=%d, T=%d, R=%d, B=%d, flexDirection='%s'",
-      //     element->GetId().c_str(), nextCfg.paddingLeft, nextCfg.paddingTop,
-      //     nextCfg.paddingRight, nextCfg.paddingBottom,
-      //     nextCfg.flexDirection.c_str());
       SetLayoutConfig(element->GetId(), nextCfg);
       UpdateContainerForElement(element, parsed.shape.containerId);
     }
@@ -2990,10 +2911,8 @@ void Widget::RemoveElementsByGroup(const std::wstring &group) {
   }
 }
 
-/*
-** Remove one or more content items by ID.
-** If id is empty, clears all content.
-*/
+// Remove one or more content items by ID.
+// If id is empty, clears all content.
 bool Widget::RemoveElements(const std::wstring &id) {
   if (id.empty()) {
     for (auto &uptr : m_Elements) {
@@ -3062,9 +2981,7 @@ bool Widget::RemoveElements(const std::wstring &id) {
   return changed;
 }
 
-/*
-** Remove multiple elements by their IDs.
-*/
+// Remove multiple elements by their IDs.
 void Widget::RemoveElements(const std::vector<std::wstring> &ids) {
   bool changed = false;
   for (const auto &id : ids) {
@@ -3099,21 +3016,15 @@ void Widget::RemoveElements(const std::vector<std::wstring> &ids) {
     Redraw();
 }
 
-/*
-** Set the entire custom context menu.
-*/
+// Set the entire custom context menu.
 void Widget::SetContextMenu(const std::vector<MenuItem> &menu) {
   m_ContextMenu = menu;
 }
 
-/*
-** Clear all custom context menu items.
-*/
+// Clear all custom context menu items.
 void Widget::ClearContextMenu() { m_ContextMenu.clear(); }
 
-/*
-** Redraw the widget window to reflect content changes.
-*/
+// Redraw the widget window to reflect content changes.
 void Widget::Redraw() {
   if (m_IsBatchUpdating <= 0) {
     UpdateLayeredWindowContent();
@@ -3179,10 +3090,8 @@ void Widget::ReleaseRenderSurface() {
   m_RenderBitmapH = 0;
 }
 
-/*
-** Update the layered window content using UpdateLayeredWindow.
-** Draws all content to a memory DC and updates the window.
-*/
+// Update the layered window content using UpdateLayeredWindow.
+// Draws all content to a memory DC and updates the window.
 void Widget::UpdateLayeredWindowContent() {
   if (!m_hWnd)
     return;
@@ -3209,12 +3118,6 @@ void Widget::UpdateLayeredWindowContent() {
       GfxRect bounds = element->GetBounds();
       maxX = (std::max)(maxX, bounds.X + bounds.Width);
       maxY = (std::max)(maxY, bounds.Y + bounds.Height);
-
-      //     Logging::Log(LogLevel::Debug, L"Widget::UpdateSize: Element '%s'
-      //     contributing to bounds: [X:%d, Y:%d, W:%d, H:%d] -> TargetMax: [%d,
-      //     %d]",
-      //         element->GetId().c_str(), bounds.X, bounds.Y, bounds.Width,
-      //         bounds.Height, maxX, maxY);
     }
 
     if (shouldCalcW) {
@@ -3236,10 +3139,6 @@ void Widget::UpdateLayeredWindowContent() {
 
     // If size changed, update window and options
     if (calcW != m_Options.width || calcH != m_Options.height) {
-      // Logging::Log(LogLevel::Info, L"Widget::UpdateSize: Resizing window '%s'
-      // from %dx%d to %dx%d",
-      //     m_Options.id.c_str(), m_Options.width, m_Options.height, calcW,
-      //     calcH);
       m_Options.width = calcW;
       m_Options.height = calcH;
       SetWindowPos(m_hWnd, NULL, 0, 0, calcW, calcH,
@@ -3303,9 +3202,6 @@ void Widget::UpdateLayeredWindowContent() {
       bool useHW = Settings::GetGlobalBool("useHardwareAcceleration", false);
       D2D1_RENDER_TARGET_TYPE rtType = useHW ? D2D1_RENDER_TARGET_TYPE_DEFAULT
                                              : D2D1_RENDER_TARGET_TYPE_SOFTWARE;
-
-      // Logging::Log(LogLevel::Info, L"Creating Direct2D Context: Hardware
-      // Acceleration = %s", useHW ? L"ON" : L"OFF");
 
       D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
           rtType,
@@ -3502,10 +3398,8 @@ void Widget::UpdateLayeredWindowContent() {
   ReleaseDC(NULL, hdcScreen);
 }
 
-/*
-** Find a content element by its ID.
-** Returns pointer to the element or nullptr if not found.
-*/
+// Find a content element by its ID.
+// Returns pointer to the element or nullptr if not found.
 Element *Widget::FindElementById(const std::wstring &id) {
   if (id.empty())
     return nullptr;
@@ -3531,12 +3425,10 @@ void Widget::UntrackButton(Element *el) {
     m_Buttons.erase(it);
 }
 
-/*
-** Rebuild the spatial grid used for O(1) hit-testing.
-** Each visible, non-contained element is inserted into every grid cell
-** its bounding box overlaps, so a single cell lookup under the cursor
-** yields only the elements that could possibly contain that point.
-*/
+// Rebuild the spatial grid used for O(1) hit-testing.
+// Each visible, non-contained element is inserted into every grid cell
+// its bounding box overlaps, so a single cell lookup under the cursor
+// yields only the elements that could possibly contain that point.
 void Widget::RebuildSpatialGrid() {
   m_SpatialGrid.clear();
   // Iterate back-to-front so that the cell vectors preserve Z-order
@@ -3566,10 +3458,8 @@ bool Widget::IsTrackedElement(Element *el) const {
   return m_TrackedElements.count(el) > 0;
 }
 
-/*
-** Stamp a 1-alpha pixel in interactive element bounds so the layered
-** window keeps those areas mouse-reachable even when visually transparent.
-*/
+// Stamp a 1-alpha pixel in interactive element bounds so the layered
+// window keeps those areas mouse-reachable even when visually transparent.
 void Widget::StampInteractiveBounds(Element *element, int offsetX, int offsetY,
                                     BYTE *pvBits, int surfW, int surfH) {
   if (!element || !element->IsVisible())
@@ -3608,10 +3498,8 @@ void Widget::StampInteractiveBounds(Element *element, int offsetX, int offsetY,
   }
 }
 
-/*
-** Handle mouse messages and dispatch to elements.
-** Returns true if the message was handled by an element, false otherwise.
-*/
+// Handle mouse messages and dispatch to elements.
+// Returns true if the message was handled by an element, false otherwise.
 bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
   bool handled = false;
   int x = GET_X_LPARAM(lParam);

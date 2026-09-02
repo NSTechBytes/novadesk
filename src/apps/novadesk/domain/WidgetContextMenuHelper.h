@@ -16,10 +16,34 @@
 struct WidgetOptions;
 class Widget;
 
+/**
+ * @brief Handles widget context menu creation and command dispatch.
+ *
+ * @note Static utility class for right-click context menu management.
+ */
 namespace WidgetContextMenuHelper {
+
+/**
+ * @brief Displays the widget context menu.
+ *
+ * @param hWnd The widget window handle.
+ * @param customMenu Custom menu items from the widget.
+ * @param showDefaultItems Whether to show default menu items.
+ * @param windowZPos Current window Z-order position.
+ * @param options Widget configuration options.
+ *
+ * @return The selected menu command ID.
+ */
 int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
                     bool showDefaultItems, ZPOSITION windowZPos,
                     const WidgetOptions &options);
 
+/**
+ * @brief Handles a context menu command selection.
+ *
+ * @param widget The widget instance.
+ * @param cmd The selected menu command ID.
+ */
 void HandleContextCommand(Widget &widget, int cmd);
+
 } // namespace WidgetContextMenuHelper

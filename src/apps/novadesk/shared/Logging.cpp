@@ -16,6 +16,10 @@
 #include <string>
 #include "PathUtils.h"
 
+// ============================================================================
+// Console Helper Functions
+// ============================================================================
+
 static WORD GetConsoleColorForLevel(LogLevel level) {
   switch (level) {
   case LogLevel::Debug:
@@ -31,11 +35,19 @@ static WORD GetConsoleColorForLevel(LogLevel level) {
   }
 }
 
+// ============================================================================
+// Static Member Initialization
+// ============================================================================
+
 // Static member initialization
 bool Logging::s_ConsoleEnabled = true;
 bool Logging::s_FileEnabled = false;
 std::wstring Logging::s_LogFilePath = L"";
 LogLevel Logging::s_MinLevel = LogLevel::Info;
+
+// ============================================================================
+// Logging Implementation
+// ============================================================================
 
 /*
 ** Log a message to the debug output and/or file.

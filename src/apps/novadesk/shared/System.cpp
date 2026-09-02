@@ -1,3 +1,10 @@
+/* Copyright (C) 2026 OfficialNovadesk
+ *
+ * This Source Code Form is subject to the terms of the GNU General Public
+ * License; either version 2 of the License, or (at your option) any later
+ * version. If a copy of the GPL was not distributed with this file, You can
+ * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
+
 #include "System.h"
 
 #include <cstring>
@@ -64,37 +71,49 @@ static const IID IID_IAudioMeterInformation_Local = {
 #pragma comment(lib, "Pdh.lib")
 
 namespace novadesk::shared::system {
-using json = nlohmann::json;
 
-// *********************************************
-//  JSON
+// ============================================================================
+// JSON Utilities
+// ============================================================================
+
+using json = nlohmann::json;
 
 struct Span {
   size_t start = 0;
   size_t end = 0;
 };
 
-// *********************************************
-//  CPU Metrics
+// ============================================================================
+// CPU Metrics - Globals
+// ============================================================================
 
+// NOTE: CPU usage calculation tracks system-wide idle/kernel/user time.
+// Static variables cached between calls to compute deltas (percent change).
 std::mutex g_cpuMutex;
 ULONGLONG g_lastIdleTime = 0;
 ULONGLONG g_lastKernelTime = 0;
 ULONGLONG g_lastUserTime = 0;
 bool g_cpuInitialized = false;
 
-// *********************************************
-//  Network Metrics
+// ============================================================================
+// Network Metrics - Globals
+// ============================================================================
 
+// NOTE: Network IO tracking maintains last sampled bytes in/out to compute
+// deltas on subsequent calls. Uses steady_clock to avoid time drift artifacts.
 std::mutex g_networkMutex;
 ULONGLONG g_lastTotalIn = 0;
 ULONGLONG g_lastTotalOut = 0;
 std::chrono::steady_clock::time_point g_lastNetworkSample =
     std::chrono::steady_clock::time_point::min();
 
-// *********************************************
-//  Disk IO Metrics (PDH)
+// ============================================================================
+// Disk IO Metrics - Globals (Performance Data Helper)
+// ============================================================================
 
+// NOTE: PDH provides high-precision disk I/O counters via Windows Performance
+// Data Helper API. Query handle and counters must persist across calls.
+// SAFETY: g_diskIoInitStarted prevents concurrent initialization attempts.
 std::mutex g_diskIoMutex;
 PDH_HQUERY g_diskIoQuery = nullptr;
 PDH_HCOUNTER g_diskReadCounter = nullptr;
@@ -103,8 +122,9 @@ bool g_diskIoPrimed = false;
 std::atomic<bool> g_diskIoInitStarted{false};
 std::atomic<bool> g_diskIoReady{false};
 
-// *********************************************
-//  Power
+// ============================================================================
+// Power State Structures
+// ============================================================================
 
 typedef struct _PROCESSOR_POWER_INFORMATION_LOCAL {
   ULONG Number;
@@ -115,14 +135,15 @@ typedef struct _PROCESSOR_POWER_INFORMATION_LOCAL {
   ULONG CurrentIdleState;
 } PROCESSOR_POWER_INFORMATION_LOCAL;
 
-// *********************************************
-//  COM Utilities
+// ============================================================================
+// COM Utilities - RAII Helper
+// ============================================================================
 
 struct ComInit {
   HRESULT hr = E_FAIL;
   ComInit() { hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED); }
   ~ComInit() {
-    // Only call CoUninitialize when we genuinely initialized COM (S_OK).
+    // SAFETY: Only call CoUninitialize when we genuinely initialized COM (S_OK).
     // RPC_E_CHANGED_MODE means COM was already initialized in a different
     // apartment model — calling CoUninitialize there corrupts COM state.
     if (hr == S_OK)
@@ -131,10 +152,12 @@ struct ComInit {
   bool Ok() const { return SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE; }
 };
 
-// *****************************************************************************
-// Audio
-// *****************************************************************************
+// ============================================================================
+// Audio Operations
+// ============================================================================
 
+// NOTE: Uses Windows Core Audio API (WASAPI) to get default multimedia endpoint
+// and set system master volume. ComInit RAII guard ensures COM state cleanup.
 static IAudioEndpointVolume *GetVolumeInterface() {
   ComInit com;
   if (!com.Ok())
@@ -170,6 +193,7 @@ static IAudioEndpointVolume *GetVolumeInterface() {
 }
 
 bool AudioSetVolume(int volumePercent) {
+  // NOTE: Clamp percentage to [0, 100] range. WASAPI scalar expects [0.0, 1.0].
   if (volumePercent < 0)
     volumePercent = 0;
   if (volumePercent > 100)
@@ -196,11 +220,15 @@ int AudioGetVolume() {
   volume->GetMasterVolumeLevelScalar(&scalar);
   volume->Release();
 
+  // NOTE: Convert [0.0, 1.0] scalar back to [0, 100] percent with rounding.
+  // Clamp result to handle float precision edge cases.
   const int result = static_cast<int>(scalar * 100.0f + 0.5f);
   return (result < 0) ? 0 : ((result > 100) ? 100 : result);
 }
 
 bool AudioPlaySound(const std::wstring &path, bool loop) {
+  // NOTE: Use SND_ASYNC for non-blocking playback. SND_NODEFAULT prevents
+  // fallback to system default sound if file not found (fail silently).
   DWORD flags = SND_FILENAME | SND_ASYNC | SND_NODEFAULT;
   if (loop) {
     flags |= SND_LOOP;
@@ -210,16 +238,21 @@ bool AudioPlaySound(const std::wstring &path, bool loop) {
 
 void AudioStopSound() { PlaySoundW(nullptr, nullptr, 0); }
 
-// *****************************************************************************
-// Clipboard
-// *****************************************************************************
+// ============================================================================
+// Clipboard Operations
+// ============================================================================
 
+// NOTE: Clipboard access is serialized via OpenClipboard/CloseClipboard.
+// GlobalAlloc allocates memory that becomes clipboard property (GMEM_MOVEABLE).
+// SAFETY: Always pair OpenClipboard with CloseClipboard, even on error paths.
 bool ClipboardSetText(const std::wstring &text) {
   if (!OpenClipboard(nullptr)) {
     return false;
   }
   EmptyClipboard();
 
+  // NOTE: Allocate +1 for null terminator. GlobalAlloc manages the buffer;
+  // clipboard takes ownership after SetClipboardData().
   const size_t bytes = (text.size() + 1) * sizeof(wchar_t);
   HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, bytes);
   if (!hMem) {
@@ -258,6 +291,8 @@ bool ClipboardGetText(std::wstring &outText) {
     return false;
   }
 
+  // NOTE: GetClipboardData returns pointer to clipboard's internal buffer.
+  // Must lock before access and unlock before close (no ownership transfer).
   const wchar_t *text = static_cast<const wchar_t *>(GlobalLock(hData));
   if (!text) {
     CloseClipboard();
@@ -270,10 +305,12 @@ bool ClipboardGetText(std::wstring &outText) {
   return true;
 }
 
-// *****************************************************************************
-// CPU Metrics
-// *****************************************************************************
+// ============================================================================
+// CPU Metrics Implementation
+// ============================================================================
 
+// NOTE: CPU usage is computed as (total - idle) / total percent. Requires
+// baseline sample on first call (returns 0%). Subsequent calls compute delta.
 bool GetCpuStats(CpuStats &outStats) {
   std::lock_guard<std::mutex> lock(g_cpuMutex);
   FILETIME idleFt{}, kernelFt{}, userFt{};
@@ -290,6 +327,7 @@ bool GetCpuStats(CpuStats &outStats) {
   user.HighPart = userFt.dwHighDateTime;
 
   if (!g_cpuInitialized) {
+    // NOTE: Prime the baseline on first call. Return 0% as no delta available yet.
     g_lastIdleTime = idle.QuadPart;
     g_lastKernelTime = kernel.QuadPart;
     g_lastUserTime = user.QuadPart;
@@ -298,6 +336,8 @@ bool GetCpuStats(CpuStats &outStats) {
     return true;
   }
 
+  // NOTE: Compute deltas. Kernel time includes system calls; user time is
+  // application execution. Idle time subtracts from total to get active time.
   const ULONGLONG idleDelta = idle.QuadPart - g_lastIdleTime;
   const ULONGLONG kernelDelta = kernel.QuadPart - g_lastKernelTime;
   const ULONGLONG userDelta = user.QuadPart - g_lastUserTime;
@@ -322,13 +362,16 @@ bool GetCpuStats(CpuStats &outStats) {
   return true;
 }
 
-// *****************************************************************************
-// Disk Metrics
-// *****************************************************************************
+// ============================================================================
+// Disk Metrics Implementation
+// ============================================================================
 
+// NOTE: GetDiskFreeSpaceEx reports available space to caller (accounting for
+// quotas/permissions) vs. total free space. Available is the relevant metric.
 bool GetDiskStats(const std::wstring &path, DiskStats &outStats) {
   std::wstring target = path;
   if (target.empty()) {
+    // NOTE: If no path specified, use current drive root. Fallback to C:\ if query fails.
     std::error_code ec;
     target = std::filesystem::current_path(ec).root_path().wstring();
     if (target.empty()) {
@@ -348,6 +391,7 @@ bool GetDiskStats(const std::wstring &path, DiskStats &outStats) {
   outStats.available = static_cast<double>(freeBytesAvailable.QuadPart);
   outStats.used =
       static_cast<double>(totalBytes.QuadPart - totalFreeBytes.QuadPart);
+  // NOTE: Round percent calculation for consistency with system tools.
   outStats.percent =
       (outStats.total > 0.0)
           ? static_cast<int>((outStats.used * 100.0) / outStats.total + 0.5)

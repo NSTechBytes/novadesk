@@ -1,9 +1,12 @@
-// Copyright (c) 2013 GitHub, Inc. All rights reserved.
-// Use of this source code is governed by MIT license that can be found in the
-// LICENSE file.
-//
-// This file is modified from Rescle written by yoshio.okumura@gmail.com:
-// http://code.google.com/p/rescle/
+/* Copyright (C) 2026 OfficialNovadesk
+ *
+ * This Source Code Form is subject to the terms of the GNU General Public
+ * License; either version 2 of the License, or (at your option) any later
+ * version. If a copy of the GPL was not distributed with this file, You can
+ * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>.
+ *
+ * Based on Rescle (http://code.google.com/p/rescle/) by yoshio.okumura@gmail.com
+ * Modified code (c) 2013 GitHub, Inc. (MIT licensed) */
 
 #include "rescle.h"
 

@@ -8,18 +8,30 @@
 #pragma once
 
 namespace BoxBorder {
-enum class Position { Outside, Center, Inside };
 
-enum class Style {
-  None,
-  Hidden,
-  Solid,
-  Inset,
-  Outset,
-  Groove,
-  Ridge,
-  Dotted,
-  Dashed,
-  Double
+/**
+ * @brief Border position relative to the element's edge.
+ */
+enum class Position {
+  Outside, ///< Border is drawn outside the element bounds.
+  Center,  ///< Border is centered on the element edge.
+  Inside   ///< Border is drawn inside the element bounds.
 };
+
+/**
+ * @brief CSS-style border styles.
+ */
+enum class Style {
+  None,    ///< No border rendered.
+  Hidden,  ///< Border hidden but still takes space.
+  Solid,   ///< Solid line border.
+  Inset,   ///< Inset 3D border (like CSS inset).
+  Outset,  ///< Outset 3D border (like CSS outset).
+  Groove,  ///< Groove 3D border (like CSS groove).
+  Ridge,   ///< Ridge 3D border (like CSS ridge).
+  Dotted,  ///< Dotted line border.
+  Dashed,  ///< Dashed line border.
+  Double   ///< Double line border.
+};
+
 } // namespace BoxBorder

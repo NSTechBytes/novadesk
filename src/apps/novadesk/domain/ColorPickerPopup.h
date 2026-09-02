@@ -8,17 +8,43 @@
 #pragma once
 #include <windows.h>
 #include <vector>
+
 class Widget;
 class ColorPickerElement;
+
+/**
+ * @brief Popup color picker dialog with HSV/RGB editing and eyedropper.
+ *
+ * @note Renders a custom Win32 popup with saturation/value gradient, hue strip,
+ *       RGB/HEX input fields, and an eyedropper tool with magnifier preview.
+ */
 class ColorPickerPopup {
 public:
+  /**
+   * @brief Constructs a color picker popup.
+   *
+   * @param widget The owning widget.
+   * @param picker The color picker element that opened this popup.
+   */
   ColorPickerPopup(Widget *widget, ColorPickerElement *picker);
   ~ColorPickerPopup();
+
+  /// Shows the color picker popup.
   void Show();
+
+  /// Closes the color picker popup.
   void Close();
+
+  /// @return True if the popup is currently open.
   bool IsOpen() const { return m_hWnd != nullptr; }
+
+  /// @return True if the eyedropper tool is active.
   bool IsEyedropperActive() const { return m_eye; }
+
+  /// Activates the eyedropper tool.
   void StartEyedropper();
+
+  /// @return The associated color picker element.
   ColorPickerElement *GetPickerElement() const { return m_Picker; }
 
 private:
@@ -43,33 +69,51 @@ private:
   void InstallOutsideClickHook();
   void RemoveOutsideClickHook();
   COLORREF HSV() const;
-  Widget *m_Widget;
-  ColorPickerElement *m_Picker;
-  HWND m_hWnd = nullptr;
-  HWND m_R = nullptr, m_G = nullptr, m_B = nullptr, m_Hex = nullptr;
-  HWND m_Magnifier = nullptr;
+
+  Widget *m_Widget;                ///< Owning widget.
+  ColorPickerElement *m_Picker;    ///< Associated color picker element.
+  HWND m_hWnd = nullptr;          ///< Popup window handle.
+
+  // Input fields
+  HWND m_R = nullptr;             ///< Red input field.
+  HWND m_G = nullptr;             ///< Green input field.
+  HWND m_B = nullptr;             ///< Blue input field.
+  HWND m_Hex = nullptr;           ///< Hex color input field.
+
+  // Magnifier
+  HWND m_Magnifier = nullptr;     ///< Eyedropper magnifier window.
   HDC m_MagnifierFrameDc = nullptr;
   HBITMAP m_MagnifierFrameBitmap = nullptr;
   HGDIOBJ m_MagnifierFrameOldBitmap = nullptr;
-  HFONT m_Font = nullptr;
-  HBRUSH m_InputBgBrush = nullptr;
+
+  HFONT m_Font = nullptr;         ///< UI font.
+  HBRUSH m_InputBgBrush = nullptr; ///< Input field background brush.
   COLORREF m_CachedInputBgColor = CLR_INVALID;
-  float m_H = 0, m_S = 0, m_V = 0;
-  bool m_dragSV = false, m_dragHue = false, m_eye = false,
-       m_eyeAwaitingFirstRelease = false, m_sync = false;
-  float m_SaturationValueHue = -1.0f;
-  std::vector<DWORD> m_SaturationValuePixels;
-  bool m_WidgetNeedsRedraw = false;
-  bool m_HexMode = false;
-  int m_EditingControl = 0;
-  bool m_FormatHover = false;
+
+  // HSV state
+  float m_H = 0, m_S = 0, m_V = 0; ///< Current HSV values.
+
+  // Drag state
+  bool m_dragSV = false;         ///< Dragging saturation/value area.
+  bool m_dragHue = false;        ///< Dragging hue strip.
+  bool m_eye = false;            ///< Eyedropper active.
+  bool m_eyeAwaitingFirstRelease = false;
+  bool m_sync = false;           ///< Suppresses recursive sync.
+
+  float m_SaturationValueHue = -1.0f; ///< Cached hue for SV bitmap.
+  std::vector<DWORD> m_SaturationValuePixels; ///< Cached SV gradient pixels.
+
+  bool m_WidgetNeedsRedraw = false; ///< Pending widget redraw flag.
+  bool m_HexMode = false;          ///< HEX input mode (vs RGBA).
+  int m_EditingControl = 0;        ///< Currently focused input field.
+  bool m_FormatHover = false;      ///< Hovering over format toggle.
+
   bool m_IgnoreEyedropperFocusLoss = false;
-  POINT m_LastSampledPos = {-1, -1};
+  POINT m_LastSampledPos = {-1, -1}; ///< Last eyedropper sample position.
   COLORREF m_LastSampledColor = CLR_INVALID;
-  COLORREF m_OriginalColor = RGB(0, 0, 0);
-  bool m_Canceled = false;
-  // Keep the state that existed when this popup opened.  GetShowDesktop()
-  // is global state and can remain true briefly after the desktop restores;
-  // the popup must only react to a new Show Desktop transition.
+  COLORREF m_OriginalColor = RGB(0, 0, 0); ///< Color when popup opened.
+  bool m_Canceled = false;         ///< True if user canceled selection.
+
+  /// Show Desktop state when popup opened (to detect transitions).
   bool m_ShowDesktopWasActive = false;
 };

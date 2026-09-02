@@ -27,10 +27,27 @@ class ElementLayoutBox;
 class InputBoxElement;
 class ColorPickerElement;
 
+/**
+ * @brief Parses JavaScript objects into C++ option structs for element creation.
+ *
+ * @note Provides Parse, Apply, and PreFill functions for each element type.
+ *       Parse reads JS properties, Apply sets element state, PreFill reads
+ *       current element state into options for incremental updates.
+ */
 namespace PropertyParser {
+
+/// Parses a CSS-style gradient string (e.g., "linear-gradient(...)").
 bool ParseGradientString(const std::wstring &str, GradientInfo &out);
+
+/// Converts a cap style string to D2D1_CAP_STYLE.
 D2D1_CAP_STYLE GetCapStyle(const std::wstring &str);
+
+/// Converts a line join string to D2D1_LINE_JOIN.
 D2D1_LINE_JOIN GetLineJoin(const std::wstring &str);
+
+// ============================================================================
+// Parse Functions (JS Object -> Options Struct)
+// ============================================================================
 
 void ParseElementOptions(JSContext *ctx, JSValueConst obj,
                          ElementOptions &options,
@@ -77,6 +94,10 @@ void ParseColorPickerOptions(JSContext *ctx, JSValueConst obj,
                              ColorPickerOptions &options,
                              const std::wstring &baseDir = L"");
 
+// ============================================================================
+// Apply Functions (Options Struct -> Element)
+// ============================================================================
+
 void ApplyElementOptions(Element *element, const ElementOptions &options);
 void ApplyImageOptions(ImageElement *element, const ImageOptions &options);
 void ApplyTextOptions(TextElement *element, const TextOptions &options);
@@ -99,6 +120,10 @@ void ApplyInputBoxOptions(InputBoxElement *element,
                           const InputBoxOptions &options);
 void ApplyColorPickerOptions(ColorPickerElement *element,
                              const ColorPickerOptions &options);
+
+// ============================================================================
+// PreFill Functions (Element -> Options Struct for incremental updates)
+// ============================================================================
 
 void PreFillElementOptions(ElementOptions &options, Element *element);
 void PreFillImageOptions(ImageOptions &options, ImageElement *element);
@@ -126,6 +151,10 @@ void PreFillInputBoxOptions(InputBoxOptions &options, InputBoxElement *element);
 void PreFillColorPickerOptions(ColorPickerOptions &options,
                                ColorPickerElement *element);
 
+// ============================================================================
+// General Image Options
+// ============================================================================
+
 void ParseGeneralImageOptions(JSContext *ctx, JSValueConst obj,
                               GeneralImageOptions &options,
                               const std::wstring &baseDir = L"");
@@ -133,11 +162,20 @@ void ApplyGeneralImageOptions(GeneralImage *image,
                               const GeneralImageOptions &options);
 void PreFillGeneralImageOptions(GeneralImageOptions &options,
                                 GeneralImage *image);
+
 } // namespace PropertyParser
 
+/**
+ * @brief Widget window option parsing for QuickJS.
+ */
 namespace novadesk::scripting::quickjs::parser {
+
+/// Parses widget window options from a JavaScript object.
 void ParseWidgetWindowOptions(JSContext *ctx, JSValueConst options,
                               WidgetWindowOptions &out);
+
+/// Parses widget window size from a JavaScript object.
 void ParseWidgetWindowSize(JSContext *ctx, JSValueConst options, int &width,
                            int &height);
+
 } // namespace novadesk::scripting::quickjs::parser

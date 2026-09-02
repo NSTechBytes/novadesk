@@ -10,8 +10,23 @@
 
 #include "ShapeElement.h"
 
+/**
+ * @brief Renders an arc shape defined by radii and start/end angles.
+ *
+ * @note Supports clockwise and counter-clockwise arc directions with
+ *       configurable elliptical radii.
+ */
 class ArcShape : public ShapeElement {
 public:
+  /**
+   * @brief Constructs an arc shape.
+   *
+   * @param id Unique element identifier.
+   * @param x X-coordinate.
+   * @param y Y-coordinate.
+   * @param width Bounding box width.
+   * @param height Bounding box height.
+   */
   ArcShape(const std::wstring &id, int x, int y, int width, int height);
   virtual ~ArcShape();
 
@@ -23,16 +38,20 @@ public:
       ID2D1Factory *factory,
       Microsoft::WRL::ComPtr<ID2D1Geometry> &geometry) const override;
 
+  /// Sets the elliptical radii for the arc.
   virtual void SetRadii(float rx, float ry) override {
     m_RadiusX = rx;
     m_RadiusY = ry;
   }
+
+  /// Configures the arc angle parameters.
   virtual void SetArcParams(float startAngle, float endAngle,
                             bool clockwise) override {
     m_StartAngle = startAngle;
     m_EndAngle = endAngle;
     m_Clockwise = clockwise;
   }
+
   virtual float GetRadiusX() const override { return m_RadiusX; }
   virtual float GetRadiusY() const override { return m_RadiusY; }
   virtual float GetStartAngle() const override { return m_StartAngle; }
@@ -40,11 +59,11 @@ public:
   virtual bool IsClockwise() const override { return m_Clockwise; }
 
 private:
-  float m_RadiusX = 0.0f;
-  float m_RadiusY = 0.0f;
-  float m_StartAngle = 0.0f;
-  float m_EndAngle = 90.0f;
-  bool m_Clockwise = true;
+  float m_RadiusX = 0.0f;   ///< Horizontal radius of the ellipse.
+  float m_RadiusY = 0.0f;   ///< Vertical radius of the ellipse.
+  float m_StartAngle = 0.0f; ///< Arc start angle in degrees.
+  float m_EndAngle = 90.0f;  ///< Arc end angle in degrees.
+  bool m_Clockwise = true;   ///< Arc sweep direction.
 
   D2D1_POINT_2F CheckPoint(float angle, float rx, float ry, float cx,
                            float cy) const;

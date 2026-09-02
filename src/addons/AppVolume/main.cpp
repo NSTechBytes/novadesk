@@ -23,7 +23,15 @@
 #include <string>
 #include <algorithm>
 
+// ============================================================================
+// Globals
+// ============================================================================
+
 const NovadeskHostAPI *g_Host = nullptr;
+
+// ============================================================================
+// Internal COM Interface Definition (IAudioMeterInformation)
+// ============================================================================
 
 #ifndef __IAudioMeterInformation_INTERFACE_DEFINED__
 #define __IAudioMeterInformation_INTERFACE_DEFINED__
@@ -62,14 +70,17 @@ struct ComInit {
   HRESULT hr = E_FAIL;
   ComInit() { hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED); }
   ~ComInit() {
-    // Only call CoUninitialize when we genuinely initialized COM (S_OK).
-    // RPC_E_CHANGED_MODE means COM was already initialized in a different
-    // apartment model — calling CoUninitialize there corrupts COM state.
-    if (hr == S_OK)
+  // NOTE: RPC_E_CHANGED_MODE means COM was already initialized in a different
+  // apartment model — calling CoUninitialize there corrupts COM state.
+  if (hr == S_OK)
       CoUninitialize();
   }
   bool Ok() const { return SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE; }
 };
+
+// ============================================================================
+// Helper Utilities
+// ============================================================================
 
 std::wstring ToLowerCopy(const std::wstring &s) {
   std::wstring out = s;
@@ -87,6 +98,7 @@ std::wstring GetProcessPathByPid(DWORD pid) {
   HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
   if (!process)
     return result;
+  // SAFETY: Buffer length is validated against header.payloadSize above.
   wchar_t buf[MAX_PATH] = {};
   DWORD size = MAX_PATH;
   if (QueryFullProcessImageNameW(process, 0, buf, &size)) {
@@ -124,6 +136,7 @@ bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
   ICONINFO iconInfo = {};
   BITMAP bmColor = {};
   BITMAP bmMask = {};
+  // Validate input and extract bitmap info from the icon handle.
   if (!fp || !hIcon || !GetIconInfo(hIcon, &iconInfo) ||
       !GetObject(iconInfo.hbmColor, sizeof(bmColor), &bmColor) ||
       !GetObject(iconInfo.hbmMask, sizeof(bmMask), &bmMask)) {
@@ -134,6 +147,7 @@ bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
     return false;
   }
 
+  // Only support 16-bit and 32-bit bitmaps for icon encoding.
   if (bmColor.bmBitsPixel != 16 && bmColor.bmBitsPixel != 32) {
     DeleteObject(iconInfo.hbmColor);
     DeleteObject(iconInfo.hbmMask);
@@ -161,6 +175,7 @@ bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
     DeleteObject(iconInfo.hbmMask);
     return false;
   }
+  // WARNING: Caller is responsible for calling DeleteObject on returned HBITMAP.
   BYTE *colorBits = new BYTE[colorBytesCount];
   if (!GetDIBits(dc, iconInfo.hbmColor, 0, bmColor.bmHeight, colorBits, bmi,
                  DIB_RGB_COLORS)) {
@@ -350,8 +365,8 @@ std::wstring ResolveIconPath(const std::wstring &filePath) {
   static std::unordered_map<std::wstring, std::wstring> cache;
   static constexpr size_t kMaxCacheEntries = 256;
 
-  // Evict the entire cache when it exceeds the cap to prevent
-  // unbounded memory growth over the application lifetime.
+  // Evict the entire cache when it exceeds the cap to prevent unbounded
+  // memory growth over the application lifetime.
   if (cache.size() > kMaxCacheEntries)
     cache.clear();
 
@@ -366,6 +381,10 @@ std::wstring ResolveIconPath(const std::wstring &filePath) {
   }
   return L"";
 }
+
+// ============================================================================
+// Audio Session Management (Core Business Logic)
+// ============================================================================
 
 bool SetForMatchingSessions(DWORD pid, const std::wstring &processName,
                             bool byPid, float *setVolume, bool *setMute) {
@@ -688,6 +707,10 @@ void RegisterSessionProps(novadesk_context ctx, const AppVolumeSessionInfo &s) {
   g_Host->RegisterBool(ctx, "muted", s.muted ? 1 : 0);
 }
 
+// ============================================================================
+// JavaScript Binding Functions
+// ============================================================================
+
 int JsAppVolumeListSessions(novadesk_context ctx) {
   std::vector<AppVolumeSessionInfo> sessions;
   if (!AppVolumeListSessions(sessions)) {
@@ -803,6 +826,10 @@ int JsAppVolumeSetMuteByProcessName(novadesk_context ctx) {
   return 1;
 }
 } // namespace
+
+// ============================================================================
+// Addon Initialization
+// ============================================================================
 
 NOVADESK_ADDON_INIT(ctx, hMsgWnd, host) {
   (void)hMsgWnd;

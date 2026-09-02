@@ -15,6 +15,10 @@
 #include <fstream>
 #include <iomanip>
 
+// ============================================================================
+// Static Member Initialization
+// ============================================================================
+
 json Settings::s_Data;
 bool Settings::s_Dirty = false;
 bool Settings::s_IsFirstRun = false;
@@ -22,6 +26,10 @@ DWORD Settings::s_LastSaveTick = 0;
 
 // Coalesce rapid SaveWidget calls: write at most once per 500 ms.
 static const DWORD SAVE_DEBOUNCE_MS = 500;
+
+// ============================================================================
+// Settings Operations
+// ============================================================================
 
 void Settings::Initialize() { Load(); }
 

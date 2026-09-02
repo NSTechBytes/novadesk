@@ -35,25 +35,19 @@ Element::~Element() {
   }
 }
 
-/*
-** Get the width of the element.
-*/
+// Get the width of the element.
 int Element::GetWidth() {
   int w = m_WDefined ? m_Width : GetAutoWidth();
   return w + m_PaddingLeft + m_PaddingRight;
 }
 
-/*
-** Get the height of the element.
-*/
+// Get the height of the element.
 int Element::GetHeight() {
   int h = m_HDefined ? m_Height : GetAutoHeight();
   return h + m_PaddingTop + m_PaddingBottom;
 }
 
-/*
-** Get the bounding box of the element.
-*/
+// Get the bounding box of the element.
 GfxRect Element::GetBounds() {
   if (!m_Show) {
     return GfxRect(m_X, m_Y, 0, 0);
@@ -63,9 +57,7 @@ GfxRect Element::GetBounds() {
 
 GfxRect Element::GetBackgroundBounds() { return GetBounds(); }
 
-/*
-** Check if a point is within the element's bounds.
-*/
+// Check if a point is within the element's bounds.
 bool Element::HitTest(int x, int y) {
   if (!m_Show)
     return false;
@@ -104,9 +96,7 @@ bool Element::HitTest(int x, int y) {
       transformed.y >= bounds.Y && transformed.y < bounds.Y + bounds.Height);
 }
 
-/*
-** Check if the element has an action associated with it.
-*/
+// Check if the element has an action associated with it.
 bool Element::HasAction(UINT message, WPARAM wParam) const {
   switch (message) {
   case WM_LBUTTONUP:
@@ -158,9 +148,7 @@ bool Element::HasAction(UINT message, WPARAM wParam) const {
   return false;
 }
 
-/*
-** Check if the element has any interactive mouse action.
-*/
+// Check if the element has any interactive mouse action.
 bool Element::HasMouseAction() const {
   return m_OnLeftMouseUpCallbackId != -1 || m_OnLeftMouseDownCallbackId != -1 ||
          m_OnLeftDoubleClickCallbackId != -1 ||
@@ -190,13 +178,8 @@ bool Element::HasDropAction() const {
          m_OnDragOverCallbackId != -1 || m_OnDragLeaveCallbackId != -1;
 }
 
-/*
-** Set the padding for the element.
-*/
+// Set the padding for the element.
 void Element::SetPadding(int left, int top, int right, int bottom) {
-  // Logging::Log(LogLevel::Debug, L"[PADDING] Element::SetPadding on '%s':
-  // L=%d, T=%d, R=%d, B=%d",
-  //    m_Id.c_str(), left, top, right, bottom);
   m_PaddingLeft = left;
   m_PaddingTop = top;
   m_PaddingRight = right;
@@ -289,9 +272,7 @@ void Element::SetOverflow(const std::wstring &value) {
   }
 }
 
-/*
-** Render the background of the element.
-*/
+// Render the background of the element.
 void Element::RenderBackground(ID2D1DeviceContext *context) {
   RenderBackdropFilter(context);
   if (!m_HasSolidColor)
@@ -324,9 +305,7 @@ void Element::RenderBackground(ID2D1DeviceContext *context) {
   }
 }
 
-/*
-** Render the bevel of the element.
-*/
+// Render the bevel of the element.
 void Element::RenderBevel(ID2D1DeviceContext *context) {
   if (m_BevelType == 0 || m_BevelWidth <= 0)
     return;

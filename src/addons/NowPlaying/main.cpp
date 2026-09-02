@@ -9,10 +9,18 @@
 #include "MediaController.h"
 #include <memory>
 
+// ============================================================================
+// Globals
+// ============================================================================
+
 const NovadeskHostAPI *g_Host = nullptr;
 std::unique_ptr<MediaController> g_Controller;
 
 namespace {
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
 MediaController &GetController() {
   if (!g_Controller) {
     g_Controller = std::make_unique<MediaController>();
@@ -20,7 +28,12 @@ MediaController &GetController() {
   return *g_Controller;
 }
 
+// ============================================================================
+// JavaScript Binding Functions
+// ============================================================================
+
 int JsNowPlayingStats(novadesk_context ctx) {
+  // Parse optional configuration object for including thumbnail and genres.
   bool includeThumbnail = true;
   bool includeGenres = true;
   if (g_Host->GetTop(ctx) > 0 && g_Host->IsObject(ctx, 0)) {
@@ -36,6 +49,7 @@ int JsNowPlayingStats(novadesk_context ctx) {
     }
   }
 
+  // Fetch current media playback stats and return as JavaScript object.
   const MediaStats stats = GetController().GetStats();
   g_Host->PushObject(ctx);
   g_Host->RegisterBool(ctx, "available", stats.available ? 1 : 0);
@@ -58,7 +72,8 @@ int JsNowPlayingStats(novadesk_context ctx) {
 }
 
 int JsNowPlayingBackend(novadesk_context ctx) {
-  g_Host->PushString(ctx, "smtc_v2"); // Updated backend name to reflect rewrite
+  // Return backend identifier: "smtc_v2" indicates System Media Transport Controls v2.
+  g_Host->PushString(ctx, "smtc_v2");
   return 1;
 }
 
@@ -99,6 +114,7 @@ int JsNowPlayingSetPosition(novadesk_context ctx) {
     return 0;
   }
   int value = static_cast<int>(g_Host->GetNumber(ctx, 0));
+  // NOTE: isPercent flag interprets value as 0..100 percentage instead of milliseconds.
   bool isPercent = false;
   if (g_Host->GetTop(ctx) > 1 && !g_Host->IsNull(ctx, 1)) {
     isPercent = g_Host->GetBool(ctx, 1) != 0;
@@ -130,6 +146,10 @@ int JsNowPlayingSetRepeat(novadesk_context ctx) {
   return 1;
 }
 } // namespace
+
+// ============================================================================
+// Addon Initialization
+// ============================================================================
 
 NOVADESK_ADDON_INIT(ctx, hMsgWnd, host) {
   (void)hMsgWnd;
