@@ -5,8 +5,9 @@
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>.
  *
- * Based on Rescle (http://code.google.com/p/rescle/) by yoshio.okumura@gmail.com
- * Modified code (c) 2013 GitHub, Inc. (MIT licensed) */
+ * Based on Rescle (http://code.google.com/p/rescle/) by
+ * yoshio.okumura@gmail.com Modified code (c) 2013 GitHub, Inc. (MIT licensed)
+ */
 
 #ifndef VERSION_INFO_UPDATER
 #define VERSION_INFO_UPDATER

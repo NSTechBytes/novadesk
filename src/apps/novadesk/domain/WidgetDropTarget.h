@@ -48,9 +48,9 @@ public:
   void SetWidget(Widget *widget) { m_Widget = widget; }
 
 private:
-  Widget *m_Widget = nullptr;              ///< Associated widget.
+  Widget *m_Widget = nullptr;               ///< Associated widget.
   Element *m_CurrentHoverElement = nullptr; ///< Element currently under cursor.
-  bool m_AcceptsDrop = false;              ///< Whether the current drag is accepted.
+  bool m_AcceptsDrop = false; ///< Whether the current drag is accepted.
   std::vector<std::wstring> m_CachedFiles; ///< Extracted file paths from drag.
 
   /// Extracts file paths from the data object.

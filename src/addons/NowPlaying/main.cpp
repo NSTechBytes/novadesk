@@ -72,7 +72,8 @@ int JsNowPlayingStats(novadesk_context ctx) {
 }
 
 int JsNowPlayingBackend(novadesk_context ctx) {
-  // Return backend identifier: "smtc_v2" indicates System Media Transport Controls v2.
+  // Return backend identifier: "smtc_v2" indicates System Media Transport
+  // Controls v2.
   g_Host->PushString(ctx, "smtc_v2");
   return 1;
 }
@@ -114,7 +115,8 @@ int JsNowPlayingSetPosition(novadesk_context ctx) {
     return 0;
   }
   int value = static_cast<int>(g_Host->GetNumber(ctx, 0));
-  // NOTE: isPercent flag interprets value as 0..100 percentage instead of milliseconds.
+  // NOTE: isPercent flag interprets value as 0..100 percentage instead of
+  // milliseconds.
   bool isPercent = false;
   if (g_Host->GetTop(ctx) > 1 && !g_Host->IsNull(ctx, 1)) {
     isPercent = g_Host->GetBool(ctx, 1) != 0;

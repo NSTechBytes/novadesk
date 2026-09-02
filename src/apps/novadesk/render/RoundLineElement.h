@@ -13,9 +13,9 @@
 /**
  * @brief Line cap style for round line endpoints.
  */
-enum RoundLineCap { 
-  ROUNDLINE_CAP_FLAT = 0,  ///< Flat/square line cap.
-  ROUNDLINE_CAP_ROUND = 1  ///< Rounded line cap.
+enum RoundLineCap {
+  ROUNDLINE_CAP_FLAT = 0, ///< Flat/square line cap.
+  ROUNDLINE_CAP_ROUND = 1 ///< Rounded line cap.
 };
 
 /**
@@ -144,18 +144,18 @@ public:
   BYTE GetLineAlphaBg() const { return m_LineAlphaBg; }
 
 private:
-  float m_Value;              ///< Current value (0.0-1.0).
-  int m_Radius = 0;          ///< Gauge radius in pixels.
-  int m_Thickness = 2;       ///< Line thickness in pixels.
-  int m_EndThickness = -1;   ///< End thickness (-1 = same as start).
-  float m_StartAngle = 0.0f; ///< Starting angle in degrees.
+  float m_Value;               ///< Current value (0.0-1.0).
+  int m_Radius = 0;            ///< Gauge radius in pixels.
+  int m_Thickness = 2;         ///< Line thickness in pixels.
+  int m_EndThickness = -1;     ///< End thickness (-1 = same as start).
+  float m_StartAngle = 0.0f;   ///< Starting angle in degrees.
   float m_TotalAngle = 360.0f; ///< Total arc angle in degrees.
-  bool m_Clockwise = true;   ///< Sweep direction.
+  bool m_Clockwise = true;     ///< Sweep direction.
 
   RoundLineCap m_StartCap = ROUNDLINE_CAP_FLAT; ///< Start cap style.
   RoundLineCap m_EndCap = ROUNDLINE_CAP_FLAT;   ///< End cap style.
-  std::vector<float> m_DashArray; ///< Dash pattern.
-  int m_Ticks = 0;            ///< Number of tick marks.
+  std::vector<float> m_DashArray;               ///< Dash pattern.
+  int m_Ticks = 0;                              ///< Number of tick marks.
 
   bool m_HasLineColor = false;
   COLORREF m_LineColor = RGB(0, 255, 0); ///< Foreground color.
@@ -165,8 +165,8 @@ private:
   COLORREF m_LineColorBg = RGB(50, 50, 50); ///< Background color.
   BYTE m_LineAlphaBg = 255;
 
-  GradientInfo m_LineGradient;    ///< Foreground gradient.
-  GradientInfo m_LineGradientBg;  ///< Background gradient.
+  GradientInfo m_LineGradient;   ///< Foreground gradient.
+  GradientInfo m_LineGradientBg; ///< Background gradient.
 };
 
 #endif

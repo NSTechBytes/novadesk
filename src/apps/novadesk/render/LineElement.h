@@ -135,25 +135,25 @@ private:
                                       const D2D1_POINT_2F &b);
 
 private:
-  int m_LineCount = 1; ///< Number of data series.
+  int m_LineCount = 1;                        ///< Number of data series.
   std::vector<std::vector<float>> m_DataSets; ///< Per-series data points.
-  std::vector<COLORREF> m_LineColors;  ///< Per-series colors.
-  std::vector<BYTE> m_LineAlphas;      ///< Per-series alpha values.
-  std::vector<GradientInfo> m_LineGradients; ///< Per-series gradients.
-  std::vector<float> m_ScaleValues;    ///< Per-series scale reference.
-  float m_LineWidth = 1.0f;            ///< Line stroke width.
-  int m_MaxPoints = 0;                 ///< Maximum visible points.
-  bool m_HorizontalLines = false;      ///< Show horizontal guide lines.
+  std::vector<COLORREF> m_LineColors;         ///< Per-series colors.
+  std::vector<BYTE> m_LineAlphas;             ///< Per-series alpha values.
+  std::vector<GradientInfo> m_LineGradients;  ///< Per-series gradients.
+  std::vector<float> m_ScaleValues;           ///< Per-series scale reference.
+  float m_LineWidth = 1.0f;                   ///< Line stroke width.
+  int m_MaxPoints = 0;                        ///< Maximum visible points.
+  bool m_HorizontalLines = false;             ///< Show horizontal guide lines.
   COLORREF m_HorizontalLineColor = RGB(0, 0, 0);
   BYTE m_HorizontalLineAlpha = 255;
   GradientInfo m_HorizontalLineGradient;
-  bool m_GraphStartLeft = false;       ///< Direction: false = right-to-left.
+  bool m_GraphStartLeft = false; ///< Direction: false = right-to-left.
   bool m_GraphHorizontalOrientation = false; ///< Orientation: false = vertical.
-  bool m_Flip = false;                 ///< Flip the axis.
+  bool m_Flip = false;                       ///< Flip the axis.
   D2D1_STROKE_TRANSFORM_TYPE m_StrokeType = D2D1_STROKE_TRANSFORM_TYPE_NORMAL;
-  bool m_AutoRange = false;            ///< Auto-range from data min/max.
-  float m_ScaleMin = 0.0f;            ///< Manual scale minimum.
-  float m_ScaleMax = 100.0f;          ///< Manual scale maximum.
+  bool m_AutoRange = false;  ///< Auto-range from data min/max.
+  float m_ScaleMin = 0.0f;   ///< Manual scale minimum.
+  float m_ScaleMax = 100.0f; ///< Manual scale maximum.
 };
 
 #endif

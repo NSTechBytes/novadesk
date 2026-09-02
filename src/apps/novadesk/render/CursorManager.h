@@ -43,5 +43,6 @@ private:
    */
   HCURSOR LoadCustomCursorFile(const std::wstring &fullPath);
 
-  std::unordered_map<std::wstring, HCURSOR> m_CustomCursorCache; ///< Cached cursor handles.
+  std::unordered_map<std::wstring, HCURSOR>
+      m_CustomCursorCache; ///< Cached cursor handles.
 };

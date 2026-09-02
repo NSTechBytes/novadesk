@@ -143,9 +143,10 @@ struct ComInit {
   HRESULT hr = E_FAIL;
   ComInit() { hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED); }
   ~ComInit() {
-    // SAFETY: Only call CoUninitialize when we genuinely initialized COM (S_OK).
-    // RPC_E_CHANGED_MODE means COM was already initialized in a different
-    // apartment model — calling CoUninitialize there corrupts COM state.
+    // SAFETY: Only call CoUninitialize when we genuinely initialized COM
+    // (S_OK). RPC_E_CHANGED_MODE means COM was already initialized in a
+    // different apartment model — calling CoUninitialize there corrupts COM
+    // state.
     if (hr == S_OK)
       CoUninitialize();
   }
@@ -327,7 +328,8 @@ bool GetCpuStats(CpuStats &outStats) {
   user.HighPart = userFt.dwHighDateTime;
 
   if (!g_cpuInitialized) {
-    // NOTE: Prime the baseline on first call. Return 0% as no delta available yet.
+    // NOTE: Prime the baseline on first call. Return 0% as no delta available
+    // yet.
     g_lastIdleTime = idle.QuadPart;
     g_lastKernelTime = kernel.QuadPart;
     g_lastUserTime = user.QuadPart;
@@ -371,7 +373,8 @@ bool GetCpuStats(CpuStats &outStats) {
 bool GetDiskStats(const std::wstring &path, DiskStats &outStats) {
   std::wstring target = path;
   if (target.empty()) {
-    // NOTE: If no path specified, use current drive root. Fallback to C:\ if query fails.
+    // NOTE: If no path specified, use current drive root. Fallback to C:\ if
+    // query fails.
     std::error_code ec;
     target = std::filesystem::current_path(ec).root_path().wstring();
     if (target.empty()) {

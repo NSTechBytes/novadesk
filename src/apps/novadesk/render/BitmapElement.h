@@ -154,16 +154,16 @@ private:
 private:
   GeneralImage m_BitmapImage; ///< Bitmap image source.
 
-  double m_Value = 0.0;       ///< Current numeric value.
-  int m_FrameCount = 1;       ///< Number of frames in the strip.
-  bool m_ZeroFrame = false;   ///< First frame represents zero.
-  bool m_Extend = false;      ///< Repeat last frame for overflow.
-  double m_MinValue = 0.0;    ///< Minimum value of the range.
-  double m_MaxValue = 1.0;    ///< Maximum value of the range.
-  int m_Digits = 0;           ///< Number of decimal digits.
+  double m_Value = 0.0;                    ///< Current numeric value.
+  int m_FrameCount = 1;                    ///< Number of frames in the strip.
+  bool m_ZeroFrame = false;                ///< First frame represents zero.
+  bool m_Extend = false;                   ///< Repeat last frame for overflow.
+  double m_MinValue = 0.0;                 ///< Minimum value of the range.
+  double m_MaxValue = 1.0;                 ///< Maximum value of the range.
+  int m_Digits = 0;                        ///< Number of decimal digits.
   BitmapAlign m_Align = BITMAP_ALIGN_LEFT; ///< Frame alignment.
-  int m_Separation = 0;      ///< Pixel separation between digits.
-  bool m_Vertical = false;    ///< True if frames are stacked vertically.
+  int m_Separation = 0;                    ///< Pixel separation between digits.
+  bool m_Vertical = false;       ///< True if frames are stacked vertically.
   bool m_AutoOrientation = true; ///< Auto-detect orientation from image.
 };
 

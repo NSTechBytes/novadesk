@@ -23,35 +23,35 @@ using namespace Windows::Media::Control;
  * @brief Media playback statistics from the system media session.
  */
 struct MediaStats {
-  bool available = false;  ///< True if a media session is active.
-  std::string player;      ///< Player application name.
-  std::string artist;      ///< Artist name.
-  std::string album;       ///< Album name.
-  std::string title;       ///< Track title.
-  std::string thumbnail;   ///< Path to album cover art.
-  int duration = 0;        ///< Track duration in seconds.
-  int position = 0;        ///< Current playback position in seconds.
-  int progress = 0;        ///< Playback progress percentage.
-  int state = 0;           ///< Playback state: 0=Stopped, 1=Playing, 2=Paused.
-  int status = 0;          ///< Session status: 0=Closed, 1=Opened.
-  bool shuffle = false;    ///< Shuffle mode enabled.
-  bool repeat = false;     ///< Repeat mode enabled.
-  std::string genres;      ///< Genre tags.
+  bool available = false; ///< True if a media session is active.
+  std::string player;     ///< Player application name.
+  std::string artist;     ///< Artist name.
+  std::string album;      ///< Album name.
+  std::string title;      ///< Track title.
+  std::string thumbnail;  ///< Path to album cover art.
+  int duration = 0;       ///< Track duration in seconds.
+  int position = 0;       ///< Current playback position in seconds.
+  int progress = 0;       ///< Playback progress percentage.
+  int state = 0;          ///< Playback state: 0=Stopped, 1=Playing, 2=Paused.
+  int status = 0;         ///< Session status: 0=Closed, 1=Opened.
+  bool shuffle = false;   ///< Shuffle mode enabled.
+  bool repeat = false;    ///< Repeat mode enabled.
+  std::string genres;     ///< Genre tags.
 };
 
 /**
  * @brief Supported media control actions.
  */
 enum class MediaAction {
-  Play,         ///< Start playback.
-  Pause,        ///< Pause playback.
-  PlayPause,    ///< Toggle play/pause.
-  Stop,         ///< Stop playback.
-  Next,         ///< Skip to next track.
-  Previous,     ///< Skip to previous track.
-  SetPosition,  ///< Seek to a position.
-  SetShuffle,   ///< Toggle shuffle mode.
-  SetRepeat     ///< Toggle repeat mode.
+  Play,        ///< Start playback.
+  Pause,       ///< Pause playback.
+  PlayPause,   ///< Toggle play/pause.
+  Stop,        ///< Stop playback.
+  Next,        ///< Skip to next track.
+  Previous,    ///< Skip to previous track.
+  SetPosition, ///< Seek to a position.
+  SetShuffle,  ///< Toggle shuffle mode.
+  SetRepeat    ///< Toggle repeat mode.
 };
 
 /**

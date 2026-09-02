@@ -44,12 +44,12 @@ public:
   // Swatch Styling
   // ============================================================================
 
-  float m_BorderRadius = 0.0f;     ///< Corner radius of the swatch.
-  float m_BorderWidth = 0.0f;      ///< Border width around the swatch.
+  float m_BorderRadius = 0.0f;           ///< Corner radius of the swatch.
+  float m_BorderWidth = 0.0f;            ///< Border width around the swatch.
   COLORREF m_BorderColor = RGB(0, 0, 0); ///< Border color.
-  BYTE m_BorderAlpha = 255;        ///< Border opacity.
-  float m_Opacity = 1.0f;          ///< Overall swatch opacity.
-  bool m_CircleShape = false;      ///< True = elliptical swatch shape.
+  BYTE m_BorderAlpha = 255;              ///< Border opacity.
+  float m_Opacity = 1.0f;                ///< Overall swatch opacity.
+  bool m_CircleShape = false;            ///< True = elliptical swatch shape.
 
   // ============================================================================
   // Popup Appearance
@@ -61,7 +61,8 @@ public:
   BYTE m_PopupAccentAlpha = 255;
   COLORREF m_PopupBorderColor = RGB(0, 0, 0); ///< Popup border color.
   BYTE m_PopupBorderAlpha = 255;
-  COLORREF m_PopupInputBackground = RGB(255, 255, 255); ///< Input field background.
+  COLORREF m_PopupInputBackground =
+      RGB(255, 255, 255); ///< Input field background.
   BYTE m_PopupInputBackgroundAlpha = 255;
   bool m_HasPopupInputBackground = false;
   COLORREF m_PopupInputColor = RGB(0, 0, 0); ///< Input field text color.
@@ -72,20 +73,20 @@ public:
   // Popup Behavior
   // ============================================================================
 
-  bool m_ShowEyedropper = true;     ///< Show eyedropper tool in popup.
-  bool m_ShowFormatToggle = true;   ///< Show format toggle (hex/rgba).
-  bool m_DefaultHexMode = false;    ///< Open in HEX mode by default.
+  bool m_ShowEyedropper = true;   ///< Show eyedropper tool in popup.
+  bool m_ShowFormatToggle = true; ///< Show format toggle (hex/rgba).
+  bool m_DefaultHexMode = false;  ///< Open in HEX mode by default.
 
   // ============================================================================
   // Event Callbacks
   // ============================================================================
 
-  int m_OnChangeCallbackId = -1;            ///< Color value changed.
-  int m_OnOpenCallbackId = -1;              ///< Popup opened.
-  int m_OnCloseCallbackId = -1;             ///< Popup closed.
-  int m_OnCancelCallbackId = -1;            ///< User canceled selection.
-  int m_OnEyedropperOpenCallbackId = -1;    ///< Eyedropper activated.
-  int m_OnEyedropperPickCallbackId = -1;    ///< Eyedropper color picked.
+  int m_OnChangeCallbackId = -1;         ///< Color value changed.
+  int m_OnOpenCallbackId = -1;           ///< Popup opened.
+  int m_OnCloseCallbackId = -1;          ///< Popup closed.
+  int m_OnCancelCallbackId = -1;         ///< User canceled selection.
+  int m_OnEyedropperOpenCallbackId = -1; ///< Eyedropper activated.
+  int m_OnEyedropperPickCallbackId = -1; ///< Eyedropper color picked.
 
   void Render(ID2D1DeviceContext *context) override;
   int GetAutoWidth() override { return 32; }

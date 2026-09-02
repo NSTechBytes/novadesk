@@ -119,18 +119,18 @@ private:
   std::vector<float> m_PrimaryData;   ///< Primary data series.
   std::vector<float> m_SecondaryData; ///< Secondary data series.
 
-  bool m_AutoRange = false;              ///< Auto-range from data min/max.
-  bool m_GraphStartLeft = false;         ///< Direction: false = right-to-left.
+  bool m_AutoRange = false;      ///< Auto-range from data min/max.
+  bool m_GraphStartLeft = false; ///< Direction: false = right-to-left.
   bool m_GraphHorizontalOrientation = false; ///< Orientation: false = vertical.
-  bool m_Flip = false;                   ///< Flip the axis.
+  bool m_Flip = false;                       ///< Flip the axis.
 
-  COLORREF m_PrimaryColor = RGB(0, 128, 0);   ///< Primary series color.
+  COLORREF m_PrimaryColor = RGB(0, 128, 0); ///< Primary series color.
   BYTE m_PrimaryAlpha = 255;
   GradientInfo m_PrimaryGradient;
   COLORREF m_SecondaryColor = RGB(255, 0, 0); ///< Secondary series color.
   BYTE m_SecondaryAlpha = 255;
   GradientInfo m_SecondaryGradient;
-  COLORREF m_BothColor = RGB(255, 255, 0);    ///< Overlap color.
+  COLORREF m_BothColor = RGB(255, 255, 0); ///< Overlap color.
   BYTE m_BothAlpha = 255;
   GradientInfo m_BothGradient;
 };

@@ -173,7 +173,8 @@ private:
     const double sr =
         static_cast<double>(m_sampleRate <= 0 ? 48000 : m_sampleRate);
     const double t = static_cast<double>(ClampMs(ms)) * 0.001;
-    // Exponential smoothing coefficient: decay to 1% of error per time-constant.
+    // Exponential smoothing coefficient: decay to 1% of error per
+    // time-constant.
     return static_cast<float>(std::exp(std::log10(0.01) / (sr * t)));
   }
 
@@ -381,8 +382,9 @@ private:
     const double sensitivity =
         (m_config.sensitivity <= 0.0) ? 35.0 : m_config.sensitivity;
 
-    // Distribute bands logarithmically across frequency range (auditory perception).
-    // Each band captures the maximum magnitude within its frequency range.
+    // Distribute bands logarithmically across frequency range (auditory
+    // perception). Each band captures the maximum magnitude within its
+    // frequency range.
     for (int i = 0; i < bands; ++i) {
       const double f1 =
           freqMin * std::pow(freqMax / freqMin, static_cast<double>(i) /

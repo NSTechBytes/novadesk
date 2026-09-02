@@ -24,8 +24,8 @@ namespace novadesk::scripting::quickjs {
  * @brief Wrapper holding a widget pointer and stable instance ID.
  */
 struct WidgetWrapper {
-  Widget *widget = nullptr;    ///< The widget instance.
-  uint64_t instanceId = 0;    ///< Stable ID across HWND reuse.
+  Widget *widget = nullptr; ///< The widget instance.
+  uint64_t instanceId = 0;  ///< Stable ID across HWND reuse.
 };
 
 /// Enables or disables debug logging for widget UI operations.

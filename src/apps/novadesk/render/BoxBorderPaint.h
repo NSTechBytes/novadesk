@@ -14,19 +14,22 @@
  * @brief Parameters for rendering a CSS-style box border.
  */
 struct BoxBorderPaintParams {
-  BoxBorder::Position position = BoxBorder::Position::Inside; ///< Border position relative to element.
-  BoxBorder::Style styleTop = BoxBorder::Style::Solid;    ///< Top border style.
-  BoxBorder::Style styleRight = BoxBorder::Style::Solid;  ///< Right border style.
-  BoxBorder::Style styleBottom = BoxBorder::Style::Solid; ///< Bottom border style.
-  BoxBorder::Style styleLeft = BoxBorder::Style::Solid;   ///< Left border style.
-  float elementRadiusX = 0.0f; ///< Element corner radius X.
-  float elementRadiusY = 0.0f; ///< Element corner radius Y.
-  float strokeWidth = 0.0f;    ///< Border stroke width in pixels.
+  BoxBorder::Position position =
+      BoxBorder::Position::Inside; ///< Border position relative to element.
+  BoxBorder::Style styleTop = BoxBorder::Style::Solid; ///< Top border style.
+  BoxBorder::Style styleRight =
+      BoxBorder::Style::Solid; ///< Right border style.
+  BoxBorder::Style styleBottom =
+      BoxBorder::Style::Solid; ///< Bottom border style.
+  BoxBorder::Style styleLeft = BoxBorder::Style::Solid; ///< Left border style.
+  float elementRadiusX = 0.0f;         ///< Element corner radius X.
+  float elementRadiusY = 0.0f;         ///< Element corner radius Y.
+  float strokeWidth = 0.0f;            ///< Border stroke width in pixels.
   COLORREF strokeColor = RGB(0, 0, 0); ///< Border color.
-  BYTE strokeAlpha = 255;      ///< Border opacity.
-  D2D1_CAP_STYLE strokeStartCap = D2D1_CAP_STYLE_FLAT; ///< Start cap style.
-  D2D1_CAP_STYLE strokeEndCap = D2D1_CAP_STYLE_FLAT;   ///< End cap style.
-  D2D1_CAP_STYLE strokeDashCap = D2D1_CAP_STYLE_FLAT;  ///< Dash cap style.
+  BYTE strokeAlpha = 255;              ///< Border opacity.
+  D2D1_CAP_STYLE strokeStartCap = D2D1_CAP_STYLE_FLAT;  ///< Start cap style.
+  D2D1_CAP_STYLE strokeEndCap = D2D1_CAP_STYLE_FLAT;    ///< End cap style.
+  D2D1_CAP_STYLE strokeDashCap = D2D1_CAP_STYLE_FLAT;   ///< Dash cap style.
   D2D1_LINE_JOIN strokeLineJoin = D2D1_LINE_JOIN_MITER; ///< Line join style.
   float strokeDashOffset = 0.0f; ///< Dash pattern offset.
 };

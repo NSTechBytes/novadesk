@@ -321,7 +321,8 @@ std::wstring LoadAppNameFromManifest() {
 
 bool InstallFromSelf(bool skipInstalledCheck) {
   // Extract embedded payload and manifest from self, then perform installation.
-  // NOTE: This function requires admin privileges to write to system directories.
+  // NOTE: This function requires admin privileges to write to system
+  // directories.
   wchar_t exePathBuf[MAX_PATH];
   GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
   fs::path exePath = exePathBuf;

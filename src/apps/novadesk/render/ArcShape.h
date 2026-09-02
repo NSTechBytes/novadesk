@@ -59,8 +59,8 @@ public:
   virtual bool IsClockwise() const override { return m_Clockwise; }
 
 private:
-  float m_RadiusX = 0.0f;   ///< Horizontal radius of the ellipse.
-  float m_RadiusY = 0.0f;   ///< Vertical radius of the ellipse.
+  float m_RadiusX = 0.0f;    ///< Horizontal radius of the ellipse.
+  float m_RadiusY = 0.0f;    ///< Vertical radius of the ellipse.
   float m_StartAngle = 0.0f; ///< Arc start angle in degrees.
   float m_EndAngle = 90.0f;  ///< Arc end angle in degrees.
   bool m_Clockwise = true;   ///< Arc sweep direction.

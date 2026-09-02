@@ -136,14 +136,14 @@ public:
 private:
   GeneralImage m_RotatorImage; ///< Rotator image source.
 
-  double m_Value = 0.0;        ///< Current value.
-  double m_OffsetX = 0.0;     ///< Pivot X offset from center.
-  double m_OffsetY = 0.0;     ///< Pivot Y offset from center.
-  double m_StartAngle = 0.0;  ///< Starting angle in radians.
+  double m_Value = 0.0;                       ///< Current value.
+  double m_OffsetX = 0.0;                     ///< Pivot X offset from center.
+  double m_OffsetY = 0.0;                     ///< Pivot Y offset from center.
+  double m_StartAngle = 0.0;                  ///< Starting angle in radians.
   double m_RotationAngle = 6.283185307179586; ///< Total rotation (default: 2π).
-  int m_ValueRemainder = 0;   ///< Value remainder for fine control.
-  double m_MinValue = 0.0;    ///< Minimum value of the range.
-  double m_MaxValue = 1.0;    ///< Maximum value of the range.
+  int m_ValueRemainder = 0; ///< Value remainder for fine control.
+  double m_MinValue = 0.0;  ///< Minimum value of the range.
+  double m_MaxValue = 1.0;  ///< Maximum value of the range.
 };
 
 #endif

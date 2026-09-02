@@ -78,18 +78,19 @@ private:
   std::wstring m_PathData; ///< SVG-style path data string.
 
   bool m_HasPathBounds = false; ///< True if path bounds have been computed.
-  float m_PathMinX = 0.0f;     ///< Path bounds minimum X.
-  float m_PathMinY = 0.0f;     ///< Path bounds minimum Y.
-  float m_PathMaxX = 0.0f;     ///< Path bounds maximum X.
-  float m_PathMaxY = 0.0f;     ///< Path bounds maximum Y.
+  float m_PathMinX = 0.0f;      ///< Path bounds minimum X.
+  float m_PathMinY = 0.0f;      ///< Path bounds minimum Y.
+  float m_PathMaxX = 0.0f;      ///< Path bounds maximum X.
+  float m_PathMaxY = 0.0f;      ///< Path bounds maximum Y.
 
-  bool m_IsCombineShape = false;      ///< True if this is a combine target.
-  std::wstring m_CombineBaseId;       ///< Base shape ID for combine.
+  bool m_IsCombineShape = false;       ///< True if this is a combine target.
+  std::wstring m_CombineBaseId;        ///< Base shape ID for combine.
   std::vector<CombineOp> m_CombineOps; ///< Combine operations.
   bool m_CombineConsumeBase = false;   ///< Consume base shape after combine.
 
   bool m_HasCombinedGeometry = false; ///< True if combined geometry is set.
-  Microsoft::WRL::ComPtr<ID2D1Geometry> m_CombinedGeometry; ///< Pre-computed geometry.
+  Microsoft::WRL::ComPtr<ID2D1Geometry>
+      m_CombinedGeometry;   ///< Pre-computed geometry.
   GfxRect m_CombinedBounds; ///< Bounds of the combined geometry.
 
   void CreatePathGeometry(ID2D1Factory *factory,

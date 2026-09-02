@@ -29,13 +29,13 @@ public:
    * @brief CSS-style box shadow configuration.
    */
   struct BoxShadow {
-    float x = 0.0f;       ///< Horizontal offset.
-    float y = 0.0f;       ///< Vertical offset.
-    float blur = 0.0f;    ///< Blur radius.
-    float spread = 0.0f;  ///< Spread radius.
+    float x = 0.0f;                ///< Horizontal offset.
+    float y = 0.0f;                ///< Vertical offset.
+    float blur = 0.0f;             ///< Blur radius.
+    float spread = 0.0f;           ///< Spread radius.
     COLORREF color = RGB(0, 0, 0); ///< Shadow color.
-    BYTE alpha = 255;     ///< Shadow opacity.
-    bool inset = false;    ///< True for inset shadow.
+    BYTE alpha = 255;              ///< Shadow opacity.
+    bool inset = false;            ///< True for inset shadow.
   };
 
   /**
@@ -58,10 +58,10 @@ public:
    */
   struct ListMarker {
     ListStyleType type = ListStyleType::Disc; ///< Marker style.
-    COLORREF color = RGB(0, 0, 0);           ///< Marker color.
+    COLORREF color = RGB(0, 0, 0);            ///< Marker color.
     BYTE alpha = 255;                         ///< Marker opacity.
     float size = 6.0f;                        ///< Marker size.
-    float offsetX = -20.0f;                   ///< Distance from content (negative = left).
+    float offsetX = -20.0f; ///< Distance from content (negative = left).
   };
 
   using BorderStyle = BoxBorder::Style;
@@ -153,15 +153,15 @@ private:
                         float markerSize, ID2D1SolidColorBrush *brush);
   BoxBorderPaintParams BuildBorderPaintParams() const;
 
-  float m_RadiusX = 0.0f; ///< Corner radius X.
-  float m_RadiusY = 0.0f; ///< Corner radius Y.
+  float m_RadiusX = 0.0f;              ///< Corner radius X.
+  float m_RadiusY = 0.0f;              ///< Corner radius Y.
   std::vector<BoxShadow> m_BoxShadows; ///< Box shadow effects.
   BorderStyle m_BorderStyleTop = BorderStyle::Solid;
   BorderStyle m_BorderStyleRight = BorderStyle::Solid;
   BorderStyle m_BorderStyleBottom = BorderStyle::Solid;
   BorderStyle m_BorderStyleLeft = BorderStyle::Solid;
   DisplayType m_DisplayType = DisplayType::Flex; ///< Display mode.
-  ListMarker m_ListMarker; ///< List item marker configuration.
+  ListMarker m_ListMarker;               ///< List item marker configuration.
   std::wstring m_FlexDirection = L"row"; ///< Flex direction.
-  int m_LayoutGap = 0; ///< Gap between children.
+  int m_LayoutGap = 0;                   ///< Gap between children.
 };

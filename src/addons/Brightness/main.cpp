@@ -165,7 +165,8 @@ private:
     if (m_lcdDevice == INVALID_HANDLE_VALUE || m_laptopLevels.size() < 2)
       return false;
 
-    // Query current brightness: values array is [valid_bit, ac_brightness, battery_brightness].
+    // Query current brightness: values array is [valid_bit, ac_brightness,
+    // battery_brightness].
     BYTE values[3] = {};
     DWORD bytesReturned = 0;
     if (!DeviceIoControl(m_lcdDevice, IOCTL_VIDEO_QUERY_DISPLAY_BRIGHTNESS,

@@ -12,10 +12,12 @@
 #include <wrl/client.h>
 
 /**
- * @brief Base class for all geometric shape elements (rect, ellipse, line, etc.).
+ * @brief Base class for all geometric shape elements (rect, ellipse, line,
+ * etc.).
  *
  * @note Provides common stroke/fill rendering, hit testing, and geometry
- *       creation. Subclasses implement specific shape geometry via CreateGeometry().
+ *       creation. Subclasses implement specific shape geometry via
+ * CreateGeometry().
  */
 class ShapeElement : public Element {
 public:
@@ -211,7 +213,8 @@ protected:
 
   bool m_UpdateStrokeStyle = false;
   Microsoft::WRL::ComPtr<ID2D1StrokeStyle1> m_StrokeStyle;
-  int m_CombineConsumerCount = 0; ///< Number of combine operations consuming this shape.
+  int m_CombineConsumerCount =
+      0; ///< Number of combine operations consuming this shape.
 
   void CreateBrush(ID2D1DeviceContext *context, ID2D1Brush **ppBrush,
                    bool isStroke);

@@ -189,7 +189,8 @@ bool IsDownWithEvent(UINT checkVk, UINT eventVk, bool eventDown) {
       return eventDown;
     return (GetAsyncKeyState(checkVk) & 0x8000) != 0;
   }
-  // For regular keys, check the current async key state or the triggering event.
+  // For regular keys, check the current async key state or the triggering
+  // event.
   if (eventVk == checkVk)
     return eventDown;
   return (GetAsyncKeyState(checkVk) & 0x8000) != 0;
@@ -272,7 +273,8 @@ LRESULT CALLBACK KeyboardHookProc(int nCode, WPARAM wParam, LPARAM lParam) {
     const bool isUp = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
     if (isDown || isUp) {
       // Only scan all hotkeys if this is a modifier key or if we might need it.
-      // For non-modifier keys, only hotkeys with that key as their main key apply.
+      // For non-modifier keys, only hotkeys with that key as their main key
+      // apply.
       const bool relevant = IsModifierVk(vk);
       std::lock_guard<std::mutex> lock(g_hotkeyMutex);
       for (auto &kv : g_hotkeys) {

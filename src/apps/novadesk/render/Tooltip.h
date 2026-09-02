@@ -55,18 +55,18 @@ public:
   HWND GetActiveHWnd() const { return m_ActiveToolTipHWnd; }
 
 private:
-  HWND m_ParentHWnd = nullptr;       ///< Parent window.
-  HWND m_ToolTipHWnd = nullptr;      ///< Standard tooltip window.
+  HWND m_ParentHWnd = nullptr;         ///< Parent window.
+  HWND m_ToolTipHWnd = nullptr;        ///< Standard tooltip window.
   HWND m_ToolTipBalloonHWnd = nullptr; ///< Balloon tooltip window.
   HWND m_ActiveToolTipHWnd = nullptr;  ///< Currently active tooltip.
-  DWORD m_LastMoveTime = 0;         ///< Last cursor move timestamp.
-  UINT m_ToolInfoSize = 0;          ///< Size of TOOLINFO structure.
-  POINT m_LastPos = {-1, -1};      ///< Last cursor position.
+  DWORD m_LastMoveTime = 0;            ///< Last cursor move timestamp.
+  UINT m_ToolInfoSize = 0;             ///< Size of TOOLINFO structure.
+  POINT m_LastPos = {-1, -1};          ///< Last cursor position.
 
   // Hybrid tracking state (delayed move to prevent flicker)
-  POINT m_PendingPos = {-1, -1};   ///< Pending cursor position.
-  DWORD m_PendingMoveTime = 0;     ///< Pending move timestamp.
-  bool m_IsMovePending = false;    ///< True if a move is pending.
+  POINT m_PendingPos = {-1, -1}; ///< Pending cursor position.
+  DWORD m_PendingMoveTime = 0;   ///< Pending move timestamp.
+  bool m_IsMovePending = false;  ///< True if a move is pending.
 
   void InitializeToolTip(HWND hwnd);
 };

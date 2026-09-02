@@ -17,7 +17,8 @@
 class Widget;
 
 /**
- * @brief Renders scrollbar tracks, thumbs, and arrow buttons for scrollable containers.
+ * @brief Renders scrollbar tracks, thumbs, and arrow buttons for scrollable
+ * containers.
  *
  * @note Static utility class; renders CSS-style scrollbars with customizable
  *       appearance (width, colors, radius, hover/active states).

@@ -23,8 +23,9 @@ namespace AnimationEasing {
  * @param t Normalized time (0.0 to 1.0).
  * @param easing Easing function name or cubic-bezier parameters.
  *
- * @return The eased value (typically 0.0 to 1.0, may overshoot for elastic/bounce).
+ * @return The eased value (typically 0.0 to 1.0, may overshoot for
+ * elastic/bounce).
  */
 float Evaluate(float t, const std::wstring &easing);
 
-}
+} // namespace AnimationEasing

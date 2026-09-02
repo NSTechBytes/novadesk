@@ -178,10 +178,11 @@ struct WidgetOptions {
 /**
  * @brief Manages a desktop widget window, its elements, and event handling.
  *
- * @note Instances are owned by DesktopManager and must only be created/destroyed
- *       on the main UI thread. Each Widget owns a set of renderable Elements
- *       and handles Win32 message dispatch, mouse interaction, drag-and-drop,
- *       scrollbar behavior, and JavaScript event callbacks via QuickJS.
+ * @note Instances are owned by DesktopManager and must only be
+ * created/destroyed on the main UI thread. Each Widget owns a set of renderable
+ * Elements and handles Win32 message dispatch, mouse interaction,
+ * drag-and-drop, scrollbar behavior, and JavaScript event callbacks via
+ * QuickJS.
  */
 class Widget {
 public:
@@ -259,7 +260,8 @@ public:
   /**
    * @brief Constructs a Widget from the given configuration options.
    *
-   * @param options Widget configuration (size, position, colors, z-order, etc.).
+   * @param options Widget configuration (size, position, colors, z-order,
+   * etc.).
    */
   Widget(const WidgetOptions &options);
 
@@ -309,7 +311,8 @@ public:
    * @brief Changes the z-order position for this widget (and optionally all).
    *
    * @param zPos The target z-order position.
-   * @param all If true, applies the change to all widgets with the same z-order.
+   * @param all If true, applies the change to all widgets with the same
+   * z-order.
    */
   void ChangeZPos(ZPOSITION zPos, bool all = false);
   /**
@@ -319,7 +322,8 @@ public:
    * @param all If true, delegates to ChangeZPos.
    */
   void ChangeSingleZPos(ZPOSITION zPos, bool all = false);
-  /// @brief Sets the window position and size. Pass -1 to leave a dimension unchanged.
+  /// @brief Sets the window position and size. Pass -1 to leave a dimension
+  /// unchanged.
   void SetWindowPosition(int x, int y, int w, int h);
   /// @brief Sets the overall window opacity (0-255).
   void SetWindowOpacity(BYTE opacity);
@@ -477,7 +481,8 @@ public:
   void OpenColorPicker(ColorPickerElement *colorPicker);
   /// @brief Closes the currently open color picker popup.
   void CloseColorPicker();
-  /// @return True if a color picker is open (optionally for a specific element).
+  /// @return True if a color picker is open (optionally for a specific
+  /// element).
   bool IsColorPickerOpen(const ColorPickerElement *colorPicker = nullptr) const;
   /// @return True if the eyedropper tool is active.
   bool IsColorPickerEyedropperActive() const;
@@ -499,7 +504,7 @@ public:
   Element *FindElementById(const std::wstring &id);
   /// @brief Returns a thread-safe snapshot of all live widgets.
   static std::vector<Widget *>
-  GetAllWidgets();                          // returns a snapshot (thread-safe)
+  GetAllWidgets(); // returns a snapshot (thread-safe)
   /// @brief Removes a widget from the global tracking list (thread-safe).
   static void RemoveWidget(Widget *widget); // thread-safe removal
   /// @brief Clears all tracked widgets.
@@ -624,17 +629,18 @@ private:
   // Window & Identity
   // ============================================================================
 
-  std::wstring m_Id;               ///< Unique widget identifier.
-  std::wstring m_Name;             ///< Display name.
-  WidgetOptions m_Options;         ///< Configuration options.
-  HWND m_hWnd = nullptr;           ///< Win32 window handle.
-  Tooltip m_Tooltip;               ///< Tooltip manager.
-  ZPOSITION m_WindowZPosition;     ///< Current z-order position.
+  std::wstring m_Id;           ///< Unique widget identifier.
+  std::wstring m_Name;         ///< Display name.
+  WidgetOptions m_Options;     ///< Configuration options.
+  HWND m_hWnd = nullptr;       ///< Win32 window handle.
+  Tooltip m_Tooltip;           ///< Tooltip manager.
+  ZPOSITION m_WindowZPosition; ///< Current z-order position.
   // ============================================================================
   // Elements
   // ============================================================================
 
-  std::vector<std::unique_ptr<Element>> m_Elements; ///< Owned element instances.
+  std::vector<std::unique_ptr<Element>>
+      m_Elements; ///< Owned element instances.
   std::unordered_set<Element *>
       m_TrackedElements; // Flat set of all live element pointers for O(1)
                          // IsTrackedElement

@@ -15,19 +15,25 @@
  * @brief Configuration for CSS Flexbox layout.
  */
 struct FlexLayoutConfig {
-  std::wstring direction = L"ltr";     ///< Text direction: "ltr" or "rtl".
-  std::wstring flexDirection = L"row"; ///< Main axis direction: "row", "rowreverse", "column", "columnreverse".
-  int gap = 0;                         ///< Gap between items in pixels.
-  std::wstring align = L"start";      ///< Cross-axis alignment: "normal", "stretch", "center", "start", "end", "flexstart", "flexend".
-  std::wstring justify = L"start";    ///< Main-axis alignment: "start", "center", "end".
-  int paddingLeft = 0;                 ///< Container left padding.
-  int paddingTop = 0;                 ///< Container top padding.
-  int paddingRight = 0;               ///< Container right padding.
-  int paddingBottom = 0;              ///< Container bottom padding.
+  std::wstring direction = L"ltr"; ///< Text direction: "ltr" or "rtl".
+  std::wstring flexDirection =
+      L"row";  ///< Main axis direction: "row", "rowreverse", "column",
+               ///< "columnreverse".
+  int gap = 0; ///< Gap between items in pixels.
+  std::wstring align =
+      L"start"; ///< Cross-axis alignment: "normal", "stretch", "center",
+                ///< "start", "end", "flexstart", "flexend".
+  std::wstring justify =
+      L"start";          ///< Main-axis alignment: "start", "center", "end".
+  int paddingLeft = 0;   ///< Container left padding.
+  int paddingTop = 0;    ///< Container top padding.
+  int paddingRight = 0;  ///< Container right padding.
+  int paddingBottom = 0; ///< Container bottom padding.
 };
 
 /**
- * @brief Implements CSS Flexbox layout algorithm for positioning child elements.
+ * @brief Implements CSS Flexbox layout algorithm for positioning child
+ * elements.
  *
  * @note Static utility class; handles positioning and sizing of child elements
  *       within a flex container according to CSS Flexbox specification rules.

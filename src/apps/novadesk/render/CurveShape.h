@@ -76,7 +76,7 @@ private:
   float m_Control2Y = 0.0f; ///< Second control point Y (cubic only).
   float m_EndX = 0.0f;      ///< End point X.
   float m_EndY = 0.0f;      ///< End point Y.
-  bool m_IsCubic = false;    ///< True for cubic, false for quadratic.
+  bool m_IsCubic = false;   ///< True for cubic, false for quadratic.
 
   bool CreateCurveGeometry(ID2D1Factory *factory,
                            ID2D1PathGeometry **outGeometry) const;

@@ -28,7 +28,8 @@ class InputBoxElement;
 class ColorPickerElement;
 
 /**
- * @brief Parses JavaScript objects into C++ option structs for element creation.
+ * @brief Parses JavaScript objects into C++ option structs for element
+ * creation.
  *
  * @note Provides Parse, Apply, and PreFill functions for each element type.
  *       Parse reads JS properties, Apply sets element state, PreFill reads

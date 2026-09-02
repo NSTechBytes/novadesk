@@ -70,9 +70,9 @@ struct ComInit {
   HRESULT hr = E_FAIL;
   ComInit() { hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED); }
   ~ComInit() {
-  // NOTE: RPC_E_CHANGED_MODE means COM was already initialized in a different
-  // apartment model — calling CoUninitialize there corrupts COM state.
-  if (hr == S_OK)
+    // NOTE: RPC_E_CHANGED_MODE means COM was already initialized in a different
+    // apartment model — calling CoUninitialize there corrupts COM state.
+    if (hr == S_OK)
       CoUninitialize();
   }
   bool Ok() const { return SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE; }
@@ -175,7 +175,8 @@ bool SaveIconToIcoFile(HICON hIcon, FILE *fp) {
     DeleteObject(iconInfo.hbmMask);
     return false;
   }
-  // WARNING: Caller is responsible for calling DeleteObject on returned HBITMAP.
+  // WARNING: Caller is responsible for calling DeleteObject on returned
+  // HBITMAP.
   BYTE *colorBits = new BYTE[colorBytesCount];
   if (!GetDIBits(dc, iconInfo.hbmColor, 0, bmColor.bmHeight, colorBits, bmi,
                  DIB_RGB_COLORS)) {

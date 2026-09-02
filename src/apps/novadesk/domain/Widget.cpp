@@ -1762,8 +1762,7 @@ void Widget::AddImage(const PropertyParser::ImageOptions &options) {
       new ImageElement(options.id, options.x, options.y, options.width,
                        options.height, options.path);
 
-  PropertyParser::ApplyImageOptions(
-      element, options);
+  PropertyParser::ApplyImageOptions(element, options);
 
   element->SetPreserveAspectRatio(options.preserveAspectRatio);
   element->SetImageAlpha(options.imageAlpha);

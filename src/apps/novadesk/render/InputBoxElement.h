@@ -284,11 +284,11 @@ public:
   // Event Callbacks
   // ============================================================================
 
-  int m_OnTextChangeCallbackId = -1;    ///< Text content changed.
-  int m_OnEnterCallbackId = -1;         ///< Enter key pressed.
-  int m_OnFocusCallbackId = -1;         ///< Input received focus.
-  int m_OnBlurCallbackId = -1;          ///< Input lost focus.
-  int m_OnInvalidInputCallbackId = -1;  ///< Typed char rejected by inputType.
+  int m_OnTextChangeCallbackId = -1;   ///< Text content changed.
+  int m_OnEnterCallbackId = -1;        ///< Enter key pressed.
+  int m_OnFocusCallbackId = -1;        ///< Input received focus.
+  int m_OnBlurCallbackId = -1;         ///< Input lost focus.
+  int m_OnInvalidInputCallbackId = -1; ///< Typed char rejected by inputType.
 
 private:
   Microsoft::WRL::ComPtr<IDWriteTextLayout>

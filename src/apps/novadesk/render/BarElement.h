@@ -13,7 +13,7 @@
 /**
  * @brief Orientation of the bar gauge.
  */
-enum BarOrientation { 
+enum BarOrientation {
   BAR_HORIZONTAL = 0, ///< Bar fills from left to right.
   BAR_VERTICAL = 1    ///< Bar fills from bottom to top.
 };
@@ -85,7 +85,7 @@ public:
   BYTE GetBarAlpha() const { return m_BarAlpha; }
 
 private:
-  float m_Value;              ///< Current value (0.0-1.0).
+  float m_Value;                ///< Current value (0.0-1.0).
   BarOrientation m_Orientation; ///< Bar orientation.
 
   int m_BarCornerRadius = 0; ///< Corner radius of the bar fill.

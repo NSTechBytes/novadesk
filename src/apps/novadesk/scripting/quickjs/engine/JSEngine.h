@@ -45,15 +45,15 @@ struct MouseEventData {
  */
 struct DropEventData {
   std::vector<std::wstring> files; ///< Dropped file paths.
-  int clientX = 0;        ///< Client-area X coordinate.
-  int clientY = 0;        ///< Client-area Y coordinate.
-  int screenX = 0;        ///< Screen X coordinate.
-  int screenY = 0;        ///< Screen Y coordinate.
-  int offsetX = 0;        ///< Element-local X coordinate.
-  int offsetY = 0;        ///< Element-local Y coordinate.
-  int offsetXPercent = 0; ///< X as percentage of element width.
-  int offsetYPercent = 0; ///< Y as percentage of element height.
-  std::string effect = "copy"; ///< Drop effect ("copy", "move", "link").
+  int clientX = 0;                 ///< Client-area X coordinate.
+  int clientY = 0;                 ///< Client-area Y coordinate.
+  int screenX = 0;                 ///< Screen X coordinate.
+  int screenY = 0;                 ///< Screen Y coordinate.
+  int offsetX = 0;                 ///< Element-local X coordinate.
+  int offsetY = 0;                 ///< Element-local Y coordinate.
+  int offsetXPercent = 0;          ///< X as percentage of element width.
+  int offsetYPercent = 0;          ///< Y as percentage of element height.
+  std::string effect = "copy";     ///< Drop effect ("copy", "move", "link").
 };
 
 /**
@@ -227,8 +227,8 @@ static const UINT WM_NOVADESK_DISPATCH = WM_USER + 101;
  * @brief Dispatch types for WM_NOVADESK_DISPATCH.
  */
 enum DispatchType : WPARAM {
-  DISPATCH_TOAST = 1,     ///< Toast notification event.
-  DISPATCH_WEBFETCH = 2,  ///< WebFetch completion event.
+  DISPATCH_TOAST = 1,      ///< Toast notification event.
+  DISPATCH_WEBFETCH = 2,   ///< WebFetch completion event.
   DISPATCH_FONT_READY = 3, ///< Font download completion event.
 };
 

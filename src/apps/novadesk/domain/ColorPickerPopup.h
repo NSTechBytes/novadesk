@@ -70,23 +70,23 @@ private:
   void RemoveOutsideClickHook();
   COLORREF HSV() const;
 
-  Widget *m_Widget;                ///< Owning widget.
-  ColorPickerElement *m_Picker;    ///< Associated color picker element.
-  HWND m_hWnd = nullptr;          ///< Popup window handle.
+  Widget *m_Widget;             ///< Owning widget.
+  ColorPickerElement *m_Picker; ///< Associated color picker element.
+  HWND m_hWnd = nullptr;        ///< Popup window handle.
 
   // Input fields
-  HWND m_R = nullptr;             ///< Red input field.
-  HWND m_G = nullptr;             ///< Green input field.
-  HWND m_B = nullptr;             ///< Blue input field.
-  HWND m_Hex = nullptr;           ///< Hex color input field.
+  HWND m_R = nullptr;   ///< Red input field.
+  HWND m_G = nullptr;   ///< Green input field.
+  HWND m_B = nullptr;   ///< Blue input field.
+  HWND m_Hex = nullptr; ///< Hex color input field.
 
   // Magnifier
-  HWND m_Magnifier = nullptr;     ///< Eyedropper magnifier window.
+  HWND m_Magnifier = nullptr; ///< Eyedropper magnifier window.
   HDC m_MagnifierFrameDc = nullptr;
   HBITMAP m_MagnifierFrameBitmap = nullptr;
   HGDIOBJ m_MagnifierFrameOldBitmap = nullptr;
 
-  HFONT m_Font = nullptr;         ///< UI font.
+  HFONT m_Font = nullptr;          ///< UI font.
   HBRUSH m_InputBgBrush = nullptr; ///< Input field background brush.
   COLORREF m_CachedInputBgColor = CLR_INVALID;
 
@@ -94,25 +94,25 @@ private:
   float m_H = 0, m_S = 0, m_V = 0; ///< Current HSV values.
 
   // Drag state
-  bool m_dragSV = false;         ///< Dragging saturation/value area.
-  bool m_dragHue = false;        ///< Dragging hue strip.
-  bool m_eye = false;            ///< Eyedropper active.
+  bool m_dragSV = false;  ///< Dragging saturation/value area.
+  bool m_dragHue = false; ///< Dragging hue strip.
+  bool m_eye = false;     ///< Eyedropper active.
   bool m_eyeAwaitingFirstRelease = false;
-  bool m_sync = false;           ///< Suppresses recursive sync.
+  bool m_sync = false; ///< Suppresses recursive sync.
 
-  float m_SaturationValueHue = -1.0f; ///< Cached hue for SV bitmap.
+  float m_SaturationValueHue = -1.0f;         ///< Cached hue for SV bitmap.
   std::vector<DWORD> m_SaturationValuePixels; ///< Cached SV gradient pixels.
 
   bool m_WidgetNeedsRedraw = false; ///< Pending widget redraw flag.
-  bool m_HexMode = false;          ///< HEX input mode (vs RGBA).
-  int m_EditingControl = 0;        ///< Currently focused input field.
-  bool m_FormatHover = false;      ///< Hovering over format toggle.
+  bool m_HexMode = false;           ///< HEX input mode (vs RGBA).
+  int m_EditingControl = 0;         ///< Currently focused input field.
+  bool m_FormatHover = false;       ///< Hovering over format toggle.
 
   bool m_IgnoreEyedropperFocusLoss = false;
   POINT m_LastSampledPos = {-1, -1}; ///< Last eyedropper sample position.
   COLORREF m_LastSampledColor = CLR_INVALID;
   COLORREF m_OriginalColor = RGB(0, 0, 0); ///< Color when popup opened.
-  bool m_Canceled = false;         ///< True if user canceled selection.
+  bool m_Canceled = false;                 ///< True if user canceled selection.
 
   /// Show Desktop state when popup opened (to detect transitions).
   bool m_ShowDesktopWasActive = false;
