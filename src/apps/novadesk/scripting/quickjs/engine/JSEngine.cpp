@@ -937,7 +937,21 @@ void ClearHandlerMap(std::unordered_map<std::string, IpcHandler> &map) {
   map.clear();
 }
 
-void ClearWidgetEventListeners() { g_widgetEventListeners.clear(); }
+void ClearWidgetEventListeners() {
+  if (g_context) {
+    for (auto &widgetKv : g_widgetEventListeners) {
+      for (auto &eventKv : widgetKv.second) {
+        for (int id : eventKv.second) {
+          if (id > 0 && id < static_cast<int>(g_eventCallbacks.size())) {
+            JS_FreeValue(g_context, g_eventCallbacks[id]);
+            g_eventCallbacks[id] = JS_UNDEFINED;
+          }
+        }
+      }
+    }
+  }
+  g_widgetEventListeners.clear();
+}
 
 void ClearEventCallbacksForScript(const std::wstring &scriptPath) {
   for (size_t i = 1; i < g_eventCallbacks.size(); ++i) {
@@ -1771,7 +1785,20 @@ void ClearWidgetEventListeners(Widget *widget) {
   std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
   if (!widget)
     return;
-  g_widgetEventListeners.erase(widget);
+  auto it = g_widgetEventListeners.find(widget);
+  if (it == g_widgetEventListeners.end())
+    return;
+  if (g_context) {
+    for (auto &eventKv : it->second) {
+      for (int id : eventKv.second) {
+        if (id > 0 && id < static_cast<int>(g_eventCallbacks.size())) {
+          JS_FreeValue(g_context, g_eventCallbacks[id]);
+          g_eventCallbacks[id] = JS_UNDEFINED;
+        }
+      }
+    }
+  }
+  g_widgetEventListeners.erase(it);
 }
 
 void CallEventCallback(int callbackId, Widget *widget,
