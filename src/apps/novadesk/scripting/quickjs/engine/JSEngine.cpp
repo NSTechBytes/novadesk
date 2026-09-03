@@ -252,9 +252,9 @@ void DestroyWidgetsForScript(const std::wstring &scriptPath) {
   // which dispatches WM_DESTROY synchronously; holding the lock there
   // would deadlock.
   for (auto *w : toDelete) {
-    // Remove the pointer-keyed listener entry before the
-    // widget storage can be released.
-    g_widgetEventListeners.erase(w);
+    // Free JS callbacks and remove the pointer-keyed listener entry before the
+    // widget storage is released — prevents stale key use-after-free.
+    ClearWidgetEventListeners(w);
     g_widgetIdToOwner.erase(w->GetOptions().id);
     g_widgetOwners.erase(w);
 
@@ -1512,6 +1512,7 @@ void UnregisterWidgetOwner(Widget *widget) {
   std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
   if (!widget)
     return;
+  ClearWidgetEventListeners(widget);
   g_widgetIdToOwner.erase(widget->GetOptions().id);
   g_widgetOwners.erase(widget);
 }
