@@ -127,6 +127,7 @@ JSModuleDef *ModuleLoader(JSContext *ctx, const char *moduleName, void *) {
                          JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
 
   if (JS_IsException(func)) {
+    JS_FreeValue(ctx, func);
     return nullptr;
   }
 
