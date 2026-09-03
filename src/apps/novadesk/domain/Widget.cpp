@@ -123,6 +123,15 @@ Widget::Widget(const WidgetOptions &options)
 
 // Destructor. Cleans up window resources and removes from system tracking.
 Widget::~Widget() {
+  // Fire "closed" while the window and event listeners are still intact.
+  // This must happen before GWLP_USERDATA is cleared, before listeners are
+  // removed, and before DestroyWindow — all of which would make any callback
+  // that re-enters widget methods (e.g. GetWindow(), SetWindowPosition()) see
+  // either a dead HWND or no registered handlers.
+  // DestroyWindow also dispatches WM_DESTROY synchronously, so firing events
+  // after it risks re-entrancy into a mid-flight destructor.
+  JSEngine::TriggerWidgetEvent(this, "closed");
+
   if (m_hWnd) {
     KillTimer(m_hWnd, WidgetAnimationHelper::kTimerId);
     KillTimer(m_hWnd, TIMER_TOPMOST);
@@ -137,8 +146,6 @@ Widget::~Widget() {
     while (PeekMessageW(&msg, m_hWnd, WM_TIMER, WM_TIMER, PM_REMOVE)) {
       // intentionally empty — just discard
     }
-
-    SetWindowLongPtr(m_hWnd, GWLP_USERDATA, 0);
 
     if (m_DropTarget) {
       RevokeDragDrop(m_hWnd);
@@ -174,6 +181,11 @@ Widget::~Widget() {
       delete reinterpret_cast<AsyncImageResult *>(message.lParam);
     }
 
+    // Detach the widget pointer from the HWND before calling DestroyWindow.
+    // DestroyWindow dispatches WM_DESTROY synchronously; zeroing GWLP_USERDATA
+    // first ensures WndProc cannot dispatch back into this widget while its
+    // destructor is mid-flight.
+    SetWindowLongPtr(m_hWnd, GWLP_USERDATA, 0);
     HWND hWnd = m_hWnd;
     m_hWnd = nullptr;
     DestroyWindow(hWnd);
