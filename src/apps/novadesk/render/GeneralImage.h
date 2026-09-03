@@ -124,11 +124,11 @@ public:
   BYTE GetImageTintAlpha() const { return m_ImageTintAlpha; }
 
   /// Sets the overall image opacity (0-255).
-  void SetImageAlpha(BYTE alpha) { m_ImageAlpha = alpha; }
+  void SetImageAlpha(BYTE alpha) { m_ImageAlpha = alpha; m_EffectsDirty = true; }
   BYTE GetImageAlpha() const { return m_ImageAlpha; }
 
   /// Enables or disables grayscale rendering.
-  void SetGrayscale(bool enable) { m_Grayscale = enable; }
+  void SetGrayscale(bool enable) { m_Grayscale = enable; m_EffectsDirty = true; }
   bool IsGrayscale() const { return m_Grayscale; }
 
   /// Sets a custom 5x5 color transformation matrix.
@@ -262,6 +262,23 @@ private:
   std::array<float, 20> m_ColorMatrix{};
   ImageFlipMode m_ImageFlip = IMAGE_FLIP_NONE;
   bool m_UseExifOrientation = false;
+
+  // ============================================================================
+  // Cached D2D Effects (mutable — lazily created inside const BuildProcessedImage)
+  // ============================================================================
+
+  /// Set whenever an effect parameter changes or the bitmap is reset.
+  /// Cleared after the effects are (re-)created in BuildProcessedImage.
+  mutable bool m_EffectsDirty = true;
+  /// The D2D context used to create the cached effects.
+  /// If the caller passes a different context (device lost/recreated),
+  /// the effects are discarded and recreated.
+  mutable ID2D1DeviceContext *m_EffectContext = nullptr;
+  /// Cached grayscale color-matrix effect (only valid when m_Grayscale).
+  mutable Microsoft::WRL::ComPtr<ID2D1Effect> m_GrayEffect;
+  /// Cached combined tint/color-matrix/alpha effect (always active when any
+  /// effect is requested).
+  mutable Microsoft::WRL::ComPtr<ID2D1Effect> m_ColorEffect;
 
   // ============================================================================
   // Crop Region

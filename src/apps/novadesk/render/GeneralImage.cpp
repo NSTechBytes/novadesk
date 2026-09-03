@@ -80,7 +80,15 @@ GeneralImage::GeneralImage() {
 
 GeneralImage::~GeneralImage() { ShutdownAsyncDownloads(); }
 
-void GeneralImage::ResetBitmapCache() { m_D2DBitmap.Reset(); }
+void GeneralImage::ResetBitmapCache() {
+  m_D2DBitmap.Reset();
+  // Cached effects hold a reference to the old bitmap as input; reset them
+  // so BuildProcessedImage recreates them with the new bitmap next frame.
+  m_GrayEffect.Reset();
+  m_ColorEffect.Reset();
+  m_EffectContext = nullptr;
+  m_EffectsDirty = true;
+}
 
 void GeneralImage::ReloadWICBitmap() {
   m_pWICBitmap.Reset();
@@ -341,6 +349,7 @@ void GeneralImage::SetImageTint(COLORREF color, BYTE alpha) {
   m_ImageTint = color;
   m_ImageTintAlpha = alpha;
   m_HasImageTint = (alpha > 0);
+  m_EffectsDirty = true;
 }
 
 void GeneralImage::SetColorMatrix(const float *matrix) {
@@ -350,6 +359,7 @@ void GeneralImage::SetColorMatrix(const float *matrix) {
   } else {
     m_HasColorMatrix = false;
   }
+  m_EffectsDirty = true;
 }
 
 void GeneralImage::SetUseExifOrientation(bool enabled) {
@@ -469,47 +479,100 @@ bool GeneralImage::BuildProcessedImage(
 
   outImage = m_D2DBitmap.Get();
 
-  if (!(m_Grayscale || m_HasImageTint || m_HasColorMatrix ||
-        m_ImageAlpha < 255)) {
+  const bool needsGray  = m_Grayscale;
+  const bool needsColor = m_HasImageTint || m_HasColorMatrix || m_ImageAlpha < 255;
+
+  if (!needsGray && !needsColor) {
+    // No effects needed — release any cached effects from a previous state
+    // so they don't hold stale references.
+    m_GrayEffect.Reset();
+    m_ColorEffect.Reset();
+    m_EffectContext = nullptr;
+    m_EffectsDirty = false;
     return true;
   }
 
-  Microsoft::WRL::ComPtr<ID2D1Image> current = m_D2DBitmap.Get();
-
-  if (m_Grayscale) {
-    Microsoft::WRL::ComPtr<ID2D1Effect> grayEffect;
-    if (SUCCEEDED(context->CreateEffect(CLSID_D2D1ColorMatrix,
-                                        grayEffect.GetAddressOf()))) {
-      D2D1_MATRIX_5X4_F grayMatrix = D2D1::Matrix5x4F(
-          0.299f, 0.299f, 0.299f, 0.0f, 0.587f, 0.587f, 0.587f, 0.0f, 0.114f,
-          0.114f, 0.114f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
-      grayEffect->SetInput(0, current.Get());
-      grayEffect->SetValue(D2D1_COLORMATRIX_PROP_COLOR_MATRIX, grayMatrix);
-      grayEffect->GetOutput(&current);
-    }
+  // If the D2D device context changed (device lost/recreated) the old effect
+  // objects belong to the old device and must be discarded.
+  if (context != m_EffectContext) {
+    m_GrayEffect.Reset();
+    m_ColorEffect.Reset();
+    m_EffectsDirty = true;
+    m_EffectContext = context;
   }
 
-  Microsoft::WRL::ComPtr<ID2D1Effect> colorEffect;
-  if (SUCCEEDED(context->CreateEffect(CLSID_D2D1ColorMatrix,
-                                      colorEffect.GetAddressOf()))) {
-    D2D1_MATRIX_5X4_F matrix = D2D1::Matrix5x4F(
-        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
-
-    if (m_HasColorMatrix) {
-      memcpy(&matrix, m_ColorMatrix.data(), sizeof(float) * 20);
-    } else if (m_HasImageTint) {
-      matrix.m[0][0] = GetRValue(m_ImageTint) / 255.0f;
-      matrix.m[1][1] = GetGValue(m_ImageTint) / 255.0f;
-      matrix.m[2][2] = GetBValue(m_ImageTint) / 255.0f;
-      matrix.m[3][3] = m_ImageTintAlpha / 255.0f;
+  // -----------------------------------------------------------------------
+  // (Re-)create effects when dirty — COM/GPU allocation happens here only.
+  // -----------------------------------------------------------------------
+  if (m_EffectsDirty) {
+    // Gray effect — only allocate when grayscale is actually needed.
+    if (needsGray) {
+      if (!m_GrayEffect) {
+        if (FAILED(context->CreateEffect(CLSID_D2D1ColorMatrix,
+                                         m_GrayEffect.ReleaseAndGetAddressOf()))) {
+          m_GrayEffect.Reset();
+        }
+      }
+      if (m_GrayEffect) {
+        D2D1_MATRIX_5X4_F grayMatrix = D2D1::Matrix5x4F(
+            0.299f, 0.299f, 0.299f, 0.0f,
+            0.587f, 0.587f, 0.587f, 0.0f,
+            0.114f, 0.114f, 0.114f, 0.0f,
+            0.0f,   0.0f,   0.0f,   1.0f,
+            0.0f,   0.0f,   0.0f,   0.0f);
+        m_GrayEffect->SetValue(D2D1_COLORMATRIX_PROP_COLOR_MATRIX, grayMatrix);
+      }
+    } else {
+      m_GrayEffect.Reset();
     }
-    // Apply global image alpha unconditionally, regardless of color matrix
-    matrix.m[3][3] *= (m_ImageAlpha / 255.0f);
 
-    colorEffect->SetInput(0, current.Get());
-    colorEffect->SetValue(D2D1_COLORMATRIX_PROP_COLOR_MATRIX, matrix);
-    colorEffect->GetOutput(&current);
+    // Color/tint/alpha effect.
+    if (needsColor) {
+      if (!m_ColorEffect) {
+        if (FAILED(context->CreateEffect(CLSID_D2D1ColorMatrix,
+                                          m_ColorEffect.ReleaseAndGetAddressOf()))) {
+          m_ColorEffect.Reset();
+        }
+      }
+      if (m_ColorEffect) {
+        D2D1_MATRIX_5X4_F matrix = D2D1::Matrix5x4F(
+            1.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 1.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 1.0f,
+            0.0f, 0.0f, 0.0f, 0.0f);
+
+        if (m_HasColorMatrix) {
+          memcpy(&matrix, m_ColorMatrix.data(), sizeof(float) * 20);
+        } else if (m_HasImageTint) {
+          matrix.m[0][0] = GetRValue(m_ImageTint) / 255.0f;
+          matrix.m[1][1] = GetGValue(m_ImageTint) / 255.0f;
+          matrix.m[2][2] = GetBValue(m_ImageTint) / 255.0f;
+          matrix.m[3][3] = m_ImageTintAlpha / 255.0f;
+        }
+        matrix.m[3][3] *= (m_ImageAlpha / 255.0f);
+        m_ColorEffect->SetValue(D2D1_COLORMATRIX_PROP_COLOR_MATRIX, matrix);
+      }
+    } else {
+      m_ColorEffect.Reset();
+    }
+
+    m_EffectsDirty = false;
+  }
+
+  // -----------------------------------------------------------------------
+  // Wire inputs and collect output — cheap every frame (no allocation).
+  // -----------------------------------------------------------------------
+  Microsoft::WRL::ComPtr<ID2D1Image> current = m_D2DBitmap.Get();
+
+  if (m_GrayEffect) {
+    m_GrayEffect->SetInput(0, current.Get());
+    m_GrayEffect->GetOutput(&current);
+  }
+
+  if (m_ColorEffect) {
+    m_ColorEffect->SetInput(0, current.Get());
+    m_ColorEffect->GetOutput(&current);
   }
 
   outImage = current;
