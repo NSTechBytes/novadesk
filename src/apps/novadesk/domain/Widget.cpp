@@ -282,8 +282,11 @@ bool Widget::Create() {
 
   // Initialize tooltip
   m_Tooltip.Initialize(m_hWnd, hInstance);
-  // Poll Ctrl key to provide temporary runtime overrides
-  SetTimer(m_hWnd, TIMER_CTRL_OVERRIDE, 50, nullptr);
+  // Poll Ctrl key to provide temporary runtime overrides — only needed while
+  // click-through is active; started/stopped by SetClickThrough otherwise.
+  if (m_Options.clickThrough) {
+    SetTimer(m_hWnd, TIMER_CTRL_OVERRIDE, 50, nullptr);
+  }
 
   // Initialize OLE Drag and Drop Target
   OleInitialize(nullptr);
@@ -779,12 +782,18 @@ void Widget::SetClickThrough(bool enable) {
 
     if (m_hWnd) {
       LONG exStyle = GetWindowLong(m_hWnd, GWL_EXSTYLE);
-      if (enable)
+      if (enable) {
         exStyle |= WS_EX_TRANSPARENT;
-      else
+        SetWindowLong(m_hWnd, GWL_EXSTYLE, exStyle);
+        // Start polling the Ctrl key now that click-through is active.
+        SetTimer(m_hWnd, TIMER_CTRL_OVERRIDE, 50, nullptr);
+      } else {
+        // Restore full transparency and stop the Ctrl-key poll — it only has
+        // work to do while click-through is enabled.
         exStyle &= ~WS_EX_TRANSPARENT;
-
-      SetWindowLong(m_hWnd, GWL_EXSTYLE, exStyle);
+        SetWindowLong(m_hWnd, GWL_EXSTYLE, exStyle);
+        KillTimer(m_hWnd, TIMER_CTRL_OVERRIDE);
+      }
     }
     Settings::SaveWidget(m_Options.id, m_Options);
   }
@@ -1305,6 +1314,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
           }
         }
       } else if (wParam == TIMER_CTRL_OVERRIDE) {
+        // Timer only runs while clickThrough is true (started/stopped by
+        // SetClickThrough and Create), but guard here defensively.
         if (widget->m_Options.clickThrough) {
           const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
           const bool shouldBeTransparent = !ctrlHeld;

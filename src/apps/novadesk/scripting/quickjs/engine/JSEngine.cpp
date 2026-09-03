@@ -254,7 +254,7 @@ void DestroyWidgetsForScript(const std::wstring &scriptPath) {
   for (auto *w : toDelete) {
     // Free JS callbacks and remove the pointer-keyed listener entry before the
     // widget storage is released — prevents stale key use-after-free.
-    ClearWidgetEventListeners(w);
+    JSEngine::ClearWidgetEventListeners(w);
     g_widgetIdToOwner.erase(w->GetOptions().id);
     g_widgetOwners.erase(w);
 
