@@ -1400,7 +1400,8 @@ bool LoadAndExecuteScripts(duk_context *ctx,
   // requested via an empty stale check. Previously this was too aggressive,
   // clearing all widgets whenever any script was previously removed. We now
   // rely on surgical cleanup in AddScript/RemoveScript.
-  if (scriptPaths.empty() && !g_staleScripts.empty()) {
+  const bool didStaleReset = scriptPaths.empty() && !g_staleScripts.empty();
+  if (didStaleReset) {
     DestroyAllWidgets();
     DestroyAllTrays();
     ResetRuntime();
@@ -1409,8 +1410,13 @@ bool LoadAndExecuteScripts(duk_context *ctx,
     return false;
   }
 
-  DestroyAllWidgets();
-  DestroyAllTrays();
+  // Only destroy widgets/trays here when the stale-reset path above did not
+  // already do so — calling them a second time operates on already-cleared
+  // maps and re-triggers TrayDestroy on non-existent tray IDs.
+  if (!didStaleReset) {
+    DestroyAllWidgets();
+    DestroyAllTrays();
+  }
 
   std::vector<std::wstring> resolved;
   if (scriptPaths.empty()) {
