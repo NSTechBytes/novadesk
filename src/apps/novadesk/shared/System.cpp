@@ -114,6 +114,9 @@ std::chrono::steady_clock::time_point g_lastNetworkSample =
 // NOTE: PDH provides high-precision disk I/O counters via Windows Performance
 // Data Helper API. Query handle and counters must persist across calls.
 // SAFETY: g_diskIoInitStarted prevents concurrent initialization attempts.
+// g_diskIoShuttingDown is set before ShutdownDiskIoStats acquires the mutex so
+// that a background init thread that wins the mutex after shutdown can detect
+// the race and immediately close any handle it opened instead of storing it.
 std::mutex g_diskIoMutex;
 PDH_HQUERY g_diskIoQuery = nullptr;
 PDH_HCOUNTER g_diskReadCounter = nullptr;
@@ -121,6 +124,7 @@ PDH_HCOUNTER g_diskWriteCounter = nullptr;
 bool g_diskIoPrimed = false;
 std::atomic<bool> g_diskIoInitStarted{false};
 std::atomic<bool> g_diskIoReady{false};
+std::atomic<bool> g_diskIoShuttingDown{false};
 
 // ============================================================================
 // Power State Structures
@@ -411,6 +415,12 @@ bool GetDiskIoStats(DiskIoStats &outStats) {
       std::thread([]() {
         std::lock_guard<std::mutex> lock(g_diskIoMutex);
 
+        // ShutdownDiskIoStats may have run while this thread was waiting for
+        // the mutex.  If so, do not open or store any new query handle.
+        if (g_diskIoShuttingDown.load(std::memory_order_acquire)) {
+          return;
+        }
+
         if (g_diskIoQuery) {
           g_diskIoReady.store(true, std::memory_order_release);
           return;
@@ -488,6 +498,10 @@ bool GetDiskIoStats(DiskIoStats &outStats) {
 }
 
 void ShutdownDiskIoStats() {
+  // Set the shutdown flag before acquiring the mutex.  A background init
+  // thread that is blocked waiting for the mutex will see this flag once it
+  // gets in and will close any handle it opened rather than storing it.
+  g_diskIoShuttingDown.store(true, std::memory_order_release);
   std::lock_guard<std::mutex> lock(g_diskIoMutex);
   if (g_diskIoQuery) {
     PdhCloseQuery(g_diskIoQuery);
