@@ -2880,6 +2880,18 @@ void Widget::ClearElementReferences(Element *element) {
     if (m_hWnd && GetCapture() == m_hWnd && !m_IsDragging)
       ReleaseCapture();
   }
+  if (element == m_ScrollbarDragContainer) {
+    m_ScrollbarDragContainer = nullptr;
+    m_IsScrollbarDragging = false;
+  }
+  if (element == m_ScrollbarHoverContainer) {
+    m_ScrollbarHoverContainer = nullptr;
+    m_ScrollbarHoverPart = ScrollbarHitPart::None;
+  }
+  if (element == m_SwipeContainer)
+    m_SwipeContainer = nullptr;
+  if (element == m_SwipeTargetElement)
+    m_SwipeTargetElement = nullptr;
 }
 
 void Widget::RemoveElementsByGroup(const std::wstring &group) {
@@ -2950,6 +2962,13 @@ bool Widget::RemoveElements(const std::wstring &id) {
     WidgetAnimationHelper::ClearAllAnimations(*this);
     m_MouseOverElement = nullptr;
     m_TooltipElement = nullptr;
+    m_CursorElement = nullptr;
+    m_ScrollbarDragContainer = nullptr;
+    m_IsScrollbarDragging = false;
+    m_ScrollbarHoverContainer = nullptr;
+    m_ScrollbarHoverPart = ScrollbarHitPart::None;
+    m_SwipeContainer = nullptr;
+    m_SwipeTargetElement = nullptr;
     Redraw();
     return true;
   }
