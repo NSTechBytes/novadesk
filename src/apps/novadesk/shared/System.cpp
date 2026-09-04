@@ -111,12 +111,22 @@ std::chrono::steady_clock::time_point g_lastNetworkSample =
 // Disk IO Metrics - Globals (Performance Data Helper)
 // ============================================================================
 
-// NOTE: PDH provides high-precision disk I/O counters via Windows Performance
-// Data Helper API. Query handle and counters must persist across calls.
-// SAFETY: g_diskIoInitStarted prevents concurrent initialization attempts.
-// g_diskIoShuttingDown is set before ShutdownDiskIoStats acquires the mutex so
-// that a background init thread that wins the mutex after shutdown can detect
-// the race and immediately close any handle it opened instead of storing it.
+// Architecture: PDH query setup and all PdhCollectQueryData calls happen
+// exclusively on a dedicated background thread (g_diskIoPollThread).
+// GetDiskIoStats() reads the last collected values from atomics — no PDH call,
+// no mutex, no blocking on the UI/message thread.
+//
+// Lifecycle:
+//   First GetDiskIoStats() call  → starts init+poll background thread.
+//   ShutdownDiskIoStats()        → sets g_diskIoShuttingDown, signals the poll
+//                                   thread via g_diskIoPollCV, then joins it.
+//
+// Thread safety:
+//   g_diskIoMutex protects the PDH handles (g_diskIoQuery, counters).
+//   g_diskIoShuttingDown / g_diskIoReady are std::atomic.
+//   Collected values are stored in g_diskReadSpeed / g_diskWriteSpeed as
+//   std::atomic<double> so the UI thread never touches a mutex.
+
 std::mutex g_diskIoMutex;
 PDH_HQUERY g_diskIoQuery = nullptr;
 PDH_HCOUNTER g_diskReadCounter = nullptr;
@@ -125,6 +135,15 @@ bool g_diskIoPrimed = false;
 std::atomic<bool> g_diskIoInitStarted{false};
 std::atomic<bool> g_diskIoReady{false};
 std::atomic<bool> g_diskIoShuttingDown{false};
+
+// Background poll thread and its wake/stop condition.
+std::thread g_diskIoPollThread;
+std::mutex g_diskIoPollMutex;
+std::condition_variable g_diskIoPollCV;
+
+// Last-collected counter values — written by poll thread, read by UI thread.
+std::atomic<double> g_diskReadSpeed{0.0};
+std::atomic<double> g_diskWriteSpeed{0.0};
 
 // ============================================================================
 // Power State Structures
@@ -407,101 +426,118 @@ bool GetDiskStats(const std::wstring &path, DiskStats &outStats) {
 }
 
 bool GetDiskIoStats(DiskIoStats &outStats) {
-  // Avoid blocking UI/window startup on expensive first PDH initialization.
+  // If the poll thread hasn't started yet, kick off init+polling on a
+  // background thread so the UI thread never touches PDH directly.
   if (!g_diskIoReady.load(std::memory_order_acquire)) {
     bool expected = false;
     if (g_diskIoInitStarted.compare_exchange_strong(
             expected, true, std::memory_order_acq_rel)) {
-      std::thread([]() {
-        std::lock_guard<std::mutex> lock(g_diskIoMutex);
+      g_diskIoPollThread = std::thread([]() {
+        // PDH initialisation (runs once) 
+        {
+          std::lock_guard<std::mutex> lock(g_diskIoMutex);
 
-        // ShutdownDiskIoStats may have run while this thread was waiting for
-        // the mutex.  If so, do not open or store any new query handle.
-        if (g_diskIoShuttingDown.load(std::memory_order_acquire)) {
-          return;
-        }
+          if (g_diskIoShuttingDown.load(std::memory_order_acquire))
+            return;
 
-        if (g_diskIoQuery) {
-          g_diskIoReady.store(true, std::memory_order_release);
-          return;
-        }
+          if (!g_diskIoQuery) {
+            if (PdhOpenQueryW(nullptr, 0, &g_diskIoQuery) != ERROR_SUCCESS) {
+              g_diskIoInitStarted.store(false, std::memory_order_release);
+              return;
+            }
 
-        if (PdhOpenQueryW(nullptr, 0, &g_diskIoQuery) != ERROR_SUCCESS) {
-          g_diskIoInitStarted.store(false, std::memory_order_release);
-          return;
-        }
+            if (PdhAddEnglishCounterW(
+                    g_diskIoQuery,
+                    L"\\PhysicalDisk(_Total)\\Disk Read Bytes/sec",
+                    0, &g_diskReadCounter) != ERROR_SUCCESS ||
+                PdhAddEnglishCounterW(
+                    g_diskIoQuery,
+                    L"\\PhysicalDisk(_Total)\\Disk Write Bytes/sec",
+                    0, &g_diskWriteCounter) != ERROR_SUCCESS) {
+              PdhCloseQuery(g_diskIoQuery);
+              g_diskIoQuery = nullptr;
+              g_diskReadCounter = nullptr;
+              g_diskWriteCounter = nullptr;
+              g_diskIoPrimed = false;
+              g_diskIoInitStarted.store(false, std::memory_order_release);
+              return;
+            }
 
-        if (PdhAddEnglishCounterW(
-                g_diskIoQuery, L"\\PhysicalDisk(_Total)\\Disk Read Bytes/sec",
-                0, &g_diskReadCounter) != ERROR_SUCCESS ||
-            PdhAddEnglishCounterW(
-                g_diskIoQuery, L"\\PhysicalDisk(_Total)\\Disk Write Bytes/sec",
-                0, &g_diskWriteCounter) != ERROR_SUCCESS) {
-          if (g_diskIoQuery) {
-            PdhCloseQuery(g_diskIoQuery);
+            // Prime — first collect establishes the baseline for rate counters.
+            if (PdhCollectQueryData(g_diskIoQuery) != ERROR_SUCCESS) {
+              PdhCloseQuery(g_diskIoQuery);
+              g_diskIoQuery = nullptr;
+              g_diskReadCounter = nullptr;
+              g_diskWriteCounter = nullptr;
+              g_diskIoPrimed = false;
+              g_diskIoInitStarted.store(false, std::memory_order_release);
+              return;
+            }
+            g_diskIoPrimed = true;
           }
-          g_diskIoQuery = nullptr;
-          g_diskReadCounter = nullptr;
-          g_diskWriteCounter = nullptr;
-          g_diskIoPrimed = false;
-          g_diskIoInitStarted.store(false, std::memory_order_release);
-          return;
         }
 
-        if (PdhCollectQueryData(g_diskIoQuery) != ERROR_SUCCESS) {
-          PdhCloseQuery(g_diskIoQuery);
-          g_diskIoQuery = nullptr;
-          g_diskReadCounter = nullptr;
-          g_diskWriteCounter = nullptr;
-          g_diskIoPrimed = false;
-          g_diskIoInitStarted.store(false, std::memory_order_release);
-          return;
-        }
-
-        g_diskIoPrimed = true;
         g_diskIoReady.store(true, std::memory_order_release);
-      }).detach();
+
+        // Polling loop (1 s interval)
+        // PdhCollectQueryData and PdhGetFormattedCounterValue run here, never
+        // on the UI/message thread.
+        constexpr auto kInterval = std::chrono::seconds(1);
+        while (true) {
+          {
+            std::unique_lock<std::mutex> lk(g_diskIoPollMutex);
+            g_diskIoPollCV.wait_for(lk, kInterval, []() {
+              return g_diskIoShuttingDown.load(std::memory_order_acquire);
+            });
+          }
+
+          if (g_diskIoShuttingDown.load(std::memory_order_acquire))
+            break;
+
+          std::lock_guard<std::mutex> lock(g_diskIoMutex);
+          if (!g_diskIoQuery)
+            break;
+
+          if (PdhCollectQueryData(g_diskIoQuery) != ERROR_SUCCESS)
+            continue;
+
+          PDH_FMT_COUNTERVALUE readValue{};
+          PDH_FMT_COUNTERVALUE writeValue{};
+          if (PdhGetFormattedCounterValue(g_diskReadCounter, PDH_FMT_DOUBLE,
+                                          nullptr, &readValue) == ERROR_SUCCESS &&
+              PdhGetFormattedCounterValue(g_diskWriteCounter, PDH_FMT_DOUBLE,
+                                          nullptr, &writeValue) == ERROR_SUCCESS) {
+            double r = (readValue.CStatus == ERROR_SUCCESS)
+                           ? readValue.doubleValue : 0.0;
+            double w = (writeValue.CStatus == ERROR_SUCCESS)
+                           ? writeValue.doubleValue : 0.0;
+            if (r < 0.0) r = 0.0;
+            if (w < 0.0) w = 0.0;
+            g_diskReadSpeed.store(r, std::memory_order_relaxed);
+            g_diskWriteSpeed.store(w, std::memory_order_relaxed);
+          }
+        }
+      });
     }
     return false;
   }
 
-  std::lock_guard<std::mutex> lock(g_diskIoMutex);
-  if (!g_diskIoQuery) {
-    g_diskIoReady.store(false, std::memory_order_release);
-    g_diskIoInitStarted.store(false, std::memory_order_release);
-    return false;
-  }
-
-  if (PdhCollectQueryData(g_diskIoQuery) != ERROR_SUCCESS) {
-    return false;
-  }
-
-  PDH_FMT_COUNTERVALUE readValue{};
-  PDH_FMT_COUNTERVALUE writeValue{};
-  if (PdhGetFormattedCounterValue(g_diskReadCounter, PDH_FMT_DOUBLE, nullptr,
-                                  &readValue) != ERROR_SUCCESS ||
-      PdhGetFormattedCounterValue(g_diskWriteCounter, PDH_FMT_DOUBLE, nullptr,
-                                  &writeValue) != ERROR_SUCCESS) {
-    return false;
-  }
-
-  outStats.readSpeed =
-      (readValue.CStatus == ERROR_SUCCESS) ? readValue.doubleValue : 0.0;
-  outStats.writeSpeed =
-      (writeValue.CStatus == ERROR_SUCCESS) ? writeValue.doubleValue : 0.0;
-
-  if (outStats.readSpeed < 0.0)
-    outStats.readSpeed = 0.0;
-  if (outStats.writeSpeed < 0.0)
-    outStats.writeSpeed = 0.0;
+  // UI thread: just read the atomics — no PDH call, no mutex, no blocking.
+  outStats.readSpeed  = g_diskReadSpeed.load(std::memory_order_relaxed);
+  outStats.writeSpeed = g_diskWriteSpeed.load(std::memory_order_relaxed);
   return true;
 }
 
 void ShutdownDiskIoStats() {
-  // Set the shutdown flag before acquiring the mutex.  A background init
-  // thread that is blocked waiting for the mutex will see this flag once it
-  // gets in and will close any handle it opened rather than storing it.
+  // Signal the poll thread to exit, then join it before touching the PDH
+  // handles — ensures PdhCloseQuery is never called while the poll thread
+  // still holds g_diskIoMutex or is mid-collect.
   g_diskIoShuttingDown.store(true, std::memory_order_release);
+  g_diskIoPollCV.notify_all();
+
+  if (g_diskIoPollThread.joinable())
+    g_diskIoPollThread.join();
+
   std::lock_guard<std::mutex> lock(g_diskIoMutex);
   if (g_diskIoQuery) {
     PdhCloseQuery(g_diskIoQuery);
