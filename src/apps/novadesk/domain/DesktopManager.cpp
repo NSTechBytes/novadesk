@@ -36,12 +36,10 @@ static Widget *FindWidget(HWND hWnd) {
   return nullptr;
 }
 
-// Initialize the System module.
-// Sets up helper windows and initializes multi-monitor information.
+// Re-enumerate all monitors and update c_Monitors.
+// Called at startup and whenever WM_DISPLAYCHANGE / WM_SETTINGCHANGE fires.
 
-void System::Initialize(HINSTANCE instance) {
-  // Initialize monitors from shared system metrics to keep a single monitor
-  // source of truth.
+void System::RefreshMonitors() {
   c_Monitors.monitors.clear();
   const auto metrics = novadesk::shared::system::GetDisplayMetrics();
   c_Monitors.vsL = metrics.virtualLeft;
@@ -69,6 +67,13 @@ void System::Initialize(HINSTANCE instance) {
     info.monitorName = m.monitorName;
     c_Monitors.monitors.push_back(std::move(info));
   }
+}
+
+// Initialize the System module.
+// Sets up helper windows and initializes multi-monitor information.
+
+void System::Initialize(HINSTANCE instance) {
+  RefreshMonitors();
 
   // Register a specialized class for system tracking
   WNDCLASSW wc = {0};
@@ -218,6 +223,25 @@ LRESULT CALLBACK System::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam,
   case WM_TIMER:
     if (wParam == TIMER_SHOWDESKTOP) {
       CheckDesktopState(GetDesktopIconsHostWindow());
+    }
+    break;
+
+  case WM_DISPLAYCHANGE:
+    // Display configuration changed: monitor connected/disconnected,
+    // resolution changed, or DPI changed. Refresh the monitor cache
+    // immediately so snap-to-edge, z-order placement, and hit-testing
+    // all use current geometry.
+    RefreshMonitors();
+    PrepareHelperWindow();
+    ChangeZPosInOrder();
+    break;
+
+  case WM_SETTINGCHANGE:
+    // SPI_SETWORKAREA fires when taskbar size/position changes, which alters
+    // the work-area rectangles used by snap-to-edge and ZPOSITION_ONDESKTOP.
+    if (wParam == SPI_SETWORKAREA) {
+      RefreshMonitors();
+      ChangeZPosInOrder();
     }
     break;
   }

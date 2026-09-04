@@ -172,6 +172,8 @@ public:
 private:
   static HWND GetDefaultShellWindow();
   static bool ShouldUseShellWindowAsDesktopIconsHost();
+  /// Re-enumerates all monitors and updates c_Monitors.
+  static void RefreshMonitors();
 
   static HWND c_Window;       ///< Main system window.
   static HWND c_HelperWindow; ///< Helper window for desktop integration.
