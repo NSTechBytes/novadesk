@@ -1114,45 +1114,102 @@ static std::wstring GetStorageFilePath() {
   return PathUtils::GetAppDataPath() + L"storage.json";
 }
 
-static JSValue LoadStorageObject(JSContext *ctx) {
+// ============================================================================
+// In-memory storage cache
+//
+// Eliminates the per-call disk read.  The file is still written on every
+// set() / remove() call (preserving durability), but the expensive
+// read + JSON-parse is done only once — on the first access after startup
+// or after an explicit cache invalidation.
+//
+// Values are stored as JSON-serialized strings so we never hold live JSValues
+// across calls (which would require a stable JSContext across reloads).
+// ============================================================================
+
+static bool g_storageCacheLoaded = false;
+static std::unordered_map<std::string, std::string> g_storageCache;
+static std::mutex g_storageCacheMutex;
+
+// Populate g_storageCache from disk if not already loaded.
+// Caller MUST hold g_storageCacheMutex.
+static void EnsureStorageCacheLoaded(JSContext *ctx) {
+  if (g_storageCacheLoaded)
+    return;
+
+  g_storageCache.clear();
   const std::wstring storagePath = GetStorageFilePath();
   std::string text;
-  if (!::novadesk::shared::system::JsonReadTextFile(storagePath, text)) {
-    return JS_NewObject(ctx);
-  }
-
-  if (text.find_first_not_of(" \t\r\n") == std::string::npos) {
-    return JS_NewObject(ctx);
+  if (!::novadesk::shared::system::JsonReadTextFile(storagePath, text) ||
+      text.find_first_not_of(" \t\r\n") == std::string::npos) {
+    g_storageCacheLoaded = true;
+    return;
   }
 
   JSValue parsed = JS_ParseJSON(ctx, text.c_str(), text.size(),
                                 Utils::ToString(storagePath).c_str());
-  if (JS_IsException(parsed) || !JS_IsObject(parsed)) {
-    if (JS_IsException(parsed)) {
-      JS_FreeValue(ctx, JS_GetException(ctx));
-    } else {
-      JS_FreeValue(ctx, parsed);
+  if (!JS_IsException(parsed) && JS_IsObject(parsed)) {
+    // Walk all own properties and serialize each value to a JSON string so
+    // that we don't hold live JSValues that would be invalidated on reload.
+    JSPropertyEnum *props = nullptr;
+    uint32_t propCount = 0;
+    if (JS_GetOwnPropertyNames(ctx, &props, &propCount, parsed,
+                               JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) == 0) {
+      for (uint32_t i = 0; i < propCount; ++i) {
+        const char *keyStr = JS_AtomToCString(ctx, props[i].atom);
+        if (!keyStr) continue;
+        JSValue val = JS_GetProperty(ctx, parsed, props[i].atom);
+        JSValue serialized = JS_JSONStringify(ctx, val, JS_UNDEFINED,
+                                              JS_UNDEFINED);
+        if (!JS_IsException(serialized)) {
+          const char *valStr = JS_ToCString(ctx, serialized);
+          if (valStr) {
+            g_storageCache[keyStr] = valStr;
+            JS_FreeCString(ctx, valStr);
+          }
+        }
+        JS_FreeValue(ctx, serialized);
+        JS_FreeValue(ctx, val);
+        JS_FreeCString(ctx, keyStr);
+      }
+      JS_FreePropertyEnum(ctx, props, propCount);
     }
-    return JS_NewObject(ctx);
+    JS_FreeValue(ctx, parsed);
+  } else {
+    if (JS_IsException(parsed))
+      JS_FreeValue(ctx, JS_GetException(ctx));
+    else
+      JS_FreeValue(ctx, parsed);
   }
-  return parsed;
+  g_storageCacheLoaded = true;
 }
 
-static bool SaveStorageObject(JSContext *ctx, JSValueConst storageObj) {
+// Serialize the current in-memory cache and flush it to disk.
+// Caller MUST hold g_storageCacheMutex.
+static bool FlushStorageCache(JSContext *ctx) {
+  // Rebuild a JS object from the cache, stringify it, then write.
+  JSValue obj = JS_NewObject(ctx);
+  for (const auto &kv : g_storageCache) {
+    JSValue val = JS_ParseJSON(ctx, kv.second.c_str(), kv.second.size(),
+                               "<storage>");
+    if (JS_IsException(val)) {
+      JS_FreeValue(ctx, JS_GetException(ctx));
+      val = JS_UNDEFINED;
+    }
+    JS_SetPropertyStr(ctx, obj, kv.first.c_str(), val);
+  }
   JSValue indent = JS_NewInt32(ctx, 2);
-  JSValue serialized = JS_JSONStringify(ctx, storageObj, JS_UNDEFINED, indent);
+  JSValue serialized = JS_JSONStringify(ctx, obj, JS_UNDEFINED, indent);
   JS_FreeValue(ctx, indent);
+  JS_FreeValue(ctx, obj);
   if (JS_IsException(serialized)) {
     JS_FreeValue(ctx, JS_GetException(ctx));
     return false;
   }
-
   const char *text = JS_ToCString(ctx, serialized);
   if (!text) {
     JS_FreeValue(ctx, serialized);
     return false;
   }
-
   const bool ok =
       ::novadesk::shared::system::JsonWriteTextFile(GetStorageFilePath(), text);
   JS_FreeCString(ctx, text);
@@ -1167,20 +1224,24 @@ JSValue JsAppStorageGet(JSContext *ctx, JSValueConst, int argc,
         ctx, "app.storage.get(key[, defaultValue]) requires string key");
   }
 
-  JSValue storageObj = LoadStorageObject(ctx);
   const char *key = JS_ToCString(ctx, argv[0]);
-  if (!key) {
-    JS_FreeValue(ctx, storageObj);
+  if (!key)
     return JS_EXCEPTION;
-  }
 
-  JSValue out = JS_GetPropertyStr(ctx, storageObj, key);
+  std::lock_guard<std::mutex> lock(g_storageCacheMutex);
+  EnsureStorageCacheLoaded(ctx);
+
+  auto it = g_storageCache.find(key);
   JS_FreeCString(ctx, key);
-  JS_FreeValue(ctx, storageObj);
 
-  if (JS_IsUndefined(out) && argc > 1) {
-    JS_FreeValue(ctx, out);
-    return JS_DupValue(ctx, argv[1]);
+  if (it == g_storageCache.end()) {
+    return (argc > 1) ? JS_DupValue(ctx, argv[1]) : JS_UNDEFINED;
+  }
+  JSValue out = JS_ParseJSON(ctx, it->second.c_str(), it->second.size(),
+                             "<storage>");
+  if (JS_IsException(out)) {
+    JS_FreeValue(ctx, JS_GetException(ctx));
+    return (argc > 1) ? JS_DupValue(ctx, argv[1]) : JS_UNDEFINED;
   }
   return out;
 }
@@ -1192,18 +1253,29 @@ JSValue JsAppStorageSet(JSContext *ctx, JSValueConst, int argc,
                              "app.storage.set(key, value) requires string key");
   }
 
-  JSValue storageObj = LoadStorageObject(ctx);
   const char *key = JS_ToCString(ctx, argv[0]);
-  if (!key) {
-    JS_FreeValue(ctx, storageObj);
+  if (!key)
+    return JS_EXCEPTION;
+
+  JSValue serialized = JS_JSONStringify(ctx, argv[1], JS_UNDEFINED, JS_UNDEFINED);
+  if (JS_IsException(serialized)) {
+    JS_FreeCString(ctx, key);
+    return JS_EXCEPTION;
+  }
+  const char *valStr = JS_ToCString(ctx, serialized);
+  JS_FreeValue(ctx, serialized);
+  if (!valStr) {
+    JS_FreeCString(ctx, key);
     return JS_EXCEPTION;
   }
 
-  JS_SetPropertyStr(ctx, storageObj, key, JS_DupValue(ctx, argv[1]));
+  std::lock_guard<std::mutex> lock(g_storageCacheMutex);
+  EnsureStorageCacheLoaded(ctx);
+  g_storageCache[key] = valStr;
+  JS_FreeCString(ctx, valStr);
   JS_FreeCString(ctx, key);
 
-  const bool ok = SaveStorageObject(ctx, storageObj);
-  JS_FreeValue(ctx, storageObj);
+  const bool ok = FlushStorageCache(ctx);
   return JS_NewBool(ctx, ok ? 1 : 0);
 }
 
@@ -1214,21 +1286,21 @@ JSValue JsAppStorageRemove(JSContext *ctx, JSValueConst, int argc,
                              "app.storage.remove(key) requires string key");
   }
 
-  JSValue storageObj = LoadStorageObject(ctx);
   const char *key = JS_ToCString(ctx, argv[0]);
-  if (!key) {
-    JS_FreeValue(ctx, storageObj);
+  if (!key)
     return JS_EXCEPTION;
-  }
 
-  JSAtom keyAtom = JS_NewAtom(ctx, key);
-  const int deleted = JS_DeleteProperty(ctx, storageObj, keyAtom, 0);
-  JS_FreeAtom(ctx, keyAtom);
+  std::lock_guard<std::mutex> lock(g_storageCacheMutex);
+  EnsureStorageCacheLoaded(ctx);
+
+  const bool erased = (g_storageCache.erase(key) > 0);
   JS_FreeCString(ctx, key);
 
-  const bool saved = SaveStorageObject(ctx, storageObj);
-  JS_FreeValue(ctx, storageObj);
-  return JS_NewBool(ctx, (deleted == 1 && saved) ? 1 : 0);
+  if (!erased)
+    return JS_NewBool(ctx, 0);
+
+  const bool saved = FlushStorageCache(ctx);
+  return JS_NewBool(ctx, saved ? 1 : 0);
 }
 
 static bool IsTrayEventName(const std::string &name) {
