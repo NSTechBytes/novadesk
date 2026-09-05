@@ -14,6 +14,7 @@
 #include "PathUtils.h"
 #include <dwrite_3.h>
 #include <mutex>
+#include <list>
 
 namespace FontManager {
 class DirectoryFontFileEnumerator : public IDWriteFontFileEnumerator {
@@ -267,8 +268,13 @@ std::mutex g_MemoryFontsMutex;
 std::map<std::wstring, std::vector<uint8_t>> g_MemoryFonts;
 
 Microsoft::WRL::ComPtr<DirectoryFontCollectionLoader> g_pLoader;
+// Cache mapping directory/URL key → font collection.
+// g_CollectionCacheOrder tracks insertion order for LRU eviction: front is
+// oldest, back is most recently used.  Both structures are always kept in sync
+// under g_CollectionCacheMutex.
 std::map<std::wstring, Microsoft::WRL::ComPtr<IDWriteFontCollection>>
     g_CollectionCache;
+std::list<std::wstring> g_CollectionCacheOrder;
 std::mutex g_CollectionCacheMutex;
 constexpr size_t kMaxCollectionCacheSize = 64;
 
@@ -340,6 +346,7 @@ void Cleanup() {
       g_pLoader = nullptr;
     }
     g_CollectionCache.clear();
+    g_CollectionCacheOrder.clear();
   }
 
   {
@@ -361,6 +368,9 @@ GetFontCollection(const std::wstring &directoryPath) {
   std::lock_guard<std::mutex> lock(g_CollectionCacheMutex);
   auto it = g_CollectionCache.find(key);
   if (it != g_CollectionCache.end()) {
+    // Move to back of order list (most-recently-used).
+    g_CollectionCacheOrder.remove(key);
+    g_CollectionCacheOrder.push_back(key);
     return it->second;
   }
 
@@ -378,14 +388,19 @@ GetFontCollection(const std::wstring &directoryPath) {
     Logging::Log(LogLevel::Info,
                  L"FontManager: Created custom font collection for '%s'",
                  key.c_str());
-    if (g_CollectionCache.size() >= kMaxCollectionCacheSize) {
-      Logging::Log(
-          LogLevel::Warn,
-          L"FontManager: Collection cache full (%zu entries), clearing",
-          g_CollectionCache.size());
-      g_CollectionCache.clear();
+    // Evict the single oldest (LRU) entry when the cache is full.
+    // This avoids the cache-stampede caused by clearing everything at once.
+    if (g_CollectionCache.size() >= kMaxCollectionCacheSize &&
+        !g_CollectionCacheOrder.empty()) {
+      const std::wstring oldest = g_CollectionCacheOrder.front();
+      g_CollectionCacheOrder.pop_front();
+      g_CollectionCache.erase(oldest);
+      Logging::Log(LogLevel::Debug,
+                   L"FontManager: Evicted LRU collection for '%s'",
+                   oldest.c_str());
     }
     g_CollectionCache[key] = pCollection;
+    g_CollectionCacheOrder.push_back(key);
     return pCollection;
   } else {
     Logging::Log(
