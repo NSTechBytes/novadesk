@@ -107,10 +107,11 @@ void Logging::Log(LogLevel level, const wchar_t *format, ...) {
              timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday,
              timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec, ms.count());
 
-  // Prepare final output string dynamically
-  // format: timestamp + " [" + productName + "] " + levelStr + " " + buffer +
-  // "\n"
-  std::wstring productName = PathUtils::GetProductName();
+  // Cache the product name — it's constant for the process lifetime.
+  // GetProductName() internally reads the executable version resource;
+  // even though it has its own cache, calling it and copying the wstring
+  // on every log message is unnecessary overhead on the hot path.
+  static const std::wstring productName = PathUtils::GetProductName();
   int outputLen = _scwprintf(L"%s [%s] %s %s\n", timestamp, productName.c_str(),
                              levelStr, buffer.data());
 
