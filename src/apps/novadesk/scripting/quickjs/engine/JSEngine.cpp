@@ -1251,6 +1251,48 @@ JSValue JsUiIpcInvoke(JSContext *ctx, JSValueConst, int argc,
   JSValue ret = JS_Call(ctx, it->second.callback, JS_UNDEFINED, 2, callArgs);
   JS_FreeValue(ctx, callArgs[0]);
   JS_FreeValue(ctx, callArgs[1]);
+
+  if (JS_IsException(ret))
+    return ret;
+
+  // Drain the microtask / job queue so that async handler bodies run
+  // synchronously to completion before we inspect the result.  Without this
+  // an async handler returns a pending Promise whose body never executes
+  // within this call, making the invoke silently return undefined.
+  if (JS_IsPromise(ret) && g_runtime) {
+    JSContext *jobCtx = nullptr;
+    while (JS_IsJobPending(g_runtime)) {
+      const int err = JS_ExecutePendingJob(g_runtime, &jobCtx);
+      if (err < 0) {
+        LogQuickJsException(jobCtx ? jobCtx : ctx);
+        break;
+      }
+    }
+
+    // After draining, inspect the Promise state.
+    const JSPromiseStateEnum state = JS_PromiseState(ctx, ret);
+    if (state == JS_PROMISE_FULFILLED) {
+      // Unwrap the resolved value so the JS caller gets the result directly.
+      JSValue resolved = JS_PromiseResult(ctx, ret);
+      JS_FreeValue(ctx, ret);
+      return resolved;
+    } else if (state == JS_PROMISE_REJECTED) {
+      // Convert rejection to a JS exception so the caller sees an error.
+      JSValue reason = JS_PromiseResult(ctx, ret);
+      JS_FreeValue(ctx, ret);
+      return JS_Throw(ctx, reason);
+    }
+    // JS_PROMISE_PENDING: the handler depends on genuinely asynchronous I/O
+    // that cannot resolve synchronously.  Return the Promise so JS callers
+    // that await it will still work, but log a warning — ipcMain.handle()
+    // handlers should be synchronous or resolve within the same microtask
+    // checkpoint for ipcRenderer.invoke() to behave as expected.
+    Logging::Log(LogLevel::Warn,
+                 L"ipcRenderer.invoke('%s'): handler returned a pending "
+                 L"Promise — result will not be available synchronously",
+                 Utils::ToWString(channel).c_str());
+  }
+
   return ret;
 }
 
