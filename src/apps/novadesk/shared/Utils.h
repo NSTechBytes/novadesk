@@ -10,8 +10,6 @@
 #include <vector>
 #include "Element.h"
 
-struct duk_hthread;
-using duk_context = duk_hthread;
 
 namespace Utils {
 

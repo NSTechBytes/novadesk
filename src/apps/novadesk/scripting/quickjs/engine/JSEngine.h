@@ -13,8 +13,7 @@
 
 #include "quickjs.h"
 
-struct duk_hthread;
-using duk_context = duk_hthread;
+
 
 class Widget;
 
@@ -72,15 +71,13 @@ struct ToastEventData {
 // ============================================================================
 
 /// Initializes the JavaScript API bindings.
-void InitializeJavaScriptAPI(duk_context *ctx);
+void InitializeJavaScriptAPI();
 
 /// Loads and executes a single script file.
-bool LoadAndExecuteScript(duk_context *ctx,
-                          const std::wstring &scriptPath = L"");
+bool LoadAndExecuteScript(const std::wstring &scriptPath = L"");
 
 /// Loads and executes multiple script files in order.
-bool LoadAndExecuteScripts(duk_context *ctx,
-                           const std::vector<std::wstring> &scriptPaths);
+bool LoadAndExecuteScripts(const std::vector<std::wstring> &scriptPaths);
 
 /// @return The directory of the entry script.
 std::wstring GetEntryScriptDir();

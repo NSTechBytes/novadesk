@@ -1378,23 +1378,20 @@ void ClearUiIpcForScript(const std::wstring &scriptPath) {
   ClearIpcChannelListenersForScript(g_uiIpcChannelListeners, scriptPath);
 }
 
-void InitializeJavaScriptAPI(duk_context *ctx) {
+void InitializeJavaScriptAPI() {
   std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
-  (void)ctx;
   EnsureRuntime();
 }
 
-bool LoadAndExecuteScript(duk_context *ctx, const std::wstring &scriptPath) {
+bool LoadAndExecuteScript(const std::wstring &scriptPath) {
   std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
   std::vector<std::wstring> list;
   list.push_back(scriptPath);
-  return LoadAndExecuteScripts(ctx, list);
+  return LoadAndExecuteScripts(list);
 }
 
-bool LoadAndExecuteScripts(duk_context *ctx,
-                           const std::vector<std::wstring> &scriptPaths) {
+bool LoadAndExecuteScripts(const std::vector<std::wstring> &scriptPaths) {
   std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
-  (void)ctx;
   const bool isDefaultLoad = scriptPaths.empty();
   // Only perform a full reset if we are loading the default set or explicitly
   // requested via an empty stale check. Previously this was too aggressive,
@@ -1538,9 +1535,9 @@ void UnregisterTrayOwner(int trayId) {
 void Reload() {
   std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
   if (!g_loadedScriptPaths.empty()) {
-    LoadAndExecuteScripts(nullptr, g_loadedScriptPaths);
+    LoadAndExecuteScripts(g_loadedScriptPaths);
   } else {
-    LoadAndExecuteScript(nullptr, g_lastScriptPath);
+    LoadAndExecuteScript(g_lastScriptPath);
   }
 }
 

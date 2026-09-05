@@ -40,7 +40,6 @@
 // Global Variables:
 HINSTANCE hInst;               // current instance
 WCHAR szTitle[MAX_LOADSTRING]; // The title bar text
-duk_context *ctx = nullptr;
 std::vector<Widget *> widgets;
 struct TrayState {
   bool initialized = false;
@@ -675,11 +674,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                  GetLastError());
   }
 
-  // Scripting runtime context is handled by the migrated QuickJS path.
-  ctx = nullptr;
-
   // Initialize JavaScript API
-  JSEngine::InitializeJavaScriptAPI(ctx);
+  JSEngine::InitializeJavaScriptAPI();
 
   // Parse command line for custom script path using argv semantics.
   // argv[0] is the executable path; the first user arg is argv[1].
@@ -785,7 +781,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   }
 
   // Load and execute script (with optional custom path)
-  if (!JSEngine::LoadAndExecuteScripts(ctx, scriptPaths)) {
+  if (!JSEngine::LoadAndExecuteScripts(scriptPaths)) {
     Logging::Log(LogLevel::Error,
                  L"Script execution failed. See QuickJS exception logs above.");
   }
@@ -811,7 +807,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   for (auto w : widgetsCopy)
     delete w;
 
-  ctx = nullptr;
   System::Finalize();
   novadesk::shared::system::ShutdownDiskIoStats();
 
