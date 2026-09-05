@@ -497,12 +497,13 @@ void Widget::ChangeZPos(ZPOSITION zPos, bool all) {
     }
   }
 
-  // Save Z-Pos state only if it actually changed
+timer_check:
+  // Save Z-Pos state if it changed — placed here so it is reached both via
+  // normal fall-through and via the goto from the ZPOSITION_ONDESKTOP
+  // early-SetWindowPos path, which previously jumped past this block.
   if (changed) {
     Settings::SaveWidget(m_Options.id, m_Options);
   }
-
-timer_check:
   if (m_hWnd) {
     if (oldZPos == ZPOSITION_ONTOPMOST &&
         m_WindowZPosition != ZPOSITION_ONTOPMOST) {
