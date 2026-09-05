@@ -520,6 +520,11 @@ JSValue JsClearTimerImpl(JSContext *ctx, JSValueConst, int argc,
   int64_t id64 = 0;
   if (JS_ToInt64(ctx, &id64, argv[0]) != 0)
     return JS_UNDEFINED;
+  // Valid timer IDs are positive (g_nextTimerId starts at 50000).
+  // Negative or zero values are never valid — reject them explicitly rather
+  // than silently wrapping to a large UINT_PTR that misses the map lookup.
+  if (id64 <= 0)
+    return JS_UNDEFINED;
   UINT_PTR id = static_cast<UINT_PTR>(id64);
   auto it = g_timers.find(id);
   if (it == g_timers.end())
