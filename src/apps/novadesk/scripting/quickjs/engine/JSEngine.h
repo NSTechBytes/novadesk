@@ -103,6 +103,10 @@ void UnregisterTrayOwner(int trayId);
 /// Reloads all scripts.
 void Reload();
 
+/// Frees the QuickJS runtime and context at application shutdown.
+/// Must be called after all widgets are destroyed and no JS calls remain.
+void Shutdown();
+
 /// Adds a script to the runtime.
 bool AddScript(const std::wstring &scriptPath);
 

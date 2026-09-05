@@ -822,6 +822,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   for (auto w : widgetsCopy)
     delete w;
 
+  // Free the QuickJS runtime, context, and all live JSValues (timers,
+  // event callbacks, IPC listeners, etc.).  Must come after widget deletion
+  // because widget destructors fire TriggerWidgetEvent("closed") which
+  // requires g_context to still be valid.
+  JSEngine::Shutdown();
+
   System::Finalize();
   novadesk::shared::system::ShutdownDiskIoStats();
 

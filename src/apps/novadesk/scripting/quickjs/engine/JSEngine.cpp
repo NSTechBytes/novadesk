@@ -1413,6 +1413,11 @@ std::wstring ResolveEntryScript(const std::wstring &scriptPath) {
 }
 } // namespace
 
+void Shutdown() {
+  std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
+  ResetRuntime();
+}
+
 void ClearAllTrayCommandCallbacks() {
   std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
   ClearAllTrayCommandCallbacksInternal();
