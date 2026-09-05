@@ -164,7 +164,12 @@ typedef struct _PROCESSOR_POWER_INFORMATION_LOCAL {
 
 struct ComInit {
   HRESULT hr = E_FAIL;
-  ComInit() { hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED); }
+  // Initialize as STA to match the main message thread's apartment model
+  // (set by Direct2DHelper::Initialize via COINIT_APARTMENTTHREADED).
+  // Using COINIT_MULTITHREADED on an STA thread returns RPC_E_CHANGED_MODE
+  // and leaves audio endpoint calls running in the wrong apartment context,
+  // which can cause COM marshaling issues or WASAPI instability.
+  ComInit() { hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED); }
   ~ComInit() {
     // SAFETY: Only call CoUninitialize when we genuinely initialized COM
     // (S_OK). RPC_E_CHANGED_MODE means COM was already initialized in a
