@@ -35,7 +35,17 @@ namespace novadesk::scripting::quickjs {
 namespace {
 using novadesk_context = void *;
 
+// Current host API version.  Increment this whenever any function pointer in
+// NovadeskHostAPI is added, removed, or its signature changes.
+constexpr uint32_t NOVADESK_HOST_API_VERSION = 1;
+
 struct NovadeskHostAPI {
+  // API version — always the first field so addons compiled against any
+  // version of this struct can read it at offset 0 before touching any
+  // function pointer.  Increment NOVADESK_HOST_API_VERSION whenever a
+  // function pointer is added, removed, or its signature changes.
+  uint32_t apiVersion;
+
   void (*RegisterString)(novadesk_context ctx, const char *name,
                          const char *value);
   void (*RegisterNumber)(novadesk_context ctx, const char *name, double value);
@@ -77,6 +87,10 @@ struct NovadeskHostAPI {
 using NovadeskAddonInitFn = void (*)(novadesk_context ctx, HWND hMsgWnd,
                                      const NovadeskHostAPI *host);
 using NovadeskAddonUnloadFn = void (*)();
+// Optional export: addon returns the NOVADESK_HOST_API_VERSION it was
+// compiled against so the host can refuse incompatible addons before
+// calling NovadeskAddonInit.
+using NovadeskAddonApiVersionFn = uint32_t (*)();
 
 bool g_moduleDebug = false;
 int g_nextTrayCommandId = 1;
@@ -763,7 +777,8 @@ static void host_ArrayPushObject(novadesk_context c) {
   call->stack.push_back(obj);
 }
 
-const NovadeskHostAPI g_hostApi = {host_RegisterString,
+const NovadeskHostAPI g_hostApi = {NOVADESK_HOST_API_VERSION,
+                                   host_RegisterString,
                                    host_RegisterNumber,
                                    host_RegisterBool,
                                    host_RegisterObjectStart,
@@ -1548,6 +1563,25 @@ JSValue JsAddonLoad(JSContext *ctx, JSValueConst, int argc,
                  addonPath.c_str());
     FreeLibrary(module);
     return JS_NULL;
+  }
+
+  // Version check: if the addon exports NovadeskAddonApiVersion, verify it
+  // matches the current host API version before calling into it.  A mismatch
+  // means the addon was compiled against a different struct layout and calling
+  // its init function would invoke wrong function pointers.
+  auto addonVersionFn = reinterpret_cast<NovadeskAddonApiVersionFn>(
+      GetProcAddress(module, "NovadeskAddonApiVersion"));
+  if (addonVersionFn) {
+    const uint32_t addonVersion = addonVersionFn();
+    if (addonVersion != NOVADESK_HOST_API_VERSION) {
+      Logging::Log(LogLevel::Error,
+                   L"Addon %s reports API version %u but host is version %u — "
+                   L"refusing to load incompatible addon",
+                   addonPath.c_str(), addonVersion,
+                   NOVADESK_HOST_API_VERSION);
+      FreeLibrary(module);
+      return JS_NULL;
+    }
   }
 
   AddonInfo info{};
