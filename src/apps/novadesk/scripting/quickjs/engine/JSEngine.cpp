@@ -371,9 +371,6 @@ bool ExecuteScriptFile(const std::wstring &finalScriptPath) {
   g_currentScriptPath = finalScriptPath;
 
   JSValue global = JS_GetGlobalObject(g_context);
-  JSValue mainIpc = CreateMainIpcObject(g_context);
-  JS_SetPropertyStr(g_context, global, "ipcMain",
-                    JS_DupValue(g_context, mainIpc));
   JS_SetPropertyStr(g_context, global, "__filename",
                     JS_NewString(g_context, fileName.c_str()));
   JS_SetPropertyStr(g_context, global, "__dirname",
@@ -394,7 +391,6 @@ bool ExecuteScriptFile(const std::wstring &finalScriptPath) {
       g_context, global, "__addonsPath",
       JS_NewString(g_context,
                    Utils::ToString(PathUtils::GetAddonsDir()).c_str()));
-  JS_FreeValue(g_context, mainIpc);
   JS_FreeValue(g_context, global);
 
   const std::string modulePrelude =
@@ -1362,6 +1358,16 @@ bool EnsureRuntime() {
   g_atom_offsetXPercent = JS_NewAtom(g_context, "__offsetXPercent");
   g_atom_offsetYPercent = JS_NewAtom(g_context, "__offsetYPercent");
   g_atom_widgetId = JS_NewAtom(g_context, "widgetId");
+
+  // Install ipcMain on the global once.  Creating it here — rather than in
+  // ExecuteScriptFile — ensures it is a stable singleton: every script
+  // execution and every module-level `const ipcMain = globalThis.ipcMain`
+  // reference the same object.  Replacing it on each ExecuteScriptFile call
+  // would silently invalidate references captured by previously loaded modules.
+  JSValue global = JS_GetGlobalObject(g_context);
+  JSValue mainIpc = CreateMainIpcObject(g_context);
+  JS_SetPropertyStr(g_context, global, "ipcMain", mainIpc);
+  JS_FreeValue(g_context, global);
 
   return true;
 }
