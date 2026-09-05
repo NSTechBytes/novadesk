@@ -372,6 +372,10 @@ public:
 
   /// @brief Mutex protecting the global widgets list.
   static std::mutex s_WidgetMutex;
+  /// @brief O(1) set for IsValid() — kept in sync with the global widgets vector.
+  static std::unordered_set<Widget *> s_WidgetSet;
+  /// @brief O(1) HWND→Widget map for GetWidgetFromHWND() — kept in sync with the global widgets vector.
+  static std::unordered_map<HWND, Widget *> s_HwndMap;
   /// @brief Tracks whether a context menu is currently active.
   static std::atomic<bool> s_IsMenuActive;
   /// @brief Tracks the number of open color picker popups.

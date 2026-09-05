@@ -3607,6 +3607,9 @@ JSValue JsWidgetWindowCtor(JSContext *ctx, JSValueConst, int argc,
       if (existingIt != widgets.end()) {
         existing = *existingIt;
         widgets.erase(existingIt);
+        Widget::s_WidgetSet.erase(existing);
+        if (existing)
+          Widget::s_HwndMap.erase(existing->GetWindow());
       }
     }
     // Lock released before delete: the destructor calls DestroyWindow
@@ -3759,6 +3762,9 @@ JSValue JsWidgetWindowCtor(JSContext *ctx, JSValueConst, int argc,
   {
     std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
     widgets.push_back(widget);
+    Widget::s_WidgetSet.insert(widget);
+    if (widget->GetWindow())
+      Widget::s_HwndMap[widget->GetWindow()] = widget;
   }
   JSEngine::RegisterWidgetOwner(widget, JSEngine::GetCurrentScriptPath());
 

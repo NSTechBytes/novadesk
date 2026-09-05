@@ -61,6 +61,8 @@
 extern std::vector<Widget *> widgets; // Defined in Novadesk.cpp
 
 std::mutex Widget::s_WidgetMutex;
+std::unordered_set<Widget *> Widget::s_WidgetSet;
+std::unordered_map<HWND, Widget *> Widget::s_HwndMap;
 std::atomic<bool> Widget::s_IsMenuActive{false};
 std::atomic<int> Widget::s_ActiveColorPickerCount{0};
 
@@ -69,11 +71,7 @@ bool Widget::IsValid(Widget *pWidget) {
   if (!pWidget)
     return false;
   std::lock_guard<std::mutex> lock(s_WidgetMutex);
-  for (auto *w : widgets) {
-    if (w == pWidget)
-      return true;
-  }
-  return false;
+  return s_WidgetSet.count(pWidget) > 0;
 }
 
 std::vector<Widget *> Widget::GetAllWidgets() {
@@ -86,11 +84,16 @@ void Widget::RemoveWidget(Widget *widget) {
   auto it = std::find(widgets.begin(), widgets.end(), widget);
   if (it != widgets.end())
     widgets.erase(it);
+  s_WidgetSet.erase(widget);
+  if (widget)
+    s_HwndMap.erase(widget->m_hWnd);
 }
 
 void Widget::ClearAllWidgets() {
   std::lock_guard<std::mutex> lock(s_WidgetMutex);
   widgets.clear();
+  s_WidgetSet.clear();
+  s_HwndMap.clear();
 }
 
 // Construct a new Widget with the specified options.
@@ -864,11 +867,8 @@ void Widget::ApplyToolbarTitle() {
 // Retrieve the Widget instance associated with a window handle.
 Widget *Widget::GetWidgetFromHWND(HWND hWnd) {
   std::lock_guard<std::mutex> lock(s_WidgetMutex);
-  for (auto w : widgets) {
-    if (w->m_hWnd == hWnd)
-      return w;
-  }
-  return nullptr;
+  auto it = s_HwndMap.find(hWnd);
+  return (it != s_HwndMap.end()) ? it->second : nullptr;
 }
 
 Widget *Widget::GetWidgetFromInstanceId(uint64_t instanceId) {
@@ -1616,6 +1616,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
         auto it = std::find(widgets.begin(), widgets.end(), widget);
         if (it != widgets.end())
           widgets.erase(it);
+        s_WidgetSet.erase(widget);
+        s_HwndMap.erase(hWnd);
       }
       // Lock released before delete: the destructor calls DestroyWindow
       // which dispatches WM_DESTROY synchronously; holding the lock there
