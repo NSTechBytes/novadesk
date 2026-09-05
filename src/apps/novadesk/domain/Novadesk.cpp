@@ -585,7 +585,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     case WM_COPYDATA: {
       const COPYDATASTRUCT *cds =
           reinterpret_cast<const COPYDATASTRUCT *>(lParam);
-      if (!cds || !cds->lpData || cds->cbData < sizeof(wchar_t)) {
+      if (!cds || !cds->lpData || cds->cbData < sizeof(wchar_t) ||
+          cds->cbData % sizeof(wchar_t) != 0) {
         return FALSE;
       }
       const wchar_t *data = reinterpret_cast<const wchar_t *>(cds->lpData);
