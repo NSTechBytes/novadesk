@@ -949,6 +949,14 @@ bool ParseTrayMenuItems(JSContext *ctx, int trayId, JSValueConst arr,
 
       JSValue actionV = JS_GetPropertyStr(ctx, itemV, "action");
       if (JS_IsFunction(ctx, actionV)) {
+        // Win32 WM_COMMAND wParam is a WORD (16-bit); menu item IDs must fit
+        // in [1, 0xFFFF].  With base offset 2000 the usable counter range is
+        // [1, 63535].  Wrap back to 1 when the next ID would overflow 0xFFFF
+        // so we never produce an out-of-range ID.  ClearTrayCommandCallbacks
+        // frees the previous menu's IDs before ParseTrayMenuItems is called,
+        // so wrapped IDs are not in use.
+        if (2000 + g_nextTrayCommandId > 0xFFFF)
+          g_nextTrayCommandId = 1;
         item.id = 2000 + g_nextTrayCommandId++;
         JSEngine::RegisterTrayCommandCallback(ctx, trayId, item.id, actionV);
       }
