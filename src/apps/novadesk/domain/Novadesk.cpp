@@ -134,6 +134,20 @@ static LRESULT CALLBACK TrayMouseHookProc(int nCode, WPARAM wParam,
     MSLLHOOKSTRUCT *pMouseStruct = reinterpret_cast<MSLLHOOKSTRUCT *>(lParam);
     POINT pt = pMouseStruct->pt;
 
+    // Fast pre-check: skip the per-tray COM calls entirely when the cursor
+    // is not inside the system tray window.  Shell_TrayWnd is the taskbar
+    // notification area host; GetWindowRect is a cheap kernel call.
+    // This short-circuits the hook for the overwhelming majority of
+    // system-wide scroll events where the cursor is elsewhere on screen.
+    HWND hTrayWnd = FindWindowW(L"Shell_TrayWnd", nullptr);
+    if (hTrayWnd) {
+      RECT trayWndRect = {};
+      if (GetWindowRect(hTrayWnd, &trayWndRect) &&
+          !PtInRect(&trayWndRect, pt)) {
+        return CallNextHookEx(g_trayMouseHook, nCode, wParam, lParam);
+      }
+    }
+
     for (auto &kv : g_trayStates) {
       if (kv.second.initialized) {
         RECT rc = GetTrayIconRect(kv.first);
