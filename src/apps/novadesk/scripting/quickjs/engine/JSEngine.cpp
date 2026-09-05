@@ -186,7 +186,7 @@ void DestroyAllTrays() {
 
 void ResetRuntime() {
   ClearAllTimers();
-  for (size_t i = 1; i < g_eventCallbacks.size(); ++i) {
+  for (size_t i = 0; i < g_eventCallbacks.size(); ++i) {
     JS_FreeValue(g_context, g_eventCallbacks[i]);
   }
   g_eventCallbacks.clear();
@@ -1487,7 +1487,7 @@ bool LoadAndExecuteScripts(const std::vector<std::wstring> &scriptPaths) {
   std::vector<std::wstring> loadedPaths;
   g_mainScriptPath = resolved.empty() ? L"" : resolved.front();
 
-  for (size_t i = 1; i < g_eventCallbacks.size(); ++i) {
+  for (size_t i = 0; i < g_eventCallbacks.size(); ++i) {
     JS_FreeValue(g_context, g_eventCallbacks[i]);
   }
   g_eventCallbacks.clear();
