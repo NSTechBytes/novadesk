@@ -696,6 +696,23 @@ static void *host_JsGetFunctionPtr(novadesk_context c, int index) {
   return handle;
 }
 
+static void host_FreeFunction(novadesk_context c, void *funcPtr) {
+  auto *call = reinterpret_cast<AddonCallContext *>(c);
+  auto *handle = reinterpret_cast<JsFunctionHandle *>(funcPtr);
+  if (!handle)
+    return;
+
+  if (call && call->addon) {
+    auto &handles = call->addon->functionHandles;
+    handles.erase(std::remove(handles.begin(), handles.end(), funcPtr),
+                  handles.end());
+  }
+
+  if (!JS_IsUndefined(handle->fn))
+    JS_FreeValue(handle->ctx, handle->fn);
+  delete handle;
+}
+
 static void host_JsCallFunction(novadesk_context c, void *funcPtr, int nargs) {
   auto *call = reinterpret_cast<AddonCallContext *>(c);
   auto *handle = reinterpret_cast<JsFunctionHandle *>(funcPtr);
@@ -805,9 +822,10 @@ const NovadeskHostAPI g_hostApi = {NOVADESK_HOST_API_VERSION,
                                    host_GetTop,
                                    host_Pop,
                                    host_PopN,
-                                   host_ThrowError,
-                                   host_JsGetFunctionPtr,
-                                   host_JsCallFunction,
+                                    host_ThrowError,
+                                    host_JsGetFunctionPtr,
+                                    host_FreeFunction,
+                                    host_JsCallFunction,
                                    host_JsCallFunctionNoArgs,
                                    host_ArrayPushObject};
 

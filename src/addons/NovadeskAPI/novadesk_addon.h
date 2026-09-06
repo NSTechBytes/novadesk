@@ -79,6 +79,7 @@ struct NovadeskHostAPI {
 
   /** JavaScript Callbacks */
   void *(*JsGetFunctionPtr)(novadesk_context ctx, int index);
+  void (*FreeFunction)(novadesk_context ctx, void *funcPtr);
   void (*JsCallFunction)(novadesk_context ctx, void *funcPtr, int nargs);
   void (*JsCallFunctionNoArgs)(novadesk_context ctx, void *funcPtr);
   void (*ArrayPushObject)(novadesk_context ctx);
@@ -122,6 +123,14 @@ public:
       : m_ctx(ctx), m_host(host) {
     m_ptr = m_host->JsGetFunctionPtr(m_ctx, idx);
   }
+
+  ~JsFunction() {
+    if (m_ptr && m_host && m_host->FreeFunction)
+      m_host->FreeFunction(m_ctx, m_ptr);
+  }
+
+  JsFunction(const JsFunction &) = delete;
+  JsFunction &operator=(const JsFunction &) = delete;
 
   bool IsValid() const { return m_ptr != nullptr; }
 
