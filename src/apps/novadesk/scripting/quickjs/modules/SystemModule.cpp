@@ -12,6 +12,8 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <atomic>
+#include <vector>
 #include <unordered_map>
 #include <mutex>
 #include <algorithm>
@@ -47,6 +49,14 @@ struct WebFetchRequest {
 std::mutex g_webFetchMutex;
 std::unordered_map<uint64_t, std::unique_ptr<WebFetchRequest>>
     g_webFetchRequests;
+
+// Lifecycle tracking for fetch threads.
+// g_webFetchShuttingDown is set before joining so threads that are blocked
+// in WebFetch() or waiting for the mutex can exit cleanly rather than
+// posting to a destroyed HWND or touching a cleared request map.
+std::atomic<bool> g_webFetchShuttingDown{false};
+std::mutex g_webFetchThreadsMutex;
+std::vector<std::thread> g_webFetchThreads;
 } // namespace
 
 void DispatchWebFetchResult(void *payload) {
@@ -880,7 +890,14 @@ JSValue JsWebFetch(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
     g_webFetchRequests[requestId] = std::move(req);
   }
 
-  std::thread([requestId, pathOrUrl]() {
+  std::thread t([requestId, pathOrUrl]() {
+    // Bail immediately if shutdown was initiated before this thread started.
+    if (g_webFetchShuttingDown.load(std::memory_order_acquire)) {
+      std::lock_guard<std::mutex> lock(g_webFetchMutex);
+      g_webFetchRequests.erase(requestId);
+      return;
+    }
+
     bool ok = false;
     std::string data;
     std::string error;
@@ -888,6 +905,13 @@ JSValue JsWebFetch(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
     ok = shared::system::WebFetch(pathOrUrl, data);
     if (!ok) {
       error = "webFetch failed";
+    }
+
+    // Check shutdown again after the (potentially long) network call.
+    if (g_webFetchShuttingDown.load(std::memory_order_acquire)) {
+      std::lock_guard<std::mutex> lock(g_webFetchMutex);
+      g_webFetchRequests.erase(requestId);
+      return;
     }
 
     {
@@ -917,7 +941,19 @@ JSValue JsWebFetch(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
       std::lock_guard<std::mutex> lock(g_webFetchMutex);
       g_webFetchRequests.erase(requestId);
     }
-  }).detach();
+  });
+
+  // Track the thread so ShutdownWebFetch() can join it instead of letting it
+  // run past JSEngine::Shutdown() into freed memory.
+  {
+    std::lock_guard<std::mutex> lk(g_webFetchThreadsMutex);
+    // Prune any already-finished threads to keep the vector from growing.
+    g_webFetchThreads.erase(
+        std::remove_if(g_webFetchThreads.begin(), g_webFetchThreads.end(),
+                       [](std::thread &th) { return !th.joinable(); }),
+        g_webFetchThreads.end());
+    g_webFetchThreads.push_back(std::move(t));
+  }
 
   return promise;
 }
@@ -1189,6 +1225,41 @@ JSModuleDef *EnsureSystemModule(JSContext *ctx, const char *moduleName) {
   JS_AddModuleExport(ctx, m, "execute");
   JS_AddModuleExport(ctx, m, "webFetch");
   return m;
+}
+
+void ShutdownWebFetch() {
+  // Signal all threads to exit after their current network call completes.
+  g_webFetchShuttingDown.store(true, std::memory_order_release);
+
+  // Discard all pending request state so threads that check after WebFetch()
+  // returns find nothing to dispatch.
+  {
+    std::lock_guard<std::mutex> lock(g_webFetchMutex);
+    for (auto &kv : g_webFetchRequests) {
+      if (kv.second && kv.second->ctx) {
+        JS_FreeValue(kv.second->ctx, kv.second->resolve);
+        JS_FreeValue(kv.second->ctx, kv.second->reject);
+        kv.second->resolve = JS_UNDEFINED;
+        kv.second->reject = JS_UNDEFINED;
+        kv.second->ctx = nullptr;
+      }
+    }
+    g_webFetchRequests.clear();
+  }
+
+  // Join every tracked thread.  WebFetch() may block on the network; threads
+  // will exit once they see g_webFetchShuttingDown or find no request to
+  // dispatch after returning from WebFetch().
+  std::vector<std::thread> threads;
+  {
+    std::lock_guard<std::mutex> lk(g_webFetchThreadsMutex);
+    threads = std::move(g_webFetchThreads);
+    g_webFetchThreads.clear();
+  }
+  for (auto &th : threads) {
+    if (th.joinable())
+      th.join();
+  }
 }
 
 void ClearWebFetchRequests(JSContext *ctx) {

@@ -28,6 +28,7 @@
 #include "../shared/System.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "../scripting/quickjs/modules/NovadeskModule.h"
+#include "../scripting/quickjs/modules/SystemModule.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -821,6 +822,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   // would deadlock.
   for (auto w : widgetsCopy)
     delete w;
+
+  // Stop in-flight webFetch threads before tearing down the JS runtime.
+  // These threads post to the message window and access JSContext; both
+  // become invalid after JSEngine::Shutdown().
+  novadesk::scripting::quickjs::ShutdownWebFetch();
 
   // Free the QuickJS runtime, context, and all live JSValues (timers,
   // event callbacks, IPC listeners, etc.).  Must come after widget deletion

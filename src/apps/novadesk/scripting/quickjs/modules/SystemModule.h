@@ -38,6 +38,11 @@ void DispatchWebFetchResult(void *payload);
 /// Clears all pending web fetch requests.
 void ClearWebFetchRequests(JSContext *ctx = nullptr);
 
+/// Signals all in-flight webFetch threads to stop and joins them.
+/// Must be called before JSEngine::Shutdown() to prevent use-after-free
+/// of the JSContext and message window.
+void ShutdownWebFetch();
+
 /// Clears web fetch requests for a specific script.
 void ClearWebFetchRequestsForScript(const std::wstring &scriptPath);
 
