@@ -153,7 +153,10 @@ Widget::~Widget() {
     if (m_DropTarget) {
       RevokeDragDrop(m_hWnd);
       m_DropTarget.Reset();
+    }
+    if (m_OleInitialized) {
       OleUninitialize();
+      m_OleInitialized = false;
     }
   }
   WidgetAnimationHelper::ClearAllAnimations(*this);
@@ -293,10 +296,17 @@ bool Widget::Create() {
   }
 
   // Initialize OLE Drag and Drop Target
-  OleInitialize(nullptr);
-  m_DropTarget = Microsoft::WRL::Make<WidgetDropTarget>(this);
-  if (m_DropTarget) {
-    RegisterDragDrop(m_hWnd, m_DropTarget.Get());
+  HRESULT hr = OleInitialize(nullptr);
+  if (SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE) {
+    m_OleInitialized = true;
+    m_DropTarget = Microsoft::WRL::Make<WidgetDropTarget>(this);
+    if (m_DropTarget) {
+      RegisterDragDrop(m_hWnd, m_DropTarget.Get());
+    }
+  } else {
+    Logging::Log(LogLevel::Warn,
+                 L"OleInitialize failed (0x%08X) — drag-and-drop disabled",
+                 hr);
   }
 
   return true;

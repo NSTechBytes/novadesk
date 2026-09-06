@@ -780,6 +780,7 @@ private:
   InputBoxElement *m_FocusedInputBox = nullptr;
   std::unique_ptr<ColorPickerPopup> m_ColorPickerPopup;
   Microsoft::WRL::ComPtr<WidgetDropTarget> m_DropTarget;
+  bool m_OleInitialized = false;
 
   void ApplyToolbarStyle();
   void ApplyToolbarIcon();
