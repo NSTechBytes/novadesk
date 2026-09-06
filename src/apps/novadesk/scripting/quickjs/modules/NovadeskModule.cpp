@@ -772,7 +772,22 @@ static void host_JsCallFunctionNoArgs(novadesk_context, void *funcPtr) {
     JS_FreeValue(handle->ctx, ret);
   } else {
     JSValue exc = JS_GetException(handle->ctx);
+    std::string msg;
+    if (JS_IsObject(exc)) {
+      JSValue msgV = JS_GetPropertyStr(handle->ctx, exc, "message");
+      if (!JS_IsUndefined(msgV) && !JS_IsNull(msgV)) {
+        const char *msgCStr = JS_ToCString(handle->ctx, msgV);
+        if (msgCStr) {
+          msg = msgCStr;
+          JS_FreeCString(handle->ctx, msgCStr);
+        }
+        JS_FreeValue(handle->ctx, msgV);
+      }
+    }
     JS_FreeValue(handle->ctx, exc);
+    Logging::Log(LogLevel::Error,
+                 L"[novadesk] addon callback exception: %s",
+                 Utils::ToWString(msg).c_str());
   }
 }
 
