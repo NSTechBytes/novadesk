@@ -1094,15 +1094,26 @@ JSValue BuildIpcMessage(JSContext *ctx, JSValueConst typeVal,
 }
 
 void DispatchIpc(std::vector<IpcListener> &listeners, JSValueConst message) {
-  for (auto &cb : listeners) {
+  // Snapshot the listener list before calling into JS.  A callback may call
+  // ipcMain.on() / ipcRenderer.on() which appends to the same vector,
+  // potentially reallocating it and invalidating any live iterator — UB.
+  // JS_DupValue each callback so that ClearCallbacks() freeing the originals
+  // mid-dispatch cannot drop the refcount to zero while we still hold them.
+  std::vector<JSValue> snapshot;
+  snapshot.reserve(listeners.size());
+  for (const auto &cb : listeners)
+    snapshot.push_back(JS_DupValue(g_context, cb.callback));
+
+  for (JSValue &fn : snapshot) {
     JSValue argv[1] = {JS_DupValue(g_context, message)};
-    JSValue ret = JS_Call(g_context, cb.callback, JS_UNDEFINED, 1, argv);
+    JSValue ret = JS_Call(g_context, fn, JS_UNDEFINED, 1, argv);
     JS_FreeValue(g_context, argv[0]);
     if (JS_IsException(ret)) {
       LogQuickJsException(g_context);
     } else {
       JS_FreeValue(g_context, ret);
     }
+    JS_FreeValue(g_context, fn);
   }
 }
 
@@ -1119,7 +1130,18 @@ void DispatchChannelIpc(
                                      channel.c_str());
   JS_FreeValue(g_context, channelVal);
 
-  for (auto &cb : it->second) {
+  // Snapshot the channel's listener callbacks before calling into JS.
+  // A callback may register a new listener on the same channel (appends to
+  // it->second, potentially reallocating it) or trigger a script reload
+  // (ClearIpcListenersForScript erases it->second).  Either invalidates live
+  // iterators.  JS_DupValue ensures the refcount stays positive even if
+  // ClearCallbacks frees the originals mid-dispatch.
+  std::vector<JSValue> snapshot;
+  snapshot.reserve(it->second.size());
+  for (const auto &cb : it->second)
+    snapshot.push_back(JS_DupValue(g_context, cb.callback));
+
+  for (JSValue &fn : snapshot) {
     JSValue argv[2] = {JS_UNDEFINED, JS_UNDEFINED};
     if (payloadFirst) {
       // Backward compatibility for legacy UI scripts: callback(payload, event)
@@ -1130,7 +1152,7 @@ void DispatchChannelIpc(
       argv[0] = JS_DupValue(g_context, eventObj);
       argv[1] = JS_DupValue(g_context, payload);
     }
-    JSValue ret = JS_Call(g_context, cb.callback, JS_UNDEFINED, 2, argv);
+    JSValue ret = JS_Call(g_context, fn, JS_UNDEFINED, 2, argv);
     JS_FreeValue(g_context, argv[0]);
     JS_FreeValue(g_context, argv[1]);
     if (JS_IsException(ret)) {
@@ -1138,6 +1160,7 @@ void DispatchChannelIpc(
     } else {
       JS_FreeValue(g_context, ret);
     }
+    JS_FreeValue(g_context, fn);
   }
 
   JS_FreeValue(g_context, eventObj);
