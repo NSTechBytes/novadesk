@@ -663,7 +663,7 @@ private:
   struct ElementAnimation {
     std::wstring id;
     std::wstring easing = L"linear";
-    DWORD startTick = 0;
+    ULONGLONG startTick = 0;
     int durationMs = 250;
     int iterationCount = 1;
     int completedIterations = 0;
@@ -677,7 +677,7 @@ private:
 
   struct WindowAnimation {
     std::wstring easing = L"linear";
-    DWORD startTick = 0;
+    ULONGLONG startTick = 0;
     int durationMs = 250;
     int iterationCount = 1;
     int completedIterations = 0;

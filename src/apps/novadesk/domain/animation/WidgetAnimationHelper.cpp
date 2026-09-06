@@ -548,7 +548,7 @@ void WidgetAnimationHelper::StartElementAnimation(
   anim.easing = easing.empty() ? L"linear" : easing;
   anim.durationMs = durationMs <= 0 ? 250 : durationMs;
   anim.iterationCount = iterationCount;
-  anim.startTick = GetTickCount();
+  anim.startTick = GetTickCount64();
   anim.useKeyframes = false;
   anim.to = to;
 
@@ -584,7 +584,7 @@ void WidgetAnimationHelper::StartElementKeyframeAnimation(
   anim.easing = easing.empty() ? L"linear" : easing;
   anim.durationMs = durationMs <= 0 ? 250 : durationMs;
   anim.iterationCount = iterationCount;
-  anim.startTick = GetTickCount();
+  anim.startTick = GetTickCount64();
   anim.useKeyframes = true;
 
   ResolveKeyframeStops(element, keyframes, anim.keyframeOffsets,
@@ -613,7 +613,7 @@ void WidgetAnimationHelper::StartWindowAnimation(
   anim.easing = easing.empty() ? L"linear" : easing;
   anim.durationMs = durationMs <= 0 ? 250 : durationMs;
   anim.iterationCount = iterationCount;
-  anim.startTick = GetTickCount();
+  anim.startTick = GetTickCount64();
   anim.useKeyframes = false;
   anim.to = to;
 
@@ -642,7 +642,7 @@ void WidgetAnimationHelper::StartWindowKeyframeAnimation(
   anim.easing = easing.empty() ? L"linear" : easing;
   anim.durationMs = durationMs <= 0 ? 250 : durationMs;
   anim.iterationCount = iterationCount;
-  anim.startTick = GetTickCount();
+  anim.startTick = GetTickCount64();
   anim.useKeyframes = true;
 
   ResolveWindowKeyframeStops(widget, keyframes, anim.keyframeOffsets,
@@ -676,7 +676,7 @@ void WidgetAnimationHelper::StepAnimations(Widget &widget) {
     return;
   }
 
-  const DWORD now = GetTickCount();
+  const ULONGLONG now = GetTickCount64();
   bool changed = false;
 
   // 1. Step element animations
@@ -688,7 +688,7 @@ void WidgetAnimationHelper::StepAnimations(Widget &widget) {
       continue;
     }
 
-    const DWORD elapsed = now - it->startTick;
+    const ULONGLONG elapsed = now - it->startTick;
     float t = static_cast<float>(elapsed) / static_cast<float>(it->durationMs);
     if (t < 0.0f)
       t = 0.0f;
@@ -729,7 +729,7 @@ void WidgetAnimationHelper::StepAnimations(Widget &widget) {
   bool windowAnimFinished = false;
   for (auto it = widget.m_WindowAnimations.begin();
        it != widget.m_WindowAnimations.end();) {
-    const DWORD elapsed = now - it->startTick;
+    const ULONGLONG elapsed = now - it->startTick;
     float t = static_cast<float>(elapsed) / static_cast<float>(it->durationMs);
     if (t < 0.0f)
       t = 0.0f;
