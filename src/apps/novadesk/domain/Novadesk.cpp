@@ -140,10 +140,17 @@ static LRESULT CALLBACK TrayMouseHookProc(int nCode, WPARAM wParam,
     // notification area host; GetWindowRect is a cheap kernel call.
     // This short-circuits the hook for the overwhelming majority of
     // system-wide scroll events where the cursor is elsewhere on screen.
-    HWND hTrayWnd = FindWindowW(L"Shell_TrayWnd", nullptr);
-    if (hTrayWnd) {
+    // Cache the handle and refresh every 5s to avoid per-event FindWindowW.
+    static HWND s_CachedTrayWnd = nullptr;
+    static DWORD s_CachedAt = 0;
+    DWORD now = GetTickCount();
+    if (!s_CachedTrayWnd || (now - s_CachedAt) > 5000) {
+      s_CachedTrayWnd = FindWindowW(L"Shell_TrayWnd", nullptr);
+      s_CachedAt = now;
+    }
+    if (s_CachedTrayWnd) {
       RECT trayWndRect = {};
-      if (GetWindowRect(hTrayWnd, &trayWndRect) &&
+      if (GetWindowRect(s_CachedTrayWnd, &trayWndRect) &&
           !PtInRect(&trayWndRect, pt)) {
         return CallNextHookEx(g_trayMouseHook, nCode, wParam, lParam);
       }
