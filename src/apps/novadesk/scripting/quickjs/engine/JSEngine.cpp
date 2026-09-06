@@ -371,6 +371,18 @@ bool ExecuteScriptFile(const std::wstring &finalScriptPath) {
   g_currentScriptPath = finalScriptPath;
 
   JSValue global = JS_GetGlobalObject(g_context);
+
+  // Save previous globals so they can be restored after this script's
+  // synchronous evaluation + job drain, preventing async module imports
+  // started here from seeing a later script's paths.
+  JSValue prevFilename = JS_GetPropertyStr(g_context, global, "__filename");
+  JSValue prevDirname = JS_GetPropertyStr(g_context, global, "__dirname");
+  JSValue prevMainScriptDirPath =
+      JS_GetPropertyStr(g_context, global, "__mainScriptDirPath");
+  JSValue prevWidgetDir = JS_GetPropertyStr(g_context, global, "__widgetDir");
+  JSValue prevAddonsPath =
+      JS_GetPropertyStr(g_context, global, "__addonsPath");
+
   JS_SetPropertyStr(g_context, global, "__filename",
                     JS_NewString(g_context, fileName.c_str()));
   JS_SetPropertyStr(g_context, global, "__dirname",
@@ -391,7 +403,6 @@ bool ExecuteScriptFile(const std::wstring &finalScriptPath) {
       g_context, global, "__addonsPath",
       JS_NewString(g_context,
                    Utils::ToString(PathUtils::GetAddonsDir()).c_str()));
-  JS_FreeValue(g_context, global);
 
   const std::string modulePrelude =
       "const ipcMain = globalThis.ipcMain;\n"
@@ -409,6 +420,14 @@ bool ExecuteScriptFile(const std::wstring &finalScriptPath) {
   if (JS_IsException(result)) {
     LogQuickJsException(g_context);
     JS_FreeValue(g_context, result);
+    // Restore previous globals so async work from prior scripts is unaffected.
+    JS_SetPropertyStr(g_context, global, "__filename", prevFilename);
+    JS_SetPropertyStr(g_context, global, "__dirname", prevDirname);
+    JS_SetPropertyStr(g_context, global, "__mainScriptDirPath",
+                      prevMainScriptDirPath);
+    JS_SetPropertyStr(g_context, global, "__widgetDir", prevWidgetDir);
+    JS_SetPropertyStr(g_context, global, "__addonsPath", prevAddonsPath);
+    JS_FreeValue(g_context, global);
     g_currentScriptDir.clear();
     g_currentScriptPath.clear();
     return false;
@@ -421,12 +440,28 @@ bool ExecuteScriptFile(const std::wstring &finalScriptPath) {
     err = JS_ExecutePendingJob(g_runtime, &ctx1);
     if (err < 0) {
       LogQuickJsException(ctx1 ? ctx1 : g_context);
+      // Restore previous globals so async work from prior scripts is unaffected.
+      JS_SetPropertyStr(g_context, global, "__filename", prevFilename);
+      JS_SetPropertyStr(g_context, global, "__dirname", prevDirname);
+      JS_SetPropertyStr(g_context, global, "__mainScriptDirPath",
+                        prevMainScriptDirPath);
+      JS_SetPropertyStr(g_context, global, "__widgetDir", prevWidgetDir);
+      JS_SetPropertyStr(g_context, global, "__addonsPath", prevAddonsPath);
+      JS_FreeValue(g_context, global);
       g_currentScriptDir.clear();
       g_currentScriptPath.clear();
       return false;
     }
   }
 
+  // Restore previous globals so async work from prior scripts is unaffected.
+  JS_SetPropertyStr(g_context, global, "__filename", prevFilename);
+  JS_SetPropertyStr(g_context, global, "__dirname", prevDirname);
+  JS_SetPropertyStr(g_context, global, "__mainScriptDirPath",
+                    prevMainScriptDirPath);
+  JS_SetPropertyStr(g_context, global, "__widgetDir", prevWidgetDir);
+  JS_SetPropertyStr(g_context, global, "__addonsPath", prevAddonsPath);
+  JS_FreeValue(g_context, global);
   g_currentScriptDir.clear();
   g_currentScriptPath.clear();
   return true;
