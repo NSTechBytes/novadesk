@@ -1285,13 +1285,17 @@ JSValue JsUiIpcInvoke(JSContext *ctx, JSValueConst, int argc,
   // within this call, making the invoke silently return undefined.
   if (JS_IsPromise(ret) && g_runtime) {
     JSContext *jobCtx = nullptr;
-    while (JS_IsJobPending(g_runtime)) {
+    int jobIter = 1000;
+    while (JS_IsJobPending(g_runtime) && jobIter-- > 0) {
       const int err = JS_ExecutePendingJob(g_runtime, &jobCtx);
       if (err < 0) {
         LogQuickJsException(jobCtx ? jobCtx : ctx);
         break;
       }
     }
+    if (jobIter <= 0)
+      Logging::Log(LogLevel::Warn,
+                   L"ipcRenderer.invoke: job drain limit hit");
 
     // After draining, inspect the Promise state.
     const JSPromiseStateEnum state = JS_PromiseState(ctx, ret);
