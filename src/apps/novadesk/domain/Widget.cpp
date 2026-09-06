@@ -153,6 +153,7 @@ Widget::~Widget() {
     if (m_DropTarget) {
       RevokeDragDrop(m_hWnd);
       m_DropTarget.Reset();
+      OleUninitialize();
     }
   }
   WidgetAnimationHelper::ClearAllAnimations(*this);
