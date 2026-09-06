@@ -22,10 +22,10 @@
 json Settings::s_Data;
 bool Settings::s_Dirty = false;
 bool Settings::s_IsFirstRun = false;
-DWORD Settings::s_LastSaveTick = 0;
+ULONGLONG Settings::s_LastSaveTick = 0;
 
 // Coalesce rapid SaveWidget calls: write at most once per 500 ms.
-static const DWORD SAVE_DEBOUNCE_MS = 500;
+static const ULONGLONG SAVE_DEBOUNCE_MS = 500;
 
 // ============================================================================
 // Settings Operations
@@ -172,7 +172,7 @@ void Settings::SaveWidget(const std::wstring &id,
 
   // Coalesce rapid writes: only flush to disk if the debounce
   // interval has elapsed.  The in-memory state is always current.
-  DWORD now = GetTickCount64();
+  ULONGLONG now = GetTickCount64();
   if (now - s_LastSaveTick >= SAVE_DEBOUNCE_MS) {
     Save();
     s_LastSaveTick = now;
@@ -234,7 +234,7 @@ void Settings::SetGlobalBool(const std::string &key, bool value) {
   if (s_Data[key] != value) {
     s_Data[key] = value;
     s_Dirty = true;
-    DWORD now = GetTickCount64();
+    ULONGLONG now = GetTickCount64();
     if (now - s_LastSaveTick >= SAVE_DEBOUNCE_MS) {
       Save();
       s_LastSaveTick = now;
