@@ -11,6 +11,7 @@
 #include "Utils.h"
 #include <filesystem>
 #include <algorithm>
+#include <unordered_map>
 #include "PathUtils.h"
 #include <dwrite_3.h>
 #include <mutex>

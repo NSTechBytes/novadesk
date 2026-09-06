@@ -79,6 +79,7 @@ struct NovadeskHostAPI {
   void (*PopN)(novadesk_context ctx, int n);
   void (*ThrowError)(novadesk_context ctx, const char *message);
   void *(*JsGetFunctionPtr)(novadesk_context ctx, int index);
+  void (*FreeFunction)(novadesk_context ctx, void *funcPtr);
   void (*JsCallFunction)(novadesk_context ctx, void *funcPtr, int nargs);
   void (*JsCallFunctionNoArgs)(novadesk_context ctx, void *funcPtr);
   void (*ArrayPushObject)(novadesk_context ctx);

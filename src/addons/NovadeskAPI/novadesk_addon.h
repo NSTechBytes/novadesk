@@ -33,6 +33,7 @@ typedef void *novadesk_context;
  * functions. Host API functions MUST only be called from the main thread.
  */
 struct NovadeskHostAPI {
+  unsigned int apiVersion;
   /** Export properties to JavaScript */
   void (*RegisterString)(novadesk_context ctx, const char *name,
                          const char *value);
