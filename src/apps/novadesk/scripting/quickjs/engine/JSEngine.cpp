@@ -56,6 +56,7 @@ std::wstring g_currentScriptPath;
 std::vector<std::wstring> g_loadedScriptPaths;
 std::vector<JSValue> g_eventCallbacks;
 std::vector<std::wstring> g_eventCallbackOwners;
+std::vector<size_t> g_freeCallbackSlots;
 std::unordered_map<Widget *, std::unordered_map<std::string, std::vector<int>>>
     g_widgetEventListeners;
 std::unordered_map<std::wstring, std::unordered_map<int, JSValue>>
@@ -193,6 +194,7 @@ void ResetRuntime() {
   g_eventCallbacks.push_back(JS_UNDEFINED);
   g_eventCallbackOwners.clear();
   g_eventCallbackOwners.push_back(L"");
+  g_freeCallbackSlots.clear();
   ClearWidgetEventListeners();
   ClearAllWidgetContextMenuCallbacks();
   ClearAllTrayCommandCallbacksInternal();
@@ -981,6 +983,7 @@ void ClearWidgetEventListeners() {
           if (id > 0 && id < static_cast<int>(g_eventCallbacks.size())) {
             JS_FreeValue(g_context, g_eventCallbacks[id]);
             g_eventCallbacks[id] = JS_UNDEFINED;
+            g_freeCallbackSlots.push_back(static_cast<size_t>(id));
           }
         }
       }
@@ -995,6 +998,7 @@ void ClearEventCallbacksForScript(const std::wstring &scriptPath) {
         g_eventCallbackOwners[i] == scriptPath) {
       JS_FreeValue(g_context, g_eventCallbacks[i]);
       g_eventCallbacks[i] = JS_UNDEFINED;
+      g_freeCallbackSlots.push_back(i);
       g_eventCallbackOwners[i].clear();
     }
   }
@@ -1406,9 +1410,10 @@ bool EnsureRuntime() {
   novadesk::scripting::quickjs::SetModuleSystemDebug(false);
   RegisterConsoleBindings(g_context);
   g_eventCallbacks.clear();
-  g_eventCallbacks.push_back(JS_UNDEFINED); // callback id 0 is invalid
+  g_eventCallbacks.push_back(JS_UNDEFINED);
   g_eventCallbackOwners.clear();
   g_eventCallbackOwners.push_back(L"");
+  g_freeCallbackSlots.clear();
   ClearCallbacks(g_mainIpcListeners);
   ClearCallbacks(g_uiIpcListeners);
   ClearChannelMap(g_mainIpcChannelListeners);
@@ -1566,6 +1571,7 @@ bool LoadAndExecuteScripts(const std::vector<std::wstring> &scriptPaths) {
   g_eventCallbacks.push_back(JS_UNDEFINED);
   g_eventCallbackOwners.clear();
   g_eventCallbackOwners.push_back(L"");
+  g_freeCallbackSlots.clear();
   ClearCallbacks(g_mainIpcListeners);
   ClearCallbacks(g_uiIpcListeners);
   ClearChannelMap(g_mainIpcChannelListeners);
@@ -1918,6 +1924,7 @@ void ClearWidgetEventListeners(Widget *widget) {
         if (id > 0 && id < static_cast<int>(g_eventCallbacks.size())) {
           JS_FreeValue(g_context, g_eventCallbacks[id]);
           g_eventCallbacks[id] = JS_UNDEFINED;
+          g_freeCallbackSlots.push_back(static_cast<size_t>(id));
         }
       }
     }
@@ -2111,15 +2118,15 @@ int RegisterEventCallback(JSContext *ctx, JSValueConst fn) {
 
   // Reuse a vacated slot (set to JS_UNDEFINED by ClearEventCallbacksForScript)
   // to prevent unbounded vector growth across script reloads.
-  for (size_t i = 1; i < g_eventCallbacks.size(); ++i) {
-    if (JS_IsUndefined(g_eventCallbacks[i])) {
-      g_eventCallbacks[i] = JS_DupValue(g_context, fn);
-      if (i < g_eventCallbackOwners.size())
-        g_eventCallbackOwners[i] = g_currentScriptPath;
-      else
-        g_eventCallbackOwners.push_back(g_currentScriptPath);
-      return static_cast<int>(i);
-    }
+  if (!g_freeCallbackSlots.empty()) {
+    size_t i = g_freeCallbackSlots.back();
+    g_freeCallbackSlots.pop_back();
+    g_eventCallbacks[i] = JS_DupValue(g_context, fn);
+    if (i < g_eventCallbackOwners.size())
+      g_eventCallbackOwners[i] = g_currentScriptPath;
+    else
+      g_eventCallbackOwners.push_back(g_currentScriptPath);
+    return static_cast<int>(i);
   }
 
   g_eventCallbacks.push_back(JS_DupValue(g_context, fn));
