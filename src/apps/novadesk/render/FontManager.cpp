@@ -275,6 +275,8 @@ Microsoft::WRL::ComPtr<DirectoryFontCollectionLoader> g_pLoader;
 std::map<std::wstring, Microsoft::WRL::ComPtr<IDWriteFontCollection>>
     g_CollectionCache;
 std::list<std::wstring> g_CollectionCacheOrder;
+std::unordered_map<std::wstring, std::list<std::wstring>::iterator>
+    g_CollectionCacheOrderIdx;
 std::mutex g_CollectionCacheMutex;
 constexpr size_t kMaxCollectionCacheSize = 64;
 
@@ -347,6 +349,7 @@ void Cleanup() {
     }
     g_CollectionCache.clear();
     g_CollectionCacheOrder.clear();
+    g_CollectionCacheOrderIdx.clear();
   }
 
   {
@@ -368,9 +371,12 @@ GetFontCollection(const std::wstring &directoryPath) {
   std::lock_guard<std::mutex> lock(g_CollectionCacheMutex);
   auto it = g_CollectionCache.find(key);
   if (it != g_CollectionCache.end()) {
-    // Move to back of order list (most-recently-used).
-    g_CollectionCacheOrder.remove(key);
-    g_CollectionCacheOrder.push_back(key);
+    // Move to back of order list (most-recently-used) in O(1).
+    auto idxIt = g_CollectionCacheOrderIdx.find(key);
+    if (idxIt != g_CollectionCacheOrderIdx.end()) {
+      g_CollectionCacheOrder.splice(g_CollectionCacheOrder.end(),
+                                    g_CollectionCacheOrder, idxIt->second);
+    }
     return it->second;
   }
 
@@ -394,6 +400,7 @@ GetFontCollection(const std::wstring &directoryPath) {
         !g_CollectionCacheOrder.empty()) {
       const std::wstring oldest = g_CollectionCacheOrder.front();
       g_CollectionCacheOrder.pop_front();
+      g_CollectionCacheOrderIdx.erase(oldest);
       g_CollectionCache.erase(oldest);
       Logging::Log(LogLevel::Debug,
                    L"FontManager: Evicted LRU collection for '%s'",
@@ -401,6 +408,7 @@ GetFontCollection(const std::wstring &directoryPath) {
     }
     g_CollectionCache[key] = pCollection;
     g_CollectionCacheOrder.push_back(key);
+    g_CollectionCacheOrderIdx[key] = std::prev(g_CollectionCacheOrder.end());
     return pCollection;
   } else {
     Logging::Log(
