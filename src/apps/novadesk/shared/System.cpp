@@ -1836,6 +1836,12 @@ bool WebFetch(const std::wstring &url, std::string &outData) {
     return false;
   }
 
+  DWORD timeout = 15000;
+  InternetSetOption(hInternet, INTERNET_OPTION_CONNECT_TIMEOUT, &timeout,
+                    sizeof(timeout));
+  InternetSetOption(hInternet, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeout,
+                    sizeof(timeout));
+
   DWORD flags = INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE;
   if (url.rfind(L"https://", 0) == 0) {
     flags |= INTERNET_FLAG_SECURE;
