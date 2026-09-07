@@ -48,7 +48,7 @@ public:
    */
   virtual bool
   CreateGeometry(ID2D1Factory *factory,
-                 Microsoft::WRL::ComPtr<ID2D1Geometry> &geometry) const = 0;
+                 Microsoft::WRL::ComPtr<ID2D1Geometry> &geometry) const override = 0;
 
   // ============================================================================
   // Stroke Configuration

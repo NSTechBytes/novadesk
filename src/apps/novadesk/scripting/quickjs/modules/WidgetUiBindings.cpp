@@ -1372,7 +1372,6 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
       TooltipMaxHeight,
       TooltipBalloon,
       TooltipDisabled,
-      BackdropFilter,
       ScrollX,
       ScrollY,
       ScrollStep,
@@ -1456,7 +1455,6 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
         {"tooltipMaxHeight", TooltipMaxHeight},
         {"tooltipBalloon", TooltipBalloon},
         {"tooltipDisabled", TooltipDisabled},
-        {"backdropFilter", BackdropFilter},
         {"scrollX", ScrollX},
         {"scrollY", ScrollY},
         {"scrollStep", ScrollStep},
@@ -1709,28 +1707,6 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
         return JS_NewBool(ctx, element->GetToolTipBalloon() ? 1 : 0);
       case TooltipDisabled:
         return JS_NewBool(ctx, element->GetToolTipDisabled() ? 1 : 0);
-      case BackdropFilter: {
-        const auto &filter = element->GetBackdropFilter();
-        JSValue result = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, result, "blur", JS_NewFloat64(ctx, filter.blur));
-        JS_SetPropertyStr(ctx, result, "brightness",
-                          JS_NewFloat64(ctx, filter.brightness));
-        JS_SetPropertyStr(ctx, result, "contrast",
-                          JS_NewFloat64(ctx, filter.contrast));
-        JS_SetPropertyStr(ctx, result, "greyScale",
-                          JS_NewFloat64(ctx, filter.grayscale));
-        JS_SetPropertyStr(ctx, result, "saturate",
-                          JS_NewFloat64(ctx, filter.saturate));
-        JS_SetPropertyStr(ctx, result, "sepia",
-                          JS_NewFloat64(ctx, filter.sepia));
-        JS_SetPropertyStr(ctx, result, "hueRotate",
-                          JS_NewFloat64(ctx, filter.hueRotate));
-        JS_SetPropertyStr(ctx, result, "invert",
-                          JS_NewFloat64(ctx, filter.invert));
-        JS_SetPropertyStr(ctx, result, "opacity",
-                          JS_NewFloat64(ctx, filter.opacity));
-        return result;
-      }
       case ScrollX:
         return JS_NewInt32(ctx, element->GetScrollX());
       case ScrollY:
@@ -1873,27 +1849,7 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
       return JS_NewFloat64(ctx, t->GetLetterSpacing());
     if (prop == "fontPath")
       return JS_NewString(ctx, Utils::ToString(t->GetFontPath()).c_str());
-    if (prop == "backdropFilter") {
-      const auto &filter = t->GetBackdropFilter();
-      JSValue result = JS_NewObject(ctx);
-      JS_SetPropertyStr(ctx, result, "blur", JS_NewFloat64(ctx, filter.blur));
-      JS_SetPropertyStr(ctx, result, "brightness",
-                        JS_NewFloat64(ctx, filter.brightness));
-      JS_SetPropertyStr(ctx, result, "contrast",
-                        JS_NewFloat64(ctx, filter.contrast));
-      JS_SetPropertyStr(ctx, result, "greyScale",
-                        JS_NewFloat64(ctx, filter.grayscale));
-      JS_SetPropertyStr(ctx, result, "saturate",
-                        JS_NewFloat64(ctx, filter.saturate));
-      JS_SetPropertyStr(ctx, result, "sepia", JS_NewFloat64(ctx, filter.sepia));
-      JS_SetPropertyStr(ctx, result, "hueRotate",
-                        JS_NewFloat64(ctx, filter.hueRotate));
-      JS_SetPropertyStr(ctx, result, "invert",
-                        JS_NewFloat64(ctx, filter.invert));
-      JS_SetPropertyStr(ctx, result, "opacity",
-                        JS_NewFloat64(ctx, filter.opacity));
-      return result;
-    }
+
 
     if (prop == "textAlign") {
       const char *alStr = "left-top";
@@ -2547,28 +2503,6 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
           JS_SetPropertyUint32(ctx, arr, i, item);
         }
         return arr;
-      }
-      if (prop == "backdropFilter") {
-        const auto &filter = layoutPrefill.shape.backdropFilter;
-        JSValue result = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, result, "blur", JS_NewFloat64(ctx, filter.blur));
-        JS_SetPropertyStr(ctx, result, "brightness",
-                          JS_NewFloat64(ctx, filter.brightness));
-        JS_SetPropertyStr(ctx, result, "contrast",
-                          JS_NewFloat64(ctx, filter.contrast));
-        JS_SetPropertyStr(ctx, result, "greyScale",
-                          JS_NewFloat64(ctx, filter.grayscale));
-        JS_SetPropertyStr(ctx, result, "saturate",
-                          JS_NewFloat64(ctx, filter.saturate));
-        JS_SetPropertyStr(ctx, result, "sepia",
-                          JS_NewFloat64(ctx, filter.sepia));
-        JS_SetPropertyStr(ctx, result, "hueRotate",
-                          JS_NewFloat64(ctx, filter.hueRotate));
-        JS_SetPropertyStr(ctx, result, "invert",
-                          JS_NewFloat64(ctx, filter.invert));
-        JS_SetPropertyStr(ctx, result, "opacity",
-                          JS_NewFloat64(ctx, filter.opacity));
-        return result;
       }
     }
 

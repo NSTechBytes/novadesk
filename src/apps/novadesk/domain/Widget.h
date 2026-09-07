@@ -581,6 +581,7 @@ private:
   /// @brief Updates the layered window with the current rendered content.
   void UpdateLayeredWindowContent();
 
+
   /**
    * @brief Processes mouse messages and dispatches to element hit targets.
    *

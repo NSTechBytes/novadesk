@@ -10,8 +10,7 @@
 #include "Direct2DHelper.h"
 #include <algorithm>
 #include <cmath>
-#include <d2d1effects.h>
-#include <d2d1effects_2.h>
+#include <cstdint>
 
 Element::Element(ElementType type, const std::wstring &id, int x, int y,
                  int width, int height)
@@ -24,6 +23,7 @@ Element::Element(ElementType type, const std::wstring &id, int x, int y,
 }
 
 Element::~Element() {
+
   // Defensively remove self from parent container to prevent dangling
   // pointers.  Normally the Widget removal path calls
   // UpdateContainerForElement() before erasing, which clears this link.
@@ -274,7 +274,6 @@ void Element::SetOverflow(const std::wstring &value) {
 
 // Render the background of the element.
 void Element::RenderBackground(ID2D1DeviceContext *context) {
-  RenderBackdropFilter(context);
   if (!m_HasSolidColor)
     return;
 
@@ -434,113 +433,28 @@ void Element::RestoreRenderTransform(
     return;
   context->SetTransform(originalTransform);
 }
-bool BackdropFilter::IsActive() const {
-  return blur > 0.0f || brightness != 1.0f || contrast != 1.0f ||
-         grayscale > 0.0f || saturate != 1.0f || sepia > 0.0f ||
-         hueRotate != 0.0f || invert > 0.0f || opacity != 1.0f;
-}
 
-void Element::RenderBackdropFilter(ID2D1DeviceContext *context) {
-  if (!context || !m_BackdropFilter.IsActive())
-    return;
-  const GfxRect bounds = GetBackgroundBounds();
-  const float pad = std::ceil(m_BackdropFilter.blur * 3.0f);
-  const D2D1_SIZE_U canvas = context->GetPixelSize();
-  if (!canvas.width || !canvas.height)
-    return;
-  const LONG l = (std::max)(0L, static_cast<LONG>(std::floor(bounds.X - pad)));
-  const LONG t = (std::max)(0L, static_cast<LONG>(std::floor(bounds.Y - pad)));
-  const LONG r =
-      (std::min)(static_cast<LONG>(canvas.width),
-                 static_cast<LONG>(std::ceil(bounds.X + bounds.Width + pad)));
-  const LONG b =
-      (std::min)(static_cast<LONG>(canvas.height),
-                 static_cast<LONG>(std::ceil(bounds.Y + bounds.Height + pad)));
-  if (r <= l || b <= t)
-    return;
+bool Element::CreateGeometry(
+    ID2D1Factory *factory,
+    Microsoft::WRL::ComPtr<ID2D1Geometry> &geometry) const {
+  if (!factory)
+    return false;
 
-  // --- Cache validation --------------------------------------------------
-  // Rebuild the render-target + bitmap only when the captured region changes.
-  // Rebuild the effect chain only when the filter parameters change.
-  const GfxRect srcRect(l, t, r - l, b - t);
-  const bool targetValid = m_BackdropFilterTarget &&
-                           m_BackdropFilterBounds.X == srcRect.X &&
-                           m_BackdropFilterBounds.Y == srcRect.Y &&
-                           m_BackdropFilterBounds.Width == srcRect.Width &&
-                           m_BackdropFilterBounds.Height == srcRect.Height;
-  if (!targetValid) {
-    if (FAILED(context->CreateCompatibleRenderTarget(
-            D2D1::SizeF(srcRect.Width, srcRect.Height),
-            &m_BackdropFilterTarget)))
-      return;
-    if (FAILED(m_BackdropFilterTarget->GetBitmap(&m_BackdropFilterBitmap)))
-      return;
-    m_BackdropFilterBounds = srcRect;
-    // Force effect-chain rebuild since we got a new bitmap.
-    m_BackdropFilterCache = BackdropFilter{};
-  }
-
-  // Copy the current content behind the element into the cached bitmap.
-  // This is the unavoidable per-frame GPU readback.
-  const D2D1_RECT_U source = D2D1::RectU(l, t, r, b);
-  if (FAILED(m_BackdropFilterBitmap->CopyFromRenderTarget(nullptr, context,
-                                                          &source)))
-    return;
-
-  // --- Effect chain (cached when filter params unchanged) -----------------
-  ID2D1Image *image = m_BackdropFilterBitmap.Get();
-  std::vector<Microsoft::WRL::ComPtr<ID2D1Effect>> effects;
-  std::vector<Microsoft::WRL::ComPtr<ID2D1Image>> outputs;
-  if (m_BackdropFilterCache.blur != m_BackdropFilter.blur ||
-      m_BackdropFilterCache.saturate != m_BackdropFilter.saturate ||
-      m_BackdropFilterCache.hueRotate != m_BackdropFilter.hueRotate ||
-      m_BackdropFilterCache.opacity != m_BackdropFilter.opacity) {
-    auto add = [&](REFCLSID id, auto set) {
-      Microsoft::WRL::ComPtr<ID2D1Effect> effect;
-      Microsoft::WRL::ComPtr<ID2D1Image> output;
-      if (FAILED(context->CreateEffect(id, &effect)))
-        return false;
-      effect->SetInput(0, image);
-      set(effect.Get());
-      effect->GetOutput(&output);
-      image = output.Get();
-      effects.push_back(effect);
-      outputs.push_back(output);
+  if (m_CornerRadius > 0) {
+    const GfxRect bounds = const_cast<Element *>(this)->GetBackgroundBounds();
+    D2D1_ROUNDED_RECT rect;
+    rect.rect = D2D1::RectF(
+        static_cast<float>(bounds.X), static_cast<float>(bounds.Y),
+        static_cast<float>(bounds.X + bounds.Width),
+        static_cast<float>(bounds.Y + bounds.Height));
+    rect.radiusX = static_cast<float>(m_CornerRadius);
+    rect.radiusY = static_cast<float>(m_CornerRadius);
+    Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> rounded;
+    if (SUCCEEDED(factory->CreateRoundedRectangleGeometry(rect, &rounded))) {
+      geometry = rounded;
       return true;
-    };
-    if (m_BackdropFilter.blur > 0 &&
-        !add(CLSID_D2D1GaussianBlur, [&](ID2D1Effect *e) {
-          e->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION,
-                      m_BackdropFilter.blur);
-          e->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE,
-                      D2D1_BORDER_MODE_HARD);
-        }))
-      return;
-    if (m_BackdropFilter.saturate != 1 &&
-        !add(CLSID_D2D1Saturation, [&](ID2D1Effect *e) {
-          e->SetValue(D2D1_SATURATION_PROP_SATURATION,
-                      m_BackdropFilter.saturate);
-        }))
-      return;
-    if (m_BackdropFilter.hueRotate != 0 &&
-        !add(CLSID_D2D1HueRotation, [&](ID2D1Effect *e) {
-          e->SetValue(D2D1_HUEROTATION_PROP_ANGLE, m_BackdropFilter.hueRotate);
-        }))
-      return;
-    if (m_BackdropFilter.opacity != 1 &&
-        !add(CLSID_D2D1Opacity, [&](ID2D1Effect *e) {
-          e->SetValue(D2D1_OPACITY_PROP_OPACITY, m_BackdropFilter.opacity);
-        }))
-      return;
-    m_BackdropFilterCache = m_BackdropFilter;
+    }
   }
 
-  const D2D1_RECT_F clip = D2D1::RectF((FLOAT)bounds.X, (FLOAT)bounds.Y,
-                                       (FLOAT)(bounds.X + bounds.Width),
-                                       (FLOAT)(bounds.Y + bounds.Height));
-  context->PushAxisAlignedClip(clip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
-  const D2D1_POINT_2F offset = D2D1::Point2F((FLOAT)l, (FLOAT)t);
-  context->DrawImage(image, &offset, nullptr, D2D1_INTERPOLATION_MODE_LINEAR,
-                     D2D1_COMPOSITE_MODE_SOURCE_OVER);
-  context->PopAxisAlignedClip();
+  return false;
 }

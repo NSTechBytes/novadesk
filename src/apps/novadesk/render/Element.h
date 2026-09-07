@@ -110,24 +110,6 @@ enum TextCase {
 };
 
 /**
- * @brief CSS-like backdrop filter configuration for blur and color effects.
- */
-struct BackdropFilter {
-  float blur = 0.0f;       ///< Gaussian blur radius.
-  float brightness = 1.0f; ///< Brightness multiplier (1.0 = normal).
-  float contrast = 1.0f;   ///< Contrast multiplier (1.0 = normal).
-  float grayscale = 0.0f;  ///< Grayscale intensity (0.0 = none, 1.0 = full).
-  float saturate = 1.0f;   ///< Saturation multiplier (1.0 = normal).
-  float sepia = 0.0f;      ///< Sepia tone intensity (0.0 = none, 1.0 = full).
-  float hueRotate = 0.0f;  ///< Hue rotation in degrees.
-  float invert = 0.0f;  ///< Color inversion intensity (0.0 = none, 1.0 = full).
-  float opacity = 1.0f; ///< Overall opacity (0.0 = transparent, 1.0 = opaque).
-
-  /// @return True if any filter (other than default opacity) is active.
-  bool IsActive() const;
-};
-
-/**
  * @brief Base class for all renderable elements in Novadesk widgets.
  *
  * @note Instances are owned by Widget and must only be created/destroyed
@@ -136,10 +118,6 @@ struct BackdropFilter {
  */
 class Element {
 public:
-  void SetBackdropFilter(const BackdropFilter &filter) {
-    m_BackdropFilter = filter;
-  }
-  const BackdropFilter &GetBackdropFilter() const { return m_BackdropFilter; }
 
   /**
    * @brief Constructs an element with type, ID, and bounding rectangle.
@@ -231,6 +209,18 @@ public:
 
   /// @return The background rendering bounds (may differ from content bounds).
   virtual GfxRect GetBackgroundBounds();
+
+  /**
+   * @brief Creates the element's geometry for rendering and clipping.
+   *
+   * @param factory Direct2D factory for geometry creation.
+   * @param geometry Receives the created geometry.
+   *
+   * @return True if geometry was created successfully.
+   */
+  virtual bool
+  CreateGeometry(ID2D1Factory *factory,
+                 Microsoft::WRL::ComPtr<ID2D1Geometry> &geometry) const;
 
   /**
    * @brief Tests if a point falls within the element's hit area.
@@ -684,7 +674,6 @@ protected:
   // Core Properties
   // ============================================================================
 
-  BackdropFilter m_BackdropFilter;
   ElementType m_Type;
   std::wstring m_Id;
   int m_X, m_Y;
@@ -806,15 +795,6 @@ protected:
   float m_TransformMatrix[6] = {1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f};
 
   // ============================================================================
-  // Backdrop Filter Cache (avoids per-frame GPU surface reallocation)
-  // ============================================================================
-
-  BackdropFilter m_BackdropFilterCache;
-  GfxRect m_BackdropFilterBounds{};
-  Microsoft::WRL::ComPtr<ID2D1BitmapRenderTarget> m_BackdropFilterTarget;
-  Microsoft::WRL::ComPtr<ID2D1Bitmap> m_BackdropFilterBitmap;
-
-  // ============================================================================
   // Tooltip
   // ============================================================================
 
@@ -831,7 +811,6 @@ protected:
   // ============================================================================
 
   void RenderBackground(ID2D1DeviceContext *context);
-  void RenderBackdropFilter(ID2D1DeviceContext *context);
   void RenderBevel(ID2D1DeviceContext *context);
   void ApplyRenderTransform(ID2D1DeviceContext *context,
                             D2D1_MATRIX_3X2_F &originalTransform);

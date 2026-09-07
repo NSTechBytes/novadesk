@@ -143,11 +143,6 @@ struct ElementOptions {
   bool tooltipBalloon = false;
   bool tooltipDisabled = false;
 
-  // ============================================================================
-  // Backdrop Filter
-  // ============================================================================
-
-  BackdropFilter backdropFilter;
 
   // ============================================================================
   // Scroll & Overflow (many properties — see Element.h for details)
