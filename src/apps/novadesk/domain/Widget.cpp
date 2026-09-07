@@ -1561,6 +1561,9 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
         }
       }
       if (moved) {
+        if (widget->m_ColorPickerPopup && widget->m_ColorPickerPopup->IsOpen()) {
+          widget->m_ColorPickerPopup->UpdatePosition();
+        }
         JSEngine::TriggerWidgetEvent(widget, "move");
       }
       if (sized) {
@@ -4319,16 +4322,6 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
       // Input box focus + caret placement on click.
       InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(hitElement);
-      ColorPickerElement *colorPicker =
-          dynamic_cast<ColorPickerElement *>(hitElement);
-      if (colorPicker) {
-        if (m_ColorPickerPopup)
-          m_ColorPickerPopup->Close();
-        m_ColorPickerPopup =
-            std::make_unique<ColorPickerPopup>(this, colorPicker);
-        m_ColorPickerPopup->Show();
-        handled = true;
-      }
       if (inputElem) {
         if (m_FocusedInputBox && m_FocusedInputBox != inputElem) {
           if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
@@ -4498,6 +4491,17 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
     if (m_FocusedInputBox) {
       m_FocusedInputBox->HandleMouseUp();
+    }
+
+    ColorPickerElement *colorPicker =
+        dynamic_cast<ColorPickerElement *>(hitElement);
+    if (colorPicker && !m_IsElementDragging) {
+      if (m_ColorPickerPopup)
+        m_ColorPickerPopup->Close();
+      m_ColorPickerPopup =
+          std::make_unique<ColorPickerPopup>(this, colorPicker);
+      m_ColorPickerPopup->Show();
+      handled = true;
     }
 
     if (m_IsElementDragging && IsTrackedElement(m_DragElement)) {

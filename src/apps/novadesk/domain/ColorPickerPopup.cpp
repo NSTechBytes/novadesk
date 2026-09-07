@@ -256,6 +256,25 @@ void ColorPickerPopup::Show() {
   }
 }
 
+void ColorPickerPopup::UpdatePosition() {
+  if (!m_hWnd || !m_Widget || !m_Picker)
+    return;
+  RECT r{};
+  GetWindowRect(m_Widget->GetWindow(), &r);
+  GfxRect b = m_Picker->GetBounds();
+  int x = r.left + b.X, y = r.top + b.Y + b.Height;
+  HMONITOR mon = MonitorFromPoint({x, y}, MONITOR_DEFAULTTONEAREST);
+  MONITORINFO mi{sizeof(mi)};
+  GetMonitorInfoW(mon, &mi);
+  if (y + H > mi.rcWork.bottom)
+    y = r.top + b.Y - H;
+  const int workLeft = static_cast<int>(mi.rcWork.left);
+  const int workRight = static_cast<int>(mi.rcWork.right);
+  x = (std::max)(workLeft, (std::min)(x, workRight - W));
+  SetWindowPos(m_hWnd, HWND_TOPMOST, x, y, W, H,
+               SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+}
+
 void ColorPickerPopup::Close() {
   if (m_hWnd && !m_Canceled && m_Picker &&
       m_Picker->m_OnCloseCallbackId != -1) {

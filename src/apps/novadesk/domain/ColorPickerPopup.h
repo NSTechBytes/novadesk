@@ -35,6 +35,9 @@ public:
   /// Closes the color picker popup.
   void Close();
 
+  /// Updates popup position when the owning widget moves.
+  void UpdatePosition();
+
   /// @return True if the popup is currently open.
   bool IsOpen() const { return m_hWnd != nullptr; }
 
