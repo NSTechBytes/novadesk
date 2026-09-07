@@ -1262,6 +1262,10 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
           // Update local options for hit testing
           widget->m_Options.x = newX;
           widget->m_Options.y = newY;
+
+          if (widget->m_Tooltip.IsActive()) {
+            widget->m_Tooltip.RepositionToCursor();
+          }
         }
       } else {
         widget->HandleMouseMessage(message, wParam, lParam);
@@ -1563,6 +1567,9 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
       if (moved) {
         if (widget->m_ColorPickerPopup && widget->m_ColorPickerPopup->IsOpen()) {
           widget->m_ColorPickerPopup->UpdatePosition();
+        }
+        if (widget->m_Tooltip.IsActive()) {
+          widget->m_Tooltip.RepositionToCursor();
         }
         JSEngine::TriggerWidgetEvent(widget, "move");
       }

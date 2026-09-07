@@ -189,6 +189,20 @@ void Tooltip::Move() {
   }
 }
 
+void Tooltip::RepositionToCursor() {
+  if (m_ActiveToolTipHWnd) {
+    POINT pt;
+    if (GetCursorPos(&pt)) {
+      SendMessageW(m_ActiveToolTipHWnd, TTM_TRACKPOSITION, 0,
+                   MAKELPARAM(pt.x + 20, pt.y + 20));
+      SetWindowPos(m_ActiveToolTipHWnd, HWND_TOPMOST, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+      m_LastPos = pt;
+      m_IsMovePending = false;
+    }
+  }
+}
+
 void Tooltip::Destroy() {
   if (m_ToolTipHWnd) {
     DestroyWindow(m_ToolTipHWnd);

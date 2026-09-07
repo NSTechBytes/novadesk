@@ -45,6 +45,9 @@ public:
   /// Repositions the tooltip to follow the cursor.
   void Move();
 
+  /// Immediately updates tooltip position to current cursor location.
+  void RepositionToCursor();
+
   /// Destroys the active tooltip window.
   void Destroy();
 
