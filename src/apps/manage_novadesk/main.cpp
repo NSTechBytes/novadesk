@@ -1,4 +1,4 @@
-﻿/* Copyright (C) 2026 OfficialNovadesk
+/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -2795,7 +2795,7 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
   wc.hIcon = g_windowIconLarge;
   wc.hIconSm = g_windowIconSmall;
   wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-  wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+  wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
   wc.lpszClassName = className;
   ATOM windowClassAtom = RegisterClassExW(&wc);
   if (!windowClassAtom) {
