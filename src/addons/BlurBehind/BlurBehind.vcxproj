@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -59,9 +59,18 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="ApiState.cpp" />
+    <ClCompile Include="ArgParser.cpp" />
+    <ClCompile Include="WindowStyler.cpp" />
+    <ClCompile Include="WinVersion.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h" />
+    <ClInclude Include="BlurBehind.h" />
+    <ClInclude Include="ApiState.h" />
+    <ClInclude Include="ArgParser.h" />
+    <ClInclude Include="WindowStyler.h" />
+    <ClInclude Include="WinVersion.h" />
     <ClInclude Include="..\NovadeskAPI\novadesk_addon.h" />
   </ItemGroup>
   <ItemGroup>

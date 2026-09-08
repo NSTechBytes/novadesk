@@ -29,6 +29,7 @@
 #include "../modules/ModuleSystem.h"
 #include "../modules/SystemModule.h"
 #include "../modules/WidgetUiBindings.h"
+#include "../modules/NovadeskModule.h"
 
 namespace JSEngine {
 namespace {
@@ -209,6 +210,7 @@ void ResetRuntime() {
   g_trayOwners.clear();
 
   novadesk::scripting::quickjs::ClearWebFetchRequests(g_context);
+  novadesk::scripting::quickjs::UnloadAllAddons();
 
   if (g_context) {
     // Free cached event-property atoms before context destruction.
