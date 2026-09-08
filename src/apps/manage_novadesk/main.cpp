@@ -2655,6 +2655,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
       RefreshListView();
       UpdateButtonState();
     } else if (wParam == kProcessMonitorTimerId) {
+      if (g_activeTab == 3) {
+        RefreshSettingsControls();
+      }
       if (g_novadeskRunning && g_novadeskProcess.hProcess) {
         DWORD exitCode = 0;
         if (GetExitCodeProcess(g_novadeskProcess.hProcess, &exitCode)) {
@@ -2665,6 +2668,11 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
           }
         }
       }
+    }
+    return 0;
+  case WM_ACTIVATE:
+    if (LOWORD(wParam) != WA_INACTIVE && g_activeTab == 3) {
+      RefreshSettingsControls();
     }
     return 0;
   case kLogAppendMessage: {
