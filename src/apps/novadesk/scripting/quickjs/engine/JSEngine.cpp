@@ -1112,6 +1112,61 @@ void RegisterChannelListener(
   map[channel].push_back(std::move(entry));
 }
 
+bool RemoveChannelListener(
+    std::unordered_map<std::string, std::vector<IpcListener>> &map,
+    JSContext *ctx, const std::string &channel, JSValueConst fn) {
+  auto mit = map.find(channel);
+  if (mit == map.end())
+    return false;
+
+  auto &vec = mit->second;
+  for (auto it = vec.begin(); it != vec.end(); ++it) {
+    if (JS_IsSameValue(ctx, it->callback, fn)) {
+      JS_FreeValue(ctx, it->callback);
+      vec.erase(it);
+      if (vec.empty()) {
+        map.erase(mit);
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+void RemoveAllChannelListeners(
+    std::unordered_map<std::string, std::vector<IpcListener>> &map,
+    JSContext *ctx, const std::string &channel) {
+  auto mit = map.find(channel);
+  if (mit == map.end())
+    return;
+
+  for (auto &listener : mit->second) {
+    JS_FreeValue(ctx, listener.callback);
+  }
+  map.erase(mit);
+}
+
+void RemoveAllChannelListeners(
+    std::unordered_map<std::string, std::vector<IpcListener>> &map,
+    JSContext *ctx) {
+  for (auto &kv : map) {
+    for (auto &listener : kv.second) {
+      JS_FreeValue(ctx, listener.callback);
+    }
+  }
+  map.clear();
+}
+
+bool RemoveChannelHandler(std::unordered_map<std::string, IpcHandler> &map,
+                          JSContext *ctx, const std::string &channel) {
+  auto it = map.find(channel);
+  if (it == map.end())
+    return false;
+  JS_FreeValue(ctx, it->second.callback);
+  map.erase(it);
+  return true;
+}
+
 JSValue BuildIpcMessage(JSContext *ctx, JSValueConst typeVal,
                         JSValueConst payloadVal, const char *from,
                         const char *to, const char *channel) {
@@ -1242,6 +1297,51 @@ JSValue JsMainIpcHandle(JSContext *ctx, JSValueConst, int argc,
   return JS_UNDEFINED;
 }
 
+JSValue JsMainIpcRemoveListener(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv) {
+  if (argc < 2 || !JS_IsFunction(ctx, argv[1])) {
+    return JS_ThrowTypeError(
+        ctx, "ipcMain.removeListener requires (channel, listener)");
+  }
+  std::string channel;
+  if (!GetChannelArg(ctx, argv[0], channel)) {
+    return JS_ThrowTypeError(
+        ctx, "ipcMain.removeListener channel must be non-empty string");
+  }
+  RemoveChannelListener(g_mainIpcChannelListeners, ctx, channel, argv[1]);
+  return JS_DupValue(ctx, this_val);
+}
+
+JSValue JsMainIpcRemoveAllListeners(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv) {
+  if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
+    std::string channel;
+    if (!GetChannelArg(ctx, argv[0], channel)) {
+      return JS_ThrowTypeError(
+          ctx, "ipcMain.removeAllListeners channel must be non-empty string");
+    }
+    RemoveAllChannelListeners(g_mainIpcChannelListeners, ctx, channel);
+  } else {
+    RemoveAllChannelListeners(g_mainIpcChannelListeners, ctx);
+    ClearCallbacks(g_mainIpcListeners);
+  }
+  return JS_DupValue(ctx, this_val);
+}
+
+JSValue JsMainIpcRemoveHandler(JSContext *ctx, JSValueConst, int argc,
+                               JSValueConst *argv) {
+  if (argc < 1) {
+    return JS_ThrowTypeError(ctx, "ipcMain.removeHandler requires (channel)");
+  }
+  std::string channel;
+  if (!GetChannelArg(ctx, argv[0], channel)) {
+    return JS_ThrowTypeError(
+        ctx, "ipcMain.removeHandler channel must be non-empty string");
+  }
+  RemoveChannelHandler(g_mainIpcHandlers, ctx, channel);
+  return JS_UNDEFINED;
+}
+
 JSValue JsMainIpcSend(JSContext *ctx, JSValueConst, int argc,
                       JSValueConst *argv) {
   if (argc < 1) {
@@ -1270,6 +1370,38 @@ JSValue JsUiIpcOn(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
   }
   RegisterChannelListener(g_uiIpcChannelListeners, ctx, channel, argv[1]);
   return JS_UNDEFINED;
+}
+
+JSValue JsUiIpcRemoveListener(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv) {
+  if (argc < 2 || !JS_IsFunction(ctx, argv[1])) {
+    return JS_ThrowTypeError(
+        ctx, "ipcRenderer.removeListener requires (channel, listener)");
+  }
+  std::string channel;
+  if (!GetChannelArg(ctx, argv[0], channel)) {
+    return JS_ThrowTypeError(
+        ctx, "ipcRenderer.removeListener channel must be non-empty string");
+  }
+  RemoveChannelListener(g_uiIpcChannelListeners, ctx, channel, argv[1]);
+  return JS_DupValue(ctx, this_val);
+}
+
+JSValue JsUiIpcRemoveAllListeners(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv) {
+  if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
+    std::string channel;
+    if (!GetChannelArg(ctx, argv[0], channel)) {
+      return JS_ThrowTypeError(
+          ctx,
+          "ipcRenderer.removeAllListeners channel must be non-empty string");
+    }
+    RemoveAllChannelListeners(g_uiIpcChannelListeners, ctx, channel);
+  } else {
+    RemoveAllChannelListeners(g_uiIpcChannelListeners, ctx);
+    ClearCallbacks(g_uiIpcListeners);
+  }
+  return JS_DupValue(ctx, this_val);
 }
 
 JSValue JsUiIpcSend(JSContext *ctx, JSValueConst, int argc,
@@ -1368,8 +1500,20 @@ JSValue JsUiIpcInvoke(JSContext *ctx, JSValueConst, int argc,
 JSValue CreateMainIpcObject(JSContext *ctx) {
   JSValue ipc = JS_NewObject(ctx);
   JS_SetPropertyStr(ctx, ipc, "on", JS_NewCFunction(ctx, JsMainIpcOn, "on", 2));
+  JS_SetPropertyStr(
+      ctx, ipc, "removeListener",
+      JS_NewCFunction(ctx, JsMainIpcRemoveListener, "removeListener", 2));
+  JS_SetPropertyStr(ctx, ipc, "off",
+                    JS_NewCFunction(ctx, JsMainIpcRemoveListener, "off", 2));
+  JS_SetPropertyStr(
+      ctx, ipc, "removeAllListeners",
+      JS_NewCFunction(ctx, JsMainIpcRemoveAllListeners, "removeAllListeners",
+                      1));
   JS_SetPropertyStr(ctx, ipc, "handle",
                     JS_NewCFunction(ctx, JsMainIpcHandle, "handle", 2));
+  JS_SetPropertyStr(
+      ctx, ipc, "removeHandler",
+      JS_NewCFunction(ctx, JsMainIpcRemoveHandler, "removeHandler", 1));
   JS_SetPropertyStr(ctx, ipc, "send",
                     JS_NewCFunction(ctx, JsMainIpcSend, "send", 2));
   return ipc;
@@ -1378,6 +1522,14 @@ JSValue CreateMainIpcObject(JSContext *ctx) {
 JSValue CreateUiIpcObjectImpl(JSContext *ctx) {
   JSValue ipc = JS_NewObject(ctx);
   JS_SetPropertyStr(ctx, ipc, "on", JS_NewCFunction(ctx, JsUiIpcOn, "on", 2));
+  JS_SetPropertyStr(
+      ctx, ipc, "removeListener",
+      JS_NewCFunction(ctx, JsUiIpcRemoveListener, "removeListener", 2));
+  JS_SetPropertyStr(ctx, ipc, "off",
+                    JS_NewCFunction(ctx, JsUiIpcRemoveListener, "off", 2));
+  JS_SetPropertyStr(
+      ctx, ipc, "removeAllListeners",
+      JS_NewCFunction(ctx, JsUiIpcRemoveAllListeners, "removeAllListeners", 1));
   JS_SetPropertyStr(ctx, ipc, "send",
                     JS_NewCFunction(ctx, JsUiIpcSend, "send", 2));
   JS_SetPropertyStr(ctx, ipc, "invoke",
