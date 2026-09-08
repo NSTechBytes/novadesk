@@ -134,6 +134,36 @@ struct RegistryValue {
 };
 
 /**
+ * @brief System color and theme information.
+ */
+struct SystemColorInfo {
+  bool isDarkMode = false;           ///< True if system/apps use dark theme.
+  COLORREF accent = RGB(0, 120, 215);///< Accent color.
+  COLORREF window = RGB(255, 255, 255);
+  COLORREF windowText = RGB(0, 0, 0);
+  COLORREF highlight = RGB(0, 120, 215);
+  COLORREF highlightText = RGB(255, 255, 255);
+  COLORREF hotTracking = RGB(0, 102, 204);
+  COLORREF buttonFace = RGB(240, 240, 240);
+  COLORREF buttonText = RGB(0, 0, 0);
+  COLORREF grayText = RGB(109, 109, 109);
+  COLORREF background = RGB(0, 0, 0);
+  COLORREF activeBorder = RGB(180, 180, 180);
+  COLORREF inactiveBorder = RGB(244, 247, 252);
+  COLORREF menu = RGB(240, 240, 240);
+  COLORREF menuText = RGB(0, 0, 0);
+};
+
+/// @return System colors and theme configuration.
+SystemColorInfo GetSystemColors();
+
+/// @return True if system or apps are configured for dark mode.
+bool IsSystemDarkMode();
+
+/// @return System accent color (from DWM or theme).
+COLORREF GetSystemAccentColor();
+
+/**
  * @brief Copies text to the system clipboard.
  *
  * @param text The text to copy.

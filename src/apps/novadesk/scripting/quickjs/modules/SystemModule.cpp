@@ -463,6 +463,123 @@ JSValue JsDisplayMetricsGetMetrics(JSContext *ctx, JSValueConst, int,
   return out;
 }
 
+namespace {
+JSValue MakeColorObject(JSContext *ctx, COLORREF c, BYTE alpha = 255) {
+  BYTE r = GetRValue(c);
+  BYTE g = GetGValue(c);
+  BYTE b = GetBValue(c);
+
+  char hex[10];
+  if (alpha == 255) {
+    snprintf(hex, sizeof(hex), "#%02X%02X%02X", r, g, b);
+  } else {
+    snprintf(hex, sizeof(hex), "#%02X%02X%02X%02X", r, g, b, alpha);
+  }
+
+  JSValue obj = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, obj, "hex", JS_NewString(ctx, hex));
+  JS_SetPropertyStr(ctx, obj, "r", JS_NewInt32(ctx, r));
+  JS_SetPropertyStr(ctx, obj, "g", JS_NewInt32(ctx, g));
+  JS_SetPropertyStr(ctx, obj, "b", JS_NewInt32(ctx, b));
+  JS_SetPropertyStr(ctx, obj, "a", JS_NewInt32(ctx, alpha));
+  return obj;
+}
+} // namespace
+
+JSValue JsColorsGet(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  const auto sysColors = shared::system::GetSystemColors();
+
+  JSValue out = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, out, "isDarkMode",
+                    JS_NewBool(ctx, sysColors.isDarkMode ? 1 : 0));
+  JS_SetPropertyStr(ctx, out, "accent", MakeColorObject(ctx, sysColors.accent));
+  JS_SetPropertyStr(ctx, out, "window", MakeColorObject(ctx, sysColors.window));
+  JS_SetPropertyStr(ctx, out, "windowText",
+                    MakeColorObject(ctx, sysColors.windowText));
+  JS_SetPropertyStr(ctx, out, "highlight",
+                    MakeColorObject(ctx, sysColors.highlight));
+  JS_SetPropertyStr(ctx, out, "highlightText",
+                    MakeColorObject(ctx, sysColors.highlightText));
+  JS_SetPropertyStr(ctx, out, "hotTracking",
+                    MakeColorObject(ctx, sysColors.hotTracking));
+  JS_SetPropertyStr(ctx, out, "buttonFace",
+                    MakeColorObject(ctx, sysColors.buttonFace));
+  JS_SetPropertyStr(ctx, out, "buttonText",
+                    MakeColorObject(ctx, sysColors.buttonText));
+  JS_SetPropertyStr(ctx, out, "grayText",
+                    MakeColorObject(ctx, sysColors.grayText));
+  JS_SetPropertyStr(ctx, out, "background",
+                    MakeColorObject(ctx, sysColors.background));
+  JS_SetPropertyStr(ctx, out, "activeBorder",
+                    MakeColorObject(ctx, sysColors.activeBorder));
+  JS_SetPropertyStr(ctx, out, "inactiveBorder",
+                    MakeColorObject(ctx, sysColors.inactiveBorder));
+  JS_SetPropertyStr(ctx, out, "menu", MakeColorObject(ctx, sysColors.menu));
+  JS_SetPropertyStr(ctx, out, "menuText",
+                    MakeColorObject(ctx, sysColors.menuText));
+
+  return out;
+}
+
+JSValue JsColorsIsDarkMode(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  return JS_NewBool(ctx, shared::system::IsSystemDarkMode() ? 1 : 0);
+}
+
+JSValue JsColorsGetAccent(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  COLORREF accent = shared::system::GetSystemAccentColor();
+  return MakeColorObject(ctx, accent);
+}
+
+JSValue JsColorsGetColor(JSContext *ctx, JSValueConst, int argc,
+                         JSValueConst *argv) {
+  if (argc < 1)
+    return JS_ThrowTypeError(ctx, "colors.getColor(name)");
+
+  const char *nameStr = JS_ToCString(ctx, argv[0]);
+  if (!nameStr)
+    return JS_EXCEPTION;
+
+  std::string name = nameStr;
+  JS_FreeCString(ctx, nameStr);
+  std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+
+  const auto sysColors = shared::system::GetSystemColors();
+  COLORREF color = RGB(0, 0, 0);
+
+  if (name == "accent")
+    color = sysColors.accent;
+  else if (name == "window")
+    color = sysColors.window;
+  else if (name == "windowtext")
+    color = sysColors.windowText;
+  else if (name == "highlight")
+    color = sysColors.highlight;
+  else if (name == "highlighttext")
+    color = sysColors.highlightText;
+  else if (name == "hottracking" || name == "hotlight")
+    color = sysColors.hotTracking;
+  else if (name == "buttonface" || name == "face" || name == "3dface")
+    color = sysColors.buttonFace;
+  else if (name == "buttontext" || name == "btntext")
+    color = sysColors.buttonText;
+  else if (name == "graytext")
+    color = sysColors.grayText;
+  else if (name == "background" || name == "desktop")
+    color = sysColors.background;
+  else if (name == "activeborder")
+    color = sysColors.activeBorder;
+  else if (name == "inactiveborder")
+    color = sysColors.inactiveBorder;
+  else if (name == "menu")
+    color = sysColors.menu;
+  else if (name == "menutext")
+    color = sysColors.menuText;
+  else
+    return JS_UNDEFINED;
+
+  return MakeColorObject(ctx, color);
+}
+
 JSValue JsAudioSetVolume(JSContext *ctx, JSValueConst, int argc,
                          JSValueConst *argv) {
   if (argc < 1)
@@ -1192,6 +1309,16 @@ int SystemModuleInit(JSContext *ctx, JSModuleDef *m) {
                      JS_NewCFunction(ctx, JsExecute, "execute", 4));
   JS_SetModuleExport(ctx, m, "webFetch",
                      JS_NewCFunction(ctx, JsWebFetch, "webFetch", 1));
+  JSValue colors = JS_NewObject(ctx);
+  JS_SetPropertyStr(ctx, colors, "get",
+                    JS_NewCFunction(ctx, JsColorsGet, "get", 0));
+  JS_SetPropertyStr(ctx, colors, "isDarkMode",
+                    JS_NewCFunction(ctx, JsColorsIsDarkMode, "isDarkMode", 0));
+  JS_SetPropertyStr(ctx, colors, "getAccent",
+                    JS_NewCFunction(ctx, JsColorsGetAccent, "getAccent", 0));
+  JS_SetPropertyStr(ctx, colors, "getColor",
+                    JS_NewCFunction(ctx, JsColorsGetColor, "getColor", 1));
+  JS_SetModuleExport(ctx, m, "colors", colors);
 
   return 0;
 }
@@ -1224,6 +1351,7 @@ JSModuleDef *EnsureSystemModule(JSContext *ctx, const char *moduleName) {
   JS_AddModuleExport(ctx, m, "getEnv");
   JS_AddModuleExport(ctx, m, "execute");
   JS_AddModuleExport(ctx, m, "webFetch");
+  JS_AddModuleExport(ctx, m, "colors");
   return m;
 }
 

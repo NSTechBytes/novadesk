@@ -663,6 +663,105 @@ DisplayMetrics GetDisplayMetrics() {
 }
 
 // *****************************************************************************
+// System Colors & Theme
+// *****************************************************************************
+
+bool IsSystemDarkMode() {
+  HKEY hKey = nullptr;
+  if (RegOpenKeyExW(
+          HKEY_CURRENT_USER,
+          L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+    DWORD value = 1;
+    DWORD size = sizeof(value);
+    DWORD type = 0;
+    // Check AppsUseLightTheme first, fallback to SystemUsesLightTheme
+    if (RegQueryValueExW(hKey, L"AppsUseLightTheme", nullptr, &type,
+                         reinterpret_cast<LPBYTE>(&value), &size) ==
+            ERROR_SUCCESS &&
+        type == REG_DWORD) {
+      RegCloseKey(hKey);
+      return value == 0;
+    }
+    if (RegQueryValueExW(hKey, L"SystemUsesLightTheme", nullptr, &type,
+                         reinterpret_cast<LPBYTE>(&value), &size) ==
+            ERROR_SUCCESS &&
+        type == REG_DWORD) {
+      RegCloseKey(hKey);
+      return value == 0;
+    }
+    RegCloseKey(hKey);
+  }
+  return false;
+}
+
+COLORREF GetSystemAccentColor() {
+  // Method 1: Check DwmGetColorizationColor from dwmapi.dll
+  HMODULE hDwm = LoadLibraryW(L"dwmapi.dll");
+  if (hDwm) {
+    typedef HRESULT(WINAPI * PFN_DwmGetColorizationColor)(DWORD *, BOOL *);
+    auto pfnDwmGetColorizationColor = reinterpret_cast<PFN_DwmGetColorizationColor>(
+        GetProcAddress(hDwm, "DwmGetColorizationColor"));
+    if (pfnDwmGetColorizationColor) {
+      DWORD dwordColor = 0;
+      BOOL opaque = FALSE;
+      if (SUCCEEDED(pfnDwmGetColorizationColor(&dwordColor, &opaque))) {
+        FreeLibrary(hDwm);
+        // dwordColor is ARGB: 0xAARRGGBB
+        BYTE r = static_cast<BYTE>((dwordColor >> 16) & 0xFF);
+        BYTE g = static_cast<BYTE>((dwordColor >> 8) & 0xFF);
+        BYTE b = static_cast<BYTE>(dwordColor & 0xFF);
+        return RGB(r, g, b);
+      }
+    }
+    FreeLibrary(hDwm);
+  }
+
+  // Method 2: Check registry DWM ColorizationColor
+  HKEY hKey = nullptr;
+  if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\DWM", 0,
+                    KEY_READ, &hKey) == ERROR_SUCCESS) {
+    DWORD dwordColor = 0;
+    DWORD size = sizeof(dwordColor);
+    DWORD type = 0;
+    if (RegQueryValueExW(hKey, L"ColorizationColor", nullptr, &type,
+                         reinterpret_cast<LPBYTE>(&dwordColor), &size) ==
+            ERROR_SUCCESS &&
+        type == REG_DWORD) {
+      RegCloseKey(hKey);
+      BYTE r = static_cast<BYTE>((dwordColor >> 16) & 0xFF);
+      BYTE g = static_cast<BYTE>((dwordColor >> 8) & 0xFF);
+      BYTE b = static_cast<BYTE>(dwordColor & 0xFF);
+      return RGB(r, g, b);
+    }
+    RegCloseKey(hKey);
+  }
+
+  // Method 3: Fallback to GetSysColor(COLOR_HIGHLIGHT)
+  return GetSysColor(COLOR_HIGHLIGHT);
+}
+
+SystemColorInfo GetSystemColors() {
+  SystemColorInfo info;
+  info.isDarkMode = IsSystemDarkMode();
+  info.accent = GetSystemAccentColor();
+  info.window = GetSysColor(COLOR_WINDOW);
+  info.windowText = GetSysColor(COLOR_WINDOWTEXT);
+  info.highlight = GetSysColor(COLOR_HIGHLIGHT);
+  info.highlightText = GetSysColor(COLOR_HIGHLIGHTTEXT);
+  info.hotTracking = GetSysColor(COLOR_HOTLIGHT);
+  info.buttonFace = GetSysColor(COLOR_3DFACE);
+  info.buttonText = GetSysColor(COLOR_BTNTEXT);
+  info.grayText = GetSysColor(COLOR_GRAYTEXT);
+  info.background = GetSysColor(COLOR_BACKGROUND);
+  info.activeBorder = GetSysColor(COLOR_ACTIVEBORDER);
+  info.inactiveBorder = GetSysColor(COLOR_INACTIVEBORDER);
+  info.menu = GetSysColor(COLOR_MENU);
+  info.menuText = GetSysColor(COLOR_MENUTEXT);
+  return info;
+}
+
+// *****************************************************************************
 // Environment
 // *****************************************************************************
 std::wstring GetEnv(const std::wstring &name) {
