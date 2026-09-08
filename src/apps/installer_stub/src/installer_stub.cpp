@@ -804,6 +804,19 @@ bool UninstallSelf() {
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   switch (msg) {
+  case WM_CTLCOLORSTATIC: {
+    HDC hdc = reinterpret_cast<HDC>(wParam);
+    SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
+    SetBkColor(hdc, GetSysColor(COLOR_WINDOW));
+    SetBkMode(hdc, TRANSPARENT);
+    return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_WINDOW));
+  }
+  case WM_CTLCOLORBTN: {
+    HDC hdc = reinterpret_cast<HDC>(wParam);
+    SetBkColor(hdc, GetSysColor(COLOR_WINDOW));
+    SetBkMode(hdc, TRANSPARENT);
+    return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_WINDOW));
+  }
   case WM_TIMER:
     RefreshUi();
     if (g_showActions.load()) {
@@ -952,13 +965,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
   g_title = CreateWindowW(L"STATIC", headerText.c_str(), WS_CHILD | WS_VISIBLE,
                           24, 20, 460, 28, g_hwnd, nullptr, hInstance, nullptr);
   g_titleFont =
-      CreateFontW(22, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+      CreateFontW(-20, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
                   DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                  CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+                  CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
   g_textFont =
-      CreateFontW(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+      CreateFontW(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                   OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                  DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+                  DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
   SendMessageW(g_title, WM_SETFONT, (WPARAM)g_titleFont, TRUE);
 
   g_status =
