@@ -32,10 +32,20 @@ function expect(name, condition, details) {
 win.on("close", () => console.log("[EVENT] close"));
 win.on("closed", () => console.log("[EVENT] closed"));
 let resizeEventFired = false;
+let resizeStartFired = false;
+let resizeEndFired = false;
 win.on("resize", () => {
   const { width, height } = win.getSize();
   console.log("New size:", width, "x", height);
   resizeEventFired = true;
+});
+win.on("resizeStart", (e) => {
+  console.log("[EVENT] resizeStart", JSON.stringify(e));
+  resizeStartFired = true;
+});
+win.on("resizeEnd", (e) => {
+  console.log("[EVENT] resizeEnd", JSON.stringify(e));
+  resizeEndFired = true;
 });
 
 setTimeout(() => {
@@ -48,6 +58,7 @@ setTimeout(() => {
   expect("isVisible() initially", win.isVisible() === true, String(win.isVisible()));
   expect("isDestroyed() initially", win.isDestroyed() === false, String(win.isDestroyed()));
   expect("isResizable() initially false", win.isResizable() === false, String(win.isResizable()));
+  expect("isResizing() initially false", win.isResizing() === false, String(win.isResizing()));
 
   win.setResizable(true);
   expect("setResizable(true)/isResizable()", win.isResizable() === true, String(win.isResizable()));

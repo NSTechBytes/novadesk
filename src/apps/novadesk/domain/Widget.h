@@ -347,6 +347,8 @@ public:
   void SetResizable(bool enable);
   /// @return True if the widget is resizable.
   bool IsResizable() const { return m_Options.resizable; }
+  /// @return True if the widget is currently being resized.
+  bool IsResizing() const { return m_IsResizing; }
   /// @brief Sets the minimum width constraint.
   void SetMinWidth(int minWidth);
   /// @return The minimum width constraint.

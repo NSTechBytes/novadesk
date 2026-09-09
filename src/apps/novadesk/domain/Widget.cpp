@@ -994,6 +994,14 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
           widget->m_ResizeStartWindow = {
               widget->m_Options.x, widget->m_Options.y, widget->m_Options.width,
               widget->m_Options.height};
+
+          JSEngine::MouseEventData eventData;
+          eventData.clientX = ptClient.x;
+          eventData.clientY = ptClient.y;
+          eventData.screenX = ptCursor.x;
+          eventData.screenY = ptCursor.y;
+          JSEngine::TriggerWidgetEvent(widget, "resizeStart", &eventData);
+          JSEngine::TriggerWidgetEvent(widget, "resize-start", &eventData);
           return 0;
         }
       }
@@ -1044,6 +1052,18 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
           ReleaseCapture();
         }
         Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
+
+        POINT ptCursor;
+        GetCursorPos(&ptCursor);
+        POINT ptClient = ptCursor;
+        ScreenToClient(hWnd, &ptClient);
+        JSEngine::MouseEventData eventData;
+        eventData.clientX = ptClient.x;
+        eventData.clientY = ptClient.y;
+        eventData.screenX = ptCursor.x;
+        eventData.screenY = ptCursor.y;
+        JSEngine::TriggerWidgetEvent(widget, "resizeEnd", &eventData);
+        JSEngine::TriggerWidgetEvent(widget, "resize-end", &eventData);
         return 0;
       }
 
@@ -1082,6 +1102,49 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
   case WM_CONTEXTMENU:
     if (widget) {
       widget->OnContextMenu();
+    }
+    return 0;
+
+  case WM_CAPTURECHANGED:
+    if (widget && widget->m_IsResizing) {
+      widget->m_IsResizing = false;
+      widget->m_ResizeEdge = WidgetResizeEdge::None;
+      Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
+
+      POINT ptCursor;
+      GetCursorPos(&ptCursor);
+      POINT ptClient = ptCursor;
+      ScreenToClient(hWnd, &ptClient);
+      JSEngine::MouseEventData eventData;
+      eventData.clientX = ptClient.x;
+      eventData.clientY = ptClient.y;
+      eventData.screenX = ptCursor.x;
+      eventData.screenY = ptCursor.y;
+      JSEngine::TriggerWidgetEvent(widget, "resizeEnd", &eventData);
+      JSEngine::TriggerWidgetEvent(widget, "resize-end", &eventData);
+    }
+    return 0;
+
+  case WM_CANCELMODE:
+    if (widget && widget->m_IsResizing) {
+      widget->m_IsResizing = false;
+      widget->m_ResizeEdge = WidgetResizeEdge::None;
+      if (GetCapture() == hWnd) {
+        ReleaseCapture();
+      }
+      Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
+
+      POINT ptCursor;
+      GetCursorPos(&ptCursor);
+      POINT ptClient = ptCursor;
+      ScreenToClient(hWnd, &ptClient);
+      JSEngine::MouseEventData eventData;
+      eventData.clientX = ptClient.x;
+      eventData.clientY = ptClient.y;
+      eventData.screenX = ptCursor.x;
+      eventData.screenY = ptCursor.y;
+      JSEngine::TriggerWidgetEvent(widget, "resizeEnd", &eventData);
+      JSEngine::TriggerWidgetEvent(widget, "resize-end", &eventData);
     }
     return 0;
 
@@ -1609,8 +1672,19 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
       }
     }
     return 0;
+  case WM_SIZING:
+    if (widget && !widget->m_IsResizing) {
+      widget->m_IsResizing = true;
+      JSEngine::TriggerWidgetEvent(widget, "resizeStart");
+      JSEngine::TriggerWidgetEvent(widget, "resize-start");
+    }
+    break;
   case WM_EXITSIZEMOVE:
     if (widget) {
+      const bool wasResizing = widget->m_IsResizing;
+      widget->m_IsResizing = false;
+      widget->m_ResizeEdge = WidgetResizeEdge::None;
+
       RECT rc;
       GetWindowRect(hWnd, &rc);
       widget->m_Options.x = rc.left;
@@ -1621,6 +1695,11 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
       widget->m_Options.m_HDefined = true;
 
       Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
+
+      if (wasResizing) {
+        JSEngine::TriggerWidgetEvent(widget, "resizeEnd");
+        JSEngine::TriggerWidgetEvent(widget, "resize-end");
+      }
     }
     return 0;
   case WM_CLOSE:

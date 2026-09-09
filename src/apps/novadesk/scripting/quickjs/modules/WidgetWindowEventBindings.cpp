@@ -533,6 +533,14 @@ JSValue JsWidgetWindowIsResizable(JSContext *ctx, JSValueConst thisVal, int,
   return JS_NewBool(ctx, widget->IsResizable() ? 1 : 0);
 }
 
+JSValue JsWidgetWindowIsResizing(JSContext *ctx, JSValueConst thisVal, int,
+                                 JSValueConst *) {
+  Widget *widget = GetWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  return JS_NewBool(ctx, widget->IsResizing() ? 1 : 0);
+}
+
 JSValue JsWidgetWindowSetMinWidth(JSContext *ctx, JSValueConst thisVal,
                                   int argc, JSValueConst *argv) {
   Widget *widget = GetWidget(ctx, thisVal);
@@ -1266,6 +1274,7 @@ const JSCFunctionListEntry kWidgetWindowEventFuncs[] = {
     JS_CFUNC_DEF("refresh", 0, JsWidgetWindowRefresh),
     JS_CFUNC_DEF("setResizable", 1, JsWidgetWindowSetResizable),
     JS_CFUNC_DEF("isResizable", 0, JsWidgetWindowIsResizable),
+    JS_CFUNC_DEF("isResizing", 0, JsWidgetWindowIsResizing),
     JS_CFUNC_DEF("setMinWidth", 1, JsWidgetWindowSetMinWidth),
     JS_CFUNC_DEF("getMinWidth", 0, JsWidgetWindowGetMinWidth),
     JS_CFUNC_DEF("setMinHeight", 1, JsWidgetWindowSetMinHeight),
