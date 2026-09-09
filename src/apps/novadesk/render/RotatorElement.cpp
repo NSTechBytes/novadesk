@@ -15,176 +15,168 @@
 
 #define CONVERT_TO_DEGREES(X) ((X) * (180.0 / M_PI))
 
-RotatorElement::RotatorElement(const std::wstring &id, int x, int y, const std::wstring &path)
-    : Element(ELEMENT_ROTATOR, id, x, y, 0, 0)
-{
-    m_RotatorImage.SetPath(path);
+RotatorElement::RotatorElement(const std::wstring &id, int x, int y,
+                               const std::wstring &path)
+    : Element(ELEMENT_ROTATOR, id, x, y, 0, 0) {
+  m_RotatorImage.SetPath(path);
 }
 
-RotatorElement::~RotatorElement()
-{
+RotatorElement::~RotatorElement() {}
+
+int RotatorElement::GetAutoWidth() { return m_RotatorImage.GetAutoWidth(); }
+
+int RotatorElement::GetAutoHeight() { return m_RotatorImage.GetAutoHeight(); }
+
+bool RotatorElement::HitTest(int x, int y) {
+  if (!Element::HitTest(x, y))
+    return false;
+
+  if (!GetPixelHitTest())
+    return true;
+
+  if ((m_HasSolidColor && m_SolidAlpha > 0) ||
+      (m_SolidGradient.type != GRADIENT_NONE))
+    return true;
+
+  if (!m_RotatorImage.IsLoaded())
+    return false;
+
+  const float imageW = static_cast<float>(m_RotatorImage.GetAutoWidth());
+  const float imageH = static_cast<float>(m_RotatorImage.GetAutoHeight());
+  if (imageW <= 0.0f || imageH <= 0.0f)
+    return false;
+
+  double normalizedValue = 0.0;
+  if (m_ValueRemainder > 0) {
+    long long rawValue = static_cast<long long>(m_Value);
+    normalizedValue = static_cast<double>(rawValue % m_ValueRemainder) /
+                      static_cast<double>(m_ValueRemainder);
+  } else {
+    const double range = m_MaxValue - m_MinValue;
+    normalizedValue = (range > 0.0) ? (m_Value - m_MinValue) / range : 0.0;
+    if (normalizedValue < 0.0)
+      normalizedValue = 0.0;
+    if (normalizedValue > 1.0)
+      normalizedValue = 1.0;
+  }
+
+  const float angleDeg = static_cast<float>(
+      CONVERT_TO_DEGREES(m_RotationAngle * normalizedValue + m_StartAngle));
+
+  const int contentX = m_X + m_PaddingLeft;
+  const int contentY = m_Y + m_PaddingTop;
+  const int elementW = GetWidth();
+  const int elementH = GetHeight();
+  const float cx =
+      static_cast<float>(contentX) + static_cast<float>(elementW) / 2.0f;
+  const float cy =
+      static_cast<float>(contentY) + static_cast<float>(elementH) / 2.0f;
+
+  D2D1::Matrix3x2F matrix =
+      D2D1::Matrix3x2F::Translation(static_cast<float>(-m_OffsetX),
+                                    static_cast<float>(-m_OffsetY)) *
+      D2D1::Matrix3x2F::Rotation(angleDeg) *
+      D2D1::Matrix3x2F::Translation(cx, cy);
+
+  if (!matrix.Invert())
+    return false;
+
+  const D2D1_POINT_2F local = matrix.TransformPoint(
+      D2D1::Point2F(static_cast<float>(x), static_cast<float>(y)));
+  if (local.x < 0.0f || local.y < 0.0f || local.x >= imageW ||
+      local.y >= imageH)
+    return false;
+
+  const BYTE alpha = m_RotatorImage.GetPixelAlpha(static_cast<int>(local.x),
+                                                  static_cast<int>(local.y));
+  return alpha > 0;
 }
 
-int RotatorElement::GetAutoWidth()
-{
-    return m_RotatorImage.GetAutoWidth();
+void RotatorElement::Render(ID2D1DeviceContext *context) {
+  if (!m_Show || !context)
+    return;
+
+  m_RotatorImage.EnsureBitmap(context);
+  ID2D1Bitmap *bitmap = m_RotatorImage.GetBitmap();
+  if (!bitmap)
+    return;
+
+  // Apply background / bevel
+  D2D1_MATRIX_3X2_F originalTransform;
+  ApplyRenderTransform(context, originalTransform);
+  RenderBackground(context);
+  RenderBevel(context);
+  RestoreRenderTransform(context, originalTransform);
+
+  const float imageW = bitmap->GetSize().width;
+  const float imageH = bitmap->GetSize().height;
+  const float opacity = m_RotatorImage.GetImageAlpha() / 255.0f;
+
+  // Calculate the normalized value (0.0-1.0)
+  double normalizedValue = 0.0;
+  if (m_ValueRemainder > 0) {
+    long long rawValue = static_cast<long long>(m_Value);
+    normalizedValue = static_cast<double>(rawValue % m_ValueRemainder) /
+                      static_cast<double>(m_ValueRemainder);
+  } else {
+    // Standard mode: normalize using maxValue
+    double range = m_MaxValue - m_MinValue;
+    normalizedValue = (range > 0.0) ? (m_Value - m_MinValue) / range : 0.0;
+    if (normalizedValue < 0.0)
+      normalizedValue = 0.0;
+    if (normalizedValue > 1.0)
+      normalizedValue = 1.0;
+  }
+
+  float angleDeg = static_cast<float>(
+      CONVERT_TO_DEGREES(m_RotationAngle * normalizedValue + m_StartAngle));
+
+  const int contentX = m_X + m_PaddingLeft;
+  const int contentY = m_Y + m_PaddingTop;
+  const int elementW = GetWidth();
+  const int elementH = GetHeight();
+  float cx = static_cast<float>(contentX) + static_cast<float>(elementW) / 2.0f;
+  float cy = static_cast<float>(contentY) + static_cast<float>(elementH) / 2.0f;
+
+  D2D1_MATRIX_3X2_F currentTransform;
+  context->GetTransform(&currentTransform);
+
+  D2D1_MATRIX_3X2_F combinedTransform =
+      D2D1::Matrix3x2F::Translation(static_cast<float>(-m_OffsetX),
+                                    static_cast<float>(-m_OffsetY)) *
+      D2D1::Matrix3x2F::Rotation(angleDeg) *
+      D2D1::Matrix3x2F::Translation(cx, cy) * currentTransform;
+
+  context->SetTransform(combinedTransform);
+
+  Microsoft::WRL::ComPtr<ID2D1Image> finalImage;
+  m_RotatorImage.BuildProcessedImage(context, finalImage);
+
+  const D2D1_RECT_F srcRect = D2D1::RectF(0.0f, 0.0f, imageW, imageH);
+  const D2D1_RECT_F dstRect = D2D1::RectF(0.0f, 0.0f, imageW, imageH);
+
+  const D2D1_BITMAP_INTERPOLATION_MODE interp =
+      m_AntiAlias ? D2D1_BITMAP_INTERPOLATION_MODE_LINEAR
+                  : D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR;
+
+  if (finalImage.Get() == static_cast<ID2D1Image *>(bitmap)) {
+    context->DrawBitmap(bitmap, &dstRect, opacity, interp, &srcRect);
+  } else {
+    const D2D1_POINT_2F targetOffset = D2D1::Point2F(0.0f, 0.0f);
+    context->DrawImage(finalImage.Get(), &targetOffset, &srcRect,
+                       m_AntiAlias ? D2D1_INTERPOLATION_MODE_LINEAR
+                                   : D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR);
+  }
+
+  // Restore original transform
+  context->SetTransform(currentTransform);
 }
 
-int RotatorElement::GetAutoHeight()
-{
-    return m_RotatorImage.GetAutoHeight();
+void RotatorElement::OnOwnerHWNDSet() {
+  m_RotatorImage.SetOwnerHWND(m_OwnerHWND);
 }
 
-bool RotatorElement::HitTest(int x, int y)
-{
-    if (!Element::HitTest(x, y))
-        return false;
-
-    if (!GetPixelHitTest())
-        return true;
-
-    if ((m_HasSolidColor && m_SolidAlpha > 0) || (m_SolidGradient.type != GRADIENT_NONE))
-        return true;
-
-    if (!m_RotatorImage.IsLoaded())
-        return false;
-
-    const float imageW = static_cast<float>(m_RotatorImage.GetAutoWidth());
-    const float imageH = static_cast<float>(m_RotatorImage.GetAutoHeight());
-    if (imageW <= 0.0f || imageH <= 0.0f)
-        return false;
-
-    double normalizedValue = 0.0;
-    if (m_ValueRemainder > 0)
-    {
-        long long rawValue = static_cast<long long>(m_Value);
-        normalizedValue = static_cast<double>(rawValue % m_ValueRemainder) / static_cast<double>(m_ValueRemainder);
-    }
-    else
-    {
-        const double range = m_MaxValue - m_MinValue;
-        normalizedValue = (range > 0.0) ? (m_Value - m_MinValue) / range : 0.0;
-        if (normalizedValue < 0.0)
-            normalizedValue = 0.0;
-        if (normalizedValue > 1.0)
-            normalizedValue = 1.0;
-    }
-
-    const float angleDeg = static_cast<float>(CONVERT_TO_DEGREES(m_RotationAngle * normalizedValue + m_StartAngle));
-
-    const int contentX = m_X + m_PaddingLeft;
-    const int contentY = m_Y + m_PaddingTop;
-    const int elementW = GetWidth();
-    const int elementH = GetHeight();
-    const float cx = static_cast<float>(contentX) + static_cast<float>(elementW) / 2.0f;
-    const float cy = static_cast<float>(contentY) + static_cast<float>(elementH) / 2.0f;
-
-    D2D1::Matrix3x2F matrix =
-        D2D1::Matrix3x2F::Translation(static_cast<float>(-m_OffsetX), static_cast<float>(-m_OffsetY)) *
-        D2D1::Matrix3x2F::Rotation(angleDeg) *
-        D2D1::Matrix3x2F::Translation(cx, cy);
-
-    if (!matrix.Invert())
-        return false;
-
-    const D2D1_POINT_2F local = matrix.TransformPoint(D2D1::Point2F(static_cast<float>(x), static_cast<float>(y)));
-    if (local.x < 0.0f || local.y < 0.0f || local.x >= imageW || local.y >= imageH)
-        return false;
-
-    const BYTE alpha = m_RotatorImage.GetPixelAlpha(static_cast<int>(local.x), static_cast<int>(local.y));
-    return alpha > 0;
-}
-
-void RotatorElement::Render(ID2D1DeviceContext *context)
-{
-    if (!m_Show || !context)
-        return;
-
-    m_RotatorImage.EnsureBitmap(context);
-    ID2D1Bitmap *bitmap = m_RotatorImage.GetBitmap();
-    if (!bitmap)
-        return;
-
-    // Apply background / bevel
-    D2D1_MATRIX_3X2_F originalTransform;
-    ApplyRenderTransform(context, originalTransform);
-    RenderBackground(context);
-    RenderBevel(context);
-    RestoreRenderTransform(context, originalTransform);
-
-    const float imageW = bitmap->GetSize().width;
-    const float imageH = bitmap->GetSize().height;
-    const float opacity = m_RotatorImage.GetImageAlpha() / 255.0f;
-
-    // Calculate the normalized value (0.0-1.0)
-    double normalizedValue = 0.0;
-    if (m_ValueRemainder > 0)
-    {
-        long long rawValue = static_cast<long long>(m_Value);
-        normalizedValue = static_cast<double>(rawValue % m_ValueRemainder) / static_cast<double>(m_ValueRemainder);
-    }
-    else
-    {
-        // Standard mode: normalize using maxValue
-        double range = m_MaxValue - m_MinValue;
-        normalizedValue = (range > 0.0) ? (m_Value - m_MinValue) / range : 0.0;
-        if (normalizedValue < 0.0)
-            normalizedValue = 0.0;
-        if (normalizedValue > 1.0)
-            normalizedValue = 1.0;
-    }
-
-    float angleDeg = static_cast<float>(CONVERT_TO_DEGREES(m_RotationAngle * normalizedValue + m_StartAngle));
-
-    const int contentX = m_X + m_PaddingLeft;
-    const int contentY = m_Y + m_PaddingTop;
-    const int elementW = GetWidth();
-    const int elementH = GetHeight();
-    float cx = static_cast<float>(contentX) + static_cast<float>(elementW) / 2.0f;
-    float cy = static_cast<float>(contentY) + static_cast<float>(elementH) / 2.0f;
-
-    D2D1_MATRIX_3X2_F currentTransform;
-    context->GetTransform(&currentTransform);
-
-    D2D1_MATRIX_3X2_F combinedTransform =
-        D2D1::Matrix3x2F::Translation(static_cast<float>(-m_OffsetX), static_cast<float>(-m_OffsetY)) *
-        D2D1::Matrix3x2F::Rotation(angleDeg) *
-        D2D1::Matrix3x2F::Translation(cx, cy) *
-        currentTransform;
-
-    context->SetTransform(combinedTransform);
-
-    Microsoft::WRL::ComPtr<ID2D1Image> finalImage;
-    m_RotatorImage.BuildProcessedImage(context, finalImage);
-
-    const D2D1_RECT_F srcRect = D2D1::RectF(0.0f, 0.0f, imageW, imageH);
-    const D2D1_RECT_F dstRect = D2D1::RectF(0.0f, 0.0f, imageW, imageH);
-
-    const D2D1_BITMAP_INTERPOLATION_MODE interp = m_AntiAlias
-                                                      ? D2D1_BITMAP_INTERPOLATION_MODE_LINEAR
-                                                      : D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR;
-
-    if (finalImage.Get() == static_cast<ID2D1Image *>(bitmap))
-    {
-        context->DrawBitmap(bitmap, &dstRect, opacity, interp, &srcRect);
-    }
-    else
-    {
-        const D2D1_POINT_2F targetOffset = D2D1::Point2F(0.0f, 0.0f);
-        context->DrawImage(finalImage.Get(), &targetOffset, &srcRect,
-                           m_AntiAlias ? D2D1_INTERPOLATION_MODE_LINEAR : D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR);
-    }
-
-    // Restore original transform
-    context->SetTransform(currentTransform);
-}
-
-void RotatorElement::OnOwnerHWNDSet()
-{
-    m_RotatorImage.SetOwnerHWND(m_OwnerHWND);
-}
-
-void RotatorElement::OnImageDownloaded(const std::wstring& url, const std::vector<BYTE>& buffer)
-{
-    m_RotatorImage.OnImageDownloaded(url, buffer);
+void RotatorElement::OnImageDownloaded(const std::wstring &url,
+                                       const std::vector<BYTE> &buffer) {
+  m_RotatorImage.OnImageDownloaded(url, buffer);
 }

@@ -1,25 +1,53 @@
+ui.beginUpdate();
+// ui.addImage({
+//     id: "list-item1",
+//     path: "C:\\Users\\nasirshahbaz\\OneDrive\\Desktop\\Screenshot 2026-05-14 181227.png",
+//     width: 400,
+//     height: 400
+// })
+
 // Test 3: display:list-item with listStyleType:disc (default filled circle marker)
 ui.addLayoutBox({
     id: "list-item-disc",
     display: "list-item",
     listStyleType: "disc",
-    x: "50",
-    y: "230",
     flexDirection: "column",
-    padding: 10,
-    // gap: 10,
-    width: 500,
-    height: 80,
-    backgroundColor: "rgba(10,10,10,0.5)",
-    children: [
-        {
-            // elementType: "image",
-            // id: "list-item1",
-            //  path: "../assets/pic.png",
-                        elementType: "text",
-            id: "list-item1",
-             text: "Test",
-             fontSize:50
-        }
-    ]
+    x: 50,
+    y: 50,
+    width: 200,
+    height: 200,
+    backdropFilter: {
+        blur: 10,
+        // brightness: 0.2,
+        // contrast: 0.2,
+        // greyScale: 0.2,
+        // saturate: 0.2,
+        // sepia: 0.2,
+        // hueRotate: 90,
+        // invert: 1,
+        // opacity: 0.5
+    },
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: "black",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    backgroundColorRadius: 20,
 })
+
+ui.addColorPicker({
+  id: "accent",
+  x: 20,
+  y: 20,
+  width: 32,
+  height: 32,
+  color: "#1b1b1b",
+  tooltipText: "Accent Color",
+  onOpen: (color) => { console.log("onOpen:", color); },
+  onClose: (color) => { console.log("onClose:", color); },
+  onCancel: (originalColor) => { console.log("onCancel (original):", originalColor); },
+  onEyedropperOpen: () => { console.log("onEyedropperOpen"); },
+  onEyedropperPick: (color) => { console.log("onEyedropperPick:", color); },
+  onChange: (color) => { console.log("onChange:", color); },
+});
+
+ui.endUpdate();

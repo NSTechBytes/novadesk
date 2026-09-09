@@ -14,34 +14,64 @@
 
 class Element;
 
-class Tooltip
-{
+/**
+ * @brief Manages Win32 tooltip windows for element hover display.
+ *
+ * @note Supports both standard and balloon-style tooltips with hybrid
+ *       tracking (delayed move to prevent flicker on rapid hover changes).
+ */
+class Tooltip {
 public:
-    Tooltip();
-    ~Tooltip();
+  Tooltip();
+  ~Tooltip();
 
-    bool Initialize(HWND parentHWnd, HINSTANCE hInstance);
-    void Update(Element* element);
-    void Move();
-    void Destroy();
-    
-    bool IsActive() const { return m_ActiveToolTipHWnd != nullptr; }
+  /**
+   * @brief Initializes the tooltip system.
+   *
+   * @param parentHWnd Parent window handle.
+   * @param hInstance Application instance handle.
+   *
+   * @return True if initialization succeeded.
+   */
+  bool Initialize(HWND parentHWnd, HINSTANCE hInstance);
+
+  /**
+   * @brief Updates the tooltip content for the hovered element.
+   *
+   * @param element The element to show tooltip for.
+   */
+  void Update(Element *element);
+
+  /// Repositions the tooltip to follow the cursor.
+  void Move();
+
+  /// Immediately updates tooltip position to current cursor location.
+  void RepositionToCursor();
+
+  /// Destroys the active tooltip window.
+  void Destroy();
+
+  /// @return True if a tooltip is currently displayed.
+  bool IsActive() const { return m_ActiveToolTipHWnd != nullptr; }
+
+  /// @return Handle to the active tooltip window.
+  HWND GetActiveHWnd() const { return m_ActiveToolTipHWnd; }
 
 private:
-    HWND m_ParentHWnd = nullptr;
-    HWND m_ToolTipHWnd = nullptr;
-    HWND m_ToolTipBalloonHWnd = nullptr;
-    HWND m_ActiveToolTipHWnd = nullptr;
-    DWORD m_LastMoveTime = 0;
-    UINT m_ToolInfoSize = 0;
-    POINT m_LastPos = { -1, -1 };
-    
-    // Hybrid tracking state
-    POINT m_PendingPos = { -1, -1 };
-    DWORD m_PendingMoveTime = 0;
-    bool m_IsMovePending = false;
+  HWND m_ParentHWnd = nullptr;         ///< Parent window.
+  HWND m_ToolTipHWnd = nullptr;        ///< Standard tooltip window.
+  HWND m_ToolTipBalloonHWnd = nullptr; ///< Balloon tooltip window.
+  HWND m_ActiveToolTipHWnd = nullptr;  ///< Currently active tooltip.
+  DWORD m_LastMoveTime = 0;            ///< Last cursor move timestamp.
+  UINT m_ToolInfoSize = 0;             ///< Size of TOOLINFO structure.
+  POINT m_LastPos = {-1, -1};          ///< Last cursor position.
 
-    void InitializeToolTip(HWND hwnd);
+  // Hybrid tracking state (delayed move to prevent flicker)
+  POINT m_PendingPos = {-1, -1}; ///< Pending cursor position.
+  DWORD m_PendingMoveTime = 0;   ///< Pending move timestamp.
+  bool m_IsMovePending = false;  ///< True if a move is pending.
+
+  void InitializeToolTip(HWND hwnd);
 };
 
 #endif

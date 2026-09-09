@@ -51,6 +51,9 @@
     <ClCompile Include="domain\InputBoxContextMenuHelper.cpp">
       <Filter>domain</Filter>
     </ClCompile>
+    <ClCompile Include="domain\ColorPickerPopup.cpp">
+      <Filter>domain</Filter>
+    </ClCompile>
     <ClCompile Include="domain\Novadesk.cpp">
       <Filter>domain</Filter>
     </ClCompile>
@@ -61,6 +64,12 @@
       <Filter>domain</Filter>
     </ClCompile>
     <ClCompile Include="domain\WidgetLayoutHelper.cpp">
+      <Filter>domain</Filter>
+    </ClCompile>
+    <ClCompile Include="domain\ScrollbarRenderer.cpp">
+      <Filter>domain</Filter>
+    </ClCompile>
+    <ClCompile Include="domain\WidgetDropTarget.cpp">
       <Filter>domain</Filter>
     </ClCompile>
     <ClCompile Include="domain\WidgetWindowChromeHelper.cpp">
@@ -150,6 +159,9 @@
     <ClCompile Include="render\InputBoxElement.cpp">
       <Filter>render</Filter>
     </ClCompile>
+    <ClCompile Include="render\ColorPickerElement.cpp">
+      <Filter>render</Filter>
+    </ClCompile>
     <ClCompile Include="render\Tooltip.cpp">
       <Filter>render</Filter>
     </ClCompile>
@@ -204,6 +216,9 @@
     <ClCompile Include="scripting\quickjs\parser\PropertyParserInputBox.cpp">
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserColorPicker.cpp">
+      <Filter>scripting\quickjs\parser</Filter>
+    </ClCompile>
     <ClCompile Include="scripting\quickjs\parser\PropertyParserWidgetWindow.cpp">
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
@@ -228,6 +243,45 @@
     <ClCompile Include="shared\Utils.cpp">
       <Filter>shared</Filter>
     </ClCompile>
+    <ClCompile Include="shared\ZipUtils.cpp">
+      <Filter>shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\adler32.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\crc32.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\deflate.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\inflate.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\inftrees.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\inffast.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\trees.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\zutil.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\minizip\ioapi.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\minizip\mztools.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\minizip\unzip.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\third_party\zlib\minizip\zip.c">
+      <Filter>third_party</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\third_party\quick-js\quickjs.c">
       <Filter>third_party</Filter>
     </ClCompile>
@@ -245,10 +299,16 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="shared\ZipUtils.h">
+      <Filter>shared</Filter>
+    </ClInclude>
     <ClInclude Include="domain\DesktopManager.h">
       <Filter>domain</Filter>
     </ClInclude>
     <ClInclude Include="domain\InputBoxContextMenuHelper.h">
+      <Filter>domain</Filter>
+    </ClInclude>
+    <ClInclude Include="domain\ColorPickerPopup.h">
       <Filter>domain</Filter>
     </ClInclude>
     <ClInclude Include="domain\Novadesk.h">
@@ -261,6 +321,12 @@
       <Filter>domain</Filter>
     </ClInclude>
     <ClInclude Include="domain\WidgetLayoutHelper.h">
+      <Filter>domain</Filter>
+    </ClInclude>
+    <ClInclude Include="domain\ScrollbarRenderer.h">
+      <Filter>domain</Filter>
+    </ClInclude>
+    <ClInclude Include="domain\WidgetDropTarget.h">
       <Filter>domain</Filter>
     </ClInclude>
     <ClInclude Include="domain\WidgetWindowChromeHelper.h">
@@ -351,6 +417,9 @@
       <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="render\InputBoxElement.h">
+      <Filter>render</Filter>
+    </ClInclude>
+    <ClInclude Include="render\ColorPickerElement.h">
       <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="render\Tooltip.h">

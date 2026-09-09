@@ -1,0 +1,21 @@
+{
+  "name": "ColorPickerAndInputBoxMethodsTest",
+  "main": "index.js",
+  "version": "1.0.0.0",
+  "author": "OfficialNovadesk",
+  "description": "Integration test for all ColorPicker and InputBox programmatic JavaScript methods, callbacks, and property getters/setters.",
+  "icon": "",
+  "preview": "",
+  "excludeItems": [],
+  "setup": {
+    "createDesktopShortcut": false,
+    "createStartupShortcut": false,
+    "runOnStartup": false,
+    "installDir": "%ProgramFiles%\\ColorPickerAndInputBoxMethodsTest",
+    "startMenuFolder": "ColorPickerAndInputBoxMethodsTest",
+    "setupName": "setup",
+    "setupIcon": "",
+    "enableUninstall": false,
+    "launchAfterInstall": false
+  }
+}

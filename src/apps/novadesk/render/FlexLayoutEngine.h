@@ -12,41 +12,44 @@
 #include "Element.h"
 
 /**
- * Configuration for flexbox layout
+ * @brief Configuration for CSS Flexbox layout.
  */
-struct FlexLayoutConfig
-{
-    std::wstring direction = L"ltr";        // "ltr" | "rtl" - Text directionality
-    std::wstring flexDirection = L"row";    // "row" | "rowreverse" | "column" | "columnreverse"
-    int gap = 0;                            // Gap between items
-    std::wstring align = L"start";          // "normal" | "stretch" | "center" | "start" | "end" | "flexstart" | "flexend"
-    std::wstring justify = L"start";        // "start" | "center" | "end" - main axis alignment
-    int paddingLeft = 0;
-    int paddingTop = 0;
-    int paddingRight = 0;
-    int paddingBottom = 0;
+struct FlexLayoutConfig {
+  std::wstring direction = L"ltr"; ///< Text direction: "ltr" or "rtl".
+  std::wstring flexDirection =
+      L"row";  ///< Main axis direction: "row", "rowreverse", "column",
+               ///< "columnreverse".
+  int gap = 0; ///< Gap between items in pixels.
+  std::wstring align =
+      L"start"; ///< Cross-axis alignment: "normal", "stretch", "center",
+                ///< "start", "end", "flexstart", "flexend".
+  std::wstring justify =
+      L"start";          ///< Main-axis alignment: "start", "center", "end".
+  int paddingLeft = 0;   ///< Container left padding.
+  int paddingTop = 0;    ///< Container top padding.
+  int paddingRight = 0;  ///< Container right padding.
+  int paddingBottom = 0; ///< Container bottom padding.
 };
 
 /**
- * FlexLayoutEngine - Implements CSS Flexbox layout algorithm
- * 
- * This engine handles positioning and sizing of child elements within a flex container
- * according to CSS Flexbox specification rules.
+ * @brief Implements CSS Flexbox layout algorithm for positioning child
+ * elements.
+ *
+ * @note Static utility class; handles positioning and sizing of child elements
+ *       within a flex container according to CSS Flexbox specification rules.
  */
-class FlexLayoutEngine
-{
+class FlexLayoutEngine {
 public:
-    /**
-     * Apply flexbox layout to a container and its children
-     * 
-     * @param container The container element to layout
-     * @param config The flexbox configuration (direction, alignment, gaps, etc.)
-     */
-    static void ApplyLayout(Element* container, const FlexLayoutConfig& config);
+  /**
+   * @brief Applies flexbox layout to a container and its children.
+   *
+   * @param container The container element to layout.
+   * @param config The flexbox configuration (direction, alignment, gaps, etc.).
+   */
+  static void ApplyLayout(Element *container, const FlexLayoutConfig &config);
 
 private:
-    // No instances - static utility class
-    FlexLayoutEngine() = delete;
+  FlexLayoutEngine() = delete; // Static utility class; no instances.
 };
 
 #endif // __NOVADESK_FLEX_LAYOUT_ENGINE_H__

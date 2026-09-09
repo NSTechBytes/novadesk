@@ -6,11 +6,12 @@ const win = new widgetWindow({
   id: "AnimationApiTestWindow",
   x: 220,
   y: 160,
-  width: 520,
-  height: 520,
+  // width: 520,
+  // height: 520,
   backgroundColor: "rgba(20,24,32,0.95)",
   script: "./script.ui.js",
-  show: true
+  show: true,
+  resizable: true
 });
 
 console.log("[PASS] widgetWindow created: AnimationApiTestWindow");

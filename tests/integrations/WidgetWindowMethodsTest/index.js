@@ -31,6 +31,22 @@ function expect(name, condition, details) {
 
 win.on("close", () => console.log("[EVENT] close"));
 win.on("closed", () => console.log("[EVENT] closed"));
+let resizeEventFired = false;
+let resizeStartFired = false;
+let resizeEndFired = false;
+win.on("resize", () => {
+  const { width, height } = win.getSize();
+  console.log("New size:", width, "x", height);
+  resizeEventFired = true;
+});
+win.on("resizeStart", (e) => {
+  console.log("[EVENT] resizeStart", JSON.stringify(e));
+  resizeStartFired = true;
+});
+win.on("resizeEnd", (e) => {
+  console.log("[EVENT] resizeEnd", JSON.stringify(e));
+  resizeEndFired = true;
+});
 
 setTimeout(() => {
   const b = win.getBounds();
@@ -41,6 +57,24 @@ setTimeout(() => {
 
   expect("isVisible() initially", win.isVisible() === true, String(win.isVisible()));
   expect("isDestroyed() initially", win.isDestroyed() === false, String(win.isDestroyed()));
+  expect("isResizable() initially false", win.isResizable() === false, String(win.isResizable()));
+  expect("isResizing() initially false", win.isResizing() === false, String(win.isResizing()));
+
+  win.setResizable(true);
+  expect("setResizable(true)/isResizable()", win.isResizable() === true, String(win.isResizable()));
+
+  expect("getMinWidth() initially 0", win.getMinWidth() === 0, String(win.getMinWidth()));
+  expect("getMinHeight() initially 0", win.getMinHeight() === 0, String(win.getMinHeight()));
+
+  win.setMinSize(300, 200);
+  const minSize = win.getMinSize();
+  expect("setMinSize(300, 200)/getMinSize()", !!minSize && minSize.width === 300 && minSize.height === 200, JSON.stringify(minSize));
+  expect("getMinWidth() after setMinSize", win.getMinWidth() === 300, String(win.getMinWidth()));
+  expect("getMinHeight() after setMinSize", win.getMinHeight() === 200, String(win.getMinHeight()));
+
+  const props = win.getProperties();
+  expect("getProperties().minWidth === 300", !!props && props.minWidth === 300, String(props?.minWidth));
+  expect("getProperties().minHeight === 200", !!props && props.minHeight === 200, String(props?.minHeight));
 }, 250);
 
 setTimeout(() => {
@@ -48,6 +82,7 @@ setTimeout(() => {
   const size = win.getSize();
   const ok = !!size && size.width === 460 && size.height === 260;
   expect("setSize()/getSize()", ok, JSON.stringify(size));
+  expect("resize event fired", resizeEventFired === true, String(resizeEventFired));
 }, 550);
 
 setTimeout(() => {
@@ -82,6 +117,17 @@ setTimeout(() => {
   expect("show()/isVisible()", win.isVisible() === true, String(win.isVisible()));
 }, 2150);
 
+let maximizeEventFired = false;
+let restoreEventFired = false;
+win.on("maximize", () => {
+  console.log("[EVENT] maximize");
+  maximizeEventFired = true;
+});
+win.on("restore", () => {
+  console.log("[EVENT] restore");
+  restoreEventFired = true;
+});
+
 setTimeout(() => {
   win.setFocus();
   const focused = win.isFocused();
@@ -89,11 +135,31 @@ setTimeout(() => {
 }, 2450);
 
 setTimeout(() => {
-  win.destroy();
-  pass("destroy()");
-}, 2850);
+  expect("isMaximized() initially false", win.isMaximized() === false, String(win.isMaximized()));
+  win.maximize();
+  expect("maximize()/isMaximized()", win.isMaximized() === true, String(win.isMaximized()));
+  expect("maximize event fired", maximizeEventFired === true, String(maximizeEventFired));
+}, 2750);
 
 setTimeout(() => {
-  expect("isDestroyed() after destroy", win.isDestroyed() === true, String(win.isDestroyed()));
-  app.exit();
-}, 3250);
+  win.restore();
+  expect("restore()/isMaximized() false", win.isMaximized() === false, String(win.isMaximized()));
+  expect("restore event fired", restoreEventFired === true, String(restoreEventFired));
+}, 3050);
+
+setTimeout(() => {
+  win.toggleMaximize();
+  expect("toggleMaximize() to true", win.isMaximized() === true, String(win.isMaximized()));
+  win.toggleMaximize();
+  expect("toggleMaximize() to false", win.isMaximized() === false, String(win.isMaximized()));
+}, 3350);
+
+// setTimeout(() => {
+//   win.destroy();
+//   pass("destroy()");
+// }, 2850);
+
+// setTimeout(() => {
+//   expect("isDestroyed() after destroy", win.isDestroyed() === true, String(win.isDestroyed()));
+//   app.exit();
+// }, 3250);

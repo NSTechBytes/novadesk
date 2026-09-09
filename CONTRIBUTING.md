@@ -63,6 +63,10 @@ To start contributing to the codebase, you'll need to set up your development en
 *   Document your widget API functions clearly.
 *   Ensure widgets are performant and don't block the UI thread.
 
+### Comments & Documentation
+*   Follow the official [C++ Comment Guidelines](COMMENT_GUIDELINES.md) for all `.cpp`, `.h`, `.hpp`, and `.c` files.
+*   Ensure mandatory license headers and Doxygen (`@brief`, `@param`, `@return`) docstrings are included on public interfaces.
+
 ## 📜 License
 
 By contributing, you agree that your contributions will be licensed under its GNU General Public License v3.0.

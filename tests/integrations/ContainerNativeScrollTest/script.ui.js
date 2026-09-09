@@ -1,0 +1,95 @@
+function pass(name, details) {
+  console.log("[PASS] " + name + (details ? " -> " + details : ""));
+}
+
+function fail(name, details) {
+  console.log("[FAIL] " + name + (details ? " -> " + details : ""));
+}
+
+function expect(name, condition, details) {
+  if (condition) {
+    pass(name, details);
+  } else {
+    fail(name, details);
+  }
+}
+
+// Background panel behind container
+ui.addShape({
+  id: "bgPanel",
+  type: "rectangle",
+  x: 30,
+  y: 30,
+  width: 320,
+  height: 220,
+  // radius: 12,
+  fillColor: "rgba(35, 42, 68, 0.95)",
+  strokeColor: "rgba(255, 255, 255, 0.15)",
+  strokeWidth: 1
+});
+
+// 1. Create a rectangle container with native scroll enabled
+ui.addShape({
+  id: "scrollBox",
+  type: "rectangle",
+  x: 30,
+  y: 30,
+  width: 320,
+  height: 220,
+  // radius: 12,
+  fillColor: "rgba(35, 42, 68, 0.95)",
+  strokeColor: "rgba(255, 255, 255, 0.15)",
+  strokeWidth: 1,
+  overflow: "auto",
+  // scrollX: 50,
+  // scrollY: 50,
+  showScrollbar: true,
+  scrollbarWidth: 10,
+  scrollbarHoverWidth: 12,
+  scrollbarRadius: 4,
+  scrollbarTrackRadius: 4,
+  // scrollbarInset: 3,
+  scrollbarMinThumbLength: 28,
+  scrollbarColor: "rgba(100, 180, 255, 0.5)",
+  scrollbarHoverColor: "rgba(120, 200, 255, 0.85)",
+  scrollbarActiveColor: "rgba(200, 235, 255, 1.0)",
+  scrollbarTrackColor: "rgba(0, 0, 0, 0.3)",
+  showScrollbarButtons: true,
+  // scrollbarButtonSize: 54,
+  scrollbarButtonRadius: 3,
+  scrollbarArrowColor: "rgba(200, 230, 255, 0.7)",
+  scrollbarArrowHoverColor: "rgba(255, 255, 255, 1.0)",
+  scrollbarArrowActiveColor: "rgba(120, 210, 255, 1.0)",
+  scrollbarButtonBgColor: "rgba(255, 255, 255, 0.05)",
+  scrollbarButtonHoverBgColor: "rgba(255, 255, 255, 0.15)"
+});
+
+// 2. Add overflowing children attached via `container: "scrollBox"`
+for (let i = 0; i < 10; i++) {
+  ui.addShape({
+    id: "item_card_" + i,
+    container: "scrollBox",
+    type: "rectangle",
+    x: 12,
+    y: 12 + (i * 55),
+    width: 480,
+    height: 45,
+    radius: 8,
+    fillColor: "rgba(255, 255, 255, 0.08)",
+    strokeColor: "rgba(255, 255, 255, 0.08)",
+    strokeWidth: 1
+  });
+
+  ui.addText({
+    id: "item_txt_" + i,
+    container: "scrollBox",
+    x: 24,
+    y: 24 + (i * 55),
+    width: 250,
+    height: 20,
+    text: "Card #" + (i + 1),
+    fontSize: 14,
+    fontColor: "#ffffff"
+  });
+}
+
