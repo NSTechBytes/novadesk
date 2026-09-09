@@ -18,7 +18,8 @@ namespace WinVersion {
 /// Must be called once before any Is* query.
 void Initialize() noexcept;
 
-/// Returns true if running on Windows 10 build 16299 (Fall Creators Update) or later.
+/// Returns true if running on Windows 10 build 16299 (Fall Creators Update) or
+/// later.
 bool IsWin10() noexcept;
 
 /// Returns true if running on Windows 11 build 22000 or later.

@@ -71,9 +71,8 @@ static void PromptRestartForHardwareAcceleration(HWND hwndParent) {
   auto doRestart = []() {
     Settings::Flush();
     const wchar_t *rawCmd = GetCommandLineW();
-    std::wstring restartCmd =
-        L"/c ping 127.0.0.1 -n 2 > nul & " +
-        std::wstring(rawCmd ? rawCmd : L"");
+    std::wstring restartCmd = L"/c ping 127.0.0.1 -n 2 > nul & " +
+                              std::wstring(rawCmd ? rawCmd : L"");
     ShellExecuteW(nullptr, L"open", L"cmd.exe", restartCmd.c_str(), nullptr,
                   SW_HIDE);
     PostQuitMessage(0);

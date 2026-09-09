@@ -13,8 +13,6 @@
 
 #include "quickjs.h"
 
-
-
 class Widget;
 
 /**

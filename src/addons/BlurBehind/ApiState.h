@@ -19,13 +19,16 @@
 
 namespace ApiState {
 
-// Raw function-pointer typedefs (kept in the header so WindowStyler can use them)
+// Raw function-pointer typedefs (kept in the header so WindowStyler can use
+// them)
 using PSET_COMPOSITION = void(__stdcall *)(HWND hWnd, void *pData);
-using PSET_ATTRIBUTE   = HRESULT(__stdcall *)(HWND hWnd, DWORD dwAttribute, LPCVOID pvAttribute, DWORD cbAttribute);
+using PSET_ATTRIBUTE = HRESULT(__stdcall *)(HWND hWnd, DWORD dwAttribute,
+                                            LPCVOID pvAttribute,
+                                            DWORD cbAttribute);
 
 /// Loaded function pointers — nullptr until Initialize() succeeds.
 extern PSET_COMPOSITION SetWindowCompositionAttribute;
-extern PSET_ATTRIBUTE   SetWindowAttribute;
+extern PSET_ATTRIBUTE SetWindowAttribute;
 
 /// Load DLLs and increment the reference count.
 void Initialize() noexcept;

@@ -118,7 +118,6 @@ enum TextCase {
  */
 class Element {
 public:
-
   /**
    * @brief Constructs an element with type, ID, and bounding rectangle.
    *

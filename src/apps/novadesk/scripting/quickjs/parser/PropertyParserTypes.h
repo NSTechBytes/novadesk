@@ -143,7 +143,6 @@ struct ElementOptions {
   bool tooltipBalloon = false;
   bool tooltipDisabled = false;
 
-
   // ============================================================================
   // Scroll & Overflow (many properties — see Element.h for details)
   // ============================================================================

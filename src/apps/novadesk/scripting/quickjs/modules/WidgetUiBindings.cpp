@@ -1850,7 +1850,6 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
     if (prop == "fontPath")
       return JS_NewString(ctx, Utils::ToString(t->GetFontPath()).c_str());
 
-
     if (prop == "textAlign") {
       const char *alStr = "left-top";
       switch (t->GetTextAlign()) {

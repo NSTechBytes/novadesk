@@ -443,10 +443,10 @@ bool Element::CreateGeometry(
   if (m_CornerRadius > 0) {
     const GfxRect bounds = const_cast<Element *>(this)->GetBackgroundBounds();
     D2D1_ROUNDED_RECT rect;
-    rect.rect = D2D1::RectF(
-        static_cast<float>(bounds.X), static_cast<float>(bounds.Y),
-        static_cast<float>(bounds.X + bounds.Width),
-        static_cast<float>(bounds.Y + bounds.Height));
+    rect.rect =
+        D2D1::RectF(static_cast<float>(bounds.X), static_cast<float>(bounds.Y),
+                    static_cast<float>(bounds.X + bounds.Width),
+                    static_cast<float>(bounds.Y + bounds.Height));
     rect.radiusX = static_cast<float>(m_CornerRadius);
     rect.radiusY = static_cast<float>(m_CornerRadius);
     Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> rounded;

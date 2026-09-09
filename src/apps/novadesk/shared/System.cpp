@@ -438,7 +438,7 @@ bool GetDiskIoStats(DiskIoStats &outStats) {
     if (g_diskIoInitStarted.compare_exchange_strong(
             expected, true, std::memory_order_acq_rel)) {
       g_diskIoPollThread = std::thread([]() {
-        // PDH initialisation (runs once) 
+        // PDH initialisation (runs once)
         {
           std::lock_guard<std::mutex> lock(g_diskIoMutex);
 
@@ -453,12 +453,12 @@ bool GetDiskIoStats(DiskIoStats &outStats) {
 
             if (PdhAddEnglishCounterW(
                     g_diskIoQuery,
-                    L"\\PhysicalDisk(_Total)\\Disk Read Bytes/sec",
-                    0, &g_diskReadCounter) != ERROR_SUCCESS ||
+                    L"\\PhysicalDisk(_Total)\\Disk Read Bytes/sec", 0,
+                    &g_diskReadCounter) != ERROR_SUCCESS ||
                 PdhAddEnglishCounterW(
                     g_diskIoQuery,
-                    L"\\PhysicalDisk(_Total)\\Disk Write Bytes/sec",
-                    0, &g_diskWriteCounter) != ERROR_SUCCESS) {
+                    L"\\PhysicalDisk(_Total)\\Disk Write Bytes/sec", 0,
+                    &g_diskWriteCounter) != ERROR_SUCCESS) {
               PdhCloseQuery(g_diskIoQuery);
               g_diskIoQuery = nullptr;
               g_diskReadCounter = nullptr;
@@ -509,15 +509,21 @@ bool GetDiskIoStats(DiskIoStats &outStats) {
           PDH_FMT_COUNTERVALUE readValue{};
           PDH_FMT_COUNTERVALUE writeValue{};
           if (PdhGetFormattedCounterValue(g_diskReadCounter, PDH_FMT_DOUBLE,
-                                          nullptr, &readValue) == ERROR_SUCCESS &&
+                                          nullptr,
+                                          &readValue) == ERROR_SUCCESS &&
               PdhGetFormattedCounterValue(g_diskWriteCounter, PDH_FMT_DOUBLE,
-                                          nullptr, &writeValue) == ERROR_SUCCESS) {
+                                          nullptr,
+                                          &writeValue) == ERROR_SUCCESS) {
             double r = (readValue.CStatus == ERROR_SUCCESS)
-                           ? readValue.doubleValue : 0.0;
+                           ? readValue.doubleValue
+                           : 0.0;
             double w = (writeValue.CStatus == ERROR_SUCCESS)
-                           ? writeValue.doubleValue : 0.0;
-            if (r < 0.0) r = 0.0;
-            if (w < 0.0) w = 0.0;
+                           ? writeValue.doubleValue
+                           : 0.0;
+            if (r < 0.0)
+              r = 0.0;
+            if (w < 0.0)
+              w = 0.0;
             g_diskReadSpeed.store(r, std::memory_order_relaxed);
             g_diskWriteSpeed.store(w, std::memory_order_relaxed);
           }
@@ -528,7 +534,7 @@ bool GetDiskIoStats(DiskIoStats &outStats) {
   }
 
   // UI thread: just read the atomics — no PDH call, no mutex, no blocking.
-  outStats.readSpeed  = g_diskReadSpeed.load(std::memory_order_relaxed);
+  outStats.readSpeed = g_diskReadSpeed.load(std::memory_order_relaxed);
   outStats.writeSpeed = g_diskWriteSpeed.load(std::memory_order_relaxed);
   return true;
 }
@@ -677,15 +683,15 @@ bool IsSystemDarkMode() {
     DWORD type = 0;
     // Check AppsUseLightTheme first, fallback to SystemUsesLightTheme
     if (RegQueryValueExW(hKey, L"AppsUseLightTheme", nullptr, &type,
-                         reinterpret_cast<LPBYTE>(&value), &size) ==
-            ERROR_SUCCESS &&
+                         reinterpret_cast<LPBYTE>(&value),
+                         &size) == ERROR_SUCCESS &&
         type == REG_DWORD) {
       RegCloseKey(hKey);
       return value == 0;
     }
     if (RegQueryValueExW(hKey, L"SystemUsesLightTheme", nullptr, &type,
-                         reinterpret_cast<LPBYTE>(&value), &size) ==
-            ERROR_SUCCESS &&
+                         reinterpret_cast<LPBYTE>(&value),
+                         &size) == ERROR_SUCCESS &&
         type == REG_DWORD) {
       RegCloseKey(hKey);
       return value == 0;
@@ -700,8 +706,9 @@ COLORREF GetSystemAccentColor() {
   HMODULE hDwm = LoadLibraryW(L"dwmapi.dll");
   if (hDwm) {
     typedef HRESULT(WINAPI * PFN_DwmGetColorizationColor)(DWORD *, BOOL *);
-    auto pfnDwmGetColorizationColor = reinterpret_cast<PFN_DwmGetColorizationColor>(
-        GetProcAddress(hDwm, "DwmGetColorizationColor"));
+    auto pfnDwmGetColorizationColor =
+        reinterpret_cast<PFN_DwmGetColorizationColor>(
+            GetProcAddress(hDwm, "DwmGetColorizationColor"));
     if (pfnDwmGetColorizationColor) {
       DWORD dwordColor = 0;
       BOOL opaque = FALSE;
@@ -725,8 +732,8 @@ COLORREF GetSystemAccentColor() {
     DWORD size = sizeof(dwordColor);
     DWORD type = 0;
     if (RegQueryValueExW(hKey, L"ColorizationColor", nullptr, &type,
-                         reinterpret_cast<LPBYTE>(&dwordColor), &size) ==
-            ERROR_SUCCESS &&
+                         reinterpret_cast<LPBYTE>(&dwordColor),
+                         &size) == ERROR_SUCCESS &&
         type == REG_DWORD) {
       RegCloseKey(hKey);
       BYTE r = static_cast<BYTE>((dwordColor >> 16) & 0xFF);

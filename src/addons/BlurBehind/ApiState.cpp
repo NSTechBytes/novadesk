@@ -15,15 +15,15 @@
 namespace ApiState {
 
 PSET_COMPOSITION SetWindowCompositionAttribute = nullptr;
-PSET_ATTRIBUTE   SetWindowAttribute            = nullptr;
+PSET_ATTRIBUTE SetWindowAttribute = nullptr;
 
 } // namespace ApiState
 
 namespace {
-static HMODULE   s_user32  = nullptr;
-static HMODULE   s_dwmapi  = nullptr;
-static uint32_t  s_refs    = 0;
-static bool      s_inited  = false;
+static HMODULE s_user32 = nullptr;
+static HMODULE s_dwmapi = nullptr;
+static uint32_t s_refs = 0;
+static bool s_inited = false;
 
 void LoadUser32() noexcept {
   s_user32 = LoadLibraryW(L"user32.dll");
@@ -47,9 +47,8 @@ void LoadDwmapi() noexcept {
   s_dwmapi = LoadLibraryW(L"dwmapi.dll");
   if (s_dwmapi) {
     DisableThreadLibraryCalls(s_dwmapi);
-    ApiState::SetWindowAttribute =
-        reinterpret_cast<ApiState::PSET_ATTRIBUTE>(
-            GetProcAddress(s_dwmapi, "DwmSetWindowAttribute"));
+    ApiState::SetWindowAttribute = reinterpret_cast<ApiState::PSET_ATTRIBUTE>(
+        GetProcAddress(s_dwmapi, "DwmSetWindowAttribute"));
   }
 }
 
@@ -81,8 +80,10 @@ bool IsUser32Loaded() noexcept { return s_user32 != nullptr; }
 bool IsDwmapiLoaded() noexcept { return s_dwmapi != nullptr; }
 
 void Finalize() noexcept {
-  if (s_refs == 0) return;
-  if (--s_refs > 0) return;
+  if (s_refs == 0)
+    return;
+  if (--s_refs > 0)
+    return;
   s_inited = false;
   UnloadUser32();
   UnloadDwmapi();

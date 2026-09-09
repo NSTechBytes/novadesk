@@ -22,26 +22,28 @@ static const int WCA_ACCENT_POLICY = 19;
 
 struct AccentPolicy {
   BB::Accent Accent;
-  uint32_t   Flags;    // Effect bits (low byte)
-  uint32_t   Color;
-  BYTE       Reserved;
+  uint32_t Flags; // Effect bits (low byte)
+  uint32_t Color;
+  BYTE Reserved;
 };
 
 struct CompositionAttribute {
-  int           Attribute; // WCA_ACCENT_POLICY
+  int Attribute; // WCA_ACCENT_POLICY
   AccentPolicy *Data;
-  DWORD         Size;
+  DWORD Size;
 };
 
 // ---- Helpers ----------------------------------------------------------------
 
 void ApplyComposition(HWND hwnd, CompositionAttribute attr) noexcept {
-  if (!ApiState::SetWindowCompositionAttribute) return;
+  if (!ApiState::SetWindowCompositionAttribute)
+    return;
   ApiState::SetWindowCompositionAttribute(hwnd, &attr);
 }
 
 void ApplyAttribute(HWND hwnd, DWORD attribute, const int &value) noexcept {
-  if (!ApiState::SetWindowAttribute) return;
+  if (!ApiState::SetWindowAttribute)
+    return;
   ApiState::SetWindowAttribute(hwnd, attribute, &value, sizeof(value));
 }
 
@@ -53,39 +55,41 @@ void ApplyAttribute(HWND hwnd, DWORD attribute, const int &value) noexcept {
 
 namespace WindowStyler {
 
-void SetAccent(HWND hwnd,
-               BB::Accent accent,
-               BB::Effect effect) noexcept {
-  if (!hwnd || !ApiState::IsUser32Loaded()) return;
+void SetAccent(HWND hwnd, BB::Accent accent, BB::Effect effect) noexcept {
+  if (!hwnd || !ApiState::IsUser32Loaded())
+    return;
 
-  AccentPolicy policy  = {};
-  policy.Accent        = accent;
-  policy.Flags         = static_cast<uint32_t>(static_cast<uint8_t>(effect));
-  policy.Color         = (accent == BB::Accent::DEFAULT) ? 0 : 0x01000000;
-  policy.Reserved      = 0;
+  AccentPolicy policy = {};
+  policy.Accent = accent;
+  policy.Flags = static_cast<uint32_t>(static_cast<uint8_t>(effect));
+  policy.Color = (accent == BB::Accent::DEFAULT) ? 0 : 0x01000000;
+  policy.Reserved = 0;
 
   CompositionAttribute data = {};
   data.Attribute = WCA_ACCENT_POLICY;
-  data.Data      = &policy;
-  data.Size      = sizeof(policy);
+  data.Data = &policy;
+  data.Size = sizeof(policy);
 
   ApplyComposition(hwnd, data);
 }
 
 void SetCorner(HWND hwnd, BB::Corner corner) noexcept {
-  if (!hwnd || !ApiState::IsDwmapiLoaded() || !WinVersion::IsWin11()) return;
+  if (!hwnd || !ApiState::IsDwmapiLoaded() || !WinVersion::IsWin11())
+    return;
   const int value = static_cast<int>(corner);
   ApplyAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, value);
 }
 
 void SetStroke(HWND hwnd, BB::Stroke stroke) noexcept {
-  if (!hwnd || !ApiState::IsDwmapiLoaded() || !WinVersion::IsWin11()) return;
+  if (!hwnd || !ApiState::IsDwmapiLoaded() || !WinVersion::IsWin11())
+    return;
   const int value = static_cast<int>(stroke);
   ApplyAttribute(hwnd, DWMWA_BORDER_COLOR, value);
 }
 
 void Disable(HWND hwnd) noexcept {
-  if (!hwnd) return;
+  if (!hwnd)
+    return;
   SetAccent(hwnd, BB::Accent::DEFAULT, BB::Effect::DEFAULT);
 }
 
