@@ -32,7 +32,8 @@ static std::unordered_map<HWND, BB::Config> g_toggleCache;
 /// Apply a full BB::Config to a window, performing version-gated fallbacks.
 static void ApplyConfig(const BB::Config &cfg) {
   HWND hwnd = cfg.hwnd;
-  if (!hwnd || !IsWindow(hwnd)) return;
+  if (!hwnd || !IsWindow(hwnd))
+    return;
 
   BB::Accent accent = cfg.accent;
 
@@ -69,7 +70,8 @@ static int JsApply(novadesk_context ctx) {
   if (top >= 1 && g_Host->IsObject(ctx, 0)) {
     BB::Config cfg = ArgParser::ParseConfig(g_Host, ctx, 0);
     // hwnd might be the second arg if not inside the object.
-    if (!cfg.hwnd && top >= 2) cfg.hwnd = ArgParser::ParseHwnd(g_Host, ctx, 1);
+    if (!cfg.hwnd && top >= 2)
+      cfg.hwnd = ArgParser::ParseHwnd(g_Host, ctx, 1);
     if (!cfg.hwnd) {
       g_Host->ThrowError(ctx, "apply(config): hwnd is missing or invalid");
       return 0;
@@ -103,9 +105,10 @@ static int JsApply(novadesk_context ctx) {
   }
 
   BB::Config cfg;
-  cfg.hwnd   = hwnd;
+  cfg.hwnd = hwnd;
   cfg.accent = ArgParser::ParseAccent(g_Host, ctx, base + 1, BB::Accent::BLUR);
-  cfg.corner = ArgParser::ParseCorner(g_Host, ctx, base + 2, BB::Corner::DEFAULT);
+  cfg.corner =
+      ArgParser::ParseCorner(g_Host, ctx, base + 2, BB::Corner::DEFAULT);
 
   ApplyConfig(cfg);
   g_Host->PushBool(ctx, 1);
@@ -140,7 +143,8 @@ static int JsSetCorner(novadesk_context ctx) {
     return 0;
   }
   int base = (hwndIdx >= 0) ? hwndIdx : 0;
-  BB::Corner corner = ArgParser::ParseCorner(g_Host, ctx, base + 1, BB::Corner::ROUND);
+  BB::Corner corner =
+      ArgParser::ParseCorner(g_Host, ctx, base + 1, BB::Corner::ROUND);
   WindowStyler::SetCorner(hwnd, corner);
   g_Host->PushBool(ctx, 1);
   return 1;
@@ -157,7 +161,8 @@ static int JsSetEffect(novadesk_context ctx) {
     return 0;
   }
   int base = (hwndIdx >= 0) ? hwndIdx : 0;
-  BB::Effect effect = ArgParser::ParseEffect(g_Host, ctx, base + 1, BB::Effect::DEFAULT);
+  BB::Effect effect =
+      ArgParser::ParseEffect(g_Host, ctx, base + 1, BB::Effect::DEFAULT);
   WindowStyler::SetAccent(hwnd, BB::Accent::BLUR, effect);
   g_Host->PushBool(ctx, 1);
   return 1;
@@ -174,7 +179,8 @@ static int JsSetStroke(novadesk_context ctx) {
     return 0;
   }
   int base = (hwndIdx >= 0) ? hwndIdx : 0;
-  BB::Stroke stroke = ArgParser::ParseStroke(g_Host, ctx, base + 1, BB::Stroke::VISIBLE);
+  BB::Stroke stroke =
+      ArgParser::ParseStroke(g_Host, ctx, base + 1, BB::Stroke::VISIBLE);
   WindowStyler::SetStroke(hwnd, stroke);
   g_Host->PushBool(ctx, 1);
   return 1;
@@ -199,9 +205,10 @@ static int JsToggle(novadesk_context ctx) {
     g_toggleCache.erase(it);
     g_Host->PushBool(ctx, 1); // true = blur ON
   } else {
-    // Blur is currently on — disable and save a default config so we can restore.
+    // Blur is currently on — disable and save a default config so we can
+    // restore.
     BB::Config saved;
-    saved.hwnd   = hwnd;
+    saved.hwnd = hwnd;
     saved.accent = BB::Accent::BLUR;
     saved.corner = BB::Corner::DEFAULT;
     g_toggleCache[hwnd] = saved;
@@ -221,16 +228,24 @@ static int JsIsSupported(novadesk_context ctx) {
     return 1;
   }
   const char *raw = g_Host->GetString(ctx, 0);
-  if (!raw) { g_Host->PushBool(ctx, 0); return 1; }
+  if (!raw) {
+    g_Host->PushBool(ctx, 0);
+    return 1;
+  }
 
   std::string s(raw);
-  for (char &c : s) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+  for (char &c : s)
+    c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
 
   bool result = false;
-  if (s == "blur" || s == "blurbehind")     result = WinVersion::IsWin10();
-  else if (s == "acrylic")                  result = WinVersion::IsWin11();
-  else if (s == "corner")                   result = WinVersion::IsWin11();
-  else if (s == "stroke" || s == "border")  result = WinVersion::IsWin11();
+  if (s == "blur" || s == "blurbehind")
+    result = WinVersion::IsWin10();
+  else if (s == "acrylic")
+    result = WinVersion::IsWin11();
+  else if (s == "corner")
+    result = WinVersion::IsWin11();
+  else if (s == "stroke" || s == "border")
+    result = WinVersion::IsWin11();
 
   g_Host->PushBool(ctx, result ? 1 : 0);
   return 1;
@@ -248,26 +263,26 @@ NOVADESK_ADDON_INIT(ctx, hMsgWnd, host) {
   ApiState::Initialize();
 
   novadesk::Addon addon(ctx, host);
-  addon.RegisterString("name",    "BlurBehind");
+  addon.RegisterString("name", "BlurBehind");
   addon.RegisterString("version", "3.0.0");
 
   // ── Existing API ─────────────────────────────────────────────────────────
-  addon.RegisterFunction("apply",     JsApply,     4);
-  addon.RegisterFunction("disable",   JsDisable,   1);
+  addon.RegisterFunction("apply", JsApply, 4);
+  addon.RegisterFunction("disable", JsDisable, 1);
   addon.RegisterFunction("setCorner", JsSetCorner, 2);
 
   // ── Extended API ─────────────────────────────────────────────────────────
-  addon.RegisterFunction("setEffect",   JsSetEffect,   2);
-  addon.RegisterFunction("setStroke",   JsSetStroke,   2);
-  addon.RegisterFunction("toggle",      JsToggle,      1);
+  addon.RegisterFunction("setEffect", JsSetEffect, 2);
+  addon.RegisterFunction("setStroke", JsSetStroke, 2);
+  addon.RegisterFunction("toggle", JsToggle, 1);
   addon.RegisterFunction("isSupported", JsIsSupported, 1);
 
   // ── Capability flags object ───────────────────────────────────────────────
   addon.RegisterObject("supports", [](novadesk::Addon &s) {
-    s.RegisterBool("blur",    WinVersion::IsWin10());
+    s.RegisterBool("blur", WinVersion::IsWin10());
     s.RegisterBool("acrylic", WinVersion::IsWin11());
-    s.RegisterBool("corner",  WinVersion::IsWin11());
-    s.RegisterBool("stroke",  WinVersion::IsWin11());
+    s.RegisterBool("corner", WinVersion::IsWin11());
+    s.RegisterBool("stroke", WinVersion::IsWin11());
   });
 }
 

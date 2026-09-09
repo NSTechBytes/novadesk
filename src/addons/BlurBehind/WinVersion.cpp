@@ -22,8 +22,8 @@ static constexpr DWORD BUILD_WIN11 = 22000; // Windows 11 initial release
 
 namespace {
 bool g_initialized = false;
-bool g_isWin10     = false;
-bool g_isWin11     = false;
+bool g_isWin10 = false;
+bool g_isWin11 = false;
 
 using RtlGetVersionFn = LONG(WINAPI *)(PRTL_OSVERSIONINFOW);
 
@@ -36,7 +36,8 @@ using RtlGetVersionFn = LONG(WINAPI *)(PRTL_OSVERSIONINFOW);
 namespace WinVersion {
 
 void Initialize() noexcept {
-  if (g_initialized) return;
+  if (g_initialized)
+    return;
   g_initialized = true;
 
   HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
@@ -63,9 +64,11 @@ void Initialize() noexcept {
   DWORDLONG mask = VerSetConditionMask(0, VER_MAJORVERSION, VER_GREATER_EQUAL);
   mask = VerSetConditionMask(mask, VER_BUILDNUMBER, VER_GREATER_EQUAL);
 
-  g_isWin10 = VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_BUILDNUMBER, mask) != FALSE;
+  g_isWin10 = VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_BUILDNUMBER,
+                                 mask) != FALSE;
   osvi.dwBuildNumber = BUILD_WIN11;
-  g_isWin11 = VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_BUILDNUMBER, mask) != FALSE;
+  g_isWin11 = VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_BUILDNUMBER,
+                                 mask) != FALSE;
 }
 
 bool IsWin10() noexcept { return g_isWin10; }

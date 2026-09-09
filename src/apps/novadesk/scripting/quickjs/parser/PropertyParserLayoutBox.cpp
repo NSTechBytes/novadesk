@@ -222,7 +222,6 @@ void ParseLayoutBoxOptions(JSContext *ctx, JSValueConst obj,
   }
   JS_FreeValue(ctx, shadowV);
 
-
   options.direction = GetStringProp(ctx, obj, "direction");
   if (options.direction.empty()) {
     JSValue styleDir = JS_GetPropertyStr(ctx, obj, "style");

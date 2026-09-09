@@ -479,8 +479,9 @@ bool GeneralImage::BuildProcessedImage(
 
   outImage = m_D2DBitmap.Get();
 
-  const bool needsGray  = m_Grayscale;
-  const bool needsColor = m_HasImageTint || m_HasColorMatrix || m_ImageAlpha < 255;
+  const bool needsGray = m_Grayscale;
+  const bool needsColor =
+      m_HasImageTint || m_HasColorMatrix || m_ImageAlpha < 255;
 
   if (!needsGray && !needsColor) {
     // No effects needed — release any cached effects from a previous state
@@ -508,18 +509,17 @@ bool GeneralImage::BuildProcessedImage(
     // Gray effect — only allocate when grayscale is actually needed.
     if (needsGray) {
       if (!m_GrayEffect) {
-        if (FAILED(context->CreateEffect(CLSID_D2D1ColorMatrix,
-                                         m_GrayEffect.ReleaseAndGetAddressOf()))) {
+        if (FAILED(
+                context->CreateEffect(CLSID_D2D1ColorMatrix,
+                                      m_GrayEffect.ReleaseAndGetAddressOf()))) {
           m_GrayEffect.Reset();
         }
       }
       if (m_GrayEffect) {
-        D2D1_MATRIX_5X4_F grayMatrix = D2D1::Matrix5x4F(
-            0.299f, 0.299f, 0.299f, 0.0f,
-            0.587f, 0.587f, 0.587f, 0.0f,
-            0.114f, 0.114f, 0.114f, 0.0f,
-            0.0f,   0.0f,   0.0f,   1.0f,
-            0.0f,   0.0f,   0.0f,   0.0f);
+        D2D1_MATRIX_5X4_F grayMatrix =
+            D2D1::Matrix5x4F(0.299f, 0.299f, 0.299f, 0.0f, 0.587f, 0.587f,
+                             0.587f, 0.0f, 0.114f, 0.114f, 0.114f, 0.0f, 0.0f,
+                             0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
         m_GrayEffect->SetValue(D2D1_COLORMATRIX_PROP_COLOR_MATRIX, grayMatrix);
       }
     } else {
@@ -529,18 +529,16 @@ bool GeneralImage::BuildProcessedImage(
     // Color/tint/alpha effect.
     if (needsColor) {
       if (!m_ColorEffect) {
-        if (FAILED(context->CreateEffect(CLSID_D2D1ColorMatrix,
-                                          m_ColorEffect.ReleaseAndGetAddressOf()))) {
+        if (FAILED(context->CreateEffect(
+                CLSID_D2D1ColorMatrix,
+                m_ColorEffect.ReleaseAndGetAddressOf()))) {
           m_ColorEffect.Reset();
         }
       }
       if (m_ColorEffect) {
         D2D1_MATRIX_5X4_F matrix = D2D1::Matrix5x4F(
-            1.0f, 0.0f, 0.0f, 0.0f,
-            0.0f, 1.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 1.0f, 0.0f,
-            0.0f, 0.0f, 0.0f, 1.0f,
-            0.0f, 0.0f, 0.0f, 0.0f);
+            1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+            0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
 
         if (m_HasColorMatrix) {
           memcpy(&matrix, m_ColorMatrix.data(), sizeof(float) * 20);

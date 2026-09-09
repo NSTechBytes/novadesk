@@ -786,8 +786,7 @@ static void host_JsCallFunctionNoArgs(novadesk_context, void *funcPtr) {
       }
     }
     JS_FreeValue(handle->ctx, exc);
-    Logging::Log(LogLevel::Error,
-                 L"[novadesk] addon callback exception: %s",
+    Logging::Log(LogLevel::Error, L"[novadesk] addon callback exception: %s",
                  Utils::ToWString(msg).c_str());
   }
 }
@@ -838,10 +837,10 @@ const NovadeskHostAPI g_hostApi = {NOVADESK_HOST_API_VERSION,
                                    host_GetTop,
                                    host_Pop,
                                    host_PopN,
-                                    host_ThrowError,
-                                    host_JsGetFunctionPtr,
-                                    host_FreeFunction,
-                                    host_JsCallFunction,
+                                   host_ThrowError,
+                                   host_JsGetFunctionPtr,
+                                   host_FreeFunction,
+                                   host_JsCallFunction,
                                    host_JsCallFunctionNoArgs,
                                    host_ArrayPushObject};
 
@@ -1213,10 +1212,11 @@ static void EnsureStorageCacheLoaded(JSContext *ctx) {
                                JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) == 0) {
       for (uint32_t i = 0; i < propCount; ++i) {
         const char *keyStr = JS_AtomToCString(ctx, props[i].atom);
-        if (!keyStr) continue;
+        if (!keyStr)
+          continue;
         JSValue val = JS_GetProperty(ctx, parsed, props[i].atom);
-        JSValue serialized = JS_JSONStringify(ctx, val, JS_UNDEFINED,
-                                              JS_UNDEFINED);
+        JSValue serialized =
+            JS_JSONStringify(ctx, val, JS_UNDEFINED, JS_UNDEFINED);
         if (!JS_IsException(serialized)) {
           const char *valStr = JS_ToCString(ctx, serialized);
           if (valStr) {
@@ -1246,8 +1246,8 @@ static bool FlushStorageCache(JSContext *ctx) {
   // Rebuild a JS object from the cache, stringify it, then write.
   JSValue obj = JS_NewObject(ctx);
   for (const auto &kv : g_storageCache) {
-    JSValue val = JS_ParseJSON(ctx, kv.second.c_str(), kv.second.size(),
-                               "<storage>");
+    JSValue val =
+        JS_ParseJSON(ctx, kv.second.c_str(), kv.second.size(), "<storage>");
     if (JS_IsException(val)) {
       JS_FreeValue(ctx, JS_GetException(ctx));
       val = JS_UNDEFINED;
@@ -1294,8 +1294,8 @@ JSValue JsAppStorageGet(JSContext *ctx, JSValueConst, int argc,
   if (it == g_storageCache.end()) {
     return (argc > 1) ? JS_DupValue(ctx, argv[1]) : JS_UNDEFINED;
   }
-  JSValue out = JS_ParseJSON(ctx, it->second.c_str(), it->second.size(),
-                             "<storage>");
+  JSValue out =
+      JS_ParseJSON(ctx, it->second.c_str(), it->second.size(), "<storage>");
   if (JS_IsException(out)) {
     JS_FreeValue(ctx, JS_GetException(ctx));
     return (argc > 1) ? JS_DupValue(ctx, argv[1]) : JS_UNDEFINED;
@@ -1314,7 +1314,8 @@ JSValue JsAppStorageSet(JSContext *ctx, JSValueConst, int argc,
   if (!key)
     return JS_EXCEPTION;
 
-  JSValue serialized = JS_JSONStringify(ctx, argv[1], JS_UNDEFINED, JS_UNDEFINED);
+  JSValue serialized =
+      JS_JSONStringify(ctx, argv[1], JS_UNDEFINED, JS_UNDEFINED);
   if (JS_IsException(serialized)) {
     JS_FreeCString(ctx, key);
     return JS_EXCEPTION;
@@ -1619,8 +1620,7 @@ JSValue JsAddonLoad(JSContext *ctx, JSValueConst, int argc,
       Logging::Log(LogLevel::Error,
                    L"Addon %s reports API version %u but host is version %u — "
                    L"refusing to load incompatible addon",
-                   addonPath.c_str(), addonVersion,
-                   NOVADESK_HOST_API_VERSION);
+                   addonPath.c_str(), addonVersion, NOVADESK_HOST_API_VERSION);
       FreeLibrary(module);
       return JS_NULL;
     }

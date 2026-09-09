@@ -124,11 +124,17 @@ public:
   BYTE GetImageTintAlpha() const { return m_ImageTintAlpha; }
 
   /// Sets the overall image opacity (0-255).
-  void SetImageAlpha(BYTE alpha) { m_ImageAlpha = alpha; m_EffectsDirty = true; }
+  void SetImageAlpha(BYTE alpha) {
+    m_ImageAlpha = alpha;
+    m_EffectsDirty = true;
+  }
   BYTE GetImageAlpha() const { return m_ImageAlpha; }
 
   /// Enables or disables grayscale rendering.
-  void SetGrayscale(bool enable) { m_Grayscale = enable; m_EffectsDirty = true; }
+  void SetGrayscale(bool enable) {
+    m_Grayscale = enable;
+    m_EffectsDirty = true;
+  }
   bool IsGrayscale() const { return m_Grayscale; }
 
   /// Sets a custom 5x5 color transformation matrix.
@@ -264,7 +270,8 @@ private:
   bool m_UseExifOrientation = false;
 
   // ============================================================================
-  // Cached D2D Effects (mutable — lazily created inside const BuildProcessedImage)
+  // Cached D2D Effects (mutable — lazily created inside const
+  // BuildProcessedImage)
   // ============================================================================
 
   /// Set whenever an effect parameter changes or the bitmap is reset.

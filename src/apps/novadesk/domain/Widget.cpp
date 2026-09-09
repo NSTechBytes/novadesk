@@ -305,8 +305,7 @@ bool Widget::Create() {
     }
   } else {
     Logging::Log(LogLevel::Warn,
-                 L"OleInitialize failed (0x%08X) — drag-and-drop disabled",
-                 hr);
+                 L"OleInitialize failed (0x%08X) — drag-and-drop disabled", hr);
   }
 
   return true;
@@ -1628,7 +1627,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
         }
       }
       if (moved) {
-        if (widget->m_ColorPickerPopup && widget->m_ColorPickerPopup->IsOpen()) {
+        if (widget->m_ColorPickerPopup &&
+            widget->m_ColorPickerPopup->IsOpen()) {
           widget->m_ColorPickerPopup->UpdatePosition();
         }
         if (widget->m_Tooltip.IsActive()) {

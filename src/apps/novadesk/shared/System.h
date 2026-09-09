@@ -137,8 +137,8 @@ struct RegistryValue {
  * @brief System color and theme information.
  */
 struct SystemColorInfo {
-  bool isDarkMode = false;           ///< True if system/apps use dark theme.
-  COLORREF accent = RGB(0, 120, 215);///< Accent color.
+  bool isDarkMode = false;            ///< True if system/apps use dark theme.
+  COLORREF accent = RGB(0, 120, 215); ///< Accent color.
   COLORREF window = RGB(255, 255, 255);
   COLORREF windowText = RGB(0, 0, 0);
   COLORREF highlight = RGB(0, 120, 215);

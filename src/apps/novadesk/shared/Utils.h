@@ -10,7 +10,6 @@
 #include <vector>
 #include "Element.h"
 
-
 namespace Utils {
 
 /**

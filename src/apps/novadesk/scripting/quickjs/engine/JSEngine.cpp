@@ -384,8 +384,7 @@ bool ExecuteScriptFile(const std::wstring &finalScriptPath) {
   JSValue prevMainScriptDirPath =
       JS_GetPropertyStr(g_context, global, "__mainScriptDirPath");
   JSValue prevWidgetDir = JS_GetPropertyStr(g_context, global, "__widgetDir");
-  JSValue prevAddonsPath =
-      JS_GetPropertyStr(g_context, global, "__addonsPath");
+  JSValue prevAddonsPath = JS_GetPropertyStr(g_context, global, "__addonsPath");
 
   JS_SetPropertyStr(g_context, global, "__filename",
                     JS_NewString(g_context, fileName.c_str()));
@@ -444,7 +443,8 @@ bool ExecuteScriptFile(const std::wstring &finalScriptPath) {
     err = JS_ExecutePendingJob(g_runtime, &ctx1);
     if (err < 0) {
       LogQuickJsException(ctx1 ? ctx1 : g_context);
-      // Restore previous globals so async work from prior scripts is unaffected.
+      // Restore previous globals so async work from prior scripts is
+      // unaffected.
       JS_SetPropertyStr(g_context, global, "__filename", prevFilename);
       JS_SetPropertyStr(g_context, global, "__dirname", prevDirname);
       JS_SetPropertyStr(g_context, global, "__mainScriptDirPath",
@@ -1467,8 +1467,7 @@ JSValue JsUiIpcInvoke(JSContext *ctx, JSValueConst, int argc,
       }
     }
     if (jobIter <= 0)
-      Logging::Log(LogLevel::Warn,
-                   L"ipcRenderer.invoke: job drain limit hit");
+      Logging::Log(LogLevel::Warn, L"ipcRenderer.invoke: job drain limit hit");
 
     // After draining, inspect the Promise state.
     const JSPromiseStateEnum state = JS_PromiseState(ctx, ret);
@@ -1505,10 +1504,9 @@ JSValue CreateMainIpcObject(JSContext *ctx) {
       JS_NewCFunction(ctx, JsMainIpcRemoveListener, "removeListener", 2));
   JS_SetPropertyStr(ctx, ipc, "off",
                     JS_NewCFunction(ctx, JsMainIpcRemoveListener, "off", 2));
-  JS_SetPropertyStr(
-      ctx, ipc, "removeAllListeners",
-      JS_NewCFunction(ctx, JsMainIpcRemoveAllListeners, "removeAllListeners",
-                      1));
+  JS_SetPropertyStr(ctx, ipc, "removeAllListeners",
+                    JS_NewCFunction(ctx, JsMainIpcRemoveAllListeners,
+                                    "removeAllListeners", 1));
   JS_SetPropertyStr(ctx, ipc, "handle",
                     JS_NewCFunction(ctx, JsMainIpcHandle, "handle", 2));
   JS_SetPropertyStr(

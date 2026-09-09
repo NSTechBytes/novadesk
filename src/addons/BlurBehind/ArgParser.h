@@ -25,23 +25,24 @@ HWND ParseHwnd(const NovadeskHostAPI *host, novadesk_context ctx, int idx);
 HWND FindHwnd(const NovadeskHostAPI *host, novadesk_context ctx, int *outIdx);
 
 /// Parse Accent enum from a string argument at idx.
-BB::Accent ParseAccent(const NovadeskHostAPI *host, novadesk_context ctx, int idx,
-                       BB::Accent defVal = BB::Accent::BLUR);
+BB::Accent ParseAccent(const NovadeskHostAPI *host, novadesk_context ctx,
+                       int idx, BB::Accent defVal = BB::Accent::BLUR);
 
 /// Parse Effect enum from a string argument at idx.
-BB::Effect ParseEffect(const NovadeskHostAPI *host, novadesk_context ctx, int idx,
-                       BB::Effect defVal = BB::Effect::DEFAULT);
+BB::Effect ParseEffect(const NovadeskHostAPI *host, novadesk_context ctx,
+                       int idx, BB::Effect defVal = BB::Effect::DEFAULT);
 
 /// Parse Corner enum from a string argument at idx.
-BB::Corner ParseCorner(const NovadeskHostAPI *host, novadesk_context ctx, int idx,
-                       BB::Corner defVal = BB::Corner::DEFAULT);
+BB::Corner ParseCorner(const NovadeskHostAPI *host, novadesk_context ctx,
+                       int idx, BB::Corner defVal = BB::Corner::DEFAULT);
 
 /// Parse Stroke from "hidden" / "visible" token or 0xRRGGBB hex at idx.
-BB::Stroke ParseStroke(const NovadeskHostAPI *host, novadesk_context ctx, int idx,
-                       BB::Stroke defVal = BB::Stroke::VISIBLE);
+BB::Stroke ParseStroke(const NovadeskHostAPI *host, novadesk_context ctx,
+                       int idx, BB::Stroke defVal = BB::Stroke::VISIBLE);
 
 /// Parse a full BB::Config from a JS object at argument index idx.
 /// Reads properties: hwnd, type/accent, effect, corner, stroke, disabled.
-BB::Config ParseConfig(const NovadeskHostAPI *host, novadesk_context ctx, int idx);
+BB::Config ParseConfig(const NovadeskHostAPI *host, novadesk_context ctx,
+                       int idx);
 
 } // namespace ArgParser

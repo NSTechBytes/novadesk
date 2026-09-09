@@ -184,7 +184,6 @@ void ParseElementOptions(JSContext *ctx, JSValueConst obj,
   GetBoolProp(ctx, obj, "tooltipBalloon", options.tooltipBalloon);
   GetBoolProp(ctx, obj, "tooltipDisabled", options.tooltipDisabled);
 
-
   if (GetIntProp(ctx, obj, "scrollX", options.scrollX))
     options.hasScrollX = true;
   if (GetIntProp(ctx, obj, "scrollY", options.scrollY))
