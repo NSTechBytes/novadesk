@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 OfficialNovadesk
+﻿/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -8,4 +8,4 @@
 #pragma once
 
 /// Application version string in "major.minor.patch.build" format.
-#define NOVADESK_VERSION "0.9.10.0"
+#define NOVADESK_VERSION "0.9.11.0"

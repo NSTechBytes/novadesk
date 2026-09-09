@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 OfficialNovadesk
+﻿/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -161,7 +161,7 @@ static const UINT kProcessMonitorIntervalMs = 500;
 static const UINT kStartupSyncDelayMs = 120;
 static const UINT kAutoUpdateIntervalMs = 60 * 1000; // 1 minute
 static const int kMaxLogRows = 2000;
-static const wchar_t *kCurrentVersion = L"0.9.10.0";
+static const wchar_t *kCurrentVersion = L"0.9.11.0";
 static const wchar_t *kSingleInstanceLockArg =
     L"--request-single-instance-lock";
 static const wchar_t *kManageWindowClassName = L"NovadeskManagerWindow";
@@ -2296,7 +2296,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
         pageRect.top, pageRect.right - pageRect.left - 140, 32, hWnd, nullptr,
         GetModuleHandleW(nullptr), nullptr);
     g_aboutVersion =
-        CreateWindowExW(0, L"STATIC", L"Version 0.9.10.0 (Beta)",
+        CreateWindowExW(0, L"STATIC", L"Version 0.9.11.0 (Beta)",
                         WS_CHILD | SS_LEFT, pageRect.left + 120,
                         pageRect.top + 34, pageRect.right - pageRect.left - 140,
                         22, hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
