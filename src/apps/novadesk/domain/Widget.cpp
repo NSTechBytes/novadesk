@@ -1321,9 +1321,15 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
           SetWindowPos(hWnd, NULL, newX, newY, 0, 0,
                        SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
-          // Update local options for hit testing
-          widget->m_Options.x = newX;
-          widget->m_Options.y = newY;
+          // NOTE: m_Options.x/y are intentionally NOT updated here.
+          // WM_WINDOWPOSCHANGED fires synchronously inside SetWindowPos above
+          // and already updates m_Options.x/y to the correctly clamped position
+          // (when keepOnScreen is active, WM_WINDOWPOSCHANGING clamps wp->x/y and
+          // WM_WINDOWPOSCHANGED mirrors those clamped values into m_Options).
+          // Overwriting m_Options.x/y here with unclamped newX/newY would cause
+          // UpdateLayeredWindowContent to use an out-of-bounds pptDst, which
+          // produces a visible flicker every time the widget repaints while held
+          // against a screen boundary.
 
           if (widget->m_Tooltip.IsActive()) {
             widget->m_Tooltip.RepositionToCursor();
