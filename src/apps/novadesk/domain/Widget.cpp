@@ -4221,6 +4221,17 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     }
   }
 
+  // Element callbacks may synchronously remove or replace any element (for
+  // example, Notes replaces its display text with an input on mouse-up).
+  // These event-local raw pointers must not be used after script returns
+  // unless the widget still owns them.
+  if (!IsTrackedElement(hitElement))
+    hitElement = nullptr;
+  if (!IsTrackedElement(actionElement))
+    actionElement = nullptr;
+  if (!IsTrackedElement(mouseActionElement))
+    mouseActionElement = nullptr;
+
   // Handle container scrolling via mouse wheel when not consumed by an element
   // action
   if (!handled && (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL)) {
