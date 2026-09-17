@@ -915,8 +915,12 @@ void InputBoxElement::Render(ID2D1DeviceContext *context) {
                                                    color, alpha / 255.0f,
                                                    textBrush.GetAddressOf()) &&
           textBrush) {
+        // Input boxes are rendered into Novadesk's premultiplied-alpha
+        // layered surface. ClearType is only supported on opaque surfaces and
+        // can cause dark text (notably light-theme black text) to disappear.
+        // Match TextElement's alpha-safe grayscale rendering instead.
         context->SetTextAntialiasMode(m_AntiAlias
-                                          ? D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE
+                                          ? D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE
                                           : D2D1_TEXT_ANTIALIAS_MODE_ALIASED);
         context->DrawTextLayout(
             D2D1::Point2F(content.left - (m_Multiline ? 0.0f : m_ScrollOffset),
