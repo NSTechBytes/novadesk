@@ -172,6 +172,16 @@ Widget::~Widget() {
 
   // Element-owned GeneralImage instances join their workers on destruction.
   // Do this while the widget HWND is still valid.
+  // Element destruction order follows m_Elements insertion order, not the
+  // container hierarchy. Detach every relationship first so a child
+  // destructor cannot call RemoveContainerItem() through a parent that was
+  // already destroyed (containers may be any Element type, including images).
+  for (const auto &element : m_Elements) {
+    if (!element)
+      continue;
+    element->SetContainer(nullptr);
+    element->ClearContainerItems();
+  }
   m_Elements.clear();
   m_TrackedElements.clear();
   m_SpatialGrid.clear();
