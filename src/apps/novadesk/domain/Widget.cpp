@@ -2330,23 +2330,42 @@ void Widget::OpenColorPickerEyedropper(ColorPickerElement *colorPicker) {
 void Widget::FocusInputBox(InputBoxElement *inputElem) {
   if (!inputElem)
     return;
-  if (m_FocusedInputBox && m_FocusedInputBox != inputElem) {
-    if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-      JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this,
-                                  nullptr);
-    m_FocusedInputBox->SetFocus(false);
-    if (m_hWnd)
-      KillTimer(m_hWnd, TIMER_CARET);
-  }
+
+  const auto isTracked = [this](const InputBoxElement *input) {
+    const auto element = static_cast<const Element *>(input);
+    return std::find_if(m_Elements.begin(), m_Elements.end(),
+                        [&](const auto &candidate) {
+                          return candidate.get() == element;
+                        }) != m_Elements.end();
+  };
+  if (!isTracked(inputElem))
+    return;
+
+  if (m_FocusedInputBox && m_FocusedInputBox != inputElem)
+    BlurInputBox(m_FocusedInputBox);
+  if (!isTracked(inputElem))
+    return;
+
+  // An onBlur callback may have focused another input.  Blur that input before
+  // completing this explicit focus request.
+  if (m_FocusedInputBox && m_FocusedInputBox != inputElem)
+    BlurInputBox(m_FocusedInputBox);
+  if (!isTracked(inputElem))
+    return;
+
   if (!inputElem->IsFocused()) {
     inputElem->SetFocus(true);
+    // Publish the focus before calling script so a re-entrant callback sees a
+    // consistent state and may safely replace or clear it.
+    m_FocusedInputBox = inputElem;
     if (m_hWnd)
       SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
     if (inputElem->m_OnFocusCallbackId != -1)
       JSEngine::CallEventCallback(inputElem->m_OnFocusCallbackId, this,
                                   nullptr);
+  } else {
+    m_FocusedInputBox = inputElem;
   }
-  m_FocusedInputBox = inputElem;
   Redraw();
 }
 
@@ -2355,13 +2374,31 @@ void Widget::BlurInputBox(InputBoxElement *inputElem) {
     return;
   if (inputElem && m_FocusedInputBox != inputElem)
     return;
-  if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-    JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this,
-                                nullptr);
-  m_FocusedInputBox->SetFocus(false);
+
+  // JavaScript callbacks are re-entrant: an onBlur handler can remove this
+  // input, focus another one, or call blurInputBox() again.  Do not retain the
+  // focused raw pointer across that callback.
+  InputBoxElement *focusedInput = m_FocusedInputBox;
+  const auto focusedElement = static_cast<Element *>(focusedInput);
+  const bool isTracked =
+      std::find_if(m_Elements.begin(), m_Elements.end(),
+                   [&](const auto &element) {
+                     return element.get() == focusedElement;
+                   }) != m_Elements.end();
+  const int onBlurCallbackId =
+      isTracked ? focusedInput->m_OnBlurCallbackId : -1;
+
+  // Clear the state before invoking script so nested focus/blur calls operate
+  // on their own state and cannot leave a dangling focused pointer behind.
+  m_FocusedInputBox = nullptr;
   if (m_hWnd)
     KillTimer(m_hWnd, TIMER_CARET);
-  m_FocusedInputBox = nullptr;
+
+  if (isTracked)
+    focusedInput->SetFocus(false);
+  if (onBlurCallbackId != -1)
+    JSEngine::CallEventCallback(onBlurCallbackId, this, nullptr);
+
   Redraw();
 }
 
@@ -4415,36 +4452,30 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       // Input box focus + caret placement on click.
       InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(hitElement);
       if (inputElem) {
-        if (m_FocusedInputBox && m_FocusedInputBox != inputElem) {
-          if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-            JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId,
-                                        this, nullptr);
-          m_FocusedInputBox->SetFocus(false);
-          KillTimer(m_hWnd, TIMER_CARET);
+        FocusInputBox(inputElem);
+
+        // Focus/blur handlers can synchronously remove the clicked element or
+        // focus a different input.  Only use the pointer if it remains owned
+        // by this widget and is still the active input.
+        const auto inputElement = static_cast<Element *>(inputElem);
+        const bool inputStillFocused =
+            m_FocusedInputBox == inputElem &&
+            std::find_if(m_Elements.begin(), m_Elements.end(),
+                         [&](const auto &element) {
+                           return element.get() == inputElement;
+                         }) != m_Elements.end();
+        if (inputStillFocused) {
+          bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+          inputElem->HandleMouseDown(x, y, shift);
+          SetFocus();
+          SetCapture(m_hWnd);
         }
-        if (!inputElem->IsFocused()) {
-          inputElem->SetFocus(true);
-          SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
-          if (inputElem->m_OnFocusCallbackId != -1)
-            JSEngine::CallEventCallback(inputElem->m_OnFocusCallbackId, this,
-                                        nullptr);
-        }
-        m_FocusedInputBox = inputElem;
-        bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-        inputElem->HandleMouseDown(x, y, shift);
-        SetFocus();
-        SetCapture(m_hWnd);
         handled = true;
         needRedraw = true;
       } else {
         // Clicked outside any input box: blur the focused one.
         if (m_FocusedInputBox) {
-          if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-            JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId,
-                                        this, nullptr);
-          m_FocusedInputBox->SetFocus(false);
-          m_FocusedInputBox = nullptr;
-          KillTimer(m_hWnd, TIMER_CARET);
+          BlurInputBox();
           needRedraw = true;
         }
       }
