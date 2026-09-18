@@ -1598,9 +1598,14 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
       case ContentHeight:
         return JS_NewInt32(ctx, contentBounds.Height);
       case X:
-        return JS_NewInt32(ctx, outerBounds.X);
+        // Return the authored position, not the calculated left edge. For
+        // center- and right-aligned text, GetBounds().X is offset by the
+        // measured text width and cannot safely be used as an animation
+        // target or round-tripped into setElementProperty("x", ...).
+        return JS_NewInt32(ctx, element->GetX());
       case Y:
-        return JS_NewInt32(ctx, outerBounds.Y);
+        // See X above: keep the public property as the stored anchor.
+        return JS_NewInt32(ctx, element->GetY());
       case Width:
         return JS_NewInt32(ctx, outerBounds.Width);
       case Height:
