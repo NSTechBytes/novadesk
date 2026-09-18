@@ -3942,7 +3942,13 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     Element *hoverElement =
         actionElement ? actionElement
                       : (mouseActionElement ? mouseActionElement : hitElement);
-    if (m_MouseOverElement && m_MouseOverElement->IsVisible() &&
+    // Keep the previous interactive owner only when the newly hit element is
+    // a display-only overlay.  Do not let a large, previously hovered
+    // element mask a newer frontmost control (such as a dropdown option).
+    // The old unconditional check made option hover/cursor callbacks
+    // unreachable whenever their popup overlapped an existing control.
+    if (!actionElement && !mouseActionElement && m_MouseOverElement &&
+        m_MouseOverElement->IsVisible() &&
         m_MouseOverElement->HasMouseAction() &&
         m_MouseOverElement->HitTest(x, y)) {
       hoverElement = m_MouseOverElement;
