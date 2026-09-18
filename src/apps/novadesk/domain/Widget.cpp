@@ -4225,27 +4225,34 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             (int)((eventData.offsetY / (double)elementH) * 100.0);
       }
 
-      // Execute function callback with mouse position aliases.
-      JSEngine::CallEventCallback(actionId, this, &eventData);
-      handled = true;
-
       // A draggable control can also have an onLeftMouseDown callback (for
       // example, a slider updates its value immediately on press).  Start its
-      // element drag here, before `handled` suppresses the later generic drag
-      // setup.  Otherwise WndProc sees no element drag and starts moving the
-      // whole widget instead.
-      if (message == WM_LBUTTONDOWN && IsTrackedElement(actionElement) &&
-          actionElement->HasDragAction()) {
+      // drag state before the callback so WndProc will not start moving the
+      // whole widget. The callback itself may close this widget, so never
+      // inspect instance state until Widget::IsValid() confirms it survived.
+      const bool startsElementDrag =
+          message == WM_LBUTTONDOWN && actionElement->HasDragAction();
+      if (startsElementDrag) {
         m_DragElement = actionElement;
         m_IsElementDragging = true;
         SetCapture(m_hWnd);
+      }
 
-        if (m_DragElement->m_OnDragStartCallbackId != -1) {
-          JSEngine::MouseEventData dragEventData =
-              buildElementEventData(m_DragElement);
-          JSEngine::CallEventCallback(
-              m_DragElement->m_OnDragStartCallbackId, this, &dragEventData);
-        }
+      // Execute function callback with mouse position aliases.
+      JSEngine::CallEventCallback(actionId, this, &eventData);
+      if (!Widget::IsValid(this))
+        return true;
+      handled = true;
+
+      if (startsElementDrag && m_DragElement == actionElement &&
+          IsTrackedElement(actionElement) &&
+          m_DragElement->m_OnDragStartCallbackId != -1) {
+        JSEngine::MouseEventData dragEventData =
+            buildElementEventData(m_DragElement);
+        JSEngine::CallEventCallback(m_DragElement->m_OnDragStartCallbackId,
+                                    this, &dragEventData);
+        if (!Widget::IsValid(this))
+          return true;
       }
     }
   }

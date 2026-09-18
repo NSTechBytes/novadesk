@@ -60,13 +60,12 @@ bool DestroyWidgetInstance(Widget *widget, bool skipCloseEvent) {
       return true;
   }
 
-  {
-    std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
-    auto it = std::find(widgets.begin(), widgets.end(), widget);
-    if (it == widgets.end())
-      return false;
-    widgets.erase(it);
-  }
+  // Remove the widget from every global registry before deleting it.  In
+  // particular, IsValid() is used after re-entrant script callbacks; leaving
+  // its pointer in s_WidgetSet makes a freed Widget appear live.
+  if (!Widget::IsValid(widget))
+    return false;
+  Widget::RemoveWidget(widget);
   // Lock released before delete: the destructor calls DestroyWindow
   // which dispatches WM_DESTROY synchronously; holding the lock there
   // would deadlock.
