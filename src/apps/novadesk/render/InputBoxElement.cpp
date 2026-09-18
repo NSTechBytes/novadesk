@@ -177,6 +177,30 @@ InputBoxElement::CreateTextLayout(ID2D1DeviceContext *context,
   if (FAILED(hr))
     return nullptr;
 
+  // DirectWrite positions an overflowing trailing-aligned line partly to the
+  // left of its layout rectangle. That works for static text, but an editable
+  // input then cannot scroll its first character or caret back into view.
+  // Keep right/center alignment while the value fits; once it overflows, use
+  // a leading layout and let m_ScrollOffset reveal either end of the value.
+  // This keeps the caret reachable with Left/Right and mouse placement.
+  if (!m_Multiline &&
+      (align == TEXT_ALIGN_RIGHT_TOP || align == TEXT_ALIGN_RIGHT_CENTER ||
+       align == TEXT_ALIGN_RIGHT_BOTTOM || align == TEXT_ALIGN_CENTER_TOP ||
+       align == TEXT_ALIGN_CENTER_CENTER ||
+       align == TEXT_ALIGN_CENTER_BOTTOM)) {
+    DWRITE_TEXT_METRICS metrics{};
+    pLayout->GetMetrics(&metrics);
+    if (metrics.widthIncludingTrailingWhitespace > layoutW) {
+      pFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+      pLayout.Reset();
+      hr = Direct2D::GetWriteFactory()->CreateTextLayout(
+          text.c_str(), (UINT32)text.length(), pFormat.Get(), layoutW,
+          layoutH, pLayout.GetAddressOf());
+      if (FAILED(hr))
+        return nullptr;
+    }
+  }
+
   return pLayout;
 }
 
@@ -958,6 +982,14 @@ void InputBoxElement::Render(ID2D1DeviceContext *context) {
       }
     }
     float caretW = 1.5f;
+
+    // A trailing-aligned value that exactly fills its layout places the end
+    // caret on content.right. Keep the complete caret stroke inside the clip
+    // instead of letting it disappear at the edge.
+    if (!m_Multiline) {
+      const float maxCaretX = std::max(content.left, content.right - caretW);
+      caretX = std::clamp(caretX, content.left, maxCaretX);
+    }
 
     D2D1_RECT_F caretRect =
         D2D1::RectF(caretX, caretY, caretX + caretW, caretY + caretH);
