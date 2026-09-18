@@ -2337,7 +2337,8 @@ void Widget::OpenColorPickerEyedropper(ColorPickerElement *colorPicker) {
   }
 }
 
-void Widget::FocusInputBox(InputBoxElement *inputElem) {
+void Widget::FocusInputBox(InputBoxElement *inputElem, bool moveCaretToEnd,
+                           bool redraw) {
   if (!inputElem)
     return;
 
@@ -2364,7 +2365,7 @@ void Widget::FocusInputBox(InputBoxElement *inputElem) {
     return;
 
   if (!inputElem->IsFocused()) {
-    inputElem->SetFocus(true);
+    inputElem->SetFocus(true, moveCaretToEnd);
     // Publish the focus before calling script so a re-entrant callback sees a
     // consistent state and may safely replace or clear it.
     m_FocusedInputBox = inputElem;
@@ -2376,7 +2377,8 @@ void Widget::FocusInputBox(InputBoxElement *inputElem) {
   } else {
     m_FocusedInputBox = inputElem;
   }
-  Redraw();
+  if (redraw)
+    Redraw();
 }
 
 void Widget::BlurInputBox(InputBoxElement *inputElem) {
@@ -4505,7 +4507,10 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       // Input box focus + caret placement on click.
       InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(hitElement);
       if (inputElem) {
-        FocusInputBox(inputElem);
+        // Mouse focus supplies the exact caret position below. Do not first
+        // place a prefilled right-aligned input at its end, because that
+        // produces a visible right-to-left caret jump before HandleMouseDown.
+        FocusInputBox(inputElem, false, false);
 
         // Focus/blur handlers can synchronously remove the clicked element or
         // focus a different input.  Only use the pointer if it remains owned

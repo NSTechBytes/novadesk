@@ -109,7 +109,7 @@ void InputBoxElement::UpdateBlink() {
   }
 }
 
-void InputBoxElement::SetFocus(bool focused) {
+void InputBoxElement::SetFocus(bool focused, bool moveCaretToEnd) {
   if (m_Focused == focused)
     return;
   m_Focused = focused;
@@ -122,7 +122,7 @@ void InputBoxElement::SetFocus(bool focused) {
     // matching normal text-field focus behavior.  A direct mouse click calls
     // HandleMouseDown immediately afterward and replaces this with the exact
     // clicked position.
-    if (m_CaretPos == 0 && !m_Text.empty()) {
+    if (moveCaretToEnd && m_CaretPos == 0 && !m_Text.empty()) {
       m_CaretPos = static_cast<UINT32>(m_Text.size());
       m_SelectionStart = m_SelectionEnd = m_CaretPos;
       m_SelectionAnchor = m_CaretPos;

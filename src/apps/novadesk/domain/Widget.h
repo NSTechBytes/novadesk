@@ -481,7 +481,8 @@ public:
     m_FocusedInputBox = inputElem;
   }
   /// @brief Gives keyboard focus to the specified input box.
-  void FocusInputBox(InputBoxElement *inputElem);
+  void FocusInputBox(InputBoxElement *inputElem, bool moveCaretToEnd = true,
+                     bool redraw = true);
   /// @brief Removes keyboard focus from the specified (or current) input box.
   void BlurInputBox(InputBoxElement *inputElem = nullptr);
 
