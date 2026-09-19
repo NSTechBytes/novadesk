@@ -116,6 +116,38 @@ struct NdpkgFooter {
 static_assert(sizeof(InstallerFooter) == 24, "InstallerFooter size mismatch");
 static_assert(sizeof(NdpkgFooter) == 16, "NdpkgFooter size mismatch");
 
+enum class LogColor { Info, Warning, Error, Success };
+
+std::ostream &LogLine(LogColor color, bool errorStream = false) {
+  HANDLE console = GetStdHandle(errorStream ? STD_ERROR_HANDLE
+                                             : STD_OUTPUT_HANDLE);
+  DWORD consoleMode = 0;
+  if (console != INVALID_HANDLE_VALUE && GetConsoleMode(console, &consoleMode)) {
+    WORD attributes = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+    switch (color) {
+    case LogColor::Info:
+      attributes = FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY;
+      break;
+    case LogColor::Warning:
+      attributes = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+      break;
+    case LogColor::Error:
+      attributes = FOREGROUND_RED | FOREGROUND_INTENSITY;
+      break;
+    case LogColor::Success:
+      attributes = FOREGROUND_GREEN | FOREGROUND_INTENSITY;
+      break;
+    }
+    SetConsoleTextAttribute(console, attributes);
+  }
+  return errorStream ? std::cerr : std::cout;
+}
+
+std::ostream &LogInfo() { return LogLine(LogColor::Info); }
+std::ostream &LogWarning() { return LogLine(LogColor::Warning, true); }
+std::ostream &LogError() { return LogLine(LogColor::Error, true); }
+std::ostream &LogSuccess() { return LogLine(LogColor::Success); }
+
 // Helper to get executable directory
 fs::path GetExeDir() {
   wchar_t path[MAX_PATH];
@@ -142,8 +174,8 @@ bool ExecuteCommand(const std::string &command) {
 bool LoadWidgetMeta(const fs::path &widgetPath, WidgetMeta &outMeta) {
   fs::path metaPath = widgetPath / "meta.json";
   if (!fs::exists(metaPath)) {
-    std::cerr << "Error: meta.json not found in current directory."
-              << std::endl;
+    LogError() << "Error: meta.json not found in current directory."
+               << std::endl;
     return false;
   }
 
@@ -153,7 +185,7 @@ bool LoadWidgetMeta(const fs::path &widgetPath, WidgetMeta &outMeta) {
 
   outMeta.json = nlohmann::json::parse(metaBuffer.str(), nullptr, false);
   if (outMeta.json.is_discarded()) {
-    std::cerr << "Error: meta.json is not valid JSON." << std::endl;
+    LogError() << "Error: meta.json is not valid JSON." << std::endl;
     return false;
   }
 
@@ -1313,18 +1345,18 @@ bool BuildWidget() {
   std::string minimumNovadeskVersion;
   if (meta.contains("minimumNovadeskVersion")) {
     if (!meta["minimumNovadeskVersion"].is_string()) {
-      std::cerr << "Error: 'minimumNovadeskVersion' must be a string in "
-                   "meta.json"
-                << std::endl;
+      LogError() << "Error: 'minimumNovadeskVersion' must be a string in "
+                     "meta.json"
+                  << std::endl;
       return false;
     }
     minimumNovadeskVersion = meta["minimumNovadeskVersion"].get<std::string>();
     uint64_t parsedVersion = 0;
     if (!ParseVersionQuad(minimumNovadeskVersion, parsedVersion)) {
-      std::cerr << "Error: 'minimumNovadeskVersion' must use "
-                   "major.minor.patch.build, with numeric parts from 0 to "
-                   "65535."
-                << std::endl;
+      LogError() << "Error: 'minimumNovadeskVersion' must use "
+                     "major.minor.patch.build, with numeric parts from 0 to "
+                     "65535."
+                  << std::endl;
       return false;
     }
   }
@@ -1342,13 +1374,13 @@ bool BuildWidget() {
   std::vector<std::string> requestedAddons;
   if (meta.contains("addons")) {
     if (!meta["addons"].is_array()) {
-      std::cerr << "Error: 'addons' must be an array in meta.json" << std::endl;
+      LogError() << "Error: 'addons' must be an array in meta.json" << std::endl;
       return false;
     }
     for (const auto &addon : meta["addons"]) {
       if (!addon.is_string()) {
-        std::cerr << "Error: all entries in 'addons' must be strings"
-                  << std::endl;
+        LogError() << "Error: all entries in 'addons' must be strings"
+                   << std::endl;
         return false;
       }
       const std::string addonValue = addon.get<std::string>();
@@ -1384,43 +1416,43 @@ bool BuildWidget() {
 
   bool missing = false;
   if (widgetRealName.empty()) {
-    std::cerr << "Error: 'name' is missing in meta.json" << std::endl;
+    LogError() << "Error: 'name' is missing in meta.json" << std::endl;
     missing = true;
   }
   if (version.empty()) {
-    std::cerr << "Error: 'version' is missing in meta.json" << std::endl;
+    LogError() << "Error: 'version' is missing in meta.json" << std::endl;
     missing = true;
   }
   if (icon.empty()) {
-    std::cerr << "Error: 'icon' is missing in meta.json" << std::endl;
+    LogError() << "Error: 'icon' is missing in meta.json" << std::endl;
     missing = true;
   }
   if (author.empty()) {
-    std::cerr << "Error: 'author' is missing in meta.json" << std::endl;
+    LogError() << "Error: 'author' is missing in meta.json" << std::endl;
     missing = true;
   }
   if (description.empty()) {
-    std::cerr << "Error: 'description' is missing in meta.json" << std::endl;
+    LogError() << "Error: 'description' is missing in meta.json" << std::endl;
     missing = true;
   }
   if (setupOptions.installDir.empty()) {
-    std::cerr << "Error: 'setup.installDir' is missing in meta.json"
-              << std::endl;
+    LogError() << "Error: 'setup.installDir' is missing in meta.json"
+               << std::endl;
     missing = true;
   }
   if (setupOptions.startMenuFolder.empty()) {
-    std::cerr << "Error: 'setup.startMenuFolder' is missing in meta.json"
-              << std::endl;
+    LogError() << "Error: 'setup.startMenuFolder' is missing in meta.json"
+               << std::endl;
     missing = true;
   }
   if (setupOptions.setupName.empty()) {
-    std::cerr << "Error: 'setup.setupName' is missing in meta.json"
-              << std::endl;
+    LogError() << "Error: 'setup.setupName' is missing in meta.json"
+               << std::endl;
     missing = true;
   }
   if (setupOptions.setupIcon.empty()) {
-    std::cerr << "Error: 'setup.setupIcon' is missing in meta.json"
-              << std::endl;
+    LogError() << "Error: 'setup.setupIcon' is missing in meta.json"
+               << std::endl;
     missing = true;
   }
 
@@ -1428,6 +1460,8 @@ bool BuildWidget() {
     return false;
 
   try {
+    LogInfo() << "Building " << widgetRealName << " " << version << "..."
+              << std::endl;
     fs::path distDir = widgetPath / "dist";
     if (fs::exists(distDir))
       fs::remove_all(distDir);
@@ -1474,8 +1508,9 @@ bool BuildWidget() {
 
     const fs::path addonsSourceDir = ResolveAddonsSourcePath(srcExe);
     if (requestedAddons.empty() && ndpkgAddons.empty()) {
-      std::cout << "No addons requested in meta.json; skipping addon copy."
-                << std::endl;
+      LogWarning() << "Warning: No addons requested in meta.json; skipping "
+                      "addon copy."
+                   << std::endl;
     }
     if (!CopyAddonsToStaging(addonsSourceDir, stagingDir, requestedAddons)) {
       return false;
@@ -1498,8 +1533,8 @@ bool BuildWidget() {
     if (!previewPath.empty()) {
       fs::path previewSource = widgetPath / previewPath;
       if (!fs::exists(previewSource) || !fs::is_regular_file(previewSource)) {
-        std::cerr << "Error: Preview image file not found: " << previewSource
-                  << std::endl;
+        LogError() << "Error: Preview image file not found: " << previewSource
+                   << std::endl;
         return false;
       }
       fs::path previewTargetName = "preview";
@@ -1508,7 +1543,7 @@ bool BuildWidget() {
                     fs::copy_options::overwrite_existing);
     }
 
-    std::cout << "Applying metadata via internal rescle..." << std::endl;
+    LogInfo() << "Applying metadata via internal rescle..." << std::endl;
     rescle::ResourceUpdater updater;
     if (updater.Load(destExe.c_str())) {
       updater.SetVersionString(RU_VS_PRODUCT_NAME,
@@ -1534,13 +1569,13 @@ bool BuildWidget() {
       }
 
       if (!updater.Commit()) {
-        std::cerr << "Error: Failed to commit metadata updates via rescle."
-                  << std::endl;
+        LogError() << "Error: Failed to commit metadata updates via rescle."
+                   << std::endl;
         return false;
       }
     } else {
-      std::cerr << "Error: Failed to load executable for metadata update."
-                << std::endl;
+      LogError() << "Error: Failed to load executable for metadata update."
+                 << std::endl;
       return false;
     }
 
@@ -1550,7 +1585,7 @@ bool BuildWidget() {
       if (fs::exists(fallbackStub)) {
         stubExe = fallbackStub;
       } else {
-        std::cerr
+        LogWarning()
             << "Warning: installer_stub.exe not found. Falling back to nwm.exe."
             << std::endl;
         stubExe = exeDir / "nwm.exe";
@@ -1559,7 +1594,7 @@ bool BuildWidget() {
 
     if (!BuildInstallerSfx(stagingDir, widgetPath, stubExe, widgetRealName,
                            version, author, description, setupOptions)) {
-      std::cerr << "Error: Failed to build installer." << std::endl;
+      LogError() << "Error: Failed to build installer." << std::endl;
       return false;
     }
 
@@ -1570,8 +1605,8 @@ bool BuildWidget() {
     }
     fs::path setupExePath = stagingDir / setupExeName;
     if (!fs::exists(setupExePath)) {
-      std::cerr << "Error: Expected setup file not found: " << setupExePath
-                << std::endl;
+      LogError() << "Error: Expected setup file not found: " << setupExePath
+                 << std::endl;
       return false;
     }
 
@@ -1583,7 +1618,7 @@ bool BuildWidget() {
       fs::remove(zipOut);
     }
     if (!CreateZipFromDirectory(stagingDir, zipOut, {setupExeName})) {
-      std::cerr << "Error: Failed to create zip package." << std::endl;
+      LogError() << "Error: Failed to create zip package." << std::endl;
       return false;
     }
 
@@ -1608,7 +1643,7 @@ bool BuildWidget() {
       std::ofstream ndpkgMetaOut(ndpkgStageDir / "ndpkg.json",
                                  std::ios::binary | std::ios::trunc);
       if (!ndpkgMetaOut) {
-        std::cerr << "Error: Failed to write ndpkg.json" << std::endl;
+        LogError() << "Error: Failed to write ndpkg.json" << std::endl;
         return false;
       }
       ndpkgMetaOut << ndpkgMeta.dump(2);
@@ -1623,20 +1658,21 @@ bool BuildWidget() {
     }
     if (!CreateZipFromDirectory(ndpkgStageDir, ndpkgOut, {},
                                 {"Widgets/", "Addons/"})) {
-      std::cerr << "Error: Failed to create ndpkg payload." << std::endl;
+      LogError() << "Error: Failed to create ndpkg payload." << std::endl;
       return false;
     }
     if (!AppendNdpkgFooter(ndpkgOut)) {
-      std::cerr << "Error: Failed to append ndpkg footer." << std::endl;
+      LogError() << "Error: Failed to append ndpkg footer." << std::endl;
       return false;
     }
 
-    std::cout << "Successfully built widget package: " << zipOut << std::endl;
-    std::cout << "Setup file created: " << setupOut << std::endl;
-    std::cout << "NDPKG created: " << ndpkgOut << std::endl;
+    LogSuccess() << "Successfully built widget package: " << zipOut
+                 << std::endl;
+    LogSuccess() << "Setup file created: " << setupOut << std::endl;
+    LogSuccess() << "NDPKG created: " << ndpkgOut << std::endl;
     return true;
   } catch (const std::exception &e) {
-    std::cerr << "Build Error: " << e.what() << std::endl;
+    LogError() << "Build Error: " << e.what() << std::endl;
     return false;
   }
 }
