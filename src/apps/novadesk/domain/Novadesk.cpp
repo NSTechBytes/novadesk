@@ -524,7 +524,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     return 0;
   }
 
-  Logging::Log(LogLevel::Info, L"Application starting...");
+  Logging::Log(LogLevel::Debug, L"Application starting...");
 
   // Initialize Common Controls
   INITCOMMONCONTROLSEX icce;
@@ -918,7 +918,7 @@ void InitTrayIcon(int trayId) {
   }
 
   Shell_NotifyIconW(NIM_ADD, &state->nid);
-  Logging::Log(LogLevel::Info, L"Tray icon initialized (id=%d)", trayId);
+  Logging::Log(LogLevel::Debug, L"Tray icon initialized (id=%d)", trayId);
 }
 
 void RemoveTrayIcon(int trayId) {
@@ -933,7 +933,7 @@ void RemoveTrayIcon(int trayId) {
     DestroyIcon(state->icon);
   }
   g_trayStates.erase(trayId);
-  Logging::Log(LogLevel::Info, L"Tray icon removed (id=%d)", trayId);
+  Logging::Log(LogLevel::Debug, L"Tray icon removed (id=%d)", trayId);
 }
 
 void RemoveAllTrayIcons() {
