@@ -282,6 +282,10 @@ public:
 
   /// @brief Makes the widget visible and brings it to its configured z-order.
   void Show();
+  /// @brief Defers widget visibility changes until EndWindowBatch().
+  static void BeginWindowBatch();
+  /// @brief Reveals all widgets queued by Show() during the active batch.
+  static void EndWindowBatch();
   /// @brief Hides the widget window.
   void Hide();
   /// @brief Reloads the widget script and recreates all elements.

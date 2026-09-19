@@ -22,6 +22,7 @@
 #include "wintoastlib.h"
 #include "../../../Version.h"
 #include "../../domain/Novadesk.h"
+#include "../../domain/Widget.h"
 #include "../../shared/Logging.h"
 #include "../../shared/PathUtils.h"
 #include "../../shared/Settings.h"
@@ -1052,6 +1053,20 @@ JSValue JsAppRefresh(JSContext *ctx, JSValueConst, int, JSValueConst *) {
 JSValue JsAppExit(JSContext *ctx, JSValueConst, int, JSValueConst *) {
   (void)ctx;
   PostQuitMessage(0);
+  return JS_UNDEFINED;
+}
+
+JSValue JsAppBeginWindowBatch(JSContext *ctx, JSValueConst, int,
+                              JSValueConst *) {
+  (void)ctx;
+  Widget::BeginWindowBatch();
+  return JS_UNDEFINED;
+}
+
+JSValue JsAppEndWindowBatch(JSContext *ctx, JSValueConst, int,
+                            JSValueConst *) {
+  (void)ctx;
+  Widget::EndWindowBatch();
   return JS_UNDEFINED;
 }
 
@@ -2292,6 +2307,12 @@ int InitAppExport(JSContext *ctx, JSModuleDef *m) {
                     JS_NewCFunction(ctx, JsAppRefresh, "refresh", 0));
   JS_SetPropertyStr(ctx, app, "exit",
                     JS_NewCFunction(ctx, JsAppExit, "exit", 0));
+  JS_SetPropertyStr(ctx, app, "beginWindowBatch",
+                    JS_NewCFunction(ctx, JsAppBeginWindowBatch,
+                                    "beginWindowBatch", 0));
+  JS_SetPropertyStr(ctx, app, "endWindowBatch",
+                    JS_NewCFunction(ctx, JsAppEndWindowBatch,
+                                    "endWindowBatch", 0));
   JS_SetPropertyStr(ctx, app, "requestSingleInstanceLock",
                     JS_NewCFunction(ctx, JsAppRequestSingleInstanceLock,
                                     "requestSingleInstanceLock", 0));

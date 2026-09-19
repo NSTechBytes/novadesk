@@ -66,6 +66,12 @@ std::unordered_map<HWND, Widget *> Widget::s_HwndMap;
 std::atomic<bool> Widget::s_IsMenuActive{false};
 std::atomic<int> Widget::s_ActiveColorPickerCount{0};
 
+namespace {
+std::mutex g_windowBatchMutex;
+int g_windowBatchDepth = 0;
+std::vector<Widget *> g_pendingWindowShows;
+} // namespace
+
 // Check if a widget pointer is valid (exists in the global widgets list).
 bool Widget::IsValid(Widget *pWidget) {
   if (!pWidget)
@@ -126,6 +132,16 @@ Widget::Widget(const WidgetOptions &options)
 
 // Destructor. Cleans up window resources and removes from system tracking.
 Widget::~Widget() {
+  // A widget may be closed while startup presentation is still batched.
+  // Remove it before the batch commits so no stale pointer is dereferenced.
+  {
+    std::lock_guard<std::mutex> lock(g_windowBatchMutex);
+    g_pendingWindowShows.erase(
+        std::remove(g_pendingWindowShows.begin(), g_pendingWindowShows.end(),
+                    this),
+        g_pendingWindowShows.end());
+  }
+
   // Fire "closed" while the window and event listeners are still intact.
   // This must happen before GWLP_USERDATA is cleared, before listeners are
   // removed, and before DestroyWindow — all of which would make any callback
@@ -324,10 +340,68 @@ bool Widget::Create() {
 // Show the widget window.
 // Makes the window visible and applies the configured z-order position.
 void Widget::Show() {
-  if (m_hWnd) {
-    ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
-    UpdateWindow(m_hWnd);
-    JSEngine::TriggerWidgetEvent(this, "show");
+  if (!m_hWnd)
+    return;
+
+  {
+    std::lock_guard<std::mutex> lock(g_windowBatchMutex);
+    if (g_windowBatchDepth > 0) {
+      if (std::find(g_pendingWindowShows.begin(), g_pendingWindowShows.end(),
+                    this) == g_pendingWindowShows.end()) {
+        g_pendingWindowShows.push_back(this);
+      }
+      return;
+    }
+  }
+
+  ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
+  UpdateWindow(m_hWnd);
+  JSEngine::TriggerWidgetEvent(this, "show");
+}
+
+void Widget::BeginWindowBatch() {
+  std::lock_guard<std::mutex> lock(g_windowBatchMutex);
+  ++g_windowBatchDepth;
+}
+
+void Widget::EndWindowBatch() {
+  std::vector<Widget *> pending;
+  {
+    std::lock_guard<std::mutex> lock(g_windowBatchMutex);
+    if (g_windowBatchDepth <= 0)
+      return;
+    if (--g_windowBatchDepth > 0)
+      return;
+    pending.swap(g_pendingWindowShows);
+  }
+
+  std::vector<Widget *> valid;
+  valid.reserve(pending.size());
+  for (Widget *widget : pending) {
+    if (widget && IsWindow(widget->m_hWnd))
+      valid.push_back(widget);
+  }
+  if (valid.empty())
+    return;
+
+  HDWP defer = BeginDeferWindowPos(static_cast<int>(valid.size()));
+  if (defer) {
+    for (Widget *widget : valid) {
+      defer = DeferWindowPos(defer, widget->m_hWnd, nullptr, 0, 0, 0, 0,
+                             SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+      if (!defer)
+        break;
+    }
+    if (defer)
+      EndDeferWindowPos(defer);
+  }
+
+  for (Widget *widget : valid) {
+    if (!IsWindowVisible(widget->m_hWnd))
+      ShowWindow(widget->m_hWnd, SW_SHOWNOACTIVATE);
+    UpdateWindow(widget->m_hWnd);
+    JSEngine::TriggerWidgetEvent(widget, "show");
   }
 }
 
