@@ -1111,11 +1111,13 @@ bool AppendNdpkgFooter(const fs::path &ndpkgPath) {
 void CopyWidgetFilesForPackaging(const fs::path &widgetPath,
                                  const fs::path &targetDir,
                                  const std::string &widgetRealName,
-                                 const std::vector<std::string> &excludeItems) {
+                                 const std::vector<std::string> &excludeItems,
+                                 const std::string &previewPath) {
   fs::create_directories(targetDir);
 
   std::vector<std::string> effectiveExclude = excludeItems;
   effectiveExclude.push_back("dist");
+  const fs::path previewRelative = fs::path(previewPath).lexically_normal();
 
   fs::recursive_directory_iterator it(
       widgetPath, fs::directory_options::skip_permission_denied);
@@ -1139,6 +1141,11 @@ void CopyWidgetFilesForPackaging(const fs::path &widgetPath,
     }
 
     if (!entry.is_regular_file())
+      continue;
+    // The preview is copied to the package root for the ndpkg installer UI.
+    // Do not also install it as a widget asset.
+    if (!previewPath.empty() &&
+        relPath.lexically_normal() == previewRelative)
       continue;
     if (!relPath.has_parent_path() &&
         relPath.filename().string() == (widgetRealName + ".exe"))
@@ -1524,11 +1531,11 @@ bool BuildWidget() {
 
     fs::path widgetsSubDir = stagingDir / "Widgets";
     CopyWidgetFilesForPackaging(widgetPath, widgetsSubDir, widgetRealName,
-                                excludeItems);
+                                excludeItems, previewPath);
 
     fs::path ndpkgWidgetsDir = ndpkgStageDir / "Widgets" / widgetRealName;
     CopyWidgetFilesForPackaging(widgetPath, ndpkgWidgetsDir, widgetRealName,
-                                excludeItems);
+                                excludeItems, previewPath);
 
     if (!previewPath.empty()) {
       fs::path previewSource = widgetPath / previewPath;
