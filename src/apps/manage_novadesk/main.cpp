@@ -287,34 +287,6 @@ static std::wstring EnsureSingleInstanceArg(const std::wstring &args) {
   return args + L" " + kSingleInstanceLockArg;
 }
 
-static bool LaunchRestartNovadesk() {
-  const std::wstring restartExe =
-      JoinPath(GetExeDir(), L"restart_novadesk.exe");
-  DWORD attrs = GetFileAttributesW(restartExe.c_str());
-  if (attrs == INVALID_FILE_ATTRIBUTES ||
-      (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0) {
-    ShowManageMessageBox(L"restart_novadesk.exe not found in the app folder.",
-                         L"Manage Novadesk", MB_OK | MB_ICONWARNING);
-    return false;
-  }
-
-  std::wstring cmdLine = L"\"" + restartExe + L"\"";
-  STARTUPINFOW si{};
-  si.cb = sizeof(si);
-  PROCESS_INFORMATION pi{};
-
-  if (!CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, FALSE, 0,
-                      nullptr, GetExeDir().c_str(), &si, &pi)) {
-    ShowManageMessageBox(L"Failed to launch restart_novadesk.exe.",
-                         L"Manage Novadesk", MB_OK | MB_ICONWARNING);
-    return false;
-  }
-
-  CloseHandle(pi.hProcess);
-  CloseHandle(pi.hThread);
-  return true;
-}
-
 static void PromptRestartForHardwareAcceleration() {
   const int kRestartNowButtonId = 1001;
   const TASKDIALOG_BUTTON buttons[] = {
@@ -339,7 +311,7 @@ static void PromptRestartForHardwareAcceleration() {
   HRESULT hr = TaskDialogIndirect(&config, &selectedButton, nullptr, nullptr);
   if (SUCCEEDED(hr)) {
     if (selectedButton == kRestartNowButtonId) {
-      LaunchRestartNovadesk();
+      ExecuteNovadeskCommandNoPath(L"--restart");
     }
     return;
   }
@@ -348,7 +320,7 @@ static void PromptRestartForHardwareAcceleration() {
       L"Novadesk needs restart for this change.\n\nRestart now?",
       L"Manage Novadesk", MB_YESNO | MB_ICONINFORMATION);
   if (fallback == IDYES) {
-    LaunchRestartNovadesk();
+    ExecuteNovadeskCommandNoPath(L"--restart");
   }
 }
 

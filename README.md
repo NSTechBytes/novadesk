@@ -40,7 +40,6 @@ flowchart TB
     Novadesk["novadesk/<br/>Runtime EXE"]
     Nwm["nwm/<br/>CLI: init, run, build"]
     Manage["manage_novadesk/<br/>Widget manager GUI"]
-    Restart["restart_novadesk/<br/>Restart helper"]
     Ndpkg["ndpkg_installer/<br/>.ndpkg installer"]
     Stub["installer_stub/<br/>Setup bootstrap"]
     Assets["assets/images"]

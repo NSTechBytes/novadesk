@@ -14,7 +14,6 @@ flowchart TB
     subgraph manager ["Widget lifecycle and packaging"]
       Nwm["nwm/<br/>nwm.exe CLI"]
       Manage["manage_novadesk/<br/>manage_novadesk.exe"]
-      Restart["restart_novadesk/<br/>restart_novadesk.exe"]
     end
 
     subgraph install ["Installers"]
@@ -38,7 +37,6 @@ flowchart TB
   Manage -->|"loads widgets"| NovadeskExe
   Manage -->|"install .ndpkg"| Ndpkg
   Ndpkg -->|"extract to Widgets/"| NovadeskExe
-  Restart -->|"restarts"| Manage
 
   Stub -->|"self-extract install"| Installed["%ProgramFiles%/Novadesk"]
   Installed --> NovadeskExe
@@ -50,7 +48,6 @@ flowchart TB
 | [`novadesk/`](novadesk/) | Core widget runtime: layered windows, Direct2D UI, QuickJS scripting |
 | [`nwm/`](nwm/) | CLI: `init`, `run`, `build`, `--install`; builds `.ndpkg` / setup using `installer_stub` |
 | [`manage_novadesk/`](manage_novadesk/) | GUI manager: list/load widgets, tray integration |
-| [`restart_novadesk/`](restart_novadesk/) | Helper to restart the manager process |
 | [`ndpkg_installer/`](ndpkg_installer/) | GUI installer for `.ndpkg` widget packages |
 | [`installer_stub/`](installer_stub/) | Small bootstrap EXE; payload appended by `nwm build` |
 | [`assets/`](assets/) | Images used by manager/installer UIs |
@@ -238,6 +235,5 @@ flowchart LR
 ### Other apps
 - **nwm:** `src/main.cpp`, `src/rescle.cc`
 - **manage_novadesk:** `main.cpp`
-- **restart_novadesk:** `main.cpp`
 - **ndpkg_installer:** `main.cpp`
 - **installer_stub:** `src/installer_stub.cpp`

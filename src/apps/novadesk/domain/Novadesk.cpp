@@ -347,6 +347,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
       std::wstring refreshPath;
       std::wstring unloadPath;
       bool refreshAll = false;
+      bool restart = false;
       bool listScripts = false;
       std::wstring listScriptsFile;
       std::optional<bool> setHardwareAcceleration;
@@ -380,6 +381,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
         if (arg == L"--refresh-all") {
           refreshAll = true;
+          continue;
+        }
+        if (arg == L"--restart") {
+          restart = true;
           continue;
         }
         if (arg == L"--unload" && i + 1 < argc) {
@@ -469,6 +474,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         if (refreshAll) {
           handledCommand =
               SendIpcCommand(hExisting, L"refresh-all", L"") || handledCommand;
+        }
+        if (restart) {
+          handledCommand = SendIpcCommand(hExisting, L"restart", L"") ||
+                           handledCommand;
         }
         if (!unloadPath.empty()) {
           handledCommand = SendIpcCommand(hExisting, L"unload", unloadPath) ||
@@ -613,6 +622,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         JSEngine::RefreshScript(path);
       } else if (command == L"refresh-all") {
         JSEngine::Reload();
+      } else if (command == L"restart") {
+        // Relaunch only after this process exits, otherwise single-instance
+        // routing would deliver the new invocation back to this process.
+        Settings::Flush();
+        const wchar_t *rawCmd = GetCommandLineW();
+        const std::wstring restartCmd =
+            L"/c ping 127.0.0.1 -n 2 > nul & " +
+            std::wstring(rawCmd ? rawCmd : L"");
+        ShellExecuteW(nullptr, L"open", L"cmd.exe", restartCmd.c_str(),
+                      nullptr, SW_HIDE);
+        PostQuitMessage(0);
       } else if (command == L"unload") {
         JSEngine::RemoveScript(path);
       } else if (command == L"load") {
