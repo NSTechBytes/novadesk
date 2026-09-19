@@ -62,7 +62,8 @@ enum ControlId : int {
   IDC_PREVIEW = 1008,
   IDC_INSTALL = 1009,
   IDC_CANCEL = 1010,
-  IDC_PROGRESS = 1011
+  IDC_PROGRESS = 1011,
+  IDC_WIDGET_STATUS = 1012
 };
 
 #pragma pack(push, 1)
@@ -82,6 +83,14 @@ struct PackageInfo {
   fs::path previewImagePath;
 };
 
+enum class WidgetInstallStatus {
+  NewInstall,
+  UpdateAvailable,
+  SameVersion,
+  NewerVersionInstalled,
+  ExistingInstallation
+};
+
 enum class AddonInstallStatus { Add, Replace, NewerVersionFound };
 
 struct AddonRow {
@@ -97,6 +106,7 @@ struct AppState {
   HWND hName = nullptr;
   HWND hVersion = nullptr;
   HWND hAuthor = nullptr;
+  HWND hWidgetStatus = nullptr;
   HWND hAddons = nullptr;
   HWND hPreview = nullptr;
   HWND hInstall = nullptr;
@@ -113,6 +123,8 @@ struct AppState {
   fs::path workingDir;
   fs::path extractDir;
   PackageInfo info;
+  WidgetInstallStatus widgetInstallStatus = WidgetInstallStatus::NewInstall;
+  std::string installedWidgetVersion;
   std::vector<AddonRow> addonRows;
 };
 
@@ -223,6 +235,72 @@ fs::path FindNovadeskExecutable() {
     return parent;
 
   return {};
+}
+
+WidgetInstallStatus GetWidgetInstallStatus(const fs::path &widgetsTarget,
+                                           const PackageInfo &package,
+                                           std::string &installedVersion) {
+  installedVersion.clear();
+  const fs::path metaPath = widgetsTarget / package.name / "meta.json";
+  if (!fs::exists(metaPath))
+    return WidgetInstallStatus::NewInstall;
+
+  try {
+    std::ifstream in(metaPath, std::ios::binary);
+    json installedMeta;
+    in >> installedMeta;
+    if (!installedMeta.contains("version") ||
+        !installedMeta["version"].is_string()) {
+      return WidgetInstallStatus::ExistingInstallation;
+    }
+    installedVersion = installedMeta["version"].get<std::string>();
+
+    uint64_t installedQuad = 0;
+    uint64_t packageQuad = 0;
+    if (!ParseVersionQuad(installedVersion, installedQuad) ||
+        !ParseVersionQuad(package.version, packageQuad)) {
+      return WidgetInstallStatus::ExistingInstallation;
+    }
+    if (packageQuad > installedQuad)
+      return WidgetInstallStatus::UpdateAvailable;
+    if (packageQuad == installedQuad)
+      return WidgetInstallStatus::SameVersion;
+    return WidgetInstallStatus::NewerVersionInstalled;
+  } catch (...) {
+    return WidgetInstallStatus::ExistingInstallation;
+  }
+}
+
+const wchar_t *WidgetInstallStatusText(WidgetInstallStatus status) {
+  switch (status) {
+  case WidgetInstallStatus::NewInstall:
+    return L"New widget";
+  case WidgetInstallStatus::UpdateAvailable:
+    return L"Update available";
+  case WidgetInstallStatus::SameVersion:
+    return L"Already installed";
+  case WidgetInstallStatus::NewerVersionInstalled:
+    return L"Newer version already installed";
+  case WidgetInstallStatus::ExistingInstallation:
+    return L"Existing installation detected";
+  }
+  return L"Existing installation detected";
+}
+
+const wchar_t *WidgetInstallButtonText(WidgetInstallStatus status) {
+  switch (status) {
+  case WidgetInstallStatus::NewInstall:
+    return L"Install";
+  case WidgetInstallStatus::UpdateAvailable:
+    return L"Update";
+  case WidgetInstallStatus::SameVersion:
+    return L"Reinstall";
+  case WidgetInstallStatus::NewerVersionInstalled:
+    return L"Downgrade";
+  case WidgetInstallStatus::ExistingInstallation:
+    return L"Replace";
+  }
+  return L"Install";
 }
 
 const wchar_t *AddonStatusText(AddonInstallStatus status) {
@@ -865,6 +943,7 @@ void ResetUiFromState(AppState *state) {
   SetEditText(state->hName, L"");
   SetEditText(state->hVersion, L"");
   SetEditText(state->hAuthor, L"");
+  SetEditText(state->hWidgetStatus, L"");
   state->addonRows.clear();
   if (state->hAddons) {
     ListView_DeleteAllItems(state->hAddons);
@@ -884,6 +963,25 @@ void UpdateUiWithPackage(AppState *state) {
   SetEditText(state->hName, Utf8ToWide(state->info.name));
   SetEditText(state->hVersion, Utf8ToWide(state->info.version));
   SetEditText(state->hAuthor, Utf8ToWide(state->info.author));
+
+  fs::path widgetsTarget;
+  fs::path addonsTarget;
+  if (ResolveInstallTargets(widgetsTarget, addonsTarget)) {
+    state->widgetInstallStatus =
+        GetWidgetInstallStatus(widgetsTarget, state->info,
+                               state->installedWidgetVersion);
+  } else {
+    state->widgetInstallStatus = WidgetInstallStatus::ExistingInstallation;
+    state->installedWidgetVersion.clear();
+  }
+  std::wstring status = WidgetInstallStatusText(state->widgetInstallStatus);
+  if (!state->installedWidgetVersion.empty()) {
+    status += L" (installed: " +
+              Utf8ToWide(state->installedWidgetVersion) + L")";
+  }
+  SetEditText(state->hWidgetStatus, status);
+  SetWindowTextW(state->hInstall,
+                 WidgetInstallButtonText(state->widgetInstallStatus));
 
   BuildAddonRows(state);
   PopulateAddonsListView(state);
@@ -997,6 +1095,32 @@ void HandleInstall(AppState *state) {
     return;
   if (state->installing)
     return;
+
+  if (state->widgetInstallStatus != WidgetInstallStatus::NewInstall) {
+    std::wstring message = L"An existing installation of " +
+                           Utf8ToWide(state->info.name) + L" was detected.";
+    switch (state->widgetInstallStatus) {
+    case WidgetInstallStatus::UpdateAvailable:
+      message += L"\n\nInstall the newer package version?";
+      break;
+    case WidgetInstallStatus::SameVersion:
+      message += L"\n\nReinstall this same version?";
+      break;
+    case WidgetInstallStatus::NewerVersionInstalled:
+      message += L"\n\nThe installed version is newer. Continue with this "
+                 L"downgrade?";
+      break;
+    case WidgetInstallStatus::ExistingInstallation:
+      message += L"\n\nReplace the existing widget files?";
+      break;
+    case WidgetInstallStatus::NewInstall:
+      break;
+    }
+    if (MessageBoxW(state->hwnd, message.c_str(), L"Confirm Widget Install",
+                    MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2) != IDYES) {
+      return;
+    }
+  }
 
   SetInstallingUiState(state, true);
   SetInstallProgress(state, 0);
@@ -1186,13 +1310,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_READONLY, 30,
         216, 272, 24, hwnd, reinterpret_cast<HMENU>(IDC_AUTHOR), nullptr,
         nullptr);
+    HWND hLblWidgetStatus = CreateWindowW(
+        L"STATIC", L"Widget Status", WS_CHILD | WS_VISIBLE, 30, 250, 140,
+        18, hwnd, nullptr, nullptr, nullptr);
+    state->hWidgetStatus = CreateWindowExW(
+        WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_READONLY,
+        30, 270, 272, 24, hwnd,
+        reinterpret_cast<HMENU>(IDC_WIDGET_STATUS), nullptr, nullptr);
     HWND hLblAddons =
         CreateWindowW(L"STATIC", L"Included Addons", WS_CHILD | WS_VISIBLE, 30,
-                      250, 140, 18, hwnd, nullptr, nullptr, nullptr);
+                      304, 140, 18, hwnd, nullptr, nullptr, nullptr);
     state->hAddons = CreateWindowExW(
         WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS, 30, 270, 272,
-        124, hwnd, reinterpret_cast<HMENU>(IDC_ADDONS), nullptr, nullptr);
+        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS, 30, 324, 272,
+        70, hwnd, reinterpret_cast<HMENU>(IDC_ADDONS), nullptr, nullptr);
     ListView_SetExtendedListViewStyle(
         state->hAddons, LVS_EX_CHECKBOXES | LVS_EX_FULLROWSELECT |
                             LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
@@ -1242,6 +1373,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     SendMessageW(hLblAuthor, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
     SendMessageW(state->hAuthor, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
+    SendMessageW(hLblWidgetStatus, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
+    SendMessageW(state->hWidgetStatus, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
     SendMessageW(hLblAddons, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
