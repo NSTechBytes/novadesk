@@ -11,6 +11,7 @@
 #include "DesktopManager.h"
 #include "Settings.h"
 #include "Resource.h"
+#include "../Version.h"
 #include <vector>
 #include <unordered_map>
 #include <shellapi.h>
@@ -33,6 +34,7 @@
 #include <fstream>
 #include <iostream>
 #include <optional>
+#include <string_view>
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -246,19 +248,46 @@ static std::wstring CreateTempListPath() {
   return std::wstring(filePath);
 }
 
+// Returns true for the lightweight external version-query command.  This is
+// intentionally handled before single-instance routing and application startup
+// so installers, launchers, and other applications can query the executable
+// without starting Novadesk or communicating with an existing instance.
+static bool IsVersionQuery() {
+  int argc = 0;
+  LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+  if (!argv)
+    return false;
+
+  bool requested = false;
+  for (int i = 1; i < argc; ++i) {
+    if (std::wstring_view(argv[i]) == L"--version") {
+      requested = true;
+      break;
+    }
+  }
+  LocalFree(argv);
+  return requested;
+}
+
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                       _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine,
                       _In_ int nCmdShow) {
   // Attach to parent console for logging if present
   if (AttachConsole(ATTACH_PARENT_PROCESS)) {
     FILE *fDummy = nullptr;
-    if (freopen_s(&fDummy, "CONOUT$", "w", stdout) == 0 && fDummy)
-      fclose(fDummy);
+    // freopen_s redirects stdout/stderr to the parent console.  Do not close
+    // the returned stream: it is the process standard stream, and closing it
+    // prevents command-line queries such as --version from producing output.
+    freopen_s(&fDummy, "CONOUT$", "w", stdout);
     fDummy = nullptr;
-    if (freopen_s(&fDummy, "CONOUT$", "w", stderr) == 0 && fDummy)
-      fclose(fDummy);
+    freopen_s(&fDummy, "CONOUT$", "w", stderr);
     if (_fileno(stdout) >= 0)
       _setmode(_fileno(stdout), _O_U16TEXT);
+  }
+
+  if (IsVersionQuery()) {
+    std::wcout << NOVADESK_VERSION << std::endl;
+    return 0;
   }
 
   // Clear log file on startup
