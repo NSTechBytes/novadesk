@@ -107,7 +107,6 @@ Section -CoreFiles SecCoreFiles
   nsExec::ExecToStack 'taskkill /F /IM "novadesk.exe"'
   nsExec::ExecToStack 'taskkill /F /IM "Novadesk.exe"'
   nsExec::ExecToStack 'taskkill /F /IM "manage_novadesk.exe"'
-  nsExec::ExecToStack 'taskkill /F /IM "restart_novadesk.exe"'
   nsExec::ExecToStack 'taskkill /F /IM "ndpkg_installer.exe"'
   nsExec::ExecToStack 'taskkill /F /IM "nwm.exe"'
   Sleep 1000
@@ -116,7 +115,6 @@ Section -CoreFiles SecCoreFiles
   SetOutPath "$INSTDIR"
   File "..\dist\novadesk.exe"
   File "..\dist\manage_novadesk.exe"
-  File "..\dist\restart_novadesk.exe"
   File "..\dist\ndpkg_installer.exe"
   File /r "..\dist\images"
 
@@ -312,7 +310,6 @@ Section "Uninstall"
   ; Kill process if running
   nsExec::ExecToStack 'taskkill /F /IM "novadesk.exe"'
   nsExec::ExecToStack 'taskkill /F /IM "manage_novadesk.exe"'
-  nsExec::ExecToStack 'taskkill /F /IM "restart_novadesk.exe"'
   nsExec::ExecToStack 'taskkill /F /IM "ndpkg_installer.exe"'
   nsExec::ExecToStack 'taskkill /F /IM "nwm.exe"'
   Sleep 1000
@@ -336,7 +333,6 @@ Section "Uninstall"
   ; Remove files
   Delete "$INSTDIR\novadesk.exe"
   Delete "$INSTDIR\manage_novadesk.exe"
-  Delete "$INSTDIR\restart_novadesk.exe"
   Delete "$INSTDIR\ndpkg_installer.exe"
   Delete "$INSTDIR\nwm\installer_stub.exe"
   Delete "$INSTDIR\nwm\nwm.exe"
