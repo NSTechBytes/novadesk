@@ -15,6 +15,7 @@
 #include <shlobj.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdint>
 #include <cstring>
@@ -75,6 +76,7 @@ struct NdpkgFooter {
 struct PackageInfo {
   std::string name;
   std::string version;
+  std::string minimumNovadeskVersion;
   std::string author;
   std::vector<std::string> addons;
   fs::path previewImagePath;
@@ -165,6 +167,62 @@ uint64_t GetFileVersionQuad(const fs::path &filePath) {
   const uint64_t ms = static_cast<uint64_t>(fileInfo->dwFileVersionMS);
   const uint64_t ls = static_cast<uint64_t>(fileInfo->dwFileVersionLS);
   return (ms << 32) | ls;
+}
+
+bool ParseVersionQuad(const std::string &value, uint64_t &outVersion) {
+  std::array<uint32_t, 4> parts{};
+  size_t start = 0;
+  for (size_t i = 0; i < parts.size(); ++i) {
+    const size_t end = value.find('.', start);
+    if ((i < parts.size() - 1 && end == std::string::npos) ||
+        (i == parts.size() - 1 && end != std::string::npos)) {
+      return false;
+    }
+    const std::string part = value.substr(start, end - start);
+    if (part.empty() ||
+        !std::all_of(part.begin(), part.end(), [](unsigned char ch) {
+          return std::isdigit(ch) != 0;
+        })) {
+      return false;
+    }
+    try {
+      const unsigned long number = std::stoul(part);
+      if (number > 65535)
+        return false;
+      parts[i] = static_cast<uint32_t>(number);
+    } catch (...) {
+      return false;
+    }
+    start = end + 1;
+  }
+
+  outVersion = (static_cast<uint64_t>(parts[0]) << 48) |
+               (static_cast<uint64_t>(parts[1]) << 32) |
+               (static_cast<uint64_t>(parts[2]) << 16) | parts[3];
+  return true;
+}
+
+std::wstring FormatVersionQuad(uint64_t version) {
+  return std::to_wstring((version >> 48) & 0xffff) + L"." +
+         std::to_wstring((version >> 32) & 0xffff) + L"." +
+         std::to_wstring((version >> 16) & 0xffff) + L"." +
+         std::to_wstring(version & 0xffff);
+}
+
+fs::path FindNovadeskExecutable() {
+  wchar_t exePath[MAX_PATH]{};
+  GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+  const fs::path exeDir = fs::path(exePath).parent_path();
+
+  const fs::path adjacent = exeDir / "Novadesk.exe";
+  if (fs::exists(adjacent))
+    return adjacent;
+
+  const fs::path parent = exeDir.parent_path() / "Novadesk.exe";
+  if (fs::exists(parent))
+    return parent;
+
+  return {};
 }
 
 const wchar_t *AddonStatusText(AddonInstallStatus status) {
@@ -412,6 +470,19 @@ bool LoadPackageMetadata(const fs::path &extractDir, PackageInfo &outInfo,
   outInfo.name = j["name"].get<std::string>();
   outInfo.version = j["version"].get<std::string>();
   outInfo.author = j["author"].get<std::string>();
+  if (j.contains("minimumNovadeskVersion")) {
+    if (!j["minimumNovadeskVersion"].is_string()) {
+      errorOut = L"ndpkg.json has an invalid minimumNovadeskVersion field.";
+      return false;
+    }
+    outInfo.minimumNovadeskVersion =
+        j["minimumNovadeskVersion"].get<std::string>();
+    uint64_t ignored = 0;
+    if (!ParseVersionQuad(outInfo.minimumNovadeskVersion, ignored)) {
+      errorOut = L"ndpkg.json has an invalid minimumNovadeskVersion value.";
+      return false;
+    }
+  }
   outInfo.addons = ParseAddons(j);
   outInfo.previewImagePath = FindPreviewImage(extractDir);
   return true;
@@ -526,19 +597,7 @@ bool CopyDirectoryRecursive(
 }
 
 bool ResolveInstallTargets(fs::path &widgetsOut, fs::path &addonsOut) {
-  wchar_t exePath[MAX_PATH]{};
-  GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-  fs::path exeDir = fs::path(exePath).parent_path();
-
-  fs::path novadeskExe = exeDir / "Novadesk.exe";
-  if (!fs::exists(novadeskExe)) {
-    fs::path parentCandidate = exeDir.parent_path() / "Novadesk.exe";
-    if (fs::exists(parentCandidate)) {
-      novadeskExe = parentCandidate;
-    } else {
-      novadeskExe.clear();
-    }
-  }
+  fs::path novadeskExe = FindNovadeskExecutable();
 
   const bool portable = !novadeskExe.empty() &&
                         fs::exists(novadeskExe.parent_path() / "settings.json");
@@ -941,6 +1000,29 @@ void HandleInstall(AppState *state) {
 
   SetInstallingUiState(state, true);
   SetInstallProgress(state, 0);
+
+  if (!state->info.minimumNovadeskVersion.empty()) {
+    uint64_t minimumVersion = 0;
+    ParseVersionQuad(state->info.minimumNovadeskVersion, minimumVersion);
+    const fs::path novadeskExe = FindNovadeskExecutable();
+    const uint64_t installedVersion =
+        novadeskExe.empty() ? 0 : GetFileVersionQuad(novadeskExe);
+    if (installedVersion == 0 || installedVersion < minimumVersion) {
+      SetInstallingUiState(state, false);
+      std::wstring message =
+          L"This widget requires Novadesk " +
+          Utf8ToWide(state->info.minimumNovadeskVersion) + L" or newer.";
+      if (installedVersion == 0) {
+        message += L"\n\nUnable to determine the installed Novadesk version.";
+      } else {
+        message += L"\n\nInstalled version: " +
+                   FormatVersionQuad(installedVersion) + L".";
+      }
+      MessageBoxW(state->hwnd, message.c_str(), L"Novadesk Update Required",
+                  MB_ICONWARNING | MB_OK);
+      return;
+    }
+  }
 
   fs::path widgetsTarget;
   fs::path addonsTarget;

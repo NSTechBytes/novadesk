@@ -12,6 +12,7 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdint>
 #include <cstring>
@@ -64,6 +65,39 @@ struct SetupOptions {
 struct WidgetMeta {
   nlohmann::json json = nlohmann::json::object();
 };
+
+bool ParseVersionQuad(const std::string &value, uint64_t &outVersion) {
+  std::array<uint32_t, 4> parts{};
+  size_t start = 0;
+  for (size_t i = 0; i < parts.size(); ++i) {
+    const size_t end = value.find('.', start);
+    if ((i < parts.size() - 1 && end == std::string::npos) ||
+        (i == parts.size() - 1 && end != std::string::npos)) {
+      return false;
+    }
+    const std::string part = value.substr(start, end - start);
+    if (part.empty() ||
+        !std::all_of(part.begin(), part.end(), [](unsigned char ch) {
+          return std::isdigit(ch) != 0;
+        })) {
+      return false;
+    }
+    try {
+      const unsigned long number = std::stoul(part);
+      if (number > 65535)
+        return false;
+      parts[i] = static_cast<uint32_t>(number);
+    } catch (...) {
+      return false;
+    }
+    start = end + 1;
+  }
+
+  outVersion = (static_cast<uint64_t>(parts[0]) << 48) |
+               (static_cast<uint64_t>(parts[1]) << 32) |
+               (static_cast<uint64_t>(parts[2]) << 16) | parts[3];
+  return true;
+}
 
 #pragma pack(push, 1)
 struct InstallerFooter {
@@ -1276,6 +1310,24 @@ bool BuildWidget() {
 
   std::string widgetRealName = meta.value("name", "");
   std::string version = meta.value("version", "");
+  std::string minimumNovadeskVersion;
+  if (meta.contains("minimumNovadeskVersion")) {
+    if (!meta["minimumNovadeskVersion"].is_string()) {
+      std::cerr << "Error: 'minimumNovadeskVersion' must be a string in "
+                   "meta.json"
+                << std::endl;
+      return false;
+    }
+    minimumNovadeskVersion = meta["minimumNovadeskVersion"].get<std::string>();
+    uint64_t parsedVersion = 0;
+    if (!ParseVersionQuad(minimumNovadeskVersion, parsedVersion)) {
+      std::cerr << "Error: 'minimumNovadeskVersion' must use "
+                   "major.minor.patch.build, with numeric parts from 0 to "
+                   "65535."
+                << std::endl;
+      return false;
+    }
+  }
   std::string icon = meta.value("icon", "");
   std::string author = meta.value("author", "");
   std::string description = meta.value("description", "");
@@ -1545,6 +1597,9 @@ bool BuildWidget() {
     ndpkgMeta["name"] = widgetRealName;
     ndpkgMeta["version"] = version;
     ndpkgMeta["author"] = author;
+    if (!minimumNovadeskVersion.empty()) {
+      ndpkgMeta["minimumNovadeskVersion"] = minimumNovadeskVersion;
+    }
     ndpkgMeta["addons"] = nlohmann::json::array();
     for (const auto &addonFile : ndpkgIncludedAddons) {
       ndpkgMeta["addons"].push_back(addonFile);

@@ -2,6 +2,7 @@
   "name": "{NAME}",
   "main": "index.js",
   "version": "1.0.0.0",
+  "minimumNovadeskVersion": "0.9.11.0",
   "author": "Your Name",
   "description": "Widget Description",
   "icon": "assets/icon.ico",
