@@ -850,6 +850,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   for (auto w : widgetsCopy)
     delete w;
 
+  // Widget placement and other options are debounced.  Always commit pending
+  // settings during a normal application exit so a layout applied just before
+  // closing is available on the next launch.
+  Settings::Flush();
+
   // Stop in-flight webFetch threads before tearing down the JS runtime.
   // These threads post to the message window and access JSContext; both
   // become invalid after JSEngine::Shutdown().

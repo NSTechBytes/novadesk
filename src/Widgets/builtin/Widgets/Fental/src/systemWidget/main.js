@@ -9,22 +9,23 @@ function loadSystemWidget() {
         return; // Widget already registered
     }
 
-    system_Widget = new widgetWindow({
+    var firstRun = app.isFirstRun();
+    var windowOptions = {
         id: 'system_Window',
         script: './src/systemWidget/ui/widget.ui.js',
         width: 212,
         height: 122,
-        show: !app.isFirstRun()
-    })
+        show: !firstRun
+    };
 
-    if (app.isFirstRun()) {
+    if (firstRun) {
         var metrics = system.displayMetrics.get();
-        system_Widget.setProperties({
-            x: ((metrics.primary.screenArea.width - 212) - 10),
-            y: 92,
-            show: true
-        });
+        windowOptions.x = ((metrics.primary.screenArea.width - 212) - 10);
+        windowOptions.y = 92;
+        windowOptions.show = true;
     }
+
+    system_Widget = new widgetWindow(windowOptions);
     
     // Set up context menu
     system_Widget.setContextMenu([

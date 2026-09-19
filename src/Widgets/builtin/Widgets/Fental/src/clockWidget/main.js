@@ -11,22 +11,23 @@ function loadClockWidget() {
         return; // Widget already registered
     }
 
-    clock_Widget = new widgetWindow({
+    var firstRun = app.isFirstRun();
+    var windowOptions = {
         id: 'clock_Window',
         script: './src/clockWidget/ui/widget.ui.js',
         width: 212,
-        height: 72, 
-        show: !app.isFirstRun()
-    })
+        height: 72,
+        show: !firstRun
+    };
 
-    if (app.isFirstRun()) {
+    if (firstRun) {
         var metrics = system.displayMetrics.get();
-        clock_Widget.setProperties({
-            x: ((metrics.primary.screenArea.width - 212) - 10),
-            y: 10,
-            show: true
-        });
+        windowOptions.x = ((metrics.primary.screenArea.width - 212) - 10);
+        windowOptions.y = 10;
+        windowOptions.show = true;
     }
+
+    clock_Widget = new widgetWindow(windowOptions);
 
     // Set up context menu
     clock_Widget.setContextMenu([

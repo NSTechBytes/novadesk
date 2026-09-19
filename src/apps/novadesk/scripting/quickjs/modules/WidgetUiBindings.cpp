@@ -3556,9 +3556,8 @@ JSValue JsWidgetWindowCtor(JSContext *ctx, JSValueConst, int argc,
     delete existing;
   }
 
-  if (!options.id.empty()) {
-    Settings::LoadWidget(options.id, options);
-  }
+  const bool hasSavedSettings =
+      !options.id.empty() && Settings::LoadWidget(options.id, options);
 
   if (parsed.hasX)
     options.x = parsed.x;
@@ -3692,6 +3691,14 @@ JSValue JsWidgetWindowCtor(JSContext *ctx, JSValueConst, int argc,
   if (!widget->Create()) {
     delete widget;
     return JS_ThrowInternalError(ctx, "Failed to create widget window");
+  }
+
+  // A widget ID has no persisted state until its first successful creation.
+  // Store that initial state now, rather than waiting for a later move or
+  // resize event.  Existing settings are deliberately never replaced here.
+  if (!hasSavedSettings && !options.id.empty()) {
+    Settings::SaveWidget(options.id, widget->GetOptions());
+    Settings::Flush();
   }
 
   if (options.show) {
