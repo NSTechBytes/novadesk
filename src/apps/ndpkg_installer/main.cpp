@@ -103,10 +103,15 @@ struct AddonRow {
 struct AppState {
   HWND hwnd = nullptr;
   HWND hTitle = nullptr;
+  HWND hNameLabel = nullptr;
   HWND hName = nullptr;
+  HWND hVersionLabel = nullptr;
   HWND hVersion = nullptr;
+  HWND hAuthorLabel = nullptr;
   HWND hAuthor = nullptr;
+  HWND hWidgetStatusLabel = nullptr;
   HWND hWidgetStatus = nullptr;
+  HWND hAddonsLabel = nullptr;
   HWND hAddons = nullptr;
   HWND hPreview = nullptr;
   HWND hInstall = nullptr;
@@ -114,6 +119,7 @@ struct AppState {
   HWND hProgress = nullptr;
   HFONT hTitleFont = nullptr;
   HFONT hUiFont = nullptr;
+  HFONT hStatusFont = nullptr;
   HBITMAP hPreviewBitmap = nullptr;
   ULONG_PTR gdiplusToken = 0;
 
@@ -280,7 +286,7 @@ const wchar_t *WidgetInstallStatusText(WidgetInstallStatus status) {
   case WidgetInstallStatus::SameVersion:
     return L"Already installed";
   case WidgetInstallStatus::NewerVersionInstalled:
-    return L"Newer version already installed";
+    return L"Newer version installed";
   case WidgetInstallStatus::ExistingInstallation:
     return L"Existing installation detected";
   }
@@ -1284,46 +1290,48 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                                  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
                                  CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                                  DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    state->hStatusFont = CreateFontW(
+        -13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+        DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     SendMessageW(state->hTitle, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hTitleFont), TRUE);
 
     HWND hGroupDetails = CreateWindowW(
         L"BUTTON", L"Widget Details", WS_CHILD | WS_VISIBLE | BS_GROUPBOX, 16,
         58, 300, 346, hwnd, nullptr, nullptr, nullptr);
-    HWND hLblName = CreateWindowW(L"STATIC", L"Name", WS_CHILD | WS_VISIBLE, 30,
-                                  88, 100, 18, hwnd, nullptr, nullptr, nullptr);
-    state->hName = CreateWindowExW(
-        WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_READONLY, 30,
-        108, 272, 24, hwnd, reinterpret_cast<HMENU>(IDC_NAME), nullptr,
-        nullptr);
-    HWND hLblVersion =
-        CreateWindowW(L"STATIC", L"Version", WS_CHILD | WS_VISIBLE, 30, 142,
-                      100, 18, hwnd, nullptr, nullptr, nullptr);
-    state->hVersion = CreateWindowExW(
-        WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_READONLY, 30,
-        162, 272, 24, hwnd, reinterpret_cast<HMENU>(IDC_VERSION), nullptr,
-        nullptr);
-    HWND hLblAuthor =
-        CreateWindowW(L"STATIC", L"Author", WS_CHILD | WS_VISIBLE, 30, 196, 100,
-                      18, hwnd, nullptr, nullptr, nullptr);
-    state->hAuthor = CreateWindowExW(
-        WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_READONLY, 30,
-        216, 272, 24, hwnd, reinterpret_cast<HMENU>(IDC_AUTHOR), nullptr,
-        nullptr);
-    HWND hLblWidgetStatus = CreateWindowW(
-        L"STATIC", L"Widget Status", WS_CHILD | WS_VISIBLE, 30, 250, 140,
-        18, hwnd, nullptr, nullptr, nullptr);
-    state->hWidgetStatus = CreateWindowExW(
-        WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_READONLY,
-        30, 270, 272, 24, hwnd,
+    state->hNameLabel = CreateWindowW(L"STATIC", L"WIDGET NAME",
+                                      WS_CHILD | WS_VISIBLE, 30, 84, 130, 17,
+                                      hwnd, nullptr, nullptr, nullptr);
+    state->hName = CreateWindowW(
+        L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 30, 103, 272, 25,
+        hwnd, reinterpret_cast<HMENU>(IDC_NAME), nullptr, nullptr);
+    state->hVersionLabel = CreateWindowW(L"STATIC", L"VERSION",
+                                         WS_CHILD | WS_VISIBLE, 30, 143, 110,
+                                         17, hwnd, nullptr, nullptr, nullptr);
+    state->hVersion = CreateWindowW(
+        L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 30, 161, 110, 23,
+        hwnd, reinterpret_cast<HMENU>(IDC_VERSION), nullptr, nullptr);
+    state->hAuthorLabel = CreateWindowW(L"STATIC", L"AUTHOR",
+                                        WS_CHILD | WS_VISIBLE, 165, 143, 110,
+                                        17, hwnd, nullptr, nullptr, nullptr);
+    state->hAuthor = CreateWindowW(
+        L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 165, 161, 110, 23,
+        hwnd, reinterpret_cast<HMENU>(IDC_AUTHOR), nullptr, nullptr);
+    state->hWidgetStatusLabel = CreateWindowW(
+        L"STATIC", L"INSTALLATION STATUS", WS_CHILD | WS_VISIBLE, 30, 202,
+        180, 17, hwnd, nullptr, nullptr, nullptr);
+    state->hWidgetStatus = CreateWindowW(
+        L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 30, 220, 272, 22,
+        hwnd,
         reinterpret_cast<HMENU>(IDC_WIDGET_STATUS), nullptr, nullptr);
-    HWND hLblAddons =
-        CreateWindowW(L"STATIC", L"Included Addons", WS_CHILD | WS_VISIBLE, 30,
-                      304, 140, 18, hwnd, nullptr, nullptr, nullptr);
+    state->hAddonsLabel = CreateWindowW(
+        L"STATIC", L"INCLUDED ADDONS", WS_CHILD | WS_VISIBLE, 30, 258, 160,
+        17, hwnd, nullptr, nullptr, nullptr);
     state->hAddons = CreateWindowExW(
         WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS, 30, 324, 272,
-        70, hwnd, reinterpret_cast<HMENU>(IDC_ADDONS), nullptr, nullptr);
+        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS, 30, 278, 272,
+        116, hwnd, reinterpret_cast<HMENU>(IDC_ADDONS), nullptr, nullptr);
     ListView_SetExtendedListViewStyle(
         state->hAddons, LVS_EX_CHECKBOXES | LVS_EX_FULLROWSELECT |
                             LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
@@ -1362,24 +1370,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
     SendMessageW(hGroupDetails, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(hLblName, WM_SETFONT, reinterpret_cast<WPARAM>(state->hUiFont),
-                 TRUE);
+    SendMessageW(state->hNameLabel, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
     SendMessageW(state->hName, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(hLblVersion, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
+    SendMessageW(state->hVersionLabel, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
     SendMessageW(state->hVersion, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(hLblAuthor, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
+    SendMessageW(state->hAuthorLabel, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
     SendMessageW(state->hAuthor, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(hLblWidgetStatus, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
     SendMessageW(state->hWidgetStatus, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(hLblAddons, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
+                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
+    SendMessageW(state->hWidgetStatusLabel, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
+    SendMessageW(state->hAddonsLabel, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
     SendMessageW(state->hAddons, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
     SendMessageW(hGroupVisuals, WM_SETFONT,
@@ -1407,6 +1415,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
       return 0;
     }
     return 0;
+  case WM_CTLCOLORSTATIC:
+    if (state) {
+      HDC hdc = reinterpret_cast<HDC>(wParam);
+      HWND control = reinterpret_cast<HWND>(lParam);
+      SetBkColor(hdc, kWindowBgColor);
+      if (control == state->hNameLabel || control == state->hVersionLabel ||
+          control == state->hAuthorLabel ||
+          control == state->hWidgetStatusLabel ||
+          control == state->hAddonsLabel) {
+        SetTextColor(hdc, RGB(100, 108, 120));
+      } else if (control == state->hWidgetStatus) {
+        SetTextColor(hdc, RGB(0, 102, 180));
+      } else if (control == state->hName || control == state->hVersion ||
+                 control == state->hAuthor) {
+        SetTextColor(hdc, RGB(30, 35, 45));
+      }
+      return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_3DFACE));
+    }
+    break;
   case WM_CLOSE:
     if (state && state->installing) {
       return 0;
@@ -1425,6 +1452,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
       if (state->hUiFont) {
         DeleteObject(state->hUiFont);
         state->hUiFont = nullptr;
+      }
+      if (state->hStatusFont) {
+        DeleteObject(state->hStatusFont);
+        state->hStatusFont = nullptr;
       }
       DeleteDirectoryIfExists(state->workingDir);
     }
