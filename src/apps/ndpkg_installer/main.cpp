@@ -1187,7 +1187,15 @@ void HandleInstall(AppState *state) {
   }
   SetInstallProgress(state, 35);
 
-  const fs::path widgetsSource = state->extractDir / "Widgets";
+  const fs::path widgetsSource =
+      state->extractDir / "Widgets" / state->info.name;
+  if (!fs::exists(widgetsSource) || !fs::is_directory(widgetsSource)) {
+    SetInstallingUiState(state, false);
+    MessageBoxW(state->hwnd, L"Invalid package: widget content is missing.",
+                L"Install Error", MB_ICONERROR | MB_OK);
+    return;
+  }
+
   size_t widgetFileCount = 0;
   std::error_code countEc;
   for (const auto &entry :
@@ -1198,7 +1206,20 @@ void HandleInstall(AppState *state) {
       ++widgetFileCount;
   }
   size_t copiedWidgetFiles = 0;
-  if (!CopyDirectoryRecursive(widgetsSource, widgetsTarget, error, [&]() {
+  const std::wstring widgetFolderName = Utf8ToWide(state->info.name);
+  const std::wstring transactionSuffix =
+      L".ndpkg-" + std::to_wstring(GetCurrentProcessId()) + L"-" +
+      std::to_wstring(GetTickCount64());
+  const fs::path installedWidgetDir = widgetsTarget / state->info.name;
+  const fs::path stagingWidgetDir =
+      widgetsTarget / (widgetFolderName + L".staging" + transactionSuffix);
+  const fs::path backupWidgetDir =
+      widgetsTarget / (widgetFolderName + L".backup" + transactionSuffix);
+
+  // Stage the complete widget beside the final directory.  No installed files
+  // are touched until this copy has completed successfully.
+  error.clear();
+  if (!CopyDirectoryRecursive(widgetsSource, stagingWidgetDir, error, [&]() {
         ++copiedWidgetFiles;
         const int widgetProgress =
             35 +
@@ -1209,10 +1230,67 @@ void HandleInstall(AppState *state) {
                              45.0);
         SetInstallProgress(state, widgetProgress);
       })) {
+    DeleteDirectoryIfExists(stagingWidgetDir);
     SetInstallingUiState(state, false);
     MessageBoxW(state->hwnd, error.c_str(), L"Install Error",
                 MB_ICONERROR | MB_OK);
     return;
+  }
+
+  // Swap folders only after staging succeeds.  If the second rename fails,
+  // move the backup back so the previous widget remains usable.
+  std::error_code transactionError;
+  bool movedExistingWidget = false;
+  const bool existingWidget = fs::exists(installedWidgetDir, transactionError);
+  if (transactionError) {
+    DeleteDirectoryIfExists(stagingWidgetDir);
+    SetInstallingUiState(state, false);
+    const std::wstring message = L"Failed to inspect the existing widget: " +
+                                 Utf8ToWide(transactionError.message());
+    MessageBoxW(state->hwnd, message.c_str(), L"Install Error",
+                MB_ICONERROR | MB_OK);
+    return;
+  }
+  if (existingWidget) {
+    fs::rename(installedWidgetDir, backupWidgetDir, transactionError);
+    if (transactionError) {
+      DeleteDirectoryIfExists(stagingWidgetDir);
+      SetInstallingUiState(state, false);
+      std::wstring message = L"Failed to back up the existing widget: " +
+                             Utf8ToWide(transactionError.message());
+      MessageBoxW(state->hwnd, message.c_str(), L"Install Error",
+                  MB_ICONERROR | MB_OK);
+      return;
+    }
+    movedExistingWidget = true;
+  }
+
+  transactionError.clear();
+  fs::rename(stagingWidgetDir, installedWidgetDir, transactionError);
+  if (transactionError) {
+    if (movedExistingWidget) {
+      std::error_code restoreError;
+      fs::rename(backupWidgetDir, installedWidgetDir, restoreError);
+      if (restoreError) {
+        error = L"Failed to install the widget and restore the previous "
+                L"installation. Backup is at: " + ToWide(backupWidgetDir);
+      }
+    }
+    DeleteDirectoryIfExists(stagingWidgetDir);
+    SetInstallingUiState(state, false);
+    if (error.empty()) {
+      error = L"Failed to activate the staged widget: " +
+              Utf8ToWide(transactionError.message());
+    }
+    MessageBoxW(state->hwnd, error.c_str(), L"Install Error",
+                MB_ICONERROR | MB_OK);
+    return;
+  }
+
+  // Delete the old folder only after the replacement is active.
+  if (movedExistingWidget) {
+    std::error_code cleanupError;
+    fs::remove_all(backupWidgetDir, cleanupError);
   }
   SetInstallProgress(state, 80);
 
