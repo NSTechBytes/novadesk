@@ -3546,7 +3546,15 @@ void Widget::UpdateLayeredWindowContent() {
                 y = (h - drawH) * 0.5f;
               return D2D1::RectF(x, y, x + drawW, y + drawH);
             };
-            if (m_Options.backgroundImageSize.type ==
+            if (m_BackgroundImage.IsFallbackShowing()) {
+              // Fallback image should fit (contain) instead of stretch
+              const float scale =
+                  (std::min)(static_cast<float>(w) / imageSize.width,
+                             static_cast<float>(h) / imageSize.height);
+              const float drawW = imageSize.width * scale;
+              const float drawH = imageSize.height * scale;
+              dst = positionImage(drawW, drawH);
+            } else if (m_Options.backgroundImageSize.type ==
                 BackgroundImageSize::Type::Explicit) {
               const float drawW = m_Options.backgroundImageSize.hasWidth
                                       ? m_Options.backgroundImageSize.width

@@ -61,6 +61,9 @@ public:
   /// @return True if the image loaded successfully.
   bool IsLoaded() const { return m_GeneralImage.IsLoaded(); }
 
+  /// @return True if currently displaying the fallback image.
+  bool IsFallbackShowing() const { return m_GeneralImage.IsFallbackShowing(); }
+
   /**
    * @brief Updates the image source path.
    *

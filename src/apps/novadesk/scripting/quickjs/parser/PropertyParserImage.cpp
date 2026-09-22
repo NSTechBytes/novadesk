@@ -105,7 +105,7 @@ void ParseImageOptions(JSContext *ctx, JSValueConst obj, ImageOptions &options,
 
   std::wstring aspect = GetStringProp(ctx, obj, "preserveAspectRatio");
   if (!aspect.empty()) {
-    if (aspect == L"preserve")
+    if (aspect == L"preserve" || aspect == L"fit")
       options.preserveAspectRatio = IMAGE_ASPECT_PRESERVE;
     else if (aspect == L"crop")
       options.preserveAspectRatio = IMAGE_ASPECT_CROP;

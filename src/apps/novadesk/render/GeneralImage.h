@@ -101,6 +101,12 @@ public:
   /// @return True if the image bitmap is loaded and ready.
   bool IsLoaded() const { return m_D2DBitmap != nullptr; }
 
+  /// @return True if currently displaying the fallback image (e.g. while downloading an online image).
+  bool IsFallbackShowing() const {
+    std::lock_guard<std::recursive_mutex> lock(m_ImageStateMutex);
+    return m_IsFallbackShowing;
+  }
+
   /// @return The Direct2D bitmap for rendering.
   ID2D1Bitmap *GetBitmap() const { return m_D2DBitmap.Get(); }
 

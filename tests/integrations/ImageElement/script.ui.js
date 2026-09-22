@@ -6,12 +6,12 @@ ui.beginUpdate();
 // Test 1: Basic image with default settings
 ui.addImage({
     id: "basic-image",
-    path: "https://picsum.photos/200/300",
-    fallbackPath:"../assets/pic.png",
+    path: "https://picsum.photos/id/237/200/300",
+    // fallbackPath:"../assets/pic.png",
     x: 20,
     y: 20,
     width: 120,
-    height: 120
+    height: 50
 });
 // ui.addText({
 //     id: "label-basic",

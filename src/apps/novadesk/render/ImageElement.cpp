@@ -69,7 +69,12 @@ bool ImageElement::ComputeImageLayout(float imageWidth, float imageHeight,
     return false;
   }
 
-  if (m_PreserveAspectRatio == IMAGE_ASPECT_PRESERVE) {
+  ImageAspectRatio effectiveAspect = m_PreserveAspectRatio;
+  if (m_GeneralImage.IsFallbackShowing()) {
+    effectiveAspect = IMAGE_ASPECT_PRESERVE;
+  }
+
+  if (effectiveAspect == IMAGE_ASPECT_PRESERVE) {
     const float scaleX = (float)layout.contentW / srcWidth;
     const float scaleY = (float)layout.contentH / srcHeight;
     const float scale = (std::min)(scaleX, scaleY);
@@ -80,7 +85,7 @@ bool ImageElement::ComputeImageLayout(float imageWidth, float imageHeight,
     layout.finalRect.top = layout.contentY + (layout.contentH - finalH) / 2.0f;
     layout.finalRect.right = layout.finalRect.left + finalW;
     layout.finalRect.bottom = layout.finalRect.top + finalH;
-  } else if (m_PreserveAspectRatio == IMAGE_ASPECT_CROP) {
+  } else if (effectiveAspect == IMAGE_ASPECT_CROP) {
     const float scaleX = (float)layout.contentW / srcWidth;
     const float scaleY = (float)layout.contentH / srcHeight;
     const float scale = (std::max)(scaleX, scaleY);
@@ -104,7 +109,12 @@ bool ImageElement::MapPointToImagePixel(float targetX, float targetY,
     return false;
   }
 
-  if (m_PreserveAspectRatio == IMAGE_ASPECT_PRESERVE) {
+  ImageAspectRatio effectiveAspect = m_PreserveAspectRatio;
+  if (m_GeneralImage.IsFallbackShowing()) {
+    effectiveAspect = IMAGE_ASPECT_PRESERVE;
+  }
+
+  if (effectiveAspect == IMAGE_ASPECT_PRESERVE) {
     if (targetX < layout.finalRect.left || targetX >= layout.finalRect.right ||
         targetY < layout.finalRect.top || targetY >= layout.finalRect.bottom) {
       return false;
@@ -188,7 +198,7 @@ void ImageElement::Render(ID2D1DeviceContext *context) {
     return;
   }
 
-  if (m_Tile) {
+  if (m_Tile && !m_GeneralImage.IsFallbackShowing()) {
     Microsoft::WRL::ComPtr<ID2D1ImageBrush> pBrush;
     D2D1_IMAGE_BRUSH_PROPERTIES brushProps = D2D1::ImageBrushProperties(
         layout.srcRect, D2D1_EXTEND_MODE_WRAP, D2D1_EXTEND_MODE_WRAP,
@@ -204,6 +214,7 @@ void ImageElement::Render(ID2D1DeviceContext *context) {
     }
   } else {
     const bool useScaleMargins =
+        !m_GeneralImage.IsFallbackShowing() &&
         m_HasScaleMargins && !m_Tile &&
         m_PreserveAspectRatio == IMAGE_ASPECT_STRETCH &&
         pFinalImage.Get() == (ID2D1Image *)bitmap;
