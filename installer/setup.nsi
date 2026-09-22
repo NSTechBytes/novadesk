@@ -1,4 +1,4 @@
-﻿;--------------------------------
+;--------------------------------
 ; Novadesk Installer Script
 ;--------------------------------
 
@@ -11,6 +11,7 @@ Name "Novadesk"
 ; The file to write
 OutFile "dist_output\Novadesk_Setup_v${VERSION}_Beta.exe"
 SetCompressor /SOLID lzma
+ReserveFile "plugins\x86-unicode\UAC.dll"
 
 ; The default installation directory
 InstallDir "$PROGRAMFILES64\Novadesk"
@@ -19,8 +20,10 @@ InstallDir "$PROGRAMFILES64\Novadesk"
 ; overwrite the old one automatically)
 InstallDirRegKey HKLM "Software\Novadesk" "Install_Dir"
 
-; Request application privileges for Windows Vista+
-RequestExecutionLevel admin
+; Start as the desktop user. Standard installs elevate only after the user presses
+; Install, so Windows shows the UAC shield on that button instead of on the
+; installer executable's icon.
+RequestExecutionLevel user
 
 ; Use 64-bit registry view
 !include "x64.nsh"
@@ -28,6 +31,8 @@ RequestExecutionLevel admin
 !include "nsDialogs.nsh"
 !include "Sections.nsh"
 !include "StrFunc.nsh"
+!addplugindir "plugins\\x86-unicode"
+!include "nsis\\UAC.nsh"
 ${StrStr}
 ${StrRep}
 
@@ -35,6 +40,9 @@ ${StrRep}
 ; Interface Settings
 ;--------------------------------
 !include "MUI2.nsh"
+
+; Remove NSIS's default "Nullsoft Install System" footer.
+BrandingText " "
 
 ;--------------------------------
 ; Windows Message Constants
@@ -44,6 +52,9 @@ ${StrRep}
 !endif
 !ifndef HWND_BROADCAST
 !define HWND_BROADCAST 0xFFFF
+!endif
+!ifndef BCM_SETSHIELD
+!define BCM_SETSHIELD 0x160C
 !endif
 
 ;--------------------------------
@@ -59,16 +70,20 @@ ${StrRep}
 ;--------------------------------
 ; Pages
 ;--------------------------------
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipPageIfInnerInstance
 !insertmacro MUI_PAGE_WELCOME
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipPageIfInnerInstance
 !insertmacro MUI_PAGE_LICENSE "LICENSE.txt"
 Page custom InstallModePageCreate InstallModePageLeave
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipPageIfInnerInstance
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE DirectoryPageLeave
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 
 ; Finish page settings
-!define MUI_FINISHPAGE_RUN "$INSTDIR\manage_novadesk.exe"
+!define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_TEXT "Run Novadesk"
+!define MUI_FINISHPAGE_RUN_FUNCTION FinishRun
 !insertmacro MUI_PAGE_FINISH
 
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -87,6 +102,33 @@ Var DocsRoot
 Var ScriptsRoot
 Var RemoveCompletely
 Var UnRemoveCheckbox
+Var UserDocsDir
+Var UserAppDataDir
+
+; The UAC plug-in keeps the UI process unelevated and launches an elevated
+; companion only when a standard installation actually needs administrator
+; access. This is the same installation model used by Rainmeter.
+!macro ElevateForStandardInstall
+NovadeskUacTryAgain:
+  !insertmacro UAC_RunElevated
+  ${Switch} $0
+    ${Case} 0
+      ${IfThen} $1 = 1 ${|} Quit ${|}
+      ${IfThen} $3 <> 0 ${|} ${Break} ${|}
+      ${If} $1 = 3
+        MessageBox MB_YESNO|MB_ICONEXCLAMATION|MB_TOPMOST "Administrator access is required to install Novadesk. Try again?" IDYES NovadeskUacTryAgain
+      ${EndIf}
+    ${Case} 1223
+      Quit
+    ${Case} 1062
+      MessageBox MB_OK|MB_ICONSTOP "The logon service is not running, so Novadesk cannot be installed."
+      Quit
+    ${Default}
+      MessageBox MB_OK|MB_ICONSTOP "Unable to obtain administrator access for the Novadesk installation. Error: $0"
+      Quit
+  ${EndSwitch}
+  SetShellVarContext all
+!macroend
 
 ;--------------------------------
 ; Sections
@@ -94,6 +136,17 @@ Var UnRemoveCheckbox
 
 Section -CoreFiles SecCoreFiles
   SectionIn RO
+
+  ${If} $InstallMode == "standard"
+    ${IfNot} ${UAC_IsAdmin}
+      ; UAC_IsAdmin can report membership instead of the current token state.
+      System::Call "shell32::IsUserAnAdmin()i.r0"
+      ${If} $0 = 0
+        !insertmacro ElevateForStandardInstall
+      ${EndIf}
+    ${EndIf}
+    SetShellVarContext all
+  ${EndIf}
 
   SetRegView 64
   ; Enforce 64-bit redirection
@@ -130,7 +183,18 @@ Section -CoreFiles SecCoreFiles
   SetOutPath "$INSTDIR"
 
   ${If} $InstallMode == "standard"
-    StrCpy $DocsRoot "$DOCUMENTS\Novadesk"
+    ; Ensure UserDocsDir and UserAppDataDir are never empty
+    ${If} $UserDocsDir == ""
+      SetShellVarContext current
+      StrCpy $UserDocsDir "$DOCUMENTS"
+      SetShellVarContext all
+    ${EndIf}
+    ${If} $UserAppDataDir == ""
+      SetShellVarContext current
+      StrCpy $UserAppDataDir "$APPDATA"
+      SetShellVarContext all
+    ${EndIf}
+    StrCpy $DocsRoot "$UserDocsDir\Novadesk"
     CreateDirectory "$DocsRoot"
     ; In standard mode, widgets/addons live in Documents\Novadesk
     SetOutPath "$DocsRoot"
@@ -138,10 +202,10 @@ Section -CoreFiles SecCoreFiles
     File /r "..\dist\Addons"
 
     ; Create settings in AppData\Novadesk
-    CreateDirectory "$APPDATA\Novadesk"
+    CreateDirectory "$UserAppDataDir\Novadesk"
     StrCpy $ScriptsRoot "$DocsRoot\Widgets\Fental\index.js"
     ${StrRep} $1 $ScriptsRoot "\" "\\"
-    FileOpen $0 "$APPDATA\Novadesk\manage_novadesk_settings.json" "w"
+    FileOpen $0 "$UserAppDataDir\Novadesk\manage_novadesk_settings.json" "w"
     FileWrite $0 "{$\r$\n"
     FileWrite $0 "  $\"loadedScripts$\": [$\r$\n"
     FileWrite $0 "    $\"$1$\"$\r$\n"
@@ -219,6 +283,11 @@ Section -CoreFiles SecCoreFiles
 SectionEnd
 
 Function InstallModePageCreate
+  ; Inner elevated instance skips all pre-install pages (same as Rainmeter pattern).
+  ${If} ${UAC_IsInnerInstance}
+    Abort
+  ${EndIf}
+
   nsDialogs::Create 1018
   Pop $0
   ${If} $0 == error
@@ -237,9 +306,61 @@ Function InstallModePageCreate
   nsDialogs::Show
 FunctionEnd
 
+; Called by the inner (elevated) instance on the outer (unelevated) process to
+; retrieve the user's selections via UAC sync registers ($1=InstallMode, $2=INSTDIR, $3=UserDocs, $4=UserAppData).
+; HideWindow hides the outer's installer window so the user only sees the inner
+; instance's INSTFILES + Finish pages — the same pattern Rainmeter uses in ExchangeSettings.
+Function SyncSettingsToInner
+  SetShellVarContext current
+  StrCpy $1 $InstallMode
+  StrCpy $2 $INSTDIR
+  StrCpy $3 "$DOCUMENTS"
+  StrCpy $4 "$APPDATA"
+  HideWindow
+FunctionEnd
+
+; Pre-function for MUI pages: skips (Abort) the page when running as the inner
+; elevated instance. Matches Rainmeter's pattern of checking UAC_IsInnerInstance
+; at the top of every custom page function.
+Function SkipPageIfInnerInstance
+  ${If} ${UAC_IsInnerInstance}
+    Abort
+  ${EndIf}
+FunctionEnd
+
+Function FinishRun
+  ; Explorer launches Novadesk with the desktop user's token instead of the elevated installer's token.
+  ExecShell "" "$WINDIR\explorer.exe" '$\"$INSTDIR\manage_novadesk.exe$\"'
+FunctionEnd
+
 Function .onInit
+  SetShellVarContext current
+  StrCpy $UserDocsDir "$DOCUMENTS"
+  StrCpy $UserAppDataDir "$APPDATA"
   StrCpy $InstallMode "standard"
   !insertmacro SelectSection ${SecCoreFiles}
+
+  ; When the UAC plug-in relaunches this installer elevated (inner instance),
+  ; the process starts over from .onInit. The inner instance must:
+  ;   1. Verify it has admin rights.
+  ;   2. Pull the user's selections ($InstallMode, $INSTDIR, $UserDocsDir, $UserAppDataDir)
+  ;      from the outer process.
+  ;      The outer's SyncSettingsToInner also calls HideWindow so the outer's
+  ;      frozen "Installing..." page disappears and only the inner's window is visible.
+  ;   3. Let the normal page loop continue — pages skip themselves via
+  ;      SkipPageIfInnerInstance, so the inner jumps straight to INSTFILES + Finish.
+  ${If} ${UAC_IsInnerInstance}
+    ${IfNot} ${UAC_IsAdmin}
+      MessageBox MB_OK|MB_ICONSTOP "Administrator access is required to complete the installation." /SD IDOK
+      Quit
+    ${EndIf}
+    ; Retrieve user selections from the outer process; outer's window is hidden inside.
+    !insertmacro UAC_AsUser_Call Function SyncSettingsToInner ${UAC_SYNCREGISTERS}
+    StrCpy $InstallMode $1
+    StrCpy $INSTDIR $2
+    StrCpy $UserDocsDir $3
+    StrCpy $UserAppDataDir $4
+  ${EndIf}
 FunctionEnd
 
 Function InstallModePageLeave
@@ -250,6 +371,18 @@ Function InstallModePageLeave
   ${Else}
     StrCpy $InstallMode "standard"
   ${EndIf}
+
+  ; Match Windows' elevation affordance to the selected install mode.
+  GetDlgItem $1 $HWNDPARENT 1
+  ${If} $InstallMode == "standard"
+    SendMessage $1 ${BCM_SETSHIELD} 0 1
+  ${Else}
+    SendMessage $1 ${BCM_SETSHIELD} 0 0
+  ${EndIf}
+FunctionEnd
+
+Function un.onInit
+  !insertmacro ElevateForStandardInstall
 FunctionEnd
 
 Function un.CompleteRemovePageCreate
@@ -343,6 +476,10 @@ Section "Uninstall"
   
   ${If} $RemoveCompletely == ${BST_CHECKED}
     ; Completely remove user data only when explicitly requested
+    SetShellVarContext current
+    RMDir /r "$APPDATA\Novadesk"
+    RMDir /r "$DOCUMENTS\Novadesk"
+    SetShellVarContext all
     RMDir /r "$APPDATA\Novadesk"
     RMDir /r "$DOCUMENTS\Novadesk"
   ${Else}
