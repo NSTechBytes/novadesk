@@ -3547,7 +3547,7 @@ void Widget::UpdateLayeredWindowContent() {
               return D2D1::RectF(x, y, x + drawW, y + drawH);
             };
             if (m_BackgroundImage.IsFallbackShowing()) {
-              // Fallback image should fit (contain) instead of stretch
+              // Fallback image should contain instead of stretch
               const float scale =
                   (std::min)(static_cast<float>(w) / imageSize.width,
                              static_cast<float>(h) / imageSize.height);

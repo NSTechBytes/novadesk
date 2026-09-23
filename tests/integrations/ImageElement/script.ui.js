@@ -13,6 +13,10 @@ ui.addImage({
     width: 120,
     height: 50
 });
+
+console.log(ui.getElementProperty("basic-image", "path")); // Should log the image path
+console.log(ui.getElementProperty("basic-image", "width")); // Should log 120
+console.log(ui.getElementProperty("basic-image", "height")); // Should log 50
 // ui.addText({
 //     id: "label-basic",
 //     text: "Basic Image\nDefault settings",
