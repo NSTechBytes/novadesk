@@ -21,7 +21,7 @@ ui.addText({
     fontSize: 25,
     fontFace: "Consolas",
     textAlign: "center",
-    fontColor: "linearGradient(120deg, #51BCFE, #BD34FE)",
+    fontColor: "linearGradient(120deg, #73F0FF, #29D1FA, #057AF0)",
 })
 
 ui.addText({

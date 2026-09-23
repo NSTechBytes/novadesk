@@ -23,7 +23,7 @@ ui.addText({
     fontSize: 25,
     fontFace: "Consolas",
     textAlign: "center",
-    fontColor: "linearGradient(120deg, #51BCFE, #BD34FE)",
+    fontColor: "linearGradient(120deg, #73F0FF, #29D1FA, #057AF0)",
 })
 
 /*
@@ -60,7 +60,7 @@ ui.addBar({
     width: 180,
     height: 8,
     value: 0,
-    barColor: "linearGradient(120deg, #51BCFE, #BD34FE)",
+    barColor: "linearGradient(120deg, #73F0FF, #29D1FA, #057AF0)",
     backgroundColor: "rgba(200,200,200,0.5)",
     backgroundColorRadius: 4,
     barCornerRadius: 4
@@ -100,7 +100,7 @@ ui.addBar({
     width: 180,
     height: 8,
     value: 0,
-    barColor: "linearGradient(120deg, #51BCFE, #BD34FE)",
+    barColor: "linearGradient(120deg, #73F0FF, #29D1FA, #057AF0)",
     backgroundColor: "rgba(200,200,200,0.5)",
     backgroundColorRadius: 4,
     barCornerRadius: 4
