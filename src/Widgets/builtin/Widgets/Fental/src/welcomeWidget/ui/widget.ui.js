@@ -8,7 +8,7 @@ ui.addShape({
     y: 1,
     width: 298,
     height: 298,
-    fillColor: "rgba(27 ,27 ,31,0.9)",
+    fillColor: "#071B30",
     strokeColor: "rgba(200,200,200,0.5)",
     radius: 15,
     strokeWidth: 2
