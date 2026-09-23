@@ -8,7 +8,7 @@ ui.addShape({
     y: 1,
     width: 298,
     height: 298,
-    fillColor: "#071B30",
+    fillColor: "#071b30eb",
     strokeColor: "rgba(200,200,200,0.5)",
     radius: 15,
     strokeWidth: 2
@@ -34,7 +34,7 @@ ui.addText({
     fontSize: 18,
     fontFace: "Consolas",
     textAlign: "center",
-    fontColor: "linearGradient(120deg, #51BCFE, #BD34FE)",
+    fontColor: "linearGradient(120deg, #73F0FF, #29D1FA, #057AF0)",
 })
 
 // Description Text
@@ -57,15 +57,15 @@ ui.addShape({
     y: 230,
     width: 80,
     height: 30,
-    fillColor: "rgba(81, 188, 254, 0.3)",
-    strokeColor: "rgba(81, 188, 254, 0.7)",
+    fillColor: "#73f1ff3c",
+    strokeColor: "#73f1fffd",
     radius: 8,
     strokeWidth: 1,
     onMouseOver: function() {
-        ui.setElementProperties("website_Button", {"fillColor": "rgba(81, 188, 254, 0.5)"});
+        ui.setElementProperties("website_Button", {"fillColor": "#73f1ff7f"});
     },
     onMouseLeave: function() {
-        ui.setElementProperties("website_Button", {"fillColor": "rgba(81, 188, 254, 0.3)"});
+        ui.setElementProperties("website_Button", {"fillColor": "#73f1ff3c"});
     },
     onLeftMouseUp: function() {
         ipcRenderer.send("openWebsite");
@@ -92,15 +92,15 @@ ui.addShape({
     y: 230,
     width: 80,
     height: 30,
-    fillColor: "rgba(189, 52, 254, 0.3)",
-    strokeColor: "rgba(189, 52, 254, 0.7)",
+    fillColor: "#057af031",
+    strokeColor: "#057af0",
     radius: 8,
     strokeWidth: 1,
     onMouseOver: function() {
-        ui.setElementProperties("docs_Button", {"fillColor": "rgba(189, 52, 254, 0.5)"});
+        ui.setElementProperties("docs_Button", {"fillColor": "#057af085"});
     },
     onMouseLeave: function() {
-        ui.setElementProperties("docs_Button", {"fillColor": "rgba(189, 52, 254, 0.3)"});
+        ui.setElementProperties("docs_Button", {"fillColor": "#057af031"});
     },
     onLeftMouseUp: function() {
         ipcRenderer.send("openDocs");
