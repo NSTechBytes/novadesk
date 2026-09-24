@@ -33,6 +33,19 @@ void ParseGeneralImageOptions(JSContext *ctx, JSValueConst obj,
     }
   }
 
+  std::wstring fallbackAspect = GetStringProp(ctx, obj, "fallbackAspectRatio");
+  if (!fallbackAspect.empty()) {
+    std::transform(fallbackAspect.begin(), fallbackAspect.end(),
+                   fallbackAspect.begin(), ::towlower);
+    if (fallbackAspect == L"preserve" || fallbackAspect == L"fit" ||
+        fallbackAspect == L"contain")
+      options.fallbackAspectRatio = IMAGE_ASPECT_PRESERVE;
+    else if (fallbackAspect == L"crop" || fallbackAspect == L"cover")
+      options.fallbackAspectRatio = IMAGE_ASPECT_CROP;
+    else if (fallbackAspect == L"stretch")
+      options.fallbackAspectRatio = IMAGE_ASPECT_STRETCH;
+  }
+
   std::wstring imageFlip = GetStringProp(ctx, obj, "imageFlip");
   std::transform(imageFlip.begin(), imageFlip.end(), imageFlip.begin(),
                  ::towlower);
@@ -303,6 +316,7 @@ void ApplyImageOptions(ImageElement *element, const ImageOptions &options) {
   element->SetTile(options.tile);
 
   element->SetFallbackPath(options.fallbackPath);
+  element->SetFallbackAspectRatio(options.fallbackAspectRatio);
   element->SetImageFlip(options.imageFlip);
   if (options.hasImageCrop)
     element->SetImageCrop(options.imageCropX, options.imageCropY,
@@ -439,6 +453,7 @@ void PreFillImageOptions(ImageOptions &options, ImageElement *element) {
   options.tile = element->IsTile();
 
   options.fallbackPath = element->GetFallbackPath();
+  options.fallbackAspectRatio = element->GetFallbackAspectRatio();
   options.imageFlip = element->GetImageFlip();
   options.hasImageCrop = element->HasImageCrop();
   if (options.hasImageCrop) {

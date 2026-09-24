@@ -71,7 +71,7 @@ bool ImageElement::ComputeImageLayout(float imageWidth, float imageHeight,
 
   ImageAspectRatio effectiveAspect = m_PreserveAspectRatio;
   if (m_GeneralImage.IsFallbackShowing()) {
-    effectiveAspect = IMAGE_ASPECT_PRESERVE;
+    effectiveAspect = m_FallbackAspectRatio;
   }
 
   if (effectiveAspect == IMAGE_ASPECT_PRESERVE) {
@@ -111,7 +111,7 @@ bool ImageElement::MapPointToImagePixel(float targetX, float targetY,
 
   ImageAspectRatio effectiveAspect = m_PreserveAspectRatio;
   if (m_GeneralImage.IsFallbackShowing()) {
-    effectiveAspect = IMAGE_ASPECT_PRESERVE;
+    effectiveAspect = m_FallbackAspectRatio;
   }
 
   if (effectiveAspect == IMAGE_ASPECT_PRESERVE) {

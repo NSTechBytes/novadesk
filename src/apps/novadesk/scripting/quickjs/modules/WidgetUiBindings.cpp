@@ -124,6 +124,22 @@ JSValue GetGeneralImagePropertyValue(JSContext *ctx, Element *element,
       val = rot->GetFallbackPath();
     return JS_NewString(ctx, Utils::ToString(val).c_str());
   }
+  if (prop == "fallbackAspectRatio") {
+    if (auto *img = dynamic_cast<ImageElement *>(element)) {
+      const char *aspect = "stretch";
+      switch (img->GetFallbackAspectRatio()) {
+      case IMAGE_ASPECT_PRESERVE:
+        aspect = "preserve";
+        break;
+      case IMAGE_ASPECT_CROP:
+        aspect = "crop";
+        break;
+      default:
+        break;
+      }
+      return JS_NewString(ctx, aspect);
+    }
+  }
   if (prop == "grayscale") {
     bool val = false;
     if (auto *img = dynamic_cast<ImageElement *>(element))
@@ -1961,6 +1977,20 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
       }
       return JS_NewString(ctx, aspect);
     }
+    if (prop == "fallbackAspectRatio") {
+      const char *aspect = "stretch";
+      switch (img->GetFallbackAspectRatio()) {
+      case IMAGE_ASPECT_PRESERVE:
+        aspect = "preserve";
+        break;
+      case IMAGE_ASPECT_CROP:
+        aspect = "crop";
+        break;
+      default:
+        break;
+      }
+      return JS_NewString(ctx, aspect);
+    }
     if (prop == "scaleMargins") {
       if (!img->HasScaleMargins()) {
         return JS_UNDEFINED;
@@ -3637,6 +3667,9 @@ JSValue JsWidgetWindowCtor(JSContext *ctx, JSValueConst, int argc,
     options.backgroundImage = parsed.backgroundImage;
   if (parsed.hasBackgroundImageFallback)
     options.backgroundImageFallback = parsed.backgroundImageFallback;
+  if (parsed.hasBackgroundImageFallbackAspectRatio)
+    options.backgroundImageFallbackAspectRatio =
+        parsed.backgroundImageFallbackAspectRatio;
   if (parsed.hasBackgroundImageSize) {
     if (parsed.backgroundImageSizeIsExplicit) {
       options.backgroundImageSize.type = BackgroundImageSize::Type::Explicit;

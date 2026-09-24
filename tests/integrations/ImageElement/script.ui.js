@@ -11,7 +11,8 @@ ui.addImage({
     x: 20,
     y: 20,
     width: 120,
-    height: 50
+    height: 50,
+    fallbackAspectRatio: "cover",
 });
 
 console.log(ui.getElementProperty("basic-image", "path")); // Should log the image path

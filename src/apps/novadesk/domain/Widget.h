@@ -159,6 +159,7 @@ struct WidgetOptions {
   GradientInfo bgGradient;
   std::wstring backgroundImage;
   std::wstring backgroundImageFallback;
+  ImageAspectRatio backgroundImageFallbackAspectRatio = IMAGE_ASPECT_STRETCH;
   BackgroundImageSize backgroundImageSize;
   BackgroundImagePosition backgroundImagePosition;
   bool draggable = true;
@@ -345,6 +346,8 @@ public:
                           const BackgroundImagePosition &position);
   /// @brief Sets a fallback background image path.
   void SetBackgroundImageFallback(const std::wstring &path);
+  /// @brief Sets the fallback background image aspect ratio mode.
+  void SetBackgroundImageFallbackAspectRatio(ImageAspectRatio mode);
   /// @brief Enables or disables window dragging.
   void SetDraggable(bool enable);
   /// @brief Enables or disables window resizing.

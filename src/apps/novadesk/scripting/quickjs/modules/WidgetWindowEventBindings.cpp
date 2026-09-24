@@ -130,6 +130,9 @@ JSValue JsWidgetWindowSetProperties(JSContext *ctx, JSValueConst thisVal,
     widget->SetBackgroundColor(parsed.backgroundColor);
   if (parsed.hasBackgroundImageFallback)
     widget->SetBackgroundImageFallback(parsed.backgroundImageFallback);
+  if (parsed.hasBackgroundImageFallbackAspectRatio)
+    widget->SetBackgroundImageFallbackAspectRatio(
+        parsed.backgroundImageFallbackAspectRatio);
   if (parsed.hasBackgroundImage || parsed.hasBackgroundImageSize ||
       parsed.hasBackgroundImagePosition) {
     const WidgetOptions &current = widget->GetOptions();
@@ -257,6 +260,16 @@ JSValue JsWidgetWindowGetProperties(JSContext *ctx, JSValueConst thisVal, int,
   JS_SetPropertyStr(
       ctx, out, "backgroundImageFallback",
       JS_NewString(ctx, Utils::ToString(o.backgroundImageFallback).c_str()));
+  {
+    const char *fallbackAspect =
+        o.backgroundImageFallbackAspectRatio == IMAGE_ASPECT_PRESERVE
+            ? "fit"
+        : o.backgroundImageFallbackAspectRatio == IMAGE_ASPECT_CROP
+            ? "crop"
+            : "stretch";
+    JS_SetPropertyStr(ctx, out, "backgroundImageFallbackAspectRatio",
+                      JS_NewString(ctx, fallbackAspect));
+  }
   if (o.backgroundImageSize.type == BackgroundImageSize::Type::Explicit) {
     JSValue size = JS_NewObject(ctx);
     if (o.backgroundImageSize.hasWidth)

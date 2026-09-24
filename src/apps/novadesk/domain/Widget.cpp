@@ -782,6 +782,15 @@ void Widget::SetBackgroundImageFallback(const std::wstring &path) {
   Settings::SaveWidget(m_Options.id, m_Options);
 }
 
+void Widget::SetBackgroundImageFallbackAspectRatio(ImageAspectRatio mode) {
+  if (m_Options.backgroundImageFallbackAspectRatio == mode)
+    return;
+
+  m_Options.backgroundImageFallbackAspectRatio = mode;
+  Redraw();
+  Settings::SaveWidget(m_Options.id, m_Options);
+}
+
 // Enable/disable dragging.
 void Widget::SetDraggable(bool enable) {
   if (m_Options.draggable != enable) {
@@ -1981,6 +1990,7 @@ void Widget::AddImage(const PropertyParser::ImageOptions &options) {
   PropertyParser::ApplyImageOptions(element, options);
 
   element->SetPreserveAspectRatio(options.preserveAspectRatio);
+  element->SetFallbackAspectRatio(options.fallbackAspectRatio);
   element->SetImageAlpha(options.imageAlpha);
   element->SetGrayscale(options.grayscale);
   element->SetTile(options.tile);
@@ -3547,13 +3557,26 @@ void Widget::UpdateLayeredWindowContent() {
               return D2D1::RectF(x, y, x + drawW, y + drawH);
             };
             if (m_BackgroundImage.IsFallbackShowing()) {
-              // Fallback image should contain instead of stretch
-              const float scale =
-                  (std::min)(static_cast<float>(w) / imageSize.width,
-                             static_cast<float>(h) / imageSize.height);
-              const float drawW = imageSize.width * scale;
-              const float drawH = imageSize.height * scale;
-              dst = positionImage(drawW, drawH);
+              if (m_Options.backgroundImageFallbackAspectRatio ==
+                  IMAGE_ASPECT_PRESERVE) {
+                const float scale =
+                    (std::min)(static_cast<float>(w) / imageSize.width,
+                               static_cast<float>(h) / imageSize.height);
+                const float drawW = imageSize.width * scale;
+                const float drawH = imageSize.height * scale;
+                dst = positionImage(drawW, drawH);
+              } else if (m_Options.backgroundImageFallbackAspectRatio ==
+                         IMAGE_ASPECT_CROP) {
+                const float scale =
+                    (std::max)(static_cast<float>(w) / imageSize.width,
+                               static_cast<float>(h) / imageSize.height);
+                const float drawW = imageSize.width * scale;
+                const float drawH = imageSize.height * scale;
+                dst = positionImage(drawW, drawH);
+              } else {
+                // IMAGE_ASPECT_STRETCH (default)
+                dst = backRect;
+              }
             } else if (m_Options.backgroundImageSize.type ==
                 BackgroundImageSize::Type::Explicit) {
               const float drawW = m_Options.backgroundImageSize.hasWidth

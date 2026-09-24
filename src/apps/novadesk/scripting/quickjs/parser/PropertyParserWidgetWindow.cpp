@@ -9,6 +9,7 @@
 #include "PropertyParserJs.h"
 #include "../../../shared/ColorUtil.h"
 #include "../../../shared/Utils.h"
+#include "../../render/ImageElement.h"
 #include <algorithm>
 #include <cmath>
 #include <cwctype>
@@ -143,6 +144,29 @@ void ParseWidgetWindowOptions(JSContext *ctx, JSValueConst options,
     }
   }
   JS_FreeValue(ctx, backgroundImageFallbackV);
+
+  JSValue backgroundImageFallbackAspectV =
+      JS_GetPropertyStr(ctx, options, "backgroundImageFallbackAspectRatio");
+  if (!JS_IsUndefined(backgroundImageFallbackAspectV) &&
+      !JS_IsNull(backgroundImageFallbackAspectV)) {
+    const char *value = JS_ToCString(ctx, backgroundImageFallbackAspectV);
+    if (value) {
+      std::wstring aspect = Utils::ToWString(value);
+      std::transform(aspect.begin(), aspect.end(), aspect.begin(), ::towlower);
+      if (aspect == L"preserve" || aspect == L"fit" || aspect == L"contain") {
+        out.backgroundImageFallbackAspectRatio = IMAGE_ASPECT_PRESERVE;
+        out.hasBackgroundImageFallbackAspectRatio = true;
+      } else if (aspect == L"crop" || aspect == L"cover") {
+        out.backgroundImageFallbackAspectRatio = IMAGE_ASPECT_CROP;
+        out.hasBackgroundImageFallbackAspectRatio = true;
+      } else if (aspect == L"stretch") {
+        out.backgroundImageFallbackAspectRatio = IMAGE_ASPECT_STRETCH;
+        out.hasBackgroundImageFallbackAspectRatio = true;
+      }
+      JS_FreeCString(ctx, value);
+    }
+  }
+  JS_FreeValue(ctx, backgroundImageFallbackAspectV);
 
   JSValue backgroundImageSizeV =
       JS_GetPropertyStr(ctx, options, "backgroundImageSize");
