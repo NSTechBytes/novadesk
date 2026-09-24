@@ -147,6 +147,11 @@ void ParseWidgetWindowOptions(JSContext *ctx, JSValueConst options,
 
   JSValue backgroundImageFallbackAspectV =
       JS_GetPropertyStr(ctx, options, "backgroundImageFallbackAspectRatio");
+  if (JS_IsUndefined(backgroundImageFallbackAspectV) || JS_IsNull(backgroundImageFallbackAspectV)) {
+    JS_FreeValue(ctx, backgroundImageFallbackAspectV);
+    backgroundImageFallbackAspectV =
+        JS_GetPropertyStr(ctx, options, "backgroundImageFallbackSize");
+  }
   if (!JS_IsUndefined(backgroundImageFallbackAspectV) &&
       !JS_IsNull(backgroundImageFallbackAspectV)) {
     const char *value = JS_ToCString(ctx, backgroundImageFallbackAspectV);

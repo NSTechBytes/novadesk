@@ -267,6 +267,8 @@ JSValue JsWidgetWindowGetProperties(JSContext *ctx, JSValueConst thisVal, int,
         : o.backgroundImageFallbackAspectRatio == IMAGE_ASPECT_CROP
             ? "crop"
             : "stretch";
+    JS_SetPropertyStr(ctx, out, "backgroundImageFallbackSize",
+                      JS_NewString(ctx, fallbackAspect));
     JS_SetPropertyStr(ctx, out, "backgroundImageFallbackAspectRatio",
                       JS_NewString(ctx, fallbackAspect));
   }

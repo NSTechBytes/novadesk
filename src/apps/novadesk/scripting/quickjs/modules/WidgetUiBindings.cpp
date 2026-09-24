@@ -91,7 +91,10 @@ std::wstring ToGradientOrRGBAString(const GradientInfo &gradient,
   std::wstring result;
   if (gradient.type == GRADIENT_LINEAR) {
     wchar_t buf[64];
-    swprintf_s(buf, L"linearGradient(%.1f", gradient.angle);
+    if (std::fmod(gradient.angle, 1.0f) == 0.0f)
+      swprintf_s(buf, L"linearGradient(%ddeg", static_cast<int>(gradient.angle));
+    else
+      swprintf_s(buf, L"linearGradient(%.1fdeg", gradient.angle);
     result = buf;
   } else if (gradient.type == GRADIENT_RADIAL) {
     result = L"radialGradient(" + gradient.shape;
@@ -100,7 +103,13 @@ std::wstring ToGradientOrRGBAString(const GradientInfo &gradient,
   }
 
   for (const auto &stop : gradient.stops) {
-    result += L", " + ColorUtil::ToRGBAString(stop.color, stop.alpha);
+    wchar_t stopBuf[32];
+    float pct = stop.position * 100.0f;
+    if (std::fmod(pct, 1.0f) == 0.0f)
+      swprintf_s(stopBuf, L" %d%%", static_cast<int>(pct));
+    else
+      swprintf_s(stopBuf, L" %.1f%%", pct);
+    result += L", " + ColorUtil::ToRGBAString(stop.color, stop.alpha) + stopBuf;
   }
   result += L")";
   return result;
