@@ -7,14 +7,17 @@
   "description": "Widget Description",
   "icon": "assets/icon.ico",
   "preview": "defaultPreview.png",
-  "excludeItems": [],
+  "excludeItems": [
+    ".git",
+    "dist"
+  ],
   "setup": {
     "createDesktopShortcut": true,
     "createStartupShortcut": false,
     "runOnStartup": false,
     "installDir": "%ProgramFiles%\\{NAME}",
     "startMenuFolder": "{NAME}",
-    "setupName": "setup",
+    "setupName": "{NAME}_Setup",
     "setupIcon": "assets/icon.ico",
     "enableUninstall": true,
     "launchAfterInstall": false
