@@ -1,9 +1,9 @@
-;--------------------------------
+﻿;--------------------------------
 ; Novadesk Installer Script
 ;--------------------------------
 
 ; Define global version variable (Update this as needed)
-!define VERSION "0.9.11.0"
+!define VERSION "0.9.12.0"
 
 ; The name of the installer
 Name "Novadesk"

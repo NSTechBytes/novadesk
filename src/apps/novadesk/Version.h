@@ -8,4 +8,4 @@
 #pragma once
 
 /// Application version string in "major.minor.patch.build" format.
-#define NOVADESK_VERSION "0.9.11.0"
+#define NOVADESK_VERSION "0.9.12.0"
