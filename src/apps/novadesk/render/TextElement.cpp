@@ -59,14 +59,13 @@ void ApplyTextAlignment(IDWriteTextFormat *textFormat,
   }
 }
 
-void ApplyClipSettings(IDWriteTextFormat *textFormat, TextClip clip,
-                       bool widthDefined) {
+void ApplyClipSettings(IDWriteTextFormat *textFormat, TextClip clip) {
   if (!textFormat)
     return;
 
-  const bool allowWrap =
-      (clip == TEXT_CLIP_WRAP) || (clip == TEXT_CLIP_NONE && widthDefined);
-  if (allowWrap) {
+  // Wrapping must be opt-in. A defined text width is a layout constraint, not
+  // a request to split text across lines.
+  if (clip == TEXT_CLIP_WRAP) {
     textFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
     return;
   }
@@ -292,7 +291,7 @@ void TextElement::Render(ID2D1DeviceContext *context) {
   }
 
   ApplyTextAlignment(pTextFormat.Get(), m_TextAlign);
-  ApplyClipSettings(pTextFormat.Get(), m_textClip, m_WDefined);
+  ApplyClipSettings(pTextFormat.Get(), m_textClip);
 
   GfxRect bounds = GetBounds();
   float layoutX = (float)bounds.X + m_PaddingLeft;
@@ -633,9 +632,8 @@ int TextElement::GetAutoHeight() {
     return 0;
 
   float maxWidth = 10000.0f;
-  // Keep auto-size text single-line unless wrap is explicitly requested.
-  bool wrap = (m_textClip == TEXT_CLIP_WRAP) ||
-              (m_textClip == TEXT_CLIP_NONE && m_WDefined);
+  // Text wraps only when explicitly requested through textClip: "wrap".
+  bool wrap = m_textClip == TEXT_CLIP_WRAP;
 
   if (wrap) {
     int elementW = GetWidth();
@@ -764,7 +762,7 @@ bool TextElement::HitTest(int x, int y) {
     layoutH = 1;
 
   ApplyTextAlignment(pTextFormat.Get(), m_TextAlign);
-  ApplyClipSettings(pTextFormat.Get(), m_textClip, m_WDefined);
+  ApplyClipSettings(pTextFormat.Get(), m_textClip);
 
   std::wstring processedText = GetProcessedText();
   if (processedText.empty())
@@ -1046,7 +1044,7 @@ UINT32 TextElement::HitTestTextPosition(int x, int y) {
     layoutH = 1;
 
   ApplyTextAlignment(pTextFormat.Get(), m_TextAlign);
-  ApplyClipSettings(pTextFormat.Get(), m_textClip, m_WDefined);
+  ApplyClipSettings(pTextFormat.Get(), m_textClip);
 
   std::wstring processedText = GetProcessedText();
   if (processedText.empty())

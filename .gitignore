@@ -445,3 +445,15 @@ FodyWeavers.xsd
 dist
 installer
 installer/dist_output
+
+# NSIS UAC resources are source dependencies, not generated installer output.
+!installer/
+installer/*
+!installer/nsis/
+!installer/nsis/UAC.nsh
+!installer/nsis/LICENSE-UAC.txt
+!installer/plugins/
+installer/plugins/*
+!installer/plugins/x86-unicode/
+installer/plugins/x86-unicode/*
+!installer/plugins/x86-unicode/UAC.dll

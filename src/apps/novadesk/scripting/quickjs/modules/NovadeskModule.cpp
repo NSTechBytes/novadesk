@@ -22,6 +22,7 @@
 #include "wintoastlib.h"
 #include "../../../Version.h"
 #include "../../domain/Novadesk.h"
+#include "../../domain/Widget.h"
 #include "../../shared/Logging.h"
 #include "../../shared/PathUtils.h"
 #include "../../shared/Settings.h"
@@ -37,7 +38,7 @@ using novadesk_context = void *;
 
 // Current host API version.  Increment this whenever any function pointer in
 // NovadeskHostAPI is added, removed, or its signature changes.
-constexpr uint32_t NOVADESK_HOST_API_VERSION = 1;
+constexpr uint32_t NOVADESK_HOST_API_VERSION = 2;
 
 struct NovadeskHostAPI {
   // API version — always the first field so addons compiled against any
@@ -83,6 +84,18 @@ struct NovadeskHostAPI {
   void (*JsCallFunction)(novadesk_context ctx, void *funcPtr, int nargs);
   void (*JsCallFunctionNoArgs)(novadesk_context ctx, void *funcPtr);
   void (*ArrayPushObject)(novadesk_context ctx);
+
+  // Read-only equivalents of selected functions from the JavaScript app
+  // module. Returned strings remain valid until the next call on the same
+  // thread.
+  const char *(*GetAppProductVersion)();
+  const char *(*GetAppFileVersion)();
+  const char *(*GetAppNovadeskVersion)();
+  const char *(*GetAppDataPath)();
+  const char *(*GetAppSettingsFilePath)();
+  const char *(*GetAppLogPath)();
+  int (*IsAppPortable)();
+  int (*IsAppFirstRun)();
 };
 
 using NovadeskAddonInitFn = void (*)(novadesk_context ctx, HWND hMsgWnd,
@@ -809,6 +822,44 @@ static void host_ArrayPushObject(novadesk_context c) {
   call->stack.push_back(obj);
 }
 
+static const char *host_GetAppProductVersion() {
+  static thread_local std::string value;
+  value = Utils::ToString(GetVersionProperty(L"ProductVersion"));
+  return value.c_str();
+}
+
+static const char *host_GetAppFileVersion() {
+  static thread_local std::string value;
+  value = Utils::ToString(GetVersionProperty(L"FileVersion"));
+  return value.c_str();
+}
+
+static const char *host_GetAppNovadeskVersion() { return NOVADESK_VERSION; }
+
+static const char *host_GetAppDataPath() {
+  static thread_local std::string value;
+  value = Utils::ToString(PathUtils::GetAppDataPath());
+  return value.c_str();
+}
+
+static const char *host_GetAppSettingsFilePath() {
+  static thread_local std::string value;
+  value = Utils::ToString(Settings::GetSettingsPath());
+  return value.c_str();
+}
+
+static const char *host_GetAppLogPath() {
+  static thread_local std::string value;
+  value = Utils::ToString(Settings::GetLogPath());
+  return value.c_str();
+}
+
+static int host_IsAppPortable() {
+  return PathUtils::IsPortableEnvironment() ? 1 : 0;
+}
+
+static int host_IsAppFirstRun() { return Settings::IsFirstRun() ? 1 : 0; }
+
 const NovadeskHostAPI g_hostApi = {NOVADESK_HOST_API_VERSION,
                                    host_RegisterString,
                                    host_RegisterNumber,
@@ -842,7 +893,15 @@ const NovadeskHostAPI g_hostApi = {NOVADESK_HOST_API_VERSION,
                                    host_FreeFunction,
                                    host_JsCallFunction,
                                    host_JsCallFunctionNoArgs,
-                                   host_ArrayPushObject};
+                                   host_ArrayPushObject,
+                                   host_GetAppProductVersion,
+                                   host_GetAppFileVersion,
+                                   host_GetAppNovadeskVersion,
+                                   host_GetAppDataPath,
+                                   host_GetAppSettingsFilePath,
+                                   host_GetAppLogPath,
+                                   host_IsAppPortable,
+                                   host_IsAppFirstRun};
 
 bool UnloadAddonById(int addonId) {
   std::lock_guard<std::recursive_mutex> lock(g_addonMutex);
@@ -1052,6 +1111,20 @@ JSValue JsAppRefresh(JSContext *ctx, JSValueConst, int, JSValueConst *) {
 JSValue JsAppExit(JSContext *ctx, JSValueConst, int, JSValueConst *) {
   (void)ctx;
   PostQuitMessage(0);
+  return JS_UNDEFINED;
+}
+
+JSValue JsAppBeginWindowBatch(JSContext *ctx, JSValueConst, int,
+                              JSValueConst *) {
+  (void)ctx;
+  Widget::BeginWindowBatch();
+  return JS_UNDEFINED;
+}
+
+JSValue JsAppEndWindowBatch(JSContext *ctx, JSValueConst, int,
+                            JSValueConst *) {
+  (void)ctx;
+  Widget::EndWindowBatch();
   return JS_UNDEFINED;
 }
 
@@ -2292,6 +2365,12 @@ int InitAppExport(JSContext *ctx, JSModuleDef *m) {
                     JS_NewCFunction(ctx, JsAppRefresh, "refresh", 0));
   JS_SetPropertyStr(ctx, app, "exit",
                     JS_NewCFunction(ctx, JsAppExit, "exit", 0));
+  JS_SetPropertyStr(ctx, app, "beginWindowBatch",
+                    JS_NewCFunction(ctx, JsAppBeginWindowBatch,
+                                    "beginWindowBatch", 0));
+  JS_SetPropertyStr(ctx, app, "endWindowBatch",
+                    JS_NewCFunction(ctx, JsAppEndWindowBatch,
+                                    "endWindowBatch", 0));
   JS_SetPropertyStr(ctx, app, "requestSingleInstanceLock",
                     JS_NewCFunction(ctx, JsAppRequestSingleInstanceLock,
                                     "requestSingleInstanceLock", 0));

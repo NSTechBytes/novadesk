@@ -61,6 +61,9 @@ public:
   /// @return True if the image loaded successfully.
   bool IsLoaded() const { return m_GeneralImage.IsLoaded(); }
 
+  /// @return True if currently displaying the fallback image.
+  bool IsFallbackShowing() const { return m_GeneralImage.IsFallbackShowing(); }
+
   /**
    * @brief Updates the image source path.
    *
@@ -70,9 +73,14 @@ public:
 
   virtual bool HitTest(int x, int y) override;
 
-  /// Sets the aspect ratio handling mode.
+  /// Sets the aspect ratio handling mode for the main image.
   void SetPreserveAspectRatio(ImageAspectRatio mode) {
     m_PreserveAspectRatio = mode;
+  }
+
+  /// Sets the aspect ratio handling mode used when the fallback image is shown.
+  void SetFallbackAspectRatio(ImageAspectRatio mode) {
+    m_FallbackAspectRatio = mode;
   }
 
   /// Sets the image tint color and opacity.
@@ -136,6 +144,9 @@ public:
   ImageAspectRatio GetPreserveAspectRatio() const {
     return m_PreserveAspectRatio;
   }
+  ImageAspectRatio GetFallbackAspectRatio() const {
+    return m_FallbackAspectRatio;
+  }
   bool HasImageTint() const { return m_GeneralImage.HasImageTint(); }
   COLORREF GetImageTint() const { return m_GeneralImage.GetImageTint(); }
   BYTE GetImageTintAlpha() const { return m_GeneralImage.GetImageTintAlpha(); }
@@ -179,6 +190,7 @@ private:
 
   GeneralImage m_GeneralImage;
   ImageAspectRatio m_PreserveAspectRatio = IMAGE_ASPECT_STRETCH;
+  ImageAspectRatio m_FallbackAspectRatio = IMAGE_ASPECT_STRETCH;
   bool m_Tile = false;
   bool m_HasScaleMargins = false;
   float m_ScaleMarginLeft = 0.0f;

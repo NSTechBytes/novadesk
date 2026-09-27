@@ -309,7 +309,7 @@ bool Initialize() {
             hr);
         g_pInMemoryLoader.Reset();
       } else {
-        Logging::Log(LogLevel::Info,
+        Logging::Log(LogLevel::Debug,
                      L"FontManager: Registered IDWriteInMemoryFontFileLoader "
                      L"successfully");
       }

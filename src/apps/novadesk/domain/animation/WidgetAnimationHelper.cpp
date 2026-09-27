@@ -243,8 +243,8 @@ void ApplyAnimationTargetToElement(Element *element,
 
   int x = element->GetX();
   int y = element->GetY();
-  int w = element->GetWidth();
-  int h = element->GetHeight();
+  int w = 0;
+  int h = 0;
   if (target.hasX)
     x = static_cast<int>(std::lround(target.x));
   if (target.hasY)
@@ -254,7 +254,17 @@ void ApplyAnimationTargetToElement(Element *element,
   if (target.hasHeight)
     h = static_cast<int>(std::lround(target.height));
   element->SetPosition(x, y);
-  element->SetSize(w, h);
+  // Do not force an auto-sized element into a fixed-size element when the
+  // animation changes only position, rotation, or text styling. In
+  // particular, centered and right-aligned TextElement instances depend on
+  // their auto-measured width to retain their anchor correctly.
+  if (target.hasWidth || target.hasHeight) {
+    if (!target.hasWidth)
+      w = element->GetWidth();
+    if (!target.hasHeight)
+      h = element->GetHeight();
+    element->SetSize(w, h);
+  }
   if (target.hasRotate)
     element->SetRotate(target.rotate);
   if (element->GetType() == ELEMENT_TEXT)
@@ -559,7 +569,10 @@ void WidgetAnimationHelper::StartElementAnimation(
   RemoveAnimationsForElement(widget, id);
   widget.m_Animations.push_back(anim);
 
-  ApplyAnimationTargetToElement(element, anim.from);
+  // Apply only properties explicitly supplied in `from`. Applying the full
+  // captured baseline used to call SetSize() on auto-sized elements before
+  // their first animation frame.
+  ApplyAnimationTargetToElement(element, from);
   widget.Redraw();
 
   if (widget.m_hWnd)

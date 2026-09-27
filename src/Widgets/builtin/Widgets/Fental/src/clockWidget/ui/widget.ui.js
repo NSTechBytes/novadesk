@@ -7,7 +7,7 @@ ui.addShape({
     y: 1,
     width: 210,
     height: 70,
-    fillColor: "rgba(27 ,27 ,31,0.8)",
+    fillColor: "rgba(12, 19, 41, 0.8)", 
     strokeColor: "rgba(200,200,200,0.5)",
     radius: 10,
     strokeWidth: 2
@@ -21,7 +21,7 @@ ui.addText({
     fontSize: 25,
     fontFace: "Consolas",
     textAlign: "center",
-    fontColor: "linearGradient(120deg, #51BCFE, #BD34FE)",
+    fontColor: "linearGradient(120deg, #73F0FF, #29D1FA, #057AF0)",
 })
 
 ui.addText({

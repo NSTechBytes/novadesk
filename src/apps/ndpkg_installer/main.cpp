@@ -15,6 +15,7 @@
 #include <shlobj.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdint>
 #include <cstring>
@@ -61,7 +62,8 @@ enum ControlId : int {
   IDC_PREVIEW = 1008,
   IDC_INSTALL = 1009,
   IDC_CANCEL = 1010,
-  IDC_PROGRESS = 1011
+  IDC_PROGRESS = 1011,
+  IDC_WIDGET_STATUS = 1012
 };
 
 #pragma pack(push, 1)
@@ -75,9 +77,18 @@ struct NdpkgFooter {
 struct PackageInfo {
   std::string name;
   std::string version;
+  std::string minimumNovadeskVersion;
   std::string author;
   std::vector<std::string> addons;
   fs::path previewImagePath;
+};
+
+enum class WidgetInstallStatus {
+  NewInstall,
+  UpdateAvailable,
+  SameVersion,
+  NewerVersionInstalled,
+  ExistingInstallation
 };
 
 enum class AddonInstallStatus { Add, Replace, NewerVersionFound };
@@ -92,9 +103,15 @@ struct AddonRow {
 struct AppState {
   HWND hwnd = nullptr;
   HWND hTitle = nullptr;
+  HWND hNameLabel = nullptr;
   HWND hName = nullptr;
+  HWND hVersionLabel = nullptr;
   HWND hVersion = nullptr;
+  HWND hAuthorLabel = nullptr;
   HWND hAuthor = nullptr;
+  HWND hWidgetStatusLabel = nullptr;
+  HWND hWidgetStatus = nullptr;
+  HWND hAddonsLabel = nullptr;
   HWND hAddons = nullptr;
   HWND hPreview = nullptr;
   HWND hInstall = nullptr;
@@ -102,6 +119,7 @@ struct AppState {
   HWND hProgress = nullptr;
   HFONT hTitleFont = nullptr;
   HFONT hUiFont = nullptr;
+  HFONT hStatusFont = nullptr;
   HBITMAP hPreviewBitmap = nullptr;
   ULONG_PTR gdiplusToken = 0;
 
@@ -111,6 +129,8 @@ struct AppState {
   fs::path workingDir;
   fs::path extractDir;
   PackageInfo info;
+  WidgetInstallStatus widgetInstallStatus = WidgetInstallStatus::NewInstall;
+  std::string installedWidgetVersion;
   std::vector<AddonRow> addonRows;
 };
 
@@ -165,6 +185,128 @@ uint64_t GetFileVersionQuad(const fs::path &filePath) {
   const uint64_t ms = static_cast<uint64_t>(fileInfo->dwFileVersionMS);
   const uint64_t ls = static_cast<uint64_t>(fileInfo->dwFileVersionLS);
   return (ms << 32) | ls;
+}
+
+bool ParseVersionQuad(const std::string &value, uint64_t &outVersion) {
+  std::array<uint32_t, 4> parts{};
+  size_t start = 0;
+  for (size_t i = 0; i < parts.size(); ++i) {
+    const size_t end = value.find('.', start);
+    if ((i < parts.size() - 1 && end == std::string::npos) ||
+        (i == parts.size() - 1 && end != std::string::npos)) {
+      return false;
+    }
+    const std::string part = value.substr(start, end - start);
+    if (part.empty() ||
+        !std::all_of(part.begin(), part.end(), [](unsigned char ch) {
+          return std::isdigit(ch) != 0;
+        })) {
+      return false;
+    }
+    try {
+      const unsigned long number = std::stoul(part);
+      if (number > 65535)
+        return false;
+      parts[i] = static_cast<uint32_t>(number);
+    } catch (...) {
+      return false;
+    }
+    start = end + 1;
+  }
+
+  outVersion = (static_cast<uint64_t>(parts[0]) << 48) |
+               (static_cast<uint64_t>(parts[1]) << 32) |
+               (static_cast<uint64_t>(parts[2]) << 16) | parts[3];
+  return true;
+}
+
+std::wstring FormatVersionQuad(uint64_t version) {
+  return std::to_wstring((version >> 48) & 0xffff) + L"." +
+         std::to_wstring((version >> 32) & 0xffff) + L"." +
+         std::to_wstring((version >> 16) & 0xffff) + L"." +
+         std::to_wstring(version & 0xffff);
+}
+
+fs::path FindNovadeskExecutable() {
+  wchar_t exePath[MAX_PATH]{};
+  GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+  const fs::path exeDir = fs::path(exePath).parent_path();
+
+  const fs::path adjacent = exeDir / "Novadesk.exe";
+  if (fs::exists(adjacent))
+    return adjacent;
+
+  const fs::path parent = exeDir.parent_path() / "Novadesk.exe";
+  if (fs::exists(parent))
+    return parent;
+
+  return {};
+}
+
+WidgetInstallStatus GetWidgetInstallStatus(const fs::path &widgetsTarget,
+                                           const PackageInfo &package,
+                                           std::string &installedVersion) {
+  installedVersion.clear();
+  const fs::path metaPath = widgetsTarget / package.name / "meta.json";
+  if (!fs::exists(metaPath))
+    return WidgetInstallStatus::NewInstall;
+
+  try {
+    std::ifstream in(metaPath, std::ios::binary);
+    json installedMeta;
+    in >> installedMeta;
+    if (!installedMeta.contains("version") ||
+        !installedMeta["version"].is_string()) {
+      return WidgetInstallStatus::ExistingInstallation;
+    }
+    installedVersion = installedMeta["version"].get<std::string>();
+
+    uint64_t installedQuad = 0;
+    uint64_t packageQuad = 0;
+    if (!ParseVersionQuad(installedVersion, installedQuad) ||
+        !ParseVersionQuad(package.version, packageQuad)) {
+      return WidgetInstallStatus::ExistingInstallation;
+    }
+    if (packageQuad > installedQuad)
+      return WidgetInstallStatus::UpdateAvailable;
+    if (packageQuad == installedQuad)
+      return WidgetInstallStatus::SameVersion;
+    return WidgetInstallStatus::NewerVersionInstalled;
+  } catch (...) {
+    return WidgetInstallStatus::ExistingInstallation;
+  }
+}
+
+const wchar_t *WidgetInstallStatusText(WidgetInstallStatus status) {
+  switch (status) {
+  case WidgetInstallStatus::NewInstall:
+    return L"New widget";
+  case WidgetInstallStatus::UpdateAvailable:
+    return L"Update available";
+  case WidgetInstallStatus::SameVersion:
+    return L"Already installed";
+  case WidgetInstallStatus::NewerVersionInstalled:
+    return L"Newer version installed";
+  case WidgetInstallStatus::ExistingInstallation:
+    return L"Existing installation detected";
+  }
+  return L"Existing installation detected";
+}
+
+const wchar_t *WidgetInstallButtonText(WidgetInstallStatus status) {
+  switch (status) {
+  case WidgetInstallStatus::NewInstall:
+    return L"Install";
+  case WidgetInstallStatus::UpdateAvailable:
+    return L"Update";
+  case WidgetInstallStatus::SameVersion:
+    return L"Reinstall";
+  case WidgetInstallStatus::NewerVersionInstalled:
+    return L"Downgrade";
+  case WidgetInstallStatus::ExistingInstallation:
+    return L"Replace";
+  }
+  return L"Install";
 }
 
 const wchar_t *AddonStatusText(AddonInstallStatus status) {
@@ -412,6 +554,19 @@ bool LoadPackageMetadata(const fs::path &extractDir, PackageInfo &outInfo,
   outInfo.name = j["name"].get<std::string>();
   outInfo.version = j["version"].get<std::string>();
   outInfo.author = j["author"].get<std::string>();
+  if (j.contains("minimumNovadeskVersion")) {
+    if (!j["minimumNovadeskVersion"].is_string()) {
+      errorOut = L"ndpkg.json has an invalid minimumNovadeskVersion field.";
+      return false;
+    }
+    outInfo.minimumNovadeskVersion =
+        j["minimumNovadeskVersion"].get<std::string>();
+    uint64_t ignored = 0;
+    if (!ParseVersionQuad(outInfo.minimumNovadeskVersion, ignored)) {
+      errorOut = L"ndpkg.json has an invalid minimumNovadeskVersion value.";
+      return false;
+    }
+  }
   outInfo.addons = ParseAddons(j);
   outInfo.previewImagePath = FindPreviewImage(extractDir);
   return true;
@@ -526,19 +681,7 @@ bool CopyDirectoryRecursive(
 }
 
 bool ResolveInstallTargets(fs::path &widgetsOut, fs::path &addonsOut) {
-  wchar_t exePath[MAX_PATH]{};
-  GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-  fs::path exeDir = fs::path(exePath).parent_path();
-
-  fs::path novadeskExe = exeDir / "Novadesk.exe";
-  if (!fs::exists(novadeskExe)) {
-    fs::path parentCandidate = exeDir.parent_path() / "Novadesk.exe";
-    if (fs::exists(parentCandidate)) {
-      novadeskExe = parentCandidate;
-    } else {
-      novadeskExe.clear();
-    }
-  }
+  fs::path novadeskExe = FindNovadeskExecutable();
 
   const bool portable = !novadeskExe.empty() &&
                         fs::exists(novadeskExe.parent_path() / "settings.json");
@@ -806,6 +949,7 @@ void ResetUiFromState(AppState *state) {
   SetEditText(state->hName, L"");
   SetEditText(state->hVersion, L"");
   SetEditText(state->hAuthor, L"");
+  SetEditText(state->hWidgetStatus, L"");
   state->addonRows.clear();
   if (state->hAddons) {
     ListView_DeleteAllItems(state->hAddons);
@@ -825,6 +969,25 @@ void UpdateUiWithPackage(AppState *state) {
   SetEditText(state->hName, Utf8ToWide(state->info.name));
   SetEditText(state->hVersion, Utf8ToWide(state->info.version));
   SetEditText(state->hAuthor, Utf8ToWide(state->info.author));
+
+  fs::path widgetsTarget;
+  fs::path addonsTarget;
+  if (ResolveInstallTargets(widgetsTarget, addonsTarget)) {
+    state->widgetInstallStatus =
+        GetWidgetInstallStatus(widgetsTarget, state->info,
+                               state->installedWidgetVersion);
+  } else {
+    state->widgetInstallStatus = WidgetInstallStatus::ExistingInstallation;
+    state->installedWidgetVersion.clear();
+  }
+  std::wstring status = WidgetInstallStatusText(state->widgetInstallStatus);
+  if (!state->installedWidgetVersion.empty()) {
+    status += L" (installed: " +
+              Utf8ToWide(state->installedWidgetVersion) + L")";
+  }
+  SetEditText(state->hWidgetStatus, status);
+  SetWindowTextW(state->hInstall,
+                 WidgetInstallButtonText(state->widgetInstallStatus));
 
   BuildAddonRows(state);
   PopulateAddonsListView(state);
@@ -939,8 +1102,57 @@ void HandleInstall(AppState *state) {
   if (state->installing)
     return;
 
+  if (state->widgetInstallStatus != WidgetInstallStatus::NewInstall) {
+    std::wstring message = L"An existing installation of " +
+                           Utf8ToWide(state->info.name) + L" was detected.";
+    switch (state->widgetInstallStatus) {
+    case WidgetInstallStatus::UpdateAvailable:
+      message += L"\n\nInstall the newer package version?";
+      break;
+    case WidgetInstallStatus::SameVersion:
+      message += L"\n\nReinstall this same version?";
+      break;
+    case WidgetInstallStatus::NewerVersionInstalled:
+      message += L"\n\nThe installed version is newer. Continue with this "
+                 L"downgrade?";
+      break;
+    case WidgetInstallStatus::ExistingInstallation:
+      message += L"\n\nReplace the existing widget files?";
+      break;
+    case WidgetInstallStatus::NewInstall:
+      break;
+    }
+    if (MessageBoxW(state->hwnd, message.c_str(), L"Confirm Widget Install",
+                    MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2) != IDYES) {
+      return;
+    }
+  }
+
   SetInstallingUiState(state, true);
   SetInstallProgress(state, 0);
+
+  if (!state->info.minimumNovadeskVersion.empty()) {
+    uint64_t minimumVersion = 0;
+    ParseVersionQuad(state->info.minimumNovadeskVersion, minimumVersion);
+    const fs::path novadeskExe = FindNovadeskExecutable();
+    const uint64_t installedVersion =
+        novadeskExe.empty() ? 0 : GetFileVersionQuad(novadeskExe);
+    if (installedVersion == 0 || installedVersion < minimumVersion) {
+      SetInstallingUiState(state, false);
+      std::wstring message =
+          L"This widget requires Novadesk " +
+          Utf8ToWide(state->info.minimumNovadeskVersion) + L" or newer.";
+      if (installedVersion == 0) {
+        message += L"\n\nUnable to determine the installed Novadesk version.";
+      } else {
+        message += L"\n\nInstalled version: " +
+                   FormatVersionQuad(installedVersion) + L".";
+      }
+      MessageBoxW(state->hwnd, message.c_str(), L"Novadesk Update Required",
+                  MB_ICONWARNING | MB_OK);
+      return;
+    }
+  }
 
   fs::path widgetsTarget;
   fs::path addonsTarget;
@@ -975,7 +1187,15 @@ void HandleInstall(AppState *state) {
   }
   SetInstallProgress(state, 35);
 
-  const fs::path widgetsSource = state->extractDir / "Widgets";
+  const fs::path widgetsSource =
+      state->extractDir / "Widgets" / state->info.name;
+  if (!fs::exists(widgetsSource) || !fs::is_directory(widgetsSource)) {
+    SetInstallingUiState(state, false);
+    MessageBoxW(state->hwnd, L"Invalid package: widget content is missing.",
+                L"Install Error", MB_ICONERROR | MB_OK);
+    return;
+  }
+
   size_t widgetFileCount = 0;
   std::error_code countEc;
   for (const auto &entry :
@@ -986,7 +1206,20 @@ void HandleInstall(AppState *state) {
       ++widgetFileCount;
   }
   size_t copiedWidgetFiles = 0;
-  if (!CopyDirectoryRecursive(widgetsSource, widgetsTarget, error, [&]() {
+  const std::wstring widgetFolderName = Utf8ToWide(state->info.name);
+  const std::wstring transactionSuffix =
+      L".ndpkg-" + std::to_wstring(GetCurrentProcessId()) + L"-" +
+      std::to_wstring(GetTickCount64());
+  const fs::path installedWidgetDir = widgetsTarget / state->info.name;
+  const fs::path stagingWidgetDir =
+      widgetsTarget / (widgetFolderName + L".staging" + transactionSuffix);
+  const fs::path backupWidgetDir =
+      widgetsTarget / (widgetFolderName + L".backup" + transactionSuffix);
+
+  // Stage the complete widget beside the final directory.  No installed files
+  // are touched until this copy has completed successfully.
+  error.clear();
+  if (!CopyDirectoryRecursive(widgetsSource, stagingWidgetDir, error, [&]() {
         ++copiedWidgetFiles;
         const int widgetProgress =
             35 +
@@ -997,10 +1230,67 @@ void HandleInstall(AppState *state) {
                              45.0);
         SetInstallProgress(state, widgetProgress);
       })) {
+    DeleteDirectoryIfExists(stagingWidgetDir);
     SetInstallingUiState(state, false);
     MessageBoxW(state->hwnd, error.c_str(), L"Install Error",
                 MB_ICONERROR | MB_OK);
     return;
+  }
+
+  // Swap folders only after staging succeeds.  If the second rename fails,
+  // move the backup back so the previous widget remains usable.
+  std::error_code transactionError;
+  bool movedExistingWidget = false;
+  const bool existingWidget = fs::exists(installedWidgetDir, transactionError);
+  if (transactionError) {
+    DeleteDirectoryIfExists(stagingWidgetDir);
+    SetInstallingUiState(state, false);
+    const std::wstring message = L"Failed to inspect the existing widget: " +
+                                 Utf8ToWide(transactionError.message());
+    MessageBoxW(state->hwnd, message.c_str(), L"Install Error",
+                MB_ICONERROR | MB_OK);
+    return;
+  }
+  if (existingWidget) {
+    fs::rename(installedWidgetDir, backupWidgetDir, transactionError);
+    if (transactionError) {
+      DeleteDirectoryIfExists(stagingWidgetDir);
+      SetInstallingUiState(state, false);
+      std::wstring message = L"Failed to back up the existing widget: " +
+                             Utf8ToWide(transactionError.message());
+      MessageBoxW(state->hwnd, message.c_str(), L"Install Error",
+                  MB_ICONERROR | MB_OK);
+      return;
+    }
+    movedExistingWidget = true;
+  }
+
+  transactionError.clear();
+  fs::rename(stagingWidgetDir, installedWidgetDir, transactionError);
+  if (transactionError) {
+    if (movedExistingWidget) {
+      std::error_code restoreError;
+      fs::rename(backupWidgetDir, installedWidgetDir, restoreError);
+      if (restoreError) {
+        error = L"Failed to install the widget and restore the previous "
+                L"installation. Backup is at: " + ToWide(backupWidgetDir);
+      }
+    }
+    DeleteDirectoryIfExists(stagingWidgetDir);
+    SetInstallingUiState(state, false);
+    if (error.empty()) {
+      error = L"Failed to activate the staged widget: " +
+              Utf8ToWide(transactionError.message());
+    }
+    MessageBoxW(state->hwnd, error.c_str(), L"Install Error",
+                MB_ICONERROR | MB_OK);
+    return;
+  }
+
+  // Delete the old folder only after the replacement is active.
+  if (movedExistingWidget) {
+    std::error_code cleanupError;
+    fs::remove_all(backupWidgetDir, cleanupError);
   }
   SetInstallProgress(state, 80);
 
@@ -1078,39 +1368,48 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                                  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
                                  CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                                  DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    state->hStatusFont = CreateFontW(
+        -13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+        DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     SendMessageW(state->hTitle, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hTitleFont), TRUE);
 
     HWND hGroupDetails = CreateWindowW(
         L"BUTTON", L"Widget Details", WS_CHILD | WS_VISIBLE | BS_GROUPBOX, 16,
         58, 300, 346, hwnd, nullptr, nullptr, nullptr);
-    HWND hLblName = CreateWindowW(L"STATIC", L"Name", WS_CHILD | WS_VISIBLE, 30,
-                                  88, 100, 18, hwnd, nullptr, nullptr, nullptr);
-    state->hName = CreateWindowExW(
-        WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_READONLY, 30,
-        108, 272, 24, hwnd, reinterpret_cast<HMENU>(IDC_NAME), nullptr,
-        nullptr);
-    HWND hLblVersion =
-        CreateWindowW(L"STATIC", L"Version", WS_CHILD | WS_VISIBLE, 30, 142,
-                      100, 18, hwnd, nullptr, nullptr, nullptr);
-    state->hVersion = CreateWindowExW(
-        WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_READONLY, 30,
-        162, 272, 24, hwnd, reinterpret_cast<HMENU>(IDC_VERSION), nullptr,
-        nullptr);
-    HWND hLblAuthor =
-        CreateWindowW(L"STATIC", L"Author", WS_CHILD | WS_VISIBLE, 30, 196, 100,
-                      18, hwnd, nullptr, nullptr, nullptr);
-    state->hAuthor = CreateWindowExW(
-        WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_READONLY, 30,
-        216, 272, 24, hwnd, reinterpret_cast<HMENU>(IDC_AUTHOR), nullptr,
-        nullptr);
-    HWND hLblAddons =
-        CreateWindowW(L"STATIC", L"Included Addons", WS_CHILD | WS_VISIBLE, 30,
-                      250, 140, 18, hwnd, nullptr, nullptr, nullptr);
+    state->hNameLabel = CreateWindowW(L"STATIC", L"WIDGET NAME",
+                                      WS_CHILD | WS_VISIBLE, 30, 84, 130, 17,
+                                      hwnd, nullptr, nullptr, nullptr);
+    state->hName = CreateWindowW(
+        L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 30, 103, 272, 25,
+        hwnd, reinterpret_cast<HMENU>(IDC_NAME), nullptr, nullptr);
+    state->hVersionLabel = CreateWindowW(L"STATIC", L"VERSION",
+                                         WS_CHILD | WS_VISIBLE, 30, 143, 110,
+                                         17, hwnd, nullptr, nullptr, nullptr);
+    state->hVersion = CreateWindowW(
+        L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 30, 161, 110, 23,
+        hwnd, reinterpret_cast<HMENU>(IDC_VERSION), nullptr, nullptr);
+    state->hAuthorLabel = CreateWindowW(L"STATIC", L"AUTHOR",
+                                        WS_CHILD | WS_VISIBLE, 165, 143, 110,
+                                        17, hwnd, nullptr, nullptr, nullptr);
+    state->hAuthor = CreateWindowW(
+        L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 165, 161, 110, 23,
+        hwnd, reinterpret_cast<HMENU>(IDC_AUTHOR), nullptr, nullptr);
+    state->hWidgetStatusLabel = CreateWindowW(
+        L"STATIC", L"INSTALLATION STATUS", WS_CHILD | WS_VISIBLE, 30, 202,
+        180, 17, hwnd, nullptr, nullptr, nullptr);
+    state->hWidgetStatus = CreateWindowW(
+        L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 30, 220, 272, 22,
+        hwnd,
+        reinterpret_cast<HMENU>(IDC_WIDGET_STATUS), nullptr, nullptr);
+    state->hAddonsLabel = CreateWindowW(
+        L"STATIC", L"INCLUDED ADDONS", WS_CHILD | WS_VISIBLE, 30, 258, 160,
+        17, hwnd, nullptr, nullptr, nullptr);
     state->hAddons = CreateWindowExW(
         WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS, 30, 270, 272,
-        124, hwnd, reinterpret_cast<HMENU>(IDC_ADDONS), nullptr, nullptr);
+        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS, 30, 278, 272,
+        116, hwnd, reinterpret_cast<HMENU>(IDC_ADDONS), nullptr, nullptr);
     ListView_SetExtendedListViewStyle(
         state->hAddons, LVS_EX_CHECKBOXES | LVS_EX_FULLROWSELECT |
                             LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
@@ -1149,20 +1448,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
     SendMessageW(hGroupDetails, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(hLblName, WM_SETFONT, reinterpret_cast<WPARAM>(state->hUiFont),
-                 TRUE);
+    SendMessageW(state->hNameLabel, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
     SendMessageW(state->hName, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(hLblVersion, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
+    SendMessageW(state->hVersionLabel, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
     SendMessageW(state->hVersion, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(hLblAuthor, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
+    SendMessageW(state->hAuthorLabel, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
     SendMessageW(state->hAuthor, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(hLblAddons, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
+    SendMessageW(state->hWidgetStatus, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
+    SendMessageW(state->hWidgetStatusLabel, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
+    SendMessageW(state->hAddonsLabel, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
     SendMessageW(state->hAddons, WM_SETFONT,
                  reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
     SendMessageW(hGroupVisuals, WM_SETFONT,
@@ -1190,6 +1493,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
       return 0;
     }
     return 0;
+  case WM_CTLCOLORSTATIC:
+    if (state) {
+      HDC hdc = reinterpret_cast<HDC>(wParam);
+      HWND control = reinterpret_cast<HWND>(lParam);
+      SetBkColor(hdc, kWindowBgColor);
+      if (control == state->hNameLabel || control == state->hVersionLabel ||
+          control == state->hAuthorLabel ||
+          control == state->hWidgetStatusLabel ||
+          control == state->hAddonsLabel) {
+        SetTextColor(hdc, RGB(100, 108, 120));
+      } else if (control == state->hWidgetStatus) {
+        SetTextColor(hdc, RGB(0, 102, 180));
+      } else if (control == state->hName || control == state->hVersion ||
+                 control == state->hAuthor) {
+        SetTextColor(hdc, RGB(30, 35, 45));
+      }
+      return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_3DFACE));
+    }
+    break;
   case WM_CLOSE:
     if (state && state->installing) {
       return 0;
@@ -1208,6 +1530,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
       if (state->hUiFont) {
         DeleteObject(state->hUiFont);
         state->hUiFont = nullptr;
+      }
+      if (state->hStatusFont) {
+        DeleteObject(state->hStatusFont);
+        state->hStatusFont = nullptr;
       }
       DeleteDirectoryIfExists(state->workingDir);
     }

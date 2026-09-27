@@ -161,7 +161,7 @@ static const UINT kProcessMonitorIntervalMs = 500;
 static const UINT kStartupSyncDelayMs = 120;
 static const UINT kAutoUpdateIntervalMs = 60 * 1000; // 1 minute
 static const int kMaxLogRows = 2000;
-static const wchar_t *kCurrentVersion = L"0.9.11.0";
+static const wchar_t *kCurrentVersion = L"0.9.12.0";
 static const wchar_t *kSingleInstanceLockArg =
     L"--request-single-instance-lock";
 static const wchar_t *kManageWindowClassName = L"NovadeskManagerWindow";
@@ -177,6 +177,7 @@ static void ConfigureAutoUpdateTimer(HWND hWnd);
 static void RequestAppExit(HWND hWnd);
 static bool HasCommandLineFlag(const wchar_t *flag);
 static bool RequestExistingManageWindowClose();
+static bool RestartManageWindow();
 
 static void InitGdiPlus() {
   if (g_gdiplusToken != 0) {
@@ -287,34 +288,6 @@ static std::wstring EnsureSingleInstanceArg(const std::wstring &args) {
   return args + L" " + kSingleInstanceLockArg;
 }
 
-static bool LaunchRestartNovadesk() {
-  const std::wstring restartExe =
-      JoinPath(GetExeDir(), L"restart_novadesk.exe");
-  DWORD attrs = GetFileAttributesW(restartExe.c_str());
-  if (attrs == INVALID_FILE_ATTRIBUTES ||
-      (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0) {
-    ShowManageMessageBox(L"restart_novadesk.exe not found in the app folder.",
-                         L"Manage Novadesk", MB_OK | MB_ICONWARNING);
-    return false;
-  }
-
-  std::wstring cmdLine = L"\"" + restartExe + L"\"";
-  STARTUPINFOW si{};
-  si.cb = sizeof(si);
-  PROCESS_INFORMATION pi{};
-
-  if (!CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, FALSE, 0,
-                      nullptr, GetExeDir().c_str(), &si, &pi)) {
-    ShowManageMessageBox(L"Failed to launch restart_novadesk.exe.",
-                         L"Manage Novadesk", MB_OK | MB_ICONWARNING);
-    return false;
-  }
-
-  CloseHandle(pi.hProcess);
-  CloseHandle(pi.hThread);
-  return true;
-}
-
 static void PromptRestartForHardwareAcceleration() {
   const int kRestartNowButtonId = 1001;
   const TASKDIALOG_BUTTON buttons[] = {
@@ -339,7 +312,7 @@ static void PromptRestartForHardwareAcceleration() {
   HRESULT hr = TaskDialogIndirect(&config, &selectedButton, nullptr, nullptr);
   if (SUCCEEDED(hr)) {
     if (selectedButton == kRestartNowButtonId) {
-      LaunchRestartNovadesk();
+      RestartManageWindow();
     }
     return;
   }
@@ -348,7 +321,7 @@ static void PromptRestartForHardwareAcceleration() {
       L"Novadesk needs restart for this change.\n\nRestart now?",
       L"Manage Novadesk", MB_YESNO | MB_ICONINFORMATION);
   if (fallback == IDYES) {
-    LaunchRestartNovadesk();
+    RestartManageWindow();
   }
 }
 
@@ -2296,7 +2269,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
         pageRect.top, pageRect.right - pageRect.left - 140, 32, hWnd, nullptr,
         GetModuleHandleW(nullptr), nullptr);
     g_aboutVersion =
-        CreateWindowExW(0, L"STATIC", L"Version 0.9.11.0 (Beta)",
+        CreateWindowExW(0, L"STATIC", L"Version 0.9.12.0 (Beta)",
                         WS_CHILD | SS_LEFT, pageRect.left + 120,
                         pageRect.top + 34, pageRect.right - pageRect.left - 140,
                         22, hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
@@ -2771,6 +2744,34 @@ static bool RequestExistingManageWindowClose() {
   return !FindWindowW(kManageWindowClassName, nullptr);
 }
 
+// Relaunch the manager through its own executable. The temporary launcher
+// process waits for the current manager to close before starting a normal
+// instance, so no separate helper executable is required.
+static bool RestartManageWindow() {
+  wchar_t currentExe[MAX_PATH + 1] = {};
+  if (GetModuleFileNameW(nullptr, currentExe, MAX_PATH) == 0)
+    return false;
+
+  const std::wstring commandLine =
+      L"\"" + std::wstring(currentExe) + L"\" --restart-manager";
+  std::vector<wchar_t> mutableCommand(commandLine.begin(), commandLine.end());
+  mutableCommand.push_back(L'\0');
+
+  STARTUPINFOW si{};
+  si.cb = sizeof(si);
+  PROCESS_INFORMATION pi{};
+  if (!CreateProcessW(nullptr, mutableCommand.data(), nullptr, nullptr, FALSE,
+                      0, nullptr, GetExeDir().c_str(), &si, &pi)) {
+    ShowManageMessageBox(L"Failed to restart Manage Novadesk.",
+                         L"Manage Novadesk", MB_OK | MB_ICONWARNING);
+    return false;
+  }
+
+  CloseHandle(pi.hProcess);
+  CloseHandle(pi.hThread);
+  return true;
+}
+
 int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
                      _In_ int nCmdShow) {
   INITCOMMONCONTROLSEX icc{};
@@ -2782,6 +2783,40 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
   g_manageCloseMessage = RegisterWindowMessageW(kManageCloseMessageName);
   if (HasCommandLineFlag(L"--request-close")) {
     return RequestExistingManageWindowClose() ? 0 : 1;
+  }
+  if (HasCommandLineFlag(L"--restart-manager")) {
+    if (!RequestExistingManageWindowClose())
+      return 1;
+
+    // Window destruction precedes process termination. Wait for the old
+    // process to release its singleton mutex before starting the replacement.
+    for (int i = 0; i < 80; ++i) {
+      HANDLE existingMutex = OpenMutexW(
+          SYNCHRONIZE, FALSE, L"Global\\NovadeskManageWindowSingleton");
+      if (!existingMutex)
+        break;
+      CloseHandle(existingMutex);
+      Sleep(50);
+    }
+
+    wchar_t currentExe[MAX_PATH + 1] = {};
+    if (GetModuleFileNameW(nullptr, currentExe, MAX_PATH) == 0)
+      return 1;
+    std::wstring commandLine = L"\"" + std::wstring(currentExe) + L"\"";
+    std::vector<wchar_t> mutableCommand(commandLine.begin(),
+                                        commandLine.end());
+    mutableCommand.push_back(L'\0');
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+    const BOOL started = CreateProcessW(nullptr, mutableCommand.data(),
+                                        nullptr, nullptr, FALSE, 0, nullptr,
+                                        GetExeDir().c_str(), &si, &pi);
+    if (started) {
+      CloseHandle(pi.hProcess);
+      CloseHandle(pi.hThread);
+    }
+    return started ? 0 : 1;
   }
   HANDLE instanceMutex =
       CreateMutexW(nullptr, FALSE, L"Global\\NovadeskManageWindowSingleton");

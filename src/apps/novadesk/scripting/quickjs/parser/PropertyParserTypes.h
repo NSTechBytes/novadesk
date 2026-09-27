@@ -215,6 +215,7 @@ struct ElementOptions {
 /// Common image options (tint, flip, crop, color matrix, etc.).
 struct GeneralImageOptions : public ElementOptions {
   std::wstring fallbackPath;
+  ImageAspectRatio fallbackAspectRatio = IMAGE_ASPECT_STRETCH;
   ImageFlipMode imageFlip = IMAGE_FLIP_NONE;
   bool hasImageCrop = false;
   float imageCropX = 0.0f;
@@ -888,6 +889,8 @@ struct WidgetWindowOptions {
   bool hasBackgroundImage = false;
   std::wstring backgroundImageFallback;
   bool hasBackgroundImageFallback = false;
+  ImageAspectRatio backgroundImageFallbackAspectRatio = IMAGE_ASPECT_STRETCH;
+  bool hasBackgroundImageFallbackAspectRatio = false;
   bool backgroundImageSizeIsExplicit = false;
   float backgroundImageSizeWidth = 0.0f;
   float backgroundImageSizeHeight = 0.0f;

@@ -11,6 +11,7 @@
 #include "DesktopManager.h"
 #include "Settings.h"
 #include "Resource.h"
+#include "../Version.h"
 #include <vector>
 #include <unordered_map>
 #include <shellapi.h>
@@ -33,6 +34,7 @@
 #include <fstream>
 #include <iostream>
 #include <optional>
+#include <string_view>
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -246,19 +248,46 @@ static std::wstring CreateTempListPath() {
   return std::wstring(filePath);
 }
 
+// Returns true for the lightweight external version-query command.  This is
+// intentionally handled before single-instance routing and application startup
+// so installers, launchers, and other applications can query the executable
+// without starting Novadesk or communicating with an existing instance.
+static bool IsVersionQuery() {
+  int argc = 0;
+  LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+  if (!argv)
+    return false;
+
+  bool requested = false;
+  for (int i = 1; i < argc; ++i) {
+    if (std::wstring_view(argv[i]) == L"--version") {
+      requested = true;
+      break;
+    }
+  }
+  LocalFree(argv);
+  return requested;
+}
+
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                       _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine,
                       _In_ int nCmdShow) {
   // Attach to parent console for logging if present
   if (AttachConsole(ATTACH_PARENT_PROCESS)) {
     FILE *fDummy = nullptr;
-    if (freopen_s(&fDummy, "CONOUT$", "w", stdout) == 0 && fDummy)
-      fclose(fDummy);
+    // freopen_s redirects stdout/stderr to the parent console.  Do not close
+    // the returned stream: it is the process standard stream, and closing it
+    // prevents command-line queries such as --version from producing output.
+    freopen_s(&fDummy, "CONOUT$", "w", stdout);
     fDummy = nullptr;
-    if (freopen_s(&fDummy, "CONOUT$", "w", stderr) == 0 && fDummy)
-      fclose(fDummy);
+    freopen_s(&fDummy, "CONOUT$", "w", stderr);
     if (_fileno(stdout) >= 0)
       _setmode(_fileno(stdout), _O_U16TEXT);
+  }
+
+  if (IsVersionQuery()) {
+    std::wcout << NOVADESK_VERSION << std::endl;
+    return 0;
   }
 
   // Clear log file on startup
@@ -347,6 +376,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
       std::wstring refreshPath;
       std::wstring unloadPath;
       bool refreshAll = false;
+      bool restart = false;
       bool listScripts = false;
       std::wstring listScriptsFile;
       std::optional<bool> setHardwareAcceleration;
@@ -380,6 +410,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
         if (arg == L"--refresh-all") {
           refreshAll = true;
+          continue;
+        }
+        if (arg == L"--restart") {
+          restart = true;
           continue;
         }
         if (arg == L"--unload" && i + 1 < argc) {
@@ -470,6 +504,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
           handledCommand =
               SendIpcCommand(hExisting, L"refresh-all", L"") || handledCommand;
         }
+        if (restart) {
+          handledCommand = SendIpcCommand(hExisting, L"restart", L"") ||
+                           handledCommand;
+        }
         if (!unloadPath.empty()) {
           handledCommand = SendIpcCommand(hExisting, L"unload", unloadPath) ||
                            handledCommand;
@@ -524,7 +562,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     return 0;
   }
 
-  Logging::Log(LogLevel::Info, L"Application starting...");
+  Logging::Log(LogLevel::Debug, L"Application starting...");
 
   // Initialize Common Controls
   INITCOMMONCONTROLSEX icce;
@@ -613,6 +651,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         JSEngine::RefreshScript(path);
       } else if (command == L"refresh-all") {
         JSEngine::Reload();
+      } else if (command == L"restart") {
+        // Relaunch only after this process exits, otherwise single-instance
+        // routing would deliver the new invocation back to this process.
+        Settings::Flush();
+        const wchar_t *rawCmd = GetCommandLineW();
+        const std::wstring restartCmd =
+            L"/c ping 127.0.0.1 -n 2 > nul & " +
+            std::wstring(rawCmd ? rawCmd : L"");
+        ShellExecuteW(nullptr, L"open", L"cmd.exe", restartCmd.c_str(),
+                      nullptr, SW_HIDE);
+        PostQuitMessage(0);
       } else if (command == L"unload") {
         JSEngine::RemoveScript(path);
       } else if (command == L"load") {
@@ -830,6 +879,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   for (auto w : widgetsCopy)
     delete w;
 
+  // Widget placement and other options are debounced.  Always commit pending
+  // settings during a normal application exit so a layout applied just before
+  // closing is available on the next launch.
+  Settings::Flush();
+
   // Stop in-flight webFetch threads before tearing down the JS runtime.
   // These threads post to the message window and access JSContext; both
   // become invalid after JSEngine::Shutdown().
@@ -918,7 +972,7 @@ void InitTrayIcon(int trayId) {
   }
 
   Shell_NotifyIconW(NIM_ADD, &state->nid);
-  Logging::Log(LogLevel::Info, L"Tray icon initialized (id=%d)", trayId);
+  Logging::Log(LogLevel::Debug, L"Tray icon initialized (id=%d)", trayId);
 }
 
 void RemoveTrayIcon(int trayId) {
@@ -933,7 +987,7 @@ void RemoveTrayIcon(int trayId) {
     DestroyIcon(state->icon);
   }
   g_trayStates.erase(trayId);
-  Logging::Log(LogLevel::Info, L"Tray icon removed (id=%d)", trayId);
+  Logging::Log(LogLevel::Debug, L"Tray icon removed (id=%d)", trayId);
 }
 
 void RemoveAllTrayIcons() {

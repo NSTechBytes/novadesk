@@ -25,6 +25,8 @@ extern "C" {
 /// Opaque context handle representing the JavaScript engine instance.
 typedef void *novadesk_context;
 
+#define NOVADESK_ADDON_API_VERSION 2
+
 /**
  * @struct NovadeskHostAPI
  * @brief Table of function pointers provided by the Novadesk core.
@@ -84,6 +86,16 @@ struct NovadeskHostAPI {
   void (*JsCallFunction)(novadesk_context ctx, void *funcPtr, int nargs);
   void (*JsCallFunctionNoArgs)(novadesk_context ctx, void *funcPtr);
   void (*ArrayPushObject)(novadesk_context ctx);
+
+  /** Read-only selected app-module APIs. */
+  const char *(*GetAppProductVersion)();
+  const char *(*GetAppFileVersion)();
+  const char *(*GetAppNovadeskVersion)();
+  const char *(*GetAppDataPath)();
+  const char *(*GetAppSettingsFilePath)();
+  const char *(*GetAppLogPath)();
+  int (*IsAppPortable)();
+  int (*IsAppFirstRun)();
 };
 
 // Function signatures for the DLL entry points
@@ -96,6 +108,9 @@ typedef void (*NovadeskAddonUnloadFn)();
  * Called when system.loadAddon() is executed.
  */
 #define NOVADESK_ADDON_INIT(ctx, hMsgWnd, host)                                \
+  extern "C" __declspec(dllexport) unsigned int NovadeskAddonApiVersion() {    \
+    return NOVADESK_ADDON_API_VERSION;                                           \
+  }                                                                               \
   extern "C" __declspec(dllexport) void NovadeskAddonInit(                     \
       novadesk_context ctx, HWND hMsgWnd, const NovadeskHostAPI *host)
 
@@ -113,6 +128,43 @@ typedef void (*NovadeskAddonUnloadFn)();
 #include <string>
 
 namespace novadesk {
+
+/** Read-only access to selected functions from Novadesk's JavaScript app API. */
+class App {
+public:
+  explicit App(const NovadeskHostAPI *host) : m_host(host) {}
+
+  bool IsAvailable() const {
+    return m_host && m_host->apiVersion >= NOVADESK_ADDON_API_VERSION;
+  }
+  const char *GetProductVersion() const {
+    return IsAvailable() ? m_host->GetAppProductVersion() : "";
+  }
+  const char *GetFileVersion() const {
+    return IsAvailable() ? m_host->GetAppFileVersion() : "";
+  }
+  const char *GetNovadeskVersion() const {
+    return IsAvailable() ? m_host->GetAppNovadeskVersion() : "";
+  }
+  const char *GetAppDataPath() const {
+    return IsAvailable() ? m_host->GetAppDataPath() : "";
+  }
+  const char *GetSettingsFilePath() const {
+    return IsAvailable() ? m_host->GetAppSettingsFilePath() : "";
+  }
+  const char *GetLogPath() const {
+    return IsAvailable() ? m_host->GetAppLogPath() : "";
+  }
+  bool IsPortable() const {
+    return IsAvailable() && m_host->IsAppPortable() != 0;
+  }
+  bool IsFirstRun() const {
+    return IsAvailable() && m_host->IsAppFirstRun() != 0;
+  }
+
+private:
+  const NovadeskHostAPI *m_host;
+};
 
 /**
  * @class JsFunction

@@ -66,6 +66,12 @@ std::unordered_map<HWND, Widget *> Widget::s_HwndMap;
 std::atomic<bool> Widget::s_IsMenuActive{false};
 std::atomic<int> Widget::s_ActiveColorPickerCount{0};
 
+namespace {
+std::mutex g_windowBatchMutex;
+int g_windowBatchDepth = 0;
+std::vector<Widget *> g_pendingWindowShows;
+} // namespace
+
 // Check if a widget pointer is valid (exists in the global widgets list).
 bool Widget::IsValid(Widget *pWidget) {
   if (!pWidget)
@@ -126,6 +132,16 @@ Widget::Widget(const WidgetOptions &options)
 
 // Destructor. Cleans up window resources and removes from system tracking.
 Widget::~Widget() {
+  // A widget may be closed while startup presentation is still batched.
+  // Remove it before the batch commits so no stale pointer is dereferenced.
+  {
+    std::lock_guard<std::mutex> lock(g_windowBatchMutex);
+    g_pendingWindowShows.erase(
+        std::remove(g_pendingWindowShows.begin(), g_pendingWindowShows.end(),
+                    this),
+        g_pendingWindowShows.end());
+  }
+
   // Fire "closed" while the window and event listeners are still intact.
   // This must happen before GWLP_USERDATA is cleared, before listeners are
   // removed, and before DestroyWindow — all of which would make any callback
@@ -172,6 +188,16 @@ Widget::~Widget() {
 
   // Element-owned GeneralImage instances join their workers on destruction.
   // Do this while the widget HWND is still valid.
+  // Element destruction order follows m_Elements insertion order, not the
+  // container hierarchy. Detach every relationship first so a child
+  // destructor cannot call RemoveContainerItem() through a parent that was
+  // already destroyed (containers may be any Element type, including images).
+  for (const auto &element : m_Elements) {
+    if (!element)
+      continue;
+    element->SetContainer(nullptr);
+    element->ClearContainerItems();
+  }
   m_Elements.clear();
   m_TrackedElements.clear();
   m_SpatialGrid.clear();
@@ -314,10 +340,68 @@ bool Widget::Create() {
 // Show the widget window.
 // Makes the window visible and applies the configured z-order position.
 void Widget::Show() {
-  if (m_hWnd) {
-    ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
-    UpdateWindow(m_hWnd);
-    JSEngine::TriggerWidgetEvent(this, "show");
+  if (!m_hWnd)
+    return;
+
+  {
+    std::lock_guard<std::mutex> lock(g_windowBatchMutex);
+    if (g_windowBatchDepth > 0) {
+      if (std::find(g_pendingWindowShows.begin(), g_pendingWindowShows.end(),
+                    this) == g_pendingWindowShows.end()) {
+        g_pendingWindowShows.push_back(this);
+      }
+      return;
+    }
+  }
+
+  ShowWindow(m_hWnd, SW_SHOWNOACTIVATE);
+  UpdateWindow(m_hWnd);
+  JSEngine::TriggerWidgetEvent(this, "show");
+}
+
+void Widget::BeginWindowBatch() {
+  std::lock_guard<std::mutex> lock(g_windowBatchMutex);
+  ++g_windowBatchDepth;
+}
+
+void Widget::EndWindowBatch() {
+  std::vector<Widget *> pending;
+  {
+    std::lock_guard<std::mutex> lock(g_windowBatchMutex);
+    if (g_windowBatchDepth <= 0)
+      return;
+    if (--g_windowBatchDepth > 0)
+      return;
+    pending.swap(g_pendingWindowShows);
+  }
+
+  std::vector<Widget *> valid;
+  valid.reserve(pending.size());
+  for (Widget *widget : pending) {
+    if (widget && IsWindow(widget->m_hWnd))
+      valid.push_back(widget);
+  }
+  if (valid.empty())
+    return;
+
+  HDWP defer = BeginDeferWindowPos(static_cast<int>(valid.size()));
+  if (defer) {
+    for (Widget *widget : valid) {
+      defer = DeferWindowPos(defer, widget->m_hWnd, nullptr, 0, 0, 0, 0,
+                             SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+      if (!defer)
+        break;
+    }
+    if (defer)
+      EndDeferWindowPos(defer);
+  }
+
+  for (Widget *widget : valid) {
+    if (!IsWindowVisible(widget->m_hWnd))
+      ShowWindow(widget->m_hWnd, SW_SHOWNOACTIVATE);
+    UpdateWindow(widget->m_hWnd);
+    JSEngine::TriggerWidgetEvent(widget, "show");
   }
 }
 
@@ -694,6 +778,15 @@ void Widget::SetBackgroundImageFallback(const std::wstring &path) {
 
   m_Options.backgroundImageFallback = resolved;
   m_BackgroundImage.SetFallbackPath(resolved);
+  Redraw();
+  Settings::SaveWidget(m_Options.id, m_Options);
+}
+
+void Widget::SetBackgroundImageFallbackAspectRatio(ImageAspectRatio mode) {
+  if (m_Options.backgroundImageFallbackAspectRatio == mode)
+    return;
+
+  m_Options.backgroundImageFallbackAspectRatio = mode;
   Redraw();
   Settings::SaveWidget(m_Options.id, m_Options);
 }
@@ -1321,9 +1414,15 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
           SetWindowPos(hWnd, NULL, newX, newY, 0, 0,
                        SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
-          // Update local options for hit testing
-          widget->m_Options.x = newX;
-          widget->m_Options.y = newY;
+          // NOTE: m_Options.x/y are intentionally NOT updated here.
+          // WM_WINDOWPOSCHANGED fires synchronously inside SetWindowPos above
+          // and already updates m_Options.x/y to the correctly clamped position
+          // (when keepOnScreen is active, WM_WINDOWPOSCHANGING clamps wp->x/y and
+          // WM_WINDOWPOSCHANGED mirrors those clamped values into m_Options).
+          // Overwriting m_Options.x/y here with unclamped newX/newY would cause
+          // UpdateLayeredWindowContent to use an out-of-bounds pptDst, which
+          // produces a visible flicker every time the widget repaints while held
+          // against a screen boundary.
 
           if (widget->m_Tooltip.IsActive()) {
             widget->m_Tooltip.RepositionToCursor();
@@ -1891,6 +1990,7 @@ void Widget::AddImage(const PropertyParser::ImageOptions &options) {
   PropertyParser::ApplyImageOptions(element, options);
 
   element->SetPreserveAspectRatio(options.preserveAspectRatio);
+  element->SetFallbackAspectRatio(options.fallbackAspectRatio);
   element->SetImageAlpha(options.imageAlpha);
   element->SetGrayscale(options.grayscale);
   element->SetTile(options.tile);
@@ -2321,27 +2421,48 @@ void Widget::OpenColorPickerEyedropper(ColorPickerElement *colorPicker) {
   }
 }
 
-void Widget::FocusInputBox(InputBoxElement *inputElem) {
+void Widget::FocusInputBox(InputBoxElement *inputElem, bool moveCaretToEnd,
+                           bool redraw) {
   if (!inputElem)
     return;
-  if (m_FocusedInputBox && m_FocusedInputBox != inputElem) {
-    if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-      JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this,
-                                  nullptr);
-    m_FocusedInputBox->SetFocus(false);
-    if (m_hWnd)
-      KillTimer(m_hWnd, TIMER_CARET);
-  }
+
+  const auto isTracked = [this](const InputBoxElement *input) {
+    const auto element = static_cast<const Element *>(input);
+    return std::find_if(m_Elements.begin(), m_Elements.end(),
+                        [&](const auto &candidate) {
+                          return candidate.get() == element;
+                        }) != m_Elements.end();
+  };
+  if (!isTracked(inputElem))
+    return;
+
+  if (m_FocusedInputBox && m_FocusedInputBox != inputElem)
+    BlurInputBox(m_FocusedInputBox);
+  if (!isTracked(inputElem))
+    return;
+
+  // An onBlur callback may have focused another input.  Blur that input before
+  // completing this explicit focus request.
+  if (m_FocusedInputBox && m_FocusedInputBox != inputElem)
+    BlurInputBox(m_FocusedInputBox);
+  if (!isTracked(inputElem))
+    return;
+
   if (!inputElem->IsFocused()) {
-    inputElem->SetFocus(true);
+    inputElem->SetFocus(true, moveCaretToEnd);
+    // Publish the focus before calling script so a re-entrant callback sees a
+    // consistent state and may safely replace or clear it.
+    m_FocusedInputBox = inputElem;
     if (m_hWnd)
       SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
     if (inputElem->m_OnFocusCallbackId != -1)
       JSEngine::CallEventCallback(inputElem->m_OnFocusCallbackId, this,
                                   nullptr);
+  } else {
+    m_FocusedInputBox = inputElem;
   }
-  m_FocusedInputBox = inputElem;
-  Redraw();
+  if (redraw)
+    Redraw();
 }
 
 void Widget::BlurInputBox(InputBoxElement *inputElem) {
@@ -2349,13 +2470,31 @@ void Widget::BlurInputBox(InputBoxElement *inputElem) {
     return;
   if (inputElem && m_FocusedInputBox != inputElem)
     return;
-  if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-    JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId, this,
-                                nullptr);
-  m_FocusedInputBox->SetFocus(false);
+
+  // JavaScript callbacks are re-entrant: an onBlur handler can remove this
+  // input, focus another one, or call blurInputBox() again.  Do not retain the
+  // focused raw pointer across that callback.
+  InputBoxElement *focusedInput = m_FocusedInputBox;
+  const auto focusedElement = static_cast<Element *>(focusedInput);
+  const bool isTracked =
+      std::find_if(m_Elements.begin(), m_Elements.end(),
+                   [&](const auto &element) {
+                     return element.get() == focusedElement;
+                   }) != m_Elements.end();
+  const int onBlurCallbackId =
+      isTracked ? focusedInput->m_OnBlurCallbackId : -1;
+
+  // Clear the state before invoking script so nested focus/blur calls operate
+  // on their own state and cannot leave a dangling focused pointer behind.
+  m_FocusedInputBox = nullptr;
   if (m_hWnd)
     KillTimer(m_hWnd, TIMER_CARET);
-  m_FocusedInputBox = nullptr;
+
+  if (isTracked)
+    focusedInput->SetFocus(false);
+  if (onBlurCallbackId != -1)
+    JSEngine::CallEventCallback(onBlurCallbackId, this, nullptr);
+
   Redraw();
 }
 
@@ -3417,7 +3556,28 @@ void Widget::UpdateLayeredWindowContent() {
                 y = (h - drawH) * 0.5f;
               return D2D1::RectF(x, y, x + drawW, y + drawH);
             };
-            if (m_Options.backgroundImageSize.type ==
+            if (m_BackgroundImage.IsFallbackShowing()) {
+              if (m_Options.backgroundImageFallbackAspectRatio ==
+                  IMAGE_ASPECT_PRESERVE) {
+                const float scale =
+                    (std::min)(static_cast<float>(w) / imageSize.width,
+                               static_cast<float>(h) / imageSize.height);
+                const float drawW = imageSize.width * scale;
+                const float drawH = imageSize.height * scale;
+                dst = positionImage(drawW, drawH);
+              } else if (m_Options.backgroundImageFallbackAspectRatio ==
+                         IMAGE_ASPECT_CROP) {
+                const float scale =
+                    (std::max)(static_cast<float>(w) / imageSize.width,
+                               static_cast<float>(h) / imageSize.height);
+                const float drawW = imageSize.width * scale;
+                const float drawH = imageSize.height * scale;
+                dst = positionImage(drawW, drawH);
+              } else {
+                // IMAGE_ASPECT_STRETCH (default)
+                dst = backRect;
+              }
+            } else if (m_Options.backgroundImageSize.type ==
                 BackgroundImageSize::Type::Explicit) {
               const float drawW = m_Options.backgroundImageSize.hasWidth
                                       ? m_Options.backgroundImageSize.width
@@ -3889,7 +4049,13 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     Element *hoverElement =
         actionElement ? actionElement
                       : (mouseActionElement ? mouseActionElement : hitElement);
-    if (m_MouseOverElement && m_MouseOverElement->IsVisible() &&
+    // Keep the previous interactive owner only when the newly hit element is
+    // a display-only overlay.  Do not let a large, previously hovered
+    // element mask a newer frontmost control (such as a dropdown option).
+    // The old unconditional check made option hover/cursor callbacks
+    // unreachable whenever their popup overlapped an existing control.
+    if (!actionElement && !mouseActionElement && m_MouseOverElement &&
+        m_MouseOverElement->IsVisible() &&
         m_MouseOverElement->HasMouseAction() &&
         m_MouseOverElement->HitTest(x, y)) {
       hoverElement = m_MouseOverElement;
@@ -4172,11 +4338,48 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             (int)((eventData.offsetY / (double)elementH) * 100.0);
       }
 
+      // A draggable control can also have an onLeftMouseDown callback (for
+      // example, a slider updates its value immediately on press).  Start its
+      // drag state before the callback so WndProc will not start moving the
+      // whole widget. The callback itself may close this widget, so never
+      // inspect instance state until Widget::IsValid() confirms it survived.
+      const bool startsElementDrag =
+          message == WM_LBUTTONDOWN && actionElement->HasDragAction();
+      if (startsElementDrag) {
+        m_DragElement = actionElement;
+        m_IsElementDragging = true;
+        SetCapture(m_hWnd);
+      }
+
       // Execute function callback with mouse position aliases.
       JSEngine::CallEventCallback(actionId, this, &eventData);
+      if (!Widget::IsValid(this))
+        return true;
       handled = true;
+
+      if (startsElementDrag && m_DragElement == actionElement &&
+          IsTrackedElement(actionElement) &&
+          m_DragElement->m_OnDragStartCallbackId != -1) {
+        JSEngine::MouseEventData dragEventData =
+            buildElementEventData(m_DragElement);
+        JSEngine::CallEventCallback(m_DragElement->m_OnDragStartCallbackId,
+                                    this, &dragEventData);
+        if (!Widget::IsValid(this))
+          return true;
+      }
     }
   }
+
+  // Element callbacks may synchronously remove or replace any element (for
+  // example, Notes replaces its display text with an input on mouse-up).
+  // These event-local raw pointers must not be used after script returns
+  // unless the widget still owns them.
+  if (!IsTrackedElement(hitElement))
+    hitElement = nullptr;
+  if (!IsTrackedElement(actionElement))
+    actionElement = nullptr;
+  if (!IsTrackedElement(mouseActionElement))
+    mouseActionElement = nullptr;
 
   // Handle container scrolling via mouse wheel when not consumed by an element
   // action
@@ -4409,36 +4612,33 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       // Input box focus + caret placement on click.
       InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(hitElement);
       if (inputElem) {
-        if (m_FocusedInputBox && m_FocusedInputBox != inputElem) {
-          if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-            JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId,
-                                        this, nullptr);
-          m_FocusedInputBox->SetFocus(false);
-          KillTimer(m_hWnd, TIMER_CARET);
+        // Mouse focus supplies the exact caret position below. Do not first
+        // place a prefilled right-aligned input at its end, because that
+        // produces a visible right-to-left caret jump before HandleMouseDown.
+        FocusInputBox(inputElem, false, false);
+
+        // Focus/blur handlers can synchronously remove the clicked element or
+        // focus a different input.  Only use the pointer if it remains owned
+        // by this widget and is still the active input.
+        const auto inputElement = static_cast<Element *>(inputElem);
+        const bool inputStillFocused =
+            m_FocusedInputBox == inputElem &&
+            std::find_if(m_Elements.begin(), m_Elements.end(),
+                         [&](const auto &element) {
+                           return element.get() == inputElement;
+                         }) != m_Elements.end();
+        if (inputStillFocused) {
+          bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+          inputElem->HandleMouseDown(x, y, shift);
+          SetFocus();
+          SetCapture(m_hWnd);
         }
-        if (!inputElem->IsFocused()) {
-          inputElem->SetFocus(true);
-          SetTimer(m_hWnd, TIMER_CARET, 530, nullptr);
-          if (inputElem->m_OnFocusCallbackId != -1)
-            JSEngine::CallEventCallback(inputElem->m_OnFocusCallbackId, this,
-                                        nullptr);
-        }
-        m_FocusedInputBox = inputElem;
-        bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-        inputElem->HandleMouseDown(x, y, shift);
-        SetFocus();
-        SetCapture(m_hWnd);
         handled = true;
         needRedraw = true;
       } else {
         // Clicked outside any input box: blur the focused one.
         if (m_FocusedInputBox) {
-          if (m_FocusedInputBox->m_OnBlurCallbackId != -1)
-            JSEngine::CallEventCallback(m_FocusedInputBox->m_OnBlurCallbackId,
-                                        this, nullptr);
-          m_FocusedInputBox->SetFocus(false);
-          m_FocusedInputBox = nullptr;
-          KillTimer(m_hWnd, TIMER_CARET);
+          BlurInputBox();
           needRedraw = true;
         }
       }

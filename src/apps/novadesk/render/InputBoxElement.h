@@ -246,7 +246,10 @@ public:
   // ============================================================================
 
   bool IsFocused() const { return m_Focused; }
-  void SetFocus(bool focused);
+  /// Programmatic focus may place a prefilled field at its end. Mouse focus
+  /// supplies an exact click position immediately afterward, so it disables
+  /// that temporary placement to avoid a visible caret jump.
+  void SetFocus(bool focused, bool moveCaretToEnd = true);
 
   /// Updates caret blink state (called each repaint).
   void UpdateBlink();

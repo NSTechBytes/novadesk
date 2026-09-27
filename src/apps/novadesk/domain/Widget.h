@@ -159,6 +159,7 @@ struct WidgetOptions {
   GradientInfo bgGradient;
   std::wstring backgroundImage;
   std::wstring backgroundImageFallback;
+  ImageAspectRatio backgroundImageFallbackAspectRatio = IMAGE_ASPECT_STRETCH;
   BackgroundImageSize backgroundImageSize;
   BackgroundImagePosition backgroundImagePosition;
   bool draggable = true;
@@ -282,6 +283,10 @@ public:
 
   /// @brief Makes the widget visible and brings it to its configured z-order.
   void Show();
+  /// @brief Defers widget visibility changes until EndWindowBatch().
+  static void BeginWindowBatch();
+  /// @brief Reveals all widgets queued by Show() during the active batch.
+  static void EndWindowBatch();
   /// @brief Hides the widget window.
   void Hide();
   /// @brief Reloads the widget script and recreates all elements.
@@ -341,6 +346,8 @@ public:
                           const BackgroundImagePosition &position);
   /// @brief Sets a fallback background image path.
   void SetBackgroundImageFallback(const std::wstring &path);
+  /// @brief Sets the fallback background image aspect ratio mode.
+  void SetBackgroundImageFallbackAspectRatio(ImageAspectRatio mode);
   /// @brief Enables or disables window dragging.
   void SetDraggable(bool enable);
   /// @brief Enables or disables window resizing.
@@ -481,7 +488,8 @@ public:
     m_FocusedInputBox = inputElem;
   }
   /// @brief Gives keyboard focus to the specified input box.
-  void FocusInputBox(InputBoxElement *inputElem);
+  void FocusInputBox(InputBoxElement *inputElem, bool moveCaretToEnd = true,
+                     bool redraw = true);
   /// @brief Removes keyboard focus from the specified (or current) input box.
   void BlurInputBox(InputBoxElement *inputElem = nullptr);
 

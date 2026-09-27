@@ -36,32 +36,35 @@ Full diagrams (all `src/apps` apps, `novadesk/` layers, render class tree, and d
 
 ```mermaid
 flowchart TB
-  subgraph src_apps ["src/apps"]
-    Novadesk["novadesk/<br/>Runtime EXE"]
+  subgraph src_apps ["Novadesk Ecosystem and Tools"]
+    Novadesk["novadesk/<br/>Desktop Runtime EXE"]
     Nwm["nwm/<br/>CLI: init, run, build"]
     Manage["manage_novadesk/<br/>Widget manager GUI"]
-    Restart["restart_novadesk/<br/>Restart helper"]
-    Ndpkg["ndpkg_installer/<br/>.ndpkg installer"]
-    Stub["installer_stub/<br/>Setup bootstrap"]
-    Assets["assets/images"]
+    Ndpkg["ndpkg_installer/<br/>.ndpkg package installer"]
+    Stub["installer_stub/<br/>Standalone SFX bootstrap"]
+    Nsis["installer/<br/>NSIS Full Setup"]
+    Assets["assets/images/<br/>Shared UI Assets"]
   end
 
-  Dev["Developer"] --> Nwm
-  User["User"] --> Manage
-  User --> Novadesk
+  Dev["Developer"] -->|"init / run / build"| Nwm
+  User["End User"] -->|"manage widgets"| Manage
+  User -->|"launch and interact"| Novadesk
+  User -->|"open .ndpkg"| Ndpkg
 
-  Nwm -->|"build"| Stub
-  Nwm --> Novadesk
-  Manage --> Novadesk
-  Ndpkg --> Novadesk
-  Restart --> Manage
-  Stub -->|"install"| Novadesk
+  Nwm -->|"standalone EXE"| Stub
+  Nwm -->|"package"| Ndpkg
+  Nwm -->|"run widget"| Novadesk
+  Manage -->|"load / unload"| Novadesk
+  Ndpkg -->|"install to Widgets/"| Novadesk
+  Stub -->|"extract to Widgets/"| Novadesk
+  Nsis -->|"platform install"| Novadesk
+  Nsis -->|"platform install"| Manage
 
   subgraph novadesk_layers ["novadesk/ internals"]
-    JS["scripting/quickjs<br/>JSEngine, PropertyParser, modules"]
-    Domain["domain/<br/>Widget, DesktopManager, Animation"]
-    Render["render/<br/>Elements, Shapes, Direct2D"]
-    Shared["shared/<br/>Settings, Logging, Utils"]
+    JS["scripting/quickjs<br/>JSEngine, Modular PropertyParsers, Modules"]
+    Domain["domain/<br/>Widget, DesktopManager, Animation, DropTarget, Popups"]
+    Render["render/<br/>Elements, Shapes, FlexLayoutEngine, Direct2D"]
+    Shared["shared/<br/>Settings, Logging, Utils, ZipUtils, ColorUtil"]
   end
 
   Novadesk --> JS

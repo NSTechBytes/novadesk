@@ -10,22 +10,23 @@ function loadNetworkWidget() {
         return; // Widget already registered
     }
 
-    network_Widget = new widgetWindow({
+    var firstRun = app.isFirstRun();
+    var windowOptions = {
         id: 'network_Window',
         script: './src/networkWidget/ui/widget.ui.js',
         width: 212,
-        height: 122, 
-        show: !app.isFirstRun()
-    })
+        height: 122,
+        show: !firstRun
+    };
 
-    if (app.isFirstRun()) {
+    if (firstRun) {
         var metrics = system.displayMetrics.get();
-        network_Widget.setProperties({
-            x: ((metrics.primary.screenArea.width - 212) - 10),
-            y: 224,
-            show: true
-        });
+        windowOptions.x = ((metrics.primary.screenArea.width - 212) - 10);
+        windowOptions.y = 224;
+        windowOptions.show = true;
     }
+
+    network_Widget = new widgetWindow(windowOptions);
 
     // Set up context menu
     network_Widget.setContextMenu([
