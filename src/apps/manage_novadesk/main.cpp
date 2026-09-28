@@ -1658,6 +1658,9 @@ static void RefreshListView(const std::wstring &preferredSelection = L"") {
   LogLine(L"[Manage] Refresh list. Widgets: " +
           std::to_wstring(g_widgets.size()));
 
+  // Suppress redraws while rebuilding to prevent flicker
+  SendMessage(g_list, WM_SETREDRAW, FALSE, 0);
+
   ListView_DeleteAllItems(g_list);
   int newSelectIdx = -1;
   int idx = 0;
@@ -1688,6 +1691,11 @@ static void RefreshListView(const std::wstring &preferredSelection = L"") {
                           LVIS_SELECTED | LVIS_FOCUSED);
     ListView_EnsureVisible(g_list, newSelectIdx, FALSE);
   }
+
+  // Re-enable drawing and repaint in one shot (no flicker)
+  SendMessage(g_list, WM_SETREDRAW, TRUE, 0);
+  RedrawWindow(g_list, NULL, NULL,
+               RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
 
   UpdateButtonState();
 }
