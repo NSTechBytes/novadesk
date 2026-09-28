@@ -1,5 +1,6 @@
 param(
-    [string]$BuildDir = "build-mingw",
+    [string]$Configuration = "Release",
+    [string]$Platform = "x64",
     [string]$SetupScript = "installer\setup.nsi"
 )
 
@@ -51,7 +52,7 @@ try {
     New-Item -ItemType Directory -Path $setupOutputDir -Force | Out-Null
 
     Write-Host "Running release build..." -ForegroundColor Cyan
-    & powershell -ExecutionPolicy Bypass -File $buildScript -Configuration Release -BuildDir $BuildDir
+    & powershell -ExecutionPolicy Bypass -File $buildScript -Configuration $Configuration -Platform $Platform
     if ($LASTEXITCODE -ne 0) {
         throw "Build.ps1 failed."
     }
