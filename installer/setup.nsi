@@ -12,6 +12,7 @@ Name "Novadesk"
 OutFile "dist_output\Novadesk_Setup_v${VERSION}_Beta.exe"
 SetCompressor /SOLID lzma
 ReserveFile "plugins\x86-unicode\UAC.dll"
+ReserveFile "plugins\x86-unicode\EnVar.dll"
 
 ; The default installation directory
 InstallDir "$PROGRAMFILES64\Novadesk"
