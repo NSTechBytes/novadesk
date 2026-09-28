@@ -1411,7 +1411,8 @@ void ClearWebFetchRequests(JSContext *ctx) {
 void ClearWebFetchRequestsForScript(const std::wstring &scriptPath) {
   std::lock_guard<std::mutex> lock(g_webFetchMutex);
   for (auto it = g_webFetchRequests.begin(); it != g_webFetchRequests.end();) {
-    if (it->second->owner == scriptPath) {
+    if (it->second->owner.size() == scriptPath.size() &&
+        _wcsicmp(it->second->owner.c_str(), scriptPath.c_str()) == 0) {
       if (it->second->ctx) {
         JS_FreeValue(it->second->ctx, it->second->resolve);
         JS_FreeValue(it->second->ctx, it->second->reject);
