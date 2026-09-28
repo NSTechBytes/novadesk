@@ -457,3 +457,4 @@ installer/plugins/*
 !installer/plugins/x86-unicode/
 installer/plugins/x86-unicode/*
 !installer/plugins/x86-unicode/UAC.dll
+!installer/plugins/x86-unicode/EnVar.dll
