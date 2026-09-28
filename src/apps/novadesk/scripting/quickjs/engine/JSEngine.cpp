@@ -101,7 +101,13 @@ std::unordered_map<Widget *, std::wstring> g_widgetOwners;
 std::unordered_map<std::wstring, std::wstring> g_widgetIdToOwner;
 std::unordered_map<int, std::wstring> g_trayOwners;
 std::unordered_set<std::wstring> g_staleScripts;
-std::unordered_map<std::wstring, int> g_scriptEvalRevisions;
+static std::atomic<uint64_t> s_globalScriptRevision{0};
+
+static bool PathEquals(const std::wstring &a, const std::wstring &b) {
+  if (a.size() != b.size())
+    return false;
+  return _wcsicmp(a.c_str(), b.c_str()) == 0;
+}
 
 // Cached atoms for high-frequency event property names — avoids
 // per-event string→atom hash lookups in CallEventCallback.
@@ -244,7 +250,7 @@ void DestroyWidgetsForScript(const std::wstring &scriptPath) {
   std::vector<Widget *> toDelete;
   for (auto *w : copy) {
     auto it = g_widgetOwners.find(w);
-    if (it != g_widgetOwners.end() && it->second == scriptPath) {
+    if (it != g_widgetOwners.end() && PathEquals(it->second, scriptPath)) {
       toDelete.push_back(w);
     }
   }
@@ -279,7 +285,7 @@ void ClearTimersForScript(const std::wstring &scriptPath) {
   if (!g_messageWindow || !g_context)
     return;
   for (auto it = g_timers.begin(); it != g_timers.end();) {
-    if (it->second.owner == scriptPath) {
+    if (PathEquals(it->second.owner, scriptPath)) {
       KillTimer(g_messageWindow, it->first);
       JS_FreeValue(g_context, it->second.callback);
       for (JSValue &a : it->second.args) {
@@ -295,7 +301,7 @@ void ClearTimersForScript(const std::wstring &scriptPath) {
 void ClearIpcListenersForScript(std::vector<IpcListener> &list,
                                 const std::wstring &scriptPath) {
   for (auto it = list.begin(); it != list.end();) {
-    if (it->owner == scriptPath) {
+    if (PathEquals(it->owner, scriptPath)) {
       JS_FreeValue(g_context, it->callback);
       it = list.erase(it);
     } else {
@@ -310,7 +316,7 @@ void ClearIpcChannelListenersForScript(
   for (auto mit = map.begin(); mit != map.end();) {
     auto &vec = mit->second;
     for (auto it = vec.begin(); it != vec.end();) {
-      if (it->owner == scriptPath) {
+      if (PathEquals(it->owner, scriptPath)) {
         JS_FreeValue(g_context, it->callback);
         it = vec.erase(it);
       } else {
@@ -328,7 +334,7 @@ void ClearIpcChannelListenersForScript(
 void ClearIpcHandlersForScript(std::unordered_map<std::string, IpcHandler> &map,
                                const std::wstring &scriptPath) {
   for (auto it = map.begin(); it != map.end();) {
-    if (it->second.owner == scriptPath) {
+    if (PathEquals(it->second.owner, scriptPath)) {
       JS_FreeValue(g_context, it->second.callback);
       it = map.erase(it);
     } else {
@@ -340,7 +346,7 @@ void ClearIpcHandlersForScript(std::unordered_map<std::string, IpcHandler> &map,
 void ClearTraysForScript(const std::wstring &scriptPath) {
   std::vector<int> toRemove;
   for (auto &kv : g_trayOwners) {
-    if (kv.second == scriptPath) {
+    if (PathEquals(kv.second, scriptPath)) {
       toRemove.push_back(kv.first);
     }
   }
@@ -366,7 +372,7 @@ bool ExecuteScriptFile(const std::wstring &finalScriptPath) {
   }
 
   const std::string fileName = Utils::ToString(finalScriptPath);
-  const int revision = ++g_scriptEvalRevisions[finalScriptPath];
+  const uint64_t revision = ++s_globalScriptRevision;
   const std::string evalModuleName =
       fileName + "#rev=" + std::to_string(revision);
   const std::wstring scriptDir = PathUtils::GetParentDir(finalScriptPath);
@@ -1823,13 +1829,19 @@ bool AddScript(const std::wstring &scriptPath) {
   std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
   const std::wstring resolved = ResolveEntryScript(scriptPath);
   for (const auto &p : g_loadedScriptPaths) {
-    if (p == resolved)
+    if (PathEquals(p, resolved))
       return true;
   }
   // If it was stale, just remove it from stale list and continue to execute it
   // fresh. We avoid calling LoadAndExecuteScripts here because it would destroy
   // all other active widgets.
-  g_staleScripts.erase(resolved);
+  for (auto it = g_staleScripts.begin(); it != g_staleScripts.end();) {
+    if (PathEquals(*it, resolved)) {
+      it = g_staleScripts.erase(it);
+    } else {
+      ++it;
+    }
+  }
   if (!EnsureRuntime())
     return false;
   if (!ExecuteScriptFile(resolved))
@@ -1843,7 +1855,7 @@ bool RemoveScript(const std::wstring &scriptPath) {
   const std::wstring resolved = ResolveEntryScript(scriptPath);
   std::vector<std::wstring> next;
   for (const auto &p : g_loadedScriptPaths) {
-    if (p != resolved) {
+    if (!PathEquals(p, resolved)) {
       next.push_back(p);
     }
   }
@@ -1861,7 +1873,6 @@ bool RemoveScript(const std::wstring &scriptPath) {
   novadesk::scripting::quickjs::ClearWebFetchRequestsForScript(resolved);
   g_loadedScriptPaths = next;
   g_staleScripts.insert(resolved);
-  g_scriptEvalRevisions.erase(resolved);
   return true;
 }
 
@@ -1870,7 +1881,7 @@ bool RefreshScript(const std::wstring &scriptPath) {
   const std::wstring resolved = ResolveEntryScript(scriptPath);
   bool found = false;
   for (const auto &p : g_loadedScriptPaths) {
-    if (p == resolved) {
+    if (PathEquals(p, resolved)) {
       found = true;
       break;
     }
