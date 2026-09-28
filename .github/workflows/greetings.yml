@@ -1,0 +1,30 @@
+name: Greetings
+
+on:
+  pull_request_target:
+  issues:
+
+jobs:
+  greeting:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            👋 Thanks for opening your first issue!
+
+            We appreciate you taking the time to help improve this project. Please provide as much relevant information as possible, including steps to reproduce the issue, screenshots, logs, or other details that may help us investigate.
+
+            We'll take a look as soon as possible. Thank you for contributing!
+
+          pr-message: |
+            👋 Thanks for opening your first pull request!
+
+            We appreciate your contribution to the project. Please make sure your changes follow the project's guidelines and include any relevant information about what was changed and why.
+
+            We'll review your pull request as soon as possible. Thank you for contributing!
