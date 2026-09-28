@@ -1641,12 +1641,25 @@ static bool ExecuteNovadeskCommand(const std::wstring &cmd,
   return ok;
 }
 
-static void RefreshListView() {
+static int GetSelectedIndex() {
+  return ListView_GetNextItem(g_list, -1, LVNI_SELECTED);
+}
+
+static void RefreshListView(const std::wstring &preferredSelection = L"") {
+  std::wstring selectedScript = preferredSelection;
+  if (selectedScript.empty()) {
+    const int prevSel = GetSelectedIndex();
+    if (prevSel >= 0 && prevSel < static_cast<int>(g_widgets.size())) {
+      selectedScript = g_widgets[prevSel].scriptPath;
+    }
+  }
+
   g_widgets = LoadWidgets();
   LogLine(L"[Manage] Refresh list. Widgets: " +
           std::to_wstring(g_widgets.size()));
 
   ListView_DeleteAllItems(g_list);
+  int newSelectIdx = -1;
   int idx = 0;
   for (const auto &w : g_widgets) {
     LVITEMW item{};
@@ -1661,13 +1674,22 @@ static void RefreshListView() {
     ListView_SetItemText(g_list, idx, 2, const_cast<wchar_t *>(status.c_str()));
     LogLine(L"[Manage] Widget: " + w.name + L" | " + w.scriptPath + L" | " +
             (w.loaded ? L"Loaded" : L"Not Loaded"));
+
+    if (!selectedScript.empty() &&
+        NormalizePathLower(w.scriptPath) == NormalizePathLower(selectedScript)) {
+      newSelectIdx = idx;
+    }
     ++idx;
   }
-  UpdateButtonState();
-}
 
-static int GetSelectedIndex() {
-  return ListView_GetNextItem(g_list, -1, LVNI_SELECTED);
+  if (newSelectIdx >= 0) {
+    ListView_SetItemState(g_list, newSelectIdx,
+                          LVIS_SELECTED | LVIS_FOCUSED,
+                          LVIS_SELECTED | LVIS_FOCUSED);
+    ListView_EnsureVisible(g_list, newSelectIdx, FALSE);
+  }
+
+  UpdateButtonState();
 }
 
 static void UpdateButtonState() {
@@ -2078,23 +2100,23 @@ static void OnToggleLoadSelected() {
     return;
   }
 
+  const std::wstring targetScript = g_widgets[idx].scriptPath;
   const bool isLoaded = g_widgets[idx].loaded;
   bool ok = false;
   if (isLoaded) {
-    LogLine(L"[Manage] Unload: " + g_widgets[idx].scriptPath);
-    ok = ExecuteNovadeskCommand(L"--unload", g_widgets[idx].scriptPath);
+    LogLine(L"[Manage] Unload: " + targetScript);
+    ok = ExecuteNovadeskCommand(L"--unload", targetScript);
   } else {
-    LogLine(L"[Manage] Load: " + g_widgets[idx].scriptPath);
-    ok = ExecuteNovadeskCommand(L"--load", g_widgets[idx].scriptPath);
+    LogLine(L"[Manage] Load: " + targetScript);
+    ok = ExecuteNovadeskCommand(L"--load", targetScript);
   }
   if (ok) {
-    RememberLoadedScriptState(g_widgets[idx].scriptPath, !isLoaded);
+    RememberLoadedScriptState(targetScript, !isLoaded);
   } else {
     ShowManageMessageBox(L"Failed to send command to Novadesk.",
                          L"Manage Novadesk", MB_OK | MB_ICONWARNING);
   }
-  RefreshListView();
-  UpdateButtonState();
+  RefreshListView(targetScript);
 }
 
 static void OnRefreshSelected() {
@@ -2103,17 +2125,21 @@ static void OnRefreshSelected() {
     LogLine(L"[Manage] Refresh ignored: no selection.");
     return;
   }
-  LogLine(L"[Manage] Refresh: " + g_widgets[idx].scriptPath);
-  ExecuteNovadeskCommand(L"--refresh", g_widgets[idx].scriptPath);
-  RefreshListView();
-  UpdateButtonState();
+  const std::wstring targetScript = g_widgets[idx].scriptPath;
+  LogLine(L"[Manage] Refresh: " + targetScript);
+  ExecuteNovadeskCommand(L"--refresh", targetScript);
+  RefreshListView(targetScript);
 }
 
 static void OnRefreshAll() {
+  int idx = GetSelectedIndex();
+  std::wstring targetScript;
+  if (idx >= 0 && idx < static_cast<int>(g_widgets.size())) {
+    targetScript = g_widgets[idx].scriptPath;
+  }
   LogLine(L"[Manage] Refresh All");
   ExecuteNovadeskCommandNoPath(L"--refresh-all");
-  RefreshListView();
-  UpdateButtonState();
+  RefreshListView(targetScript);
 }
 
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
@@ -2185,7 +2211,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
     OffsetRect(&pageRect, tabRectOnParent.left, tabRectOnParent.top);
 
     g_list = CreateWindowExW(0, WC_LISTVIEWW, L"",
-                             WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL,
+                             WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS,
                              pageRect.left, pageRect.top,
                              pageRect.right - pageRect.left,
                              pageRect.bottom - pageRect.top, hWnd, nullptr,
@@ -2595,8 +2621,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
     break;
   case WM_NOTIFY: {
     LPNMHDR hdr = reinterpret_cast<LPNMHDR>(lParam);
-    if (hdr && hdr->hwndFrom == g_list && hdr->code == LVN_ITEMCHANGED) {
-      UpdateButtonState();
+    if (hdr && hdr->hwndFrom == g_list) {
+      if (hdr->code == LVN_ITEMCHANGED) {
+        UpdateButtonState();
+      } else if (hdr->code == NM_DBLCLK) {
+        OnToggleLoadSelected();
+      }
     } else if (hdr && hdr->hwndFrom == g_tab && hdr->code == TCN_SELCHANGE) {
       g_activeTab = TabCtrl_GetCurSel(g_tab);
       ApplyTabState();
