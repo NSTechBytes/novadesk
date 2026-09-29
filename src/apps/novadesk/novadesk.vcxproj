@@ -122,6 +122,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="render\FontDownloader.cpp" />
+    <ClCompile Include="render\FontCache.cpp" />
+    <ClCompile Include="render\HttpDiskCache.cpp" />
     <ClCompile Include="render\ImageCache.cpp" />
     <ClCompile Include="..\..\third_party\woff2\font.cc" />
     <ClCompile Include="..\..\third_party\woff2\glyph.cc" />
@@ -290,6 +292,8 @@
     <ClInclude Include="render\CursorManager.h" />
     <ClInclude Include="render\CurveShape.h" />
     <ClInclude Include="render\Direct2DHelper.h" />
+    <ClInclude Include="render\FontCache.h" />
+    <ClInclude Include="render\HttpDiskCache.h" />
     <ClInclude Include="render\ImageCache.h" />
     <ClInclude Include="render\Element.h" />
     <ClInclude Include="render\ElementLayoutBox.h" />

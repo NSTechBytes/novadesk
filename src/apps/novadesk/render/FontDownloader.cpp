@@ -6,9 +6,9 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "FontDownloader.h"
+#include "FontCache.h"
 #include "FontManager.h"
 #include "../shared/Logging.h"
-#include "../shared/System.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "../domain/Widget.h"
 
@@ -79,6 +79,64 @@ bool ConvertWoff2ToTtf(const std::string &woff2Data, std::string &ttfOut) {
   }
 
   return true;
+}
+
+// -----------------------------------------------------------------------
+// Font payload validation
+// -----------------------------------------------------------------------
+
+// Accepts sfnt-based fonts (TrueType, OpenType/CFF, collections, Apple
+// 'true'), WOFF1 (DirectWrite reads it natively) and WOFF2 (converted
+// below). Anything else is likely an HTML error page (e.g. a captive
+// portal) masquerading as a font.
+bool LooksLikeFont(const std::vector<BYTE> &data) {
+  if (data.size() < 4)
+    return false;
+  const BYTE *d = data.data();
+  auto Tag = [d](const char t[4]) {
+    return d[0] == static_cast<BYTE>(t[0]) && d[1] == static_cast<BYTE>(t[1]) &&
+           d[2] == static_cast<BYTE>(t[2]) && d[3] == static_cast<BYTE>(t[3]);
+  };
+  const char ttcf[4] = {'t', 't', 'c', 'f'};
+  const char true_[4] = {'t', 'r', 'u', 'e'};
+  const char otto[4] = {'O', 'T', 'T', 'O'};
+  const char woff1[4] = {'w', 'O', 'F', 'F'};
+  const char woff2[4] = {'w', 'O', 'F', '2'};
+  if (d[0] == 0x00 && d[1] == 0x01 && d[2] == 0x00 && d[3] == 0x00)
+    return true; // TTF sfnt version
+  return Tag(ttcf) || Tag(true_) || Tag(otto) || Tag(woff1) || Tag(woff2);
+}
+
+// Fetches bytes through the disk cache and validates the font magic. A bad
+// entry (corrupted on disk, or a cached error page) is purged and reloaded
+// from the network exactly once per attempt.
+bool FetchValidatedFontBytes(const std::wstring &url, std::string &outRaw) {
+  std::vector<BYTE> bytes;
+  bool ok = FontCache::FetchBytes(url, bytes);
+
+  if (ok && !LooksLikeFont(bytes)) {
+    Logging::Log(LogLevel::Warn,
+                 L"FontDownloader: invalid font payload for '%s'; purging "
+                 L"cache entry and re-fetching",
+                 url.c_str());
+    FontCache::DeleteUrl(url);
+    bytes.clear();
+    ok = FontCache::FetchBytes(url, bytes);
+    if (ok && !LooksLikeFont(bytes)) {
+      Logging::Log(LogLevel::Error,
+                   L"FontDownloader: invalid font payload after re-fetch "
+                   L"for '%s'",
+                   url.c_str());
+      FontCache::DeleteUrl(url);
+      ok = false;
+    }
+  }
+
+  if (ok && !bytes.empty()) {
+    outRaw.assign(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+    return true;
+  }
+  return false;
 }
 
 // -----------------------------------------------------------------------
@@ -182,9 +240,9 @@ void RequestAsync(const std::wstring &url, uint64_t widgetInstanceId,
     std::wstring cachedDir;
 
     std::string rawData;
-    bool ok = novadesk::shared::system::WebFetch(url, rawData);
+    bool ok = FetchValidatedFontBytes(url, rawData);
 
-    if (ok && !rawData.empty()) {
+    if (ok) {
       // Convert WOFF2 → TTF if needed
       if (IsWoff2(rawData)) {
         Logging::Log(LogLevel::Info,

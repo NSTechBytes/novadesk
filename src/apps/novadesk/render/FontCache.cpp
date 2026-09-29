@@ -5,16 +5,16 @@
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
-#include "ImageCache.h"
+#include "FontCache.h"
 
 #include "HttpDiskCache.h"
 
-namespace ImageCache {
+namespace FontCache {
 namespace {
 
 HttpDiskCache::Cache &Instance() {
   static HttpDiskCache::Cache cache(
-      {L"image-cache", L"[ImageCache]", 24 * 60 * 60, 256ll * 1024 * 1024});
+      {L"font-cache", L"[FontCache]", 24 * 60 * 60, 64ll * 1024 * 1024});
   return cache;
 }
 
@@ -30,4 +30,6 @@ bool FetchBytes(const std::wstring &url, std::vector<BYTE> &outBytes) {
   return Instance().FetchBytes(url, outBytes);
 }
 
-} // namespace ImageCache
+void DeleteUrl(const std::wstring &url) { Instance().DeleteUrl(url); }
+
+} // namespace FontCache

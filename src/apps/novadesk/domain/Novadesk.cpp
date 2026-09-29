@@ -24,6 +24,7 @@
 #include <commctrl.h>
 #include "Direct2DHelper.h"
 #include "FontManager.h"
+#include "../render/FontCache.h"
 #include "../render/FontDownloader.h"
 #include "../render/ImageCache.h"
 #include "../shared/Logging.h"
@@ -379,6 +380,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
       bool refreshAll = false;
       bool restart = false;
       bool clearImageCache = false;
+      bool clearFontCache = false;
       bool listScripts = false;
       std::wstring listScriptsFile;
       std::optional<bool> setHardwareAcceleration;
@@ -416,6 +418,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
         if (arg == L"--clear-image-cache") {
           clearImageCache = true;
+          continue;
+        }
+        if (arg == L"--clear-font-cache") {
+          clearFontCache = true;
           continue;
         }
         if (arg == L"--restart") {
@@ -514,6 +520,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
           handledCommand = SendIpcCommand(hExisting, L"clear-image-cache",
                                           L"") || handledCommand;
         }
+        if (clearFontCache) {
+          handledCommand = SendIpcCommand(hExisting, L"clear-font-cache",
+                                          L"") || handledCommand;
+        }
         if (restart) {
           handledCommand = SendIpcCommand(hExisting, L"restart", L"") ||
                            handledCommand;
@@ -589,8 +599,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   // Initialize Settings
   Settings::Initialize();
 
-  // Prepare the online-image disk cache before widgets start loading.
+  // Prepare the online-image and online-font disk caches before widgets
+  // start loading.
   ImageCache::Startup();
+  FontCache::Startup();
 
   // Initialize global strings
   wcscpy_s(szTitle, MAX_LOADSTRING, appTitle.c_str());
@@ -666,6 +678,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         JSEngine::Reload();
       } else if (command == L"clear-image-cache") {
         ImageCache::Clear();
+      } else if (command == L"clear-font-cache") {
+        FontCache::Clear();
       } else if (command == L"restart") {
         // Relaunch only after this process exits, otherwise single-instance
         // routing would deliver the new invocation back to this process.
@@ -719,8 +733,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
     case WM_DESTROY:
       // Font workers post to this window.  Join them before its handle
-      // becomes invalid during destruction.
+      // becomes invalid during destruction.  The caches must shut down
+      // first: workers may be parked on an in-flight download condition
+      // variable, and only Cache::Shutdown() wakes them.
       ImageCache::Shutdown();
+      FontCache::Shutdown();
       FontDownloader::Shutdown();
       JSEngine::SetMessageWindow(nullptr);
       if (g_trayMouseHook) {
@@ -773,6 +790,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   std::optional<bool> setLogging;
   std::optional<bool> setSaveLogToFile;
   bool clearImageCache = false;
+  bool clearFontCache = false;
   int argc = 0;
   LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
   if (argv) {
@@ -792,6 +810,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
         if (arg == L"--clear-image-cache") {
           clearImageCache = true;
+          continue;
+        }
+        if (arg == L"--clear-font-cache") {
+          clearFontCache = true;
           continue;
         }
         if (arg == L"--load") {
@@ -842,9 +864,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     LocalFree(argv);
   }
 
-  // Clear the image disk cache before any widget can reload images from it.
+  // Clear the image/font disk caches before any widget can reload from them.
   if (clearImageCache)
     ImageCache::Clear();
+  if (clearFontCache)
+    FontCache::Clear();
 
   bool appliedCliSettings = false;
   if (setHardwareAcceleration.has_value()) {

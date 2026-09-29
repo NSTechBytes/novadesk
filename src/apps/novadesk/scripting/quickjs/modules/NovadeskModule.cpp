@@ -28,6 +28,7 @@
 #include "../../shared/Settings.h"
 #include "../../shared/System.h"
 #include "../../shared/Utils.h"
+#include "../../render/FontCache.h"
 #include "../../render/ImageCache.h"
 #include "../engine/JSEngine.h"
 #include "ModuleSystem.h"
@@ -1112,6 +1113,11 @@ JSValue JsAppRefresh(JSContext *ctx, JSValueConst, int, JSValueConst *) {
 JSValue JsAppClearImageCache(JSContext *ctx, JSValueConst, int,
                              JSValueConst *) {
   return JS_NewBool(ctx, ImageCache::Clear());
+}
+
+JSValue JsAppClearFontCache(JSContext *ctx, JSValueConst, int,
+                            JSValueConst *) {
+  return JS_NewBool(ctx, FontCache::Clear());
 }
 
 JSValue JsAppExit(JSContext *ctx, JSValueConst, int, JSValueConst *) {
@@ -2372,6 +2378,9 @@ int InitAppExport(JSContext *ctx, JSModuleDef *m) {
   JS_SetPropertyStr(ctx, app, "clearImageCache",
                     JS_NewCFunction(ctx, JsAppClearImageCache,
                                     "clearImageCache", 0));
+  JS_SetPropertyStr(ctx, app, "clearFontCache",
+                    JS_NewCFunction(ctx, JsAppClearFontCache,
+                                    "clearFontCache", 0));
   JS_SetPropertyStr(ctx, app, "exit",
                     JS_NewCFunction(ctx, JsAppExit, "exit", 0));
   JS_SetPropertyStr(ctx, app, "beginWindowBatch",
