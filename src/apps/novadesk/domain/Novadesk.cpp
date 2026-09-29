@@ -915,6 +915,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     DispatchMessage(&msg);
   }
 
+  // Some exit paths (app.exit(), --restart) quit the message loop without
+  // destroying the message window, so its WM_DESTROY never ran.  Join the
+  // font workers here as a safety net: a still-joinable std::thread in the
+  // namespace-scope vector would call std::terminate during static
+  // destruction at process exit.  All three calls are idempotent, and the
+  // cache Shutdowns must precede the join to wake workers parked on an
+  // in-flight download condition variable.
+  ImageCache::Shutdown();
+  FontCache::Shutdown();
+  FontDownloader::Shutdown();
+
   // Cleanup
   std::vector<Widget *> widgetsCopy;
   {
