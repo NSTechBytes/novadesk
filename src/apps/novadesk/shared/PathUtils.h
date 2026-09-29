@@ -222,4 +222,23 @@ std::wstring GetUrlParentDir(const std::wstring &url);
  * @return Resolved absolute URL.
  */
 std::wstring ResolveUrl(const std::wstring &path, const std::wstring &baseUrl);
+
+/**
+ * @brief Normalizes a URL for cache-key purposes.
+ *
+ * @param url The URL to normalize.
+ *
+ * @return URL with the fragment removed and scheme+host lowercased;
+ *         path and query case are preserved.
+ */
+std::wstring NormalizeURL(const std::wstring &url);
+
+/**
+ * @brief Computes a stable cache key for a URL.
+ *
+ * @param url The URL to hash.
+ *
+ * @return 16 lowercase hex characters (FNV-1a 64-bit of the normalized URL).
+ */
+std::wstring GetUrlCacheKey(const std::wstring &url);
 } // namespace PathUtils

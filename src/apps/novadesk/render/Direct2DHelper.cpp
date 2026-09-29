@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "Direct2DHelper.h"
+#include "ImageCache.h"
 #include "../shared/Logging.h"
 #include "../shared/PathUtils.h"
 #include <cmath>
@@ -351,7 +352,22 @@ bool LoadWICBitmapFromFile(const std::wstring &path, IWICBitmap **wicBitmap,
 }
 
 bool DownloadImageFromURL(const std::wstring &url, std::vector<BYTE> &buffer) {
+  ImageHttpMeta meta;
+  if (!DownloadImageFromURL(url, buffer, &meta, L"", L""))
+    return false;
+  return !buffer.empty();
+}
+
+bool DownloadImageFromURL(const std::wstring &url, std::vector<BYTE> &buffer,
+                          ImageHttpMeta *meta,
+                          const std::wstring &ifNoneMatch,
+                          const std::wstring &ifModifiedSince) {
   buffer.clear();
+  if (meta) {
+    meta->etag.clear();
+    meta->lastModified.clear();
+    meta->notModified = false;
+  }
 
   // Parse URL
   URL_COMPONENTS urlComp = {0};
@@ -371,8 +387,9 @@ bool DownloadImageFromURL(const std::wstring &url, std::vector<BYTE> &buffer) {
     return false;
   }
 
-  // Initialize WinHTTP
-  HINTERNET hSession =
+  // Shared session handle (WinHTTP sessions are thread-safe for concurrent
+  // requests; it is intentionally kept alive for the process lifetime).
+  static HINTERNET hSession =
       WinHttpOpen(L"Novadesk/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                   WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
 
@@ -385,7 +402,6 @@ bool DownloadImageFromURL(const std::wstring &url, std::vector<BYTE> &buffer) {
   HINTERNET hConnect = WinHttpConnect(hSession, szHostName, urlComp.nPort, 0);
 
   if (!hConnect) {
-    WinHttpCloseHandle(hSession);
     Logging::Log(LogLevel::Error,
                  L"[novadesk] WinHttpConnect failed for host: %s", szHostName);
     return false;
@@ -400,19 +416,26 @@ bool DownloadImageFromURL(const std::wstring &url, std::vector<BYTE> &buffer) {
 
   if (!hRequest) {
     WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
     Logging::Log(LogLevel::Error, L"[novadesk] WinHttpOpenRequest failed");
     return false;
   }
 
+  // Conditional GET headers
+  std::wstring extraHeaders;
+  if (!ifNoneMatch.empty())
+    extraHeaders += L"If-None-Match: " + ifNoneMatch + L"\r\n";
+  if (!ifModifiedSince.empty())
+    extraHeaders += L"If-Modified-Since: " + ifModifiedSince + L"\r\n";
+  LPCWSTR additionalHeaders =
+      extraHeaders.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : extraHeaders.c_str();
+
   // Send request
-  BOOL bResults = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
+  BOOL bResults = WinHttpSendRequest(hRequest, additionalHeaders, 0,
                                      WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
 
   if (!bResults) {
     WinHttpCloseHandle(hRequest);
     WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
     Logging::Log(LogLevel::Error, L"[novadesk] WinHttpSendRequest failed");
     return false;
   }
@@ -422,7 +445,6 @@ bool DownloadImageFromURL(const std::wstring &url, std::vector<BYTE> &buffer) {
   if (!bResults) {
     WinHttpCloseHandle(hRequest);
     WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
     Logging::Log(LogLevel::Error, L"[novadesk] WinHttpReceiveResponse failed");
     return false;
   }
@@ -434,10 +456,18 @@ bool DownloadImageFromURL(const std::wstring &url, std::vector<BYTE> &buffer) {
                       WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
                       nullptr, &dwStatusCode, &dwSize, nullptr);
 
+  if (dwStatusCode == 304) {
+    // Cache revalidation hit: no body, caller serves its stored bytes.
+    if (meta)
+      meta->notModified = true;
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    return true;
+  }
+
   if (dwStatusCode != 200) {
     WinHttpCloseHandle(hRequest);
     WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
     Logging::Log(LogLevel::Error,
                  L"[novadesk] HTTP request failed with status code: %d",
                  dwStatusCode);
@@ -484,10 +514,24 @@ bool DownloadImageFromURL(const std::wstring &url, std::vector<BYTE> &buffer) {
 
   } while (dwSize > 0);
 
+  // Capture validators for the cache before tearing down the request.
+  if (meta) {
+    wchar_t headerBuf[512];
+    DWORD headerSize = sizeof(headerBuf);
+    if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_ETAG,
+                            WINHTTP_HEADER_NAME_BY_INDEX, headerBuf,
+                            &headerSize, WINHTTP_NO_HEADER_INDEX))
+      meta->etag = headerBuf;
+    headerSize = sizeof(headerBuf);
+    if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_LAST_MODIFIED,
+                            WINHTTP_HEADER_NAME_BY_INDEX, headerBuf,
+                            &headerSize, WINHTTP_NO_HEADER_INDEX))
+      meta->lastModified = headerBuf;
+  }
+
   // Cleanup
   WinHttpCloseHandle(hRequest);
   WinHttpCloseHandle(hConnect);
-  WinHttpCloseHandle(hSession);
 
   if (downloadError) {
     Logging::Log(LogLevel::Error,
@@ -507,9 +551,9 @@ bool LoadWICBitmapFromURL(const std::wstring &url, IWICBitmap **wicBitmap,
   if (!g_pWICFactory)
     return false;
 
-  // Download image data
+  // Download image data (disk cache first, network on miss)
   std::vector<BYTE> imageData;
-  if (!DownloadImageFromURL(url, imageData)) {
+  if (!ImageCache::FetchBytes(url, imageData)) {
     Logging::Log(LogLevel::Error,
                  L"[novadesk] Failed to download image from URL: %s",
                  url.c_str());

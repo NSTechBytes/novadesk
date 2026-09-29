@@ -8,6 +8,7 @@
 #include "GeneralImage.h"
 
 #include "Direct2DHelper.h"
+#include "ImageCache.h"
 #include "../shared/Logging.h"
 #include "../shared/PathUtils.h"
 #include "../Resource.h"
@@ -142,7 +143,13 @@ void GeneralImage::LoadFallbackFromResource() {
   m_IsFallbackShowing = true;
 }
 
-void GeneralImage::SetPath(const std::wstring &path) {
+void GeneralImage::SetPath(const std::wstring &path, bool force) {
+  // Re-setting an identical URL must not restart a download; identical local
+  // paths still reload because their file contents may have changed.
+  // Callers that need to re-fetch a URL (e.g. rotators) pass force=true.
+  if (!force && path == m_ImagePath && PathUtils::IsURL(path))
+    return;
+
   m_ImagePath = path;
   m_LoadedPath = path;
   m_IsFallbackShowing = false;
@@ -261,7 +268,7 @@ void GeneralImage::StartAsyncDownload(const std::wstring &url) {
 
   m_AsyncDownloadThreads.emplace_back([this, hWnd, url]() {
     AsyncImageResult *result = new AsyncImageResult();
-    if (Direct2D::DownloadImageFromURL(url, result->encodedBytes) &&
+    if (ImageCache::FetchBytes(url, result->encodedBytes) &&
         !result->encodedBytes.empty()) {
       // Don't decode here — only the background-image path needs
       // pre-decoded pixels, and that is done on-demand in the handler.

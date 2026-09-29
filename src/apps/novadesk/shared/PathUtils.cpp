@@ -10,6 +10,7 @@
 #include <shlwapi.h>
 #include <shlobj.h>
 #include <cstdio>
+#include "Utils.h"
 #include "Version.h"
 #include "Logging.h"
 
@@ -18,6 +19,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 
 namespace PathUtils {
@@ -514,5 +516,34 @@ std::wstring ResolveUrl(const std::wstring &path, const std::wstring &baseUrl) {
   }
 
   return GetUrlParentDir(baseUrl) + path;
+}
+
+std::wstring NormalizeURL(const std::wstring &url) {
+  std::wstring u = url;
+  const size_t fragment = u.find(L'#');
+  if (fragment != std::wstring::npos)
+    u.erase(fragment);
+
+  const size_t schemeEnd = u.find(L"://");
+  if (schemeEnd == std::wstring::npos)
+    return u;
+  size_t authorityEnd = u.find_first_of(L"/?", schemeEnd + 3);
+  if (authorityEnd == std::wstring::npos)
+    authorityEnd = u.size();
+  for (size_t i = 0; i < authorityEnd; ++i)
+    u[i] = (wchar_t)std::tolower((unsigned char)u[i]);
+  return u;
+}
+
+std::wstring GetUrlCacheKey(const std::wstring &url) {
+  const std::string bytes = Utils::ToString(NormalizeURL(url));
+  uint64_t hash = 1469598103934665603ull;
+  for (unsigned char c : bytes) {
+    hash ^= c;
+    hash *= 1099511628211ull;
+  }
+  wchar_t buf[17];
+  swprintf_s(buf, L"%016llx", (unsigned long long)hash);
+  return std::wstring(buf);
 }
 } // namespace PathUtils

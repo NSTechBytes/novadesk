@@ -79,8 +79,10 @@ public:
    * @brief Sets the image source path (file or URL).
    *
    * @param path Path to the image file or HTTP/HTTPS URL.
+   * @param force Re-fetch even when the path is an unchanged URL; local
+   *              paths always reload. Default skips redundant URL downloads.
    */
-  void SetPath(const std::wstring &path);
+  void SetPath(const std::wstring &path, bool force = false);
 
   /// @return The current image path.
   const std::wstring &GetPath() const { return m_ImagePath; }

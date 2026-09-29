@@ -183,6 +183,15 @@ bool LoadWICBitmapFromURL(const std::wstring &url, IWICBitmap **wicBitmap,
                           bool useExifOrientation = false);
 
 /**
+ * @brief HTTP validator metadata exchanged with DownloadImageFromURL().
+ */
+struct ImageHttpMeta {
+  std::wstring etag; ///< Response ETag header (empty if the server sent none).
+  std::wstring lastModified; ///< Response Last-Modified header.
+  bool notModified = false; ///< True when the server answered 304.
+};
+
+/**
  * @brief Downloads image data from a URL.
  *
  * @param url The URL to download from.
@@ -191,6 +200,23 @@ bool LoadWICBitmapFromURL(const std::wstring &url, IWICBitmap **wicBitmap,
  * @return True if successful.
  */
 bool DownloadImageFromURL(const std::wstring &url, std::vector<BYTE> &buffer);
+
+/**
+ * @brief Downloads image data from a URL with HTTP validator support.
+ *
+ * @param url The URL to download from.
+ * @param buffer Receives the downloaded bytes (empty when 304).
+ * @param meta Optional out-param receiving response ETag/Last-Modified,
+ *             with notModified set when the server answered 304.
+ * @param ifNoneMatch Value to send as If-None-Match (empty to omit).
+ * @param ifModifiedSince Value to send as If-Modified-Since (empty to omit).
+ *
+ * @return True when the request succeeded (200 or 304).
+ */
+bool DownloadImageFromURL(const std::wstring &url, std::vector<BYTE> &buffer,
+                          ImageHttpMeta *meta,
+                          const std::wstring &ifNoneMatch,
+                          const std::wstring &ifModifiedSince);
 
 // ============================================================================
 // Conversion Helpers

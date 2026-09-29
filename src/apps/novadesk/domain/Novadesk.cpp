@@ -25,6 +25,7 @@
 #include "Direct2DHelper.h"
 #include "FontManager.h"
 #include "../render/FontDownloader.h"
+#include "../render/ImageCache.h"
 #include "../shared/Logging.h"
 #include "../shared/System.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
@@ -579,6 +580,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   // Initialize Settings
   Settings::Initialize();
 
+  // Prepare the online-image disk cache before widgets start loading.
+  ImageCache::Startup();
+
   // Initialize global strings
   wcscpy_s(szTitle, MAX_LOADSTRING, appTitle.c_str());
   hInst = hInstance;
@@ -705,6 +709,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     case WM_DESTROY:
       // Font workers post to this window.  Join them before its handle
       // becomes invalid during destruction.
+      ImageCache::Shutdown();
       FontDownloader::Shutdown();
       JSEngine::SetMessageWindow(nullptr);
       if (g_trayMouseHook) {
