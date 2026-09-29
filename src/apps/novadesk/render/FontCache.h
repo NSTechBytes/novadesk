@@ -15,7 +15,7 @@
  * @brief Disk cache for fonts downloaded from HTTP/HTTPS URLs.
  *
  * @note Backed by the generic HttpDiskCache engine: raw response bytes
- *       (WOFF2 included) are stored under <AppData>\font-cache keyed by a
+ *       (WOFF2 included) are stored under <AppData>\cache\font-cache keyed by a
  *       hash of the URL, revalidated per RFC 9111 server directives, and
  *       served stale on network failure unless must-revalidate applies.
  *       WOFF2-to-TTF conversion stays in FontDownloader. Performs file I/O

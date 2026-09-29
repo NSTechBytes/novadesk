@@ -14,7 +14,7 @@
 /**
  * @brief Disk cache for images downloaded from HTTP/HTTPS URLs.
  *
- * @note Downloaded bytes are stored under <AppData>\image-cache keyed by a
+ * @note Downloaded bytes are stored under <AppData>\cache\image-cache keyed by a
  *       hash of the URL, with a sidecar metadata file holding the original
  *       URL, fetch time and HTTP validators (ETag / Last-Modified). Entries
  *       are served from disk until the TTL expires, then revalidated with a

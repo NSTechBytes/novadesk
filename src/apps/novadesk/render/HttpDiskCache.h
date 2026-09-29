@@ -33,7 +33,7 @@ namespace HttpDiskCache {
 
 /// Configuration for one cache instance.
 struct Config {
-  std::wstring dirName;   ///< AppData subfolder, e.g. L"image-cache".
+  std::wstring dirName;   ///< Subfolder of the AppData "cache" folder, e.g. L"image-cache".
   std::wstring logPrefix; ///< Log tag, e.g. L"[ImageCache]".
   long long ttlSeconds = 24 * 60 * 60; ///< Default lifetime and max-age cap.
   long long maxCacheBytes = 256ll * 1024 * 1024; ///< Eviction budget.

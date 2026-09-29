@@ -76,7 +76,9 @@ struct Cache::Impl {
   }
 
   std::wstring CacheDir() const {
-    return PathUtils::GetAppDataPath() + cfg.dirName;
+    // All disk caches live under one "cache" folder in AppData, each in
+    // its own subfolder, e.g. <AppData>\<Product>\cache\image-cache.
+    return PathUtils::GetAppDataPath() + L"cache\\" + cfg.dirName;
   }
 
   fs::path BinPath(const std::wstring &key) const {
