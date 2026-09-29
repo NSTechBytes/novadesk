@@ -9,6 +9,7 @@
 #include <Windows.h>
 #include "ColorUtil.h"
 #include <algorithm>
+#include <cstdlib>
 #include <cwctype>
 #include <shellapi.h>
 #include <cstdio>
@@ -315,6 +316,118 @@ std::vector<std::wstring> SplitByComma(const std::wstring &s) {
   std::vector<std::wstring> parts;
   TrySplitByComma(s, parts);
   return parts;
+}
+
+long long ParseHttpDate(const std::wstring &value) {
+  // IMF-fixdate: "Wdy, DD Mon YYYY HH:MM:SS GMT"
+  int day = 0, year = 0, hour = 0, minute = 0, second = 0;
+  wchar_t mon[4] = {};
+  wchar_t zone[8] = {};
+  const int parsed =
+      swscanf_s(value.c_str(), L"%*3[^,], %d %3s %d %d:%d:%d %7s", &day, mon,
+                (unsigned)_countof(mon), &year, &hour, &minute, &second, zone,
+                (unsigned)_countof(zone));
+  if (parsed != 7)
+    return -1;
+
+  static const wchar_t *kMonths[12] = {L"Jan", L"Feb", L"Mar", L"Apr",
+                                       L"May", L"Jun", L"Jul", L"Aug",
+                                       L"Sep", L"Oct", L"Nov", L"Dec"};
+  int month = 0;
+  for (int i = 0; i < 12; ++i) {
+    if (_wcsnicmp(mon, kMonths[i], 3) == 0) {
+      month = i + 1;
+      break;
+    }
+  }
+  if (month == 0 || year < 1970 || year > 2100 || day < 1 || day > 31 ||
+      hour > 23 || minute > 59 || second > 60)
+    return -1;
+
+  SYSTEMTIME st = {};
+  st.wYear = (WORD)year;
+  st.wMonth = (WORD)month;
+  st.wDay = (WORD)day;
+  st.wHour = (WORD)hour;
+  st.wMinute = (WORD)minute;
+  st.wSecond = (WORD)second;
+
+  FILETIME ft;
+  if (!SystemTimeToFileTime(&st, &ft))
+    return -1;
+  ULARGE_INTEGER ull;
+  ull.LowPart = ft.dwLowDateTime;
+  ull.HighPart = ft.dwHighDateTime;
+  // 116444736000000000 = 100ns ticks between 1601-01-01 and 1970-01-01.
+  if (ull.QuadPart < 116444736000000000ull)
+    return -1;
+  return (long long)((ull.QuadPart - 116444736000000000ull) / 10000000ull);
+}
+
+bool HasCacheControlDirective(const std::wstring &cacheControl,
+                              const std::wstring &name) {
+  size_t pos = 0;
+  while (pos <= cacheControl.size()) {
+    size_t end = cacheControl.find(L',', pos);
+    const bool last = (end == std::wstring::npos);
+    if (last)
+      end = cacheControl.size();
+
+    size_t s = pos, e = end;
+    while (s < e && iswspace(cacheControl[s]))
+      ++s;
+    while (e > s && iswspace(cacheControl[e - 1]))
+      --e;
+    const size_t eq = cacheControl.find(L'=', s);
+    if (eq != std::wstring::npos && eq < e)
+      e = eq; // strip the directive parameter before comparing tokens
+
+    if (e - s == name.size() &&
+        _wcsnicmp(cacheControl.c_str() + s, name.c_str(), name.size()) == 0)
+      return true;
+
+    if (last)
+      break;
+    pos = end + 1;
+  }
+  return false;
+}
+
+long long ParseCacheControlMaxAge(const std::wstring &cacheControl) {
+  size_t pos = 0;
+  static const std::wstring kMaxAge = L"max-age";
+  while (pos <= cacheControl.size()) {
+    size_t end = cacheControl.find(L',', pos);
+    const bool last = (end == std::wstring::npos);
+    if (last)
+      end = cacheControl.size();
+
+    size_t s = pos, e = end;
+    while (s < e && iswspace(cacheControl[s]))
+      ++s;
+    while (e > s && iswspace(cacheControl[e - 1]))
+      --e;
+    const size_t eq = cacheControl.find(L'=', s);
+    const bool hasParam = (eq != std::wstring::npos && eq < e);
+    const size_t tokenEnd = hasParam ? eq : e;
+
+    if (tokenEnd - s == kMaxAge.size() &&
+        _wcsnicmp(cacheControl.c_str() + s, kMaxAge.c_str(), kMaxAge.size()) ==
+            0 &&
+        hasParam) {
+      const wchar_t *digits = cacheControl.c_str() + eq + 1;
+      wchar_t *stop = nullptr;
+      const long long v = wcstoll(digits, &stop, 10);
+      if (stop != digits && v >= 0)
+        return v;
+      return -1;
+    }
+
+    if (last)
+      break;
+    pos = end + 1;
+  }
+  return -1;
 }
 
 } // namespace Utils

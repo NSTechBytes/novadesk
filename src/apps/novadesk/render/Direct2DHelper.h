@@ -183,12 +183,24 @@ bool LoadWICBitmapFromURL(const std::wstring &url, IWICBitmap **wicBitmap,
                           bool useExifOrientation = false);
 
 /**
- * @brief HTTP validator metadata exchanged with DownloadImageFromURL().
+ * @brief HTTP validator and cache-directive metadata exchanged with
+ *        DownloadImageFromURL().
+ *
+ * The noStore/noCache/mustRevalidate flags are aggregated across the whole
+ * redirect chain (RFC 9111 evaluates each redirect response separately),
+ * while the raw header strings describe the final response.
  */
 struct ImageHttpMeta {
   std::wstring etag; ///< Response ETag header (empty if the server sent none).
   std::wstring lastModified; ///< Response Last-Modified header.
-  bool notModified = false; ///< True when the server answered 304.
+  bool notModified = false;  ///< True when the server answered 304.
+  std::wstring cacheControl; ///< Raw Cache-Control header of the final hop.
+  std::wstring date;         ///< Date header of the final hop.
+  std::wstring age;          ///< Age header of the final hop (seconds).
+  std::wstring expires;      ///< Expires header of the final hop.
+  bool noStore = false;      ///< no-store seen on any hop of the chain.
+  bool noCache = false;      ///< no-cache seen on any hop of the chain.
+  bool mustRevalidate = false; ///< must-revalidate seen on any hop.
 };
 
 /**

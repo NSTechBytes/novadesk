@@ -16,6 +16,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -30,7 +31,11 @@ namespace {
 // ---------------------------------------------------------------------------
 // Policy
 // ---------------------------------------------------------------------------
-constexpr long long kTtlSeconds = 24 * 60 * 60; // serve from disk for 24h
+// Default freshness when the server sends no cache directives, and the cap
+// applied to any server-provided max-age/Expires lifetime (RFC 9111 lets a
+// server pin an entry for a year; we revalidate through the disk hit
+// instead). Server directives below kTtlSeconds are honored as-is.
+constexpr long long kTtlSeconds = 24 * 60 * 60;
 constexpr long long kMaxCacheBytes = 256ll * 1024 * 1024;
 constexpr int kTempFileMaxAgeSeconds = 3600;
 
@@ -51,6 +56,8 @@ std::unordered_map<std::wstring, std::shared_ptr<InFlightState>> g_InFlight;
 struct Meta {
   std::wstring url;
   long long fetchedAt = 0;
+  long long expiresAt = 0; // absolute epoch when the entry must revalidate
+  bool mustRevalidate = false; // forbid serving stale when the network fails
   std::wstring etag;
   std::wstring lastModified;
 };
@@ -105,6 +112,9 @@ std::wstring SerializeMeta(const Meta &meta) {
   std::wstring out;
   out += L"url=" + meta.url + L"\n";
   out += L"fetchedAt=" + std::to_wstring(meta.fetchedAt) + L"\n";
+  out += L"expiresAt=" + std::to_wstring(meta.expiresAt) + L"\n";
+  out += L"mustRevalidate=" + std::wstring(meta.mustRevalidate ? L"1" : L"0") +
+         L"\n";
   out += L"etag=" + meta.etag + L"\n";
   out += L"lastModified=" + meta.lastModified + L"\n";
   return out;
@@ -114,6 +124,7 @@ bool ParseMeta(const std::string &text, Meta &meta) {
   std::istringstream stream(text);
   std::string line;
   bool hasUrl = false;
+  bool hasExpiresAt = false;
   while (std::getline(stream, line)) {
     if (!line.empty() && line.back() == '\r')
       line.pop_back();
@@ -131,13 +142,28 @@ bool ParseMeta(const std::string &text, Meta &meta) {
       } catch (...) {
         return false;
       }
+    } else if (key == "expiresAt") {
+      try {
+        meta.expiresAt = std::stoll(value);
+        hasExpiresAt = true;
+      } catch (...) {
+        return false;
+      }
+    } else if (key == "mustRevalidate") {
+      meta.mustRevalidate = (value == "1");
     } else if (key == "etag") {
       meta.etag = Utils::ToWString(value);
     } else if (key == "lastModified") {
       meta.lastModified = Utils::ToWString(value);
     }
   }
-  return hasUrl;
+  if (!hasUrl)
+    return false;
+  // Entries written before server directives were tracked: fall back to
+  // the old flat-TTL behavior instead of treating them as malformed.
+  if (!hasExpiresAt)
+    meta.expiresAt = meta.fetchedAt + kTtlSeconds;
+  return true;
 }
 
 bool ReadFileBytes(const fs::path &path, std::vector<BYTE> &out) {
@@ -173,6 +199,52 @@ bool WriteEntry(const std::wstring &key, const Meta &meta,
   return WriteFileAtomic(MetaPath(key), metaData);
 }
 
+void DeleteEntry(const std::wstring &key) {
+  std::error_code ec;
+  fs::remove(BinPath(key), ec);
+  fs::remove(MetaPath(key), ec);
+}
+
+// Freshness lifetime for a stored entry, per RFC 9111 §4.2: explicit
+// max-age (minus the upstream Age), else Expires relative to the server's
+// Date (avoids clock skew), else heuristic (10% of the time since
+// Last-Modified), else our default TTL. no-cache/max-age=0 make the entry
+// immediately stale so every reuse revalidates. The result is capped by
+// kTtlSeconds so a long server max-age still results in cheap 304 checks.
+long long ComputeFreshLifetime(const Direct2D::ImageHttpMeta &resp) {
+  long long lifetime = -1;
+
+  const long long maxAge = Utils::ParseCacheControlMaxAge(resp.cacheControl);
+  if (resp.noCache || maxAge == 0) {
+    lifetime = 0;
+  } else if (maxAge > 0) {
+    long long age = 0;
+    if (!resp.age.empty()) {
+      const long long parsed = _wtoi64(resp.age.c_str());
+      if (parsed > 0)
+        age = parsed;
+    }
+    lifetime = maxAge - age;
+  } else {
+    const long long date = Utils::ParseHttpDate(resp.date);
+    const long long expires = Utils::ParseHttpDate(resp.expires);
+    const long long lastModified = Utils::ParseHttpDate(resp.lastModified);
+    if (expires >= 0 && date >= 0) {
+      lifetime = expires - date; // Expires present (no max-age)
+    } else if (lastModified >= 0 && date > lastModified) {
+      lifetime = (date - lastModified) / 10; // heuristic freshness
+    } else {
+      lifetime = kTtlSeconds; // no signal at all: our default
+    }
+  }
+
+  if (lifetime < 0)
+    lifetime = 0;
+  if (lifetime > kTtlSeconds)
+    lifetime = kTtlSeconds;
+  return lifetime;
+}
+
 // ---------------------------------------------------------------------------
 // Download (once per URL) with revalidation and stale fallback
 // ---------------------------------------------------------------------------
@@ -182,7 +254,7 @@ bool DownloadAndCache(const std::wstring &url, const std::wstring &key,
   std::vector<BYTE> staleBytes;
   const bool haveStale = ReadEntry(key, url, stale, staleBytes);
 
-  if (haveStale && NowSeconds() - stale.fetchedAt <= kTtlSeconds) {
+  if (haveStale && NowSeconds() < stale.expiresAt) {
     outBytes = std::move(staleBytes);
     return true;
   }
@@ -196,8 +268,17 @@ bool DownloadAndCache(const std::wstring &url, const std::wstring &key,
       haveStale ? stale.lastModified : std::wstring());
 
   if (netOk && resp.notModified) {
+    if (resp.noStore) {
+      // The server now forbids storing this resource; drop the entry but
+      // still serve the confirmed-unchanged bytes for this load.
+      DeleteEntry(key);
+      outBytes = std::move(staleBytes);
+      return true;
+    }
     Meta refreshed = stale;
     refreshed.fetchedAt = NowSeconds();
+    refreshed.expiresAt = refreshed.fetchedAt + ComputeFreshLifetime(resp);
+    refreshed.mustRevalidate = resp.mustRevalidate;
     if (!resp.etag.empty())
       refreshed.etag = resp.etag;
     if (!resp.lastModified.empty())
@@ -211,25 +292,37 @@ bool DownloadAndCache(const std::wstring &url, const std::wstring &key,
   }
 
   if (netOk && !bytes.empty()) {
+    outBytes = std::move(bytes);
+    if (resp.noStore) {
+      // no-store anywhere in the redirect chain: never persist, and purge
+      // any entry left by an older build so the next load hits the network.
+      DeleteEntry(key);
+      Logging::Log(LogLevel::Debug,
+                   L"[ImageCache] no-store directive; served without caching "
+                   L"for '%s'",
+                   url.c_str());
+      return true;
+    }
     Meta fresh;
     fresh.url = url;
     fresh.fetchedAt = NowSeconds();
+    fresh.expiresAt = fresh.fetchedAt + ComputeFreshLifetime(resp);
+    fresh.mustRevalidate = resp.mustRevalidate;
     fresh.etag = resp.etag;
     fresh.lastModified = resp.lastModified;
-    if (WriteEntry(key, fresh, bytes))
+    if (WriteEntry(key, fresh, outBytes))
       Logging::Log(LogLevel::Debug,
                    L"[ImageCache] Downloaded and cached %llu bytes for '%s'",
-                   (unsigned long long)bytes.size(), url.c_str());
+                   (unsigned long long)outBytes.size(), url.c_str());
     else
       Logging::Log(LogLevel::Debug,
                    L"[ImageCache] Downloaded %llu bytes but cache write "
                    L"failed for '%s'",
-                   (unsigned long long)bytes.size(), url.c_str());
-    outBytes = std::move(bytes);
+                   (unsigned long long)outBytes.size(), url.c_str());
     return true;
   }
 
-  if (haveStale) {
+  if (haveStale && !stale.mustRevalidate) {
     Logging::Log(LogLevel::Warn,
                  L"[ImageCache] Network failed, serving stale cache for '%s'",
                  url.c_str());
@@ -237,8 +330,14 @@ bool DownloadAndCache(const std::wstring &url, const std::wstring &key,
     return true;
   }
 
-  Logging::Log(LogLevel::Warn, L"[ImageCache] Download failed for '%s'",
-               url.c_str());
+  if (haveStale)
+    Logging::Log(LogLevel::Warn,
+                 L"[ImageCache] Network failed and must-revalidate forbids "
+                 L"stale reuse for '%s'",
+                 url.c_str());
+  else
+    Logging::Log(LogLevel::Warn, L"[ImageCache] Download failed for '%s'",
+                 url.c_str());
   return false;
 }
 
@@ -378,12 +477,13 @@ bool FetchBytes(const std::wstring &url, std::vector<BYTE> &outBytes) {
 
   const std::wstring key = PathUtils::GetUrlCacheKey(url);
 
-  // Fresh disk hit needs no coordination or network.
+  // Fresh disk hit needs no coordination or network. Entries with
+  // no-cache/max-age=0 have expiresAt <= now and fall through to
+  // revalidation below.
   {
     Meta meta;
     std::vector<BYTE> bytes;
-    if (ReadEntry(key, url, meta, bytes) &&
-        NowSeconds() - meta.fetchedAt <= kTtlSeconds) {
+    if (ReadEntry(key, url, meta, bytes) && NowSeconds() < meta.expiresAt) {
       outBytes = std::move(bytes);
       Logging::Log(LogLevel::Debug, L"[ImageCache] Cache hit for '%s'",
                    url.c_str());

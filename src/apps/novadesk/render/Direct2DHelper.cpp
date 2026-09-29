@@ -9,6 +9,7 @@
 #include "ImageCache.h"
 #include "../shared/Logging.h"
 #include "../shared/PathUtils.h"
+#include "../shared/Utils.h"
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -358,192 +359,267 @@ bool DownloadImageFromURL(const std::wstring &url, std::vector<BYTE> &buffer) {
   return !buffer.empty();
 }
 
+namespace {
+
+// Queries one response header by name. Header values longer than the buffer
+// are treated as absent, which is acceptable for the short cache-related
+// headers read here.
+std::wstring QueryResponseHeader(HINTERNET hRequest, const wchar_t *name) {
+  wchar_t headerBuf[512] = {};
+  wchar_t nameBuf[64] = {};
+  wcscpy_s(nameBuf, name);
+  DWORD size = sizeof(headerBuf);
+  if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_CUSTOM, nameBuf, headerBuf,
+                          &size, WINHTTP_NO_HEADER_INDEX))
+    return headerBuf;
+  return std::wstring();
+}
+
+bool HasUrlScheme(const std::wstring &url, const wchar_t *scheme) {
+  return _wcsnicmp(url.c_str(), scheme, wcslen(scheme)) == 0;
+}
+
+} // namespace
+
 bool DownloadImageFromURL(const std::wstring &url, std::vector<BYTE> &buffer,
                           ImageHttpMeta *meta,
                           const std::wstring &ifNoneMatch,
                           const std::wstring &ifModifiedSince) {
   buffer.clear();
-  if (meta) {
-    meta->etag.clear();
-    meta->lastModified.clear();
-    meta->notModified = false;
-  }
-
-  // Parse URL
-  URL_COMPONENTS urlComp = {0};
-  urlComp.dwStructSize = sizeof(urlComp);
-
-  WCHAR szHostName[256] = {0};
-  WCHAR szUrlPath[1024] = {0};
-
-  urlComp.lpszHostName = szHostName;
-  urlComp.dwHostNameLength = sizeof(szHostName) / sizeof(WCHAR);
-  urlComp.lpszUrlPath = szUrlPath;
-  urlComp.dwUrlPathLength = sizeof(szUrlPath) / sizeof(WCHAR);
-
-  if (!WinHttpCrackUrl(url.c_str(), (DWORD)url.length(), 0, &urlComp)) {
-    Logging::Log(LogLevel::Error, L"[novadesk] Failed to parse URL: %s",
-                 url.c_str());
-    return false;
-  }
+  if (meta)
+    *meta = ImageHttpMeta();
 
   // Shared session handle (WinHTTP sessions are thread-safe for concurrent
   // requests; it is intentionally kept alive for the process lifetime).
-  static HINTERNET hSession =
-      WinHttpOpen(L"Novadesk/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-                  WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+  // Automatic redirects are disabled so every hop of the chain can be
+  // inspected: RFC 9111 evaluates each redirect response separately, and
+  // servers like picsum.photos mark the redirect itself no-store while the
+  // final image claims long-lived freshness.
+  static HINTERNET hSession = [] {
+    HINTERNET h =
+        WinHttpOpen(L"Novadesk/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                    WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (h) {
+      DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
+      WinHttpSetOption(h, WINHTTP_OPTION_REDIRECT_POLICY, &policy,
+                       sizeof(policy));
+    }
+    return h;
+  }();
 
   if (!hSession) {
     Logging::Log(LogLevel::Error, L"[novadesk] WinHttpOpen failed");
     return false;
   }
 
-  // Connect to server
-  HINTERNET hConnect = WinHttpConnect(hSession, szHostName, urlComp.nPort, 0);
-
-  if (!hConnect) {
-    Logging::Log(LogLevel::Error,
-                 L"[novadesk] WinHttpConnect failed for host: %s", szHostName);
-    return false;
-  }
-
-  // Open request
-  DWORD dwFlags =
-      (urlComp.nScheme == INTERNET_SCHEME_HTTPS) ? WINHTTP_FLAG_SECURE : 0;
-  HINTERNET hRequest = WinHttpOpenRequest(
-      hConnect, L"GET", szUrlPath, nullptr, WINHTTP_NO_REFERER,
-      WINHTTP_DEFAULT_ACCEPT_TYPES, dwFlags);
-
-  if (!hRequest) {
-    WinHttpCloseHandle(hConnect);
-    Logging::Log(LogLevel::Error, L"[novadesk] WinHttpOpenRequest failed");
-    return false;
-  }
-
-  // Conditional GET headers
+  // Conditional GET headers. Validators are re-sent on every hop; servers
+  // that do not recognize them simply ignore them.
   std::wstring extraHeaders;
   if (!ifNoneMatch.empty())
     extraHeaders += L"If-None-Match: " + ifNoneMatch + L"\r\n";
   if (!ifModifiedSince.empty())
     extraHeaders += L"If-Modified-Since: " + ifModifiedSince + L"\r\n";
   LPCWSTR additionalHeaders =
-      extraHeaders.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : extraHeaders.c_str();
+      extraHeaders.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS
+                           : extraHeaders.c_str();
 
-  // Send request
-  BOOL bResults = WinHttpSendRequest(hRequest, additionalHeaders, 0,
-                                     WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+  const DWORD kMaxRedirects = 8;
+  std::wstring currentUrl = url;
 
-  if (!bResults) {
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    Logging::Log(LogLevel::Error, L"[novadesk] WinHttpSendRequest failed");
-    return false;
-  }
+  for (DWORD hop = 0; hop <= kMaxRedirects; ++hop) {
+    URL_COMPONENTS urlComp = {0};
+    urlComp.dwStructSize = sizeof(urlComp);
 
-  // Receive response
-  bResults = WinHttpReceiveResponse(hRequest, nullptr);
-  if (!bResults) {
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    Logging::Log(LogLevel::Error, L"[novadesk] WinHttpReceiveResponse failed");
-    return false;
-  }
+    WCHAR szHostName[256] = {0};
+    WCHAR szUrlPath[1024] = {0};
 
-  // Check status code
-  DWORD dwStatusCode = 0;
-  DWORD dwSize = sizeof(dwStatusCode);
-  WinHttpQueryHeaders(hRequest,
-                      WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-                      nullptr, &dwStatusCode, &dwSize, nullptr);
+    urlComp.lpszHostName = szHostName;
+    urlComp.dwHostNameLength = (DWORD)(sizeof(szHostName) / sizeof(WCHAR));
+    urlComp.lpszUrlPath = szUrlPath;
+    urlComp.dwUrlPathLength = (DWORD)(sizeof(szUrlPath) / sizeof(WCHAR));
 
-  if (dwStatusCode == 304) {
-    // Cache revalidation hit: no body, caller serves its stored bytes.
-    if (meta)
-      meta->notModified = true;
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    return true;
-  }
-
-  if (dwStatusCode != 200) {
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    Logging::Log(LogLevel::Error,
-                 L"[novadesk] HTTP request failed with status code: %d",
-                 dwStatusCode);
-    return false;
-  }
-
-  // Read data — cap at 50 MB to prevent memory exhaustion from
-  // malicious or accidentally huge payloads.
-  static const DWORD MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
-  DWORD dwDownloaded = 0;
-  BYTE tempBuffer[4096];
-  bool downloadError = false;
-
-  do {
-    dwSize = 0;
-    if (!WinHttpQueryDataAvailable(hRequest, &dwSize)) {
-      downloadError = true;
-      break;
+    if (!WinHttpCrackUrl(currentUrl.c_str(), (DWORD)currentUrl.length(), 0,
+                         &urlComp)) {
+      Logging::Log(LogLevel::Error, L"[novadesk] Failed to parse URL: %s",
+                   currentUrl.c_str());
+      return false;
     }
 
-    if (dwSize == 0)
-      break;
-
-    if (dwDownloaded + dwSize > MAX_DOWNLOAD_BYTES) {
+    const bool secure = (urlComp.nScheme == INTERNET_SCHEME_HTTPS);
+    HINTERNET hConnect = WinHttpConnect(hSession, szHostName, urlComp.nPort, 0);
+    if (!hConnect) {
       Logging::Log(LogLevel::Error,
-                   L"[novadesk] Download exceeded %lu byte limit from URL: %s",
-                   MAX_DOWNLOAD_BYTES, url.c_str());
-      downloadError = true;
-      break;
+                   L"[novadesk] WinHttpConnect failed for host: %s", szHostName);
+      return false;
     }
 
-    DWORD dwRead = 0;
-    if (!WinHttpReadData(hRequest, tempBuffer,
-                         (std::min)((DWORD)sizeof(tempBuffer), dwSize),
-                         &dwRead)) {
-      downloadError = true;
-      break;
+    HINTERNET hRequest = WinHttpOpenRequest(
+        hConnect, L"GET", szUrlPath, nullptr, WINHTTP_NO_REFERER,
+        WINHTTP_DEFAULT_ACCEPT_TYPES, secure ? WINHTTP_FLAG_SECURE : 0);
+    if (!hRequest) {
+      WinHttpCloseHandle(hConnect);
+      Logging::Log(LogLevel::Error, L"[novadesk] WinHttpOpenRequest failed");
+      return false;
     }
 
-    if (dwRead > 0) {
-      buffer.insert(buffer.end(), tempBuffer, tempBuffer + dwRead);
-      dwDownloaded += dwRead;
+    if (!WinHttpSendRequest(hRequest, additionalHeaders, 0,
+                            WINHTTP_NO_REQUEST_DATA, 0, 0, 0)) {
+      const DWORD err = GetLastError();
+      WinHttpCloseHandle(hRequest);
+      WinHttpCloseHandle(hConnect);
+      Logging::Log(LogLevel::Error,
+                   L"[novadesk] WinHttpSendRequest failed (%lu) for URL: %s",
+                   err, currentUrl.c_str());
+      return false;
     }
 
-  } while (dwSize > 0);
+    if (!WinHttpReceiveResponse(hRequest, nullptr)) {
+      const DWORD err = GetLastError();
+      WinHttpCloseHandle(hRequest);
+      WinHttpCloseHandle(hConnect);
+      Logging::Log(LogLevel::Error,
+                   L"[novadesk] WinHttpReceiveResponse failed (%lu) for URL: %s",
+                   err, currentUrl.c_str());
+      return false;
+    }
 
-  // Capture validators for the cache before tearing down the request.
-  if (meta) {
-    wchar_t headerBuf[512];
-    DWORD headerSize = sizeof(headerBuf);
-    if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_ETAG,
-                            WINHTTP_HEADER_NAME_BY_INDEX, headerBuf,
-                            &headerSize, WINHTTP_NO_HEADER_INDEX))
-      meta->etag = headerBuf;
-    headerSize = sizeof(headerBuf);
-    if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_LAST_MODIFIED,
-                            WINHTTP_HEADER_NAME_BY_INDEX, headerBuf,
-                            &headerSize, WINHTTP_NO_HEADER_INDEX))
-      meta->lastModified = headerBuf;
+    DWORD dwStatusCode = 0;
+    DWORD dwSize = sizeof(dwStatusCode);
+    WinHttpQueryHeaders(hRequest,
+                        WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                        nullptr, &dwStatusCode, &dwSize, nullptr);
+
+    // Aggregate cache constraints across the whole redirect chain.
+    const std::wstring cacheControl =
+        QueryResponseHeader(hRequest, L"Cache-Control");
+    if (meta) {
+      if (Utils::HasCacheControlDirective(cacheControl, L"no-store"))
+        meta->noStore = true;
+      if (Utils::HasCacheControlDirective(cacheControl, L"no-cache"))
+        meta->noCache = true;
+      if (Utils::HasCacheControlDirective(cacheControl, L"must-revalidate"))
+        meta->mustRevalidate = true;
+    }
+
+    const bool isRedirect = dwStatusCode == 301 || dwStatusCode == 302 ||
+                            dwStatusCode == 303 || dwStatusCode == 307 ||
+                            dwStatusCode == 308;
+    if (isRedirect) {
+      std::wstring next = QueryResponseHeader(hRequest, L"Location");
+      WinHttpCloseHandle(hRequest);
+      WinHttpCloseHandle(hConnect);
+      if (next.empty()) {
+        Logging::Log(LogLevel::Error,
+                     L"[novadesk] HTTP status %lu without Location header for "
+                     L"URL: %s",
+                     dwStatusCode, currentUrl.c_str());
+        return false;
+      }
+      if (!HasUrlScheme(next, L"http://") && !HasUrlScheme(next, L"https://"))
+        next = PathUtils::ResolveUrl(next, currentUrl);
+      if (secure && HasUrlScheme(next, L"http://")) {
+        Logging::Log(LogLevel::Error,
+                     L"[novadesk] Refused HTTPS-to-HTTP redirect to: %s",
+                     next.c_str());
+        return false;
+      }
+      currentUrl.swap(next);
+      continue;
+    }
+
+    if (dwStatusCode == 304) {
+      // Cache revalidation hit: no body, caller serves its stored bytes.
+      // RFC 9111 says the stored response headers are updated from the 304.
+      if (meta) {
+        meta->notModified = true;
+        meta->etag = QueryResponseHeader(hRequest, L"ETag");
+        meta->lastModified = QueryResponseHeader(hRequest, L"Last-Modified");
+        meta->cacheControl = cacheControl;
+        meta->date = QueryResponseHeader(hRequest, L"Date");
+        meta->age = QueryResponseHeader(hRequest, L"Age");
+        meta->expires = QueryResponseHeader(hRequest, L"Expires");
+      }
+      WinHttpCloseHandle(hRequest);
+      WinHttpCloseHandle(hConnect);
+      return true;
+    }
+
+    if (dwStatusCode != 200) {
+      WinHttpCloseHandle(hRequest);
+      WinHttpCloseHandle(hConnect);
+      Logging::Log(LogLevel::Error,
+                   L"[novadesk] HTTP request failed with status code: %lu",
+                   dwStatusCode);
+      return false;
+    }
+
+    // 200 OK — read the body. Cap at 50 MB to prevent memory exhaustion
+    // from malicious or accidentally huge payloads.
+    static const DWORD MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
+    DWORD dwDownloaded = 0;
+    BYTE tempBuffer[4096];
+    bool downloadError = false;
+
+    do {
+      dwSize = 0;
+      if (!WinHttpQueryDataAvailable(hRequest, &dwSize)) {
+        downloadError = true;
+        break;
+      }
+
+      if (dwSize == 0)
+        break;
+
+      if (dwDownloaded + dwSize > MAX_DOWNLOAD_BYTES) {
+        Logging::Log(LogLevel::Error,
+                     L"[novadesk] Download exceeded %lu byte limit from URL: %s",
+                     MAX_DOWNLOAD_BYTES, url.c_str());
+        downloadError = true;
+        break;
+      }
+
+      DWORD dwRead = 0;
+      if (!WinHttpReadData(hRequest, tempBuffer,
+                           (std::min)((DWORD)sizeof(tempBuffer), dwSize),
+                           &dwRead)) {
+        downloadError = true;
+        break;
+      }
+
+      if (dwRead > 0) {
+        buffer.insert(buffer.end(), tempBuffer, tempBuffer + dwRead);
+        dwDownloaded += dwRead;
+      }
+
+    } while (dwSize > 0);
+
+    // Capture validators and freshness metadata for the cache.
+    if (meta) {
+      meta->etag = QueryResponseHeader(hRequest, L"ETag");
+      meta->lastModified = QueryResponseHeader(hRequest, L"Last-Modified");
+      meta->cacheControl = cacheControl;
+      meta->date = QueryResponseHeader(hRequest, L"Date");
+      meta->age = QueryResponseHeader(hRequest, L"Age");
+      meta->expires = QueryResponseHeader(hRequest, L"Expires");
+    }
+
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+
+    if (downloadError) {
+      Logging::Log(LogLevel::Error,
+                   L"[novadesk] download interrupted after %lu bytes from URL: %s",
+                   dwDownloaded, url.c_str());
+      buffer.clear();
+      return false;
+    }
+
+    return buffer.size() > 0;
   }
 
-  // Cleanup
-  WinHttpCloseHandle(hRequest);
-  WinHttpCloseHandle(hConnect);
-
-  if (downloadError) {
-    Logging::Log(LogLevel::Error,
-                 L"[novadesk] download interrupted after %d bytes from URL: %s",
-                 dwDownloaded, url.c_str());
-    buffer.clear();
-    return false;
-  }
-
-  // Logging::Log(LogLevel::Info, L"[novadesk] Downloaded %d bytes from URL:
-  // %s", dwDownloaded, url.c_str());
-  return buffer.size() > 0;
+  Logging::Log(LogLevel::Error, L"[novadesk] Too many redirects for URL: %s",
+               url.c_str());
+  return false;
 }
 
 bool LoadWICBitmapFromURL(const std::wstring &url, IWICBitmap **wicBitmap,

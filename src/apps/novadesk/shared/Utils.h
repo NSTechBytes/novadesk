@@ -73,4 +73,35 @@ std::vector<std::wstring> SplitByComma(const std::wstring &s);
  */
 bool ExtractFileIconToIco(const std::wstring &filePath,
                           const std::wstring &outIcoPath, int size = 48);
+
+/**
+ * @brief Parses an HTTP date header (RFC 7231 IMF-fixdate).
+ *
+ * @param value The header value, e.g. "Tue, 29 Sep 2026 03:40:57 GMT".
+ *
+ * @return Seconds since the Unix epoch, or -1 if the value cannot be parsed.
+ */
+long long ParseHttpDate(const std::wstring &value);
+
+/**
+ * @brief Checks a Cache-Control header value for a directive.
+ *
+ * @param cacheControl The raw header value (comma-separated directives).
+ * @param name The directive token to look for, e.g. L"no-store".
+ *
+ * @return True if the directive is present (case-insensitive, parameters
+ *         like max-age=5 do not match a bare directive name).
+ */
+bool HasCacheControlDirective(const std::wstring &cacheControl,
+                              const std::wstring &name);
+
+/**
+ * @brief Extracts the max-age=N value from a Cache-Control header.
+ *
+ * @param cacheControl The raw header value.
+ *
+ * @return The lifetime in seconds, or -1 when the directive is absent or
+ *         malformed.
+ */
+long long ParseCacheControlMaxAge(const std::wstring &cacheControl);
 } // namespace Utils
