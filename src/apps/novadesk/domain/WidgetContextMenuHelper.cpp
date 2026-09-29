@@ -15,6 +15,7 @@
 #include "Widget.h"
 #include "../shared/MenuUtils.h"
 #include "PathUtils.h"
+#include "../render/ImageCache.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "Settings.h"
 
@@ -40,6 +41,7 @@ constexpr int CMD_SETTINGS_ENABLE_LOGGING = 1140;
 constexpr int CMD_SETTINGS_ENABLE_DEBUGGING = 1141;
 constexpr int CMD_SETTINGS_SAVE_LOG_TO_FILE = 1142;
 constexpr int CMD_SETTINGS_USE_HW_ACCEL = 1143;
+constexpr int CMD_SETTINGS_CLEAR_IMAGE_CACHE = 1144;
 
 static void PromptRestartForHardwareAcceleration(HWND hwndParent) {
   const std::wstring appTitle = PathUtils::GetProductName();
@@ -177,6 +179,8 @@ int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
                 CMD_SETTINGS_SAVE_LOG_TO_FILE, L"Save Log to file");
     AppendMenuW(hSettingsMenu, MF_STRING | (useHwAccel ? MF_CHECKED : 0),
                 CMD_SETTINGS_USE_HW_ACCEL, L"Use hardware acceleration");
+    AppendMenuW(hSettingsMenu, MF_STRING, CMD_SETTINGS_CLEAR_IMAGE_CACHE,
+                L"Clear Image Cache");
 
     AppendMenuW(hAppMenu, MF_POPUP, (UINT_PTR)hSettingsMenu, L"Settings");
     AppendMenuW(hAppMenu, MF_SEPARATOR, 0, nullptr);
@@ -297,6 +301,10 @@ void HandleContextCommand(Widget &widget, int cmd) {
     Settings::ApplyGlobalSettings();
     Settings::Save();
     PromptRestartForHardwareAcceleration(widget.GetWindow());
+    return;
+  }
+  if (cmd == CMD_SETTINGS_CLEAR_IMAGE_CACHE) {
+    ImageCache::Clear();
     return;
   }
 }

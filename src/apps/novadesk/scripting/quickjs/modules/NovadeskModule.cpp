@@ -28,6 +28,7 @@
 #include "../../shared/Settings.h"
 #include "../../shared/System.h"
 #include "../../shared/Utils.h"
+#include "../../render/ImageCache.h"
 #include "../engine/JSEngine.h"
 #include "ModuleSystem.h"
 #include "WidgetUiBindings.h"
@@ -1106,6 +1107,11 @@ JSValue JsAppRefresh(JSContext *ctx, JSValueConst, int, JSValueConst *) {
   (void)ctx;
   JSEngine::Reload();
   return JS_UNDEFINED;
+}
+
+JSValue JsAppClearImageCache(JSContext *ctx, JSValueConst, int,
+                             JSValueConst *) {
+  return JS_NewBool(ctx, ImageCache::Clear());
 }
 
 JSValue JsAppExit(JSContext *ctx, JSValueConst, int, JSValueConst *) {
@@ -2363,6 +2369,9 @@ int InitAppExport(JSContext *ctx, JSModuleDef *m) {
                     JS_NewCFunction(ctx, JsAppReload, "reload", 0));
   JS_SetPropertyStr(ctx, app, "refresh",
                     JS_NewCFunction(ctx, JsAppRefresh, "refresh", 0));
+  JS_SetPropertyStr(ctx, app, "clearImageCache",
+                    JS_NewCFunction(ctx, JsAppClearImageCache,
+                                    "clearImageCache", 0));
   JS_SetPropertyStr(ctx, app, "exit",
                     JS_NewCFunction(ctx, JsAppExit, "exit", 0));
   JS_SetPropertyStr(ctx, app, "beginWindowBatch",

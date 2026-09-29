@@ -378,6 +378,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
       std::wstring unloadPath;
       bool refreshAll = false;
       bool restart = false;
+      bool clearImageCache = false;
       bool listScripts = false;
       std::wstring listScriptsFile;
       std::optional<bool> setHardwareAcceleration;
@@ -411,6 +412,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
         if (arg == L"--refresh-all") {
           refreshAll = true;
+          continue;
+        }
+        if (arg == L"--clear-image-cache") {
+          clearImageCache = true;
           continue;
         }
         if (arg == L"--restart") {
@@ -504,6 +509,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         if (refreshAll) {
           handledCommand =
               SendIpcCommand(hExisting, L"refresh-all", L"") || handledCommand;
+        }
+        if (clearImageCache) {
+          handledCommand = SendIpcCommand(hExisting, L"clear-image-cache",
+                                          L"") || handledCommand;
         }
         if (restart) {
           handledCommand = SendIpcCommand(hExisting, L"restart", L"") ||
@@ -655,6 +664,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         JSEngine::RefreshScript(path);
       } else if (command == L"refresh-all") {
         JSEngine::Reload();
+      } else if (command == L"clear-image-cache") {
+        ImageCache::Clear();
       } else if (command == L"restart") {
         // Relaunch only after this process exits, otherwise single-instance
         // routing would deliver the new invocation back to this process.
@@ -761,6 +772,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   std::optional<bool> setDebugging;
   std::optional<bool> setLogging;
   std::optional<bool> setSaveLogToFile;
+  bool clearImageCache = false;
   int argc = 0;
   LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
   if (argv) {
@@ -776,6 +788,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
           continue;
         }
         if (arg == L"--refresh-all") {
+          continue;
+        }
+        if (arg == L"--clear-image-cache") {
+          clearImageCache = true;
           continue;
         }
         if (arg == L"--load") {
@@ -825,6 +841,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
     LocalFree(argv);
   }
+
+  // Clear the image disk cache before any widget can reload images from it.
+  if (clearImageCache)
+    ImageCache::Clear();
 
   bool appliedCliSettings = false;
   if (setHardwareAcceleration.has_value()) {

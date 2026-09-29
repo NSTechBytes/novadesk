@@ -40,6 +40,18 @@ void Startup();
 void Shutdown();
 
 /**
+ * @brief Deletes all cached image files (entries and stray temp files).
+ *
+ * @return False only when called during shutdown; true otherwise.
+ *
+ * @note Safe to call at runtime from any thread. Images already loaded in
+ *       memory keep rendering; the next load of a URL re-downloads and
+ *       re-caches. A download in flight may re-create its own single
+ *       entry after the sweep, which is the fresh result.
+ */
+bool Clear();
+
+/**
  * @brief Returns the image bytes for a URL, using the disk cache when
  *        possible and downloading (once) otherwise.
  *

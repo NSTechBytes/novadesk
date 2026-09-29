@@ -332,6 +332,45 @@ void Shutdown() {
     pair.second->cv.notify_all();
 }
 
+bool Clear() {
+  {
+    std::lock_guard<std::mutex> lk(g_Mutex);
+    if (g_ShuttingDown)
+      return false;
+  }
+
+  // File I/O happens without holding g_Mutex: FetchBytes never touches it
+  // during I/O and writes are atomic temp+rename, so a concurrent download
+  // either lands before the sweep (removed) or after (one fresh entry).
+  std::error_code ec;
+  const fs::path dir = CacheDir();
+  long long freed = 0;
+  int removed = 0;
+  for (fs::directory_iterator it(dir, ec), end; !ec && it != end;
+       it.increment(ec)) {
+    const std::wstring name = it->path().filename().wstring();
+    const bool isEntry =
+        (name.size() >= 4 &&
+         (name.compare(name.size() - 4, 4, L".bin") == 0 ||
+          name.compare(name.size() - 4, 4, L".tmp") == 0));
+    const bool isMeta =
+        (name.size() >= 5 && name.compare(name.size() - 5, 5, L".meta") == 0);
+    if (!isEntry && !isMeta)
+      continue;
+    std::error_code fec;
+    if (isEntry)
+      freed += (long long)fs::file_size(it->path(), fec);
+    fs::remove(it->path(), ec);
+    if (!ec)
+      ++removed;
+  }
+
+  Logging::Log(LogLevel::Info,
+               L"[ImageCache] Cleared cache: %d files, %lld bytes freed",
+               removed, freed);
+  return true;
+}
+
 bool FetchBytes(const std::wstring &url, std::vector<BYTE> &outBytes) {
   outBytes.clear();
   if (url.empty())
