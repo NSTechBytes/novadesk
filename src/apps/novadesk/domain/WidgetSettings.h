@@ -28,6 +28,10 @@ class Widget;
 enum class WidgetSettingType { Color, Number, Text, Toggle, Select };
 
 /// @brief Binds a setting to an element property applied by the engine.
+/// @note Supported properties: text elements - "text", "fontcolor",
+///       "fontsize", "fontface"; image elements - "image"/"path"; any element
+///       - "x", "y", "width", "height", "color", "cornerradius", "show";
+///       toggleSwitch elements - "checked".
 struct WidgetSettingBinding {
   std::wstring elementId; ///< Target element ID.
   std::wstring property;  ///< Target property name.

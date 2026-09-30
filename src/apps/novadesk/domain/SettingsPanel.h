@@ -44,6 +44,7 @@ private:
   enum class ControlKind {
     TogglePill,
     ToggleKnob,
+    BoundSwitch, ///< A real toggleSwitch element on the target widget.
     SelectButton,
     SelectLabel,
     ResetButton,

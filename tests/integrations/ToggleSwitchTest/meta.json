@@ -1,0 +1,21 @@
+{
+  "name": "ToggleSwitchTest",
+  "main": "index.js",
+  "version": "1.0.0.0",
+  "author": "OfficialNovadesk",
+  "description": "Integration test for the toggleSwitch element: creation, properties, animation settings, programmatic methods and callbacks.",
+  "icon": "",
+  "preview": "",
+  "excludeItems": [],
+  "setup": {
+    "createDesktopShortcut": false,
+    "createStartupShortcut": false,
+    "runOnStartup": false,
+    "installDir": "%ProgramFiles%\\ToggleSwitchTest",
+    "startMenuFolder": "ToggleSwitchTest",
+    "setupName": "setup",
+    "setupIcon": "",
+    "enableUninstall": false,
+    "launchAfterInstall": false
+  }
+}

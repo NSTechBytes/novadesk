@@ -120,6 +120,12 @@ bool ApplySettingToWidget(Widget *widget, const WidgetSetting &setting,
 
   const std::wstring &prop = setting.binding.property;
 
+  if (element->GetType() == ELEMENT_TOGGLE_SWITCH && prop == L"checked") {
+    static_cast<ToggleSwitchElement *>(element)->SetChecked(
+        ParseSettingBool(value), /*animate=*/false);
+    return true;
+  }
+
   if (element->GetType() == ELEMENT_TEXT) {
     TextElement *text = static_cast<TextElement *>(element);
     PropertyParser::TextOptions opts;

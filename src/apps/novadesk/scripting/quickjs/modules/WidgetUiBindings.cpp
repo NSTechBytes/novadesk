@@ -372,6 +372,22 @@ JSValue JsWidgetAddColorPicker(JSContext *ctx, JSValueConst thisVal, int argc,
   return JS_UNDEFINED;
 }
 
+JSValue JsWidgetAddToggleSwitch(JSContext *ctx, JSValueConst thisVal, int argc,
+                                JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addToggleSwitch", "expected options object");
+  PropertyParser::ToggleSwitchOptions options;
+  PropertyParser::ParseToggleSwitchOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddToggleSwitch(options);
+  return JS_UNDEFINED;
+}
+
 JSValue JsWidgetAddBar(JSContext *ctx, JSValueConst thisVal, int argc,
                        JSValueConst *argv) {
   Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -576,6 +592,8 @@ static JSValue CallAddByType(JSContext *ctx, Widget *widget,
     return JsWidgetAddInputBox(ctx, thisVal, 1, argvLocal);
   if (type == L"colorpicker")
     return JsWidgetAddColorPicker(ctx, thisVal, 1, argvLocal);
+  if (type == L"toggleswitch")
+    return JsWidgetAddToggleSwitch(ctx, thisVal, 1, argvLocal);
   if (type == L"bitmap")
     return JsWidgetAddBitmap(ctx, thisVal, 1, argvLocal);
   if (type == L"rotator")
@@ -1266,6 +1284,35 @@ JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
           widget->CloseColorPicker();
       }
       JS_FreeValue(ctx, openVal);
+    }
+  } else if (auto *sw = dynamic_cast<ToggleSwitchElement *>(element)) {
+    PropertyParser::ToggleSwitchOptions options;
+    PropertyParser::PreFillToggleSwitchOptions(options, sw);
+    PropertyParser::ParseToggleSwitchOptions(ctx, argv[1], options, baseDir);
+    const bool wasChecked = sw->IsChecked();
+    PropertyParser::ApplyToggleSwitchOptions(sw, options);
+    if (sw->IsChecked() != wasChecked)
+      options.checked = wasChecked;
+    if (JS_IsObject(argv[1])) {
+      JSValue checkedVal = JS_GetPropertyStr(ctx, argv[1], "checked");
+      if (!JS_IsUndefined(checkedVal)) {
+        bool animate = true;
+        JSValue animateVal = JS_GetPropertyStr(ctx, argv[1], "animate");
+        if (!JS_IsUndefined(animateVal))
+          animate = JS_ToBool(ctx, animateVal) == 1;
+        JS_FreeValue(ctx, animateVal);
+        sw->SetChecked(JS_ToBool(ctx, checkedVal) == 1, animate);
+        if (sw->IsAnimating())
+          SetTimer(widget->GetHwnd(), Widget::TIMER_TOGGLE_ANIM, 16, nullptr);
+      }
+      JS_FreeValue(ctx, checkedVal);
+    }
+    // Fire onChange only for a change actually requested through this call;
+    // re-applying the current state stays silent.
+    if (options.onChangeCallbackId != -1 && sw->IsChecked() != options.checked) {
+      JSEngine::CallEventCallbackWithText(
+          options.onChangeCallbackId, widget,
+          sw->IsChecked() ? L"true" : L"false");
     }
   }
 
@@ -2712,6 +2759,92 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
                      .c_str());
       return JS_UNDEFINED;
     }
+  } else if (element->GetType() == ELEMENT_TOGGLE_SWITCH) {
+    auto *sw = static_cast<ToggleSwitchElement *>(element);
+
+    if (prop == "checked" || prop == "value" || prop == "isOn")
+      return JS_NewBool(ctx, sw->IsChecked() ? 1 : 0);
+    if (prop == "animating")
+      return JS_NewBool(ctx, sw->IsAnimating() ? 1 : 0);
+    if (prop == "disabled")
+      return JS_NewBool(ctx, sw->m_Disabled ? 1 : 0);
+    if (prop == "onColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(sw->m_OnColor,
+                                                       sw->m_OnAlpha))
+                   .c_str());
+    if (prop == "offColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(sw->m_OffColor,
+                                                       sw->m_OffAlpha))
+                   .c_str());
+    if (prop == "knobColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(sw->m_KnobColor,
+                                                       sw->m_KnobAlpha))
+                   .c_str());
+    if (prop == "borderWidth")
+      return JS_NewInt32(ctx, sw->m_BorderWidth);
+    if (prop == "borderColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(sw->m_BorderColor,
+                                                       sw->m_BorderAlpha))
+                   .c_str());
+    if (prop == "borderRadius")
+      return JS_NewInt32(ctx, sw->m_BorderRadius);
+    if (prop == "knobBorderWidth")
+      return JS_NewInt32(ctx, sw->m_KnobBorderWidth);
+    if (prop == "knobBorderColor")
+      return JS_NewString(
+          ctx, Utils::ToString(
+                   ColorUtil::ToRGBAString(sw->m_KnobBorderColor,
+                                           sw->m_KnobBorderAlpha))
+                   .c_str());
+    if (prop == "knobSize")
+      return JS_NewInt32(ctx, sw->m_KnobSize);
+    if (prop == "knobPadding")
+      return JS_NewInt32(ctx, sw->m_KnobPadding);
+    if (prop == "opacity")
+      return JS_NewFloat64(ctx, sw->m_Opacity);
+    if (prop == "disabledTrackColor")
+      return JS_NewString(
+          ctx, Utils::ToString(
+                   ColorUtil::ToRGBAString(sw->m_DisabledTrackColor,
+                                           sw->m_DisabledTrackAlpha))
+                   .c_str());
+    if (prop == "disabledKnobColor")
+      return JS_NewString(
+          ctx, Utils::ToString(
+                   ColorUtil::ToRGBAString(sw->m_DisabledKnobColor,
+                                           sw->m_DisabledKnobAlpha))
+                   .c_str());
+    if (prop == "hoverTrackColor") {
+      if (!sw->m_HasHoverTrackColor)
+        return JS_UNDEFINED;
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(sw->m_HoverTrackColor,
+                                                       sw->m_HoverTrackAlpha))
+                   .c_str());
+    }
+    if (prop == "onText")
+      return JS_NewString(ctx, Utils::ToString(sw->m_OnText).c_str());
+    if (prop == "offText")
+      return JS_NewString(ctx, Utils::ToString(sw->m_OffText).c_str());
+    if (prop == "labelFontFace")
+      return JS_NewString(ctx, Utils::ToString(sw->m_LabelFontFace).c_str());
+    if (prop == "labelFontSize")
+      return JS_NewInt32(ctx, sw->m_LabelFontSize);
+    if (prop == "labelFontWeight")
+      return JS_NewInt32(ctx, sw->m_LabelFontWeight);
+    if (prop == "labelFontColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(sw->m_LabelFontColor,
+                                                       sw->m_LabelFontAlpha))
+                   .c_str());
+    if (prop == "durationMs")
+      return JS_NewInt32(ctx, sw->m_DurationMs);
+    if (prop == "easing")
+      return JS_NewString(ctx, Utils::ToString(sw->m_Easing).c_str());
   }
 
   return JS_UNDEFINED;
@@ -2852,6 +2985,73 @@ JSValue JsWidgetGetColorPickerColor(JSContext *ctx, JSValueConst thisVal,
   swprintf_s(value, L"#%02X%02X%02X", GetRValue(color), GetGValue(color),
              GetBValue(color));
   return JS_NewString(ctx, Utils::ToString(value).c_str());
+}
+
+static ToggleSwitchElement *FindToggleSwitch(JSContext *ctx, Widget *widget,
+                                             JSValueConst idVal) {
+  const char *idUtf8 = JS_ToCString(ctx, idVal);
+  if (!idUtf8)
+    return nullptr;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  return dynamic_cast<ToggleSwitchElement *>(widget->FindElementById(id));
+}
+
+JSValue JsWidgetSetToggleSwitchChecked(JSContext *ctx, JSValueConst thisVal,
+                                       int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 2)
+    return ThrowTypeError(ctx, "setToggleSwitchChecked",
+                          "expected (id, checked[, animate])");
+  auto *sw = FindToggleSwitch(ctx, widget, argv[0]);
+  if (!sw)
+    return JS_NewBool(ctx, 0);
+  bool checked = JS_ToBool(ctx, argv[1]) == 1;
+  bool animate = true;
+  if (argc >= 3 && !JS_IsUndefined(argv[2]))
+    animate = JS_ToBool(ctx, argv[2]) == 1;
+  if (sw->IsChecked() != checked) {
+    sw->SetChecked(checked, animate);
+    if (sw->IsAnimating())
+      SetTimer(widget->GetHwnd(), Widget::TIMER_TOGGLE_ANIM, 16, nullptr);
+    if (sw->m_OnChangeCallbackId != -1)
+      JSEngine::CallEventCallbackWithText(sw->m_OnChangeCallbackId, widget,
+                                          checked ? L"true" : L"false");
+    else if (widget->GetInputSink())
+      widget->GetInputSink()->OnElementMouseUp(widget, sw, 0, 0);
+  }
+  widget->Redraw();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetGetToggleSwitchChecked(JSContext *ctx, JSValueConst thisVal,
+                                       int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getToggleSwitchChecked", "expected (id)");
+  auto *sw = FindToggleSwitch(ctx, widget, argv[0]);
+  if (!sw)
+    return JS_NewBool(ctx, 0);
+  return JS_NewBool(ctx, sw->IsChecked() ? 1 : 0);
+}
+
+JSValue JsWidgetToggleToggleSwitch(JSContext *ctx, JSValueConst thisVal,
+                                   int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "toggleToggleSwitch", "expected (id)");
+  auto *sw = FindToggleSwitch(ctx, widget, argv[0]);
+  if (!sw)
+    return JS_NewBool(ctx, 0);
+  widget->ToggleToggleSwitch(sw);
+  widget->Redraw();
+  return JS_NewBool(ctx, 1);
 }
 
 JSValue JsWidgetOpenColorPickerEyedropper(JSContext *ctx, JSValueConst thisVal,
@@ -3345,6 +3545,7 @@ const JSCFunctionListEntry kWidgetProtoFuncs[] = {
     JS_CFUNC_DEF("addText", 1, JsWidgetAddText),
     JS_CFUNC_DEF("addInputBox", 1, JsWidgetAddInputBox),
     JS_CFUNC_DEF("addColorPicker", 1, JsWidgetAddColorPicker),
+    JS_CFUNC_DEF("addToggleSwitch", 1, JsWidgetAddToggleSwitch),
     JS_CFUNC_DEF("addBar", 1, JsWidgetAddBar),
     JS_CFUNC_DEF("addLine", 1, JsWidgetAddLine),
     JS_CFUNC_DEF("addHistogram", 1, JsWidgetAddHistogram),
@@ -3378,6 +3579,11 @@ const JSCFunctionListEntry kWidgetProtoFuncs[] = {
     JS_CFUNC_DEF("getColorPickerColor", 1, JsWidgetGetColorPickerColor),
     JS_CFUNC_DEF("openColorPickerEyedropper", 1,
                  JsWidgetOpenColorPickerEyedropper),
+
+    // ToggleSwitch
+    JS_CFUNC_DEF("setToggleSwitchChecked", 2, JsWidgetSetToggleSwitchChecked),
+    JS_CFUNC_DEF("getToggleSwitchChecked", 1, JsWidgetGetToggleSwitchChecked),
+    JS_CFUNC_DEF("toggleToggleSwitch", 1, JsWidgetToggleToggleSwitch),
 
     // InputBox
     JS_CFUNC_DEF("focusInputBox", 1, JsWidgetFocusInputBox),

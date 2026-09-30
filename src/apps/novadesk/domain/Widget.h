@@ -37,6 +37,7 @@
 #include "../render/FlexLayoutEngine.h"
 #include "../render/InputBoxElement.h"
 #include "../render/ColorPickerElement.h"
+#include "../render/ToggleSwitchElement.h"
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -62,6 +63,7 @@ struct ShapeOptions;
 struct AreaGraphOptions;
 struct InputBoxOptions;
 struct ColorPickerOptions;
+struct ToggleSwitchOptions;
 } // namespace PropertyParser
 
 #include "MenuItem.h"
@@ -481,6 +483,11 @@ public:
   void AddInputBox(const PropertyParser::InputBoxOptions &options);
   /// @brief Adds a color picker popup element to the widget.
   void AddColorPicker(const PropertyParser::ColorPickerOptions &options);
+  /// @brief Adds an on/off toggle switch element to the widget.
+  void AddToggleSwitch(const PropertyParser::ToggleSwitchOptions &options);
+  /// @brief Flips a toggle switch's state, starts its knob animation and
+  ///        notifies scripts or the settings sink.
+  void ToggleToggleSwitch(ToggleSwitchElement *element);
 
   /// @brief Applies property changes to a specific element by ID.
   void SetElementProperties(const std::wstring &id, JSContext *ctx,
@@ -845,6 +852,11 @@ private:
   int m_RenderBitmapW = 0;
   int m_RenderBitmapH = 0;
 
+public:
+  /// @brief Timer ID driving toggleSwitch knob animations.
+  static const UINT_PTR TIMER_TOGGLE_ANIM = 8;
+
+private:
   static const UINT_PTR TIMER_TOPMOST = 2;
   static const UINT_PTR TIMER_TOOLTIP = 3;
   static const UINT_PTR TIMER_CTRL_OVERRIDE = 4;

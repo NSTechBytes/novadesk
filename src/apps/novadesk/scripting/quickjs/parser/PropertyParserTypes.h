@@ -418,6 +418,51 @@ struct ColorPickerOptions : public ElementOptions {
   int onEyedropperPickCallbackId = -1;
 };
 
+/// Toggle switch element options.
+struct ToggleSwitchOptions : public ElementOptions {
+  bool checked = false;
+
+  COLORREF onColor = RGB(59, 130, 246);
+  BYTE onAlpha = 255;
+  COLORREF offColor = RGB(63, 63, 70);
+  BYTE offAlpha = 255;
+  float borderWidth = 0.0f;
+  COLORREF borderColor = RGB(0, 0, 0);
+  BYTE borderAlpha = 255;
+  float borderRadius = -1.0f; ///< < 0 = auto (height / 2).
+  float opacity = 1.0f;
+
+  COLORREF knobColor = RGB(255, 255, 255);
+  BYTE knobAlpha = 255;
+  float knobBorderWidth = 0.0f;
+  COLORREF knobBorderColor = RGB(0, 0, 0);
+  BYTE knobBorderAlpha = 255;
+  float knobSize = 0.0f;    ///< 0 = auto from height.
+  float knobPadding = 2.0f;
+
+  bool disabled = false;
+  COLORREF disabledTrackColor = RGB(80, 80, 88);
+  BYTE disabledTrackAlpha = 255;
+  COLORREF disabledKnobColor = RGB(150, 150, 158);
+  BYTE disabledKnobAlpha = 255;
+  bool hasHoverTrackColor = false;
+  COLORREF hoverTrackColor = RGB(0, 0, 0);
+  BYTE hoverTrackAlpha = 255;
+
+  std::wstring onText;
+  std::wstring offText;
+  std::wstring labelFontFace = L"Segoe UI";
+  int labelFontSize = 10;
+  int labelFontWeight = 600;
+  COLORREF labelFontColor = RGB(255, 255, 255);
+  BYTE labelFontAlpha = 255;
+
+  int durationMs = 180;
+  std::wstring easing = L"ease-out";
+
+  int onChangeCallbackId = -1;
+};
+
 /// Bar gauge element options.
 struct BarOptions : public ElementOptions {
   float value = 0.0f;

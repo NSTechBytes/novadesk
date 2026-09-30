@@ -42,8 +42,9 @@ enum ElementType {
   ELEMENT_ROTATOR,     ///< Rotating knob or dial element.
   ELEMENT_AREA_GRAPH,  ///< Area graph chart element.
   ELEMENT_LAYOUT_BOX,  ///< Flexbox container element.
-  ELEMENT_INPUT_BOX,   ///< Text input field element.
-  ELEMENT_COLOR_PICKER ///< Color picker popup element.
+  ELEMENT_INPUT_BOX,    ///< Text input field element.
+  ELEMENT_COLOR_PICKER, ///< Color picker popup element.
+  ELEMENT_TOGGLE_SWITCH ///< On/off switch element.
 };
 
 /**

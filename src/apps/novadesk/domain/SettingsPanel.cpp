@@ -67,6 +67,9 @@ Widget *SettingsPanel::OpenFor(Widget *target) {
 
   SettingsPanel *self = new SettingsPanel();
   self->m_Target = target;
+  // Set before BuildPanel(): a failed build deletes the panel, and its
+  // destructor must be able to restore the target's previous sink.
+  target->SetInputSink(self);
   self->BuildPanel(target);
   if (!self->m_Panel) {
     delete self;
@@ -125,6 +128,9 @@ void SettingsPanel::BuildPanel(Widget *target) {
   }
   m_Panel = panel;
   panel->SetInputSink(this);
+  // The target's own sink was set in OpenFor() before BuildPanel(), because
+  // Create() below would otherwise make this widget look like a panel to
+  // CloseAllForTarget (sink already installed at Create time).
   panel->BeginUpdate();
 
   std::wstring title = target->GetOptions().id;
@@ -249,6 +255,21 @@ void SettingsPanel::BuildPanel(Widget *target) {
     }
     case WidgetSettingType::Toggle: {
       const bool on = IsToggleOn(value);
+      // When the setting is bound to a real toggleSwitch element on the
+      // target widget, drive that switch instead of drawing a pill+knob.
+      Element *bound = nullptr;
+      if (!setting.binding.elementId.empty() &&
+          setting.binding.property == L"checked" && m_Target &&
+          Widget::IsValid(m_Target)) {
+        bound = m_Target->FindElementById(setting.binding.elementId);
+      }
+      if (auto *sw = dynamic_cast<ToggleSwitchElement *>(bound)) {
+        sw->SetChecked(on, false);
+        m_Target->Redraw();
+        m_Controls[sw->GetId()] = {setting.id, ControlKind::BoundSwitch};
+        break;
+      }
+
       PropertyParser::ShapeOptions pill;
       pill.id = PanelElementId(setting.id, L"pill");
       pill.x = kControlX;
@@ -386,6 +407,11 @@ SettingsPanel::~SettingsPanel() {
     delete m_Panel;
     m_Panel = nullptr;
   }
+  // Only clear the target's sink if it still points at this panel: a second
+  // panel registered later owns the routing and must not be orphaned.
+  if (m_Target && Widget::IsValid(m_Target) &&
+      m_Target->GetInputSink() == this)
+    m_Target->SetInputSink(nullptr);
 }
 
 void SettingsPanel::Close() {
@@ -398,6 +424,9 @@ void SettingsPanel::Close() {
       m_Panel->SetInputSink(nullptr);
       m_Panel->Hide();
     }
+    if (m_Target && Widget::IsValid(m_Target) &&
+        m_Target->GetInputSink() == this)
+      m_Target->SetInputSink(nullptr);
     m_Target = nullptr;
     auto registered = std::find(s_Panels.begin(), s_Panels.end(), this);
     if (registered != s_Panels.end())
@@ -476,6 +505,18 @@ void SettingsPanel::UpdateRowVisuals(const WidgetSetting &setting) {
 
   if (setting.type == WidgetSettingType::Toggle) {
     const bool on = IsToggleOn(value);
+    auto bound = m_Controls.find(setting.binding.elementId);
+    if (bound != m_Controls.end() &&
+        bound->second.kind == ControlKind::BoundSwitch &&
+        bound->second.settingId == setting.id && m_Target &&
+        Widget::IsValid(m_Target)) {
+      if (auto *sw = dynamic_cast<ToggleSwitchElement *>(
+              m_Target->FindElementById(setting.binding.elementId))) {
+        sw->SetChecked(on, false);
+        m_Target->Redraw();
+      }
+      return;
+    }
     if (Element *pill =
             m_Panel->FindElementById(PanelElementId(setting.id, L"pill"))) {
       pill->SetSolidColor(on ? kAccentColor : kToggleOff, 255);
@@ -550,8 +591,13 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int,
 
   const std::wstring current = catalog.ValueOrDefault(setting->id);
 
-  if (it->second.kind == ControlKind::TogglePill ||
-      it->second.kind == ControlKind::ToggleKnob) {
+  if (it->second.kind == ControlKind::BoundSwitch) {
+    // Widget::ToggleToggleSwitch already flipped the switch and routed here;
+    // commit the state it now shows.
+    auto *sw = dynamic_cast<ToggleSwitchElement *>(element);
+    Commit(setting->id, (sw && sw->IsChecked()) ? L"true" : L"false");
+  } else if (it->second.kind == ControlKind::TogglePill ||
+             it->second.kind == ControlKind::ToggleKnob) {
     Commit(setting->id, IsToggleOn(current) ? L"false" : L"true");
     if (!IsAlive(this))
       return;

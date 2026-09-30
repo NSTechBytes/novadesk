@@ -166,6 +166,7 @@ Widget::~Widget() {
     KillTimer(m_hWnd, TIMER_CARET);
     KillTimer(m_hWnd, TIMER_CTRL_OVERRIDE);
     KillTimer(m_hWnd, TIMER_TOOLTIP);
+    KillTimer(m_hWnd, TIMER_TOGGLE_ANIM);
 
     // KillTimer prevents future firings, but already-queued WM_TIMER
     // messages may still sit in the message queue.  Drain them now so
@@ -1550,6 +1551,48 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
         } else {
           KillTimer(hWnd, TIMER_SCROLLBAR_BUTTON);
         }
+      } else if (wParam == TIMER_TOGGLE_ANIM) {
+        bool anyAnimating = false;
+        for (const auto &elem : widget->m_Elements) {
+          auto *sw = dynamic_cast<ToggleSwitchElement *>(elem.get());
+          if (!sw || !sw->IsAnimating())
+            continue;
+          if (sw->StepAnimation()) {
+            anyAnimating = true;
+            continue;
+          }
+          // Finished: settle the knob on an integer pixel so the last frame
+          // is not a fraction short of (or past) the resting position.
+          // Geometry mirrors ToggleSwitchElement::Render, which measures from
+          // GetBounds() (scroll offset included).
+          const GfxRect b = sw->GetBounds();
+          const float h = static_cast<float>(b.Height);
+          const float w = static_cast<float>(b.Width);
+          float pad = (std::max)(0.0f, sw->m_KnobPadding);
+          float dia = sw->m_KnobSize > 0.0f
+                          ? (std::min)(sw->m_KnobSize, h - 2.0f * pad)
+                          : h - 2.0f * pad;
+          if (dia <= 0.0f) {
+            widget->Redraw();
+            continue;
+          }
+          if (sw->m_BorderWidth > 0.0f) {
+            pad += sw->m_BorderWidth;
+            dia = (std::max)(1.0f, h - 2.0f * pad);
+          }
+          const float travel = (std::max)(0.0f, w - dia - 2.0f * pad);
+          const float centerF =
+              b.X + pad + dia * 0.5f +
+              travel * (sw->IsChecked() ? 1.0f : 0.0f);
+          const int centerI = static_cast<int>(centerF + 0.5f);
+          sw->m_KnobOffsetPx =
+              static_cast<float>(centerI) - centerF;
+          widget->Redraw(); // Final frame at the settled knob position.
+        }
+        if (anyAnimating)
+          widget->Redraw();
+        else
+          KillTimer(hWnd, TIMER_TOGGLE_ANIM);
       }
     }
     return 0;
@@ -2401,6 +2444,41 @@ void Widget::AddColorPicker(const PropertyParser::ColorPickerOptions &options) {
   Redraw();
 }
 
+void Widget::AddToggleSwitch(
+    const PropertyParser::ToggleSwitchOptions &options) {
+  if (options.id.empty())
+    return;
+  if (FindElementById(options.id))
+    RemoveElements(options.id);
+  auto *element = new ToggleSwitchElement(
+      options.id, options.x, options.y,
+      options.width > 0 ? options.width : 48,
+      options.height > 0 ? options.height : 26);
+  PropertyParser::ApplyToggleSwitchOptions(element, options);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
+  Redraw();
+}
+
+void Widget::ToggleToggleSwitch(ToggleSwitchElement *element) {
+  if (!element || element->m_Disabled)
+    return;
+  element->Toggle();
+  if (element->IsAnimating())
+    SetTimer(m_hWnd, TIMER_TOGGLE_ANIM, 16, nullptr);
+  const std::wstring value = element->IsChecked() ? L"true" : L"false";
+  const int callbackId = element->m_OnChangeCallbackId;
+  if (callbackId != -1) {
+    JSEngine::CallEventCallbackWithText(callbackId, this, value);
+    return;
+  }
+  if (m_InputSink)
+    m_InputSink->OnElementMouseUp(this, element, 0, 0);
+}
+
 void Widget::OpenColorPicker(ColorPickerElement *colorPicker) {
   if (!colorPicker)
     return;
@@ -3096,6 +3174,14 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx,
     PropertyParser::ParseAreaGraphOptions(ctx, options, parsed, baseDir);
     PropertyParser::ApplyAreaGraphOptions(
         static_cast<AreaGraphElement *>(element), parsed);
+    UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_TOGGLE_SWITCH) {
+    PropertyParser::ToggleSwitchOptions parsed;
+    PropertyParser::PreFillToggleSwitchOptions(
+        parsed, static_cast<ToggleSwitchElement *>(element));
+    PropertyParser::ParseToggleSwitchOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyToggleSwitchOptions(
+        static_cast<ToggleSwitchElement *>(element), parsed);
     UpdateContainerForElement(element, parsed.containerId);
   }
 }
@@ -4003,7 +4089,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
   // An element is normally an action target only when it has a JS callback.
   // Widgets with an input sink (the settings panel) route callback-less
   // clicks to that sink instead, so every element counts as an action target.
-  const bool sinkHandlesClicks = m_InputSink && message == WM_LBUTTONUP;
+  const bool sinkHandlesClicks =
+      m_InputSink && message == WM_LBUTTONUP && !m_Options.scriptPath.empty();
 
   // Use the spatial grid for large element counts; fall back to linear scan
   // for small counts where the hash-lookup overhead exceeds the savings.
@@ -4103,6 +4190,11 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     Element *hoverElement =
         actionElement ? actionElement
                       : (mouseActionElement ? mouseActionElement : hitElement);
+    // A scriptless widget with an input sink (the settings panel) treats
+    // every element as an action target, which would let display-only labels
+    // steal hover; use the frontmost real hit instead.
+    if (m_InputSink && m_Options.scriptPath.empty() && hitElement)
+      hoverElement = hitElement;
     // Keep the previous interactive owner only when the newly hit element is
     // a display-only overlay.  Do not let a large, previously hovered
     // element mask a newer frontmost control (such as a dropdown option).
@@ -4118,6 +4210,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         toolTipElement ? toolTipElement : hoverElement;
 
     if (hoverElement != m_MouseOverElement) {
+      Element *previousMouseOver = m_MouseOverElement;
       if (m_MouseOverElement && IsTrackedElement(m_MouseOverElement)) {
         m_MouseOverElement->m_IsMouseOver = false;
         int leaveId = m_MouseOverElement->m_OnMouseLeaveCallbackId;
@@ -4190,6 +4283,23 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       // different action state
       PostMessage(m_hWnd, WM_SETCURSOR, (WPARAM)m_hWnd,
                   MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));
+
+      // Toggle switches track hover themselves: hover ownership can sit with
+      // an overlaying element, which would otherwise freeze the knob
+      // mid-slide until the pointer leaves. Paints are opaque, so a switch
+      // hovered behind another element must not light up.
+      ToggleSwitchElement *swHovered = nullptr;
+      if (hitElement)
+        swHovered = dynamic_cast<ToggleSwitchElement *>(hitElement);
+      if (!swHovered && hoverElement && hitElement != m_MouseOverElement)
+        swHovered = dynamic_cast<ToggleSwitchElement *>(hoverElement);
+      for (const auto &elem : m_Elements) {
+        auto *sw = dynamic_cast<ToggleSwitchElement *>(elem.get());
+        if (sw && sw->m_Hovered != (sw == swHovered)) {
+          sw->m_Hovered = (sw == swHovered);
+          needRedraw = true;
+        }
+      }
     }
 
     if (nextToolTipElement != m_TooltipElement) {
@@ -4851,6 +4961,24 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           std::make_unique<ColorPickerPopup>(this, colorPicker);
       m_ColorPickerPopup->Show();
       handled = true;
+    }
+
+    ToggleSwitchElement *toggleSwitch =
+        dynamic_cast<ToggleSwitchElement *>(hitElement);
+    if (toggleSwitch && !m_IsElementDragging) {
+      // The sink only routes clicks on its exclusive topmost hit; a switch
+      // behind another element must not commit through the sink.
+      if (actionElement == toggleSwitch)
+        actionElement = nullptr;
+      const bool consumedBySink =
+          hitElement == toggleSwitch && m_InputSink &&
+          !m_Options.scriptPath.empty();
+      if (!consumedBySink) {
+        handled = true;
+        ToggleToggleSwitch(toggleSwitch);
+        if (!Widget::IsValid(this))
+          return true;
+      }
     }
 
     if (m_IsElementDragging && IsTrackedElement(m_DragElement)) {
