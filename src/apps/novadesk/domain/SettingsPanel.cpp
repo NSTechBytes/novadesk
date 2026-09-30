@@ -154,6 +154,7 @@ void SettingsPanel::BuildPanel(Widget *target) {
     to.text = L"X";
     to.fontSize = 14;
     to.fontColor = kMutedColor;
+    to.mouseEventCursorName = L"hand";
     panel->AddText(to);
     m_Controls[to.id] = {L"", ControlKind::CloseButton};
 
@@ -214,6 +215,7 @@ void SettingsPanel::BuildPanel(Widget *target) {
       co.popupAccentColor = kAccentColor;
       co.popupBorderColor = kDivider;
       co.showEyedropper = false;
+      co.mouseEventCursorName = L"hand";
       panel->AddColorPicker(co);
       m_Controls[co.id] = {setting.id, ControlKind::ColorSwatch};
       break;
@@ -259,6 +261,7 @@ void SettingsPanel::BuildPanel(Widget *target) {
       pill.solidAlpha = 255;
       pill.fillColor = pill.solidColor;
       pill.fillAlpha = 255;
+      pill.mouseEventCursorName = L"hand";
       panel->AddShape(pill);
       m_Controls[pill.id] = {setting.id, ControlKind::TogglePill};
 
@@ -274,6 +277,7 @@ void SettingsPanel::BuildPanel(Widget *target) {
       knob.solidAlpha = 255;
       knob.fillColor = knob.solidColor;
       knob.fillAlpha = 255;
+      knob.mouseEventCursorName = L"hand";
       panel->AddShape(knob);
       m_Controls[knob.id] = {setting.id, ControlKind::ToggleKnob};
       break;
@@ -291,6 +295,7 @@ void SettingsPanel::BuildPanel(Widget *target) {
       btn.solidAlpha = 255;
       btn.fillColor = kControlFill;
       btn.fillAlpha = 255;
+      btn.mouseEventCursorName = L"hand";
       panel->AddShape(btn);
       m_Controls[btn.id] = {setting.id, ControlKind::SelectButton};
 
@@ -303,6 +308,7 @@ void SettingsPanel::BuildPanel(Widget *target) {
       vt.text = value;
       vt.fontSize = 12;
       vt.fontColor = kTextColor;
+      vt.mouseEventCursorName = L"hand";
       panel->AddText(vt);
       m_Controls[vt.id] = {setting.id, ControlKind::SelectLabel};
       break;
@@ -338,6 +344,7 @@ void SettingsPanel::BuildPanel(Widget *target) {
     btn.solidAlpha = 255;
     btn.fillColor = kControlFill;
     btn.fillAlpha = 255;
+    btn.mouseEventCursorName = L"hand";
     panel->AddShape(btn);
     m_Controls[btn.id] = {L"", ControlKind::ResetButton};
 
@@ -350,6 +357,7 @@ void SettingsPanel::BuildPanel(Widget *target) {
     bt.text = L"Reset to defaults";
     bt.fontSize = 12;
     bt.fontColor = kTextColor;
+    bt.mouseEventCursorName = L"hand";
     panel->AddText(bt);
     m_Controls[bt.id] = {L"", ControlKind::ResetLabel};
   }

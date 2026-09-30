@@ -36,7 +36,8 @@ ui.addText({
   text: "Online Font Test",
   fontSize: 16,
   fontColor: "#ffffff",
-  fontWeight: 700
+  fontWeight: 700,
+  show:false
 });
 
 // Test 1 – Text element with Orbitron URL in fontPath
