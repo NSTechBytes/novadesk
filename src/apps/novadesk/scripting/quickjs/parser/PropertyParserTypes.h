@@ -14,6 +14,7 @@
 #include <d2d1.h>
 #include <windows.h>
 
+#include "../../../domain/WidgetSettings.h"
 #include "../../../render/BarElement.h"
 #include "../../../render/BitmapElement.h"
 #include "../../../render/ButtonElement.h"
@@ -910,5 +911,7 @@ struct WidgetWindowOptions {
   bool hasZPos = false;
   std::wstring scriptPath;
   bool hasScriptPath = false;
+  std::vector<WidgetSetting> settings;
+  bool hasSettings = false;
 };
 } // namespace novadesk::scripting::quickjs::parser

@@ -49,6 +49,26 @@ public:
   static bool LoadWidget(const std::wstring &id, WidgetOptions &outOptions);
 
   /**
+   * @brief Saves a widget's user setting values to persistent storage.
+   *
+   * @param id The widget's unique identifier.
+   * @param catalog The settings catalog whose values are persisted.
+   */
+  static void SaveWidgetSettingValues(const std::wstring &id,
+                                      const WidgetSettingsCatalog &catalog);
+
+  /**
+   * @brief Loads saved user setting values into a settings catalog.
+   *
+   * @param id The widget's unique identifier.
+   * @param outCatalog Receives the loaded values.
+   *
+   * @return True if at least one value was loaded.
+   */
+  static bool LoadWidgetSettingValues(const std::wstring &id,
+                                      WidgetSettingsCatalog &outCatalog);
+
+  /**
    * @brief Applies global settings to the application.
    *
    * @note Called during initialization and when settings change.

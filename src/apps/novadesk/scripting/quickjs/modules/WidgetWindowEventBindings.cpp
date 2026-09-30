@@ -16,6 +16,7 @@
 
 #include "../../domain/Widget.h"
 #include "../../shared/PathUtils.h"
+#include "../../shared/Settings.h"
 #include "../../shared/Utils.h"
 #include "../engine/JSEngine.h"
 #include "../parser/PropertyParser.h"
@@ -1266,9 +1267,46 @@ JSValue JsWidgetWindowStopAnimation(JSContext *ctx, JSValueConst thisVal, int,
   return JS_DupValue(ctx, thisVal);
 }
 
+JSValue JsWidgetWindowSetSettings(JSContext *ctx, JSValueConst thisVal,
+                                  int argc, JSValueConst *argv) {
+  Widget *widget = GetWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsArray(argv[0]))
+    return ThrowTypeError(ctx, "setSettings", "expected settings array");
+  std::vector<WidgetSetting> settings;
+  if (!PropertyParser::ParseSettingsSchema(ctx, argv[0], settings))
+    return ThrowTypeError(ctx, "setSettings", "no valid settings declared");
+  widget->SetSettingsSchema(std::move(settings));
+  Settings::LoadWidgetSettingValues(widget->GetOptions().id,
+                                    widget->GetSettings());
+  ApplyAllSettings(widget);
+  return JS_UNDEFINED;
+}
+
+JSValue JsWidgetWindowGetSetting(JSContext *ctx, JSValueConst thisVal,
+                                 int argc, JSValueConst *argv) {
+  Widget *widget = GetWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getSetting", "expected setting id");
+  const char *idStr = JS_ToCString(ctx, argv[0]);
+  if (!idStr)
+    return JS_UNDEFINED;
+  const std::wstring id = Utils::ToWString(idStr);
+  JS_FreeCString(ctx, idStr);
+  const WidgetSettingsCatalog &catalog = widget->GetSettings();
+  if (!catalog.hasSchema || !catalog.Find(id))
+    return JS_UNDEFINED;
+  return JS_NewString(ctx, Utils::ToString(catalog.ValueOrDefault(id)).c_str());
+}
+
 const JSCFunctionListEntry kWidgetWindowEventFuncs[] = {
     JS_CFUNC_DEF("animate", 1, JsWidgetWindowAnimate),
     JS_CFUNC_DEF("stopAnimation", 0, JsWidgetWindowStopAnimation),
+    JS_CFUNC_DEF("setSettings", 1, JsWidgetWindowSetSettings),
+    JS_CFUNC_DEF("getSetting", 1, JsWidgetWindowGetSetting),
     JS_CFUNC_DEF("setProperties", 1, JsWidgetWindowSetProperties),
     JS_CFUNC_DEF("getProperties", 0, JsWidgetWindowGetProperties),
     JS_CFUNC_DEF("close", 0, JsWidgetWindowClose),

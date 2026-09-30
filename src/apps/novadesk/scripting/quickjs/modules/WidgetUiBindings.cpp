@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "../../domain/Widget.h"
+#include "../../domain/SettingsPanel.h"
 #include "../../render/BarElement.h"
 #include "../../render/BitmapElement.h"
 #include "../../render/HistogramElement.h"
@@ -3589,6 +3590,9 @@ JSValue JsWidgetWindowCtor(JSContext *ctx, JSValueConst, int argc,
           Widget::s_HwndMap.erase(existing->GetWindow());
       }
     }
+    // This manual erase bypasses Widget::RemoveWidget, so close any panel
+    // owned by the replaced instance here.
+    SettingsPanel::CloseAllForTarget(existing);
     // Lock released before delete: the destructor calls DestroyWindow
     // which dispatches WM_DESTROY synchronously; holding the lock there
     // would deadlock.
@@ -3735,6 +3739,11 @@ JSValue JsWidgetWindowCtor(JSContext *ctx, JSValueConst, int argc,
     return JS_ThrowInternalError(ctx, "Failed to create widget window");
   }
 
+  if (parsed.hasSettings) {
+    widget->SetSettingsSchema(std::move(parsed.settings));
+    Settings::LoadWidgetSettingValues(options.id, widget->GetSettings());
+  }
+
   // A widget ID has no persisted state until its first successful creation.
   // Store that initial state now, rather than waiting for a later move or
   // resize event.  Existing settings are deliberately never replaced here.
@@ -3768,6 +3777,9 @@ JSValue JsWidgetWindowCtor(JSContext *ctx, JSValueConst, int argc,
 
   if (!options.scriptPath.empty()) {
     RunWidgetUiScriptImpl(ctx, widget, options.scriptPath);
+  }
+  if (parsed.hasSettings) {
+    ApplyAllSettings(widget);
   }
   return obj;
 }

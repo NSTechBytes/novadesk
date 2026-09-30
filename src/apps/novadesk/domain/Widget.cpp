@@ -46,6 +46,7 @@
 #include "../shared/System.h"
 #include "BitmapElement.h"
 #include "WidgetContextMenuHelper.h"
+#include "SettingsPanel.h"
 #include "InputBoxContextMenuHelper.h"
 #include "ColorPickerPopup.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
@@ -86,13 +87,21 @@ std::vector<Widget *> Widget::GetAllWidgets() {
 }
 
 void Widget::RemoveWidget(Widget *widget) {
-  std::lock_guard<std::mutex> lock(s_WidgetMutex);
-  auto it = std::find(widgets.begin(), widgets.end(), widget);
-  if (it != widgets.end())
-    widgets.erase(it);
-  s_WidgetSet.erase(widget);
-  if (widget)
-    s_HwndMap.erase(widget->m_hWnd);
+  {
+    std::lock_guard<std::mutex> lock(s_WidgetMutex);
+    auto it = std::find(widgets.begin(), widgets.end(), widget);
+    if (it != widgets.end())
+      widgets.erase(it);
+    s_WidgetSet.erase(widget);
+    if (widget)
+      s_HwndMap.erase(widget->m_hWnd);
+  }
+
+  // A settings panel is owned by the widget it edits; once that widget is no
+  // longer registered it must not be touched again.  Panels are destroyed
+  // after releasing the mutex because their own teardown re-enters
+  // RemoveWidget.
+  SettingsPanel::CloseAllForTarget(widget);
 }
 
 void Widget::ClearAllWidgets() {
@@ -421,6 +430,10 @@ void Widget::Refresh() {
     JSEngine::ExecuteWidgetScript(this);
   }
   EndUpdate();
+
+  // The script rebuilt every element from its own defaults; the user's saved
+  // settings have to win over them again.
+  ApplyAllSettings(this);
 }
 
 void Widget::SetFocus() {
@@ -1818,6 +1831,9 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
         s_WidgetSet.erase(widget);
         s_HwndMap.erase(hWnd);
       }
+      // This manual unregister bypasses RemoveWidget; close any settings
+      // panel owned by the widget before it is deleted.
+      SettingsPanel::CloseAllForTarget(widget);
       // Lock released before delete: the destructor calls DestroyWindow
       // which dispatches WM_DESTROY synchronously; holding the lock there
       // would deadlock.
@@ -1906,6 +1922,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
           if (input->m_OnEnterCallbackId != -1)
             JSEngine::CallEventCallbackWithText(input->m_OnEnterCallbackId,
                                                 widget, input->GetText());
+          else if (widget->m_InputSink)
+            widget->m_InputSink->OnInputCommitted(widget, input);
         }
         return 0;
       }
@@ -2494,6 +2512,13 @@ void Widget::BlurInputBox(InputBoxElement *inputElem) {
     focusedInput->SetFocus(false);
   if (onBlurCallbackId != -1)
     JSEngine::CallEventCallback(onBlurCallbackId, this, nullptr);
+  else if (isTracked && m_InputSink) {
+    m_InputSink->OnInputCommitted(this, focusedInput);
+    // The sink defers its own teardown to the end of this callback, which can
+    // delete this widget; nothing below may run on a freed instance.
+    if (!Widget::IsValid(this))
+      return;
+  }
 
   Redraw();
 }
@@ -3307,6 +3332,28 @@ void Widget::SetContextMenu(const std::vector<MenuItem> &menu) {
 // Clear all custom context menu items.
 void Widget::ClearContextMenu() { m_ContextMenu.clear(); }
 
+void Widget::SetSettingsSchema(std::vector<WidgetSetting> schema) {
+  m_Settings.schema = std::move(schema);
+  m_Settings.hasSchema = !m_Settings.schema.empty();
+
+  std::unordered_map<std::wstring, std::wstring> kept;
+  for (const WidgetSetting &setting : m_Settings.schema) {
+    auto it = m_Settings.values.find(setting.id);
+    if (it != m_Settings.values.end())
+      kept.emplace(it->first, it->second);
+  }
+  m_Settings.values = std::move(kept);
+
+  if (m_Settings.hasSchema &&
+      (m_Options.id.empty() || m_Options.id == L"widget")) {
+    Logging::Log(LogLevel::Warn,
+                 L"[novadesk] Widget settings declared with default/empty id "
+                 L"'%s'; values will be shared with other widgets using the "
+                 L"same id.",
+                 m_Options.id.c_str());
+  }
+}
+
 // Redraw the widget window to reflect content changes.
 void Widget::Redraw() {
   if (m_IsBatchUpdating <= 0) {
@@ -3953,6 +4000,11 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
   Element *mouseActionElement = nullptr;
   Element *toolTipElement = nullptr;
 
+  // An element is normally an action target only when it has a JS callback.
+  // Widgets with an input sink (the settings panel) route callback-less
+  // clicks to that sink instead, so every element counts as an action target.
+  const bool sinkHandlesClicks = m_InputSink && message == WM_LBUTTONUP;
+
   // Use the spatial grid for large element counts; fall back to linear scan
   // for small counts where the hash-lookup overhead exceeds the savings.
   if (static_cast<int>(m_Elements.size()) > GRID_THRESHOLD) {
@@ -3986,7 +4038,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         if (el->HitTest(x, y)) {
           if (!hitElement)
             hitElement = el;
-          if (!actionElement && el->HasAction(message, wParam))
+          if (!actionElement &&
+              (el->HasAction(message, wParam) || sinkHandlesClicks))
             actionElement = el;
           if (!mouseActionElement && el->HasMouseAction())
             mouseActionElement = el;
@@ -4028,7 +4081,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       if (el->HitTest(x, y)) {
         if (!hitElement)
           hitElement = el;
-        if (!actionElement && el->HasAction(message, wParam))
+        if (!actionElement &&
+            (el->HasAction(message, wParam) || sinkHandlesClicks))
           actionElement = el;
         if (!mouseActionElement && el->HasMouseAction())
           mouseActionElement = el;
@@ -4367,6 +4421,15 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         if (!Widget::IsValid(this))
           return true;
       }
+    } else if (m_InputSink && message == WM_LBUTTONUP) {
+      // The element has no JS callback bound; forward the click to the
+      // installed input sink (settings panel) instead. The sink may
+      // synchronously destroy this widget (panel close), so nothing may
+      // touch instance state after the call unless it survived.
+      handled = true;
+      m_InputSink->OnElementMouseUp(this, actionElement, x, y);
+      if (!Widget::IsValid(this))
+        return true;
     }
   }
 
@@ -4831,7 +4894,7 @@ void Widget::OnContextMenu() {
 
   const int cmd = WidgetContextMenuHelper::ShowContextMenu(
       m_hWnd, m_ContextMenu, m_ShowDefaultContextMenuItems, m_WindowZPosition,
-      m_Options);
+      m_Options, m_Settings.hasSchema);
   WidgetContextMenuHelper::HandleContextCommand(*this, cmd);
 }
 

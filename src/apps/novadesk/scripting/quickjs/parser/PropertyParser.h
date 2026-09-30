@@ -95,6 +95,11 @@ void ParseColorPickerOptions(JSContext *ctx, JSValueConst obj,
                              ColorPickerOptions &options,
                              const std::wstring &baseDir = L"");
 
+/// Parses a widget settings schema array (`[{id, label, type, ...}]`).
+/// @return True if at least one valid setting was parsed.
+bool ParseSettingsSchema(JSContext *ctx, JSValueConst arr,
+                         std::vector<WidgetSetting> &out);
+
 // ============================================================================
 // Apply Functions (Options Struct -> Element)
 // ============================================================================

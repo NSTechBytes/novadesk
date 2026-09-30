@@ -63,6 +63,12 @@
     <ClCompile Include="domain\WidgetContextMenuHelper.cpp">
       <Filter>domain</Filter>
     </ClCompile>
+    <ClCompile Include="domain\WidgetSettings.cpp">
+      <Filter>domain</Filter>
+    </ClCompile>
+    <ClCompile Include="domain\SettingsPanel.cpp">
+      <Filter>domain</Filter>
+    </ClCompile>
     <ClCompile Include="domain\WidgetLayoutHelper.cpp">
       <Filter>domain</Filter>
     </ClCompile>
@@ -318,6 +324,12 @@
       <Filter>domain</Filter>
     </ClInclude>
     <ClInclude Include="domain\WidgetContextMenuHelper.h">
+      <Filter>domain</Filter>
+    </ClInclude>
+    <ClInclude Include="domain\WidgetSettings.h">
+      <Filter>domain</Filter>
+    </ClInclude>
+    <ClInclude Include="domain\SettingsPanel.h">
       <Filter>domain</Filter>
     </ClInclude>
     <ClInclude Include="domain\WidgetLayoutHelper.h">

@@ -31,12 +31,13 @@ namespace WidgetContextMenuHelper {
  * @param showDefaultItems Whether to show default menu items.
  * @param windowZPos Current window Z-order position.
  * @param options Widget configuration options.
+ * @param hasSettings Whether the widget declared a user settings schema.
  *
  * @return The selected menu command ID.
  */
 int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
                     bool showDefaultItems, ZPOSITION windowZPos,
-                    const WidgetOptions &options);
+                    const WidgetOptions &options, bool hasSettings = false);
 
 /**
  * @brief Handles a context menu command selection.

@@ -155,6 +155,8 @@
     <ClCompile Include="domain\Novadesk.cpp" />
     <ClCompile Include="domain\Widget.cpp" />
     <ClCompile Include="domain\WidgetContextMenuHelper.cpp" />
+    <ClCompile Include="domain\WidgetSettings.cpp" />
+    <ClCompile Include="domain\SettingsPanel.cpp" />
     <ClCompile Include="domain\WidgetLayoutHelper.cpp" />
     <ClCompile Include="domain\ScrollbarRenderer.cpp" />
     <ClCompile Include="domain\WidgetDropTarget.cpp" />
@@ -276,6 +278,8 @@
     <ClInclude Include="domain\Novadesk.h" />
     <ClInclude Include="domain\Widget.h" />
     <ClInclude Include="domain\WidgetContextMenuHelper.h" />
+    <ClInclude Include="domain\WidgetSettings.h" />
+    <ClInclude Include="domain\SettingsPanel.h" />
     <ClInclude Include="domain\WidgetLayoutHelper.h" />
     <ClInclude Include="domain\ScrollbarRenderer.h" />
     <ClInclude Include="domain\WidgetDropTarget.h" />

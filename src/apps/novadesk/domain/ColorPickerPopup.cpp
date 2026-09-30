@@ -613,6 +613,8 @@ void ColorPickerPopup::Notify() {
     swprintf_s(s, L"#%02X%02X%02X", GetRValue(c), GetGValue(c), GetBValue(c));
     JSEngine::CallEventCallbackWithText(m_Picker->m_OnChangeCallbackId,
                                         m_Widget, s);
+  } else if (m_Widget && m_Widget->GetInputSink()) {
+    m_Widget->GetInputSink()->OnColorCommitted(m_Widget, m_Picker);
   }
 }
 

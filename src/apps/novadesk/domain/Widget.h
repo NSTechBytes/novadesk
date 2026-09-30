@@ -20,6 +20,7 @@
 #include <d2d1_1.h>
 #include <wrl/client.h>
 #include "DesktopManager.h"
+#include "WidgetSettings.h"
 #include "../render/Element.h"
 #include "../render/TextElement.h"
 #include "../render/ImageElement.h"
@@ -64,6 +65,26 @@ struct ColorPickerOptions;
 } // namespace PropertyParser
 
 #include "MenuItem.h"
+
+class Widget;
+
+/**
+ * @brief Receives element input for widgets whose elements have no JavaScript
+ *        callback bound (callback id -1). Used by the built-in settings panel;
+ *        widgets without a sink are unaffected.
+ */
+class IWidgetInputSink {
+public:
+  virtual ~IWidgetInputSink() = default;
+  /// @brief Called on left-button release over an element without callbacks.
+  virtual void OnElementMouseUp(Widget *widget, Element *element, int x,
+                                int y) = 0;
+  /// @brief Called when a focused input box commits its text (Enter/blur).
+  virtual void OnInputCommitted(Widget *widget, InputBoxElement *inputBox) = 0;
+  /// @brief Called when a color picker popup changes a swatch color.
+  virtual void OnColorCommitted(Widget *widget,
+                                ColorPickerElement *colorPicker) = 0;
+};
 
 /**
  * @brief Specifies which edge of a widget is being targeted for resizing.
@@ -412,6 +433,17 @@ public:
 
   /// @return Read-only access to the widget configuration.
   const WidgetOptions &GetOptions() const { return m_Options; }
+  /// @return The user-facing settings catalog (schema + current values).
+  WidgetSettingsCatalog &GetSettings() { return m_Settings; }
+  /// @return The user-facing settings catalog (read-only).
+  const WidgetSettingsCatalog &GetSettings() const { return m_Settings; }
+  /// @brief Replaces the declared settings schema, dropping stored values
+  ///        for settings that are no longer declared.
+  void SetSettingsSchema(std::vector<WidgetSetting> schema);
+  /// @brief Installs a sink receiving element input that has no JS callback.
+  void SetInputSink(IWidgetInputSink *sink) { m_InputSink = sink; }
+  /// @return The installed input sink, or nullptr.
+  IWidgetInputSink *GetInputSink() const { return m_InputSink; }
   /// @return Unique instance ID for this widget.
   uint64_t GetInstanceId() const { return m_InstanceId; }
   /// @return The underlying Win32 window handle.
@@ -648,6 +680,9 @@ private:
   std::wstring m_Id;           ///< Unique widget identifier.
   std::wstring m_Name;         ///< Display name.
   WidgetOptions m_Options;     ///< Configuration options.
+  WidgetSettingsCatalog m_Settings; ///< Declared user settings + values.
+  IWidgetInputSink *m_InputSink =
+      nullptr; ///< Optional non-JS input handler (settings panel).
   HWND m_hWnd = nullptr;       ///< Win32 window handle.
   Tooltip m_Tooltip;           ///< Tooltip manager.
   ZPOSITION m_WindowZPosition; ///< Current z-order position.

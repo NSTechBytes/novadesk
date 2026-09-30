@@ -13,6 +13,7 @@
 #include <shellapi.h>
 
 #include "Widget.h"
+#include "SettingsPanel.h"
 #include "../shared/MenuUtils.h"
 #include "PathUtils.h"
 #include "../render/FontCache.h"
@@ -44,6 +45,7 @@ constexpr int CMD_SETTINGS_SAVE_LOG_TO_FILE = 1142;
 constexpr int CMD_SETTINGS_USE_HW_ACCEL = 1143;
 constexpr int CMD_SETTINGS_CLEAR_IMAGE_CACHE = 1144;
 constexpr int CMD_SETTINGS_CLEAR_FONT_CACHE = 1145;
+constexpr int CMD_OPEN_SETTINGS = 1146;
 
 static void PromptRestartForHardwareAcceleration(HWND hwndParent) {
   const std::wstring appTitle = PathUtils::GetProductName();
@@ -104,7 +106,7 @@ static void PromptRestartForHardwareAcceleration(HWND hwndParent) {
 namespace WidgetContextMenuHelper {
 int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
                     bool showDefaultItems, ZPOSITION windowZPos,
-                    const WidgetOptions &options) {
+                    const WidgetOptions &options, bool hasSettings) {
   POINT pt{};
   GetCursorPos(&pt);
 
@@ -161,6 +163,10 @@ int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
                 MF_STRING | (options.keepOnScreen ? MF_CHECKED : 0),
                 CMD_MANAGE_KEEPOFFSCREEN, L"Keep On Screen");
     AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hManageMenu, L"Manage");
+
+    if (hasSettings) {
+      AppendMenuW(hMenu, MF_STRING, CMD_OPEN_SETTINGS, L"Settings…");
+    }
 
     HMENU hAppMenu = CreatePopupMenu();
 
@@ -313,6 +319,10 @@ void HandleContextCommand(Widget &widget, int cmd) {
   }
   if (cmd == CMD_SETTINGS_CLEAR_FONT_CACHE) {
     FontCache::Clear();
+    return;
+  }
+  if (cmd == CMD_OPEN_SETTINGS) {
+    SettingsPanel::OpenFor(&widget);
     return;
   }
 }

@@ -150,6 +150,10 @@ void OnWidgetContextCommand(const std::wstring &widgetId, int commandId);
 void TriggerWidgetEvent(Widget *widget, const char *eventName,
                         const MouseEventData *data = nullptr);
 
+/// Triggers the "settingchange" event with {id, value} payload.
+void TriggerWidgetSettingChange(Widget *widget, const std::wstring &settingId,
+                                const std::wstring &value);
+
 /// Clears all event listeners for a widget.
 void ClearWidgetEventListeners(Widget *widget);
 

@@ -133,7 +133,13 @@ void Settings::SaveWidget(const std::wstring &id,
 
   std::string idStr = Utils::ToString(id);
 
-  json widgetData;
+  // Merge into the existing entry so unrelated keys (e.g. "settings")
+  // are preserved.
+  if (!s_Data.contains("widgets") || !s_Data["widgets"].contains(idStr))
+    s_Data["widgets"][idStr] = json::object();
+  json &widgetData = s_Data["widgets"][idStr];
+  const json prev = widgetData;
+
   widgetData["x"] = options.x;
   widgetData["y"] = options.y;
   widgetData["windowopacity"] = options.windowOpacity;
@@ -161,13 +167,10 @@ void Settings::SaveWidget(const std::wstring &id,
   widgetData["snapedges"] = options.snapEdges;
 
   // Only save if data has actually changed
-  if (s_Data.contains("widgets") && s_Data["widgets"].contains(idStr)) {
-    if (s_Data["widgets"][idStr] == widgetData) {
-      return; // No changes, skip saving
-    }
+  if (widgetData == prev) {
+    return; // No changes, skip saving
   }
 
-  s_Data["widgets"][idStr] = widgetData;
   s_Dirty = true;
 
   // Coalesce rapid writes: only flush to disk if the debounce
@@ -226,6 +229,70 @@ bool Settings::LoadWidget(const std::wstring &id, WidgetOptions &outOptions) {
   } catch (std::exception &e) {
     Logging::Log(LogLevel::Error, L"Error loading widget %s: %S", id.c_str(),
                  e.what());
+    return false;
+  }
+}
+
+void Settings::SaveWidgetSettingValues(
+    const std::wstring &id, const WidgetSettingsCatalog &catalog) {
+  if (id.empty())
+    return;
+
+  std::string idStr = Utils::ToString(id);
+
+  json settingsData = json::object();
+  for (const auto &kv : catalog.values) {
+    std::string key = Utils::ToString(kv.first);
+    std::string value = Utils::ToString(kv.second);
+    settingsData[key] = value;
+  }
+
+  if (!s_Data.contains("widgets") || !s_Data["widgets"].contains(idStr))
+    s_Data["widgets"][idStr] = json::object();
+  json &widgetData = s_Data["widgets"][idStr];
+
+  if (widgetData.contains("settings") && widgetData["settings"].is_object() &&
+      widgetData["settings"] == settingsData) {
+    return; // No changes, skip saving
+  }
+
+  widgetData["settings"] = std::move(settingsData);
+  s_Dirty = true;
+
+  ULONGLONG now = GetTickCount64();
+  if (now - s_LastSaveTick >= SAVE_DEBOUNCE_MS) {
+    Save();
+    s_LastSaveTick = now;
+  }
+}
+
+bool Settings::LoadWidgetSettingValues(const std::wstring &id,
+                                       WidgetSettingsCatalog &outCatalog) {
+  if (id.empty())
+    return false;
+
+  std::string idStr = Utils::ToString(id);
+
+  if (!s_Data.contains("widgets") || !s_Data["widgets"].contains(idStr))
+    return false;
+
+  try {
+    json &w = s_Data["widgets"][idStr];
+    if (!w.contains("settings") || !w["settings"].is_object())
+      return false;
+
+    bool loadedAny = false;
+    for (auto it = w["settings"].begin(); it != w["settings"].end(); ++it) {
+      if (!it.value().is_string())
+        continue;
+      outCatalog.values[Utils::ToWString(it.key())] =
+          Utils::ToWString(it.value().get<std::string>());
+      loadedAny = true;
+    }
+    return loadedAny;
+  } catch (std::exception &e) {
+    Logging::Log(LogLevel::Error, L"Error loading widget settings %s: %S",
+                 id.c_str(), e.what());
     return false;
   }
 }

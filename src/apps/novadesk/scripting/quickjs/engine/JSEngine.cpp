@@ -18,6 +18,7 @@
 #include <mutex>
 
 #include "../../domain/Widget.h"
+#include "../../domain/SettingsPanel.h"
 #include "../../shared/Settings.h"
 #include "../../render/FontDownloader.h"
 #include "../../shared/FileUtils.h"
@@ -164,6 +165,9 @@ std::wstring GetWidgetOwnerScriptPathById(const std::wstring &widgetId) {
 }
 
 void DestroyAllWidgets() {
+  // Panels point at their target widget; CloseAllForTarget is bypassed by
+  // the ClearAllWidgets below, so tear the panels down first.
+  SettingsPanel::CloseAll();
   std::vector<Widget *> copy = Widget::GetAllWidgets(); // thread-safe snapshot
   Widget::ClearAllWidgets();                            // thread-safe clear
   // Lock released before delete: the destructor calls DestroyWindow
@@ -2071,6 +2075,55 @@ void TriggerWidgetEvent(Widget *widget, const char *eventName,
 
   for (int callbackId : eventIt->second) {
     CallEventCallback(callbackId, widget, data);
+  }
+}
+
+void TriggerWidgetSettingChange(Widget *widget, const std::wstring &settingId,
+                                const std::wstring &value) {
+  std::lock_guard<std::recursive_mutex> lock(g_engineMutex);
+  if (!widget)
+    return;
+
+  auto widgetIt = g_widgetEventListeners.find(widget);
+  if (widgetIt == g_widgetEventListeners.end())
+    return;
+
+  auto eventIt = widgetIt->second.find("settingchange");
+  if (eventIt == widgetIt->second.end())
+    return;
+
+  if (!g_context)
+    return;
+
+  const std::wstring ownerScriptPath = GetWidgetOwnerScriptPath(widget);
+  ScriptExecutionScope scope(ownerScriptPath);
+
+  for (int callbackId : eventIt->second) {
+    if (callbackId <= 0 ||
+        callbackId >= static_cast<int>(g_eventCallbacks.size()))
+      continue;
+    JSValue callback = g_eventCallbacks[callbackId];
+    if (JS_IsUndefined(callback) || JS_IsNull(callback))
+      continue;
+
+    JSValue arg = JS_NewObject(g_context);
+    JS_SetPropertyStr(
+        g_context, arg, "widgetId",
+        JS_NewString(g_context,
+                     Utils::ToString(widget->GetOptions().id).c_str()));
+    JS_SetPropertyStr(g_context, arg, "id",
+                      JS_NewString(g_context, Utils::ToString(settingId).c_str()));
+    JS_SetPropertyStr(
+        g_context, arg, "value",
+        JS_NewString(g_context, Utils::ToString(value).c_str()));
+
+    JSValue argv[1] = {arg};
+    JSValue ret = JS_Call(g_context, callback, JS_UNDEFINED, 1, argv);
+    JS_FreeValue(g_context, arg);
+    if (JS_IsException(ret))
+      LogQuickJsException(g_context);
+    else
+      JS_FreeValue(g_context, ret);
   }
 }
 

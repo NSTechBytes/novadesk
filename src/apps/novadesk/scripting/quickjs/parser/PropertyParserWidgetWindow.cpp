@@ -16,6 +16,106 @@
 #include <string>
 #include <vector>
 
+namespace PropertyParser {
+
+bool ParseSettingsSchema(JSContext *ctx, JSValueConst arr,
+                         std::vector<WidgetSetting> &out) {
+  if (!JS_IsArray(arr))
+    return false;
+
+  uint32_t len = 0;
+  JSValue lenV = JS_GetPropertyStr(ctx, arr, "length");
+  if (JS_ToUint32(ctx, &len, lenV) != 0) {
+    JS_FreeValue(ctx, lenV);
+    return false;
+  }
+  JS_FreeValue(ctx, lenV);
+
+  bool parsedAny = false;
+  for (uint32_t i = 0; i < len; ++i) {
+    JSValue itemV = JS_GetPropertyUint32(ctx, arr, i);
+    if (!JS_IsObject(itemV)) {
+      JS_FreeValue(ctx, itemV);
+      continue;
+    }
+
+    WidgetSetting setting;
+    setting.id = Js::GetStringProp(ctx, itemV, "id");
+    std::wstring typeStr = Js::GetStringProp(ctx, itemV, "type");
+    std::transform(typeStr.begin(), typeStr.end(), typeStr.begin(), ::towlower);
+    if (setting.id.empty() || !ParseWidgetSettingType(typeStr, setting.type)) {
+      JS_FreeValue(ctx, itemV);
+      continue;
+    }
+
+    setting.label = Js::GetStringProp(ctx, itemV, "label");
+    if (setting.label.empty())
+      setting.label = setting.id;
+
+    JSValue defV = JS_GetPropertyStr(ctx, itemV, "default");
+    if (JS_IsString(defV)) {
+      setting.defaultValue = Js::GetStringProp(ctx, itemV, "default");
+    } else if (JS_IsBool(defV)) {
+      setting.defaultValue = JS_ToBool(ctx, defV) > 0 ? L"true" : L"false";
+    } else if (JS_IsNumber(defV)) {
+      double d = 0.0;
+      if (JS_ToFloat64(ctx, &d, defV) == 0)
+        setting.defaultValue = WidgetSettingNumberToString(d);
+    }
+    JS_FreeValue(ctx, defV);
+
+    if (setting.type == WidgetSettingType::Toggle &&
+        setting.defaultValue.empty())
+      setting.defaultValue = L"false";
+
+    setting.hasMin = Js::GetFloatProp(ctx, itemV, "min", setting.minValue);
+    setting.hasMax = Js::GetFloatProp(ctx, itemV, "max", setting.maxValue);
+
+    if (setting.type == WidgetSettingType::Select) {
+      JSValue optsV = JS_GetPropertyStr(ctx, itemV, "options");
+      if (JS_IsArray(optsV)) {
+        uint32_t optLen = 0;
+        JSValue optLenV = JS_GetPropertyStr(ctx, optsV, "length");
+        if (JS_ToUint32(ctx, &optLen, optLenV) == 0) {
+          for (uint32_t j = 0; j < optLen; ++j) {
+            JSValue optV = JS_GetPropertyUint32(ctx, optsV, j);
+            const char *optStr = JS_ToCString(ctx, optV);
+            if (optStr && *optStr)
+              setting.options.push_back(Utils::ToWString(optStr));
+            if (optStr)
+              JS_FreeCString(ctx, optStr);
+            JS_FreeValue(ctx, optV);
+          }
+        }
+        JS_FreeValue(ctx, optLenV);
+      }
+      JS_FreeValue(ctx, optsV);
+      if (setting.options.empty()) {
+        JS_FreeValue(ctx, itemV);
+        continue;
+      }
+    }
+
+    JSValue bindV = JS_GetPropertyStr(ctx, itemV, "bind");
+    if (JS_IsObject(bindV)) {
+      setting.binding.elementId = Js::GetStringProp(ctx, bindV, "element");
+      setting.binding.property = Js::GetStringProp(ctx, bindV, "property");
+      std::transform(setting.binding.property.begin(),
+                     setting.binding.property.end(),
+                     setting.binding.property.begin(), ::towlower);
+    }
+    JS_FreeValue(ctx, bindV);
+
+    out.push_back(std::move(setting));
+    parsedAny = true;
+    JS_FreeValue(ctx, itemV);
+  }
+
+  return parsedAny;
+}
+
+} // namespace PropertyParser
+
 namespace novadesk::scripting::quickjs::parser {
 void ParseWidgetWindowOptions(JSContext *ctx, JSValueConst options,
                               WidgetWindowOptions &out) {
@@ -322,6 +422,13 @@ void ParseWidgetWindowOptions(JSContext *ctx, JSValueConst options,
     out.scriptPath = scriptPath;
     out.hasScriptPath = true;
   }
+
+  JSValue settingsVal = JS_GetPropertyStr(ctx, options, "settings");
+  if (JS_IsArray(settingsVal) &&
+      PropertyParser::ParseSettingsSchema(ctx, settingsVal, out.settings)) {
+    out.hasSettings = true;
+  }
+  JS_FreeValue(ctx, settingsVal);
 }
 
 void ParseWidgetWindowSize(JSContext *ctx, JSValueConst options, int &width,
