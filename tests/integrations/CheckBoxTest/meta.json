@@ -1,0 +1,21 @@
+{
+  "name": "CheckBoxTest",
+  "main": "index.js",
+  "version": "1.0.0.0",
+  "author": "OfficialNovadesk",
+  "description": "Integration test for the checkBox element: creation, tri-state cycling, properties, programmatic methods and callbacks.",
+  "icon": "",
+  "preview": "",
+  "excludeItems": [],
+  "setup": {
+    "createDesktopShortcut": false,
+    "createStartupShortcut": false,
+    "runOnStartup": false,
+    "installDir": "%ProgramFiles%\\CheckBoxTest",
+    "startMenuFolder": "CheckBoxTest",
+    "setupName": "setup",
+    "setupIcon": "",
+    "enableUninstall": false,
+    "launchAfterInstall": false
+  }
+}

@@ -26,6 +26,8 @@
 #include "../../../render/TextElement.h"
 #include "../../../render/InputBoxElement.h"
 #include "../../../render/ColorPickerElement.h"
+#include "../../../render/ToggleSwitchElement.h"
+#include "../../../render/CheckBoxElement.h"
 
 /**
  * @brief Property parser option structs for all element types.
@@ -458,6 +460,50 @@ struct ToggleSwitchOptions : public ElementOptions {
   BYTE labelFontAlpha = 255;
 
   int durationMs = 180;
+  std::wstring easing = L"ease-out";
+
+  int onChangeCallbackId = -1;
+};
+
+/// Check box element options.
+struct CheckBoxOptions : public ElementOptions {
+  bool checked = false;
+  bool indeterminate = false; ///< Overrides checked when true.
+  bool triState = false;      ///< Include indeterminate in the click cycle.
+
+  float boxSize = 0.0f; ///< 0 = auto from min(width, height).
+  float borderRadius = 3.0f;
+  COLORREF uncheckedBorderColor = RGB(113, 113, 122);
+  BYTE uncheckedBorderAlpha = 255;
+  float uncheckedBorderWidth = 1.5f;
+  COLORREF checkedColor = RGB(59, 130, 246);
+  BYTE checkedAlpha = 255;
+  float boxOpacity = 1.0f;
+
+  COLORREF checkColor = RGB(255, 255, 255);
+  BYTE checkAlpha = 255;
+  float checkThickness = 2.0f;
+
+  bool disabled = false;
+  COLORREF disabledBoxColor = RGB(80, 80, 88);
+  BYTE disabledBoxAlpha = 255;
+  COLORREF disabledCheckColor = RGB(150, 150, 158);
+  BYTE disabledCheckAlpha = 255;
+  COLORREF disabledTextColor = RGB(113, 113, 122);
+  BYTE disabledTextAlpha = 255;
+  bool hasHoverBorderColor = false;
+  COLORREF hoverBorderColor = RGB(0, 0, 0);
+  BYTE hoverBorderAlpha = 255;
+
+  std::wstring text;
+  std::wstring fontFace = L"Segoe UI";
+  int fontSize = 12;
+  int fontWeight = 400;
+  COLORREF fontColor = RGB(228, 228, 231);
+  BYTE fontAlpha = 255;
+  float labelGap = 8.0f;
+
+  int durationMs = 120;
   std::wstring easing = L"ease-out";
 
   int onChangeCallbackId = -1;

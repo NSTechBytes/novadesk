@@ -191,6 +191,7 @@
     <ClCompile Include="render\InputBoxElement.cpp" />
     <ClCompile Include="render\ColorPickerElement.cpp" />
     <ClCompile Include="render\ToggleSwitchElement.cpp" />
+    <ClCompile Include="render\CheckBoxElement.cpp" />
     <ClCompile Include="render\Tooltip.cpp" />
     <ClCompile Include="scripting\quickjs\engine\JSEngine.cpp" />
     <ClCompile Include="scripting\quickjs\modules\FSModule.cpp" />
@@ -211,6 +212,7 @@
     <ClCompile Include="scripting\quickjs\parser\PropertyParserInputBox.cpp" />
     <ClCompile Include="scripting\quickjs\parser\PropertyParserColorPicker.cpp" />
     <ClCompile Include="scripting\quickjs\parser\PropertyParserToggleSwitch.cpp" />
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserCheckBox.cpp" />
     <ClCompile Include="scripting\quickjs\parser\PropertyParserWidgetWindow.cpp" />
     <ClCompile Include="shared\FileUtils.cpp" />
     <ClCompile Include="shared\Logging.cpp" />
@@ -320,6 +322,7 @@
     <ClInclude Include="render\InputBoxElement.h" />
     <ClInclude Include="render\ColorPickerElement.h" />
     <ClInclude Include="render\ToggleSwitchElement.h" />
+    <ClInclude Include="render\CheckBoxElement.h" />
     <ClInclude Include="render\Tooltip.h" />
     <ClInclude Include="scripting\quickjs\engine\JSEngine.h" />
     <ClInclude Include="scripting\quickjs\modules\FSModule.h" />

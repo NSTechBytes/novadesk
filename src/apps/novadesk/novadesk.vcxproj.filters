@@ -171,6 +171,9 @@
     <ClCompile Include="render\ToggleSwitchElement.cpp">
       <Filter>render</Filter>
     </ClCompile>
+    <ClCompile Include="render\CheckBoxElement.cpp">
+      <Filter>render</Filter>
+    </ClCompile>
     <ClCompile Include="render\Tooltip.cpp">
       <Filter>render</Filter>
     </ClCompile>
@@ -229,6 +232,9 @@
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
     <ClCompile Include="scripting\quickjs\parser\PropertyParserToggleSwitch.cpp">
+      <Filter>scripting\quickjs\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserCheckBox.cpp">
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
     <ClCompile Include="scripting\quickjs\parser\PropertyParserWidgetWindow.cpp">
@@ -441,6 +447,9 @@
       <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="render\ToggleSwitchElement.h">
+      <Filter>render</Filter>
+    </ClInclude>
+    <ClInclude Include="render\CheckBoxElement.h">
       <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="render\Tooltip.h">

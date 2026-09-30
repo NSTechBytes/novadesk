@@ -255,8 +255,9 @@ void SettingsPanel::BuildPanel(Widget *target) {
     }
     case WidgetSettingType::Toggle: {
       const bool on = IsToggleOn(value);
-      // When the setting is bound to a real toggleSwitch element on the
-      // target widget, drive that switch instead of drawing a pill+knob.
+      // When the setting is bound to a real toggleSwitch or checkBox
+      // element on the target widget, drive that control instead of drawing
+      // a pill+knob.
       Element *bound = nullptr;
       if (!setting.binding.elementId.empty() &&
           setting.binding.property == L"checked" && m_Target &&
@@ -267,6 +268,12 @@ void SettingsPanel::BuildPanel(Widget *target) {
         sw->SetChecked(on, false);
         m_Target->Redraw();
         m_Controls[sw->GetId()] = {setting.id, ControlKind::BoundSwitch};
+        break;
+      }
+      if (auto *cb = dynamic_cast<CheckBoxElement *>(bound)) {
+        cb->SetChecked(on, false);
+        m_Target->Redraw();
+        m_Controls[cb->GetId()] = {setting.id, ControlKind::BoundSwitch};
         break;
       }
 
@@ -514,6 +521,12 @@ void SettingsPanel::UpdateRowVisuals(const WidgetSetting &setting) {
               m_Target->FindElementById(setting.binding.elementId))) {
         sw->SetChecked(on, false);
         m_Target->Redraw();
+        return;
+      }
+      if (auto *cb = dynamic_cast<CheckBoxElement *>(
+              m_Target->FindElementById(setting.binding.elementId))) {
+        cb->SetChecked(on, false);
+        m_Target->Redraw();
       }
       return;
     }
@@ -592,10 +605,16 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int,
   const std::wstring current = catalog.ValueOrDefault(setting->id);
 
   if (it->second.kind == ControlKind::BoundSwitch) {
-    // Widget::ToggleToggleSwitch already flipped the switch and routed here;
-    // commit the state it now shows.
-    auto *sw = dynamic_cast<ToggleSwitchElement *>(element);
-    Commit(setting->id, (sw && sw->IsChecked()) ? L"true" : L"false");
+    // Widget::ToggleToggleSwitch / ToggleCheckBox already flipped the
+    // control and routed here; commit the state it now shows. A bound
+    // toggle setting only carries true/false, so an indeterminate check
+    // box commits as false.
+    bool checked = false;
+    if (auto *sw = dynamic_cast<ToggleSwitchElement *>(element))
+      checked = sw->IsChecked();
+    else if (auto *cb = dynamic_cast<CheckBoxElement *>(element))
+      checked = cb->GetState() == CheckBoxElement::State::Checked;
+    Commit(setting->id, checked ? L"true" : L"false");
   } else if (it->second.kind == ControlKind::TogglePill ||
              it->second.kind == ControlKind::ToggleKnob) {
     Commit(setting->id, IsToggleOn(current) ? L"false" : L"true");

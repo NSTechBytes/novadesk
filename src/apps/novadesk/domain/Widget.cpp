@@ -1589,6 +1589,16 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
               static_cast<float>(centerI) - centerF;
           widget->Redraw(); // Final frame at the settled knob position.
         }
+        for (const auto &elem : widget->m_Elements) {
+          auto *cb = dynamic_cast<CheckBoxElement *>(elem.get());
+          if (!cb || !cb->IsAnimating())
+            continue;
+          if (cb->StepAnimation()) {
+            anyAnimating = true;
+            continue;
+          }
+          widget->Redraw(); // Final frame with the mark at full strength.
+        }
         if (anyAnimating)
           widget->Redraw();
         else
@@ -2479,6 +2489,44 @@ void Widget::ToggleToggleSwitch(ToggleSwitchElement *element) {
     m_InputSink->OnElementMouseUp(this, element, 0, 0);
 }
 
+void Widget::AddCheckBox(const PropertyParser::CheckBoxOptions &options) {
+  if (options.id.empty())
+    return;
+  if (FindElementById(options.id))
+    RemoveElements(options.id);
+  auto *element = new CheckBoxElement(
+      options.id, options.x, options.y,
+      options.width > 0 ? options.width : 16,
+      options.height > 0 ? options.height : 22);
+  PropertyParser::ApplyCheckBoxOptions(element, options);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
+  Redraw();
+}
+
+void Widget::ToggleCheckBox(CheckBoxElement *element) {
+  if (!element || element->m_Disabled)
+    return;
+  element->Toggle();
+  if (element->IsAnimating())
+    SetTimer(m_hWnd, TIMER_TOGGLE_ANIM, 16, nullptr);
+  std::wstring value = L"false";
+  if (element->GetState() == CheckBoxElement::State::Checked)
+    value = L"true";
+  else if (element->GetState() == CheckBoxElement::State::Indeterminate)
+    value = L"indeterminate";
+  const int callbackId = element->m_OnChangeCallbackId;
+  if (callbackId != -1) {
+    JSEngine::CallEventCallbackWithText(callbackId, this, value);
+    return;
+  }
+  if (m_InputSink)
+    m_InputSink->OnElementMouseUp(this, element, 0, 0);
+}
+
 void Widget::OpenColorPicker(ColorPickerElement *colorPicker) {
   if (!colorPicker)
     return;
@@ -3182,6 +3230,14 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx,
     PropertyParser::ParseToggleSwitchOptions(ctx, options, parsed, baseDir);
     PropertyParser::ApplyToggleSwitchOptions(
         static_cast<ToggleSwitchElement *>(element), parsed);
+    UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_CHECK_BOX) {
+    PropertyParser::CheckBoxOptions parsed;
+    PropertyParser::PreFillCheckBoxOptions(parsed,
+                                          static_cast<CheckBoxElement *>(element));
+    PropertyParser::ParseCheckBoxOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyCheckBoxOptions(static_cast<CheckBoxElement *>(element),
+                                         parsed);
     UpdateContainerForElement(element, parsed.containerId);
   }
 }
@@ -4284,20 +4340,33 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       PostMessage(m_hWnd, WM_SETCURSOR, (WPARAM)m_hWnd,
                   MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));
 
-      // Toggle switches track hover themselves: hover ownership can sit with
-      // an overlaying element, which would otherwise freeze the knob
-      // mid-slide until the pointer leaves. Paints are opaque, so a switch
-      // hovered behind another element must not light up.
-      ToggleSwitchElement *swHovered = nullptr;
-      if (hitElement)
-        swHovered = dynamic_cast<ToggleSwitchElement *>(hitElement);
-      if (!swHovered && hoverElement && hitElement != m_MouseOverElement)
-        swHovered = dynamic_cast<ToggleSwitchElement *>(hoverElement);
+      // Toggle switches and check boxes track hover themselves: hover
+      // ownership can sit with an overlaying element, which would otherwise
+      // freeze the knob/mark mid-animation until the pointer leaves. Paints
+      // are opaque, so a control hovered behind another element must not
+      // light up.
+      Element *checkedHovered = nullptr;
+      if (hitElement && dynamic_cast<ToggleSwitchElement *>(hitElement))
+        checkedHovered = hitElement;
+      if (!checkedHovered && hitElement &&
+          dynamic_cast<CheckBoxElement *>(hitElement))
+        checkedHovered = hitElement;
+      if (!checkedHovered && hoverElement && hitElement != m_MouseOverElement) {
+        if (dynamic_cast<ToggleSwitchElement *>(hoverElement) ||
+            dynamic_cast<CheckBoxElement *>(hoverElement))
+          checkedHovered = hoverElement;
+      }
       for (const auto &elem : m_Elements) {
         auto *sw = dynamic_cast<ToggleSwitchElement *>(elem.get());
-        if (sw && sw->m_Hovered != (sw == swHovered)) {
-          sw->m_Hovered = (sw == swHovered);
+        if (sw && sw->m_Hovered != (sw == checkedHovered)) {
+          sw->m_Hovered = (sw == checkedHovered);
           needRedraw = true;
+        }
+        if (auto *cb = dynamic_cast<CheckBoxElement *>(elem.get())) {
+          if (cb->m_Hovered != (cb == checkedHovered)) {
+            cb->m_Hovered = (cb == checkedHovered);
+            needRedraw = true;
+          }
         }
       }
     }
@@ -4961,6 +5030,22 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           std::make_unique<ColorPickerPopup>(this, colorPicker);
       m_ColorPickerPopup->Show();
       handled = true;
+    }
+
+    CheckBoxElement *checkBox = dynamic_cast<CheckBoxElement *>(hitElement);
+    if (checkBox && !m_IsElementDragging) {
+      // The sink only routes clicks on its exclusive topmost hit; a check
+      // box behind another element must not commit through the sink.
+      if (actionElement == checkBox)
+        actionElement = nullptr;
+      const bool consumedBySink = hitElement == checkBox && m_InputSink &&
+                                  !m_Options.scriptPath.empty();
+      if (!consumedBySink) {
+        handled = true;
+        ToggleCheckBox(checkBox);
+        if (!Widget::IsValid(this))
+          return true;
+      }
     }
 
     ToggleSwitchElement *toggleSwitch =

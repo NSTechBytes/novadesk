@@ -388,6 +388,22 @@ JSValue JsWidgetAddToggleSwitch(JSContext *ctx, JSValueConst thisVal, int argc,
   return JS_UNDEFINED;
 }
 
+JSValue JsWidgetAddCheckBox(JSContext *ctx, JSValueConst thisVal, int argc,
+                            JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addCheckBox", "expected options object");
+  PropertyParser::CheckBoxOptions options;
+  PropertyParser::ParseCheckBoxOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddCheckBox(options);
+  return JS_UNDEFINED;
+}
+
 JSValue JsWidgetAddBar(JSContext *ctx, JSValueConst thisVal, int argc,
                        JSValueConst *argv) {
   Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -594,6 +610,8 @@ static JSValue CallAddByType(JSContext *ctx, Widget *widget,
     return JsWidgetAddColorPicker(ctx, thisVal, 1, argvLocal);
   if (type == L"toggleswitch")
     return JsWidgetAddToggleSwitch(ctx, thisVal, 1, argvLocal);
+  if (type == L"checkbox")
+    return JsWidgetAddCheckBox(ctx, thisVal, 1, argvLocal);
   if (type == L"bitmap")
     return JsWidgetAddBitmap(ctx, thisVal, 1, argvLocal);
   if (type == L"rotator")
@@ -1313,6 +1331,55 @@ JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
       JSEngine::CallEventCallbackWithText(
           options.onChangeCallbackId, widget,
           sw->IsChecked() ? L"true" : L"false");
+    }
+  } else if (auto *cb = dynamic_cast<CheckBoxElement *>(element)) {
+    PropertyParser::CheckBoxOptions options;
+    PropertyParser::PreFillCheckBoxOptions(options, cb);
+    PropertyParser::ParseCheckBoxOptions(ctx, argv[1], options, baseDir);
+    const CheckBoxElement::State wasState = cb->GetState();
+    PropertyParser::ApplyCheckBoxOptions(cb, options);
+    if (cb->GetState() != wasState) {
+      options.checked = wasState != CheckBoxElement::State::Unchecked;
+      options.indeterminate = wasState == CheckBoxElement::State::Indeterminate;
+    }
+    if (JS_IsObject(argv[1])) {
+      JSValue checkedVal = JS_GetPropertyStr(ctx, argv[1], "checked");
+      if (!JS_IsUndefined(checkedVal) && !JS_IsNull(checkedVal)) {
+        bool animate = true;
+        JSValue animateVal = JS_GetPropertyStr(ctx, argv[1], "animate");
+        if (!JS_IsUndefined(animateVal))
+          animate = JS_ToBool(ctx, animateVal) == 1;
+        JS_FreeValue(ctx, animateVal);
+        CheckBoxElement::State wanted = CheckBoxElement::State::Unchecked;
+        if (JS_IsString(checkedVal)) {
+          const char *s = JS_ToCString(ctx, checkedVal);
+          if (s) {
+            const std::string sstr(s);
+            JS_FreeCString(ctx, s);
+            if (sstr == "indeterminate")
+              wanted = CheckBoxElement::State::Indeterminate;
+            else if (sstr != "false" && sstr != "0")
+              wanted = CheckBoxElement::State::Checked;
+          }
+        } else if (JS_ToBool(ctx, checkedVal) == 1) {
+          wanted = CheckBoxElement::State::Checked;
+        }
+        cb->SetState(wanted, animate);
+        if (cb->IsAnimating())
+          SetTimer(widget->GetHwnd(), Widget::TIMER_TOGGLE_ANIM, 16, nullptr);
+      }
+      JS_FreeValue(ctx, checkedVal);
+    }
+    // Fire onChange only for a change actually requested through this call;
+    // re-applying the current state stays silent.
+    if (options.onChangeCallbackId != -1 && cb->GetState() != wasState) {
+      std::wstring value = L"false";
+      if (cb->GetState() == CheckBoxElement::State::Checked)
+        value = L"true";
+      else if (cb->GetState() == CheckBoxElement::State::Indeterminate)
+        value = L"indeterminate";
+      JSEngine::CallEventCallbackWithText(options.onChangeCallbackId, widget,
+                                          value);
     }
   }
 
@@ -2845,6 +2912,91 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
       return JS_NewInt32(ctx, sw->m_DurationMs);
     if (prop == "easing")
       return JS_NewString(ctx, Utils::ToString(sw->m_Easing).c_str());
+  } else if (element->GetType() == ELEMENT_CHECK_BOX) {
+    auto *cb = static_cast<CheckBoxElement *>(element);
+
+    if (prop == "checked" || prop == "value" || prop == "isOn")
+      return JS_NewBool(ctx, cb->IsChecked() ? 1 : 0);
+    if (prop == "state") {
+      const char *s =
+          cb->GetState() == CheckBoxElement::State::Checked
+              ? "checked"
+              : (cb->GetState() == CheckBoxElement::State::Indeterminate
+                     ? "indeterminate"
+                     : "unchecked");
+      return JS_NewString(ctx, s);
+    }
+    if (prop == "animating")
+      return JS_NewBool(ctx, cb->IsAnimating() ? 1 : 0);
+    if (prop == "triState")
+      return JS_NewBool(ctx, cb->m_TriState ? 1 : 0);
+    if (prop == "disabled")
+      return JS_NewBool(ctx, cb->m_Disabled ? 1 : 0);
+    if (prop == "boxSize")
+      return JS_NewFloat64(ctx, cb->m_BoxSize);
+    if (prop == "uncheckedBorderColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   cb->m_UncheckedBorderColor, cb->m_UncheckedBorderAlpha))
+                   .c_str());
+    if (prop == "uncheckedBorderWidth")
+      return JS_NewFloat64(ctx, cb->m_UncheckedBorderWidth);
+    if (prop == "checkedColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(cb->m_CheckedColor,
+                                                      cb->m_CheckedAlpha))
+                   .c_str());
+    if (prop == "boxOpacity")
+      return JS_NewFloat64(ctx, cb->m_BoxOpacity);
+    if (prop == "checkColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(cb->m_CheckColor,
+                                                      cb->m_CheckAlpha))
+                   .c_str());
+    if (prop == "checkThickness")
+      return JS_NewFloat64(ctx, cb->m_CheckThickness);
+    if (prop == "disabledBoxColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   cb->m_DisabledBoxColor, cb->m_DisabledBoxAlpha))
+                   .c_str());
+    if (prop == "disabledCheckColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   cb->m_DisabledCheckColor, cb->m_DisabledCheckAlpha))
+                   .c_str());
+    if (prop == "disabledTextColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   cb->m_DisabledTextColor, cb->m_DisabledTextAlpha))
+                   .c_str());
+    if (prop == "hoverBorderColor") {
+      if (!cb->m_HasHoverBorderColor)
+        return JS_UNDEFINED;
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   cb->m_HoverBorderColor, cb->m_HoverBorderAlpha))
+                   .c_str());
+    }
+    if (prop == "text")
+      return JS_NewString(ctx, Utils::ToString(cb->m_Text).c_str());
+    if (prop == "fontFace")
+      return JS_NewString(ctx, Utils::ToString(cb->m_FontFace).c_str());
+    if (prop == "fontSize")
+      return JS_NewInt32(ctx, cb->m_FontSize);
+    if (prop == "fontWeight")
+      return JS_NewInt32(ctx, cb->m_FontWeight);
+    if (prop == "fontColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(cb->m_FontColor,
+                                                      cb->m_FontAlpha))
+                   .c_str());
+    if (prop == "labelGap")
+      return JS_NewFloat64(ctx, cb->m_LabelGap);
+    if (prop == "durationMs")
+      return JS_NewInt32(ctx, cb->m_DurationMs);
+    if (prop == "easing")
+      return JS_NewString(ctx, Utils::ToString(cb->m_Easing).c_str());
   }
 
   return JS_UNDEFINED;
@@ -3050,6 +3202,109 @@ JSValue JsWidgetToggleToggleSwitch(JSContext *ctx, JSValueConst thisVal,
   if (!sw)
     return JS_NewBool(ctx, 0);
   widget->ToggleToggleSwitch(sw);
+  widget->Redraw();
+  return JS_NewBool(ctx, 1);
+}
+
+static CheckBoxElement *FindCheckBox(JSContext *ctx, Widget *widget,
+                                     JSValueConst idVal) {
+  const char *idUtf8 = JS_ToCString(ctx, idVal);
+  if (!idUtf8)
+    return nullptr;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  return dynamic_cast<CheckBoxElement *>(widget->FindElementById(id));
+}
+
+JSValue JsWidgetSetCheckBoxChecked(JSContext *ctx, JSValueConst thisVal,
+                                   int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 2)
+    return ThrowTypeError(ctx, "setCheckBoxChecked",
+                          "expected (id, checked[, animate])");
+  auto *cb = FindCheckBox(ctx, widget, argv[0]);
+  if (!cb)
+    return JS_NewBool(ctx, 0);
+  CheckBoxElement::State wanted = CheckBoxElement::State::Unchecked;
+  if (JS_IsString(argv[1])) {
+    const char *s = JS_ToCString(ctx, argv[1]);
+    if (s) {
+      const std::string sstr(s);
+      JS_FreeCString(ctx, s);
+      if (sstr == "indeterminate")
+        wanted = CheckBoxElement::State::Indeterminate;
+      else if (sstr != "false" && sstr != "0")
+        wanted = CheckBoxElement::State::Checked;
+    }
+  } else if (JS_ToBool(ctx, argv[1]) == 1) {
+    wanted = CheckBoxElement::State::Checked;
+  }
+  bool animate = true;
+  if (argc >= 3 && !JS_IsUndefined(argv[2]))
+    animate = JS_ToBool(ctx, argv[2]) == 1;
+  if (cb->GetState() != wanted) {
+    cb->SetState(wanted, animate);
+    if (cb->IsAnimating())
+      SetTimer(widget->GetHwnd(), Widget::TIMER_TOGGLE_ANIM, 16, nullptr);
+    std::wstring value = L"false";
+    if (wanted == CheckBoxElement::State::Checked)
+      value = L"true";
+    else if (wanted == CheckBoxElement::State::Indeterminate)
+      value = L"indeterminate";
+    if (cb->m_OnChangeCallbackId != -1)
+      JSEngine::CallEventCallbackWithText(cb->m_OnChangeCallbackId, widget,
+                                          value);
+    else if (widget->GetInputSink())
+      widget->GetInputSink()->OnElementMouseUp(widget, cb, 0, 0);
+  }
+  widget->Redraw();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetGetCheckBoxChecked(JSContext *ctx, JSValueConst thisVal,
+                                   int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getCheckBoxChecked", "expected (id)");
+  auto *cb = FindCheckBox(ctx, widget, argv[0]);
+  if (!cb)
+    return JS_NewBool(ctx, 0);
+  return JS_NewBool(ctx, cb->IsChecked() ? 1 : 0);
+}
+
+JSValue JsWidgetGetCheckBoxState(JSContext *ctx, JSValueConst thisVal,
+                                 int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NULL;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getCheckBoxState", "expected (id)");
+  auto *cb = FindCheckBox(ctx, widget, argv[0]);
+  if (!cb)
+    return JS_NULL;
+  const char *s = cb->GetState() == CheckBoxElement::State::Checked
+                      ? "checked"
+                      : (cb->GetState() == CheckBoxElement::State::Indeterminate
+                             ? "indeterminate"
+                             : "unchecked");
+  return JS_NewString(ctx, s);
+}
+
+JSValue JsWidgetToggleCheckBox(JSContext *ctx, JSValueConst thisVal, int argc,
+                               JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "toggleCheckBox", "expected (id)");
+  auto *cb = FindCheckBox(ctx, widget, argv[0]);
+  if (!cb)
+    return JS_NewBool(ctx, 0);
+  widget->ToggleCheckBox(cb);
   widget->Redraw();
   return JS_NewBool(ctx, 1);
 }
@@ -3546,6 +3801,7 @@ const JSCFunctionListEntry kWidgetProtoFuncs[] = {
     JS_CFUNC_DEF("addInputBox", 1, JsWidgetAddInputBox),
     JS_CFUNC_DEF("addColorPicker", 1, JsWidgetAddColorPicker),
     JS_CFUNC_DEF("addToggleSwitch", 1, JsWidgetAddToggleSwitch),
+    JS_CFUNC_DEF("addCheckBox", 1, JsWidgetAddCheckBox),
     JS_CFUNC_DEF("addBar", 1, JsWidgetAddBar),
     JS_CFUNC_DEF("addLine", 1, JsWidgetAddLine),
     JS_CFUNC_DEF("addHistogram", 1, JsWidgetAddHistogram),
@@ -3584,6 +3840,10 @@ const JSCFunctionListEntry kWidgetProtoFuncs[] = {
     JS_CFUNC_DEF("setToggleSwitchChecked", 2, JsWidgetSetToggleSwitchChecked),
     JS_CFUNC_DEF("getToggleSwitchChecked", 1, JsWidgetGetToggleSwitchChecked),
     JS_CFUNC_DEF("toggleToggleSwitch", 1, JsWidgetToggleToggleSwitch),
+    JS_CFUNC_DEF("setCheckBoxChecked", 2, JsWidgetSetCheckBoxChecked),
+    JS_CFUNC_DEF("getCheckBoxChecked", 1, JsWidgetGetCheckBoxChecked),
+    JS_CFUNC_DEF("getCheckBoxState", 1, JsWidgetGetCheckBoxState),
+    JS_CFUNC_DEF("toggleCheckBox", 1, JsWidgetToggleCheckBox),
 
     // InputBox
     JS_CFUNC_DEF("focusInputBox", 1, JsWidgetFocusInputBox),

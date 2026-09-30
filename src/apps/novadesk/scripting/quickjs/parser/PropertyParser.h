@@ -27,6 +27,7 @@ class ElementLayoutBox;
 class InputBoxElement;
 class ColorPickerElement;
 class ToggleSwitchElement;
+class CheckBoxElement;
 
 /**
  * @brief Parses JavaScript objects into C++ option structs for element
@@ -98,6 +99,9 @@ void ParseColorPickerOptions(JSContext *ctx, JSValueConst obj,
 void ParseToggleSwitchOptions(JSContext *ctx, JSValueConst obj,
                               ToggleSwitchOptions &options,
                               const std::wstring &baseDir = L"");
+void ParseCheckBoxOptions(JSContext *ctx, JSValueConst obj,
+                          CheckBoxOptions &options,
+                          const std::wstring &baseDir = L"");
 
 /// Parses a widget settings schema array (`[{id, label, type, ...}]`).
 /// @return True if at least one valid setting was parsed.
@@ -132,6 +136,8 @@ void ApplyColorPickerOptions(ColorPickerElement *element,
                              const ColorPickerOptions &options);
 void ApplyToggleSwitchOptions(ToggleSwitchElement *element,
                               const ToggleSwitchOptions &options);
+void ApplyCheckBoxOptions(CheckBoxElement *element,
+                          const CheckBoxOptions &options);
 
 // ============================================================================
 // PreFill Functions (Element -> Options Struct for incremental updates)
@@ -164,6 +170,8 @@ void PreFillColorPickerOptions(ColorPickerOptions &options,
                                ColorPickerElement *element);
 void PreFillToggleSwitchOptions(ToggleSwitchOptions &options,
                                 ToggleSwitchElement *element);
+void PreFillCheckBoxOptions(CheckBoxOptions &options,
+                            CheckBoxElement *element);
 
 // ============================================================================
 // General Image Options

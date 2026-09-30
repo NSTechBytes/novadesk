@@ -126,6 +126,12 @@ bool ApplySettingToWidget(Widget *widget, const WidgetSetting &setting,
     return true;
   }
 
+  if (element->GetType() == ELEMENT_CHECK_BOX && prop == L"checked") {
+    static_cast<CheckBoxElement *>(element)->SetChecked(
+        ParseSettingBool(value), /*animate=*/false);
+    return true;
+  }
+
   if (element->GetType() == ELEMENT_TEXT) {
     TextElement *text = static_cast<TextElement *>(element);
     PropertyParser::TextOptions opts;

@@ -38,6 +38,7 @@
 #include "../render/InputBoxElement.h"
 #include "../render/ColorPickerElement.h"
 #include "../render/ToggleSwitchElement.h"
+#include "../render/CheckBoxElement.h"
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -64,6 +65,7 @@ struct AreaGraphOptions;
 struct InputBoxOptions;
 struct ColorPickerOptions;
 struct ToggleSwitchOptions;
+struct CheckBoxOptions;
 } // namespace PropertyParser
 
 #include "MenuItem.h"
@@ -488,6 +490,11 @@ public:
   /// @brief Flips a toggle switch's state, starts its knob animation and
   ///        notifies scripts or the settings sink.
   void ToggleToggleSwitch(ToggleSwitchElement *element);
+  /// @brief Adds a check box element to the widget.
+  void AddCheckBox(const PropertyParser::CheckBoxOptions &options);
+  /// @brief Cycles a check box's tri-state, starts its mark animation and
+  ///        notifies scripts or the settings sink.
+  void ToggleCheckBox(CheckBoxElement *element);
 
   /// @brief Applies property changes to a specific element by ID.
   void SetElementProperties(const std::wstring &id, JSContext *ctx,

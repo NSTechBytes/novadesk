@@ -44,7 +44,8 @@ enum ElementType {
   ELEMENT_LAYOUT_BOX,  ///< Flexbox container element.
   ELEMENT_INPUT_BOX,    ///< Text input field element.
   ELEMENT_COLOR_PICKER, ///< Color picker popup element.
-  ELEMENT_TOGGLE_SWITCH ///< On/off switch element.
+  ELEMENT_TOGGLE_SWITCH, ///< On/off switch element.
+  ELEMENT_CHECK_BOX      ///< Check box element (tri-state).
 };
 
 /**
