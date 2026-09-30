@@ -132,6 +132,15 @@ bool ApplySettingToWidget(Widget *widget, const WidgetSetting &setting,
     return true;
   }
 
+  if (element->GetType() == ELEMENT_SLIDER && prop == L"value") {
+    double d = 0.0;
+    if (!ParseSettingNumber(value, d))
+      return false;
+    d = ClampToSetting(setting, d);
+    static_cast<SliderElement *>(element)->SetValue(d);
+    return true;
+  }
+
   if (element->GetType() == ELEMENT_TEXT) {
     TextElement *text = static_cast<TextElement *>(element);
     PropertyParser::TextOptions opts;

@@ -404,6 +404,22 @@ JSValue JsWidgetAddCheckBox(JSContext *ctx, JSValueConst thisVal, int argc,
   return JS_UNDEFINED;
 }
 
+JSValue JsWidgetAddSlider(JSContext *ctx, JSValueConst thisVal, int argc,
+                          JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addSlider", "expected options object");
+  PropertyParser::SliderOptions options;
+  PropertyParser::ParseSliderOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddSlider(options);
+  return JS_UNDEFINED;
+}
+
 JSValue JsWidgetAddBar(JSContext *ctx, JSValueConst thisVal, int argc,
                        JSValueConst *argv) {
   Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -612,6 +628,8 @@ static JSValue CallAddByType(JSContext *ctx, Widget *widget,
     return JsWidgetAddToggleSwitch(ctx, thisVal, 1, argvLocal);
   if (type == L"checkbox")
     return JsWidgetAddCheckBox(ctx, thisVal, 1, argvLocal);
+  if (type == L"slider")
+    return JsWidgetAddSlider(ctx, thisVal, 1, argvLocal);
   if (type == L"bitmap")
     return JsWidgetAddBitmap(ctx, thisVal, 1, argvLocal);
   if (type == L"rotator")
@@ -1380,6 +1398,37 @@ JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
         value = L"indeterminate";
       JSEngine::CallEventCallbackWithText(options.onChangeCallbackId, widget,
                                           value);
+    }
+  } else if (auto *sl = dynamic_cast<SliderElement *>(element)) {
+    PropertyParser::SliderOptions options;
+    PropertyParser::PreFillSliderOptions(options, sl);
+    PropertyParser::ParseSliderOptions(ctx, argv[1], options, baseDir);
+    const double wasValue = sl->GetValue();
+    bool hasExplicitValue = false;
+    double requestedValue = wasValue;
+    if (JS_IsObject(argv[1])) {
+      JSValue valueVal = JS_GetPropertyStr(ctx, argv[1], "value");
+      if (!JS_IsUndefined(valueVal) && !JS_IsNull(valueVal)) {
+        if (JS_ToFloat64(ctx, &requestedValue, valueVal) != 0) {
+          JS_FreeValue(ctx, valueVal);
+          JS_FreeValue(ctx, JS_ThrowTypeError(ctx, "value must be a number"));
+          return JS_EXCEPTION;
+        }
+        hasExplicitValue = true;
+      }
+      JS_FreeValue(ctx, valueVal);
+    }
+    // Apply commits the parsed range first, then move the thumb so clamping
+    // and snapping use the new range.
+    PropertyParser::ApplySliderOptions(sl, options);
+    if (hasExplicitValue)
+      sl->SetValue(requestedValue);
+    // Fire onChange only for a change actually requested through this call;
+    // re-applying the current value stays silent.
+    if (options.onChangeCallbackId != -1 && sl->GetValue() != wasValue) {
+      JSEngine::CallEventCallbackWithText(
+          options.onChangeCallbackId, widget,
+          Utils::ToWString(SliderElement::FormatValue(sl->GetValue())));
     }
   }
 
@@ -2997,6 +3046,84 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
       return JS_NewInt32(ctx, cb->m_DurationMs);
     if (prop == "easing")
       return JS_NewString(ctx, Utils::ToString(cb->m_Easing).c_str());
+  } else if (element->GetType() == ELEMENT_SLIDER) {
+    auto *sl = static_cast<SliderElement *>(element);
+
+    if (prop == "value")
+      return JS_NewFloat64(ctx, sl->GetValue());
+    if (prop == "minValue")
+      return JS_NewFloat64(ctx, sl->m_MinValue);
+    if (prop == "maxValue")
+      return JS_NewFloat64(ctx, sl->m_MaxValue);
+    if (prop == "step")
+      return JS_NewFloat64(ctx, sl->m_Step);
+    if (prop == "direction" || prop == "orientation")
+      return JS_NewString(ctx, sl->IsVertical() ? "column" : "row");
+    if (prop == "dragging")
+      return JS_NewBool(ctx, sl->IsDragging() ? 1 : 0);
+    if (prop == "disabled")
+      return JS_NewBool(ctx, sl->m_Disabled ? 1 : 0);
+    if (prop == "trackThickness")
+      return JS_NewFloat64(ctx, sl->m_TrackThickness);
+    if (prop == "trackBorderRadius")
+      return JS_NewFloat64(ctx, sl->m_TrackBorderRadius);
+    if (prop == "trackColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(sl->m_TrackColor,
+                                                      sl->m_TrackAlpha))
+                   .c_str());
+    if (prop == "fillColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(sl->m_FillColor,
+                                                      sl->m_FillAlpha))
+                   .c_str());
+    if (prop == "sliderOpacity")
+      return JS_NewFloat64(ctx, sl->m_SliderOpacity);
+    if (prop == "thumbSize")
+      return JS_NewFloat64(ctx, sl->m_ThumbSize);
+    if (prop == "thumbColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(sl->m_ThumbColor,
+                                                      sl->m_ThumbAlpha))
+                   .c_str());
+    if (prop == "thumbBorderWidth")
+      return JS_NewFloat64(ctx, sl->m_ThumbBorderWidth);
+    if (prop == "thumbBorderColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   sl->m_ThumbBorderColor, sl->m_ThumbBorderAlpha))
+                   .c_str());
+    if (prop == "hoverThumbColor") {
+      if (!sl->m_HasHoverThumbColor)
+        return JS_UNDEFINED;
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   sl->m_HoverThumbColor, sl->m_HoverThumbAlpha))
+                   .c_str());
+    }
+    if (prop == "pressedThumbColor") {
+      if (!sl->m_HasPressedThumbColor)
+        return JS_UNDEFINED;
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   sl->m_PressedThumbColor, sl->m_PressedThumbAlpha))
+                   .c_str());
+    }
+    if (prop == "disabledTrackColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   sl->m_DisabledTrackColor, sl->m_DisabledTrackAlpha))
+                   .c_str());
+    if (prop == "disabledFillColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   sl->m_DisabledFillColor, sl->m_DisabledFillAlpha))
+                   .c_str());
+    if (prop == "disabledThumbColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   sl->m_DisabledThumbColor, sl->m_DisabledThumbAlpha))
+                   .c_str());
   }
 
   return JS_UNDEFINED;
@@ -3307,6 +3434,59 @@ JSValue JsWidgetToggleCheckBox(JSContext *ctx, JSValueConst thisVal, int argc,
   widget->ToggleCheckBox(cb);
   widget->Redraw();
   return JS_NewBool(ctx, 1);
+}
+
+static SliderElement *FindSlider(JSContext *ctx, Widget *widget,
+                                 JSValueConst idVal) {
+  const char *idUtf8 = JS_ToCString(ctx, idVal);
+  if (!idUtf8)
+    return nullptr;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  return dynamic_cast<SliderElement *>(widget->FindElementById(id));
+}
+
+JSValue JsWidgetSetSliderValue(JSContext *ctx, JSValueConst thisVal, int argc,
+                               JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 2)
+    return ThrowTypeError(ctx, "setSliderValue", "expected (id, value)");
+  auto *sl = FindSlider(ctx, widget, argv[0]);
+  if (!sl)
+    return JS_NewBool(ctx, 0);
+  double wanted = 0.0;
+  if (JS_ToFloat64(ctx, &wanted, argv[1]) != 0) {
+    JS_FreeValue(ctx, JS_ThrowTypeError(ctx, "value must be a number"));
+    return JS_EXCEPTION;
+  }
+  const double wasValue = sl->GetValue();
+  if (sl->SnapAndClamp(wanted) != wasValue) {
+    sl->SetValue(wanted);
+    const std::wstring value =
+        Utils::ToWString(SliderElement::FormatValue(sl->GetValue()));
+    if (sl->m_OnChangeCallbackId != -1)
+      JSEngine::CallEventCallbackWithText(sl->m_OnChangeCallbackId, widget,
+                                          value);
+    else if (widget->GetInputSink())
+      widget->GetInputSink()->OnElementMouseUp(widget, sl, 0, 0);
+  }
+  widget->Redraw();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetGetSliderValue(JSContext *ctx, JSValueConst thisVal, int argc,
+                               JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getSliderValue", "expected (id)");
+  auto *sl = FindSlider(ctx, widget, argv[0]);
+  if (!sl)
+    return JS_UNDEFINED;
+  return JS_NewFloat64(ctx, sl->GetValue());
 }
 
 JSValue JsWidgetOpenColorPickerEyedropper(JSContext *ctx, JSValueConst thisVal,
@@ -3802,6 +3982,7 @@ const JSCFunctionListEntry kWidgetProtoFuncs[] = {
     JS_CFUNC_DEF("addColorPicker", 1, JsWidgetAddColorPicker),
     JS_CFUNC_DEF("addToggleSwitch", 1, JsWidgetAddToggleSwitch),
     JS_CFUNC_DEF("addCheckBox", 1, JsWidgetAddCheckBox),
+    JS_CFUNC_DEF("addSlider", 1, JsWidgetAddSlider),
     JS_CFUNC_DEF("addBar", 1, JsWidgetAddBar),
     JS_CFUNC_DEF("addLine", 1, JsWidgetAddLine),
     JS_CFUNC_DEF("addHistogram", 1, JsWidgetAddHistogram),
@@ -3844,6 +4025,8 @@ const JSCFunctionListEntry kWidgetProtoFuncs[] = {
     JS_CFUNC_DEF("getCheckBoxChecked", 1, JsWidgetGetCheckBoxChecked),
     JS_CFUNC_DEF("getCheckBoxState", 1, JsWidgetGetCheckBoxState),
     JS_CFUNC_DEF("toggleCheckBox", 1, JsWidgetToggleCheckBox),
+    JS_CFUNC_DEF("setSliderValue", 2, JsWidgetSetSliderValue),
+    JS_CFUNC_DEF("getSliderValue", 1, JsWidgetGetSliderValue),
 
     // InputBox
     JS_CFUNC_DEF("focusInputBox", 1, JsWidgetFocusInputBox),

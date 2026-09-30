@@ -45,7 +45,8 @@ enum ElementType {
   ELEMENT_INPUT_BOX,    ///< Text input field element.
   ELEMENT_COLOR_PICKER, ///< Color picker popup element.
   ELEMENT_TOGGLE_SWITCH, ///< On/off switch element.
-  ELEMENT_CHECK_BOX      ///< Check box element (tri-state).
+  ELEMENT_CHECK_BOX,     ///< Check box element (tri-state).
+  ELEMENT_SLIDER         ///< Draggable slider element.
 };
 
 /**

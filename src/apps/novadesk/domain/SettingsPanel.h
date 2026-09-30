@@ -45,6 +45,7 @@ private:
     TogglePill,
     ToggleKnob,
     BoundSwitch, ///< A real toggleSwitch element on the target widget.
+    BoundSlider, ///< A real slider element on the target widget.
     SelectButton,
     SelectLabel,
     ResetButton,

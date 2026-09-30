@@ -174,6 +174,9 @@
     <ClCompile Include="render\CheckBoxElement.cpp">
       <Filter>render</Filter>
     </ClCompile>
+    <ClCompile Include="render\SliderElement.cpp">
+      <Filter>render</Filter>
+    </ClCompile>
     <ClCompile Include="render\Tooltip.cpp">
       <Filter>render</Filter>
     </ClCompile>
@@ -235,6 +238,9 @@
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
     <ClCompile Include="scripting\quickjs\parser\PropertyParserCheckBox.cpp">
+      <Filter>scripting\quickjs\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserSlider.cpp">
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
     <ClCompile Include="scripting\quickjs\parser\PropertyParserWidgetWindow.cpp">
@@ -450,6 +456,9 @@
       <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="render\CheckBoxElement.h">
+      <Filter>render</Filter>
+    </ClInclude>
+    <ClInclude Include="render\SliderElement.h">
       <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="render\Tooltip.h">

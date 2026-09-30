@@ -11,6 +11,7 @@
 #include "Settings.h"
 #include "Resource.h"
 #include "Utils.h"
+#include "../shared/Utils.h"
 #include "../render/FlexLayoutEngine.h"
 #include "WidgetLayoutHelper.h"
 #include "WidgetDropTarget.h"
@@ -1126,6 +1127,9 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
       // focused
       const bool isSelectingText = (widget->m_TextSelectionElement != nullptr);
       const bool inputBoxFocused = (widget->m_FocusedInputBox != nullptr);
+      // A slider press owns the pointer until release; never turn it into a
+      // window move.
+      const bool sliderDragActive = (widget->m_SliderDragElement != nullptr);
 
       const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
       const bool hasSwipeContainer = (widget->m_SwipeContainer != nullptr);
@@ -1136,7 +1140,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
 
       if (!widget->m_IsElementDragging && !widget->m_IsScrollbarDragging &&
           !hasSwipeContainer && !isSelectingText && !inputBoxFocused &&
-          canDragWindow) {
+          !sliderDragActive && canDragWindow) {
         SetCapture(hWnd);
         widget->m_IsDragging = true;
         widget->m_DragThresholdMet = false;
@@ -1999,6 +2003,37 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
       widget->Redraw();
       return 0;
     }
+    // Route arrow/Home/End keys to the focused slider.
+    if (widget && widget->m_FocusedSlider &&
+        widget->IsTrackedElement(widget->m_FocusedSlider)) {
+      SliderElement *slider = widget->m_FocusedSlider;
+      const bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+      double newValue = 0.0;
+      const bool consumed = slider->HandleKeyDown(
+          static_cast<unsigned int>(wParam), shift, newValue);
+      if (consumed) {
+        slider->SetValue(newValue);
+        widget->NotifySliderChange(slider, /*isFinal=*/true);
+        if (!Widget::IsValid(widget))
+          return 0;
+        widget->Redraw();
+        return 0;
+      }
+      // Navigation keys belong to the slider even when already at the limit.
+      switch (wParam) {
+      case VK_LEFT:
+      case VK_RIGHT:
+      case VK_UP:
+      case VK_DOWN:
+      case VK_HOME:
+      case VK_END:
+      case VK_PRIOR:
+      case VK_NEXT:
+        return 0;
+      default:
+        break;
+      }
+    }
     return DefWindowProc(hWnd, message, wParam, lParam);
 
   case WM_CHAR:
@@ -2524,6 +2559,40 @@ void Widget::ToggleCheckBox(CheckBoxElement *element) {
     return;
   }
   if (m_InputSink)
+    m_InputSink->OnElementMouseUp(this, element, 0, 0);
+}
+
+void Widget::AddSlider(const PropertyParser::SliderOptions &options) {
+  if (options.id.empty())
+    return;
+  if (FindElementById(options.id))
+    RemoveElements(options.id);
+  auto *element = new SliderElement(
+      options.id, options.x, options.y,
+      options.width > 0 ? options.width : 140,
+      options.height > 0 ? options.height : 26);
+  PropertyParser::ApplySliderOptions(element, options);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
+  Redraw();
+}
+
+void Widget::NotifySliderChange(SliderElement *element, bool isFinal) {
+  if (!element)
+    return;
+  const std::wstring value =
+      Utils::ToWString(SliderElement::FormatValue(element->GetValue()));
+  const int callbackId =
+      isFinal ? element->m_OnChangeCallbackId : element->m_OnInputCallbackId;
+  if (callbackId != -1) {
+    JSEngine::CallEventCallbackWithText(callbackId, this, value);
+    return;
+  }
+  // onInput has no sink fallback: only the final commit routes to settings.
+  if (isFinal && !element->m_OnInputCallbackId && m_InputSink)
     m_InputSink->OnElementMouseUp(this, element, 0, 0);
 }
 
@@ -3239,6 +3308,14 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx,
     PropertyParser::ApplyCheckBoxOptions(static_cast<CheckBoxElement *>(element),
                                          parsed);
     UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_SLIDER) {
+    PropertyParser::SliderOptions parsed;
+    PropertyParser::PreFillSliderOptions(parsed,
+                                         static_cast<SliderElement *>(element));
+    PropertyParser::ParseSliderOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplySliderOptions(static_cast<SliderElement *>(element),
+                                       parsed);
+    UpdateContainerForElement(element, parsed.containerId);
   }
 }
 
@@ -3299,6 +3376,12 @@ void Widget::ClearElementReferences(Element *element) {
     m_IsElementDragging = false;
     if (m_hWnd && GetCapture() == m_hWnd && !m_IsDragging)
       ReleaseCapture();
+  }
+  if (SliderElement *slider = dynamic_cast<SliderElement *>(element)) {
+    if (slider == m_SliderDragElement)
+      m_SliderDragElement = nullptr;
+    if (slider == m_FocusedSlider)
+      m_FocusedSlider = nullptr;
   }
   if (element == m_ScrollbarDragContainer) {
     m_ScrollbarDragContainer = nullptr;
@@ -4148,6 +4231,14 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
   const bool sinkHandlesClicks =
       m_InputSink && message == WM_LBUTTONUP && !m_Options.scriptPath.empty();
 
+  // A slider grabs the mouse on button-down and drags to completion, so it
+  // must own hover/action dispatch even without any JS callbacks.
+  auto IsInteractiveControl = [](Element *el) {
+    return el && (dynamic_cast<SliderElement *>(el) ||
+                  dynamic_cast<ToggleSwitchElement *>(el) ||
+                  dynamic_cast<CheckBoxElement *>(el));
+  };
+
   // Use the spatial grid for large element counts; fall back to linear scan
   // for small counts where the hash-lookup overhead exceeds the savings.
   if (static_cast<int>(m_Elements.size()) > GRID_THRESHOLD) {
@@ -4182,9 +4273,14 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           if (!hitElement)
             hitElement = el;
           if (!actionElement &&
-              (el->HasAction(message, wParam) || sinkHandlesClicks))
+              (el->HasAction(message, wParam) || sinkHandlesClicks ||
+               ((message == WM_LBUTTONDOWN || message == WM_MOUSEMOVE) &&
+                IsInteractiveControl(el))))
             actionElement = el;
-          if (!mouseActionElement && el->HasMouseAction())
+          if (!mouseActionElement &&
+              (el->HasMouseAction() ||
+               ((message == WM_LBUTTONDOWN || message == WM_MOUSEMOVE) &&
+                IsInteractiveControl(el))))
             mouseActionElement = el;
           if (!toolTipElement && el->HasToolTip())
             toolTipElement = el;
@@ -4225,9 +4321,14 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         if (!hitElement)
           hitElement = el;
         if (!actionElement &&
-            (el->HasAction(message, wParam) || sinkHandlesClicks))
+            (el->HasAction(message, wParam) || sinkHandlesClicks ||
+             ((message == WM_LBUTTONDOWN || message == WM_MOUSEMOVE) &&
+              IsInteractiveControl(el))))
           actionElement = el;
-        if (!mouseActionElement && el->HasMouseAction())
+        if (!mouseActionElement &&
+            (el->HasMouseAction() ||
+             ((message == WM_LBUTTONDOWN || message == WM_MOUSEMOVE) &&
+              IsInteractiveControl(el))))
           mouseActionElement = el;
         if (!toolTipElement && el->HasToolTip())
           toolTipElement = el;
@@ -4262,6 +4363,10 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         m_MouseOverElement->HitTest(x, y)) {
       hoverElement = m_MouseOverElement;
     }
+    // A slider owns its press from WM_LBUTTONDOWN through the release, so it
+    // stays the hover/cursor target even while the pointer leaves its bounds.
+    if (m_SliderDragElement && IsTrackedElement(m_SliderDragElement))
+      hoverElement = m_SliderDragElement;
     Element *nextToolTipElement =
         toolTipElement ? toolTipElement : hoverElement;
 
@@ -4340,22 +4445,29 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       PostMessage(m_hWnd, WM_SETCURSOR, (WPARAM)m_hWnd,
                   MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));
 
-      // Toggle switches and check boxes track hover themselves: hover
-      // ownership can sit with an overlaying element, which would otherwise
-      // freeze the knob/mark mid-animation until the pointer leaves. Paints
-      // are opaque, so a control hovered behind another element must not
-      // light up.
+      // Interactive controls (switches, check boxes, sliders) track hover
+      // themselves: hover ownership can sit with an overlaying element, which
+      // would otherwise freeze the knob/mark mid-animation until the pointer
+      // leaves. Paints are opaque, so a control hovered behind another element
+      // must not light up.
       Element *checkedHovered = nullptr;
       if (hitElement && dynamic_cast<ToggleSwitchElement *>(hitElement))
         checkedHovered = hitElement;
       if (!checkedHovered && hitElement &&
           dynamic_cast<CheckBoxElement *>(hitElement))
         checkedHovered = hitElement;
+      if (!checkedHovered && hitElement &&
+          dynamic_cast<SliderElement *>(hitElement))
+        checkedHovered = hitElement;
       if (!checkedHovered && hoverElement && hitElement != m_MouseOverElement) {
         if (dynamic_cast<ToggleSwitchElement *>(hoverElement) ||
-            dynamic_cast<CheckBoxElement *>(hoverElement))
+            dynamic_cast<CheckBoxElement *>(hoverElement) ||
+            dynamic_cast<SliderElement *>(hoverElement))
           checkedHovered = hoverElement;
       }
+      // A dragged slider keeps its hover highlight for the whole press.
+      if (m_SliderDragElement && IsTrackedElement(m_SliderDragElement))
+        checkedHovered = m_SliderDragElement;
       for (const auto &elem : m_Elements) {
         auto *sw = dynamic_cast<ToggleSwitchElement *>(elem.get());
         if (sw && sw->m_Hovered != (sw == checkedHovered)) {
@@ -4365,6 +4477,12 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         if (auto *cb = dynamic_cast<CheckBoxElement *>(elem.get())) {
           if (cb->m_Hovered != (cb == checkedHovered)) {
             cb->m_Hovered = (cb == checkedHovered);
+            needRedraw = true;
+          }
+        }
+        if (auto *sl = dynamic_cast<SliderElement *>(elem.get())) {
+          if (sl->m_Hovered != (sl == checkedHovered)) {
+            sl->m_Hovered = (sl == checkedHovered);
             needRedraw = true;
           }
         }
@@ -4477,7 +4595,11 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
   }
 
   // Dispatch Actions
-  if (actionElement && IsTrackedElement(actionElement)) {
+  // A slider press is handled entirely by the drag machinery below; skipping
+  // the generic dispatch keeps its down/up callbacks (if any) from stealing
+  // capture or starting an element drag.
+  if (!(message == WM_LBUTTONUP && m_SliderDragElement) &&
+      actionElement && IsTrackedElement(actionElement)) {
     int actionId = -1;
 
     switch (message) {
@@ -4623,6 +4745,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
   if (!IsTrackedElement(mouseActionElement))
     mouseActionElement = nullptr;
 
+  // Dispatch Actions
+
   // Handle container scrolling via mouse wheel when not consumed by an element
   // action
   if (!handled && (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL)) {
@@ -4666,6 +4790,30 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
   // Dispatch drag actions (for slider-like interactions on any element).
   if (message == WM_LBUTTONDOWN) {
+    // A slider grabs the pointer first: pressing it starts a drag (with a
+    // jump to the press position) instead of arming container swipe/pan.
+    if (SliderElement *slider = dynamic_cast<SliderElement *>(hitElement)) {
+      m_FocusedSlider = slider;
+      handled = true;
+      if (!slider->m_Disabled) {
+        SetCapture(m_hWnd);
+        m_SliderDragElement = slider;
+        const bool changed = slider->BeginDrag(x, y);
+        needRedraw = true;
+        if (changed) {
+          NotifySliderChange(slider, /*isFinal=*/false);
+          if (!Widget::IsValid(this))
+            return true;
+          if (!IsTrackedElement(slider)) {
+            m_SliderDragElement = nullptr;
+            m_FocusedSlider = nullptr;
+          }
+        }
+      }
+    }
+  }
+
+  if (message == WM_LBUTTONDOWN && !handled) {
     // Check if scrollbar of a container was clicked
     ScrollbarHitResult sbHit;
     if (HitTestContainerScrollbar(x, y, sbHit)) {
@@ -4883,10 +5031,12 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           BlurInputBox();
           needRedraw = true;
         }
+        if (!hitElement || !dynamic_cast<SliderElement *>(hitElement))
+          m_FocusedSlider = nullptr;
       }
 
       Element *dragTarget = actionElement ? actionElement : hitElement;
-      if (dragTarget && dragTarget->HasDragAction()) {
+      if (!m_SliderDragElement && dragTarget && dragTarget->HasDragAction()) {
         m_DragElement = dragTarget;
         m_IsElementDragging = true;
         SetCapture(m_hWnd);
@@ -4910,8 +5060,24 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       needRedraw = true;
     }
   } else if (message == WM_MOUSEMOVE) {
+    // Handle an active slider drag before any hover/pan machinery.
+    if (m_SliderDragElement && IsTrackedElement(m_SliderDragElement)) {
+      SliderElement *slider = m_SliderDragElement;
+      const bool changed = slider->UpdateDrag(x, y);
+      handled = true;
+      needRedraw = true;
+      if (changed) {
+        NotifySliderChange(slider, /*isFinal=*/false);
+        if (!Widget::IsValid(this))
+          return true;
+        if (!IsTrackedElement(slider)) {
+          m_SliderDragElement = nullptr;
+          m_FocusedSlider = nullptr;
+        }
+      }
+    }
     // Handle scrollbar dragging
-    if (m_IsScrollbarDragging && m_ScrollbarDragContainer) {
+    else if (m_IsScrollbarDragging && m_ScrollbarDragContainer) {
       int delta =
           (m_ScrollbarDragIsVertical ? y : x) - m_ScrollbarDragStartMouse;
       float thumbTravel =
@@ -4981,6 +5147,27 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       needRedraw = true;
     }
   } else if (message == WM_LBUTTONUP) {
+    // Finish an active slider drag: commit onChange when the value moved.
+    bool sliderConsumed = false;
+    if (m_SliderDragElement) {
+      SliderElement *slider =
+          IsTrackedElement(m_SliderDragElement) ? m_SliderDragElement
+                                                : nullptr;
+      m_SliderDragElement = nullptr;
+      if (slider) {
+        sliderConsumed = true;
+        const bool moved = slider->GetValue() != slider->DragStartValue();
+        slider->EndDrag();
+        handled = true;
+        needRedraw = true;
+        if (moved) {
+          NotifySliderChange(slider, /*isFinal=*/true);
+          if (!Widget::IsValid(this))
+            return true;
+        }
+      }
+    }
+
     if (m_ScrollbarActivePart != ScrollbarHitPart::None) {
       m_ScrollbarActivePart = ScrollbarHitPart::None;
       KillTimer(m_hWnd, TIMER_SCROLLBAR_BUTTON);
@@ -5023,7 +5210,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
     ColorPickerElement *colorPicker =
         dynamic_cast<ColorPickerElement *>(hitElement);
-    if (colorPicker && !m_IsElementDragging) {
+    if (colorPicker && !m_IsElementDragging && !sliderConsumed) {
       if (m_ColorPickerPopup)
         m_ColorPickerPopup->Close();
       m_ColorPickerPopup =
@@ -5033,7 +5220,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     }
 
     CheckBoxElement *checkBox = dynamic_cast<CheckBoxElement *>(hitElement);
-    if (checkBox && !m_IsElementDragging) {
+    if (checkBox && !m_IsElementDragging && !sliderConsumed) {
       // The sink only routes clicks on its exclusive topmost hit; a check
       // box behind another element must not commit through the sink.
       if (actionElement == checkBox)
@@ -5050,7 +5237,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
     ToggleSwitchElement *toggleSwitch =
         dynamic_cast<ToggleSwitchElement *>(hitElement);
-    if (toggleSwitch && !m_IsElementDragging) {
+    if (toggleSwitch && !m_IsElementDragging && !sliderConsumed) {
       // The sink only routes clicks on its exclusive topmost hit; a switch
       // behind another element must not commit through the sink.
       if (actionElement == toggleSwitch)

@@ -8,6 +8,7 @@
 #include "SettingsPanel.h"
 
 #include <algorithm>
+#include <cwchar>
 #include <windows.h>
 
 #include "../scripting/quickjs/parser/PropertyParser.h"
@@ -38,6 +39,15 @@ const COLORREF kControlFill = RGB(42, 42, 50);
 const COLORREF kControlBorder = RGB(70, 70, 82);
 const COLORREF kToggleOff = RGB(64, 64, 74);
 const COLORREF kDivider = RGB(58, 58, 66);
+
+bool ParseSettingDouble(const std::wstring &value, double &out) {
+  wchar_t *end = nullptr;
+  const double d = std::wcstod(value.c_str(), &end);
+  if (end == value.c_str())
+    return false;
+  out = d;
+  return true;
+}
 
 std::wstring PanelElementId(const std::wstring &settingId,
                             const wchar_t *role) {
@@ -228,6 +238,23 @@ void SettingsPanel::BuildPanel(Widget *target) {
     }
     case WidgetSettingType::Number:
     case WidgetSettingType::Text: {
+      // When a Number setting is bound to a real slider element on the
+      // target widget, drive that control instead of a text input.
+      Element *boundSlider = nullptr;
+      if (setting.type == WidgetSettingType::Number &&
+          !setting.binding.elementId.empty() &&
+          setting.binding.property == L"value" && m_Target &&
+          Widget::IsValid(m_Target)) {
+        boundSlider = m_Target->FindElementById(setting.binding.elementId);
+      }
+      if (auto *sl = dynamic_cast<SliderElement *>(boundSlider)) {
+        double initial = sl->m_MinValue;
+        ParseSettingDouble(value, initial);
+        sl->SetValue(initial);
+        m_Target->Redraw();
+        m_Controls[sl->GetId()] = {setting.id, ControlKind::BoundSlider};
+        break;
+      }
       PropertyParser::InputBoxOptions io;
       io.id = PanelElementId(setting.id, L"input");
       io.x = kControlX;
@@ -546,6 +573,21 @@ void SettingsPanel::UpdateRowVisuals(const WidgetSetting &setting) {
     }
   } else if (setting.type == WidgetSettingType::Number ||
              setting.type == WidgetSettingType::Text) {
+    auto bound = m_Controls.find(setting.binding.elementId);
+    if (setting.type == WidgetSettingType::Number &&
+        bound != m_Controls.end() &&
+        bound->second.kind == ControlKind::BoundSlider &&
+        bound->second.settingId == setting.id && m_Target &&
+        Widget::IsValid(m_Target)) {
+      if (auto *sl = dynamic_cast<SliderElement *>(
+              m_Target->FindElementById(setting.binding.elementId))) {
+        double parsed = sl->GetValue();
+        ParseSettingDouble(value, parsed);
+        sl->SetValue(parsed);
+        m_Target->Redraw();
+        return;
+      }
+    }
     if (Element *input =
             m_Panel->FindElementById(PanelElementId(setting.id, L"input"))) {
       if (InputBoxElement *box = dynamic_cast<InputBoxElement *>(input))
@@ -615,6 +657,16 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int,
     else if (auto *cb = dynamic_cast<CheckBoxElement *>(element))
       checked = cb->GetState() == CheckBoxElement::State::Checked;
     Commit(setting->id, checked ? L"true" : L"false");
+  } else if (it->second.kind == ControlKind::BoundSlider) {
+    // Widget::NotifySliderChange already moved the thumb and routed here on
+    // release/keyboard commit; persist the value it now shows.
+    if (auto *sl = dynamic_cast<SliderElement *>(element)) {
+      Commit(setting->id, Utils::ToWString(SliderElement::FormatValue(
+                              sl->GetSnappedValue())));
+      if (!IsAlive(this))
+        return;
+      UpdateRowVisuals(*setting);
+    }
   } else if (it->second.kind == ControlKind::TogglePill ||
              it->second.kind == ControlKind::ToggleKnob) {
     Commit(setting->id, IsToggleOn(current) ? L"false" : L"true");

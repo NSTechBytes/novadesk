@@ -39,6 +39,7 @@
 #include "../render/ColorPickerElement.h"
 #include "../render/ToggleSwitchElement.h"
 #include "../render/CheckBoxElement.h"
+#include "../render/SliderElement.h"
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -66,6 +67,7 @@ struct InputBoxOptions;
 struct ColorPickerOptions;
 struct ToggleSwitchOptions;
 struct CheckBoxOptions;
+struct SliderOptions;
 } // namespace PropertyParser
 
 #include "MenuItem.h"
@@ -495,6 +497,12 @@ public:
   /// @brief Cycles a check box's tri-state, starts its mark animation and
   ///        notifies scripts or the settings sink.
   void ToggleCheckBox(CheckBoxElement *element);
+  /// @brief Adds a slider element to the widget.
+  void AddSlider(const PropertyParser::SliderOptions &options);
+  /// @brief Fires a slider's onInput (isFinal=false) or onChange (isFinal=true)
+  ///        callback, falling back to the settings sink when no callback is
+  ///        registered.
+  void NotifySliderChange(SliderElement *element, bool isFinal);
 
   /// @brief Applies property changes to a specific element by ID.
   void SetElementProperties(const std::wstring &id, JSContext *ctx,
@@ -771,6 +779,10 @@ private:
   POINT m_DragStartWindow = {0, 0};
   bool m_IsElementDragging = false;
   Element *m_DragElement = nullptr;
+
+  // Slider interaction state (raw pointers; validated via IsTrackedElement).
+  SliderElement *m_SliderDragElement = nullptr;
+  SliderElement *m_FocusedSlider = nullptr;
 
   // Scrollbar Dragging & Hover State
   enum class ScrollbarHitPart {

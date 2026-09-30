@@ -60,6 +60,16 @@ function rgba(hex, a) {
   );
 }
 
+// onChange receives the event object; the state string is on e.data/e.target.
+function firedWith(log, index, expected) {
+  const e = log[index];
+  return (
+    log.length === index + 1 &&
+    !!e &&
+    (e.data === expected || e.target === expected)
+  );
+}
+
 ui.beginUpdate();
 
 // Title
@@ -190,7 +200,11 @@ expectTrue(
   "indeterminate box reports checked",
   ui.getCheckBoxChecked("indetBox"),
 );
-expectEq("indeterminate state", ui.getCheckBoxState("indetBox"), "indeterminate");
+expectEq(
+  "indeterminate state",
+  ui.getCheckBoxState("indetBox"),
+  "indeterminate",
+);
 expectTrue(
   "layout child created",
   ui.getElementProperty("childBox", "checked"),
@@ -259,11 +273,7 @@ expectEq(
   0.9,
 );
 expectEq("text", ui.getElementProperty("styledBox", "text"), "Styled");
-expectEq(
-  "fontFace",
-  ui.getElementProperty("styledBox", "fontFace"),
-  "Arial",
-);
+expectEq("fontFace", ui.getElementProperty("styledBox", "fontFace"), "Arial");
 expectEq("fontSize", ui.getElementProperty("styledBox", "fontSize"), 14);
 expectEq("fontWeight", ui.getElementProperty("styledBox", "fontWeight"), 600);
 expectEq(
@@ -272,16 +282,8 @@ expectEq(
   rgba("#FFFFFF"),
 );
 expectEq("labelGap", ui.getElementProperty("styledBox", "labelGap"), 10);
-expectEq(
-  "durationMs",
-  ui.getElementProperty("styledBox", "durationMs"),
-  250,
-);
-expectEq(
-  "easing",
-  ui.getElementProperty("styledBox", "easing"),
-  "ease-in-out",
-);
+expectEq("durationMs", ui.getElementProperty("styledBox", "durationMs"), 250);
+expectEq("easing", ui.getElementProperty("styledBox", "easing"), "ease-in-out");
 expectEq(
   "hoverBorderColor",
   ui.getElementProperty("styledBox", "hoverBorderColor"),
@@ -404,14 +406,14 @@ expectTrue("checked after set true", ui.getCheckBoxChecked("testBox"));
 expectEq("state after set true", ui.getCheckBoxState("testBox"), "checked");
 expectTrue(
   "onChange fired with 'true'",
-  changeLog.length === 1 && changeLog[0] === "true",
+  firedWith(changeLog, 0, "true"),
 );
 
 ui.setCheckBoxChecked("testBox", false, false);
 expectFalse("checked after set false", ui.getCheckBoxChecked("testBox"));
 expectTrue(
   "onChange fired with 'false'",
-  changeLog.length === 2 && changeLog[1] === "false",
+  firedWith(changeLog, 1, "false"),
 );
 
 // Setting the same value must not fire onChange again
@@ -420,10 +422,7 @@ expectEq("no duplicate onChange for same value", changeLog.length, 2);
 
 // String "indeterminate" sets the third state
 ui.setCheckBoxChecked("testBox", "indeterminate", false);
-expectTrue(
-  "indeterminate reports checked",
-  ui.getCheckBoxChecked("testBox"),
-);
+expectTrue("indeterminate reports checked", ui.getCheckBoxChecked("testBox"));
 expectEq(
   "state after indeterminate",
   ui.getCheckBoxState("testBox"),
@@ -431,15 +430,19 @@ expectEq(
 );
 expectTrue(
   "onChange fired with 'indeterminate'",
-  changeLog.length === 3 && changeLog[2] === "indeterminate",
+  firedWith(changeLog, 2, "indeterminate"),
 );
 
 // toggleCheckBox on a two-state box flips checked/unchecked only
-changeLog = [];
 ui.setCheckBoxChecked("testBox", false, false);
+changeLog = [];
 const toggled1 = ui.toggleCheckBox("testBox");
 expectTrue("toggleCheckBox returns true", toggled1);
-expectEq("two-state toggle to checked", ui.getCheckBoxState("testBox"), "checked");
+expectEq(
+  "two-state toggle to checked",
+  ui.getCheckBoxState("testBox"),
+  "checked",
+);
 ui.toggleCheckBox("testBox");
 expectEq(
   "two-state toggle skips indeterminate",
@@ -449,8 +452,10 @@ expectEq(
 expectTrue(
   "two-state cycle fired true then false",
   changeLog.length === 2 &&
-    changeLog[0] === "true" &&
-    changeLog[1] === "false",
+    !!changeLog[0] &&
+    changeLog[0].data === "true" &&
+    !!changeLog[1] &&
+    changeLog[1].data === "false",
 );
 
 // Tri-state cycling via toggleCheckBox: unchecked -> checked -> indeterminate
@@ -464,17 +469,16 @@ expectEq(
   "indeterminate",
 );
 ui.toggleCheckBox("triBox");
-expectEq(
-  "tri toggle clears",
-  ui.getCheckBoxState("triBox"),
-  "unchecked",
-);
+expectEq("tri toggle clears", ui.getCheckBoxState("triBox"), "unchecked");
 expectTrue(
   "tri cycle fired three events",
   changeLog.length === 3 &&
-    changeLog[0] === "true" &&
-    changeLog[1] === "indeterminate" &&
-    changeLog[2] === "false",
+    !!changeLog[0] &&
+    changeLog[0].data === "true" &&
+    !!changeLog[1] &&
+    changeLog[1].data === "indeterminate" &&
+    !!changeLog[2] &&
+    changeLog[2].data === "false",
 );
 
 // Programmatic indeterminate still works on a two-state box, and the next
@@ -513,7 +517,10 @@ expectFalse(
 );
 
 // Unknown ids return false / null and do not crash
-expectFalse("setCheckBoxChecked unknown id", ui.setCheckBoxChecked("nope", true));
+expectFalse(
+  "setCheckBoxChecked unknown id",
+  ui.setCheckBoxChecked("nope", true),
+);
 expectFalse("getCheckBoxChecked unknown id", ui.getCheckBoxChecked("nope"));
 expectEq("getCheckBoxState unknown id", ui.getCheckBoxState("nope"), null);
 expectFalse("toggleCheckBox unknown id", ui.toggleCheckBox("nope"));
@@ -538,7 +545,7 @@ expectTrue(
 );
 expectEq(
   "imperative checked fires onChange",
-  changeLog[changeLog.length - 1],
+  changeLog[changeLog.length - 1].data,
   "true",
 );
 
@@ -595,18 +602,12 @@ expectFalse(
 );
 expectTrue("settled checked", ui.getElementProperty("testBox", "checked"));
 
-setTimeout(() => {
-  expectFalse(
-    "animation finished after duration",
-    ui.getElementProperty("testBox", "animating"),
-  );
-  expectEq(
-    "state settled",
-    ui.getElementProperty("testBox", "state"),
-    "checked",
-  );
+expectFalse(
+  "animation finished after duration",
+  ui.getElementProperty("testBox", "animating"),
+);
+expectEq("state settled", ui.getElementProperty("testBox", "state"), "checked");
 
-  console.log("----------------------------------------");
-  console.log("=== All Tests Completed ===");
-  console.log("----------------------------------------");
-}, 600);
+console.log("----------------------------------------");
+console.log("=== All Tests Completed ===");
+console.log("----------------------------------------");

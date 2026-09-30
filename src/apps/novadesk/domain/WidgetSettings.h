@@ -31,7 +31,8 @@ enum class WidgetSettingType { Color, Number, Text, Toggle, Select };
 /// @note Supported properties: text elements - "text", "fontcolor",
 ///       "fontsize", "fontface"; image elements - "image"/"path"; any element
 ///       - "x", "y", "width", "height", "color", "cornerradius", "show";
-///       toggleSwitch and checkBox elements - "checked".
+///       toggleSwitch and checkBox elements - "checked"; slider elements -
+///       "value" (Number settings drive the thumb directly).
 struct WidgetSettingBinding {
   std::wstring elementId; ///< Target element ID.
   std::wstring property;  ///< Target property name.

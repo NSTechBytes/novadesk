@@ -1,0 +1,21 @@
+{
+  "name": "SliderTest",
+  "main": "index.js",
+  "version": "1.0.0.0",
+  "author": "OfficialNovadesk",
+  "description": "Integration test for the slider element: creation, value model (clamping/snapping), properties, programmatic methods and callbacks.",
+  "icon": "",
+  "preview": "",
+  "excludeItems": [],
+  "setup": {
+    "createDesktopShortcut": false,
+    "createStartupShortcut": false,
+    "runOnStartup": false,
+    "installDir": "%ProgramFiles%\\SliderTest",
+    "startMenuFolder": "SliderTest",
+    "setupName": "setup",
+    "setupIcon": "",
+    "enableUninstall": false,
+    "launchAfterInstall": false
+  }
+}

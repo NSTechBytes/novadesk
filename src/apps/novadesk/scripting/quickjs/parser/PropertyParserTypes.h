@@ -28,6 +28,7 @@
 #include "../../../render/ColorPickerElement.h"
 #include "../../../render/ToggleSwitchElement.h"
 #include "../../../render/CheckBoxElement.h"
+#include "../../../render/SliderElement.h"
 
 /**
  * @brief Property parser option structs for all element types.
@@ -507,6 +508,47 @@ struct CheckBoxOptions : public ElementOptions {
   std::wstring easing = L"ease-out";
 
   int onChangeCallbackId = -1;
+};
+
+/// Slider element options.
+struct SliderOptions : public ElementOptions {
+  double value = 0.0;
+  double minValue = 0.0;
+  double maxValue = 100.0;
+  double step = 1.0; ///< <= 0 disables snapping.
+  bool vertical = false;
+
+  float trackThickness = 4.0f;
+  float trackBorderRadius = -1.0f; ///< < 0 = thickness / 2.
+  COLORREF trackColor = RGB(63, 63, 70);
+  BYTE trackAlpha = 255;
+  COLORREF fillColor = RGB(59, 130, 246);
+  BYTE fillAlpha = 255;
+  float sliderOpacity = 1.0f;
+
+  float thumbSize = 0.0f; ///< 0 = auto.
+  COLORREF thumbColor = RGB(255, 255, 255);
+  BYTE thumbAlpha = 255;
+  float thumbBorderWidth = 0.0f;
+  COLORREF thumbBorderColor = RGB(0, 0, 0);
+  BYTE thumbBorderAlpha = 255;
+  bool hasHoverThumbColor = false;
+  COLORREF hoverThumbColor = RGB(0, 0, 0);
+  BYTE hoverThumbAlpha = 255;
+  bool hasPressedThumbColor = false;
+  COLORREF pressedThumbColor = RGB(0, 0, 0);
+  BYTE pressedThumbAlpha = 255;
+
+  bool disabled = false;
+  COLORREF disabledTrackColor = RGB(80, 80, 88);
+  BYTE disabledTrackAlpha = 255;
+  COLORREF disabledFillColor = RGB(80, 80, 88);
+  BYTE disabledFillAlpha = 255;
+  COLORREF disabledThumbColor = RGB(150, 150, 158);
+  BYTE disabledThumbAlpha = 255;
+
+  int onChangeCallbackId = -1;
+  int onInputCallbackId = -1;
 };
 
 /// Bar gauge element options.
