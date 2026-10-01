@@ -2514,6 +2514,9 @@ void Widget::ToggleToggleSwitch(ToggleSwitchElement *element) {
   element->Toggle();
   if (element->IsAnimating())
     SetTimer(m_hWnd, TIMER_TOGGLE_ANIM, 16, nullptr);
+  // Redraw immediately so the first animation frame (or instant change when
+  // durationMs==0) is visible before the animation timer fires.
+  Redraw();
   const std::wstring value = element->IsChecked() ? L"true" : L"false";
   const int callbackId = element->m_OnChangeCallbackId;
   if (callbackId != -1) {
@@ -2548,6 +2551,9 @@ void Widget::ToggleCheckBox(CheckBoxElement *element) {
   element->Toggle();
   if (element->IsAnimating())
     SetTimer(m_hWnd, TIMER_TOGGLE_ANIM, 16, nullptr);
+  // Redraw immediately so the first animation frame (or the instant state
+  // change when durationMs==0) is visible before the animation timer fires.
+  Redraw();
   std::wstring value = L"false";
   if (element->GetState() == CheckBoxElement::State::Checked)
     value = L"true";
@@ -5229,6 +5235,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
                                   !m_Options.scriptPath.empty();
       if (!consumedBySink) {
         handled = true;
+        needRedraw = true;
         ToggleCheckBox(checkBox);
         if (!Widget::IsValid(this))
           return true;
@@ -5247,6 +5254,7 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           !m_Options.scriptPath.empty();
       if (!consumedBySink) {
         handled = true;
+        needRedraw = true;
         ToggleToggleSwitch(toggleSwitch);
         if (!Widget::IsValid(this))
           return true;

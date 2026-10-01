@@ -1355,6 +1355,21 @@ JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
     PropertyParser::PreFillCheckBoxOptions(options, cb);
     PropertyParser::ParseCheckBoxOptions(ctx, argv[1], options, baseDir);
     const CheckBoxElement::State wasState = cb->GetState();
+    // If the caller supplied an explicit "checked" key, keep the options state
+    // aligned with the current element state so ApplyCheckBoxOptions does not
+    // silently apply the new state without animation.  The explicit block below
+    // will call SetState with the correct animate flag.
+    bool hasExplicitChecked = false;
+    if (JS_IsObject(argv[1])) {
+      JSValue probe = JS_GetPropertyStr(ctx, argv[1], "checked");
+      hasExplicitChecked = !JS_IsUndefined(probe) && !JS_IsNull(probe);
+      JS_FreeValue(ctx, probe);
+    }
+    if (hasExplicitChecked) {
+      options.checked = cb->IsChecked();
+      options.indeterminate =
+          cb->GetState() == CheckBoxElement::State::Indeterminate;
+    }
     PropertyParser::ApplyCheckBoxOptions(cb, options);
     if (cb->GetState() != wasState) {
       options.checked = wasState != CheckBoxElement::State::Unchecked;

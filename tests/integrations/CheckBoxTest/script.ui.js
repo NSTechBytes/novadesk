@@ -95,7 +95,7 @@ ui.addCheckBox({
   checked: false,
   onChange: (state) => {
     changeLog.push(state);
-    console.log("testBox onChange fired with state: " + state);
+    console.log("testBox onChange fired with state: " + state.data);
   },
 });
 
@@ -404,17 +404,11 @@ expectTrue(
 );
 expectTrue("checked after set true", ui.getCheckBoxChecked("testBox"));
 expectEq("state after set true", ui.getCheckBoxState("testBox"), "checked");
-expectTrue(
-  "onChange fired with 'true'",
-  firedWith(changeLog, 0, "true"),
-);
+expectTrue("onChange fired with 'true'", firedWith(changeLog, 0, "true"));
 
 ui.setCheckBoxChecked("testBox", false, false);
 expectFalse("checked after set false", ui.getCheckBoxChecked("testBox"));
-expectTrue(
-  "onChange fired with 'false'",
-  firedWith(changeLog, 1, "false"),
-);
+expectTrue("onChange fired with 'false'", firedWith(changeLog, 1, "false"));
 
 // Setting the same value must not fire onChange again
 ui.setCheckBoxChecked("testBox", false, false);
@@ -572,6 +566,10 @@ ui.addCheckBox({
   y: 55,
   checked: true,
   checkedColor: "#FF0000",
+  onChange: (state) => {
+    changeLog.push(state);
+    console.log("testBox onChange fired with state: " + state.data);
+  },
 });
 expectTrue("re-added box checked", ui.getCheckBoxChecked("testBox"));
 expectEq(
