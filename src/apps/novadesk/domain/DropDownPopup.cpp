@@ -381,12 +381,8 @@ void DropDownPopup::Paint(HDC targetDc) {
     return;
 
   DropDownElement *dropDown = ElementStillValid() ? m_DropDown : nullptr;
-  // The row the list opened on keeps the tick, so the user can see what was
-  // chosen before they changed it. Once it is outside the visible window the
-  // tick moves to the highlighted row instead of vanishing entirely.
-  int markIndex = m_OriginalIndex;
-  if (markIndex < m_FirstVisible || markIndex >= m_FirstVisible + m_VisibleRows)
-    markIndex = m_Highlight;
+  // The tick always stays on the row that was selected when the popup opened.
+  // It never follows the hover cursor.
   const COLORREF bgColor =
       dropDown ? dropDown->m_PopupBackground : RGB(36, 36, 44);
   const COLORREF hoverColor =
@@ -427,12 +423,20 @@ void DropDownPopup::Paint(HDC targetDc) {
     const int rowTop = m_Padding + row * m_RowHeight;
     RECT rowRect{m_Padding, rowTop, clientWidth - m_Padding,
                  rowTop + m_RowHeight};
-    if (index == m_Highlight && m_MouseActive) {
+    if (index == m_OriginalIndex) {
+      // The originally-selected row always shows with selectedColor regardless
+      // of where the hover cursor is.
+      HBRUSH highlight = CreateSolidBrush(selectedColor);
+      FillRect(dc, &rowRect, highlight);
+      DeleteObject(highlight);
+    }
+    if (index == m_Highlight && m_MouseActive && index != m_OriginalIndex) {
+      // Hovered row (mouse-driven) that is not the selected row uses hoverColor.
       HBRUSH highlight = CreateSolidBrush(hoverColor);
       FillRect(dc, &rowRect, highlight);
       DeleteObject(highlight);
-    } else if (index == m_Highlight) {
-      // Keyboard cursor: the selected-row colour doubles as the highlight.
+    } else if (index == m_Highlight && !m_MouseActive && index != m_OriginalIndex) {
+      // Keyboard cursor on a non-selected row uses selectedColor.
       HBRUSH highlight = CreateSolidBrush(selectedColor);
       FillRect(dc, &rowRect, highlight);
       DeleteObject(highlight);
@@ -483,32 +487,10 @@ void DropDownPopup::Paint(HDC targetDc) {
     }
   }
   if (vectorTarget) {
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> checkBrush;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> thumbBrush;
     if (dropDown) {
-      Direct2D::CreateSolidBrush(vectorTarget.Get(), dropDown->m_PopupCheckColor,
-                                 dropDown->m_PopupCheckAlpha / 255.0f,
-                                 checkBrush.GetAddressOf());
       Direct2D::CreateSolidBrush(vectorTarget.Get(), textColor, 0.45f,
                                  thumbBrush.GetAddressOf());
-    }
-    if (checkBrush) {
-      for (int row = 0; row < m_VisibleRows; ++row) {
-        const int index = m_FirstVisible + row;
-        if (index >= count)
-          break;
-        if (index != markIndex)
-          continue;
-        const float centerY =
-            static_cast<float>(m_Padding + row * m_RowHeight + m_RowHeight / 2);
-        const float x = static_cast<float>(textRight + 6);
-        vectorTarget->DrawLine(D2D1::Point2F(x, centerY - 3.0f),
-                               D2D1::Point2F(x + 3.0f, centerY + 2.0f),
-                               checkBrush.Get(), 1.6f);
-        vectorTarget->DrawLine(D2D1::Point2F(x + 3.0f, centerY + 2.0f),
-                               D2D1::Point2F(x + 8.0f, centerY - 4.0f),
-                               checkBrush.Get(), 1.6f);
-      }
     }
     if (thumbBrush && count > m_VisibleRows) {
       const float trackTop = static_cast<float>(m_Padding);
