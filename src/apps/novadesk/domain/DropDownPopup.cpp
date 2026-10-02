@@ -312,6 +312,12 @@ void DropDownPopup::CommitHighlighted() {
     m_Widget->NotifyDropDownChange(m_DropDown);
   if (!Widget::IsValid(m_Widget))
     return;
+  // The WM_LBUTTONUP that paired with this WM_LBUTTONDOWN will be delivered
+  // to the widget window after the popup closes. If another dropdown element
+  // sits at that screen position it would immediately open a new popup. Tell
+  // the widget to suppress the next dropdown open from WM_LBUTTONUP.
+  if (m_Widget)
+    m_Widget->SetSuppressNextDropDownOpen(true);
   Close();
 }
 

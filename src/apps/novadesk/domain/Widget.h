@@ -589,6 +589,11 @@ public:
   bool IsDropDownOpen(const DropDownElement *dropDown = nullptr) const;
   /// @brief Scrolls an open menu so this row is visible, cursor untouched.
   void SyncDropDownScrollTop(const DropDownElement *dropDown, int index);
+  /// @brief Called by DropDownPopup after a commit so the next WM_LBUTTONUP
+  ///        delivered to the widget window does not re-open a popup.
+  void SetSuppressNextDropDownOpen(bool value) {
+    m_SuppressNextDropDownOpen = value;
+  }
 
   /// @brief Begins a batch update (suppresses redraws until EndUpdate).
   void BeginUpdate();
@@ -876,6 +881,12 @@ private:
   POINT m_ResizeStartCursor = {0, 0};
   WidgetRect4 m_ResizeStartWindow = {0, 0, 0, 0};
   static WidgetResizeEdge GetResizeEdgeAt(int x, int y, int w, int h);
+
+  // Set when a dropdown popup is open at the moment of WM_LBUTTONDOWN so
+  // that the WM_LBUTTONUP the popup delivers back to the widget (after the
+  // popup closes) does not immediately open a new popup on whichever dropdown
+  // element happens to sit at that screen position.
+  bool m_SuppressNextDropDownOpen = false;
   static LPCWSTR GetCursorForResizeEdge(WidgetResizeEdge edge);
 
   CursorManager m_CursorManager;

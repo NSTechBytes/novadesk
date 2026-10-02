@@ -5397,6 +5397,12 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       needRedraw = true;
     }
   } else if (message == WM_LBUTTONUP) {
+    // A suppression flag may have been set at WM_LBUTTONDOWN time (when a
+    // popup was open). Snapshot and clear it now so it never leaks into a
+    // subsequent click even if the mouse-up lands outside any dropdown.
+    const bool suppressDropDownOpen = m_SuppressNextDropDownOpen;
+    m_SuppressNextDropDownOpen = false;
+
     // Finish an active slider drag: commit onChange when the value moved.
     bool sliderConsumed = false;
     if (m_SliderDragElement) {
@@ -5464,19 +5470,26 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       // never falls through to the widget's own mouse-down handlers.
       handled = true;
       if (!dropDown->m_Disabled) {
-        if (actionElement == dropDown)
-          actionElement = nullptr;
-        const bool wasOpen = IsDropDownOpen(dropDown);
-        m_FocusedDropDown = dropDown;
-        if (wasOpen) {
-          // Toggle-close behaves like a dismissal, not a cancel.
-          CloseDropDown();
-          needRedraw = true;
-        } else {
-          OpenDropDown(dropDown);
-          if (!Widget::IsValid(this))
-            return true;
-          needRedraw = true;
+        // If a popup was open when the mouse button went down, the popup
+        // already consumed that press and closed itself. The WM_LBUTTONUP
+        // that arrives here is the tail of that same click, not a new
+        // user intent — suppress the open so the popup does not immediately
+        // reappear on whichever dropdown sits at that screen position.
+        if (!suppressDropDownOpen) {
+          if (actionElement == dropDown)
+            actionElement = nullptr;
+          const bool wasOpen = IsDropDownOpen(dropDown);
+          m_FocusedDropDown = dropDown;
+          if (wasOpen) {
+            // Toggle-close behaves like a dismissal, not a cancel.
+            CloseDropDown();
+            needRedraw = true;
+          } else {
+            OpenDropDown(dropDown);
+            if (!Widget::IsValid(this))
+              return true;
+            needRedraw = true;
+          }
         }
       }
     }
