@@ -31,6 +31,24 @@ DropDownPopup *g_OutsideClickPopup = nullptr;
 
 int ClampInt(int v, int lo, int hi) { return (std::max)(lo, (std::min)(v, hi)); }
 
+/// Returns the widget-relative bounding rect of an element, correctly handling
+/// elements that are children of a layout box. A contained element's m_X/m_Y
+/// are container-local, so we walk up the container chain and accumulate the
+/// offsets to get the true widget-client-area position.
+GfxRect GetAbsoluteBounds(const Element *element) {
+  if (!element)
+    return GfxRect(0, 0, 0, 0);
+  GfxRect b = const_cast<Element *>(element)->GetBounds();
+  const Element *container = element->GetContainer();
+  while (container) {
+    GfxRect cb = const_cast<Element *>(container)->GetBounds();
+    b.X += cb.X;
+    b.Y += cb.Y;
+    container = container->GetContainer();
+  }
+  return b;
+}
+
 /// Height of the font for a drop-down's point size (negative = character
 /// height, which is what CreateFontIndirectW expects for UI text).
 HFONT CreateDropDownFont(const DropDownElement *dropDown) {
@@ -139,7 +157,7 @@ void DropDownPopup::Show() {
 
   RECT r{};
   GetWindowRect(m_Widget->GetWindow(), &r);
-  GfxRect b = m_DropDown->GetBounds();
+  GfxRect b = GetAbsoluteBounds(m_DropDown);
   int x = r.left + b.X;
   int y = r.top + b.Y + b.Height;
   HMONITOR mon = MonitorFromPoint({x, y}, MONITOR_DEFAULTTONEAREST);
@@ -184,7 +202,7 @@ void DropDownPopup::UpdatePosition() {
   LayoutRows();
   RECT r{};
   GetWindowRect(m_Widget->GetWindow(), &r);
-  GfxRect b = m_DropDown->GetBounds();
+  GfxRect b = GetAbsoluteBounds(m_DropDown);
   int x = r.left + b.X;
   int y = r.top + b.Y + b.Height;
   HMONITOR mon = MonitorFromPoint({x, y}, MONITOR_DEFAULTTONEAREST);
