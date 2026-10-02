@@ -251,11 +251,6 @@ void DropDownPopup::FlushWidgetRedraw() {
 }
 
 void DropDownPopup::SetHighlight(int index, bool scrollIntoView) {
-  // The pointer owns the highlight while it is moving over the list; keyboard
-  // navigation must not fight it for the same row. WM_MOUSEMOVE sets this flag
-  // before calling in, so only foreign callers are turned away.
-  if (m_MouseActive && !scrollIntoView)
-    return;
   const int count =
       (m_DropDown && ElementStillValid()) ? m_DropDown->OptionCount() : 0;
   if (count <= 0)
@@ -575,6 +570,8 @@ LRESULT DropDownPopup::Handle(UINT m, WPARAM w, LPARAM l) {
     const int count = ElementStillValid() ? m_DropDown->OptionCount() : 0;
     const int hovered = RowIndexAt(pt);
     if (hovered >= 0) {
+      // Mark mouse active before updating the highlight so Paint() uses
+      // hoverColor (not the keyboard selectedColor) for the highlighted row.
       m_MouseActive = true;
       SetHighlight(hovered, false);
     }
