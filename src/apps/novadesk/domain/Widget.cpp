@@ -4205,7 +4205,8 @@ DropDownElement *Widget::TopDropDownAt(int x, int y) {
             return dd;
         }
         if (auto *dd = dynamic_cast<DropDownElement *>(el))
-          return dd;
+          if (dd->HitTest(px, py))
+            return dd;
       }
       return nullptr;
     }
@@ -4229,7 +4230,8 @@ DropDownElement *Widget::TopDropDownAt(int x, int y) {
         }
       }
       if (auto *dd = dynamic_cast<DropDownElement *>(el))
-        return dd;
+        if (dd->HitTest(px, py))
+          return dd;
     }
     return nullptr;
   };
