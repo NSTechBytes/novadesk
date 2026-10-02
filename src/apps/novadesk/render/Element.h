@@ -46,7 +46,8 @@ enum ElementType {
   ELEMENT_COLOR_PICKER, ///< Color picker popup element.
   ELEMENT_TOGGLE_SWITCH, ///< On/off switch element.
   ELEMENT_CHECK_BOX,     ///< Check box element (tri-state).
-  ELEMENT_SLIDER         ///< Draggable slider element.
+  ELEMENT_SLIDER,      ///< Draggable slider element.
+  ELEMENT_DROPDOWN     ///< Drop-down selector with a separate popup window.
 };
 
 /**

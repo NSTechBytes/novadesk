@@ -58,6 +58,16 @@ bool IsToggleOn(const std::wstring &value) {
   return value == L"true" || value == L"1";
 }
 
+/// Position of a choice in a Select setting, or -1 when nothing matches.
+int IndexOfOption(const std::vector<std::wstring> &options,
+                  const std::wstring &value) {
+  for (size_t i = 0; i < options.size(); ++i) {
+    if (options[i] == value)
+      return static_cast<int>(i);
+  }
+  return -1;
+}
+
 } // namespace
 
 Widget *SettingsPanel::OpenFor(Widget *target) {
@@ -338,6 +348,37 @@ void SettingsPanel::BuildPanel(Widget *target) {
       break;
     }
     case WidgetSettingType::Select: {
+      // A Select setting with real choices gets a genuine drop-down whose menu
+      // is its own window. It is created without an onChange callback, so the
+      // commit arrives through IWidgetInputSink instead.
+      if (!setting.options.empty()) {
+        PropertyParser::DropDownOptions dd;
+        dd.id = PanelElementId(setting.id, L"dropdown");
+        dd.x = kControlX;
+        dd.y = controlY;
+        dd.width = kControlWidth;
+        dd.height = 26;
+        for (const std::wstring &option : setting.options)
+          dd.options.push_back({option, option});
+        dd.hasOptions = true;
+        dd.selectedIndex = IndexOfOption(setting.options, value);
+        dd.backgroundColor = kControlFill;
+        dd.borderColor = kControlBorder;
+        dd.borderWidth = 1.0f;
+        dd.borderRadius = 6.0f;
+        dd.fontColor = kTextColor;
+        dd.placeholderColor = kMutedColor;
+        dd.popupBackground = kControlFill;
+        dd.popupBorderColor = kControlBorder;
+        dd.popupHoverColor = RGB(56, 56, 66);
+        dd.popupSelectedColor = kAccentColor;
+        dd.popupTextColor = kTextColor;
+        dd.mouseEventCursorName = L"hand";
+        panel->AddDropDown(dd);
+        m_Controls[dd.id] = {setting.id, ControlKind::PanelDropDown};
+        break;
+      }
+
       PropertyParser::ShapeOptions btn;
       btn.id = PanelElementId(setting.id, L"btn");
       btn.x = kControlX;
@@ -566,6 +607,20 @@ void SettingsPanel::UpdateRowVisuals(const WidgetSetting &setting) {
       knob->SetPosition(on ? kControlX + 24 : kControlX + 2, knob->GetY());
     }
   } else if (setting.type == WidgetSettingType::Select) {
+    // A bound drop-down shows the choice through its own selected index, so
+    // sync it rather than painting a label over it.
+    auto bound = m_Controls.find(setting.binding.elementId);
+    if (bound != m_Controls.end() &&
+        bound->second.kind == ControlKind::PanelDropDown &&
+        bound->second.settingId == setting.id && m_Panel &&
+        Widget::IsValid(m_Panel)) {
+      if (auto *dd = dynamic_cast<DropDownElement *>(
+              m_Panel->FindElementById(setting.binding.elementId))) {
+        dd->SetSelectedIndex(IndexOfOption(setting.options, value));
+        m_Panel->Redraw();
+        return;
+      }
+    }
     if (Element *label =
             m_Panel->FindElementById(PanelElementId(setting.id, L"btnlabel"))) {
       if (TextElement *text = dynamic_cast<TextElement *>(label))
@@ -663,6 +718,17 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int,
     if (auto *sl = dynamic_cast<SliderElement *>(element)) {
       Commit(setting->id, Utils::ToWString(SliderElement::FormatValue(
                               sl->GetSnappedValue())));
+      if (!IsAlive(this))
+        return;
+      UpdateRowVisuals(*setting);
+    }
+  } else if (it->second.kind == ControlKind::PanelDropDown) {
+    // DropDownPopup already moved the selection and routed here; persist the
+    // option it now shows. A scripted re-set from Commit() may replace or
+    // remove this element, so nothing below touches it again.
+    if (auto *dd = dynamic_cast<DropDownElement *>(element)) {
+      const std::wstring chosen = dd->SelectedValue();
+      Commit(setting->id, chosen);
       if (!IsAlive(this))
         return;
       UpdateRowVisuals(*setting);

@@ -50,6 +50,7 @@
 #include "SettingsPanel.h"
 #include "InputBoxContextMenuHelper.h"
 #include "ColorPickerPopup.h"
+#include "DropDownPopup.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "InputBoxElement.h"
 #include "../shared/PathUtils.h"
@@ -67,11 +68,15 @@ std::unordered_set<Widget *> Widget::s_WidgetSet;
 std::unordered_map<HWND, Widget *> Widget::s_HwndMap;
 std::atomic<bool> Widget::s_IsMenuActive{false};
 std::atomic<int> Widget::s_ActiveColorPickerCount{0};
+std::atomic<int> Widget::s_ActiveDropDownCount{0};
 
 namespace {
 std::mutex g_windowBatchMutex;
 int g_windowBatchDepth = 0;
 std::vector<Widget *> g_pendingWindowShows;
+
+/// Rows skipped by PageUp/PageDown on a closed drop-down.
+constexpr int kDropDownKeyboardPage = 5;
 } // namespace
 
 // Check if a widget pointer is valid (exists in the global widgets list).
@@ -1042,6 +1047,10 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
 
   case WM_KILLFOCUS:
     if (widget) {
+      // The drop-down popup takes the foreground focus while it is open, so
+      // losing focus means the widget itself is no longer being worked with.
+      // The selection stays; only the keyboard target goes away.
+      widget->m_FocusedDropDown = nullptr;
       // Blur any focused input box
       if (widget->m_FocusedInputBox) {
         KillTimer(hWnd, TIMER_CARET);
@@ -1130,6 +1139,13 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
       // A slider press owns the pointer until release; never turn it into a
       // window move.
       const bool sliderDragActive = (widget->m_SliderDragElement != nullptr);
+      // Pressing a drop-down opens its popup; the threshold check that follows
+      // would otherwise drag the whole window across the desktop.
+      POINT pressPoint{};
+      GetCursorPos(&pressPoint);
+      ScreenToClient(hWnd, &pressPoint);
+      DropDownElement *pressedDropDown =
+          widget->TopDropDownAt(pressPoint.x, pressPoint.y);
 
       const bool ctrlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
       const bool hasSwipeContainer = (widget->m_SwipeContainer != nullptr);
@@ -1140,7 +1156,7 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
 
       if (!widget->m_IsElementDragging && !widget->m_IsScrollbarDragging &&
           !hasSwipeContainer && !isSelectingText && !inputBoxFocused &&
-          !sliderDragActive && canDragWindow) {
+          !sliderDragActive && !pressedDropDown && canDragWindow) {
         SetCapture(hWnd);
         widget->m_IsDragging = true;
         widget->m_DragThresholdMet = false;
@@ -1800,12 +1816,17 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
             widget->m_ColorPickerPopup->IsOpen()) {
           widget->m_ColorPickerPopup->UpdatePosition();
         }
+        if (widget->m_DropDownPopup && widget->m_DropDownPopup->IsOpen()) {
+          widget->m_DropDownPopup->UpdatePosition();
+        }
         if (widget->m_Tooltip.IsActive()) {
           widget->m_Tooltip.RepositionToCursor();
         }
         JSEngine::TriggerWidgetEvent(widget, "move");
       }
       if (sized) {
+        if (widget->m_DropDownPopup && widget->m_DropDownPopup->IsOpen())
+          widget->m_DropDownPopup->UpdatePosition();
         widget->Redraw();
         JSEngine::TriggerWidgetEvent(widget, "resize");
       }
@@ -1925,6 +1946,74 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
         textElem->ClearTextSelection();
         widget->m_TextSelectionElement = nullptr;
         widget->Redraw();
+        return 0;
+      }
+    }
+    // A focused drop-down owns navigation keys even when a text selection or an
+    // input box also holds state: those branches above return early for the keys
+    // they handle, which would otherwise swallow Up/Down and Enter.
+    if (widget && widget->m_FocusedDropDown &&
+        !widget->IsTrackedElement(widget->m_FocusedDropDown))
+      widget->m_FocusedDropDown = nullptr;
+    if (widget && widget->m_FocusedDropDown) {
+      DropDownElement *dropDown = widget->m_FocusedDropDown;
+      const int count = dropDown->OptionCount();
+      const int index = dropDown->GetSelectedIndex();
+      const bool isOpen = widget->IsDropDownOpen(dropDown);
+      const bool stepKey =
+          wParam == VK_UP || wParam == VK_DOWN || wParam == VK_HOME ||
+          wParam == VK_END || wParam == VK_PRIOR || wParam == VK_NEXT;
+      // Alt+Down is the Windows combo-box gesture for opening the list.
+      const bool altHeld = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+      const bool toggleKey = wParam == VK_RETURN || wParam == VK_SPACE ||
+                             (wParam == VK_DOWN && altHeld);
+      if (!dropDown->m_Disabled && !isOpen && (stepKey || toggleKey)) {
+        if (toggleKey) {
+          widget->OpenDropDown(dropDown);
+          if (!Widget::IsValid(widget))
+            return 0;
+          widget->Redraw();
+          return 0;
+        }
+        if (count <= 0)
+          return 0;
+        int next = index;
+        switch (wParam) {
+        case VK_UP:
+          next = index < 0 ? count - 1 : index - 1;
+          break;
+        case VK_DOWN:
+          next = index < 0 ? 0 : index + 1;
+          break;
+        case VK_HOME:
+          next = 0;
+          break;
+        case VK_END:
+          next = count - 1;
+          break;
+        case VK_PRIOR:
+          next = index < 0 ? 0 : index - kDropDownKeyboardPage;
+          break;
+        case VK_NEXT:
+          next = index < 0 ? count - 1 : index + kDropDownKeyboardPage;
+          break;
+        default:
+          break;
+        }
+        next = (std::max)(0, (std::min)(count - 1, next));
+        if (next != index) {
+          dropDown->SetSelectedIndex(next);
+          widget->NotifyDropDownChange(dropDown);
+          if (!Widget::IsValid(widget))
+            return 0;
+          widget->Redraw();
+        }
+        return 0;
+      }
+      if (isOpen)
+        return 0;
+      if (wParam == VK_ESCAPE) {
+        widget->m_FocusedDropDown = nullptr;
         return 0;
       }
     }
@@ -2591,6 +2680,9 @@ void Widget::NotifySliderChange(SliderElement *element, bool isFinal) {
     return;
   const std::wstring value =
       Utils::ToWString(SliderElement::FormatValue(element->GetValue()));
+  // Redraw immediately so the thumb position is current before the callback
+  // runs (mirrors the Redraw() added to ToggleCheckBox/ToggleToggleSwitch).
+  Redraw();
   const int callbackId =
       isFinal ? element->m_OnChangeCallbackId : element->m_OnInputCallbackId;
   if (callbackId != -1) {
@@ -2602,9 +2694,53 @@ void Widget::NotifySliderChange(SliderElement *element, bool isFinal) {
     m_InputSink->OnElementMouseUp(this, element, 0, 0);
 }
 
+void Widget::AddDropDown(const PropertyParser::DropDownOptions &options) {
+  if (options.id.empty())
+    return;
+  // Close first: re-adding an id whose popup is open would otherwise leave the
+  // popup pointing at a destroyed element.
+  Element *existing = FindElementById(options.id);
+  auto *existingDropDown =
+      existing ? dynamic_cast<DropDownElement *>(existing) : nullptr;
+  if (existingDropDown) {
+    if (IsDropDownOpen(existingDropDown))
+      CloseDropDown();
+  } else if (IsDropDownOpen()) {
+    CloseDropDown();
+  }
+  if (existing)
+    RemoveElements(options.id);
+  auto *element = new DropDownElement(
+      options.id, options.x, options.y,
+      options.width > 0 ? options.width : 160,
+      options.height > 0 ? options.height : 28);
+  PropertyParser::ApplyDropDownOptions(element, options);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
+  Redraw();
+}
+
+void Widget::NotifyDropDownChange(DropDownElement *element) {
+  if (!element)
+    return;
+  const std::wstring value = element->SelectedValue();
+  Redraw();
+  if (element->m_OnChangeCallbackId != -1) {
+    JSEngine::CallEventCallbackWithText(element->m_OnChangeCallbackId, this,
+                                        value);
+    return;
+  }
+  if (m_InputSink)
+    m_InputSink->OnElementMouseUp(this, element, 0, 0);
+}
+
 void Widget::OpenColorPicker(ColorPickerElement *colorPicker) {
   if (!colorPicker)
     return;
+  CloseDropDown();
   if (m_ColorPickerPopup)
     m_ColorPickerPopup->Close();
   m_ColorPickerPopup = std::make_unique<ColorPickerPopup>(this, colorPicker);
@@ -2615,6 +2751,7 @@ void Widget::CloseColorPicker() {
   if (m_ColorPickerPopup) {
     m_ColorPickerPopup->Close();
     m_ColorPickerPopup.reset();
+    Redraw();
   }
 }
 
@@ -2628,6 +2765,54 @@ bool Widget::IsColorPickerOpen(const ColorPickerElement *colorPicker) const {
 
 bool Widget::IsColorPickerEyedropperActive() const {
   return m_ColorPickerPopup && m_ColorPickerPopup->IsEyedropperActive();
+}
+
+void Widget::OpenDropDown(DropDownElement *dropDown) {
+  if (!dropDown)
+    return;
+  // Only one popup of either kind may hold the outside-click hook.
+  CloseColorPicker();
+  DropDownElement *previous =
+      m_DropDownPopup ? m_DropDownPopup->GetDropDownElement() : nullptr;
+  const bool sameOpen = previous == dropDown && IsDropDownOpen(dropDown);
+  // Re-pointing at a different control must repaint the old one out of its
+  // open border colour, so clear it before the new popup takes over.
+  if (!sameOpen && previous && previous != dropDown)
+    previous->m_Open = false;
+  if (sameOpen)
+    return;
+  if (m_DropDownPopup)
+    m_DropDownPopup->Close();
+  m_DropDownPopup = std::make_unique<DropDownPopup>(this, dropDown);
+  dropDown->m_Open = true;
+  m_DropDownPopup->Show();
+}
+
+void Widget::CloseDropDown() {
+  if (m_DropDownPopup) {
+    if (DropDownElement *target = m_DropDownPopup->GetDropDownElement())
+      target->m_Open = false;
+    m_DropDownPopup->Close();
+    m_DropDownPopup.reset();
+  }
+}
+
+bool Widget::IsDropDownOpen(const DropDownElement *dropDown) const {
+  if (!m_DropDownPopup || !m_DropDownPopup->IsOpen())
+    return false;
+  if (dropDown)
+    return m_DropDownPopup->GetDropDownElement() == dropDown;
+  return true;
+}
+
+void Widget::SyncDropDownScrollTop(const DropDownElement *dropDown, int index) {
+  if (!m_DropDownPopup || !m_DropDownPopup->IsOpen())
+    return;
+  if (dropDown && m_DropDownPopup->GetDropDownElement() != dropDown)
+    return;
+  // Scroll without disturbing the highlight: a scripted set must not look like
+  // the user moved the keyboard cursor.
+  m_DropDownPopup->ScrollIntoView(index);
 }
 
 void Widget::OpenColorPickerEyedropper(ColorPickerElement *colorPicker) {
@@ -3322,6 +3507,18 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx,
     PropertyParser::ApplySliderOptions(static_cast<SliderElement *>(element),
                                        parsed);
     UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_DROPDOWN) {
+    DropDownElement *dropDown = static_cast<DropDownElement *>(element);
+    const int optionCountBefore = dropDown->OptionCount();
+    PropertyParser::DropDownOptions parsed;
+    PropertyParser::PreFillDropDownOptions(parsed, dropDown);
+    PropertyParser::ParseDropDownOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyDropDownOptions(dropDown, parsed);
+    // A popup whose list just changed shape can no longer be trusted to match
+    // what it painted.
+    if (IsDropDownOpen(dropDown) && dropDown->OptionCount() != optionCountBefore)
+      CloseDropDown();
+    UpdateContainerForElement(element, parsed.containerId);
   }
 }
 
@@ -3388,6 +3585,13 @@ void Widget::ClearElementReferences(Element *element) {
       m_SliderDragElement = nullptr;
     if (slider == m_FocusedSlider)
       m_FocusedSlider = nullptr;
+  }
+  if (DropDownElement *dropDown = dynamic_cast<DropDownElement *>(element)) {
+    if (dropDown == m_FocusedDropDown)
+      m_FocusedDropDown = nullptr;
+    if (IsDropDownOpen(dropDown))
+      CloseDropDown();
+    dropDown->m_Open = false;
   }
   if (element == m_ScrollbarDragContainer) {
     m_ScrollbarDragContainer = nullptr;
@@ -4034,6 +4238,77 @@ void Widget::RebuildSpatialGrid() {
   }
 }
 
+DropDownElement *Widget::TopDropDownAt(int x, int y) {
+  // Mirrors the mouse-move scan: spatial-grid cells are built from
+  // non-contained elements only, so children have to be reached through their
+  // container.
+  auto Scan = [&](int px, int py) -> DropDownElement * {
+    if (static_cast<int>(m_Elements.size()) > GRID_THRESHOLD) {
+      RebuildSpatialGrid();
+      const int cx = px / GRID_CELL_SIZE;
+      const int cy = py / GRID_CELL_SIZE;
+      const int64_t key =
+          (static_cast<int64_t>(cx) << 32) | static_cast<uint32_t>(cy);
+      auto cellIt = m_SpatialGrid.find(key);
+      if (cellIt == m_SpatialGrid.end())
+        return nullptr;
+      for (Element *el : cellIt->second) {
+        Element *child = nullptr;
+        Element *unusedAction = nullptr;
+        Element *unusedMouse = nullptr;
+        Element *unusedTip = nullptr;
+        if (el->IsContainer() &&
+            HitTestContainerChildrenDetailed(el, px, py, WM_LBUTTONDOWN, 0,
+                                             child, unusedAction, unusedMouse,
+                                             unusedTip) &&
+            child) {
+          if (auto *dd = dynamic_cast<DropDownElement *>(child))
+            return dd;
+        }
+        if (auto *dd = dynamic_cast<DropDownElement *>(el))
+          return dd;
+      }
+      return nullptr;
+    }
+    for (auto it = m_Elements.rbegin(); it != m_Elements.rend(); ++it) {
+      Element *el = it->get();
+      if (!el->IsVisible())
+        continue;
+      if (el->IsContained())
+        continue;
+      if (el->IsContainer()) {
+        Element *child = nullptr;
+        Element *unusedAction = nullptr;
+        Element *unusedMouse = nullptr;
+        Element *unusedTip = nullptr;
+        if (HitTestContainerChildrenDetailed(el, px, py, WM_LBUTTONDOWN, 0,
+                                             child, unusedAction, unusedMouse,
+                                             unusedTip) &&
+            child) {
+          if (auto *dd = dynamic_cast<DropDownElement *>(child))
+            return dd;
+        }
+      }
+      if (auto *dd = dynamic_cast<DropDownElement *>(el))
+        return dd;
+    }
+    return nullptr;
+  };
+
+  POINT cursor{};
+  GetCursorPos(&cursor);
+  if (m_hWnd)
+    ScreenToClient(m_hWnd, &cursor);
+  if (auto *hit = Scan(cursor.x, cursor.y))
+    return hit;
+  // A press outside the layered window's bounds never reaches WndProc, so this
+  // only ever re-tests the same point; keep the caller's coordinates as a
+  // fallback when no HWND exists yet.
+  if (m_hWnd)
+    return nullptr;
+  return Scan(x, y);
+}
+
 bool Widget::IsTrackedElement(Element *el) const {
   if (!el)
     return false;
@@ -4242,7 +4517,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
   auto IsInteractiveControl = [](Element *el) {
     return el && (dynamic_cast<SliderElement *>(el) ||
                   dynamic_cast<ToggleSwitchElement *>(el) ||
-                  dynamic_cast<CheckBoxElement *>(el));
+                  dynamic_cast<CheckBoxElement *>(el) ||
+                  dynamic_cast<DropDownElement *>(el));
   };
 
   // Use the spatial grid for large element counts; fall back to linear scan
@@ -4465,10 +4741,14 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       if (!checkedHovered && hitElement &&
           dynamic_cast<SliderElement *>(hitElement))
         checkedHovered = hitElement;
+      if (!checkedHovered && hitElement &&
+          dynamic_cast<DropDownElement *>(hitElement))
+        checkedHovered = hitElement;
       if (!checkedHovered && hoverElement && hitElement != m_MouseOverElement) {
         if (dynamic_cast<ToggleSwitchElement *>(hoverElement) ||
             dynamic_cast<CheckBoxElement *>(hoverElement) ||
-            dynamic_cast<SliderElement *>(hoverElement))
+            dynamic_cast<SliderElement *>(hoverElement) ||
+            dynamic_cast<DropDownElement *>(hoverElement))
           checkedHovered = hoverElement;
       }
       // A dragged slider keeps its hover highlight for the whole press.
@@ -4489,6 +4769,17 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         if (auto *sl = dynamic_cast<SliderElement *>(elem.get())) {
           if (sl->m_Hovered != (sl == checkedHovered)) {
             sl->m_Hovered = (sl == checkedHovered);
+            needRedraw = true;
+          }
+        }
+        if (auto *dd = dynamic_cast<DropDownElement *>(elem.get())) {
+          const bool hovered = (dd == checkedHovered);
+          // The open border colour outranks hover, so keep it in step with the
+          // popup even when the pointer has already left the control.
+          const bool open = IsDropDownOpen(dd);
+          if (dd->m_Hovered != hovered || dd->m_Open != open) {
+            dd->m_Hovered = hovered;
+            dd->m_Open = open;
             needRedraw = true;
           }
         }
@@ -4936,6 +5227,14 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     }
 
     if (!handled) {
+      // A press outside every control blurs the keyboard targets. Doing this
+      // here rather than in the input-box chain below means a callback fired
+      // from an earlier branch cannot suppress it by setting `handled`.
+      if (!hitElement || !dynamic_cast<SliderElement *>(hitElement))
+        m_FocusedSlider = nullptr;
+      if (!hitElement || !dynamic_cast<DropDownElement *>(hitElement))
+        m_FocusedDropDown = nullptr;
+
       // Helper: container has overflow that permits scrolling (OverflowX or Y
       // is not Hidden)
       auto isScrollContainer = [](Element *el) -> bool {
@@ -4944,6 +5243,10 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         return el->GetOverflowX() != Element::OverflowMode::Hidden ||
                el->GetOverflowY() != Element::OverflowMode::Hidden;
       };
+
+      // Pressing a drop-down is a click on a control, not the start of a pan.
+      const bool dropDownPressed =
+          hitElement && dynamic_cast<DropDownElement *>(hitElement) != nullptr;
 
       // Initialize container swipe tracking
       Element *swipeTarget = hitElement;
@@ -4970,8 +5273,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         }
       }
       m_IsContainerSwiping = false;
-      m_SwipeContainer = swipeCont;
-      m_SwipeTargetElement = swipeTarget;
+      m_SwipeContainer = dropDownPressed ? nullptr : swipeCont;
+      m_SwipeTargetElement = dropDownPressed ? nullptr : swipeTarget;
       m_SwipeStartPos = {x, y};
       m_SwipeStartTime = GetTickCount();
       if (swipeCont)
@@ -5037,11 +5340,11 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           BlurInputBox();
           needRedraw = true;
         }
-        if (!hitElement || !dynamic_cast<SliderElement *>(hitElement))
-          m_FocusedSlider = nullptr;
       }
 
       Element *dragTarget = actionElement ? actionElement : hitElement;
+      if (dragTarget && dynamic_cast<DropDownElement *>(dragTarget))
+        dragTarget = nullptr;
       if (!m_SliderDragElement && dragTarget && dragTarget->HasDragAction()) {
         m_DragElement = dragTarget;
         m_IsElementDragging = true;
@@ -5212,6 +5515,29 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
     if (m_FocusedInputBox) {
       m_FocusedInputBox->HandleMouseUp();
+    }
+
+    DropDownElement *dropDown = dynamic_cast<DropDownElement *>(hitElement);
+    if (dropDown && !m_IsElementDragging && !sliderConsumed) {
+      // A press on the control is consumed even when disabled, so the click
+      // never falls through to the widget's own mouse-down handlers.
+      handled = true;
+      if (!dropDown->m_Disabled) {
+        if (actionElement == dropDown)
+          actionElement = nullptr;
+        const bool wasOpen = IsDropDownOpen(dropDown);
+        m_FocusedDropDown = dropDown;
+        if (wasOpen) {
+          // Toggle-close behaves like a dismissal, not a cancel.
+          CloseDropDown();
+          needRedraw = true;
+        } else {
+          OpenDropDown(dropDown);
+          if (!Widget::IsValid(this))
+            return true;
+          needRedraw = true;
+        }
+      }
     }
 
     ColorPickerElement *colorPicker =

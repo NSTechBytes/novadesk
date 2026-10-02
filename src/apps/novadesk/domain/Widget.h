@@ -40,6 +40,7 @@
 #include "../render/ToggleSwitchElement.h"
 #include "../render/CheckBoxElement.h"
 #include "../render/SliderElement.h"
+#include "../render/DropDownElement.h"
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -50,6 +51,7 @@ class WidgetLayoutHelper;
 class ScrollbarRenderer;
 class WidgetDropTarget;
 class ColorPickerPopup;
+class DropDownPopup;
 
 namespace PropertyParser {
 struct ImageOptions;
@@ -68,6 +70,7 @@ struct ColorPickerOptions;
 struct ToggleSwitchOptions;
 struct CheckBoxOptions;
 struct SliderOptions;
+struct DropDownOptions;
 } // namespace PropertyParser
 
 #include "MenuItem.h"
@@ -418,10 +421,13 @@ public:
   static std::atomic<bool> s_IsMenuActive;
   /// @brief Tracks the number of open color picker popups.
   static std::atomic<int> s_ActiveColorPickerCount;
-  /// @return True if any menu or color picker is currently active.
+  /// @brief Tracks the number of open drop-down popups.
+  static std::atomic<int> s_ActiveDropDownCount;
+  /// @return True if any menu, color picker or drop-down is currently active.
   static bool IsMenuActive() {
     return s_IsMenuActive.load(std::memory_order_relaxed) ||
-           s_ActiveColorPickerCount.load(std::memory_order_relaxed) > 0;
+           s_ActiveColorPickerCount.load(std::memory_order_relaxed) > 0 ||
+           s_ActiveDropDownCount.load(std::memory_order_relaxed) > 0;
   }
   static void SetMenuActive(bool active) {
     s_IsMenuActive.store(active, std::memory_order_relaxed);
@@ -434,6 +440,16 @@ public:
     do {
       prev = s_ActiveColorPickerCount.load(std::memory_order_relaxed);
     } while (prev > 0 && !s_ActiveColorPickerCount.compare_exchange_weak(
+                             prev, prev - 1, std::memory_order_relaxed));
+  }
+  static void IncrementDropDownCount() {
+    s_ActiveDropDownCount.fetch_add(1, std::memory_order_relaxed);
+  }
+  static void DecrementDropDownCount() {
+    int prev;
+    do {
+      prev = s_ActiveDropDownCount.load(std::memory_order_relaxed);
+    } while (prev > 0 && !s_ActiveDropDownCount.compare_exchange_weak(
                              prev, prev - 1, std::memory_order_relaxed));
   }
 
@@ -503,6 +519,12 @@ public:
   ///        callback, falling back to the settings sink when no callback is
   ///        registered.
   void NotifySliderChange(SliderElement *element, bool isFinal);
+  /// @brief Adds a drop-down element to the widget.
+  void AddDropDown(const PropertyParser::DropDownOptions &options);
+  /// @brief Fires a drop-down's onChange callback with the selected option's
+  ///        value, falling back to the settings sink when no callback is
+  ///        registered.
+  void NotifyDropDownChange(DropDownElement *element);
 
   /// @brief Applies property changes to a specific element by ID.
   void SetElementProperties(const std::wstring &id, JSContext *ctx,
@@ -558,6 +580,15 @@ public:
   bool IsColorPickerEyedropperActive() const;
   /// @brief Activates the eyedropper tool for color picking.
   void OpenColorPickerEyedropper(ColorPickerElement *colorPicker = nullptr);
+
+  /// @brief Opens the drop-down popup for the specified element.
+  void OpenDropDown(DropDownElement *dropDown);
+  /// @brief Closes the currently open drop-down popup.
+  void CloseDropDown();
+  /// @return True if a drop-down is open (optionally for a specific element).
+  bool IsDropDownOpen(const DropDownElement *dropDown = nullptr) const;
+  /// @brief Scrolls an open menu so this row is visible, cursor untouched.
+  void SyncDropDownScrollTop(const DropDownElement *dropDown, int index);
 
   /// @brief Begins a batch update (suppresses redraws until EndUpdate).
   void BeginUpdate();
@@ -685,6 +716,10 @@ private:
                                         Element *&outActionElement,
                                         Element *&outMouseActionElement,
                                         Element *&outToolTipElement);
+  /// @return The topmost visible element under a widget-relative point, or
+  ///         nullptr. Used where a decision must not depend on the hover
+  ///         cache, which only WM_MOUSEMOVE keeps current.
+  DropDownElement *TopDropDownAt(int x, int y);
 
   /// @brief Tests if an element is in the tracked elements set.
   bool IsTrackedElement(Element *el) const;
@@ -784,6 +819,9 @@ private:
   SliderElement *m_SliderDragElement = nullptr;
   SliderElement *m_FocusedSlider = nullptr;
 
+  // Drop-down interaction state (raw pointer; validated via IsTrackedElement).
+  DropDownElement *m_FocusedDropDown = nullptr;
+
   // Scrollbar Dragging & Hover State
   enum class ScrollbarHitPart {
     None,
@@ -852,6 +890,7 @@ private:
   // Input box focus state
   InputBoxElement *m_FocusedInputBox = nullptr;
   std::unique_ptr<ColorPickerPopup> m_ColorPickerPopup;
+  std::unique_ptr<DropDownPopup> m_DropDownPopup;
   Microsoft::WRL::ComPtr<WidgetDropTarget> m_DropTarget;
   bool m_OleInitialized = false;
 

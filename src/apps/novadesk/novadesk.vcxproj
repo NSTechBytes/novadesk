@@ -152,6 +152,7 @@
     <ClCompile Include="domain\DesktopManager.cpp" />
     <ClCompile Include="domain\InputBoxContextMenuHelper.cpp" />
     <ClCompile Include="domain\ColorPickerPopup.cpp" />
+    <ClCompile Include="domain\DropDownPopup.cpp" />
     <ClCompile Include="domain\Novadesk.cpp" />
     <ClCompile Include="domain\Widget.cpp" />
     <ClCompile Include="domain\WidgetContextMenuHelper.cpp" />
@@ -193,6 +194,7 @@
     <ClCompile Include="render\ToggleSwitchElement.cpp" />
     <ClCompile Include="render\CheckBoxElement.cpp" />
     <ClCompile Include="render\SliderElement.cpp" />
+    <ClCompile Include="render\DropDownElement.cpp" />
     <ClCompile Include="render\Tooltip.cpp" />
     <ClCompile Include="scripting\quickjs\engine\JSEngine.cpp" />
     <ClCompile Include="scripting\quickjs\modules\FSModule.cpp" />
@@ -215,6 +217,7 @@
     <ClCompile Include="scripting\quickjs\parser\PropertyParserToggleSwitch.cpp" />
     <ClCompile Include="scripting\quickjs\parser\PropertyParserCheckBox.cpp" />
     <ClCompile Include="scripting\quickjs\parser\PropertyParserSlider.cpp" />
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserDropDown.cpp" />
     <ClCompile Include="scripting\quickjs\parser\PropertyParserWidgetWindow.cpp" />
     <ClCompile Include="shared\FileUtils.cpp" />
     <ClCompile Include="shared\Logging.cpp" />
@@ -281,6 +284,7 @@
     <ClInclude Include="domain\DesktopManager.h" />
     <ClInclude Include="domain\InputBoxContextMenuHelper.h" />
     <ClInclude Include="domain\ColorPickerPopup.h" />
+    <ClInclude Include="domain\DropDownPopup.h" />
     <ClInclude Include="domain\Novadesk.h" />
     <ClInclude Include="domain\Widget.h" />
     <ClInclude Include="domain\WidgetContextMenuHelper.h" />
@@ -326,6 +330,7 @@
     <ClInclude Include="render\ToggleSwitchElement.h" />
     <ClInclude Include="render\CheckBoxElement.h" />
     <ClInclude Include="render\SliderElement.h" />
+    <ClInclude Include="render\DropDownElement.h" />
     <ClInclude Include="render\Tooltip.h" />
     <ClInclude Include="scripting\quickjs\engine\JSEngine.h" />
     <ClInclude Include="scripting\quickjs\modules\FSModule.h" />

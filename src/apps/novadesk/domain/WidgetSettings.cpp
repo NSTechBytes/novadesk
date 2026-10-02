@@ -105,6 +105,14 @@ double ClampToSetting(const WidgetSetting &setting, double value) {
   return value;
 }
 
+// A scripted choice while the menu is open should reveal its row; the cursor
+// itself belongs to the pointer or the popup's own keys. Only a change made
+// here is worth syncing: re-applying the current value stays silent.
+void SyncOpenMenu(Widget *widget, int index, int previousIndex) {
+  if (index != previousIndex)
+    widget->SyncDropDownScrollTop(nullptr, index);
+}
+
 } // namespace
 
 bool ApplySettingToWidget(Widget *widget, const WidgetSetting &setting,
@@ -138,6 +146,25 @@ bool ApplySettingToWidget(Widget *widget, const WidgetSetting &setting,
       return false;
     d = ClampToSetting(setting, d);
     static_cast<SliderElement *>(element)->SetValue(d);
+    return true;
+  }
+
+  // A select setting carries an option value; a numeric string is read as an
+  // index so hand-written settings without matching values still work.
+  if (element->GetType() == ELEMENT_DROPDOWN && prop == L"selected") {
+    DropDownElement *dropDown = static_cast<DropDownElement *>(element);
+    const int before = dropDown->GetSelectedIndex();
+    const int byValue = dropDown->IndexForValue(value);
+    if (byValue >= 0) {
+      dropDown->SetSelectedIndex(byValue);
+      SyncOpenMenu(widget, dropDown->GetSelectedIndex(), before);
+      return true;
+    }
+    double d = 0.0;
+    if (!ParseSettingNumber(value, d))
+      return false;
+    dropDown->SetSelectedIndex(static_cast<int>(std::lround(d)));
+    SyncOpenMenu(widget, dropDown->GetSelectedIndex(), before);
     return true;
   }
 

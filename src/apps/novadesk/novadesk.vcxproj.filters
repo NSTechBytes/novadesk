@@ -54,6 +54,9 @@
     <ClCompile Include="domain\ColorPickerPopup.cpp">
       <Filter>domain</Filter>
     </ClCompile>
+    <ClCompile Include="domain\DropDownPopup.cpp">
+      <Filter>domain</Filter>
+    </ClCompile>
     <ClCompile Include="domain\Novadesk.cpp">
       <Filter>domain</Filter>
     </ClCompile>
@@ -177,6 +180,9 @@
     <ClCompile Include="render\SliderElement.cpp">
       <Filter>render</Filter>
     </ClCompile>
+    <ClCompile Include="render\DropDownElement.cpp">
+      <Filter>render</Filter>
+    </ClCompile>
     <ClCompile Include="render\Tooltip.cpp">
       <Filter>render</Filter>
     </ClCompile>
@@ -241,6 +247,9 @@
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
     <ClCompile Include="scripting\quickjs\parser\PropertyParserSlider.cpp">
+      <Filter>scripting\quickjs\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserDropDown.cpp">
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
     <ClCompile Include="scripting\quickjs\parser\PropertyParserWidgetWindow.cpp">
@@ -333,6 +342,9 @@
       <Filter>domain</Filter>
     </ClInclude>
     <ClInclude Include="domain\ColorPickerPopup.h">
+      <Filter>domain</Filter>
+    </ClInclude>
+    <ClInclude Include="domain\DropDownPopup.h">
       <Filter>domain</Filter>
     </ClInclude>
     <ClInclude Include="domain\Novadesk.h">
@@ -459,6 +471,9 @@
       <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="render\SliderElement.h">
+      <Filter>render</Filter>
+    </ClInclude>
+    <ClInclude Include="render\DropDownElement.h">
       <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="render\Tooltip.h">

@@ -420,6 +420,22 @@ JSValue JsWidgetAddSlider(JSContext *ctx, JSValueConst thisVal, int argc,
   return JS_UNDEFINED;
 }
 
+JSValue JsWidgetAddDropDown(JSContext *ctx, JSValueConst thisVal, int argc,
+                            JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addDropDown", "expected options object");
+  PropertyParser::DropDownOptions options;
+  PropertyParser::ParseDropDownOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddDropDown(options);
+  return JS_UNDEFINED;
+}
+
 JSValue JsWidgetAddBar(JSContext *ctx, JSValueConst thisVal, int argc,
                        JSValueConst *argv) {
   Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -630,6 +646,8 @@ static JSValue CallAddByType(JSContext *ctx, Widget *widget,
     return JsWidgetAddCheckBox(ctx, thisVal, 1, argvLocal);
   if (type == L"slider")
     return JsWidgetAddSlider(ctx, thisVal, 1, argvLocal);
+  if (type == L"dropdown")
+    return JsWidgetAddDropDown(ctx, thisVal, 1, argvLocal);
   if (type == L"bitmap")
     return JsWidgetAddBitmap(ctx, thisVal, 1, argvLocal);
   if (type == L"rotator")
@@ -1445,6 +1463,82 @@ JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
           options.onChangeCallbackId, widget,
           Utils::ToWString(SliderElement::FormatValue(sl->GetValue())));
     }
+  } else if (auto *dd = dynamic_cast<DropDownElement *>(element)) {
+    PropertyParser::DropDownOptions options;
+    PropertyParser::PreFillDropDownOptions(options, dd);
+    PropertyParser::ParseDropDownOptions(ctx, argv[1], options, baseDir);
+    const int wasIndex = dd->GetSelectedIndex();
+
+    // Read the choice keys raw: an explicit selectedIndex outranks a pre-filled
+    // selectedValue, and both must survive a parse of an unrelated property.
+    bool hasExplicitIndex = false;
+    int requestedIndex = wasIndex;
+    bool hasExplicitValue = false;
+    std::wstring requestedValue;
+    if (JS_IsObject(argv[1])) {
+      JSValue indexVal = JS_GetPropertyStr(ctx, argv[1], "selectedIndex");
+      if (!JS_IsUndefined(indexVal) && !JS_IsNull(indexVal)) {
+        int32_t v = 0;
+        if (JS_ToInt32(ctx, &v, indexVal) != 0) {
+          JS_FreeValue(ctx, indexVal);
+          JS_FreeValue(ctx, JS_ThrowTypeError(ctx,
+                                              "selectedIndex must be a number"));
+          return JS_EXCEPTION;
+        }
+        requestedIndex = v;
+        hasExplicitIndex = true;
+      }
+      JS_FreeValue(ctx, indexVal);
+
+      JSValue valueVal = JS_GetPropertyStr(ctx, argv[1], "selectedValue");
+      if (JS_IsString(valueVal)) {
+        const char *s = JS_ToCString(ctx, valueVal);
+        if (s) {
+          requestedValue = Utils::ToWString(s);
+          JS_FreeCString(ctx, s);
+        }
+        hasExplicitValue = true;
+      }
+      JS_FreeValue(ctx, valueVal);
+    }
+
+    // Apply commits the option list first, so an index or value written in the
+    // same call resolves against the new choices.
+    PropertyParser::ApplyDropDownOptions(dd, options);
+    int wanted = dd->GetSelectedIndex();
+    if (hasExplicitValue) {
+      const int byValue = dd->IndexForValue(requestedValue);
+      if (byValue >= 0)
+        wanted = byValue;
+    }
+    if (hasExplicitIndex)
+      wanted = requestedIndex;
+    if (wanted != dd->GetSelectedIndex()) {
+      dd->SetSelectedIndex(wanted);
+      // A scripted choice behind an open menu should reveal its row; the cursor
+      // itself belongs to the pointer or the popup's own keys.
+      widget->SyncDropDownScrollTop(dd, wanted);
+    }
+
+    if (JS_IsObject(argv[1])) {
+      JSValue openVal = JS_GetPropertyStr(ctx, argv[1], "isOpen");
+      if (JS_IsUndefined(openVal))
+        openVal = JS_GetPropertyStr(ctx, argv[1], "open");
+      if (!JS_IsUndefined(openVal)) {
+        if (JS_ToBool(ctx, openVal) == 1)
+          widget->OpenDropDown(dd);
+        else if (widget->IsDropDownOpen(dd))
+          widget->CloseDropDown();
+      }
+      JS_FreeValue(ctx, openVal);
+    }
+
+    // Fire onChange only for a change actually requested through this call;
+    // re-applying the current selection stays silent.
+    if (options.onChangeCallbackId != -1 && dd->GetSelectedIndex() != wasIndex) {
+      JSEngine::CallEventCallbackWithText(options.onChangeCallbackId, widget,
+                                          dd->SelectedValue());
+    }
   }
 
   widget->Redraw();
@@ -1711,14 +1805,20 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
       case IsOpen:
         if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
           return JS_NewBool(ctx, widget->IsColorPickerOpen(picker) ? 1 : 0);
+        if (auto *dd = dynamic_cast<DropDownElement *>(element))
+          return JS_NewBool(ctx, widget->IsDropDownOpen(dd) ? 1 : 0);
         break;
       case BorderRadius:
         if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
           return JS_NewFloat64(ctx, picker->m_BorderRadius);
+        if (auto *dd = dynamic_cast<DropDownElement *>(element))
+          return JS_NewFloat64(ctx, dd->m_BorderRadius);
         break;
       case BorderWidth:
         if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
           return JS_NewFloat64(ctx, picker->m_BorderWidth);
+        if (auto *dd = dynamic_cast<DropDownElement *>(element))
+          return JS_NewFloat64(ctx, dd->m_BorderWidth);
         break;
       case BorderColor:
         if (auto *picker = dynamic_cast<ColorPickerElement *>(element)) {
@@ -1726,10 +1826,17 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
                                                          picker->m_BorderAlpha);
           return JS_NewString(ctx, Utils::ToString(s).c_str());
         }
+        if (auto *dd = dynamic_cast<DropDownElement *>(element)) {
+          const std::wstring s = ColorUtil::ToRGBAString(dd->m_BorderColor,
+                                                        dd->m_BorderAlpha);
+          return JS_NewString(ctx, Utils::ToString(s).c_str());
+        }
         break;
       case Opacity:
         if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
           return JS_NewFloat64(ctx, picker->m_Opacity);
+        if (auto *dd = dynamic_cast<DropDownElement *>(element))
+          return JS_NewFloat64(ctx, dd->m_DropdownOpacity);
         break;
       case Shape:
         if (auto *picker = dynamic_cast<ColorPickerElement *>(element))
@@ -1740,6 +1847,11 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
         if (auto *picker = dynamic_cast<ColorPickerElement *>(element)) {
           const std::wstring s = ColorUtil::ToRGBAString(
               picker->m_PopupBackground, picker->m_PopupBackgroundAlpha);
+          return JS_NewString(ctx, Utils::ToString(s).c_str());
+        }
+        if (auto *dd = dynamic_cast<DropDownElement *>(element)) {
+          const std::wstring s = ColorUtil::ToRGBAString(
+              dd->m_PopupBackground, dd->m_PopupBackgroundAlpha);
           return JS_NewString(ctx, Utils::ToString(s).c_str());
         }
         break;
@@ -1754,6 +1866,11 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
         if (auto *picker = dynamic_cast<ColorPickerElement *>(element)) {
           const std::wstring s = ColorUtil::ToRGBAString(
               picker->m_PopupBorderColor, picker->m_PopupBorderAlpha);
+          return JS_NewString(ctx, Utils::ToString(s).c_str());
+        }
+        if (auto *dd = dynamic_cast<DropDownElement *>(element)) {
+          const std::wstring s = ColorUtil::ToRGBAString(
+              dd->m_PopupBorderColor, dd->m_PopupBorderAlpha);
           return JS_NewString(ctx, Utils::ToString(s).c_str());
         }
         break;
@@ -3139,6 +3256,125 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
           ctx, Utils::ToString(ColorUtil::ToRGBAString(
                    sl->m_DisabledThumbColor, sl->m_DisabledThumbAlpha))
                    .c_str());
+  } else if (element->GetType() == ELEMENT_DROPDOWN) {
+    auto *dd = static_cast<DropDownElement *>(element);
+
+    if (prop == "selectedIndex")
+      return JS_NewInt32(ctx, dd->GetSelectedIndex());
+    if (prop == "selectedValue")
+      return JS_NewString(ctx, Utils::ToString(dd->SelectedValue()).c_str());
+    if (prop == "selectedLabel")
+      return JS_NewString(ctx, Utils::ToString(dd->SelectedLabel()).c_str());
+    if (prop == "optionCount")
+      return JS_NewInt32(ctx, dd->OptionCount());
+    if (prop == "options") {
+      JSValue arr = JS_NewArray(ctx);
+      const auto &opts = dd->Options();
+      for (uint32_t i = 0; i < static_cast<uint32_t>(opts.size()); ++i) {
+        JSValue item = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, item, "label",
+                          JS_NewString(ctx, Utils::ToString(opts[i].label)
+                                                 .c_str()));
+        JS_SetPropertyStr(ctx, item, "value",
+                          JS_NewString(ctx, Utils::ToString(opts[i].value)
+                                                 .c_str()));
+        JS_SetPropertyUint32(ctx, arr, i, item);
+      }
+      return arr;
+    }
+    if (prop == "placeholder")
+      return JS_NewString(ctx, Utils::ToString(dd->m_Placeholder).c_str());
+    if (prop == "maxDisplayLength")
+      return JS_NewInt32(ctx, static_cast<int32_t>(dd->m_MaxDisplayLength));
+    if (prop == "disabled")
+      return JS_NewBool(ctx, dd->m_Disabled ? 1 : 0);
+    if (prop == "isOpen")
+      return JS_NewBool(ctx, widget->IsDropDownOpen(dd) ? 1 : 0);
+    if (prop == "paddingLeft")
+      return JS_NewFloat64(ctx, dd->m_PaddingLeft);
+    if (prop == "paddingRight")
+      return JS_NewFloat64(ctx, dd->m_PaddingRight);
+    if (prop == "backgroundColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(dd->m_BackgroundColor,
+                                                       dd->m_BackgroundAlpha))
+                   .c_str());
+    if (prop == "chevronColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(dd->m_ChevronColor,
+                                                       dd->m_ChevronAlpha))
+                   .c_str());
+    if (prop == "chevronSize")
+      return JS_NewFloat64(ctx, dd->m_ChevronSize);
+    if (prop == "chevronGap")
+      return JS_NewFloat64(ctx, dd->m_ChevronGap);
+    if (prop == "fontFace")
+      return JS_NewString(ctx, Utils::ToString(dd->m_FontFace).c_str());
+    if (prop == "fontSize")
+      return JS_NewInt32(ctx, dd->m_FontSize);
+    if (prop == "fontWeight")
+      return JS_NewInt32(ctx, dd->m_FontWeight);
+    if (prop == "fontColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(dd->m_FontColor,
+                                                       dd->m_FontAlpha))
+                   .c_str());
+    if (prop == "placeholderColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   dd->m_PlaceholderColor, dd->m_PlaceholderAlpha))
+                   .c_str());
+    if (prop == "hoverBorderColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(dd->m_HoverBorderColor,
+                                                       dd->m_HoverBorderAlpha))
+                   .c_str());
+    if (prop == "openBorderColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(dd->m_OpenBorderColor,
+                                                       dd->m_OpenBorderAlpha))
+                   .c_str());
+    if (prop == "disabledBackgroundColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   dd->m_DisabledBackgroundColor, dd->m_DisabledBackgroundAlpha))
+                   .c_str());
+    if (prop == "disabledBorderColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   dd->m_DisabledBorderColor, dd->m_DisabledBorderAlpha))
+                   .c_str());
+    if (prop == "disabledTextColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   dd->m_DisabledTextColor, dd->m_DisabledTextAlpha))
+                   .c_str());
+    if (prop == "popupHoverColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   dd->m_PopupHoverColor, dd->m_PopupHoverAlpha))
+                   .c_str());
+    if (prop == "popupSelectedColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(
+                   dd->m_PopupSelectedColor, dd->m_PopupSelectedAlpha))
+                   .c_str());
+    if (prop == "popupTextColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(dd->m_PopupTextColor,
+                                                       dd->m_PopupTextAlpha))
+                   .c_str());
+    if (prop == "popupCheckColor")
+      return JS_NewString(
+          ctx, Utils::ToString(ColorUtil::ToRGBAString(dd->m_PopupCheckColor,
+                                                       dd->m_PopupCheckAlpha))
+                   .c_str());
+    if (prop == "popupItemHeight")
+      return JS_NewInt32(ctx, dd->m_PopupItemHeight);
+    if (prop == "popupMaxVisibleItems")
+      return JS_NewInt32(ctx, dd->m_PopupMaxVisibleItems);
+    if (prop == "popupPadding")
+      return JS_NewInt32(ctx, dd->m_PopupPadding);
   }
 
   return JS_UNDEFINED;
@@ -3479,6 +3715,7 @@ JSValue JsWidgetSetSliderValue(JSContext *ctx, JSValueConst thisVal, int argc,
   const double wasValue = sl->GetValue();
   if (sl->SnapAndClamp(wanted) != wasValue) {
     sl->SetValue(wanted);
+    widget->Redraw();
     const std::wstring value =
         Utils::ToWString(SliderElement::FormatValue(sl->GetValue()));
     if (sl->m_OnChangeCallbackId != -1)
@@ -3502,6 +3739,192 @@ JSValue JsWidgetGetSliderValue(JSContext *ctx, JSValueConst thisVal, int argc,
   if (!sl)
     return JS_UNDEFINED;
   return JS_NewFloat64(ctx, sl->GetValue());
+}
+
+static DropDownElement *FindDropDown(JSContext *ctx, Widget *widget,
+                                     JSValueConst idVal) {
+  const char *idUtf8 = JS_ToCString(ctx, idVal);
+  if (!idUtf8)
+    return nullptr;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  return dynamic_cast<DropDownElement *>(widget->FindElementById(id));
+}
+
+JSValue JsWidgetSetDropDownIndex(JSContext *ctx, JSValueConst thisVal, int argc,
+                                 JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 2)
+    return ThrowTypeError(ctx, "setDropDownIndex", "expected (id, index)");
+  auto *dd = FindDropDown(ctx, widget, argv[0]);
+  if (!dd)
+    return JS_NewBool(ctx, 0);
+  int32_t wanted = -1;
+  if (JS_ToInt32(ctx, &wanted, argv[1]) != 0) {
+    JS_FreeValue(ctx, JS_ThrowTypeError(ctx, "index must be a number"));
+    return JS_EXCEPTION;
+  }
+  const int clamped =
+      wanted < -1 ? -1
+                  : (wanted >= dd->OptionCount() ? dd->OptionCount() - 1
+                                                : wanted);
+  if (clamped != dd->GetSelectedIndex()) {
+    dd->SetSelectedIndex(clamped);
+    widget->SyncDropDownScrollTop(dd, clamped);
+    widget->Redraw();
+    if (dd->m_OnChangeCallbackId != -1)
+      JSEngine::CallEventCallbackWithText(dd->m_OnChangeCallbackId, widget,
+                                          dd->SelectedValue());
+    else if (widget->GetInputSink())
+      widget->GetInputSink()->OnElementMouseUp(widget, dd, 0, 0);
+  }
+  widget->Redraw();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetGetDropDownIndex(JSContext *ctx, JSValueConst thisVal, int argc,
+                                 JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getDropDownIndex", "expected (id)");
+  auto *dd = FindDropDown(ctx, widget, argv[0]);
+  if (!dd)
+    return JS_UNDEFINED;
+  return JS_NewInt32(ctx, dd->GetSelectedIndex());
+}
+
+/**
+ * @brief Selects an option by value string, or by index when given a number.
+ *
+ * An unknown value is a silent no-op and returns false; an out-of-range index
+ * clamps, matching setDropDownIndex.
+ */
+JSValue JsWidgetSetDropDownValue(JSContext *ctx, JSValueConst thisVal, int argc,
+                                 JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 2)
+    return ThrowTypeError(ctx, "setDropDownValue", "expected (id, value)");
+  auto *dd = FindDropDown(ctx, widget, argv[0]);
+  if (!dd)
+    return JS_NewBool(ctx, 0);
+
+  int target = -2; // -2 = unresolved
+  if (JS_IsNumber(argv[1])) {
+    double numeric = 0.0;
+    if (JS_ToFloat64(ctx, &numeric, argv[1]) != 0)
+      return JS_EXCEPTION;
+    target = static_cast<int>(numeric);
+    const int count = dd->OptionCount();
+    if (target < -1)
+      target = -1;
+    else if (count > 0 && target >= count)
+      target = count - 1;
+    else if (count == 0)
+      target = -1;
+  } else if (JS_IsString(argv[1])) {
+    const char *s = JS_ToCString(ctx, argv[1]);
+    if (!s)
+      return JS_EXCEPTION;
+    target = dd->IndexForValue(Utils::ToWString(s));
+    JS_FreeCString(ctx, s);
+    if (target < 0)
+      return JS_NewBool(ctx, 0);
+  } else {
+    return JS_NewBool(ctx, 0);
+  }
+
+  if (target != dd->GetSelectedIndex()) {
+    dd->SetSelectedIndex(target);
+    widget->SyncDropDownScrollTop(dd, target);
+    widget->Redraw();
+    if (dd->m_OnChangeCallbackId != -1)
+      JSEngine::CallEventCallbackWithText(dd->m_OnChangeCallbackId, widget,
+                                          dd->SelectedValue());
+    else if (widget->GetInputSink())
+      widget->GetInputSink()->OnElementMouseUp(widget, dd, 0, 0);
+  }
+  widget->Redraw();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetGetDropDownValue(JSContext *ctx, JSValueConst thisVal, int argc,
+                                 JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getDropDownValue", "expected (id)");
+  auto *dd = FindDropDown(ctx, widget, argv[0]);
+  if (!dd)
+    return JS_UNDEFINED;
+  return JS_NewString(ctx, Utils::ToString(dd->SelectedValue()).c_str());
+}
+
+JSValue JsWidgetGetDropDownLabel(JSContext *ctx, JSValueConst thisVal, int argc,
+                                 JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getDropDownLabel", "expected (id)");
+  auto *dd = FindDropDown(ctx, widget, argv[0]);
+  if (!dd)
+    return JS_UNDEFINED;
+  return JS_NewString(ctx, Utils::ToString(dd->SelectedLabel()).c_str());
+}
+
+JSValue JsWidgetGetDropDownOptionCount(JSContext *ctx, JSValueConst thisVal,
+                                       int argc, JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getDropDownOptionCount", "expected (id)");
+  auto *dd = FindDropDown(ctx, widget, argv[0]);
+  if (!dd)
+    return JS_UNDEFINED;
+  return JS_NewInt32(ctx, dd->OptionCount());
+}
+
+JSValue JsWidgetOpenDropDown(JSContext *ctx, JSValueConst thisVal, int argc,
+                             JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "openDropDown", "expected (id)");
+  auto *dd = FindDropDown(ctx, widget, argv[0]);
+  if (!dd || dd->m_Disabled)
+    return JS_NewBool(ctx, 0);
+  widget->OpenDropDown(dd);
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetCloseDropDown(JSContext *ctx, JSValueConst thisVal, int,
+                              JSValueConst *) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  widget->CloseDropDown();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetIsDropDownOpen(JSContext *ctx, JSValueConst thisVal, int argc,
+                               JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
+    auto *dd = FindDropDown(ctx, widget, argv[0]);
+    return JS_NewBool(ctx, widget->IsDropDownOpen(dd) ? 1 : 0);
+  }
+  return JS_NewBool(ctx, widget->IsDropDownOpen() ? 1 : 0);
 }
 
 JSValue JsWidgetOpenColorPickerEyedropper(JSContext *ctx, JSValueConst thisVal,
@@ -3998,6 +4421,7 @@ const JSCFunctionListEntry kWidgetProtoFuncs[] = {
     JS_CFUNC_DEF("addToggleSwitch", 1, JsWidgetAddToggleSwitch),
     JS_CFUNC_DEF("addCheckBox", 1, JsWidgetAddCheckBox),
     JS_CFUNC_DEF("addSlider", 1, JsWidgetAddSlider),
+    JS_CFUNC_DEF("addDropDown", 1, JsWidgetAddDropDown),
     JS_CFUNC_DEF("addBar", 1, JsWidgetAddBar),
     JS_CFUNC_DEF("addLine", 1, JsWidgetAddLine),
     JS_CFUNC_DEF("addHistogram", 1, JsWidgetAddHistogram),
@@ -4042,6 +4466,17 @@ const JSCFunctionListEntry kWidgetProtoFuncs[] = {
     JS_CFUNC_DEF("toggleCheckBox", 1, JsWidgetToggleCheckBox),
     JS_CFUNC_DEF("setSliderValue", 2, JsWidgetSetSliderValue),
     JS_CFUNC_DEF("getSliderValue", 1, JsWidgetGetSliderValue),
+
+    // DropDown
+    JS_CFUNC_DEF("setDropDownIndex", 2, JsWidgetSetDropDownIndex),
+    JS_CFUNC_DEF("getDropDownIndex", 1, JsWidgetGetDropDownIndex),
+    JS_CFUNC_DEF("setDropDownValue", 2, JsWidgetSetDropDownValue),
+    JS_CFUNC_DEF("getDropDownValue", 1, JsWidgetGetDropDownValue),
+    JS_CFUNC_DEF("getDropDownLabel", 1, JsWidgetGetDropDownLabel),
+    JS_CFUNC_DEF("getDropDownOptionCount", 1, JsWidgetGetDropDownOptionCount),
+    JS_CFUNC_DEF("openDropDown", 1, JsWidgetOpenDropDown),
+    JS_CFUNC_DEF("closeDropDown", 0, JsWidgetCloseDropDown),
+    JS_CFUNC_DEF("isDropDownOpen", 1, JsWidgetIsDropDownOpen),
 
     // InputBox
     JS_CFUNC_DEF("focusInputBox", 1, JsWidgetFocusInputBox),

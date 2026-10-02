@@ -32,7 +32,8 @@ enum class WidgetSettingType { Color, Number, Text, Toggle, Select };
 ///       "fontsize", "fontface"; image elements - "image"/"path"; any element
 ///       - "x", "y", "width", "height", "color", "cornerradius", "show";
 ///       toggleSwitch and checkBox elements - "checked"; slider elements -
-///       "value" (Number settings drive the thumb directly).
+///       "value" (Number settings drive the thumb directly); dropDown elements
+///       - "selected" (Select settings drive the choice directly).
 struct WidgetSettingBinding {
   std::wstring elementId; ///< Target element ID.
   std::wstring property;  ///< Target property name.
