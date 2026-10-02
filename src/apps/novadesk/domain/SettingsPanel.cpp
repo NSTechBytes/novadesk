@@ -302,13 +302,13 @@ void SettingsPanel::BuildPanel(Widget *target) {
         bound = m_Target->FindElementById(setting.binding.elementId);
       }
       if (auto *sw = dynamic_cast<ToggleSwitchElement *>(bound)) {
-        sw->SetChecked(on, false);
+        sw->SetChecked(on);
         m_Target->Redraw();
         m_Controls[sw->GetId()] = {setting.id, ControlKind::BoundSwitch};
         break;
       }
       if (auto *cb = dynamic_cast<CheckBoxElement *>(bound)) {
-        cb->SetChecked(on, false);
+        cb->SetChecked(on);
         m_Target->Redraw();
         m_Controls[cb->GetId()] = {setting.id, ControlKind::BoundSwitch};
         break;
@@ -587,13 +587,13 @@ void SettingsPanel::UpdateRowVisuals(const WidgetSetting &setting) {
         Widget::IsValid(m_Target)) {
       if (auto *sw = dynamic_cast<ToggleSwitchElement *>(
               m_Target->FindElementById(setting.binding.elementId))) {
-        sw->SetChecked(on, false);
+        sw->SetChecked(on);
         m_Target->Redraw();
         return;
       }
       if (auto *cb = dynamic_cast<CheckBoxElement *>(
               m_Target->FindElementById(setting.binding.elementId))) {
-        cb->SetChecked(on, false);
+        cb->SetChecked(on);
         m_Target->Redraw();
       }
       return;

@@ -910,10 +910,6 @@ private:
   int m_RenderBitmapW = 0;
   int m_RenderBitmapH = 0;
 
-public:
-  /// @brief Timer ID driving toggleSwitch knob animations.
-  static const UINT_PTR TIMER_TOGGLE_ANIM = 8;
-
 private:
   static const UINT_PTR TIMER_TOPMOST = 2;
   static const UINT_PTR TIMER_TOOLTIP = 3;

@@ -10,11 +10,12 @@
 #include "Element.h"
 
 /**
- * @brief On/off switch element with an animated sliding knob.
+ * @brief On/off switch element with a sliding knob.
  *
  * @note A left click toggles the state by itself (no JS callback required);
  *       the engine then fires the onChange callback or routes the change to
- *       the widget's input sink. Knob motion is tweened on a widget timer.
+ *       the widget's input sink. The knob jumps straight to its resting
+ *       position.
  */
 class ToggleSwitchElement : public Element {
 public:
@@ -37,18 +38,11 @@ public:
 
   bool IsChecked() const { return m_Checked; }
 
-  /// @brief Sets the checked state, optionally sliding the knob.
-  void SetChecked(bool checked, bool animate);
+  /// @brief Sets the checked state.
+  void SetChecked(bool checked);
 
-  /// @brief Flips the checked state with animation per durationMs.
+  /// @brief Flips the checked state.
   void Toggle();
-
-  /// @brief Advances the knob tween; call from the widget animation timer.
-  /// @return True while an animation is still running.
-  bool StepAnimation();
-
-  /// @return True if the knob is currently animating.
-  bool IsAnimating() const { return m_Animating; }
 
   // ============================================================================
   // Track Styling
@@ -103,17 +97,6 @@ public:
   BYTE m_LabelFontAlpha = 255;
 
   // ============================================================================
-  // Animation
-  // ============================================================================
-
-  int m_DurationMs = 180;                ///< Knob slide duration; 0 = instant.
-  std::wstring m_Easing = L"ease-out";   ///< AnimationEasing function name.
-
-  /// @brief Pixel snap applied to the resting knob center (set when an
-  ///        animation finishes) so the final frame matches a fresh paint.
-  float m_KnobOffsetPx = 0.0f;
-
-  // ============================================================================
   // Event Callbacks
   // ============================================================================
 
@@ -125,9 +108,4 @@ public:
 
 private:
   bool m_Checked = false;
-  bool m_Animating = false;
-  float m_KnobProgress = 0.0f; ///< Rendered knob position 0.0 (off)..1.0 (on).
-  float m_AnimFrom = 0.0f;
-  float m_AnimTo = 1.0f;
-  DWORD m_AnimStartTick = 0;
 };

@@ -130,13 +130,13 @@ bool ApplySettingToWidget(Widget *widget, const WidgetSetting &setting,
 
   if (element->GetType() == ELEMENT_TOGGLE_SWITCH && prop == L"checked") {
     static_cast<ToggleSwitchElement *>(element)->SetChecked(
-        ParseSettingBool(value), /*animate=*/false);
+        ParseSettingBool(value));
     return true;
   }
 
   if (element->GetType() == ELEMENT_CHECK_BOX && prop == L"checked") {
     static_cast<CheckBoxElement *>(element)->SetChecked(
-        ParseSettingBool(value), /*animate=*/false);
+        ParseSettingBool(value));
     return true;
   }
 

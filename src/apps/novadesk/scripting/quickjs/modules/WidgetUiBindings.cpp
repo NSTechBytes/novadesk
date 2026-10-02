@@ -1349,16 +1349,8 @@ JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
       options.checked = wasChecked;
     if (JS_IsObject(argv[1])) {
       JSValue checkedVal = JS_GetPropertyStr(ctx, argv[1], "checked");
-      if (!JS_IsUndefined(checkedVal)) {
-        bool animate = true;
-        JSValue animateVal = JS_GetPropertyStr(ctx, argv[1], "animate");
-        if (!JS_IsUndefined(animateVal))
-          animate = JS_ToBool(ctx, animateVal) == 1;
-        JS_FreeValue(ctx, animateVal);
-        sw->SetChecked(JS_ToBool(ctx, checkedVal) == 1, animate);
-        if (sw->IsAnimating())
-          SetTimer(widget->GetHwnd(), Widget::TIMER_TOGGLE_ANIM, 16, nullptr);
-      }
+      if (!JS_IsUndefined(checkedVal))
+        sw->SetChecked(JS_ToBool(ctx, checkedVal) == 1);
       JS_FreeValue(ctx, checkedVal);
     }
     // Fire onChange only for a change actually requested through this call;
@@ -1373,21 +1365,6 @@ JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
     PropertyParser::PreFillCheckBoxOptions(options, cb);
     PropertyParser::ParseCheckBoxOptions(ctx, argv[1], options, baseDir);
     const CheckBoxElement::State wasState = cb->GetState();
-    // If the caller supplied an explicit "checked" key, keep the options state
-    // aligned with the current element state so ApplyCheckBoxOptions does not
-    // silently apply the new state without animation.  The explicit block below
-    // will call SetState with the correct animate flag.
-    bool hasExplicitChecked = false;
-    if (JS_IsObject(argv[1])) {
-      JSValue probe = JS_GetPropertyStr(ctx, argv[1], "checked");
-      hasExplicitChecked = !JS_IsUndefined(probe) && !JS_IsNull(probe);
-      JS_FreeValue(ctx, probe);
-    }
-    if (hasExplicitChecked) {
-      options.checked = cb->IsChecked();
-      options.indeterminate =
-          cb->GetState() == CheckBoxElement::State::Indeterminate;
-    }
     PropertyParser::ApplyCheckBoxOptions(cb, options);
     if (cb->GetState() != wasState) {
       options.checked = wasState != CheckBoxElement::State::Unchecked;
@@ -1396,11 +1373,6 @@ JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
     if (JS_IsObject(argv[1])) {
       JSValue checkedVal = JS_GetPropertyStr(ctx, argv[1], "checked");
       if (!JS_IsUndefined(checkedVal) && !JS_IsNull(checkedVal)) {
-        bool animate = true;
-        JSValue animateVal = JS_GetPropertyStr(ctx, argv[1], "animate");
-        if (!JS_IsUndefined(animateVal))
-          animate = JS_ToBool(ctx, animateVal) == 1;
-        JS_FreeValue(ctx, animateVal);
         CheckBoxElement::State wanted = CheckBoxElement::State::Unchecked;
         if (JS_IsString(checkedVal)) {
           const char *s = JS_ToCString(ctx, checkedVal);
@@ -1415,9 +1387,7 @@ JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
         } else if (JS_ToBool(ctx, checkedVal) == 1) {
           wanted = CheckBoxElement::State::Checked;
         }
-        cb->SetState(wanted, animate);
-        if (cb->IsAnimating())
-          SetTimer(widget->GetHwnd(), Widget::TIMER_TOGGLE_ANIM, 16, nullptr);
+        cb->SetState(wanted);
       }
       JS_FreeValue(ctx, checkedVal);
     }
@@ -3012,8 +2982,6 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
 
     if (prop == "checked" || prop == "value" || prop == "isOn")
       return JS_NewBool(ctx, sw->IsChecked() ? 1 : 0);
-    if (prop == "animating")
-      return JS_NewBool(ctx, sw->IsAnimating() ? 1 : 0);
     if (prop == "disabled")
       return JS_NewBool(ctx, sw->m_Disabled ? 1 : 0);
     if (prop == "onColor")
@@ -3089,10 +3057,6 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
           ctx, Utils::ToString(ColorUtil::ToRGBAString(sw->m_LabelFontColor,
                                                        sw->m_LabelFontAlpha))
                    .c_str());
-    if (prop == "durationMs")
-      return JS_NewInt32(ctx, sw->m_DurationMs);
-    if (prop == "easing")
-      return JS_NewString(ctx, Utils::ToString(sw->m_Easing).c_str());
   } else if (element->GetType() == ELEMENT_CHECK_BOX) {
     auto *cb = static_cast<CheckBoxElement *>(element);
 
@@ -3107,8 +3071,6 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
                      : "unchecked");
       return JS_NewString(ctx, s);
     }
-    if (prop == "animating")
-      return JS_NewBool(ctx, cb->IsAnimating() ? 1 : 0);
     if (prop == "triState")
       return JS_NewBool(ctx, cb->m_TriState ? 1 : 0);
     if (prop == "disabled")
@@ -3174,10 +3136,6 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
                    .c_str());
     if (prop == "labelGap")
       return JS_NewFloat64(ctx, cb->m_LabelGap);
-    if (prop == "durationMs")
-      return JS_NewInt32(ctx, cb->m_DurationMs);
-    if (prop == "easing")
-      return JS_NewString(ctx, Utils::ToString(cb->m_Easing).c_str());
   } else if (element->GetType() == ELEMENT_SLIDER) {
     auto *sl = static_cast<SliderElement *>(element);
 
@@ -3533,19 +3491,13 @@ JSValue JsWidgetSetToggleSwitchChecked(JSContext *ctx, JSValueConst thisVal,
   if (!widget)
     return JS_NewBool(ctx, 0);
   if (argc < 2)
-    return ThrowTypeError(ctx, "setToggleSwitchChecked",
-                          "expected (id, checked[, animate])");
+    return ThrowTypeError(ctx, "setToggleSwitchChecked", "expected (id, checked)");
   auto *sw = FindToggleSwitch(ctx, widget, argv[0]);
   if (!sw)
     return JS_NewBool(ctx, 0);
   bool checked = JS_ToBool(ctx, argv[1]) == 1;
-  bool animate = true;
-  if (argc >= 3 && !JS_IsUndefined(argv[2]))
-    animate = JS_ToBool(ctx, argv[2]) == 1;
   if (sw->IsChecked() != checked) {
-    sw->SetChecked(checked, animate);
-    if (sw->IsAnimating())
-      SetTimer(widget->GetHwnd(), Widget::TIMER_TOGGLE_ANIM, 16, nullptr);
+    sw->SetChecked(checked);
     if (sw->m_OnChangeCallbackId != -1)
       JSEngine::CallEventCallbackWithText(sw->m_OnChangeCallbackId, widget,
                                           checked ? L"true" : L"false");
@@ -3601,7 +3553,7 @@ JSValue JsWidgetSetCheckBoxChecked(JSContext *ctx, JSValueConst thisVal,
     return JS_NewBool(ctx, 0);
   if (argc < 2)
     return ThrowTypeError(ctx, "setCheckBoxChecked",
-                          "expected (id, checked[, animate])");
+                          "expected (id, checked)");
   auto *cb = FindCheckBox(ctx, widget, argv[0]);
   if (!cb)
     return JS_NewBool(ctx, 0);
@@ -3619,13 +3571,8 @@ JSValue JsWidgetSetCheckBoxChecked(JSContext *ctx, JSValueConst thisVal,
   } else if (JS_ToBool(ctx, argv[1]) == 1) {
     wanted = CheckBoxElement::State::Checked;
   }
-  bool animate = true;
-  if (argc >= 3 && !JS_IsUndefined(argv[2]))
-    animate = JS_ToBool(ctx, argv[2]) == 1;
   if (cb->GetState() != wanted) {
-    cb->SetState(wanted, animate);
-    if (cb->IsAnimating())
-      SetTimer(widget->GetHwnd(), Widget::TIMER_TOGGLE_ANIM, 16, nullptr);
+    cb->SetState(wanted);
     std::wstring value = L"false";
     if (wanted == CheckBoxElement::State::Checked)
       value = L"true";

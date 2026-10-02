@@ -461,9 +461,6 @@ struct ToggleSwitchOptions : public ElementOptions {
   COLORREF labelFontColor = RGB(255, 255, 255);
   BYTE labelFontAlpha = 255;
 
-  int durationMs = 180;
-  std::wstring easing = L"ease-out";
-
   int onChangeCallbackId = -1;
 };
 
@@ -504,9 +501,6 @@ struct CheckBoxOptions : public ElementOptions {
   COLORREF fontColor = RGB(228, 228, 231);
   BYTE fontAlpha = 255;
   float labelGap = 8.0f;
-
-  int durationMs = 120;
-  std::wstring easing = L"ease-out";
 
   int onChangeCallbackId = -1;
 };

@@ -7,7 +7,6 @@
 
 #include "CheckBoxElement.h"
 #include "Direct2DHelper.h"
-#include "../domain/animation/AnimationEasing.h"
 #include <wrl/client.h>
 #include <algorithm>
 #include <cmath>
@@ -18,51 +17,18 @@ constexpr float kClamp01(float v) {
 }
 } // namespace
 
-void CheckBoxElement::SetState(State state, bool animate) {
-  const State oldState = m_State;
-  if (oldState == state && !m_Animating) {
-    m_MarkProgress = state == State::Unchecked ? 0.0f : 1.0f;
-    return;
-  }
-  m_State = state;
-  const float target = state == State::Unchecked ? 0.0f : 1.0f;
-  if (!animate || m_DurationMs <= 0) {
-    m_Animating = false;
-    m_MarkProgress = target;
-    return;
-  }
-  m_AnimFrom = m_MarkProgress;
-  m_AnimTo = target;
-  m_AnimStartTick = GetTickCount();
-  m_Animating = true;
-}
+void CheckBoxElement::SetState(State state) { m_State = state; }
 
 void CheckBoxElement::Toggle() {
   if (!m_TriState) {
-    SetState(IsChecked() ? State::Unchecked : State::Checked,
-             m_DurationMs > 0);
+    SetState(IsChecked() ? State::Unchecked : State::Checked);
     return;
   }
   const State next = m_State == State::Unchecked
                          ? State::Checked
                          : (m_State == State::Checked ? State::Indeterminate
                                                       : State::Unchecked);
-  SetState(next, m_DurationMs > 0);
-}
-
-bool CheckBoxElement::StepAnimation() {
-  if (!m_Animating)
-    return false;
-  DWORD elapsed = GetTickCount() - m_AnimStartTick;
-  if (static_cast<int>(elapsed) >= m_DurationMs) {
-    m_MarkProgress = m_AnimTo;
-    m_Animating = false;
-    return false;
-  }
-  float t = static_cast<float>(elapsed) / static_cast<float>(m_DurationMs);
-  float eased = AnimationEasing::Evaluate(kClamp01(t), m_Easing);
-  m_MarkProgress = m_AnimFrom + (m_AnimTo - m_AnimFrom) * eased;
-  return true;
+  SetState(next);
 }
 
 void CheckBoxElement::Render(ID2D1DeviceContext *context) {
@@ -144,18 +110,9 @@ void CheckBoxElement::Render(ID2D1DeviceContext *context) {
     }
   }
 
-  //  Mark (checkmark polyline or indeterminate dash), scaled about the
-  //  box center and faded in by the tween progress. Two non-empty states
-  //  morph at full progress so switching kinds never double-fades. 
-  const float progress =
-      m_Animating ? kClamp01(m_MarkProgress) : (nonEmpty ? 1.0f : 0.0f);
-  const bool morphBetweenNonEmpty =
-      nonEmpty && m_Animating && m_AnimTo > 0.5f && m_AnimFrom > 0.5f;
-  const float markAlpha =
-      morphBetweenNonEmpty ? 1.0f : progress;
-  const float markScale =
-      morphBetweenNonEmpty ? 1.0f : (0.6f + 0.4f * progress);
-  if (markAlpha > 0.001f) {
+  //  Mark (checkmark polyline or indeterminate dash), drawn at full strength
+  //  whenever the state is non-empty.
+  if (nonEmpty) {
     COLORREF checkColor = m_CheckColor;
     BYTE checkAlpha = m_CheckAlpha;
     if (m_Disabled) {
@@ -167,22 +124,24 @@ void CheckBoxElement::Render(ID2D1DeviceContext *context) {
         D2D1::ColorF(GetRValue(checkColor) / 255.0f,
                      GetGValue(checkColor) / 255.0f,
                      GetBValue(checkColor) / 255.0f,
-                     (checkAlpha / 255.0f) * opacity * markAlpha),
+                     (checkAlpha / 255.0f) * opacity),
         markBrush.GetAddressOf());
     if (markBrush) {
       const float thickness = std::max(0.5f, m_CheckThickness);
       const float cx = boxLeft + size * 0.5f;
       const float cy = boxTop + size * 0.5f;
-      const float s = size * markScale;
       if (m_State == State::Indeterminate) {
-        context->DrawLine(
-            D2D1::Point2F(cx - s * 0.28f, cy), D2D1::Point2F(cx + s * 0.28f, cy),
-            markBrush.Get(), thickness, nullptr);
+        context->DrawLine(D2D1::Point2F(cx - size * 0.28f, cy),
+                          D2D1::Point2F(cx + size * 0.28f, cy), markBrush.Get(),
+                          thickness, nullptr);
       } else {
         // Polyline: left-mid -> bottom-mid -> top-right, centred on the box.
-        const D2D1_POINT_2F p0 = D2D1::Point2F(cx - s * 0.32f, cy + s * 0.02f);
-        const D2D1_POINT_2F p1 = D2D1::Point2F(cx - s * 0.10f, cy + s * 0.24f);
-        const D2D1_POINT_2F p2 = D2D1::Point2F(cx + s * 0.34f, cy - s * 0.24f);
+        const D2D1_POINT_2F p0 =
+            D2D1::Point2F(cx - size * 0.32f, cy + size * 0.02f);
+        const D2D1_POINT_2F p1 =
+            D2D1::Point2F(cx - size * 0.10f, cy + size * 0.24f);
+        const D2D1_POINT_2F p2 =
+            D2D1::Point2F(cx + size * 0.34f, cy - size * 0.24f);
         context->DrawLine(p0, p1, markBrush.Get(), thickness, nullptr);
         context->DrawLine(p1, p2, markBrush.Get(), thickness, nullptr);
       }

@@ -7,7 +7,6 @@
 
 #include "ToggleSwitchElement.h"
 #include "Direct2DHelper.h"
-#include "../domain/animation/AnimationEasing.h"
 #include <wrl/client.h>
 #include <algorithm>
 #include <cmath>
@@ -18,44 +17,9 @@ constexpr float kClamp01(float v) {
 }
 } // namespace
 
-void ToggleSwitchElement::SetChecked(bool checked, bool animate) {
-  if (m_Checked == checked && !m_Animating) {
-    m_KnobProgress = checked ? 1.0f : 0.0f;
-    return;
-  }
-  m_Checked = checked;
-  const float target = checked ? 1.0f : 0.0f;
-  if (!animate || m_DurationMs <= 0) {
-    m_Animating = false;
-    m_KnobProgress = target;
-    m_KnobOffsetPx = 0.0f;
-    return;
-  }
-  m_KnobOffsetPx = 0.0f;
-  m_AnimFrom = m_KnobProgress;
-  m_AnimTo = target;
-  m_AnimStartTick = GetTickCount();
-  m_Animating = true;
-}
+void ToggleSwitchElement::SetChecked(bool checked) { m_Checked = checked; }
 
-void ToggleSwitchElement::Toggle() {
-  SetChecked(!m_Checked, m_DurationMs > 0);
-}
-
-bool ToggleSwitchElement::StepAnimation() {
-  if (!m_Animating)
-    return false;
-  DWORD elapsed = GetTickCount() - m_AnimStartTick;
-  if (static_cast<int>(elapsed) >= m_DurationMs) {
-    m_KnobProgress = m_AnimTo;
-    m_Animating = false;
-    return false;
-  }
-  float t = static_cast<float>(elapsed) / static_cast<float>(m_DurationMs);
-  float eased = AnimationEasing::Evaluate(kClamp01(t), m_Easing);
-  m_KnobProgress = m_AnimFrom + (m_AnimTo - m_AnimFrom) * eased;
-  return true;
-}
+void ToggleSwitchElement::Toggle() { m_Checked = !m_Checked; }
 
 void ToggleSwitchElement::Render(ID2D1DeviceContext *context) {
   if (!context || !m_Show)
@@ -143,10 +107,8 @@ void ToggleSwitchElement::Render(ID2D1DeviceContext *context) {
     diameter = std::max(1.0f, height - 2.0f * padding);
   }
   const float travel = std::max(0.0f, width - diameter - 2.0f * padding);
-  const float progress = m_Animating ? m_KnobProgress
-                                      : (m_Checked ? 1.0f : 0.0f);
-  const float knobCenterX = left + padding + diameter * 0.5f +
-                            travel * kClamp01(progress) + m_KnobOffsetPx;
+  const float knobCenterX =
+      left + padding + diameter * 0.5f + travel * (m_Checked ? 1.0f : 0.0f);
   const float knobCenterY = top + height * 0.5f;
   const D2D1_ELLIPSE knob =
       D2D1::Ellipse(D2D1::Point2F(knobCenterX, knobCenterY), diameter * 0.5f,
@@ -182,7 +144,7 @@ void ToggleSwitchElement::Render(ID2D1DeviceContext *context) {
   format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
   // Keep the label on the half of the track the knob is not covering.
-  const float labelLeft = left + (progress > 0.5f ? 0.0f : width * 0.5f);
+  const float labelLeft = left + (m_Checked ? 0.0f : width * 0.5f);
   const float labelWidth = width * 0.5f;
   Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
   hr = Direct2D::GetWriteFactory()->CreateTextLayout(

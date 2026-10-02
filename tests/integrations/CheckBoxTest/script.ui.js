@@ -121,8 +121,6 @@ ui.addCheckBox({
   fontWeight: 600,
   fontColor: "#FFFFFF",
   labelGap: 10,
-  durationMs: 250,
-  easing: "ease-in-out",
   hoverBorderColor: "#60A5FA",
   disabledBoxColor: "#27272A",
   disabledCheckColor: "#52525B",
@@ -282,8 +280,6 @@ expectEq(
   rgba("#FFFFFF"),
 );
 expectEq("labelGap", ui.getElementProperty("styledBox", "labelGap"), 10);
-expectEq("durationMs", ui.getElementProperty("styledBox", "durationMs"), 250);
-expectEq("easing", ui.getElementProperty("styledBox", "easing"), "ease-in-out");
 expectEq(
   "hoverBorderColor",
   ui.getElementProperty("styledBox", "hoverBorderColor"),
@@ -327,16 +323,6 @@ expectEq(
   2,
 );
 expectEq(
-  "default durationMs",
-  ui.getElementProperty("testBox", "durationMs"),
-  120,
-);
-expectEq(
-  "default easing",
-  ui.getElementProperty("testBox", "easing"),
-  "ease-out",
-);
-expectEq(
   "default fontFace",
   ui.getElementProperty("testBox", "fontFace"),
   "Segoe UI",
@@ -373,49 +359,37 @@ expectFalse("re-enabled", ui.getElementProperty("testBox", "disabled"));
 // Runtime styling updates
 ui.setElementProperties("testBox", {
   checkThickness: 3,
-  durationMs: 100,
-  easing: "linear",
 });
 expectEq(
   "checkThickness after update",
   ui.getElementProperty("testBox", "checkThickness"),
   3,
 );
-expectEq(
-  "durationMs after update",
-  ui.getElementProperty("testBox", "durationMs"),
-  100,
-);
-expectEq(
-  "easing after update",
-  ui.getElementProperty("testBox", "easing"),
-  "linear",
-);
 
 console.log("----------------------------------------");
 console.log("Starting CheckBox Methods Tests...");
 console.log("----------------------------------------");
 
-// setCheckBoxChecked / getCheckBoxChecked (instant: animate=false)
+// setCheckBoxChecked / getCheckBoxChecked
 changeLog = [];
 expectTrue(
   "setCheckBoxChecked returns true",
-  ui.setCheckBoxChecked("testBox", true, false),
+  ui.setCheckBoxChecked("testBox", true),
 );
 expectTrue("checked after set true", ui.getCheckBoxChecked("testBox"));
 expectEq("state after set true", ui.getCheckBoxState("testBox"), "checked");
 expectTrue("onChange fired with 'true'", firedWith(changeLog, 0, "true"));
 
-ui.setCheckBoxChecked("testBox", false, false);
+ui.setCheckBoxChecked("testBox", false);
 expectFalse("checked after set false", ui.getCheckBoxChecked("testBox"));
 expectTrue("onChange fired with 'false'", firedWith(changeLog, 1, "false"));
 
 // Setting the same value must not fire onChange again
-ui.setCheckBoxChecked("testBox", false, false);
+ui.setCheckBoxChecked("testBox", false);
 expectEq("no duplicate onChange for same value", changeLog.length, 2);
 
 // String "indeterminate" sets the third state
-ui.setCheckBoxChecked("testBox", "indeterminate", false);
+ui.setCheckBoxChecked("testBox", "indeterminate");
 expectTrue("indeterminate reports checked", ui.getCheckBoxChecked("testBox"));
 expectEq(
   "state after indeterminate",
@@ -428,7 +402,7 @@ expectTrue(
 );
 
 // toggleCheckBox on a two-state box flips checked/unchecked only
-ui.setCheckBoxChecked("testBox", false, false);
+ui.setCheckBoxChecked("testBox", false);
 changeLog = [];
 const toggled1 = ui.toggleCheckBox("testBox");
 expectTrue("toggleCheckBox returns true", toggled1);
@@ -477,7 +451,7 @@ expectTrue(
 
 // Programmatic indeterminate still works on a two-state box, and the next
 // click from it lands on unchecked.
-ui.setCheckBoxChecked("testBox", "indeterminate", false);
+ui.setCheckBoxChecked("testBox", "indeterminate");
 expectTrue(
   "two-state box accepts programmatic indeterminate",
   ui.getCheckBoxChecked("testBox"),
@@ -531,8 +505,8 @@ expectFalse(
   ui.getElementProperty("testBox", "triState"),
 );
 
-// setElementProperties imperative checked (instant)
-ui.setElementProperties("testBox", { checked: true, animate: false });
+// setElementProperties imperative checked
+ui.setElementProperties("testBox", { checked: true });
 expectTrue(
   "checked via setElementProperties",
   ui.getElementProperty("testBox", "checked"),
@@ -543,17 +517,14 @@ expectEq(
   "true",
 );
 
-ui.setElementProperties("testBox", {
-  checked: "indeterminate",
-  animate: false,
-});
+ui.setElementProperties("testBox", { checked: "indeterminate" });
 expectEq(
   "string checked via setElementProperties",
   ui.getCheckBoxState("testBox"),
   "indeterminate",
 );
 
-ui.setElementProperties("testBox", { checked: false, animate: false });
+ui.setElementProperties("testBox", { checked: false });
 expectFalse(
   "unchecked via setElementProperties",
   ui.getElementProperty("testBox", "checked"),
@@ -579,30 +550,16 @@ expectEq(
 );
 
 console.log("----------------------------------------");
-console.log("Starting CheckBox Animation Tests...");
+console.log("Starting CheckBox Update Tests...");
 console.log("----------------------------------------");
 
 ui.beginUpdate();
-// Animated change sets animating=true briefly; duration 0 stays instant
-ui.setElementProperties("testBox", { durationMs: 400 });
-ui.setElementProperties("testBox", { checked: false, animate: true });
-expectTrue(
-  "animating after animated change",
-  ui.getElementProperty("testBox", "animating"),
-);
-
-ui.setElementProperties("testBox", { durationMs: 0 });
-ui.setElementProperties("testBox", { checked: true, animate: true });
+ui.setElementProperties("testBox", { checked: false });
+ui.setElementProperties("testBox", { checked: true });
 ui.endUpdate();
-expectFalse(
-  "not animating with durationMs 0",
-  ui.getElementProperty("testBox", "animating"),
-);
-expectTrue("settled checked", ui.getElementProperty("testBox", "checked"));
-
-expectFalse(
-  "animation finished after duration",
-  ui.getElementProperty("testBox", "animating"),
+expectTrue(
+  "checked after batched update",
+  ui.getElementProperty("testBox", "checked"),
 );
 expectEq("state settled", ui.getElementProperty("testBox", "state"), "checked");
 

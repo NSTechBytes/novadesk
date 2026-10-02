@@ -15,7 +15,6 @@
  * @note A left click cycles the state unchecked -> checked -> indeterminate
  *       by itself (no JS callback required); the engine then fires the
  *       onChange callback or routes the change to the widget's input sink.
- *       The mark fades/scales in on the widget toggle animation timer.
  */
 class CheckBoxElement : public Element {
 public:
@@ -48,23 +47,16 @@ public:
   /// @brief True for both Checked and Indeterminate.
   bool IsChecked() const { return m_State != State::Unchecked; }
 
-  /// @brief Sets the state, optionally fading/scaling the mark.
-  void SetState(State state, bool animate);
+  /// @brief Sets the state.
+  void SetState(State state);
 
   /// @brief Convenience: sets Checked/Unchecked from a bool.
-  void SetChecked(bool checked, bool animate) {
-    SetState(checked ? State::Checked : State::Unchecked, animate);
+  void SetChecked(bool checked) {
+    SetState(checked ? State::Checked : State::Unchecked);
   }
 
   /// @brief Advances unchecked -> checked -> indeterminate -> unchecked.
   void Toggle();
-
-  /// @brief Advances the mark tween; call from the widget animation timer.
-  /// @return True while an animation is still running.
-  bool StepAnimation();
-
-  /// @return True if the mark is currently animating.
-  bool IsAnimating() const { return m_Animating; }
 
   // ============================================================================
   // Box Styling
@@ -116,13 +108,6 @@ public:
   float m_LabelGap = 8.0f; ///< Gap between the box and the label.
 
   // ============================================================================
-  // Animation
-  // ============================================================================
-
-  int m_DurationMs = 120;              ///< Mark fade/scale duration; 0 = instant.
-  std::wstring m_Easing = L"ease-out"; ///< AnimationEasing function name.
-
-  // ============================================================================
   // Event Callbacks
   // ============================================================================
 
@@ -134,9 +119,4 @@ public:
 
 private:
   State m_State = State::Unchecked;
-  bool m_Animating = false;
-  float m_MarkProgress = 0.0f; ///< Rendered mark strength 0.0..1.0.
-  float m_AnimFrom = 0.0f;
-  float m_AnimTo = 1.0f;
-  DWORD m_AnimStartTick = 0;
 };

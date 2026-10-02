@@ -117,18 +117,6 @@ void ParseCheckBoxOptions(JSContext *ctx, JSValueConst obj, CheckBoxOptions &o,
   ParseColorAlpha(ctx, obj, "fontColor", o.fontColor, o.fontAlpha);
   ParseFloatProp(ctx, obj, "labelGap", o.labelGap);
 
-  // animation
-  ParseIntProp(ctx, obj, "durationMs", o.durationMs);
-  if (o.durationMs < 0)
-    o.durationMs = 0;
-  {
-    std::wstring easing = Js::GetStringProp(ctx, obj, "easing");
-    if (!easing.empty()) {
-      std::transform(easing.begin(), easing.end(), easing.begin(), ::towlower);
-      o.easing = easing;
-    }
-  }
-
   // callbacks
   Js::GetEventCallbackProp(ctx, obj, "onChange", o.onChangeCallbackId);
 }
@@ -169,9 +157,6 @@ void ApplyCheckBoxOptions(CheckBoxElement *e, const CheckBoxOptions &o) {
   e->m_FontAlpha = o.fontAlpha;
   e->m_LabelGap = o.labelGap;
 
-  e->m_DurationMs = o.durationMs;
-  e->m_Easing = o.easing;
-
   e->m_OnChangeCallbackId = o.onChangeCallbackId;
 
   // An interactive check box shows the hand cursor even without a JS callback.
@@ -180,14 +165,11 @@ void ApplyCheckBoxOptions(CheckBoxElement *e, const CheckBoxOptions &o) {
     e->SetMouseEventCursorName(L"hand");
   }
 
-  // Only move the mark when the state actually changed; applying styling
-  // must not restart or jump an in-flight animation.
   const CheckBoxElement::State wanted =
       o.indeterminate ? CheckBoxElement::State::Indeterminate
                       : (o.checked ? CheckBoxElement::State::Checked
                                    : CheckBoxElement::State::Unchecked);
-  if (e->GetState() != wanted)
-    e->SetState(wanted, false);
+  e->SetState(wanted);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -230,9 +212,6 @@ void PreFillCheckBoxOptions(CheckBoxOptions &o, CheckBoxElement *e) {
   o.fontColor = e->m_FontColor;
   o.fontAlpha = e->m_FontAlpha;
   o.labelGap = e->m_LabelGap;
-
-  o.durationMs = e->m_DurationMs;
-  o.easing = e->m_Easing;
 
   o.onChangeCallbackId = e->m_OnChangeCallbackId;
 }

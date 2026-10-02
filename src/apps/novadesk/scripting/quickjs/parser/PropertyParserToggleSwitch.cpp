@@ -89,18 +89,6 @@ void ParseToggleSwitchOptions(JSContext *ctx, JSValueConst obj,
   ParseColorAlpha(ctx, obj, "labelFontColor", o.labelFontColor,
                   o.labelFontAlpha);
 
-  // animation
-  ParseIntProp(ctx, obj, "durationMs", o.durationMs);
-  if (o.durationMs < 0)
-    o.durationMs = 0;
-  {
-    std::wstring easing = Js::GetStringProp(ctx, obj, "easing");
-    if (!easing.empty()) {
-      std::transform(easing.begin(), easing.end(), easing.begin(), ::towlower);
-      o.easing = easing;
-    }
-  }
-
   // callbacks
   Js::GetEventCallbackProp(ctx, obj, "onChange", o.onChangeCallbackId);
 }
@@ -144,9 +132,6 @@ void ApplyToggleSwitchOptions(ToggleSwitchElement *e,
   e->m_LabelFontColor = o.labelFontColor;
   e->m_LabelFontAlpha = o.labelFontAlpha;
 
-  e->m_DurationMs = o.durationMs;
-  e->m_Easing = o.easing;
-
   e->m_OnChangeCallbackId = o.onChangeCallbackId;
 
   // An interactive switch shows the hand cursor even without a JS callback.
@@ -155,10 +140,7 @@ void ApplyToggleSwitchOptions(ToggleSwitchElement *e,
     e->SetMouseEventCursorName(L"hand");
   }
 
-  // Only move the knob when the state actually changed; applying styling
-  // must not restart or jump an in-flight animation.
-  if (e->IsChecked() != o.checked)
-    e->SetChecked(o.checked, false);
+  e->SetChecked(o.checked);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -202,9 +184,6 @@ void PreFillToggleSwitchOptions(ToggleSwitchOptions &o,
   o.labelFontWeight = e->m_LabelFontWeight;
   o.labelFontColor = e->m_LabelFontColor;
   o.labelFontAlpha = e->m_LabelFontAlpha;
-
-  o.durationMs = e->m_DurationMs;
-  o.easing = e->m_Easing;
 
   o.onChangeCallbackId = e->m_OnChangeCallbackId;
 }

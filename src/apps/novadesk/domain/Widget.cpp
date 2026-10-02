@@ -172,7 +172,6 @@ Widget::~Widget() {
     KillTimer(m_hWnd, TIMER_CARET);
     KillTimer(m_hWnd, TIMER_CTRL_OVERRIDE);
     KillTimer(m_hWnd, TIMER_TOOLTIP);
-    KillTimer(m_hWnd, TIMER_TOGGLE_ANIM);
 
     // KillTimer prevents future firings, but already-queued WM_TIMER
     // messages may still sit in the message queue.  Drain them now so
@@ -1571,58 +1570,6 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
         } else {
           KillTimer(hWnd, TIMER_SCROLLBAR_BUTTON);
         }
-      } else if (wParam == TIMER_TOGGLE_ANIM) {
-        bool anyAnimating = false;
-        for (const auto &elem : widget->m_Elements) {
-          auto *sw = dynamic_cast<ToggleSwitchElement *>(elem.get());
-          if (!sw || !sw->IsAnimating())
-            continue;
-          if (sw->StepAnimation()) {
-            anyAnimating = true;
-            continue;
-          }
-          // Finished: settle the knob on an integer pixel so the last frame
-          // is not a fraction short of (or past) the resting position.
-          // Geometry mirrors ToggleSwitchElement::Render, which measures from
-          // GetBounds() (scroll offset included).
-          const GfxRect b = sw->GetBounds();
-          const float h = static_cast<float>(b.Height);
-          const float w = static_cast<float>(b.Width);
-          float pad = (std::max)(0.0f, sw->m_KnobPadding);
-          float dia = sw->m_KnobSize > 0.0f
-                          ? (std::min)(sw->m_KnobSize, h - 2.0f * pad)
-                          : h - 2.0f * pad;
-          if (dia <= 0.0f) {
-            widget->Redraw();
-            continue;
-          }
-          if (sw->m_BorderWidth > 0.0f) {
-            pad += sw->m_BorderWidth;
-            dia = (std::max)(1.0f, h - 2.0f * pad);
-          }
-          const float travel = (std::max)(0.0f, w - dia - 2.0f * pad);
-          const float centerF =
-              b.X + pad + dia * 0.5f +
-              travel * (sw->IsChecked() ? 1.0f : 0.0f);
-          const int centerI = static_cast<int>(centerF + 0.5f);
-          sw->m_KnobOffsetPx =
-              static_cast<float>(centerI) - centerF;
-          widget->Redraw(); // Final frame at the settled knob position.
-        }
-        for (const auto &elem : widget->m_Elements) {
-          auto *cb = dynamic_cast<CheckBoxElement *>(elem.get());
-          if (!cb || !cb->IsAnimating())
-            continue;
-          if (cb->StepAnimation()) {
-            anyAnimating = true;
-            continue;
-          }
-          widget->Redraw(); // Final frame with the mark at full strength.
-        }
-        if (anyAnimating)
-          widget->Redraw();
-        else
-          KillTimer(hWnd, TIMER_TOGGLE_ANIM);
       }
     }
     return 0;
@@ -2601,10 +2548,6 @@ void Widget::ToggleToggleSwitch(ToggleSwitchElement *element) {
   if (!element || element->m_Disabled)
     return;
   element->Toggle();
-  if (element->IsAnimating())
-    SetTimer(m_hWnd, TIMER_TOGGLE_ANIM, 16, nullptr);
-  // Redraw immediately so the first animation frame (or instant change when
-  // durationMs==0) is visible before the animation timer fires.
   Redraw();
   const std::wstring value = element->IsChecked() ? L"true" : L"false";
   const int callbackId = element->m_OnChangeCallbackId;
@@ -2638,10 +2581,6 @@ void Widget::ToggleCheckBox(CheckBoxElement *element) {
   if (!element || element->m_Disabled)
     return;
   element->Toggle();
-  if (element->IsAnimating())
-    SetTimer(m_hWnd, TIMER_TOGGLE_ANIM, 16, nullptr);
-  // Redraw immediately so the first animation frame (or the instant state
-  // change when durationMs==0) is visible before the animation timer fires.
   Redraw();
   std::wstring value = L"false";
   if (element->GetState() == CheckBoxElement::State::Checked)

@@ -112,8 +112,6 @@ ui.addToggleSwitch({
   knobBorderWidth: 1,
   knobBorderColor: "#000000",
   opacity: 0.9,
-  durationMs: 250,
-  easing: "ease-in-out",
   hoverTrackColor: "#60A5FA",
   disabledTrackColor: "#27272A",
   disabledKnobColor: "#52525B",
@@ -264,16 +262,6 @@ expectEq(
   rgba("#FFFFFF"),
 );
 expectEq(
-  "durationMs",
-  ui.getElementProperty("styledSwitch", "durationMs"),
-  250,
-);
-expectEq(
-  "easing",
-  ui.getElementProperty("styledSwitch", "easing"),
-  "ease-in-out",
-);
-expectEq(
   "hoverTrackColor",
   ui.getElementProperty("styledSwitch", "hoverTrackColor"),
   rgba("#60A5FA"),
@@ -306,16 +294,6 @@ expectEq(
   2,
 );
 expectEq(
-  "default durationMs",
-  ui.getElementProperty("testSwitch", "durationMs"),
-  180,
-);
-expectEq(
-  "default easing",
-  ui.getElementProperty("testSwitch", "easing"),
-  "ease-out",
-);
-expectEq(
   "unset hoverTrackColor",
   ui.getElementProperty("testSwitch", "hoverTrackColor"),
   undefined,
@@ -341,34 +319,22 @@ expectFalse("re-enabled", ui.getElementProperty("testSwitch", "disabled"));
 // Runtime styling updates
 ui.setElementProperties("testSwitch", {
   knobPadding: 4,
-  durationMs: 100,
-  easing: "linear",
 });
 expectEq(
   "knobPadding after update",
   ui.getElementProperty("testSwitch", "knobPadding"),
   4,
 );
-expectEq(
-  "durationMs after update",
-  ui.getElementProperty("testSwitch", "durationMs"),
-  100,
-);
-expectEq(
-  "easing after update",
-  ui.getElementProperty("testSwitch", "easing"),
-  "linear",
-);
 
 console.log("----------------------------------------");
 console.log("Starting ToggleSwitch Methods Tests...");
 console.log("----------------------------------------");
 
-// setToggleSwitchChecked / getToggleSwitchChecked (instant: animate=false)
+// setToggleSwitchChecked / getToggleSwitchChecked
 changeLog = [];
 expectTrue(
   "setToggleSwitchChecked returns true",
-  ui.setToggleSwitchChecked("testSwitch", true, false),
+  ui.setToggleSwitchChecked("testSwitch", true),
 );
 expectTrue("checked after set true", ui.getToggleSwitchChecked("testSwitch"));
 expectTrue(
@@ -376,7 +342,7 @@ expectTrue(
   changeLog.length === 1 && changeLog[0] === "true",
 );
 
-ui.setToggleSwitchChecked("testSwitch", false, false);
+ui.setToggleSwitchChecked("testSwitch", false);
 expectFalse("checked after set false", ui.getToggleSwitchChecked("testSwitch"));
 expectTrue(
   "onChange fired with 'false'",
@@ -384,7 +350,7 @@ expectTrue(
 );
 
 // Setting the same value must not fire onChange again
-ui.setToggleSwitchChecked("testSwitch", false, false);
+ui.setToggleSwitchChecked("testSwitch", false);
 expectEq("no duplicate onChange for same value", changeLog.length, 2);
 
 // toggleToggleSwitch flips state
@@ -424,13 +390,13 @@ expectFalse(
 );
 expectFalse("toggleToggleSwitch unknown id", ui.toggleToggleSwitch("nope"));
 
-// setElementProperties imperative checked (instant)
-ui.setElementProperties("testSwitch", { checked: true, animate: false });
+// setElementProperties imperative checked
+ui.setElementProperties("testSwitch", { checked: true });
 expectTrue(
   "checked via setElementProperties",
   ui.getElementProperty("testSwitch", "checked"),
 );
-ui.setElementProperties("testSwitch", { checked: false, animate: false });
+ui.setElementProperties("testSwitch", { checked: false });
 expectFalse(
   "unchecked via setElementProperties",
   ui.getElementProperty("testSwitch", "checked"),
@@ -452,30 +418,16 @@ expectEq(
 );
 
 console.log("----------------------------------------");
-console.log("Starting ToggleSwitch Animation Tests...");
+console.log("Starting ToggleSwitch Update Tests...");
 console.log("----------------------------------------");
 
 ui.beginUpdate();
-// Animated change sets animating=true briefly; duration 0 stays instant
-ui.setElementProperties("testSwitch", { durationMs: 400 });
-ui.setElementProperties("testSwitch", { checked: false, animate: true });
-expectTrue(
-  "animating after animated change",
-  ui.getElementProperty("testSwitch", "animating"),
-);
-
-ui.setElementProperties("testSwitch", { durationMs: 0 });
-ui.setElementProperties("testSwitch", { checked: true, animate: true });
+ui.setElementProperties("testSwitch", { checked: false });
+ui.setElementProperties("testSwitch", { checked: true });
 ui.endUpdate();
-expectFalse(
-  "not animating with durationMs 0",
-  ui.getElementProperty("testSwitch", "animating"),
-);
-expectTrue("settled checked", ui.getElementProperty("testSwitch", "checked"));
-
-expectFalse(
-  "animation finished after duration",
-  ui.getElementProperty("testSwitch", "animating"),
+expectTrue(
+  "checked after batched update",
+  ui.getElementProperty("testSwitch", "checked"),
 );
 
 console.log("----------------------------------------");
