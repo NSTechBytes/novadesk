@@ -82,10 +82,14 @@ double SliderElement::ValueFromPoint(int px, int py) {
   const TrackGeometry g = GetTrackGeometry();
   if (g.length <= 0.0f || m_MaxValue <= m_MinValue)
     return m_Value;
+  // Use the correct axis origin for each orientation:
+  //   horizontal: px along X, offset from g.left (track start X)
+  //   vertical:   py along Y, offset from g.top  (track start Y)
   const float along = IsVertical() ? static_cast<float>(py)
                                    : static_cast<float>(px);
-  const float f = kClamp01((along - g.left) / g.length);
-  // Vertical fills from the bottom, so the fraction is inverted there.
+  const float origin = IsVertical() ? g.top : g.left;
+  const float f = kClamp01((along - origin) / g.length);
+  // Vertical convention: bottom = minValue, top = maxValue, so invert.
   const double frac = IsVertical() ? (1.0 - static_cast<double>(f))
                                    : static_cast<double>(f);
   return m_MinValue + frac * (m_MaxValue - m_MinValue);
