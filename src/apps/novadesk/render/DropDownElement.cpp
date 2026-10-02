@@ -142,13 +142,20 @@ void DropDownElement::Render(ID2D1DeviceContext *context) {
   const float chevronRight = left + width - m_PaddingRight;
   const float chevronCenterY = top + height * 0.5f;
   const float half = std::max(2.0f, m_ChevronSize);
+  // armX controls horizontal spread, armY controls vertical drop.
+  // Ratio ~1.6:1 (width:height) gives a natural chevron that is wider than
+  // tall without looking flat.
+  const float armX = half * 0.75f;
+  const float armY = half * 0.55f;
   auto chevronBrush = MakeBrush(m_ChevronColor, m_ChevronAlpha);
   if (chevronBrush) {
+    // apex is the bottom-centre point of the V
     const D2D1_POINT_2F apex =
-        D2D1::Point2F(chevronRight - half, chevronCenterY + half * 0.6f);
-    context->DrawLine(D2D1::Point2F(apex.x - half, apex.y - half * 0.8f), apex,
-                      chevronBrush.Get(), 1.5f);
-    context->DrawLine(apex, D2D1::Point2F(apex.x + half, apex.y - half * 0.8f),
+        D2D1::Point2F(chevronRight - armX, chevronCenterY + armY * 0.5f);
+    context->DrawLine(D2D1::Point2F(apex.x - armX, apex.y - armY),
+                      apex, chevronBrush.Get(), 1.5f);
+    context->DrawLine(apex,
+                      D2D1::Point2F(apex.x + armX, apex.y - armY),
                       chevronBrush.Get(), 1.5f);
   }
 
