@@ -147,46 +147,4 @@ void CheckBoxElement::Render(ID2D1DeviceContext *context) {
       }
     }
   }
-
-  //  Label 
-  if (m_Text.empty() || !Direct2D::GetWriteFactory())
-    return;
-
-  Microsoft::WRL::ComPtr<IDWriteTextFormat> format;
-  HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
-      m_FontFace.c_str(), nullptr,
-      static_cast<DWRITE_FONT_WEIGHT>(m_FontWeight), DWRITE_FONT_STYLE_NORMAL,
-      DWRITE_FONT_STRETCH_NORMAL, static_cast<FLOAT>(m_FontSize), L"",
-      format.GetAddressOf());
-  if (FAILED(hr) || !format)
-    return;
-  format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-  format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-
-  const float labelLeft = boxLeft + size + m_LabelGap;
-  const float labelWidth = left + width - labelLeft;
-  if (labelWidth <= 0.0f)
-    return;
-  Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
-  hr = Direct2D::GetWriteFactory()->CreateTextLayout(
-      m_Text.c_str(), static_cast<UINT32>(m_Text.length()), format.Get(),
-      labelWidth, height, layout.GetAddressOf());
-  if (FAILED(hr) || !layout)
-    return;
-
-  COLORREF textColor = m_FontColor;
-  BYTE textAlpha = m_FontAlpha;
-  if (m_Disabled) {
-    textColor = m_DisabledTextColor;
-    textAlpha = m_DisabledTextAlpha;
-  }
-  Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> textBrush;
-  context->CreateSolidColorBrush(
-      D2D1::ColorF(GetRValue(textColor) / 255.0f, GetGValue(textColor) / 255.0f,
-                   GetBValue(textColor) / 255.0f,
-                   (textAlpha / 255.0f) * opacity),
-      textBrush.GetAddressOf());
-  if (textBrush)
-    context->DrawTextLayout(D2D1::Point2F(labelLeft, top), layout.Get(),
-                            textBrush.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }

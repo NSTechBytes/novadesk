@@ -3108,11 +3108,6 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
           ctx, Utils::ToString(ColorUtil::ToRGBAString(
                    cb->m_DisabledCheckColor, cb->m_DisabledCheckAlpha))
                    .c_str());
-    if (prop == "disabledTextColor")
-      return JS_NewString(
-          ctx, Utils::ToString(ColorUtil::ToRGBAString(
-                   cb->m_DisabledTextColor, cb->m_DisabledTextAlpha))
-                   .c_str());
     if (prop == "hoverBorderColor") {
       if (!cb->m_HasHoverBorderColor)
         return JS_UNDEFINED;
@@ -3121,21 +3116,6 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
                    cb->m_HoverBorderColor, cb->m_HoverBorderAlpha))
                    .c_str());
     }
-    if (prop == "text")
-      return JS_NewString(ctx, Utils::ToString(cb->m_Text).c_str());
-    if (prop == "fontFace")
-      return JS_NewString(ctx, Utils::ToString(cb->m_FontFace).c_str());
-    if (prop == "fontSize")
-      return JS_NewInt32(ctx, cb->m_FontSize);
-    if (prop == "fontWeight")
-      return JS_NewInt32(ctx, cb->m_FontWeight);
-    if (prop == "fontColor")
-      return JS_NewString(
-          ctx, Utils::ToString(ColorUtil::ToRGBAString(cb->m_FontColor,
-                                                      cb->m_FontAlpha))
-                   .c_str());
-    if (prop == "labelGap")
-      return JS_NewFloat64(ctx, cb->m_LabelGap);
   } else if (element->GetType() == ELEMENT_SLIDER) {
     auto *sl = static_cast<SliderElement *>(element);
 

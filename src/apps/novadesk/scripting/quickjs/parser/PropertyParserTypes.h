@@ -488,19 +488,9 @@ struct CheckBoxOptions : public ElementOptions {
   BYTE disabledBoxAlpha = 255;
   COLORREF disabledCheckColor = RGB(150, 150, 158);
   BYTE disabledCheckAlpha = 255;
-  COLORREF disabledTextColor = RGB(113, 113, 122);
-  BYTE disabledTextAlpha = 255;
   bool hasHoverBorderColor = false;
   COLORREF hoverBorderColor = RGB(0, 0, 0);
   BYTE hoverBorderAlpha = 255;
-
-  std::wstring text;
-  std::wstring fontFace = L"Segoe UI";
-  int fontSize = 12;
-  int fontWeight = 400;
-  COLORREF fontColor = RGB(228, 228, 231);
-  BYTE fontAlpha = 255;
-  float labelGap = 8.0f;
 
   int onChangeCallbackId = -1;
 };

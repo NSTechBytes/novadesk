@@ -93,8 +93,6 @@ void ParseCheckBoxOptions(JSContext *ctx, JSValueConst obj, CheckBoxOptions &o,
                   o.disabledBoxAlpha);
   ParseColorAlpha(ctx, obj, "disabledCheckColor", o.disabledCheckColor,
                   o.disabledCheckAlpha);
-  ParseColorAlpha(ctx, obj, "disabledTextColor", o.disabledTextColor,
-                  o.disabledTextAlpha);
   {
     std::wstring hover = Js::GetStringProp(ctx, obj, "hoverBorderColor");
     if (!hover.empty()) {
@@ -102,20 +100,6 @@ void ParseCheckBoxOptions(JSContext *ctx, JSValueConst obj, CheckBoxOptions &o,
       o.hasHoverBorderColor = true;
     }
   }
-
-  // label
-  o.text = Js::GetStringProp(ctx, obj, "text");
-  {
-    std::wstring face = Js::GetStringProp(ctx, obj, "fontFace");
-    if (!face.empty())
-      o.fontFace = face;
-  }
-  ParseIntProp(ctx, obj, "fontSize", o.fontSize);
-  if (o.fontSize < 1)
-    o.fontSize = 1;
-  ParseIntProp(ctx, obj, "fontWeight", o.fontWeight);
-  ParseColorAlpha(ctx, obj, "fontColor", o.fontColor, o.fontAlpha);
-  ParseFloatProp(ctx, obj, "labelGap", o.labelGap);
 
   // callbacks
   Js::GetEventCallbackProp(ctx, obj, "onChange", o.onChangeCallbackId);
@@ -143,19 +127,9 @@ void ApplyCheckBoxOptions(CheckBoxElement *e, const CheckBoxOptions &o) {
   e->m_DisabledBoxAlpha = o.disabledBoxAlpha;
   e->m_DisabledCheckColor = o.disabledCheckColor;
   e->m_DisabledCheckAlpha = o.disabledCheckAlpha;
-  e->m_DisabledTextColor = o.disabledTextColor;
-  e->m_DisabledTextAlpha = o.disabledTextAlpha;
   e->m_HasHoverBorderColor = o.hasHoverBorderColor;
   e->m_HoverBorderColor = o.hoverBorderColor;
   e->m_HoverBorderAlpha = o.hoverBorderAlpha;
-
-  e->m_Text = o.text;
-  e->m_FontFace = o.fontFace;
-  e->m_FontSize = o.fontSize;
-  e->m_FontWeight = o.fontWeight;
-  e->m_FontColor = o.fontColor;
-  e->m_FontAlpha = o.fontAlpha;
-  e->m_LabelGap = o.labelGap;
 
   e->m_OnChangeCallbackId = o.onChangeCallbackId;
 
@@ -199,19 +173,9 @@ void PreFillCheckBoxOptions(CheckBoxOptions &o, CheckBoxElement *e) {
   o.disabledBoxAlpha = e->m_DisabledBoxAlpha;
   o.disabledCheckColor = e->m_DisabledCheckColor;
   o.disabledCheckAlpha = e->m_DisabledCheckAlpha;
-  o.disabledTextColor = e->m_DisabledTextColor;
-  o.disabledTextAlpha = e->m_DisabledTextAlpha;
   o.hasHoverBorderColor = e->m_HasHoverBorderColor;
   o.hoverBorderColor = e->m_HoverBorderColor;
   o.hoverBorderAlpha = e->m_HoverBorderAlpha;
-
-  o.text = e->m_Text;
-  o.fontFace = e->m_FontFace;
-  o.fontSize = e->m_FontSize;
-  o.fontWeight = e->m_FontWeight;
-  o.fontColor = e->m_FontColor;
-  o.fontAlpha = e->m_FontAlpha;
-  o.labelGap = e->m_LabelGap;
 
   o.onChangeCallbackId = e->m_OnChangeCallbackId;
 }

@@ -88,24 +88,10 @@ public:
   BYTE m_DisabledBoxAlpha = 255;
   COLORREF m_DisabledCheckColor = RGB(150, 150, 158);
   BYTE m_DisabledCheckAlpha = 255;
-  COLORREF m_DisabledTextColor = RGB(113, 113, 122);
-  BYTE m_DisabledTextAlpha = 255;
   bool m_HasHoverBorderColor = false; ///< Hover border enabled.
   COLORREF m_HoverBorderColor = RGB(0, 0, 0);
   BYTE m_HoverBorderAlpha = 255;
   bool m_Hovered = false; ///< Set by the widget on hover changes.
-
-  // ============================================================================
-  // Label
-  // ============================================================================
-
-  std::wstring m_Text; ///< Label drawn right of the box.
-  std::wstring m_FontFace = L"Segoe UI";
-  int m_FontSize = 12;
-  int m_FontWeight = 400;
-  COLORREF m_FontColor = RGB(228, 228, 231);
-  BYTE m_FontAlpha = 255;
-  float m_LabelGap = 8.0f; ///< Gap between the box and the label.
 
   // ============================================================================
   // Event Callbacks
