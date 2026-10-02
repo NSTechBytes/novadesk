@@ -1,0 +1,21 @@
+{
+  "name": "DropdownTest",
+  "main": "index.js",
+  "version": "1.0.0.0",
+  "author": "OfficialNovadesk",
+  "description": "Integration test for the drop-down element: creation, option/value model, selection clamping, property round-trips, programmatic methods and callbacks.",
+  "icon": "",
+  "preview": "",
+  "excludeItems": [],
+  "setup": {
+    "createDesktopShortcut": false,
+    "createStartupShortcut": false,
+    "runOnStartup": false,
+    "installDir": "%ProgramFiles%\\DropdownTest",
+    "startMenuFolder": "DropdownTest",
+    "setupName": "setup",
+    "setupIcon": "",
+    "enableUninstall": false,
+    "launchAfterInstall": false
+  }
+}

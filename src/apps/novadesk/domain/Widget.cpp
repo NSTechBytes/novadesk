@@ -2724,19 +2724,18 @@ void Widget::OpenDropDown(DropDownElement *dropDown) {
     m_DropDownPopup->Close();
   m_DropDownPopup = std::make_unique<DropDownPopup>(this, dropDown);
   dropDown->m_Open = true;
+  Redraw();
   m_DropDownPopup->Show();
 }
 
 void Widget::CloseDropDown() {
   if (m_DropDownPopup) {
-    if (DropDownElement *target = m_DropDownPopup->GetDropDownElement())
+    if (DropDownElement *target = m_DropDownPopup->GetDropDownElement()) {
       target->m_Open = false;
-    m_DropDownPopup->Close();
+      target->m_Hovered = false;
+    }
+    m_DropDownPopup->Close(); // Close() handles Redraw() internally
     m_DropDownPopup.reset();
-    // Immediately restore the arrow cursor and ask the widget to re-evaluate
-    // m_CursorElement. Without this the hand cursor stays until the next
-    // WM_MOUSEMOVE, because no window fires WM_SETCURSOR after the popup
-    // is destroyed.
     SetCursor(LoadCursor(nullptr, IDC_ARROW));
     if (m_hWnd)
       PostMessage(m_hWnd, WM_SETCURSOR, (WPARAM)m_hWnd,

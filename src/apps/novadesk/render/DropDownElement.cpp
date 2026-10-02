@@ -138,9 +138,8 @@ void DropDownElement::Render(ID2D1DeviceContext *context) {
     }
   }
 
-  //  Chevron: render the down-chevron glyph from Segoe MDL2 Assets (U+E70D).
-  //  This is a Windows system font available on Windows 10/11 that provides
-  //  crisp, pixel-perfect UI icons at any size.
+  //  Chevron: render the down/up-chevron glyph from Segoe MDL2 Assets.
+  //  U+E70D () = down (popup closed), U+E70E () = up (popup open).
   IDWriteFactory *writeFactory = Direct2D::GetWriteFactory();
   if (writeFactory) {
     const float chevronFontSize = std::max(4.0f, m_ChevronSize * 1.4f);
@@ -154,7 +153,8 @@ void DropDownElement::Render(ID2D1DeviceContext *context) {
       chevronFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
       chevronFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
 
-      const wchar_t chevronGlyph[] = L"\uE70D"; // 
+      // Switch glyph based on whether the popup is open.
+      const wchar_t *chevronGlyph = m_Open ? L"\uE70E" : L"\uE70D";
       Microsoft::WRL::ComPtr<IDWriteTextLayout> chevronLayout;
       if (SUCCEEDED(writeFactory->CreateTextLayout(
               chevronGlyph, 1, chevronFormat.Get(),

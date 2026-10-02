@@ -231,6 +231,14 @@ void DropDownPopup::Close() {
   if (m_Closing)
     return;
   m_Closing = true;
+  // Clear the element's visual state immediately before anything else so
+  // the very first widget repaint (triggered below) shows the idle border
+  // and down-chevron, not the open/hovered state.
+  if (m_DropDown && m_Widget && Widget::IsValid(m_Widget) &&
+      m_Widget->FindElementById(m_DropDown->GetId()) == m_DropDown) {
+    m_DropDown->m_Open = false;
+    m_DropDown->m_Hovered = false;
+  }
   if (m_hWnd && !m_Canceled && m_Widget && m_DropDown &&
       m_DropDown->m_OnCloseCallbackId != -1) {
     JSEngine::CallEventCallbackWithText(m_DropDown->m_OnCloseCallbackId,
@@ -251,6 +259,10 @@ void DropDownPopup::Close() {
     DeleteObject(m_Font);
     m_Font = nullptr;
   }
+  // Redraw the widget now that the popup is gone so the dropdown control
+  // immediately paints its idle state (normal border, down-chevron).
+  if (m_Widget && Widget::IsValid(m_Widget))
+    m_Widget->Redraw();
   m_Closing = false;
 }
 
