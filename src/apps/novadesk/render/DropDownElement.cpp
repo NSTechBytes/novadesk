@@ -138,30 +138,42 @@ void DropDownElement::Render(ID2D1DeviceContext *context) {
     }
   }
 
-  //  Chevron on the right edge.
-  const float chevronRight = left + width - m_PaddingRight;
-  const float chevronCenterY = top + height * 0.5f;
-  const float half = std::max(2.0f, m_ChevronSize);
-  // armX controls horizontal spread, armY controls vertical drop.
-  // Ratio ~1.6:1 (width:height) gives a natural chevron that is wider than
-  // tall without looking flat.
-  const float armX = half * 0.75f;
-  const float armY = half * 0.55f;
-  auto chevronBrush = MakeBrush(m_ChevronColor, m_ChevronAlpha);
-  if (chevronBrush) {
-    // apex is the bottom-centre point of the V
-    const D2D1_POINT_2F apex =
-        D2D1::Point2F(chevronRight - armX, chevronCenterY + armY * 0.5f);
-    context->DrawLine(D2D1::Point2F(apex.x - armX, apex.y - armY),
-                      apex, chevronBrush.Get(), 1.5f);
-    context->DrawLine(apex,
-                      D2D1::Point2F(apex.x + armX, apex.y - armY),
-                      chevronBrush.Get(), 1.5f);
+  //  Chevron: render the down-chevron glyph from Segoe MDL2 Assets (U+E70D).
+  //  This is a Windows system font available on Windows 10/11 that provides
+  //  crisp, pixel-perfect UI icons at any size.
+  IDWriteFactory *writeFactory = Direct2D::GetWriteFactory();
+  if (writeFactory) {
+    const float chevronFontSize = std::max(4.0f, m_ChevronSize * 1.4f);
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> chevronFormat;
+    if (SUCCEEDED(writeFactory->CreateTextFormat(
+            L"Segoe MDL2 Assets", nullptr,
+            DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+            DWRITE_FONT_STRETCH_NORMAL, chevronFontSize, L"",
+            chevronFormat.GetAddressOf()))) {
+      chevronFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+      chevronFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+      chevronFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+
+      const wchar_t chevronGlyph[] = L"\uE70D"; // 
+      Microsoft::WRL::ComPtr<IDWriteTextLayout> chevronLayout;
+      if (SUCCEEDED(writeFactory->CreateTextLayout(
+              chevronGlyph, 1, chevronFormat.Get(),
+              chevronFontSize * 2.0f, height,
+              chevronLayout.GetAddressOf()))) {
+        auto chevronBrush = MakeBrush(m_ChevronColor, m_ChevronAlpha);
+        if (chevronBrush) {
+          // Position so the glyph sits flush against the right padding.
+          const float glyphX = left + width - m_PaddingRight - chevronFontSize * 1.5f;
+          context->DrawTextLayout(D2D1::Point2F(glyphX, top),
+                                  chevronLayout.Get(), chevronBrush.Get(),
+                                  D2D1_DRAW_TEXT_OPTIONS_NONE);
+        }
+      }
+    }
   }
 
   //  Label: DirectWrite, vertically centred, clipped to the box.
   const std::wstring text = DisplayText();
-  IDWriteFactory *writeFactory = Direct2D::GetWriteFactory();
   if (text.empty() || !writeFactory)
     return;
 
@@ -178,7 +190,9 @@ void DropDownElement::Render(ID2D1DeviceContext *context) {
   format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
 
   const float textLeft = left + m_PaddingLeft;
-  const float textWidth = chevronRight - half * 2.0f - m_ChevronGap - textLeft;
+  // Reserve space on the right for the Segoe MDL2 chevron glyph.
+  const float chevronFontSize = std::max(4.0f, m_ChevronSize * 1.4f);
+  const float textWidth = (left + width - m_PaddingRight - chevronFontSize * 1.5f) - m_ChevronGap - textLeft;
   if (textWidth <= 0.0f)
     return;
 

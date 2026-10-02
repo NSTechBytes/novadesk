@@ -2733,6 +2733,14 @@ void Widget::CloseDropDown() {
       target->m_Open = false;
     m_DropDownPopup->Close();
     m_DropDownPopup.reset();
+    // Immediately restore the arrow cursor and ask the widget to re-evaluate
+    // m_CursorElement. Without this the hand cursor stays until the next
+    // WM_MOUSEMOVE, because no window fires WM_SETCURSOR after the popup
+    // is destroyed.
+    SetCursor(LoadCursor(nullptr, IDC_ARROW));
+    if (m_hWnd)
+      PostMessage(m_hWnd, WM_SETCURSOR, (WPARAM)m_hWnd,
+                  MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));
   }
 }
 
@@ -4818,6 +4826,10 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       m_MouseOverElement = nullptr;
       m_TooltipElement = nullptr;
     }
+    // Clear the cached cursor element so WM_SETCURSOR does not keep showing
+    // the hand cursor after the mouse has left the widget entirely.
+    m_CursorElement = nullptr;
+    SetCursor(LoadCursor(nullptr, IDC_ARROW));
     // Tooltip Update and kill timer
     m_Tooltip.Update(nullptr);
     KillTimer(m_hWnd, TIMER_TOOLTIP);

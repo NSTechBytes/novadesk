@@ -594,6 +594,11 @@ public:
   void SetSuppressNextDropDownOpen(bool value) {
     m_SuppressNextDropDownOpen = value;
   }
+  /// @brief Called by DropDownPopup on mouse-leave to clear the stale cached
+  ///        cursor element so WM_SETCURSOR stops showing the hand cursor.
+  void ClearCursorElement() {
+    m_CursorElement = nullptr;
+  }
 
   /// @brief Begins a batch update (suppresses redraws until EndUpdate).
   void BeginUpdate();

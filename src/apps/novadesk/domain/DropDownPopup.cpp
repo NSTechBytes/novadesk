@@ -600,8 +600,16 @@ LRESULT DropDownPopup::Handle(UINT m, WPARAM w, LPARAM l) {
   if (m == WM_MOUSELEAVE) {
     if (m_MouseActive && !m_DraggingThumb) {
       m_MouseActive = false;
+      m_Highlight = m_OriginalIndex;
       InvalidateRect(m_hWnd, nullptr, FALSE);
     }
+    // Clear the widget's cached cursor element and immediately restore the
+    // arrow cursor. The widget's own WM_MOUSELEAVE may never fire when moving
+    // from the popup directly to the desktop (the widget never re-armed
+    // TrackMouseEvent while the popup was open), so we must do this here.
+    if (m_Widget)
+      m_Widget->ClearCursorElement();
+    SetCursor(LoadCursor(nullptr, IDC_ARROW));
     return 0;
   }
   if (m == WM_SETCURSOR) {
