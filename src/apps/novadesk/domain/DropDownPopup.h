@@ -81,6 +81,7 @@ private:
   void LayoutRows();
   int RowIndexAt(POINT clientPt) const;
   void ScrollBy(int rows);
+  void ApplyHighlighted();
   void CommitHighlighted();
   void SelectFromKeyboard(int index);
   void InstallOutsideClickHook();
@@ -108,6 +109,7 @@ private:
   bool m_Canceled = false;       ///< Escape/close-without-commit.
   bool m_Closing = false;        ///< Re-entrancy guard for Close().
   bool m_WidgetNeedsRedraw = false;
-  int m_OriginalIndex = -1;      ///< Selection when the popup opened.
+  int m_OriginalIndex = -1;      ///< Tracks the current committed selection (for Paint highlight).
+  int m_EscapeIndex = -1;        ///< Selection when the popup first opened (for Escape restore).
   bool m_ShowDesktopWasActive = false;
 };

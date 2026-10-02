@@ -142,6 +142,7 @@ void DropDownPopup::Show() {
   m_Font = CreateDropDownFont(m_DropDown);
   LayoutRows();
   m_OriginalIndex = m_DropDown->GetSelectedIndex();
+  m_EscapeIndex = m_OriginalIndex;
   m_Highlight = m_OriginalIndex;
   m_FirstVisible = 0;
   if (m_Highlight >= 0) {
@@ -317,6 +318,36 @@ int DropDownPopup::RowIndexAt(POINT clientPt) const {
 void DropDownPopup::SelectFromKeyboard(int index) {
   m_MouseActive = false;
   SetHighlight(index, true);
+  // Immediately apply the highlighted selection to the dropdown so the
+  // control reflects the current arrow-key position. The popup stays open;
+  // Enter or a click will confirm and close. Escape restores m_OriginalIndex.
+  ApplyHighlighted();
+}
+
+void DropDownPopup::ApplyHighlighted() {
+  // Applies the current highlight to the dropdown's selected index and fires
+  // onChange, but does NOT close the popup. Used by keyboard navigation so
+  // the control updates live while the user browses with arrow keys.
+  if (!m_DropDown || !ElementStillValid() || m_Highlight < 0)
+    return;
+  if (m_Highlight >= m_DropDown->OptionCount())
+    return;
+  if (m_DropDown->GetSelectedIndex() == m_Highlight)
+    return; // no change, skip the callback
+  m_DropDown->SetSelectedIndex(m_Highlight);
+  // Advance m_OriginalIndex so Paint() highlights the newly committed row
+  // rather than leaving the old row lit up.
+  m_OriginalIndex = m_Highlight;
+  m_WidgetNeedsRedraw = true;
+  if (m_Widget)
+    m_Widget->NotifyDropDownChange(m_DropDown);
+  // NotifyDropDownChange may have destroyed the widget or the element;
+  // re-validate before touching anything else.
+  if (!Widget::IsValid(m_Widget) || !ElementStillValid())
+    return;
+  // Redraw the dropdown control itself so it shows the updated label.
+  FlushWidgetRedraw();
+  m_WidgetNeedsRedraw = false;
 }
 
 void DropDownPopup::CommitHighlighted() {
@@ -692,8 +723,8 @@ LRESULT DropDownPopup::Handle(UINT m, WPARAM w, LPARAM l) {
       if (m_DropDown && ElementStillValid() &&
           m_DropDown->m_OnCancelCallbackId != -1) {
         std::wstring payload =
-            (m_OriginalIndex >= 0 && m_OriginalIndex < count)
-                ? m_DropDown->Options()[static_cast<size_t>(m_OriginalIndex)]
+            (m_EscapeIndex >= 0 && m_EscapeIndex < count)
+                ? m_DropDown->Options()[static_cast<size_t>(m_EscapeIndex)]
                       .value
                 : std::wstring();
         JSEngine::CallEventCallbackWithText(m_DropDown->m_OnCancelCallbackId,
@@ -702,7 +733,7 @@ LRESULT DropDownPopup::Handle(UINT m, WPARAM w, LPARAM l) {
           return 0;
       }
       if (m_DropDown && ElementStillValid()) {
-        m_DropDown->SetSelectedIndex(m_OriginalIndex);
+        m_DropDown->SetSelectedIndex(m_EscapeIndex);
         m_WidgetNeedsRedraw = true;
       }
       Close();
