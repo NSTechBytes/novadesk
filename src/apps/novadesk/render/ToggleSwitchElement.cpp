@@ -126,42 +126,4 @@ void ToggleSwitchElement::Render(ID2D1DeviceContext *context) {
     if (knobBorderBrush)
       context->DrawEllipse(knob, knobBorderBrush.Get(), m_KnobBorderWidth);
   }
-
-  //  Labels 
-  const std::wstring &label = m_Checked ? m_OnText : m_OffText;
-  if (label.empty() || !Direct2D::GetWriteFactory())
-    return;
-
-  Microsoft::WRL::ComPtr<IDWriteTextFormat> format;
-  HRESULT hr = Direct2D::GetWriteFactory()->CreateTextFormat(
-      m_LabelFontFace.c_str(), nullptr,
-      static_cast<DWRITE_FONT_WEIGHT>(m_LabelFontWeight),
-      DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
-      static_cast<FLOAT>(m_LabelFontSize), L"", format.GetAddressOf());
-  if (FAILED(hr) || !format)
-    return;
-  format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-  format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-
-  // Keep the label on the half of the track the knob is not covering.
-  const float labelLeft = left + (m_Checked ? 0.0f : width * 0.5f);
-  const float labelWidth = width * 0.5f;
-  Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
-  hr = Direct2D::GetWriteFactory()->CreateTextLayout(
-      label.c_str(), static_cast<UINT32>(label.length()), format.Get(),
-      labelWidth, height, layout.GetAddressOf());
-  if (FAILED(hr) || !layout)
-    return;
-
-  Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> labelBrush;
-  context->CreateSolidColorBrush(
-      D2D1::ColorF(GetRValue(m_LabelFontColor) / 255.0f,
-                   GetGValue(m_LabelFontColor) / 255.0f,
-                   GetBValue(m_LabelFontColor) / 255.0f,
-                   (m_LabelFontAlpha / 255.0f) * opacity),
-      labelBrush.GetAddressOf());
-  if (labelBrush)
-    context->DrawTextLayout(D2D1::Point2F(labelLeft, top), layout.Get(),
-                            labelBrush.Get(),
-                            D2D1_DRAW_TEXT_OPTIONS_CLIP);
 }

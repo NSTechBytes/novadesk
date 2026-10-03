@@ -85,18 +85,6 @@ public:
   bool m_Hovered = false; ///< Set by the widget on hover changes.
 
   // ============================================================================
-  // Labels
-  // ============================================================================
-
-  std::wstring m_OnText;  ///< Text drawn inside the track when checked.
-  std::wstring m_OffText; ///< Text drawn inside the track when unchecked.
-  std::wstring m_LabelFontFace = L"Segoe UI";
-  int m_LabelFontSize = 10;
-  int m_LabelFontWeight = 600;
-  COLORREF m_LabelFontColor = RGB(255, 255, 255);
-  BYTE m_LabelFontAlpha = 255;
-
-  // ============================================================================
   // Event Callbacks
   // ============================================================================
 

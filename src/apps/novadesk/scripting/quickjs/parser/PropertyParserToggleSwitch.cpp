@@ -74,21 +74,6 @@ void ParseToggleSwitchOptions(JSContext *ctx, JSValueConst obj,
     }
   }
 
-  // labels
-  o.onText = Js::GetStringProp(ctx, obj, "onText");
-  o.offText = Js::GetStringProp(ctx, obj, "offText");
-  {
-    std::wstring face = Js::GetStringProp(ctx, obj, "labelFontFace");
-    if (!face.empty())
-      o.labelFontFace = face;
-  }
-  ParseIntProp(ctx, obj, "labelFontSize", o.labelFontSize);
-  if (o.labelFontSize < 1)
-    o.labelFontSize = 1;
-  ParseIntProp(ctx, obj, "labelFontWeight", o.labelFontWeight);
-  ParseColorAlpha(ctx, obj, "labelFontColor", o.labelFontColor,
-                  o.labelFontAlpha);
-
   // callbacks
   Js::GetEventCallbackProp(ctx, obj, "onChange", o.onChangeCallbackId);
 }
@@ -123,14 +108,6 @@ void ApplyToggleSwitchOptions(ToggleSwitchElement *e,
   e->m_HasHoverTrackColor = o.hasHoverTrackColor;
   e->m_HoverTrackColor = o.hoverTrackColor;
   e->m_HoverTrackAlpha = o.hoverTrackAlpha;
-
-  e->m_OnText = o.onText;
-  e->m_OffText = o.offText;
-  e->m_LabelFontFace = o.labelFontFace;
-  e->m_LabelFontSize = o.labelFontSize;
-  e->m_LabelFontWeight = o.labelFontWeight;
-  e->m_LabelFontColor = o.labelFontColor;
-  e->m_LabelFontAlpha = o.labelFontAlpha;
 
   e->m_OnChangeCallbackId = o.onChangeCallbackId;
 
@@ -176,14 +153,6 @@ void PreFillToggleSwitchOptions(ToggleSwitchOptions &o,
   o.hasHoverTrackColor = e->m_HasHoverTrackColor;
   o.hoverTrackColor = e->m_HoverTrackColor;
   o.hoverTrackAlpha = e->m_HoverTrackAlpha;
-
-  o.onText = e->m_OnText;
-  o.offText = e->m_OffText;
-  o.labelFontFace = e->m_LabelFontFace;
-  o.labelFontSize = e->m_LabelFontSize;
-  o.labelFontWeight = e->m_LabelFontWeight;
-  o.labelFontColor = e->m_LabelFontColor;
-  o.labelFontAlpha = e->m_LabelFontAlpha;
 
   o.onChangeCallbackId = e->m_OnChangeCallbackId;
 }

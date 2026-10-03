@@ -453,14 +453,6 @@ struct ToggleSwitchOptions : public ElementOptions {
   COLORREF hoverTrackColor = RGB(0, 0, 0);
   BYTE hoverTrackAlpha = 255;
 
-  std::wstring onText;
-  std::wstring offText;
-  std::wstring labelFontFace = L"Segoe UI";
-  int labelFontSize = 10;
-  int labelFontWeight = 600;
-  COLORREF labelFontColor = RGB(255, 255, 255);
-  BYTE labelFontAlpha = 255;
-
   int onChangeCallbackId = -1;
 };
 

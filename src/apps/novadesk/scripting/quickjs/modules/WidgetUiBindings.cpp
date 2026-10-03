@@ -3042,21 +3042,6 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
                                                        sw->m_HoverTrackAlpha))
                    .c_str());
     }
-    if (prop == "onText")
-      return JS_NewString(ctx, Utils::ToString(sw->m_OnText).c_str());
-    if (prop == "offText")
-      return JS_NewString(ctx, Utils::ToString(sw->m_OffText).c_str());
-    if (prop == "labelFontFace")
-      return JS_NewString(ctx, Utils::ToString(sw->m_LabelFontFace).c_str());
-    if (prop == "labelFontSize")
-      return JS_NewInt32(ctx, sw->m_LabelFontSize);
-    if (prop == "labelFontWeight")
-      return JS_NewInt32(ctx, sw->m_LabelFontWeight);
-    if (prop == "labelFontColor")
-      return JS_NewString(
-          ctx, Utils::ToString(ColorUtil::ToRGBAString(sw->m_LabelFontColor,
-                                                       sw->m_LabelFontAlpha))
-                   .c_str());
   } else if (element->GetType() == ELEMENT_CHECK_BOX) {
     auto *cb = static_cast<CheckBoxElement *>(element);
 
