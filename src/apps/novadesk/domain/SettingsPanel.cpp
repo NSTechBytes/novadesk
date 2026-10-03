@@ -174,11 +174,12 @@ void SettingsPanel::BuildPanel(Widget *target) {
     to = PropertyParser::TextOptions{};
     to.id = L"__settings_close";
     to.x = kPanelWidth - 34;
-    to.y = 12;
+    to.y = 10;
     to.width = 22;
-    to.height = 20;
-    to.text = L"X";
-    to.fontSize = 14;
+    to.height = 22;
+    to.text = L"\uE711"; // Segoe MDL2 Assets: Cancel/Close glyph
+    to.fontFace = L"Segoe MDL2 Assets";
+    to.fontSize = 10;
     to.fontColor = kMutedColor;
     to.mouseEventCursorName = L"hand";
     panel->AddText(to);
@@ -314,37 +315,24 @@ void SettingsPanel::BuildPanel(Widget *target) {
         break;
       }
 
-      PropertyParser::ShapeOptions pill;
-      pill.id = PanelElementId(setting.id, L"pill");
-      pill.x = kControlX;
-      pill.y = controlY + 2;
-      pill.width = 44;
-      pill.height = 22;
-      pill.solidColorRadius = 11;
-      pill.hasSolidColor = true;
-      pill.solidColor = on ? kAccentColor : kToggleOff;
-      pill.solidAlpha = 255;
-      pill.fillColor = pill.solidColor;
-      pill.fillAlpha = 255;
-      pill.mouseEventCursorName = L"hand";
-      panel->AddShape(pill);
-      m_Controls[pill.id] = {setting.id, ControlKind::TogglePill};
-
-      PropertyParser::ShapeOptions knob;
-      knob.id = PanelElementId(setting.id, L"knob");
-      knob.shapeType = L"ellipse";
-      knob.x = on ? kControlX + 24 : kControlX + 2;
-      knob.y = controlY + 4;
-      knob.width = 18;
-      knob.height = 18;
-      knob.hasSolidColor = true;
-      knob.solidColor = RGB(245, 245, 248);
-      knob.solidAlpha = 255;
-      knob.fillColor = knob.solidColor;
-      knob.fillAlpha = 255;
-      knob.mouseEventCursorName = L"hand";
-      panel->AddShape(knob);
-      m_Controls[knob.id] = {setting.id, ControlKind::ToggleKnob};
+      PropertyParser::ToggleSwitchOptions ts;
+      ts.id = PanelElementId(setting.id, L"pill");
+      ts.x = kControlX;
+      ts.y = controlY + 2;
+      ts.width = 44;
+      ts.height = 22;
+      ts.checked = on;
+      ts.onColor = kAccentColor;
+      ts.onAlpha = 255;
+      ts.offColor = kToggleOff;
+      ts.offAlpha = 255;
+      ts.borderRadius = -1.0f; // auto = height/2 (full pill)
+      ts.knobColor = RGB(245, 245, 248);
+      ts.knobAlpha = 255;
+      ts.knobPadding = 2.0f;
+      ts.mouseEventCursorName = L"hand";
+      panel->AddToggleSwitch(ts);
+      m_Controls[ts.id] = {setting.id, ControlKind::TogglePill};
       break;
     }
     case WidgetSettingType::Select: {
@@ -598,13 +586,12 @@ void SettingsPanel::UpdateRowVisuals(const WidgetSetting &setting) {
       }
       return;
     }
-    if (Element *pill =
+    // Update the ToggleSwitchElement used for standalone toggles.
+    if (Element *el =
             m_Panel->FindElementById(PanelElementId(setting.id, L"pill"))) {
-      pill->SetSolidColor(on ? kAccentColor : kToggleOff, 255);
-    }
-    if (Element *knob =
-            m_Panel->FindElementById(PanelElementId(setting.id, L"knob"))) {
-      knob->SetPosition(on ? kControlX + 24 : kControlX + 2, knob->GetY());
+      if (auto *ts = dynamic_cast<ToggleSwitchElement *>(el)) {
+        ts->SetChecked(on);
+      }
     }
   } else if (setting.type == WidgetSettingType::Select) {
     // A bound drop-down shows the choice through its own selected index, so
@@ -733,8 +720,7 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int,
         return;
       UpdateRowVisuals(*setting);
     }
-  } else if (it->second.kind == ControlKind::TogglePill ||
-             it->second.kind == ControlKind::ToggleKnob) {
+  } else if (it->second.kind == ControlKind::TogglePill) {
     Commit(setting->id, IsToggleOn(current) ? L"false" : L"true");
     if (!IsAlive(this))
       return;

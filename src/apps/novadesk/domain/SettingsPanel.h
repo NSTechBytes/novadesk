@@ -43,7 +43,6 @@ public:
 private:
   enum class ControlKind {
     TogglePill,
-    ToggleKnob,
     BoundSwitch, ///< A real toggleSwitch element on the target widget.
     BoundSlider, ///< A real slider element on the target widget.
     PanelDropDown, ///< A dropDown built by the panel for a Select setting.
