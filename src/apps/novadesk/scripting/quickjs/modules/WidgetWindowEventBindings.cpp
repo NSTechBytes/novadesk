@@ -1272,12 +1272,15 @@ JSValue JsWidgetWindowSetSettings(JSContext *ctx, JSValueConst thisVal,
   Widget *widget = GetWidget(ctx, thisVal);
   if (!widget)
     return JS_UNDEFINED;
-  if (argc < 1 || !JS_IsArray(argv[0]))
-    return ThrowTypeError(ctx, "setSettings", "expected settings array");
-  std::vector<WidgetSetting> settings;
-  if (!PropertyParser::ParseSettingsSchema(ctx, argv[0], settings))
+  if (argc < 1 || (!JS_IsArray(argv[0]) && !JS_IsObject(argv[0])))
+    return ThrowTypeError(ctx, "setSettings",
+                          "expected settings array or config object");
+
+  WidgetSettingsCatalog catalog;
+  if (!PropertyParser::ParseSettingsConfig(ctx, argv[0], catalog))
     return ThrowTypeError(ctx, "setSettings", "no valid settings declared");
-  widget->SetSettingsSchema(std::move(settings));
+
+  widget->SetSettingsCatalog(std::move(catalog));
   Settings::LoadWidgetSettingValues(widget->GetOptions().id,
                                     widget->GetSettings());
   ApplyAllSettings(widget);

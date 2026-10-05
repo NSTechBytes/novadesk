@@ -53,11 +53,33 @@ struct WidgetSetting {
   WidgetSettingBinding binding;
 };
 
+/// @brief One custom tab in the settings panel.
+struct WidgetSettingsTab {
+  std::wstring label;                   ///< Tab button text.
+  std::wstring icon;                    ///< Optional Segoe MDL2 glyph prefix.
+  std::vector<WidgetSetting> settings;  ///< Rows shown in this tab.
+};
+
 /// @brief Schema plus current values for one widget.
 struct WidgetSettingsCatalog {
+  // ── Per-row data (flat union across all tabs) ───────────────────────────
   std::vector<WidgetSetting> schema;
   std::unordered_map<std::wstring, std::wstring> values;
   bool hasSchema = false;
+
+  // ── Panel-level config ──────────────────────────────────────────────────
+  std::vector<WidgetSettingsTab> tabs;   ///< Ordered custom tabs.
+  std::wstring panelTitle;               ///< Overrides "Settings - <id>" header.
+  bool showWindowTab = true;             ///< Show/hide built-in Window tab.
+
+  struct AboutInfo {
+    std::wstring name;
+    std::wstring version;
+    std::wstring description;
+    bool hasName        = false;
+    bool hasVersion     = false;
+    bool hasDescription = false;
+  } about;
 
   /// @return The setting with this ID, or nullptr.
   const WidgetSetting *Find(const std::wstring &id) const;

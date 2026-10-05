@@ -18,8 +18,9 @@
 
 namespace PropertyParser {
 
-bool ParseSettingsSchema(JSContext *ctx, JSValueConst arr,
-                         std::vector<WidgetSetting> &out) {
+// ── Parse one flat array of setting rows into out ────────────────────────────
+static bool ParseSettingsRows(JSContext *ctx, JSValueConst arr,
+                              std::vector<WidgetSetting> &out) {
   if (!JS_IsArray(arr))
     return false;
 
@@ -99,7 +100,7 @@ bool ParseSettingsSchema(JSContext *ctx, JSValueConst arr,
     JSValue bindV = JS_GetPropertyStr(ctx, itemV, "bind");
     if (JS_IsObject(bindV)) {
       setting.binding.elementId = Js::GetStringProp(ctx, bindV, "element");
-      setting.binding.property = Js::GetStringProp(ctx, bindV, "property");
+      setting.binding.property  = Js::GetStringProp(ctx, bindV, "property");
       std::transform(setting.binding.property.begin(),
                      setting.binding.property.end(),
                      setting.binding.property.begin(), ::towlower);
@@ -112,6 +113,102 @@ bool ParseSettingsSchema(JSContext *ctx, JSValueConst arr,
   }
 
   return parsedAny;
+}
+
+// ── Kept for internal use (old flat-array path) ───────────────────────────────
+bool ParseSettingsSchema(JSContext *ctx, JSValueConst arr,
+                         std::vector<WidgetSetting> &out) {
+  return ParseSettingsRows(ctx, arr, out);
+}
+
+// ── New entry point: accepts object config OR backward-compat plain array ──────
+bool ParseSettingsConfig(JSContext *ctx, JSValueConst val,
+                         WidgetSettingsCatalog &catalog) {
+  catalog.tabs.clear();
+  catalog.schema.clear();
+  catalog.panelTitle.clear();
+  catalog.showWindowTab = true;
+  catalog.about = {};
+
+  // ── Backward compat: plain array → single tab named "Settings" ────────────
+  if (JS_IsArray(val)) {
+    WidgetSettingsTab tab;
+    tab.label = L"Settings";
+    if (!ParseSettingsRows(ctx, val, tab.settings))
+      return false;
+    catalog.tabs.push_back(std::move(tab));
+    for (const auto &s : catalog.tabs[0].settings)
+      catalog.schema.push_back(s);
+    catalog.hasSchema = !catalog.schema.empty();
+    return catalog.hasSchema;
+  }
+
+  if (!JS_IsObject(val))
+    return false;
+
+  // ── panel-level options ────────────────────────────────────────────────────
+  {
+    std::wstring t = Js::GetStringProp(ctx, val, "title");
+    if (!t.empty()) catalog.panelTitle = t;
+  }
+  {
+    JSValue v = JS_GetPropertyStr(ctx, val, "showWindowTab");
+    if (!JS_IsUndefined(v) && !JS_IsNull(v)) {
+      int b = JS_ToBool(ctx, v);
+      if (b >= 0) catalog.showWindowTab = (b != 0);
+    }
+    JS_FreeValue(ctx, v);
+  }
+
+  // ── about object ──────────────────────────────────────────────────────────
+  {
+    JSValue aboutV = JS_GetPropertyStr(ctx, val, "about");
+    if (JS_IsObject(aboutV)) {
+      std::wstring nm  = Js::GetStringProp(ctx, aboutV, "name");
+      std::wstring ver = Js::GetStringProp(ctx, aboutV, "version");
+      std::wstring dsc = Js::GetStringProp(ctx, aboutV, "description");
+      if (!nm.empty())  { catalog.about.name    = nm;  catalog.about.hasName        = true; }
+      if (!ver.empty()) { catalog.about.version = ver; catalog.about.hasVersion     = true; }
+      if (!dsc.empty()) { catalog.about.description = dsc; catalog.about.hasDescription = true; }
+    }
+    JS_FreeValue(ctx, aboutV);
+  }
+
+  // ── tabs array ────────────────────────────────────────────────────────────
+  JSValue tabsV = JS_GetPropertyStr(ctx, val, "tabs");
+  if (JS_IsArray(tabsV)) {
+    uint32_t tabLen = 0;
+    JSValue tLenV = JS_GetPropertyStr(ctx, tabsV, "length");
+    if (JS_ToUint32(ctx, &tabLen, tLenV) == 0) {
+      for (uint32_t ti = 0; ti < tabLen; ++ti) {
+        JSValue tabItemV = JS_GetPropertyUint32(ctx, tabsV, ti);
+        if (!JS_IsObject(tabItemV)) { JS_FreeValue(ctx, tabItemV); continue; }
+
+        WidgetSettingsTab tab;
+        tab.label = Js::GetStringProp(ctx, tabItemV, "label");
+        if (tab.label.empty()) tab.label = L"Tab";
+        tab.icon  = Js::GetStringProp(ctx, tabItemV, "icon");
+
+        JSValue rowsV = JS_GetPropertyStr(ctx, tabItemV, "settings");
+        ParseSettingsRows(ctx, rowsV, tab.settings);
+        JS_FreeValue(ctx, rowsV);
+
+        // Merge rows into the flat schema
+        for (const auto &s : tab.settings)
+          catalog.schema.push_back(s);
+
+        catalog.tabs.push_back(std::move(tab));
+        JS_FreeValue(ctx, tabItemV);
+      }
+    }
+    JS_FreeValue(ctx, tLenV);
+  }
+  JS_FreeValue(ctx, tabsV);
+
+  catalog.hasSchema = !catalog.schema.empty() || !catalog.tabs.empty();
+  return catalog.hasSchema || !catalog.panelTitle.empty()
+                           || catalog.about.hasName
+                           || !catalog.showWindowTab;
 }
 
 } // namespace PropertyParser

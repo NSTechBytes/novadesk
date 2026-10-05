@@ -3714,17 +3714,32 @@ void Widget::SetContextMenu(const std::vector<MenuItem> &menu) {
 void Widget::ClearContextMenu() { m_ContextMenu.clear(); }
 
 void Widget::SetSettingsSchema(std::vector<WidgetSetting> schema) {
-  m_Settings.schema = std::move(schema);
-  m_Settings.hasSchema = !m_Settings.schema.empty();
+  // Wrap old flat-array call into a single "Settings" tab for the new API
+  WidgetSettingsCatalog catalog;
+  catalog.showWindowTab = true;
+  if (!schema.empty()) {
+    WidgetSettingsTab tab;
+    tab.label = L"Settings";
+    tab.settings = schema;
+    catalog.tabs.push_back(std::move(tab));
+    catalog.schema = std::move(schema);
+    catalog.hasSchema = true;
+  }
+  // Preserve existing values
+  catalog.values = std::move(m_Settings.values);
+  SetSettingsCatalog(std::move(catalog));
+}
 
+void Widget::SetSettingsCatalog(WidgetSettingsCatalog catalog) {
+  // Preserve values for any settings that still exist
   std::unordered_map<std::wstring, std::wstring> kept;
-  for (const WidgetSetting &setting : m_Settings.schema) {
+  for (const WidgetSetting &setting : catalog.schema) {
     auto it = m_Settings.values.find(setting.id);
     if (it != m_Settings.values.end())
       kept.emplace(it->first, it->second);
   }
-  m_Settings.values = std::move(kept);
-
+  catalog.values = std::move(kept);
+  m_Settings = std::move(catalog);
   if (m_Settings.hasSchema &&
       (m_Options.id.empty() || m_Options.id == L"widget")) {
     Logging::Log(LogLevel::Warn,

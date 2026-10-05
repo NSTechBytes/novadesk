@@ -122,6 +122,25 @@ public:
    */
   static bool GetGlobalBool(const std::string &key, bool defaultValue);
 
+  /**
+   * @brief Sets a string global setting by key.
+   *
+   * @param key The setting key (e.g., "theme").
+   * @param value The string value to store.
+   */
+  static void SetGlobalString(const std::string &key, const std::string &value);
+
+  /**
+   * @brief Gets a string global setting by key.
+   *
+   * @param key The setting key.
+   * @param defaultValue Value to return if the key doesn't exist.
+   *
+   * @return The stored value, or defaultValue if not found.
+   */
+  static std::string GetGlobalString(const std::string &key,
+                                     const std::string &defaultValue);
+
 private:
   static void Load();       ///< Loads settings from disk.
   static json s_Data;       ///< In-memory settings data.

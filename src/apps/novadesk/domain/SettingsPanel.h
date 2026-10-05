@@ -13,51 +13,48 @@
 #include <vector>
 
 #include "Widget.h"
+#include "SettingsPanelTheme.h"
 
 /**
  * @brief Built-in per-widget settings window rendered with Novadesk elements.
  *
- * @note The panel is itself a scriptless Widget (empty ID, so it never
- *       persists) whose elements carry no JS callbacks; their input arrives
- *       through the IWidgetInputSink installed on the panel widget. Values are
- *       applied to the target widget declaratively and persisted via
- *       CommitWidgetSetting().
+ * Tab layout (indices):
+ *   0 … N-1   custom tabs from catalog.tabs
+ *   N          Window tab (if catalog.showWindowTab)
+ *   last       About tab (always)
  */
 class SettingsPanel : public IWidgetInputSink {
 public:
-  /// @brief Opens (or focuses) the settings panel for a target widget.
-  /// @return The panel widget, or nullptr on failure.
   static Widget *OpenFor(Widget *target);
-  /// @brief Closes every panel whose target is the given widget.
   static void CloseAllForTarget(Widget *target);
-  /// @brief Closes all open panels (application shutdown).
   static void CloseAll();
 
   ~SettingsPanel() override;
 
-  void OnElementMouseUp(Widget *widget, Element *element, int x,
-                        int y) override;
-  void OnInputCommitted(Widget *widget, InputBoxElement *inputBox) override;
-  void OnColorCommitted(Widget *widget, ColorPickerElement *colorPicker) override;
+  void OnElementMouseUp(Widget *, Element *, int, int) override;
+  void OnInputCommitted(Widget *, InputBoxElement *) override;
+  void OnColorCommitted(Widget *, ColorPickerElement *) override;
 
 private:
+  // ── Control kinds ─────────────────────────────────────────────────────────
   enum class ControlKind {
-    TogglePill,
-    BoundSwitch, ///< A real toggleSwitch element on the target widget.
-    BoundSlider, ///< A real slider element on the target widget.
-    PanelDropDown, ///< A dropDown built by the panel for a Select setting.
-    SelectButton,
-    SelectLabel,
-    ResetButton,
-    ResetLabel,
-    CloseButton,
-    Input,
-    ColorSwatch,
+    // Script-settings rows
+    TogglePill, BoundSwitch, BoundSlider, PanelDropDown,
+    SelectButton, SelectLabel, Input, ColorSwatch,
+    // Footer
+    ResetButton, ResetLabel,
+    // Chrome
+    CloseButton, TabButton,
+    // Window tab
+    WindowToggle, WindowZPos, WindowOpacity,
+    // About tab
+    ThemeSelector,
   };
 
   struct ControlInfo {
-    std::wstring settingId;
-    ControlKind kind;
+    std::wstring settingId; ///< Setting id OR repurposed key (tab index, window key)
+    ControlKind  kind;
+    int          tabIndex = 0; ///< Owning tab index (-1 = always-visible chrome)
   };
 
   SettingsPanel() = default;
@@ -65,28 +62,37 @@ private:
   void Close();
   void Commit(const std::wstring &settingId, const std::wstring &value);
   void CommitInput(InputBoxElement *inputBox);
-  void CommitColor(ColorPickerElement *colorPicker);
   void ResetAll();
   void UpdateRowVisuals(const WidgetSetting &setting);
   void UpdateAllVisuals();
+  void UpdateWindowTabVisuals();
   void BuildPanel(Widget *target);
+  int  BuildCustomTab(Widget *panel, Widget *target,
+                      const WidgetSettingsTab &tab, int tabIndex, int startY);
+  void BuildWindowTab(Widget *panel, Widget *target, int tabIndex, int startY);
+  void BuildAboutTab(Widget *panel, int tabIndex, int startY);
+  void SwitchTab(int tabIndex);
+  void ApplyPaletteToPanel();
 
-  /// @brief False once a nested callback has deleted this panel.
   static bool IsAlive(SettingsPanel *panel);
-  /// @brief Frees panels orphaned during a popup or blur dispatch.
   static void FlushPending();
 
   static std::vector<SettingsPanel *> s_Panels;
   static std::vector<SettingsPanel *> s_PendingDestroy;
 
-  bool m_DeferClose = false;    ///< Inside a popup/blur dispatch.
-  bool m_CloseRequested = false; ///< Close() called while deferring.
+  bool m_DeferClose     = false;
+  bool m_CloseRequested = false;
+  int  m_ActiveTab      = 0;   ///< Current tab index
+  int  m_WindowTabIndex = -1;  ///< -1 when hidden
+  int  m_AboutTabIndex  = 0;
+  int  m_TotalTabs      = 1;
+  bool m_ShowTabBar     = true; ///< False when only one custom tab & no window tab
 
-  Widget *m_Panel = nullptr;  ///< Owned panel widget.
-  Widget *m_Target = nullptr; ///< Target widget (guarded by IsValid).
-  std::unordered_map<std::wstring, ControlInfo>
-      m_Controls;                    ///< Panel element ID -> control info.
-  std::vector<std::wstring> m_Order; ///< Setting IDs in schema order.
+  ThemePalette m_Palette;
+
+  Widget *m_Panel  = nullptr;
+  Widget *m_Target = nullptr;
+  std::unordered_map<std::wstring, ControlInfo> m_Controls;
 };
 
-#endif // __NOVADESK_SETTINGSPANEL_H__
+#endif

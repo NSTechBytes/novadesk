@@ -315,3 +315,24 @@ bool Settings::GetGlobalBool(const std::string &key, bool defaultValue) {
   }
   return defaultValue;
 }
+
+void Settings::SetGlobalString(const std::string &key,
+                                const std::string &value) {
+  if (!s_Data.contains(key) || !s_Data[key].is_string() ||
+      s_Data[key].get<std::string>() != value) {
+    s_Data[key] = value;
+    s_Dirty = true;
+    ULONGLONG now = GetTickCount64();
+    if (now - s_LastSaveTick >= SAVE_DEBOUNCE_MS) {
+      Save();
+      s_LastSaveTick = now;
+    }
+  }
+}
+
+std::string Settings::GetGlobalString(const std::string &key,
+                                      const std::string &defaultValue) {
+  if (s_Data.contains(key) && s_Data[key].is_string())
+    return s_Data[key].get<std::string>();
+  return defaultValue;
+}

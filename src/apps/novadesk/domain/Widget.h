@@ -462,6 +462,8 @@ public:
   /// @brief Replaces the declared settings schema, dropping stored values
   ///        for settings that are no longer declared.
   void SetSettingsSchema(std::vector<WidgetSetting> schema);
+  /// @brief Replaces the entire settings catalog (new API).
+  void SetSettingsCatalog(WidgetSettingsCatalog catalog);
   /// @brief Installs a sink receiving element input that has no JS callback.
   void SetInputSink(IWidgetInputSink *sink) { m_InputSink = sink; }
   /// @return The installed input sink, or nullptr.

@@ -3,7 +3,7 @@ import { app, widgetWindow } from "novadesk";
 console.log("=== OnlineFontTest Integration ===");
 
 // Keep a reference on globalThis to prevent garbage collection of the window.
-globalThis.win = new widgetWindow({
+var window = new widgetWindow({
   id: "OnlineFontTestWindow",
   x: 200,
   y: 150,
@@ -12,34 +12,43 @@ globalThis.win = new widgetWindow({
   backgroundColor: "rgba(18,22,32,0.97)",
   script: "./script.ui.js",
   show: true,
-  settings: [
-    {
-      id: "titleColor",
-      label: "Title color",
-      type: "color",
-      default: "#E8E8EF",
-      bind: { element: "title", property: "fontColor" },
-    },
-    {
-      id: "titleSize",
-      label: "Title size",
-      type: "number",
-      default: 16,
-      min: 10,
-      max: 48,
-      bind: { element: "title", property: "fontSize" },
-    },
-    {
-      id: "compact",
-      label: "Compact",
-      type: "toggle",
-      default: false,
-      bind: { element: "title", property: "show" },
-    },
-  ],
 });
 
-globalThis.win.on("close", function () {
+  window.setSettings({
+
+    title: "My Widget",        // optional: overrides "Settings - <id>" in header
+    showWindowTab: true,       // optional: show/hide built-in Window tab (default true)
+
+    about: {                   // optional: controls the About tab
+      name:        "My Widget",
+      version:     "1.2.0",
+      description: "Does awesome things",
+    },
+
+    tabs: [
+      {
+        label: "General",       // tab button text
+        icon:  "\uE713",        // optional: Segoe MDL2 glyph before label
+        settings: [
+          { id: "titleColor", type: "color",  label: "Title color",  default: "#a6e3a1",
+            bind: { element: "myTitle", property: "fontColor" } },
+          { id: "fontSize",   type: "number", label: "Font size",    default: 16,
+            bind: { element: "myTitle", property: "fontSize" } },
+        ],
+      },
+      {
+        label: "Behaviour",
+        settings: [
+          { id: "compact", type: "toggle", label: "Compact mode", default: false },
+          { id: "style",   type: "select", label: "Style",        default: "rounded",
+            options: ["rounded", "sharp", "pill"] },
+        ],
+      },
+    ],
+
+  });
+
+globalThis.window.on("close", function () {
   app.exit();
 });
 

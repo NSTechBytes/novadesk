@@ -116,6 +116,9 @@ void ParseDropDownOptions(JSContext *ctx, JSValueConst obj,
 bool ParseSettingsSchema(JSContext *ctx, JSValueConst arr,
                          std::vector<WidgetSetting> &out);
 
+bool ParseSettingsConfig(JSContext *ctx, JSValueConst val,
+                         WidgetSettingsCatalog &catalog);
+
 // ============================================================================
 // Apply Functions (Options Struct -> Element)
 // ============================================================================
