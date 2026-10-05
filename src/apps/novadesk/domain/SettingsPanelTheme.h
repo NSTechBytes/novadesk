@@ -15,17 +15,19 @@
  */
 struct ThemePalette {
   COLORREF background;    ///< Panel window background fill.
+  COLORREF sidebar;       ///< Left sidebar background.
+  COLORREF sidebarBorder; ///< Thin right border of the sidebar.
   COLORREF text;          ///< Primary text (title, input values).
   COLORREF label;         ///< Row label text.
   COLORREF muted;         ///< Close button, placeholders, secondary info.
-  COLORREF accent;        ///< Highlights, toggle-on, tab underline, app name.
+  COLORREF accent;        ///< Highlights, toggle-on, active tab indicator, app name.
   COLORREF controlFill;   ///< Input box / dropdown fill.
   COLORREF controlBorder; ///< Input box / dropdown border.
   COLORREF toggleOff;     ///< Toggle pill color when off.
   COLORREF divider;       ///< Horizontal rule / separator.
   COLORREF tabActive;     ///< Active tab label text.
   COLORREF tabInactive;   ///< Inactive tab label text.
-  COLORREF tabBar;        ///< Tab strip background.
+  COLORREF tabBar;        ///< Tab strip background (unused in sidebar mode, kept for compat).
   BYTE     bgAlpha;       ///< Panel background alpha (always 255).
 };
 

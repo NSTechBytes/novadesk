@@ -25,27 +25,46 @@ extern std::vector<Widget *> widgets;
 std::vector<SettingsPanel *> SettingsPanel::s_Panels;
 std::vector<SettingsPanel *> SettingsPanel::s_PendingDestroy;
 
-// ─── Layout ──────────────────────────────────────────────────────────────────
+// ─── Layout constants ─────────────────────────────────────────────────────────
 namespace {
 
-constexpr int kPanelWidth    = 300;
-constexpr int kHeaderHeight  = 44;
-constexpr int kTabBarHeight  = 36;
-constexpr int kRowHeight     = 44;
-constexpr int kFooterHeight  = 48;
-constexpr int kControlX      = 150;
-constexpr int kControlWidth  = 134;
-constexpr int kWindowRows    = 7;
-constexpr int kAboutContentH = 160;
+// Overall panel
+constexpr int kPanelW  = 520;
+constexpr int kPanelH  = 480;
 
-// Tab button x positions for up to 6 tabs (evenly spaced)
-int TabButtonX(int tabIndex, int totalTabs) {
-  const int margin   = 14;
-  const int usable   = kPanelWidth - margin * 2;
-  const int spacing  = totalTabs > 1 ? usable / totalTabs : usable;
-  return margin + tabIndex * spacing;
-}
+// Header strip (title + close button) — spans full width
+constexpr int kHeaderH = 48;
 
+// Left sidebar (tab navigation)
+constexpr int kSideW   = 140;   // sidebar width
+
+// Right content pane
+constexpr int kContentX = kSideW;                    // content starts here
+constexpr int kContentW = kPanelW - kSideW;          // = 380
+constexpr int kContentH = kPanelH - kHeaderH;        // = 432
+
+// Sidebar tab button geometry
+constexpr int kTabBtnH  = 40;    // height of each tab button
+constexpr int kTabBtnX  = 0;     // starts at sidebar left edge
+constexpr int kTabIndW  = 3;     // active-tab indicator bar width
+constexpr int kTabPadX  = 16;    // icon/text horizontal padding
+
+// Content area layout
+constexpr int kPadX     = 20;    // horizontal content padding
+constexpr int kRowH     = 58;    // height per settings row (label + control stacked)
+constexpr int kCtrlH    = 28;    // height of individual control (input/toggle/dropdown)
+constexpr int kCtrlW    = kContentW - kPadX * 2;  // = 340
+
+// Footer within content pane
+constexpr int kFooterH  = 52;
+
+// Window tab
+constexpr int kWinRows  = 7;
+
+// About tab minimum height
+constexpr int kAboutH   = 180;
+
+// Z-position options
 const std::vector<std::wstring> kZPosLabels = {
   L"Normal", L"On Top", L"Always on Top", L"On Bottom", L"On Desktop"
 };
@@ -61,45 +80,38 @@ int ZPosToIndex(ZPOSITION z) {
   return 0;
 }
 
-bool ParseSettingDouble(const std::wstring &v, double &out) {
+bool ParseDbl(const std::wstring &v, double &out) {
   wchar_t *end = nullptr;
   double d = std::wcstod(v.c_str(), &end);
   if (end == v.c_str()) return false;
-  out = d;
-  return true;
+  out = d; return true;
 }
 
-std::wstring PanelElemId(int tabIndex, const std::wstring &settingId,
-                         const wchar_t *role) {
-  return L"__t" + std::to_wstring(tabIndex) + L"_" + settingId + L"_" + role;
+// IDs for content elements (scoped per tab to avoid collisions)
+std::wstring CEId(int ti, const std::wstring &sid, const wchar_t *role) {
+  return L"__t" + std::to_wstring(ti) + L"_" + sid + L"_" + role;
 }
 
-bool IsToggleOn(const std::wstring &v) {
-  return v == L"true" || v == L"1";
-}
+bool IsOn(const std::wstring &v) { return v == L"true" || v == L"1"; }
 
-int IndexOfOption(const std::vector<std::wstring> &options,
-                  const std::wstring &value) {
-  for (size_t i = 0; i < options.size(); ++i)
-    if (options[i] == value) return static_cast<int>(i);
+int OptIndex(const std::vector<std::wstring> &opts, const std::wstring &v) {
+  for (size_t i = 0; i < opts.size(); ++i) if (opts[i] == v) return (int)i;
   return -1;
 }
 
 struct BoolRow { const wchar_t *id; const wchar_t *label; bool value; };
 
-} // namespace
+} // anonymous namespace
 
 // ─── Statics ─────────────────────────────────────────────────────────────────
 
 Widget *SettingsPanel::OpenFor(Widget *target) {
   FlushPending();
   if (!target || !Widget::IsValid(target)) return nullptr;
-  for (SettingsPanel *p : s_Panels) {
-    if (p->m_Target == target && p->m_Panel && Widget::IsValid(p->m_Panel)) {
-      SetForegroundWindow(p->m_Panel->GetWindow());
-      return p->m_Panel;
-    }
-  }
+  for (SettingsPanel *p : s_Panels)
+    if (p->m_Target == target && p->m_Panel && Widget::IsValid(p->m_Panel))
+      { SetForegroundWindow(p->m_Panel->GetWindow()); return p->m_Panel; }
+
   SettingsPanel *self = new SettingsPanel();
   self->m_Target = target;
   target->SetInputSink(self);
@@ -128,92 +140,75 @@ void SettingsPanel::CloseAll() {
   FlushPending();
 }
 
-// ─── Small helpers ────────────────────────────────────────────────────────────
+// ─── Element creation helpers ─────────────────────────────────────────────────
 
-static void AddLabel(Widget *panel, const std::wstring &id,
-                     int x, int y, int w, int h,
-                     const std::wstring &text, int fontSize,
-                     COLORREF color, bool hand = false) {
-  PropertyParser::TextOptions lo;
-  lo.id = id; lo.x = x; lo.y = y; lo.width = w; lo.height = h;
-  lo.text = text; lo.fontSize = fontSize; lo.fontColor = color;
-  if (hand) lo.mouseEventCursorName = L"hand";
-  panel->AddText(lo);
+static void Txt(Widget *panel, const std::wstring &id,
+                int x, int y, int w, int h,
+                const std::wstring &text, int size, COLORREF color,
+                int weight = 400, bool hand = false) {
+  PropertyParser::TextOptions o;
+  o.id = id; o.x = x; o.y = y; o.width = w; o.height = h;
+  o.text = text; o.fontSize = size; o.fontColor = color;
+  o.fontWeight = weight;
+  if (hand) o.mouseEventCursorName = L"hand";
+  panel->AddText(o);
 }
 
-static void AddDivider(Widget *panel, const std::wstring &id,
-                       int y, COLORREF color) {
-  PropertyParser::ShapeOptions so;
-  so.id = id; so.x = 10; so.y = y;
-  so.width = kPanelWidth - 20; so.height = 1;
-  so.hasSolidColor = true;
-  so.solidColor = color; so.solidAlpha = 255;
-  so.fillColor  = color; so.fillAlpha  = 255;
-  panel->AddShape(so);
+static void Rect(Widget *panel, const std::wstring &id,
+                 int x, int y, int w, int h,
+                 COLORREF color, BYTE alpha = 255,
+                 float radius = 0.0f, bool hand = false) {
+  PropertyParser::ShapeOptions o;
+  o.id = id; o.x = x; o.y = y; o.width = w; o.height = h;
+  o.hasSolidColor = true;
+  o.solidColor = color; o.solidAlpha = alpha;
+  o.fillColor  = color; o.fillAlpha  = alpha;
+  if (radius > 0.0f) o.solidColorRadius = static_cast<int>(radius);
+  if (hand) o.mouseEventCursorName = L"hand";
+  panel->AddShape(o);
 }
 
-// ─── BuildPanel ──────────────────────────────────────────────────────────────
+// ─── BuildPanel ───────────────────────────────────────────────────────────────
 
 void SettingsPanel::BuildPanel(Widget *target) {
   m_Palette = ResolveTheme();
 
-  const WidgetSettingsCatalog &catalog = target->GetSettings();
-  const int numCustomTabs = static_cast<int>(catalog.tabs.size());
-  const bool showWindow   = catalog.showWindowTab;
+  const WidgetSettingsCatalog &cat = target->GetSettings();
+  const int nCustom    = static_cast<int>(cat.tabs.size());
+  const bool showWin   = cat.showWindowTab;
 
-  // Compute tab indices
-  m_WindowTabIndex = showWindow ? numCustomTabs : -1;
-  m_AboutTabIndex  = numCustomTabs + (showWindow ? 1 : 0);
+  m_WindowTabIndex = showWin ? nCustom : -1;
+  m_AboutTabIndex  = nCustom + (showWin ? 1 : 0);
   m_TotalTabs      = m_AboutTabIndex + 1;
+  m_ActiveTab      = (nCustom > 0) ? 0
+                   : (showWin     ? m_WindowTabIndex
+                                  : m_AboutTabIndex);
 
-  // Hide tab bar when there is exactly 1 custom tab and no Window tab
-  m_ShowTabBar = !(numCustomTabs <= 1 && !showWindow);
-
-  // Default active tab
-  m_ActiveTab = 0;
-  if (numCustomTabs == 0 && showWindow)
-    m_ActiveTab = m_WindowTabIndex;
-
-  // Heights
-  const int maxCustomRows = [&]() {
-    int mx = 0;
-    for (const auto &t : catalog.tabs)
-      mx = std::max(mx, static_cast<int>(t.settings.size()));
-    return mx;
-  }();
-  const int contentH = std::max({
-    maxCustomRows  * kRowHeight,
-    kWindowRows    * kRowHeight,
-    kAboutContentH
-  });
-  const int tabBarH  = m_ShowTabBar ? kTabBarHeight : 0;
-  const int startY   = kHeaderHeight + tabBarH;
-  const int panelH   = kHeaderHeight + tabBarH + contentH + kFooterHeight;
-
-  // Position
+  // Position panel beside target
   RECT tr{};
   GetWindowRect(target->GetWindow(), &tr);
   const int screenW = GetSystemMetrics(SM_CXSCREEN);
   const int screenH = GetSystemMetrics(SM_CYSCREEN);
-  int x = tr.right + 12;
-  if (x + kPanelWidth > screenW)
-    x = std::max(8, (int)(tr.left) - 12 - kPanelWidth);
-  int y = tr.top;
-  if (y + panelH > screenH) y = std::max(0, screenH - panelH - 8);
+  int px = tr.right + 12;
+  if (px + kPanelW > screenW) px = std::max(8, (int)tr.left - 12 - kPanelW);
+  int py = tr.top;
+  if (py + kPanelH > screenH) py = std::max(0, screenH - kPanelH - 8);
 
   WidgetOptions po;
-  po.id = L""; po.x = x; po.y = y; po.width = kPanelWidth; po.height = panelH;
+  po.id = L""; po.x = px; po.y = py; po.width = kPanelW; po.height = kPanelH;
   po.m_WDefined = true; po.m_HDefined = true;
-  po.minWidth = 200; po.minHeight = 96;
-  wchar_t bgBuf[64];
-  swprintf_s(bgBuf, L"rgba(%d,%d,%d,%d)",
-             GetRValue(m_Palette.background), GetGValue(m_Palette.background),
-             GetBValue(m_Palette.background), (int)m_Palette.bgAlpha);
-  po.backgroundColor = bgBuf;
-  po.color = m_Palette.background; po.bgAlpha = m_Palette.bgAlpha;
-  po.draggable = true; po.resizable = false; po.keepOnScreen = true;
-  po.snapEdges = false; po.showInToolbar = false;
-  po.zPos = ZPOSITION_ONTOPMOST; po.show = false; po.windowOpacity = 255;
+  po.minWidth = kPanelW; po.minHeight = kPanelH;
+  wchar_t bg[64];
+  swprintf_s(bg, L"rgba(%d,%d,%d,255)",
+             GetRValue(m_Palette.background),
+             GetGValue(m_Palette.background),
+             GetBValue(m_Palette.background));
+  po.backgroundColor = bg;
+  po.color = m_Palette.background; po.bgAlpha = 255;
+  po.draggable = true; po.resizable = false;
+  po.keepOnScreen = true; po.snapEdges = false;
+  po.showInToolbar = false; po.zPos = ZPOSITION_ONTOPMOST;
+  po.show = false; po.windowOpacity = 255;
 
   Widget *panel = new Widget(po);
   if (!panel->Create()) { delete panel; return; }
@@ -221,110 +216,136 @@ void SettingsPanel::BuildPanel(Widget *target) {
   panel->SetInputSink(this);
   panel->BeginUpdate();
 
-  // ── Header ────────────────────────────────────────────────────────────────
-  std::wstring headerTitle = catalog.panelTitle;
-  if (headerTitle.empty()) {
-    headerTitle = target->GetOptions().id;
-    if (headerTitle.empty() || headerTitle == L"widget")
-      headerTitle = target->GetTitle();
-    if (headerTitle.empty()) headerTitle = L"Widget";
-    headerTitle = L"Settings - " + headerTitle;
-  }
-  AddLabel(panel, L"__settings_title", 14, 12, kPanelWidth - 58, 20,
-           headerTitle, 14, m_Palette.text);
+  // ── Header (full width) ───────────────────────────────────────────────────
+  // Header background
+  Rect(panel, L"__hdr_bg", 0, 0, kPanelW, kHeaderH, m_Palette.sidebar);
 
+  // Title
+  std::wstring hdrTitle = cat.panelTitle;
+  if (hdrTitle.empty()) {
+    hdrTitle = target->GetOptions().id;
+    if (hdrTitle.empty() || hdrTitle == L"widget") hdrTitle = target->GetTitle();
+    if (hdrTitle.empty()) hdrTitle = L"Widget";
+    hdrTitle = L"Settings \u2014 " + hdrTitle; // em dash
+  }
+  Txt(panel, L"__hdr_title", kSideW + kPadX, 0, kContentW - kPadX - 40,
+      kHeaderH, hdrTitle, 13, m_Palette.text, 600);
+
+  // Close button ✕ (Segoe MDL2 U+E8BB is cleaner at small sizes)
   {
-    PropertyParser::TextOptions to;
-    to.id = L"__settings_close";
-    to.x = kPanelWidth - 34; to.y = 10; to.width = 22; to.height = 22;
-    to.text = L"\uE711"; to.fontFace = L"Segoe MDL2 Assets";
-    to.fontSize = 10; to.fontColor = m_Palette.muted;
-    to.mouseEventCursorName = L"hand";
-    panel->AddText(to);
-    m_Controls[to.id] = {L"", ControlKind::CloseButton, -1};
+    PropertyParser::TextOptions o;
+    o.id = L"__hdr_close";
+    o.x = kPanelW - 36; o.y = 0; o.width = 36; o.height = kHeaderH;
+    o.text = L"\uE8BB"; o.fontFace = L"Segoe MDL2 Assets";
+    o.fontSize = 9; o.fontColor = m_Palette.muted;
+    o.mouseEventCursorName = L"hand";
+    panel->AddText(o);
+    m_Controls[o.id] = {L"", ControlKind::CloseButton, -1};
   }
-  AddDivider(panel, L"__settings_hr", kHeaderHeight - 1, m_Palette.divider);
 
-  // ── Tab strip (optional) ──────────────────────────────────────────────────
-  if (m_ShowTabBar) {
-    // Background
-    {
-      PropertyParser::ShapeOptions bg;
-      bg.id = L"__tab_bar";
-      bg.x = 0; bg.y = kHeaderHeight; bg.width = kPanelWidth; bg.height = kTabBarHeight;
-      bg.hasSolidColor = true; bg.solidColor = m_Palette.tabBar; bg.solidAlpha = 255;
-      bg.fillColor = m_Palette.tabBar; bg.fillAlpha = 255;
-      panel->AddShape(bg);
-    }
+  // Header bottom border
+  Rect(panel, L"__hdr_border", 0, kHeaderH - 1, kPanelW, 1, m_Palette.divider);
 
-    // Build tab labels list
-    std::vector<std::wstring> tabLabels;
-    for (const auto &t : catalog.tabs)
-      tabLabels.push_back(t.icon.empty() ? t.label : t.icon + L" " + t.label);
-    if (showWindow) tabLabels.push_back(L"Window");
-    tabLabels.push_back(L"About");
+  // ── Left sidebar ──────────────────────────────────────────────────────────
+  // Sidebar background
+  Rect(panel, L"__sb_bg", 0, kHeaderH, kSideW, kContentH, m_Palette.sidebar);
 
-    for (int ti = 0; ti < m_TotalTabs; ++ti) {
-      bool active = (ti == m_ActiveTab);
-      PropertyParser::TextOptions to;
-      to.id = L"__tab_" + std::to_wstring(ti);
-      to.x = TabButtonX(ti, m_TotalTabs);
-      to.y = kHeaderHeight + 8; to.width = 80; to.height = 20;
-      to.text = tabLabels[ti]; to.fontSize = 11;
-      to.fontColor = active ? m_Palette.tabActive : m_Palette.tabInactive;
-      to.mouseEventCursorName = L"hand";
-      panel->AddText(to);
-      m_Controls[to.id] = {std::to_wstring(ti), ControlKind::TabButton, -1};
-    }
+  // Sidebar right border (1px)
+  Rect(panel, L"__sb_border", kSideW - 1, kHeaderH, 1, kContentH,
+       m_Palette.sidebarBorder);
 
-    // Indicator
+  // Build tab button labels
+  std::vector<std::wstring> tabLabels, tabIcons;
+  for (const auto &t : cat.tabs) {
+    tabLabels.push_back(t.label);
+    tabIcons.push_back(t.icon);
+  }
+  if (showWin) { tabLabels.push_back(L"Window");  tabIcons.push_back(L"\uE770"); }
+  tabLabels.push_back(L"About"); tabIcons.push_back(L"\uE946");
+
+  const int sideContentY = kHeaderH + 12; // top padding in sidebar
+
+  for (int ti = 0; ti < m_TotalTabs; ++ti) {
+    const int btnY = sideContentY + ti * kTabBtnH;
+    const bool active = (ti == m_ActiveTab);
+
+    // Active indicator bar (left edge, always built, hidden when inactive)
     {
       PropertyParser::ShapeOptions ind;
-      ind.id = L"__tab_indicator";
-      ind.x = TabButtonX(m_ActiveTab, m_TotalTabs);
-      ind.y = kHeaderHeight + kTabBarHeight - 2;
-      ind.width = 50; ind.height = 2;
+      ind.id = L"__tab_ind_" + std::to_wstring(ti);
+      ind.x = 0; ind.y = btnY + 6; ind.width = kTabIndW; ind.height = kTabBtnH - 12;
+      ind.solidColorRadius = 2;
       ind.hasSolidColor = true;
       ind.solidColor = m_Palette.accent; ind.solidAlpha = 255;
       ind.fillColor  = m_Palette.accent; ind.fillAlpha  = 255;
       panel->AddShape(ind);
+      // indicator is always registered at tabIndex=-1 but we manage show manually
+      m_Controls[ind.id] = {std::to_wstring(ti), ControlKind::TabButton, -1};
     }
-    AddDivider(panel, L"__tab_divider",
-               kHeaderHeight + kTabBarHeight - 1, m_Palette.divider);
+
+    // Icon (Segoe MDL2) — shown at left side of button
+    if (!tabIcons[ti].empty()) {
+      PropertyParser::TextOptions ico;
+      ico.id = L"__tab_ico_" + std::to_wstring(ti);
+      ico.x = kTabPadX; ico.y = btnY; ico.width = 20; ico.height = kTabBtnH;
+      ico.text = tabIcons[ti];
+      ico.fontFace = L"Segoe MDL2 Assets";
+      ico.fontSize = 11;
+      ico.fontColor = active ? m_Palette.accent : m_Palette.tabInactive;
+      ico.mouseEventCursorName = L"hand";
+      panel->AddText(ico);
+      m_Controls[ico.id] = {std::to_wstring(ti), ControlKind::TabButton, -1};
+    }
+
+    // Label text
+    {
+      PropertyParser::TextOptions lbl;
+      lbl.id = L"__tab_lbl_" + std::to_wstring(ti);
+      lbl.x = kTabPadX + (!tabIcons[ti].empty() ? 22 : 0);
+      lbl.y = btnY; lbl.width = kSideW - kTabPadX - 8; lbl.height = kTabBtnH;
+      lbl.text = tabLabels[ti]; lbl.fontSize = 12;
+      lbl.fontWeight = active ? 600 : 400;
+      lbl.fontColor = active ? m_Palette.tabActive : m_Palette.tabInactive;
+      lbl.mouseEventCursorName = L"hand";
+      panel->AddText(lbl);
+      m_Controls[lbl.id] = {std::to_wstring(ti), ControlKind::TabButton, -1};
+    }
   }
 
-  // ── Custom tabs ───────────────────────────────────────────────────────────
-  for (int ti = 0; ti < numCustomTabs; ++ti)
-    BuildCustomTab(panel, target, catalog.tabs[ti], ti, startY);
+  // Sidebar bottom — version micro-text
+  Txt(panel, L"__sb_ver",
+      kTabPadX, kHeaderH + kContentH - 22, kSideW - kTabPadX, 18,
+      Utils::ToWString(NOVADESK_VERSION), 9, m_Palette.muted);
 
-  // ── Window tab ────────────────────────────────────────────────────────────
-  if (showWindow) BuildWindowTab(panel, target, m_WindowTabIndex, startY);
+  // ── Content area background ───────────────────────────────────────────────
+  Rect(panel, L"__content_bg",
+       kContentX, kHeaderH, kContentW, kContentH, m_Palette.background);
 
-  // ── About tab ─────────────────────────────────────────────────────────────
-  BuildAboutTab(panel, m_AboutTabIndex, startY);
+  // ── Build each tab content ────────────────────────────────────────────────
+  const int contentY0 = kHeaderH + 16; // top padding in content area
 
-  // ── Footer ────────────────────────────────────────────────────────────────
-  const int footerY = panelH - kFooterHeight + 6;
-  AddDivider(panel, L"__settings_hr2", footerY, m_Palette.divider);
-  {
-    PropertyParser::ShapeOptions btn;
-    btn.id = L"__settings_reset";
-    btn.x = 14; btn.y = footerY + 8; btn.width = 140; btn.height = 26;
-    btn.solidColorRadius = 6; btn.hasSolidColor = true;
-    btn.solidColor = m_Palette.controlFill; btn.solidAlpha = 255;
-    btn.fillColor  = m_Palette.controlFill; btn.fillAlpha  = 255;
-    btn.mouseEventCursorName = L"hand";
-    panel->AddShape(btn);
-    m_Controls[btn.id] = {L"", ControlKind::ResetButton, 0};
-  }
-  {
-    PropertyParser::TextOptions bt;
-    bt.id = L"__settings_reset_label";
-    bt.x = 22; bt.y = footerY + 12; bt.width = 130; bt.height = 18;
-    bt.text = L"Reset to defaults"; bt.fontSize = 12;
-    bt.fontColor = m_Palette.text; bt.mouseEventCursorName = L"hand";
-    panel->AddText(bt);
-    m_Controls[bt.id] = {L"", ControlKind::ResetLabel, 0};
+  for (int ti = 0; ti < nCustom; ++ti)
+    BuildCustomTab(panel, target, cat.tabs[ti], ti, contentY0);
+
+  if (showWin) BuildWindowTab(panel, target, m_WindowTabIndex, contentY0);
+  BuildAboutTab(panel, m_AboutTabIndex, contentY0);
+
+  // ── Footer (Reset to defaults) — belongs to tab 0 ────────────────────────
+  if (nCustom > 0) {
+    const int footerY = kHeaderH + kContentH - kFooterH;
+    Rect(panel, L"__settings_hr2",
+         kContentX, footerY, kContentW, 1, m_Palette.divider);
+    m_Controls[L"__settings_hr2"] = {L"", ControlKind::ResetLabel, 0};
+
+    Rect(panel, L"__settings_reset",
+         kContentX + kPadX, footerY + 12, 150, 28,
+         m_Palette.controlFill, 255, 6.0f, true);
+    m_Controls[L"__settings_reset"] = {L"", ControlKind::ResetButton, 0};
+
+    Txt(panel, L"__settings_reset_label",
+        kContentX + kPadX + 12, footerY + 12, 130, 28,
+        L"Reset to defaults", 12, m_Palette.text, 400, true);
+    m_Controls[L"__settings_reset_label"] = {L"", ControlKind::ResetLabel, 0};
   }
 
   // Register widget
@@ -341,157 +362,174 @@ void SettingsPanel::BuildPanel(Widget *target) {
   if (panel->GetWindow()) SetForegroundWindow(panel->GetWindow());
 }
 
-// ─── BuildCustomTab ───────────────────────────────────────────────────────────
+// ─── BuildCustomTab ──────────────────────────────────────────────────────────
 
-int SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
-                                  const WidgetSettingsTab &tab,
-                                  int tabIndex, int startY) {
-  int rowTop = startY;
+void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
+                                   const WidgetSettingsTab &tab,
+                                   int ti, int startY) {
+  int y = startY;
+  // Tab heading
+  Txt(panel, CEId(ti, L"", L"heading"),
+      kContentX + kPadX, y, kCtrlW, 22,
+      tab.label, 14, m_Palette.text, 700);
+  m_Controls[CEId(ti, L"", L"heading")] = {L"", ControlKind::SelectLabel, ti};
+  y += 30;
+
+  // Thin heading underline
+  Rect(panel, CEId(ti, L"", L"hdivider"),
+       kContentX + kPadX, y, kCtrlW, 1, m_Palette.divider);
+  m_Controls[CEId(ti, L"", L"hdivider")] = {L"", ControlKind::SelectLabel, ti};
+  y += 12;
+
   for (const WidgetSetting &setting : tab.settings) {
-    const int controlY = rowTop + 9;
-    const std::wstring value =
-        target->GetSettings().ValueOrDefault(setting.id);
+    const std::wstring value = target->GetSettings().ValueOrDefault(setting.id);
 
     // Row label
-    {
-      PropertyParser::TextOptions lo;
-      lo.id = PanelElemId(tabIndex, setting.id, L"label");
-      lo.x = 14; lo.y = controlY + 2;
-      lo.width = kControlX - 24; lo.height = 22;
-      lo.text = setting.label; lo.fontSize = 12; lo.fontColor = m_Palette.label;
-      panel->AddText(lo);
-      m_Controls[lo.id] = {setting.id, ControlKind::SelectLabel, tabIndex};
-    }
+    Txt(panel, CEId(ti, setting.id, L"label"),
+        kContentX + kPadX, y, kCtrlW, 18,
+        setting.label, 11, m_Palette.label, 400);
+    m_Controls[CEId(ti, setting.id, L"label")] =
+        {setting.id, ControlKind::SelectLabel, ti};
+
+    const int ctrlY = y + 20;
 
     switch (setting.type) {
     case WidgetSettingType::Color: {
       PropertyParser::ColorPickerOptions co;
-      co.id = PanelElemId(tabIndex, setting.id, L"swatch");
-      co.x = kControlX; co.y = controlY; co.width = kControlWidth; co.height = 26;
-      COLORREF color = RGB(0,0,0); BYTE alpha = 255;
-      if (!value.empty()) ColorUtil::ParseRGBA(value, color, alpha);
-      co.color = color; co.borderRadius = 6.0f; co.borderWidth = 1.0f;
+      co.id = CEId(ti, setting.id, L"swatch");
+      co.x = kContentX + kPadX; co.y = ctrlY;
+      co.width = kCtrlW; co.height = kCtrlH;
+      COLORREF col = RGB(0,0,0); BYTE alp = 255;
+      if (!value.empty()) ColorUtil::ParseRGBA(value, col, alp);
+      co.color = col; co.borderRadius = 7.0f; co.borderWidth = 1.0f;
       co.borderColor = m_Palette.controlBorder; co.borderAlpha = 255;
       co.popupBackground = m_Palette.controlFill; co.popupBackgroundAlpha = 255;
       co.popupAccentColor = m_Palette.accent;
       co.popupBorderColor = m_Palette.divider;
       co.showEyedropper = false; co.mouseEventCursorName = L"hand";
       panel->AddColorPicker(co);
-      m_Controls[co.id] = {setting.id, ControlKind::ColorSwatch, tabIndex};
+      m_Controls[co.id] = {setting.id, ControlKind::ColorSwatch, ti};
       break;
     }
     case WidgetSettingType::Number:
     case WidgetSettingType::Text: {
-      Element *boundSlider = nullptr;
+      Element *bs = nullptr;
       if (setting.type == WidgetSettingType::Number &&
           !setting.binding.elementId.empty() &&
-          setting.binding.property == L"value" &&
-          m_Target && Widget::IsValid(m_Target))
-        boundSlider = m_Target->FindElementById(setting.binding.elementId);
-
-      if (auto *sl = dynamic_cast<SliderElement *>(boundSlider)) {
-        double init = sl->m_MinValue;
-        ParseSettingDouble(value, init); sl->SetValue(init); m_Target->Redraw();
-        m_Controls[sl->GetId()] = {setting.id, ControlKind::BoundSlider, tabIndex};
+          setting.binding.property == L"value" && m_Target &&
+          Widget::IsValid(m_Target))
+        bs = m_Target->FindElementById(setting.binding.elementId);
+      if (auto *sl = dynamic_cast<SliderElement *>(bs)) {
+        double init = sl->m_MinValue; ParseDbl(value, init);
+        sl->SetValue(init); m_Target->Redraw();
+        m_Controls[sl->GetId()] = {setting.id, ControlKind::BoundSlider, ti};
         break;
       }
       PropertyParser::InputBoxOptions io;
-      io.id = PanelElemId(tabIndex, setting.id, L"input");
-      io.x = kControlX; io.y = controlY; io.width = kControlWidth; io.height = 26;
+      io.id = CEId(ti, setting.id, L"input");
+      io.x = kContentX + kPadX; io.y = ctrlY;
+      io.width = kCtrlW; io.height = kCtrlH;
       io.text = value; io.fontSize = 12;
       io.fontColor = m_Palette.text; io.fontAlpha = 255;
       io.hasFillColor = true;
       io.fillColor = m_Palette.controlFill; io.fillAlpha = 255;
-      io.borderWidth = 1.0f; io.borderRadius = 6.0f;
+      io.borderWidth = 1.0f; io.borderRadius = 7.0f;
       io.borderColor = m_Palette.controlBorder; io.borderColorAlpha = 255;
       io.caretColor = m_Palette.text; io.selectionColor = m_Palette.accent;
       if (setting.type == WidgetSettingType::Number) io.inputType = InputType::Float;
       panel->AddInputBox(io);
-      m_Controls[io.id] = {setting.id, ControlKind::Input, tabIndex};
+      m_Controls[io.id] = {setting.id, ControlKind::Input, ti};
       break;
     }
     case WidgetSettingType::Toggle: {
-      const bool on = IsToggleOn(value);
+      const bool on = IsOn(value);
       Element *bound = nullptr;
       if (!setting.binding.elementId.empty() &&
-          setting.binding.property == L"checked" &&
-          m_Target && Widget::IsValid(m_Target))
+          setting.binding.property == L"checked" && m_Target &&
+          Widget::IsValid(m_Target))
         bound = m_Target->FindElementById(setting.binding.elementId);
-
       if (auto *sw = dynamic_cast<ToggleSwitchElement *>(bound)) {
         sw->SetChecked(on); m_Target->Redraw();
-        m_Controls[sw->GetId()] = {setting.id, ControlKind::BoundSwitch, tabIndex};
+        m_Controls[sw->GetId()] = {setting.id, ControlKind::BoundSwitch, ti};
         break;
       }
       if (auto *cb = dynamic_cast<CheckBoxElement *>(bound)) {
         cb->SetChecked(on); m_Target->Redraw();
-        m_Controls[cb->GetId()] = {setting.id, ControlKind::BoundSwitch, tabIndex};
+        m_Controls[cb->GetId()] = {setting.id, ControlKind::BoundSwitch, ti};
         break;
       }
       PropertyParser::ToggleSwitchOptions ts;
-      ts.id = PanelElemId(tabIndex, setting.id, L"pill");
-      ts.x = kControlX; ts.y = controlY + 2; ts.width = 44; ts.height = 22;
+      ts.id = CEId(ti, setting.id, L"pill");
+      ts.x = kContentX + kPadX; ts.y = ctrlY + 2;
+      ts.width = 46; ts.height = 24;
       ts.checked = on; ts.onColor = m_Palette.accent; ts.onAlpha = 255;
       ts.offColor = m_Palette.toggleOff; ts.offAlpha = 255;
-      ts.borderRadius = -1.0f; ts.knobColor = RGB(245,245,248); ts.knobAlpha = 255;
-      ts.knobPadding = 2.0f; ts.mouseEventCursorName = L"hand";
+      ts.borderRadius = -1.0f;
+      ts.knobColor = RGB(252,252,255); ts.knobAlpha = 255;
+      ts.knobPadding = 3.0f; ts.mouseEventCursorName = L"hand";
       panel->AddToggleSwitch(ts);
-      m_Controls[ts.id] = {setting.id, ControlKind::TogglePill, tabIndex};
+      m_Controls[ts.id] = {setting.id, ControlKind::TogglePill, ti};
       break;
     }
     case WidgetSettingType::Select: {
       if (!setting.options.empty()) {
         PropertyParser::DropDownOptions dd;
-        dd.id = PanelElemId(tabIndex, setting.id, L"dropdown");
-        dd.x = kControlX; dd.y = controlY; dd.width = kControlWidth; dd.height = 26;
+        dd.id = CEId(ti, setting.id, L"dropdown");
+        dd.x = kContentX + kPadX; dd.y = ctrlY;
+        dd.width = kCtrlW; dd.height = kCtrlH;
         for (const auto &opt : setting.options) dd.options.push_back({opt, opt});
         dd.hasOptions = true;
-        dd.selectedIndex = IndexOfOption(setting.options, value);
-        dd.backgroundColor = m_Palette.controlFill;
-        dd.borderColor = m_Palette.controlBorder; dd.borderWidth = 1.0f;
-        dd.borderRadius = 6.0f; dd.fontColor = m_Palette.text;
-        dd.placeholderColor = m_Palette.muted;
-        dd.popupBackground = m_Palette.controlFill;
-        dd.popupBorderColor = m_Palette.controlBorder;
-        dd.popupHoverColor  = m_Palette.controlBorder;
+        dd.selectedIndex = OptIndex(setting.options, value);
+        dd.backgroundColor    = m_Palette.controlFill;
+        dd.borderColor        = m_Palette.controlBorder;
+        dd.borderWidth = 1.0f; dd.borderRadius = 7.0f;
+        dd.fontColor          = m_Palette.text;
+        dd.placeholderColor   = m_Palette.muted;
+        dd.popupBackground    = m_Palette.controlFill;
+        dd.popupBorderColor   = m_Palette.controlBorder;
+        dd.popupHoverColor    = m_Palette.controlBorder;
         dd.popupSelectedColor = m_Palette.accent;
-        dd.popupTextColor = m_Palette.text; dd.mouseEventCursorName = L"hand";
+        dd.popupTextColor     = m_Palette.text;
+        dd.mouseEventCursorName = L"hand";
         panel->AddDropDown(dd);
-        m_Controls[dd.id] = {setting.id, ControlKind::PanelDropDown, tabIndex};
+        m_Controls[dd.id] = {setting.id, ControlKind::PanelDropDown, ti};
         break;
       }
-      PropertyParser::ShapeOptions btn;
-      btn.id = PanelElemId(tabIndex, setting.id, L"btn");
-      btn.x = kControlX; btn.y = controlY; btn.width = kControlWidth; btn.height = 26;
-      btn.solidColorRadius = 6; btn.hasSolidColor = true;
-      btn.solidColor = m_Palette.controlFill; btn.solidAlpha = 255;
-      btn.fillColor  = m_Palette.controlFill; btn.fillAlpha  = 255;
-      btn.mouseEventCursorName = L"hand";
-      panel->AddShape(btn);
-      m_Controls[btn.id] = {setting.id, ControlKind::SelectButton, tabIndex};
-
-      PropertyParser::TextOptions vt;
-      vt.id = PanelElemId(tabIndex, setting.id, L"btnlabel");
-      vt.x = kControlX + 8; vt.y = controlY + 4;
-      vt.width = kControlWidth - 16; vt.height = 18;
-      vt.text = value; vt.fontSize = 12; vt.fontColor = m_Palette.text;
-      vt.mouseEventCursorName = L"hand";
-      panel->AddText(vt);
-      m_Controls[vt.id] = {setting.id, ControlKind::SelectLabel, tabIndex};
+      // Fallback cycle button
+      Rect(panel, CEId(ti, setting.id, L"btn"),
+           kContentX + kPadX, ctrlY, kCtrlW, kCtrlH,
+           m_Palette.controlFill, 255, 7.0f, true);
+      m_Controls[CEId(ti, setting.id, L"btn")] =
+          {setting.id, ControlKind::SelectButton, ti};
+      Txt(panel, CEId(ti, setting.id, L"btnlabel"),
+          kContentX + kPadX + 10, ctrlY, kCtrlW - 20, kCtrlH,
+          value, 12, m_Palette.text, 400, true);
+      m_Controls[CEId(ti, setting.id, L"btnlabel")] =
+          {setting.id, ControlKind::SelectLabel, ti};
       break;
     }
     }
-    rowTop += kRowHeight;
+    y += kRowH;
   }
-  return rowTop;
 }
 
 // ─── BuildWindowTab ───────────────────────────────────────────────────────────
 
 void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
-                                   int tabIndex, int startY) {
+                                   int ti, int startY) {
   if (!target || !Widget::IsValid(target)) return;
   const WidgetOptions &opts = target->GetOptions();
+
+  int y = startY;
+  Txt(panel, CEId(ti, L"", L"heading"),
+      kContentX + kPadX, y, kCtrlW, 22,
+      L"Window Settings", 14, m_Palette.text, 700);
+  m_Controls[CEId(ti, L"", L"heading")] = {L"", ControlKind::SelectLabel, ti};
+  y += 30;
+  Rect(panel, CEId(ti, L"", L"hdivider"),
+       kContentX + kPadX, y, kCtrlW, 1, m_Palette.divider);
+  m_Controls[CEId(ti, L"", L"hdivider")] = {L"", ControlKind::SelectLabel, ti};
+  y += 16;
 
   const BoolRow toggleRows[] = {
     { L"__win_draggable",    L"Draggable",      opts.draggable    },
@@ -501,115 +539,140 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
     { L"__win_resizable",    L"Resizable",      opts.resizable    },
   };
 
-  int rowTop = startY;
   for (const auto &r : toggleRows) {
-    const int cy = rowTop + 9;
-    AddLabel(panel, std::wstring(r.id) + L"_lbl",
-             14, cy + 2, kControlX - 24, 22, r.label, 12, m_Palette.label);
-    m_Controls[std::wstring(r.id) + L"_lbl"] = {r.id, ControlKind::SelectLabel, tabIndex};
+    // Label + toggle on the same row (toggle right-aligned)
+    Txt(panel, std::wstring(r.id) + L"_lbl",
+        kContentX + kPadX, y + 4, kCtrlW - 56, 24,
+        r.label, 12, m_Palette.label, 400);
+    m_Controls[std::wstring(r.id) + L"_lbl"] =
+        {r.id, ControlKind::SelectLabel, ti};
 
     PropertyParser::ToggleSwitchOptions ts;
     ts.id = r.id;
-    ts.x = kControlX; ts.y = cy + 2; ts.width = 44; ts.height = 22;
-    ts.checked = r.value; ts.onColor = m_Palette.accent; ts.onAlpha = 255;
+    ts.x = kContentX + kCtrlW - 46 + kPadX; ts.y = y + 4;
+    ts.width = 46; ts.height = 24;
+    ts.checked = r.value;
+    ts.onColor = m_Palette.accent; ts.onAlpha = 255;
     ts.offColor = m_Palette.toggleOff; ts.offAlpha = 255;
-    ts.borderRadius = -1.0f; ts.knobColor = RGB(245,245,248); ts.knobAlpha = 255;
-    ts.knobPadding = 2.0f; ts.mouseEventCursorName = L"hand";
+    ts.borderRadius = -1.0f;
+    ts.knobColor = RGB(252,252,255); ts.knobAlpha = 255;
+    ts.knobPadding = 3.0f; ts.mouseEventCursorName = L"hand";
     panel->AddToggleSwitch(ts);
-    m_Controls[ts.id] = {r.id, ControlKind::WindowToggle, tabIndex};
-    rowTop += kRowHeight;
+    m_Controls[ts.id] = {r.id, ControlKind::WindowToggle, ti};
+
+    y += 36;
+    // Light separator between rows
+    Rect(panel, std::wstring(r.id) + L"_sep",
+         kContentX + kPadX, y, kCtrlW, 1, m_Palette.divider);
+    m_Controls[std::wstring(r.id) + L"_sep"] = {L"", ControlKind::SelectLabel, ti};
+    y += 8;
   }
 
   // Z-position
+  y += 4;
+  Txt(panel, L"__win_zpos_lbl",
+      kContentX + kPadX, y, kCtrlW, 18, L"Z-position", 11, m_Palette.label);
+  m_Controls[L"__win_zpos_lbl"] = {L"", ControlKind::SelectLabel, ti};
+  y += 20;
   {
-    const int cy = rowTop + 9;
-    AddLabel(panel, L"__win_zpos_lbl", 14, cy + 2, kControlX - 24, 22,
-             L"Z-position", 12, m_Palette.label);
-    m_Controls[L"__win_zpos_lbl"] = {L"__win_zpos", ControlKind::SelectLabel, tabIndex};
-
     PropertyParser::DropDownOptions dd;
     dd.id = L"__win_zpos";
-    dd.x = kControlX; dd.y = cy; dd.width = kControlWidth; dd.height = 26;
+    dd.x = kContentX + kPadX; dd.y = y; dd.width = kCtrlW; dd.height = kCtrlH;
     for (const auto &l : kZPosLabels) dd.options.push_back({l, l});
     dd.hasOptions = true; dd.selectedIndex = ZPosToIndex(opts.zPos);
-    dd.backgroundColor = m_Palette.controlFill;
-    dd.borderColor = m_Palette.controlBorder; dd.borderWidth = 1.0f; dd.borderRadius = 6.0f;
-    dd.fontColor = m_Palette.text; dd.placeholderColor = m_Palette.muted;
-    dd.popupBackground = m_Palette.controlFill; dd.popupBorderColor = m_Palette.controlBorder;
-    dd.popupHoverColor = m_Palette.controlBorder; dd.popupSelectedColor = m_Palette.accent;
-    dd.popupTextColor = m_Palette.text; dd.mouseEventCursorName = L"hand";
+    dd.backgroundColor    = m_Palette.controlFill;
+    dd.borderColor        = m_Palette.controlBorder;
+    dd.borderWidth = 1.0f; dd.borderRadius = 7.0f;
+    dd.fontColor          = m_Palette.text; dd.placeholderColor = m_Palette.muted;
+    dd.popupBackground    = m_Palette.controlFill;
+    dd.popupBorderColor   = m_Palette.controlBorder;
+    dd.popupHoverColor    = m_Palette.controlBorder;
+    dd.popupSelectedColor = m_Palette.accent;
+    dd.popupTextColor     = m_Palette.text; dd.mouseEventCursorName = L"hand";
     panel->AddDropDown(dd);
-    m_Controls[dd.id] = {L"__win_zpos", ControlKind::WindowZPos, tabIndex};
-    rowTop += kRowHeight;
+    m_Controls[dd.id] = {L"__win_zpos", ControlKind::WindowZPos, ti};
   }
+  y += kCtrlH + 12;
 
   // Opacity
+  Txt(panel, L"__win_opacity_lbl",
+      kContentX + kPadX, y, kCtrlW, 18, L"Opacity (0 \u2013 100)", 11, m_Palette.label);
+  m_Controls[L"__win_opacity_lbl"] = {L"", ControlKind::SelectLabel, ti};
+  y += 20;
   {
-    const int cy = rowTop + 9;
-    AddLabel(panel, L"__win_opacity_lbl", 14, cy + 2, kControlX - 24, 22,
-             L"Opacity (0-100)", 12, m_Palette.label);
-    m_Controls[L"__win_opacity_lbl"] = {L"__win_opacity", ControlKind::SelectLabel, tabIndex};
-
     const int pct = static_cast<int>(std::round(opts.windowOpacity / 255.0 * 100.0));
     wchar_t buf[8]; swprintf_s(buf, L"%d", pct);
-
     PropertyParser::InputBoxOptions io;
     io.id = L"__win_opacity";
-    io.x = kControlX; io.y = cy; io.width = kControlWidth; io.height = 26;
+    io.x = kContentX + kPadX; io.y = y; io.width = kCtrlW; io.height = kCtrlH;
     io.text = buf; io.fontSize = 12;
     io.fontColor = m_Palette.text; io.fontAlpha = 255;
     io.hasFillColor = true; io.fillColor = m_Palette.controlFill; io.fillAlpha = 255;
-    io.borderWidth = 1.0f; io.borderRadius = 6.0f;
+    io.borderWidth = 1.0f; io.borderRadius = 7.0f;
     io.borderColor = m_Palette.controlBorder; io.borderColorAlpha = 255;
     io.caretColor = m_Palette.text; io.selectionColor = m_Palette.accent;
     io.inputType = InputType::Float;
     panel->AddInputBox(io);
-    m_Controls[io.id] = {L"__win_opacity", ControlKind::WindowOpacity, tabIndex};
+    m_Controls[io.id] = {L"__win_opacity", ControlKind::WindowOpacity, ti};
   }
 }
 
 // ─── BuildAboutTab ────────────────────────────────────────────────────────────
 
-void SettingsPanel::BuildAboutTab(Widget *panel, int tabIndex, int startY) {
-  const WidgetSettingsCatalog &catalog =
+void SettingsPanel::BuildAboutTab(Widget *panel, int ti, int startY) {
+  const WidgetSettingsCatalog &cat =
       m_Target ? m_Target->GetSettings() : WidgetSettingsCatalog{};
-  const auto &about = catalog.about;
+  const auto &about = cat.about;
 
   int y = startY;
 
-  // App / widget name
-  std::wstring nameText = about.hasName ? about.name
+  // App / widget name (large accent)
+  const std::wstring nameText =
+      about.hasName ? about.name
       : (m_Target ? m_Target->GetOptions().id : L"Novadesk");
-  if (nameText.empty()) nameText = L"Novadesk";
-  AddLabel(panel, L"__about_name", 14, y + 12, 260, 26,
-           nameText, 18, m_Palette.accent);
-  m_Controls[L"__about_name"] = {L"", ControlKind::SelectLabel, tabIndex};
+  Txt(panel, L"__about_name",
+      kContentX + kPadX, y, kCtrlW, 32,
+      nameText.empty() ? L"Novadesk" : nameText, 20, m_Palette.accent, 700);
+  m_Controls[L"__about_name"] = {L"", ControlKind::SelectLabel, ti};
+  y += 36;
 
   // Version
-  if (about.hasVersion) {
-    AddLabel(panel, L"__about_ver", 14, y + 46, 260, 18,
-             L"Version " + about.version, 12, m_Palette.label);
-    m_Controls[L"__about_ver"] = {L"", ControlKind::SelectLabel, tabIndex};
-  } else {
-    AddLabel(panel, L"__about_ver", 14, y + 46, 260, 18,
-             L"Version " NOVADESK_VERSION, 12, m_Palette.label);
-    m_Controls[L"__about_ver"] = {L"", ControlKind::SelectLabel, tabIndex};
-  }
+  const std::wstring verText = about.hasVersion
+      ? (L"Version " + about.version)
+      : (L"Version " NOVADESK_VERSION);
+  Txt(panel, L"__about_ver",
+      kContentX + kPadX, y, kCtrlW, 18, verText, 12, m_Palette.label);
+  m_Controls[L"__about_ver"] = {L"", ControlKind::SelectLabel, ti};
+  y += 22;
 
   // Description
   if (about.hasDescription) {
-    AddLabel(panel, L"__about_desc", 14, y + 68, 260, 18,
-             about.description, 11, m_Palette.muted);
-    m_Controls[L"__about_desc"] = {L"", ControlKind::SelectLabel, tabIndex};
+    Txt(panel, L"__about_desc",
+        kContentX + kPadX, y, kCtrlW, 18,
+        about.description, 11, m_Palette.muted);
+    m_Controls[L"__about_desc"] = {L"", ControlKind::SelectLabel, ti};
+    y += 24;
   }
 
-  AddDivider(panel, L"__about_hr", y + 96, m_Palette.divider);
-  m_Controls[L"__about_hr"] = {L"", ControlKind::SelectLabel, tabIndex};
+  // Divider
+  y += 8;
+  Rect(panel, L"__about_hr",
+       kContentX + kPadX, y, kCtrlW, 1, m_Palette.divider);
+  m_Controls[L"__about_hr"] = {L"", ControlKind::SelectLabel, ti};
+  y += 16;
 
-  // Theme
-  AddLabel(panel, L"__about_theme_lbl", 14, y + 110, kControlX - 24, 22,
-           L"Theme", 12, m_Palette.label);
-  m_Controls[L"__about_theme_lbl"] = {L"", ControlKind::SelectLabel, tabIndex};
+  // Theme section heading
+  Txt(panel, L"__about_theme_hdr",
+      kContentX + kPadX, y, kCtrlW, 18,
+      L"Appearance", 11, m_Palette.muted, 600);
+  m_Controls[L"__about_theme_hdr"] = {L"", ControlKind::SelectLabel, ti};
+  y += 24;
+
+  Txt(panel, L"__about_theme_lbl",
+      kContentX + kPadX, y, kCtrlW, 18,
+      L"Theme", 11, m_Palette.label);
+  m_Controls[L"__about_theme_lbl"] = {L"", ControlKind::SelectLabel, ti};
+  y += 20;
 
   {
     const std::string cur = Settings::GetGlobalString("theme", "system");
@@ -618,17 +681,20 @@ void SettingsPanel::BuildAboutTab(Widget *panel, int tabIndex, int startY) {
 
     PropertyParser::DropDownOptions dd;
     dd.id = L"__about_theme";
-    dd.x = kControlX; dd.y = y + 106; dd.width = kControlWidth; dd.height = 26;
+    dd.x = kContentX + kPadX; dd.y = y; dd.width = kCtrlW; dd.height = kCtrlH;
     dd.options = {{L"Dark",L"dark"},{L"Light",L"light"},{L"System",L"system"}};
     dd.hasOptions = true; dd.selectedIndex = sel;
-    dd.backgroundColor = m_Palette.controlFill;
-    dd.borderColor = m_Palette.controlBorder; dd.borderWidth = 1.0f; dd.borderRadius = 6.0f;
-    dd.fontColor = m_Palette.text; dd.placeholderColor = m_Palette.muted;
-    dd.popupBackground = m_Palette.controlFill; dd.popupBorderColor = m_Palette.controlBorder;
-    dd.popupHoverColor = m_Palette.controlBorder; dd.popupSelectedColor = m_Palette.accent;
-    dd.popupTextColor = m_Palette.text; dd.mouseEventCursorName = L"hand";
+    dd.backgroundColor    = m_Palette.controlFill;
+    dd.borderColor        = m_Palette.controlBorder;
+    dd.borderWidth = 1.0f; dd.borderRadius = 7.0f;
+    dd.fontColor          = m_Palette.text; dd.placeholderColor = m_Palette.muted;
+    dd.popupBackground    = m_Palette.controlFill;
+    dd.popupBorderColor   = m_Palette.controlBorder;
+    dd.popupHoverColor    = m_Palette.controlBorder;
+    dd.popupSelectedColor = m_Palette.accent;
+    dd.popupTextColor     = m_Palette.text; dd.mouseEventCursorName = L"hand";
     panel->AddDropDown(dd);
-    m_Controls[dd.id] = {L"__about_theme", ControlKind::ThemeSelector, tabIndex};
+    m_Controls[dd.id] = {L"__about_theme", ControlKind::ThemeSelector, ti};
   }
 }
 
@@ -638,78 +704,90 @@ void SettingsPanel::SwitchTab(int tabIndex) {
   if (!m_Panel || !Widget::IsValid(m_Panel)) return;
   m_ActiveTab = tabIndex;
 
+  // Show/hide content elements
   for (auto &[id, info] : m_Controls) {
-    if (info.tabIndex == -1) continue; // chrome always visible
+    if (info.tabIndex == -1) continue; // sidebar chrome: manage separately
     Element *el = m_Panel->FindElementById(id);
     if (!el) continue;
-
-    // Footer: only on first custom tab (or window tab if no custom tabs)
     if (id == L"__settings_reset" || id == L"__settings_reset_label" ||
         id == L"__settings_hr2") {
-      el->SetShow(tabIndex == 0 ||
-                  (m_Target && m_Target->GetSettings().tabs.empty() &&
-                   tabIndex == m_WindowTabIndex));
+      el->SetShow(tabIndex == 0);
       continue;
     }
     el->SetShow(info.tabIndex == tabIndex);
   }
 
-  // Always show chrome
-  for (const wchar_t *id : {L"__settings_hr", L"__settings_title",
-                              L"__tab_bar", L"__tab_divider"}) {
+  // Update sidebar tab buttons (active indicator, label weight/color, icon color)
+  for (int ti = 0; ti < m_TotalTabs; ++ti) {
+    const bool active = (ti == tabIndex);
+
+    // Indicator bar
+    const std::wstring indId = L"__tab_ind_" + std::to_wstring(ti);
+    if (Element *el = m_Panel->FindElementById(indId))
+      el->SetShow(active);
+
+    // Icon
+    const std::wstring icoId = L"__tab_ico_" + std::to_wstring(ti);
+    if (Element *el = m_Panel->FindElementById(icoId))
+      if (auto *te = dynamic_cast<TextElement *>(el))
+        te->SetFontColor(active ? m_Palette.accent : m_Palette.tabInactive, 255);
+
+    // Label
+    const std::wstring lblId = L"__tab_lbl_" + std::to_wstring(ti);
+    if (Element *el = m_Panel->FindElementById(lblId))
+      if (auto *te = dynamic_cast<TextElement *>(el)) {
+        te->SetFontColor(active ? m_Palette.tabActive : m_Palette.tabInactive, 255);
+        te->SetFontWeight(active ? 600 : 400);
+      }
+  }
+
+  // Always-visible structural elements
+  for (const wchar_t *id : {L"__hdr_bg",L"__hdr_title",L"__hdr_border",
+                              L"__hdr_close",L"__sb_bg",L"__sb_border",
+                              L"__sb_ver",L"__content_bg"})
     if (Element *el = m_Panel->FindElementById(id)) el->SetShow(true);
-  }
-
-  // Move indicator
-  if (m_ShowTabBar) {
-    if (Element *ind = m_Panel->FindElementById(L"__tab_indicator"))
-      ind->SetPosition(TabButtonX(tabIndex, m_TotalTabs), ind->GetY());
-
-    // Update tab label colors
-    for (int ti = 0; ti < m_TotalTabs; ++ti) {
-      const std::wstring tabId = L"__tab_" + std::to_wstring(ti);
-      if (Element *el = m_Panel->FindElementById(tabId))
-        if (auto *te = dynamic_cast<TextElement *>(el))
-          te->SetFontColor(ti == tabIndex ? m_Palette.tabActive
-                                          : m_Palette.tabInactive, 255);
-    }
-  }
 
   if (tabIndex == m_WindowTabIndex) UpdateWindowTabVisuals();
   m_Panel->Redraw();
 }
 
-// ─── Palette application ──────────────────────────────────────────────────────
+// ─── ApplyPaletteToPanel ──────────────────────────────────────────────────────
 
 void SettingsPanel::ApplyPaletteToPanel() {
   if (!m_Panel || !Widget::IsValid(m_Panel)) return;
+
   wchar_t bgBuf[64];
-  swprintf_s(bgBuf, L"rgba(%d,%d,%d,%d)",
-             GetRValue(m_Palette.background), GetGValue(m_Palette.background),
-             GetBValue(m_Palette.background), (int)m_Palette.bgAlpha);
+  swprintf_s(bgBuf, L"rgba(%d,%d,%d,255)",
+             GetRValue(m_Palette.background),
+             GetGValue(m_Palette.background),
+             GetBValue(m_Palette.background));
   m_Panel->SetBackgroundColor(bgBuf);
 
-  auto Txt = [&](const wchar_t *id, COLORREF c) {
+  auto T = [&](const wchar_t *id, COLORREF c, int w = -1) {
     if (Element *el = m_Panel->FindElementById(id))
-      if (auto *te = dynamic_cast<TextElement *>(el))
+      if (auto *te = dynamic_cast<TextElement *>(el)) {
         te->SetFontColor(c, 255);
+        if (w >= 0) te->SetFontWeight(w);
+      }
   };
-  Txt(L"__settings_title", m_Palette.text);
-  Txt(L"__settings_close", m_Palette.muted);
-  Txt(L"__about_name",     m_Palette.accent);
-  Txt(L"__about_ver",      m_Palette.label);
-  Txt(L"__about_desc",     m_Palette.muted);
+  auto S = [&](const wchar_t *id, COLORREF c) {
+    if (Element *el = m_Panel->FindElementById(id)) el->SetSolidColor(c, 255);
+  };
 
-  auto Shp = [&](const wchar_t *id, COLORREF c) {
-    if (Element *el = m_Panel->FindElementById(id))
-      el->SetSolidColor(c, 255);
-  };
-  Shp(L"__settings_hr",   m_Palette.divider);
-  Shp(L"__tab_bar",       m_Palette.tabBar);
-  Shp(L"__tab_divider",   m_Palette.divider);
-  Shp(L"__tab_indicator", m_Palette.accent);
-  Shp(L"__settings_hr2",  m_Palette.divider);
-  Shp(L"__about_hr",      m_Palette.divider);
+  T(L"__hdr_title",      m_Palette.text);
+  T(L"__hdr_close",      m_Palette.muted);
+  T(L"__about_name",     m_Palette.accent);
+  T(L"__about_ver",      m_Palette.label);
+  T(L"__about_desc",     m_Palette.muted);
+  T(L"__about_theme_hdr",m_Palette.muted);
+  T(L"__about_theme_lbl",m_Palette.label);
+  S(L"__hdr_bg",         m_Palette.sidebar);
+  S(L"__hdr_border",     m_Palette.divider);
+  S(L"__sb_bg",          m_Palette.sidebar);
+  S(L"__sb_border",      m_Palette.sidebarBorder);
+  S(L"__content_bg",     m_Palette.background);
+  S(L"__about_hr",       m_Palette.divider);
+  S(L"__settings_hr2",   m_Palette.divider);
 
   SwitchTab(m_ActiveTab);
 }
@@ -719,24 +797,21 @@ void SettingsPanel::ApplyPaletteToPanel() {
 void SettingsPanel::UpdateWindowTabVisuals() {
   if (!m_Target || !Widget::IsValid(m_Target) ||
       !m_Panel  || !Widget::IsValid(m_Panel)) return;
-
   const WidgetOptions &opts = m_Target->GetOptions();
   const BoolRow bools[] = {
-    { L"__win_draggable",    L"", opts.draggable    },
-    { L"__win_clickthrough", L"", opts.clickThrough },
-    { L"__win_keeponscreen", L"", opts.keepOnScreen },
-    { L"__win_snapedges",    L"", opts.snapEdges    },
-    { L"__win_resizable",    L"", opts.resizable    },
+    {L"__win_draggable",    L"", opts.draggable   },
+    {L"__win_clickthrough", L"", opts.clickThrough},
+    {L"__win_keeponscreen", L"", opts.keepOnScreen},
+    {L"__win_snapedges",    L"", opts.snapEdges   },
+    {L"__win_resizable",    L"", opts.resizable   },
   };
   for (const auto &b : bools)
     if (Element *el = m_Panel->FindElementById(b.id))
       if (auto *ts = dynamic_cast<ToggleSwitchElement *>(el))
         ts->SetChecked(b.value);
-
   if (Element *el = m_Panel->FindElementById(L"__win_zpos"))
     if (auto *dd = dynamic_cast<DropDownElement *>(el))
       dd->SetSelectedIndex(ZPosToIndex(opts.zPos));
-
   if (Element *el = m_Panel->FindElementById(L"__win_opacity"))
     if (auto *ib = dynamic_cast<InputBoxElement *>(el)) {
       const int pct = static_cast<int>(std::round(opts.windowOpacity / 255.0 * 100.0));
@@ -784,7 +859,6 @@ void SettingsPanel::Commit(const std::wstring &sid, const std::wstring &val) {
   if (!m_Target || !Widget::IsValid(m_Target)) { Close(); return; }
   CommitWidgetSetting(m_Target, sid, val);
 }
-
 void SettingsPanel::ResetAll() {
   if (!m_Target || !Widget::IsValid(m_Target)) { Close(); return; }
   for (const WidgetSetting &s : m_Target->GetSettings().schema) {
@@ -800,19 +874,16 @@ void SettingsPanel::ResetAll() {
 void SettingsPanel::UpdateRowVisuals(const WidgetSetting &setting) {
   if (!m_Panel || !Widget::IsValid(m_Panel) ||
       !m_Target || !Widget::IsValid(m_Target)) return;
-
   const std::wstring value = m_Target->GetSettings().ValueOrDefault(setting.id);
 
-  // Find which tab owns this setting
-  int tabIndex = 0;
-  for (auto &[id, info] : m_Controls) {
-    if (info.settingId == setting.id && info.tabIndex >= 0) {
-      tabIndex = info.tabIndex; break;
-    }
-  }
+  // Determine which tab index owns this setting
+  int ti = 0;
+  for (auto &[id, info] : m_Controls)
+    if (info.settingId == setting.id && info.tabIndex >= 0)
+      { ti = info.tabIndex; break; }
 
   if (setting.type == WidgetSettingType::Toggle) {
-    const bool on = IsToggleOn(value);
+    const bool on = IsOn(value);
     if (!setting.binding.elementId.empty() && m_Target && Widget::IsValid(m_Target)) {
       if (auto *sw = dynamic_cast<ToggleSwitchElement *>(
               m_Target->FindElementById(setting.binding.elementId)))
@@ -821,38 +892,29 @@ void SettingsPanel::UpdateRowVisuals(const WidgetSetting &setting) {
               m_Target->FindElementById(setting.binding.elementId)))
         { cb->SetChecked(on); m_Target->Redraw(); return; }
     }
-    if (Element *el = m_Panel->FindElementById(
-            PanelElemId(tabIndex, setting.id, L"pill")))
+    if (Element *el = m_Panel->FindElementById(CEId(ti, setting.id, L"pill")))
       if (auto *ts = dynamic_cast<ToggleSwitchElement *>(el))
         ts->SetChecked(on);
-
   } else if (setting.type == WidgetSettingType::Select) {
-    if (Element *el = m_Panel->FindElementById(
-            PanelElemId(tabIndex, setting.id, L"dropdown")))
+    if (Element *el = m_Panel->FindElementById(CEId(ti, setting.id, L"dropdown")))
       if (auto *dd = dynamic_cast<DropDownElement *>(el))
-        { dd->SetSelectedIndex(IndexOfOption(setting.options, value)); return; }
-    if (Element *el = m_Panel->FindElementById(
-            PanelElemId(tabIndex, setting.id, L"btnlabel")))
+        { dd->SetSelectedIndex(OptIndex(setting.options, value)); return; }
+    if (Element *el = m_Panel->FindElementById(CEId(ti, setting.id, L"btnlabel")))
       if (auto *te = dynamic_cast<TextElement *>(el)) te->SetText(value);
-
   } else if (setting.type == WidgetSettingType::Number ||
              setting.type == WidgetSettingType::Text) {
     if (!setting.binding.elementId.empty() && m_Target && Widget::IsValid(m_Target))
       if (auto *sl = dynamic_cast<SliderElement *>(
-              m_Target->FindElementById(setting.binding.elementId))) {
-        double p = sl->GetValue(); ParseSettingDouble(value, p);
-        sl->SetValue(p); m_Target->Redraw(); return;
-      }
-    if (Element *el = m_Panel->FindElementById(
-            PanelElemId(tabIndex, setting.id, L"input")))
+              m_Target->FindElementById(setting.binding.elementId)))
+        { double p = sl->GetValue(); ParseDbl(value, p); sl->SetValue(p);
+          m_Target->Redraw(); return; }
+    if (Element *el = m_Panel->FindElementById(CEId(ti, setting.id, L"input")))
       if (auto *box = dynamic_cast<InputBoxElement *>(el)) box->SetText(value);
-
   } else if (setting.type == WidgetSettingType::Color) {
-    if (Element *el = m_Panel->FindElementById(
-            PanelElemId(tabIndex, setting.id, L"swatch")))
-      if (auto *picker = dynamic_cast<ColorPickerElement *>(el)) {
+    if (Element *el = m_Panel->FindElementById(CEId(ti, setting.id, L"swatch")))
+      if (auto *cp = dynamic_cast<ColorPickerElement *>(el)) {
         COLORREF c = RGB(0,0,0); BYTE a = 255;
-        if (!value.empty() && ColorUtil::ParseRGBA(value, c, a)) picker->SetColor(c);
+        if (!value.empty() && ColorUtil::ParseRGBA(value, c, a)) cp->SetColor(c);
       }
   }
 }
@@ -865,8 +927,7 @@ void SettingsPanel::UpdateAllVisuals() {
 
 // ─── Input sink ───────────────────────────────────────────────────────────────
 
-void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element,
-                                     int, int) {
+void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int, int) {
   if (!widget || widget != m_Panel || !element) return;
   auto it = m_Controls.find(element->GetId());
   if (it == m_Controls.end()) return;
@@ -880,14 +941,11 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element,
   if (info.kind == ControlKind::CloseButton) { Close(); return; }
   if (info.kind == ControlKind::ResetButton ||
       info.kind == ControlKind::ResetLabel)  { ResetAll(); return; }
-
   if (!m_Target || !Widget::IsValid(m_Target)) { Close(); return; }
 
-  // Window toggles
   if (info.kind == ControlKind::WindowToggle) {
     if (auto *ts = dynamic_cast<ToggleSwitchElement *>(element)) {
-      const bool on = ts->IsChecked();
-      const std::wstring &sid = info.settingId;
+      const bool on = ts->IsChecked(); const std::wstring &sid = info.settingId;
       if      (sid == L"__win_draggable")    m_Target->SetDraggable(on);
       else if (sid == L"__win_clickthrough") m_Target->SetClickThrough(on);
       else if (sid == L"__win_keeponscreen") m_Target->SetKeepOnScreen(on);
@@ -897,8 +955,6 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element,
     }
     return;
   }
-
-  // Window z-pos
   if (info.kind == ControlKind::WindowZPos) {
     if (auto *dd = dynamic_cast<DropDownElement *>(element)) {
       const int idx = dd->GetSelectedIndex();
@@ -909,8 +965,6 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element,
     }
     return;
   }
-
-  // Theme selector
   if (info.kind == ControlKind::ThemeSelector) {
     if (auto *dd = dynamic_cast<DropDownElement *>(element)) {
       Settings::SetGlobalString("theme", Utils::ToString(dd->SelectedValue()));
@@ -921,7 +975,6 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element,
     return;
   }
 
-  // Script-settings rows
   const WidgetSettingsCatalog &catalog = m_Target->GetSettings();
   const WidgetSetting *setting = catalog.Find(info.settingId);
   if (!setting) return;
@@ -934,34 +987,29 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element,
     else if (auto *cb = dynamic_cast<CheckBoxElement *>(element))
       checked = cb->GetState() == CheckBoxElement::State::Checked;
     Commit(setting->id, checked ? L"true" : L"false");
-
   } else if (info.kind == ControlKind::BoundSlider) {
     if (auto *sl = dynamic_cast<SliderElement *>(element)) {
-      Commit(setting->id,
-             Utils::ToWString(SliderElement::FormatValue(sl->GetSnappedValue())));
+      Commit(setting->id, Utils::ToWString(
+                 SliderElement::FormatValue(sl->GetSnappedValue())));
       if (!IsAlive(this)) return;
       UpdateRowVisuals(*setting);
     }
   } else if (info.kind == ControlKind::PanelDropDown) {
     if (auto *dd = dynamic_cast<DropDownElement *>(element)) {
       Commit(setting->id, dd->SelectedValue());
-      if (!IsAlive(this)) return;
-      UpdateRowVisuals(*setting);
+      if (!IsAlive(this)) return; UpdateRowVisuals(*setting);
     }
   } else if (info.kind == ControlKind::TogglePill) {
-    Commit(setting->id, IsToggleOn(current) ? L"false" : L"true");
-    if (!IsAlive(this)) return;
-    UpdateRowVisuals(*setting);
+    Commit(setting->id, IsOn(current) ? L"false" : L"true");
+    if (!IsAlive(this)) return; UpdateRowVisuals(*setting);
   } else if (info.kind == ControlKind::SelectButton ||
              info.kind == ControlKind::SelectLabel) {
     if (!setting || setting->options.empty()) return;
     size_t idx = 0;
     for (size_t i = 0; i < setting->options.size(); ++i)
       if (setting->options[i] == current) { idx = i; break; }
-    Commit(setting->id,
-           setting->options[(idx + 1) % setting->options.size()]);
-    if (!IsAlive(this)) return;
-    UpdateRowVisuals(*setting);
+    Commit(setting->id, setting->options[(idx + 1) % setting->options.size()]);
+    if (!IsAlive(this)) return; UpdateRowVisuals(*setting);
   } else { return; }
 
   if (m_Panel && Widget::IsValid(m_Panel)) m_Panel->Redraw();
@@ -970,34 +1018,28 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element,
 void SettingsPanel::OnInputCommitted(Widget *widget, InputBoxElement *inputBox) {
   if (!widget || widget != m_Panel || !inputBox) return;
   m_DeferClose = true;
-
   auto it = m_Controls.find(inputBox->GetId());
   if (it != m_Controls.end()) {
     if (it->second.kind == ControlKind::WindowOpacity) {
       if (m_Target && Widget::IsValid(m_Target)) {
-        double pct = 100.0;
-        ParseSettingDouble(inputBox->GetText(), pct);
+        double pct = 100.0; ParseDbl(inputBox->GetText(), pct);
         pct = std::max(0.0, std::min(100.0, pct));
         const BYTE b = static_cast<BYTE>(std::round(pct / 100.0 * 255.0));
         m_Target->SetWindowOpacity(b);
         Settings::SaveWidget(m_Target->GetOptions().id, m_Target->GetOptions());
       }
     } else if (it->second.kind == ControlKind::Input) {
-      auto jt = m_Controls.find(inputBox->GetId());
-      if (jt != m_Controls.end() && m_Target && Widget::IsValid(m_Target)) {
-        Commit(jt->second.settingId, inputBox->GetText());
-        if (!m_CloseRequested) {
-          if (Widget::IsValid(m_Target)) {
-            const WidgetSetting *s =
-                m_Target->GetSettings().Find(jt->second.settingId);
-            if (s) UpdateRowVisuals(*s);
-          }
+      if (m_Target && Widget::IsValid(m_Target)) {
+        Commit(it->second.settingId, inputBox->GetText());
+        if (!m_CloseRequested && Widget::IsValid(m_Target)) {
+          const WidgetSetting *s =
+              m_Target->GetSettings().Find(it->second.settingId);
+          if (s) UpdateRowVisuals(*s);
           if (m_Panel && Widget::IsValid(m_Panel)) m_Panel->Redraw();
         }
       }
     }
   }
-
   m_DeferClose = false;
   FlushPending();
 }
@@ -1009,7 +1051,6 @@ void SettingsPanel::OnColorCommitted(Widget *widget,
   if (it == m_Controls.end() || it->second.kind != ControlKind::ColorSwatch) return;
   m_DeferClose = true;
   if (m_Target && Widget::IsValid(m_Target))
-    Commit(it->second.settingId,
-           WidgetSettingColorToHex(colorPicker->GetColor()));
+    Commit(it->second.settingId, WidgetSettingColorToHex(colorPicker->GetColor()));
   m_DeferClose = false;
 }

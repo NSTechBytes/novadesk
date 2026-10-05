@@ -67,7 +67,7 @@ private:
   void UpdateAllVisuals();
   void UpdateWindowTabVisuals();
   void BuildPanel(Widget *target);
-  int  BuildCustomTab(Widget *panel, Widget *target,
+  void BuildCustomTab(Widget *panel, Widget *target,
                       const WidgetSettingsTab &tab, int tabIndex, int startY);
   void BuildWindowTab(Widget *panel, Widget *target, int tabIndex, int startY);
   void BuildAboutTab(Widget *panel, int tabIndex, int startY);
