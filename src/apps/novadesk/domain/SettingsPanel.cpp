@@ -209,6 +209,10 @@ void SettingsPanel::BuildPanel(Widget *target) {
   po.keepOnScreen = true; po.snapEdges = false;
   po.showInToolbar = false; po.zPos = ZPOSITION_ONTOPMOST;
   po.show = false; po.windowOpacity = 255;
+  // A non-empty scriptPath makes the widget treat every element as an action
+  // target (sinkHandlesClicks=true), routing WM_LBUTTONUP to OnElementMouseUp
+  // even for elements that have no JS callbacks (all settings panel controls).
+  po.scriptPath = L"__settings_panel__";
 
   Widget *panel = new Widget(po);
   if (!panel->Create()) { delete panel; return; }
