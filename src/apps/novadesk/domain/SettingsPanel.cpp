@@ -949,6 +949,11 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int, int)
 
   if (info.kind == ControlKind::WindowToggle) {
     if (auto *ts = dynamic_cast<ToggleSwitchElement *>(element)) {
+      // When scriptPath is non-empty (our sentinel), the widget skips
+      // ToggleToggleSwitch() and routes straight here — the element has NOT
+      // been flipped yet. Flip it manually, then apply to the target.
+      ts->Toggle();
+      m_Panel->Redraw();
       const bool on = ts->IsChecked(); const std::wstring &sid = info.settingId;
       if      (sid == L"__win_draggable")    m_Target->SetDraggable(on);
       else if (sid == L"__win_clickthrough") m_Target->SetClickThrough(on);
@@ -986,10 +991,16 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int, int)
 
   if (info.kind == ControlKind::BoundSwitch) {
     bool checked = false;
-    if (auto *sw = dynamic_cast<ToggleSwitchElement *>(element))
+    if (auto *sw = dynamic_cast<ToggleSwitchElement *>(element)) {
+      // consumedBySink path: element was not flipped by the widget — flip it now
+      sw->Toggle();
+      m_Panel->Redraw();
       checked = sw->IsChecked();
-    else if (auto *cb = dynamic_cast<CheckBoxElement *>(element))
+    } else if (auto *cb = dynamic_cast<CheckBoxElement *>(element)) {
+      cb->Toggle();
+      m_Panel->Redraw();
       checked = cb->GetState() == CheckBoxElement::State::Checked;
+    }
     Commit(setting->id, checked ? L"true" : L"false");
   } else if (info.kind == ControlKind::BoundSlider) {
     if (auto *sl = dynamic_cast<SliderElement *>(element)) {
