@@ -93,6 +93,9 @@ public:
   /// @brief Called when a color picker popup changes a swatch color.
   virtual void OnColorCommitted(Widget *widget,
                                 ColorPickerElement *colorPicker) = 0;
+  /// @brief Called before a dropdown popup is opened.
+  virtual void OnBeforeOpenDropDown(Widget *widget,
+                                    DropDownElement *dropDown) {}
 };
 
 /**

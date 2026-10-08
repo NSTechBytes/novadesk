@@ -140,6 +140,16 @@ void SettingsPanel::CloseAll() {
   FlushPending();
 }
 
+void SettingsPanel::SyncTargetVisuals(Widget *target) {
+  if (!target) return;
+  for (SettingsPanel *p : s_Panels) {
+    if (p->m_Target == target && p->m_Panel && Widget::IsValid(p->m_Panel)) {
+      p->UpdateWindowTabVisuals();
+      break;
+    }
+  }
+}
+
 // ─── Element creation helpers ─────────────────────────────────────────────────
 
 static void Txt(Widget *panel, const std::wstring &id,
@@ -821,6 +831,14 @@ void SettingsPanel::UpdateWindowTabVisuals() {
       const int pct = static_cast<int>(std::round(opts.windowOpacity / 255.0 * 100.0));
       wchar_t buf[8]; swprintf_s(buf, L"%d", pct); ib->SetText(buf);
     }
+  m_Panel->Redraw();
+}
+
+void SettingsPanel::OnBeforeOpenDropDown(Widget *widget,
+                                         DropDownElement *dropDown) {
+  if (widget == m_Panel && dropDown && dropDown->GetId() == L"__win_zpos") {
+    UpdateWindowTabVisuals();
+  }
 }
 
 // ─── Destructor / Close ───────────────────────────────────────────────────────
@@ -936,7 +954,6 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int, int)
   auto it = m_Controls.find(element->GetId());
   if (it == m_Controls.end()) return;
   const ControlInfo &info = it->second;
-
   if (info.kind == ControlKind::TabButton) {
     int idx = 0;
     try { idx = std::stoi(Utils::ToString(info.settingId)); } catch (...) {}
@@ -968,8 +985,11 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int, int)
     if (auto *dd = dynamic_cast<DropDownElement *>(element)) {
       const int idx = dd->GetSelectedIndex();
       if (idx >= 0 && idx < kZPosCount) {
-        m_Target->ChangeZPos(kZPosValues[idx]);
-        Settings::SaveWidget(m_Target->GetOptions().id, m_Target->GetOptions());
+        m_Target->ChangeZPos(kZPosValues[idx], false);
+        if (m_Target && Widget::IsValid(m_Target)) {
+          Settings::SaveWidget(m_Target->GetOptions().id, m_Target->GetOptions());
+          UpdateWindowTabVisuals();
+        }
       }
     }
     return;

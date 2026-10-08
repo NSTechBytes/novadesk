@@ -369,17 +369,14 @@ void DropDownPopup::CommitHighlighted() {
     return;
   m_DropDown->SetSelectedIndex(m_Highlight);
   m_WidgetNeedsRedraw = true;
-  if (m_Widget)
-    m_Widget->NotifyDropDownChange(m_DropDown);
-  if (!Widget::IsValid(m_Widget))
-    return;
-  // The WM_LBUTTONUP that paired with this WM_LBUTTONDOWN will be delivered
-  // to the widget window after the popup closes. If another dropdown element
-  // sits at that screen position it would immediately open a new popup. Tell
-  // the widget to suppress the next dropdown open from WM_LBUTTONUP.
-  if (m_Widget)
-    m_Widget->SetSuppressNextDropDownOpen(true);
+  Widget *widget = m_Widget;
+  DropDownElement *dropDown = m_DropDown;
+  if (widget && Widget::IsValid(widget))
+    widget->SetSuppressNextDropDownOpen(true);
   Close();
+  if (widget && Widget::IsValid(widget)) {
+    widget->NotifyDropDownChange(dropDown);
+  }
 }
 
 void DropDownPopup::InstallOutsideClickHook() {
@@ -745,8 +742,11 @@ LRESULT DropDownPopup::Handle(UINT m, WPARAM w, LPARAM l) {
           return 0;
       }
       if (m_DropDown && ElementStillValid()) {
+        const bool hadChanged = (m_DropDown->GetSelectedIndex() != m_EscapeIndex);
         m_DropDown->SetSelectedIndex(m_EscapeIndex);
         m_WidgetNeedsRedraw = true;
+        if (hadChanged && m_Widget)
+          m_Widget->NotifyDropDownChange(m_DropDown);
       }
       Close();
       return 0;

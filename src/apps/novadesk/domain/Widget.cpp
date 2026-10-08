@@ -543,7 +543,7 @@ std::wstring Widget::GetTitle() const {
 // Change the z-order position of this widget.
 // If all is true, affects all widgets in the same z-order group.
 void Widget::ChangeZPos(ZPOSITION zPos, bool all) {
-  if (Widget::IsMenuActive())
+  if (s_IsMenuActive.load(std::memory_order_relaxed))
     return;
 
   ZPOSITION oldZPos = m_WindowZPosition;
@@ -552,6 +552,7 @@ void Widget::ChangeZPos(ZPOSITION zPos, bool all) {
   bool changed = (m_Options.zPos != zPos);
   m_Options.zPos = zPos;
   m_WindowZPosition = zPos;
+  SettingsPanel::SyncTargetVisuals(this);
 
   switch (zPos) {
   case ZPOSITION_ONTOPMOST:
@@ -636,6 +637,8 @@ timer_check:
 void Widget::ChangeSingleZPos(ZPOSITION zPos, bool all) {
   if (zPos == ZPOSITION_NORMAL && (!all || System::GetShowDesktop())) {
     m_WindowZPosition = zPos;
+    m_Options.zPos = zPos;
+    SettingsPanel::SyncTargetVisuals(this);
     if (m_hWnd) {
       SetWindowPos(m_hWnd, System::GetBackmostTopWindow(), 0, 0, 0, 0,
                    ZPOS_FLAGS);
@@ -815,11 +818,17 @@ void Widget::SetDraggable(bool enable) {
   if (m_Options.draggable != enable) {
     m_Options.draggable = enable;
     Settings::SaveWidget(m_Options.id, m_Options);
+    SettingsPanel::SyncTargetVisuals(this);
   }
 }
 
 // Enable/disable resizing.
-void Widget::SetResizable(bool enable) { m_Options.resizable = enable; }
+void Widget::SetResizable(bool enable) {
+  if (m_Options.resizable != enable) {
+    m_Options.resizable = enable;
+    SettingsPanel::SyncTargetVisuals(this);
+  }
+}
 
 // Set minimum width.
 void Widget::SetMinWidth(int minWidth) {
@@ -922,6 +931,7 @@ void Widget::SetClickThrough(bool enable) {
       }
     }
     Settings::SaveWidget(m_Options.id, m_Options);
+    SettingsPanel::SyncTargetVisuals(this);
   }
 }
 
@@ -930,6 +940,7 @@ void Widget::SetKeepOnScreen(bool enable) {
   if (m_Options.keepOnScreen != enable) {
     m_Options.keepOnScreen = enable;
     Settings::SaveWidget(m_Options.id, m_Options);
+    SettingsPanel::SyncTargetVisuals(this);
   }
 }
 
@@ -938,6 +949,7 @@ void Widget::SetSnapEdges(bool enable) {
   if (m_Options.snapEdges != enable) {
     m_Options.snapEdges = enable;
     Settings::SaveWidget(m_Options.id, m_Options);
+    SettingsPanel::SyncTargetVisuals(this);
   }
 }
 
@@ -2709,6 +2721,8 @@ bool Widget::IsColorPickerEyedropperActive() const {
 void Widget::OpenDropDown(DropDownElement *dropDown) {
   if (!dropDown)
     return;
+  if (m_InputSink)
+    m_InputSink->OnBeforeOpenDropDown(this, dropDown);
   // Only one popup of either kind may hold the outside-click hook.
   CloseColorPicker();
   DropDownElement *previous =
@@ -4518,7 +4532,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           if (!hitElement)
             hitElement = el;
           if (!actionElement &&
-              (el->HasAction(message, wParam) || sinkHandlesClicks ||
+              (el->HasAction(message, wParam) ||
+               (sinkHandlesClicks && !dynamic_cast<DropDownElement *>(el)) ||
                ((message == WM_LBUTTONDOWN || message == WM_MOUSEMOVE) &&
                 IsInteractiveControl(el))))
             actionElement = el;
@@ -4566,7 +4581,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         if (!hitElement)
           hitElement = el;
         if (!actionElement &&
-            (el->HasAction(message, wParam) || sinkHandlesClicks ||
+            (el->HasAction(message, wParam) ||
+             (sinkHandlesClicks && !dynamic_cast<DropDownElement *>(el)) ||
              ((message == WM_LBUTTONDOWN || message == WM_MOUSEMOVE) &&
               IsInteractiveControl(el))))
           actionElement = el;
@@ -4988,13 +5004,16 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
       }
     } else if (m_InputSink && message == WM_LBUTTONUP) {
       // The element has no JS callback bound; forward the click to the
-      // installed input sink (settings panel) instead. The sink may
-      // synchronously destroy this widget (panel close), so nothing may
-      // touch instance state after the call unless it survived.
-      handled = true;
-      m_InputSink->OnElementMouseUp(this, actionElement, x, y);
-      if (!Widget::IsValid(this))
-        return true;
+      // installed input sink (settings panel) instead. DropDown elements
+      // are handled by OpenDropDown and commit exclusively via NotifyDropDownChange.
+      // The sink may synchronously destroy this widget (panel close), so
+      // nothing may touch instance state after the call unless it survived.
+      if (!dynamic_cast<DropDownElement *>(actionElement)) {
+        handled = true;
+        m_InputSink->OnElementMouseUp(this, actionElement, x, y);
+        if (!Widget::IsValid(this))
+          return true;
+      }
     }
   }
 

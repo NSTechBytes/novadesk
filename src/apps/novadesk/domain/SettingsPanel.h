@@ -28,12 +28,14 @@ public:
   static Widget *OpenFor(Widget *target);
   static void CloseAllForTarget(Widget *target);
   static void CloseAll();
+  static void SyncTargetVisuals(Widget *target);
 
   ~SettingsPanel() override;
 
   void OnElementMouseUp(Widget *, Element *, int, int) override;
   void OnInputCommitted(Widget *, InputBoxElement *) override;
   void OnColorCommitted(Widget *, ColorPickerElement *) override;
+  void OnBeforeOpenDropDown(Widget *, DropDownElement *) override;
 
 private:
   // ── Control kinds ─────────────────────────────────────────────────────────
