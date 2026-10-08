@@ -176,6 +176,7 @@ static void Rect(Widget *panel, const std::wstring &id,
   o.hasSolidColor = true;
   o.solidColor = color; o.solidAlpha = alpha;
   o.fillColor  = color; o.fillAlpha  = alpha;
+  o.strokeWidth = 0.0f;
   if (radius > 0.0f) {
     o.radiusX = radius;
     o.radiusY = radius;
@@ -194,6 +195,7 @@ static void Ellipse(Widget *panel, const std::wstring &id,
   o.hasSolidColor = true;
   o.solidColor = color; o.solidAlpha = alpha;
   o.fillColor  = color; o.fillAlpha  = alpha;
+  o.strokeWidth = 0.0f;
   if (hand) o.mouseEventCursorName = L"hand";
   panel->AddShape(o);
 }
@@ -827,6 +829,21 @@ void SettingsPanel::OnBeforeOpenDropDown(Widget *widget,
                                          DropDownElement *dropDown) {
   if (widget == m_Panel && dropDown && dropDown->GetId() == L"__win_zpos") {
     UpdateWindowTabVisuals();
+  }
+}
+
+void SettingsPanel::OnElementHoverChanged(Widget *widget, Element *element,
+                                         bool isHovered) {
+  if (widget != m_Panel || !element) return;
+  if (element->GetId() == L"__hdr_close") {
+    // Normal: rgb(239, 68, 68) (red)
+    // Hover: brighter/stronger red rgb(255, 80, 80) or darker red rgb(220, 38, 38)
+    COLORREF color = isHovered ? RGB(255, 90, 90) : RGB(239, 68, 68);
+    element->SetSolidColor(color, 255);
+    if (auto *shape = dynamic_cast<ShapeElement *>(element)) {
+      shape->SetFill(color, 255);
+    }
+    m_Panel->Redraw();
   }
 }
 

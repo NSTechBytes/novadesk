@@ -4640,6 +4640,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           JSEngine::MouseEventData leaveData =
               buildElementEventData(m_MouseOverElement);
           JSEngine::CallEventCallback(leaveId, this, &leaveData);
+        } else if (m_InputSink) {
+          m_InputSink->OnElementHoverChanged(this, m_MouseOverElement, false);
         }
 
         // If callback cleared the elements or deleted
@@ -4667,6 +4669,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           JSEngine::MouseEventData overData =
               buildElementEventData(hoverElement);
           JSEngine::CallEventCallback(overId, this, &overData);
+        } else if (m_InputSink) {
+          m_InputSink->OnElementHoverChanged(this, hoverElement, true);
         }
 
         // Re-verify after callback
@@ -4852,6 +4856,8 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
           }
         }
         JSEngine::CallEventCallback(leaveId, this, &elementLeaveData);
+      } else if (m_InputSink) {
+        m_InputSink->OnElementHoverChanged(this, m_MouseOverElement, false);
       }
       m_MouseOverElement = nullptr;
       m_TooltipElement = nullptr;

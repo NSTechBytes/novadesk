@@ -96,6 +96,9 @@ public:
   /// @brief Called before a dropdown popup is opened.
   virtual void OnBeforeOpenDropDown(Widget *widget,
                                     DropDownElement *dropDown) {}
+  /// @brief Called when mouse enters or leaves an element without JS callbacks.
+  virtual void OnElementHoverChanged(Widget *widget, Element *element,
+                                     bool isHovered) {}
 };
 
 /**

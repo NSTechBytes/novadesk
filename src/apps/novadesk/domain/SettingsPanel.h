@@ -36,6 +36,7 @@ public:
   void OnInputCommitted(Widget *, InputBoxElement *) override;
   void OnColorCommitted(Widget *, ColorPickerElement *) override;
   void OnBeforeOpenDropDown(Widget *, DropDownElement *) override;
+  void OnElementHoverChanged(Widget *widget, Element *element, bool isHovered) override;
 
 private:
   // ── Control kinds ─────────────────────────────────────────────────────────
