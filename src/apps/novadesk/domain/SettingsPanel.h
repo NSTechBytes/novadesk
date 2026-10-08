@@ -48,9 +48,7 @@ private:
     // Chrome
     CloseButton, TabButton,
     // Window tab
-    WindowToggle, WindowZPos, WindowOpacity,
-    // About tab
-    ThemeSelector,
+    WindowToggle, WindowZPos, WindowOpacity
   };
 
   struct ControlInfo {
