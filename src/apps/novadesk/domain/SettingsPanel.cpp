@@ -54,8 +54,8 @@ constexpr int kPadX     = 20;    // horizontal content padding
 constexpr int kRowH     = 44;    // height per inline settings row (label left, control right)
 constexpr int kCtrlH    = 28;    // height of individual control (input/toggle/dropdown)
 constexpr int kCtrlW    = kContentW - kPadX * 2;  // = 340
-constexpr int kInlineLabelW = 180;
-constexpr int kInlineCtrlW  = 140;
+constexpr int kInlineLabelW = 220;
+constexpr int kInlineCtrlW  = 100;
 
 // Footer within content pane
 constexpr int kFooterH  = 52;
@@ -485,8 +485,9 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
     case WidgetSettingType::Color: {
       PropertyParser::ColorPickerOptions co;
       co.id = CEId(ti, setting.id, L"swatch");
-      co.x = kContentX + kPadX + kCtrlW - 60; co.y = ctrlY;
-      co.width = 60; co.height = kCtrlH;
+      // Square swatch: width == height == kCtrlH, right-aligned in control zone
+      co.x = kContentX + kPadX + kCtrlW - kCtrlH; co.y = ctrlY;
+      co.width = kCtrlH; co.height = kCtrlH;
       COLORREF col = RGB(0,0,0); BYTE alp = 255;
       if (!value.empty()) ColorUtil::ParseRGBA(value, col, alp);
       co.color = col; co.borderRadius = 7.0f; co.borderWidth = 1.0f;
@@ -516,7 +517,7 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
       PropertyParser::InputBoxOptions io;
       io.id = CEId(ti, setting.id, L"input");
       io.x = ctrlX; io.y = ctrlY;
-      io.width = kInlineCtrlW; io.height = kCtrlH;
+      io.width = kInlineCtrlW - 20; io.height = kCtrlH;
       io.text = value; io.fontSize = 12;
       io.fontColor = m_Palette.text; io.fontAlpha = 255;
       io.hasFillColor = true;
@@ -524,6 +525,7 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
       io.borderWidth = 1.0f; io.borderRadius = 7.0f;
       io.borderColor = m_Palette.controlBorder; io.borderColorAlpha = 255;
       io.caretColor = m_Palette.text; io.selectionColor = m_Palette.accent;
+      io.paddingLeft = 10; io.paddingRight = 10; // match dropdown default padding
       if (setting.type == WidgetSettingType::Number) io.inputType = InputType::Float;
       panel->AddInputBox(io);
       m_Controls[io.id] = {setting.id, ControlKind::Input, ti};
@@ -661,7 +663,7 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
 
   // Z-position (same row: label left, dropdown right)
   Txt(panel, L"__win_zpos_lbl",
-      kContentX + kPadX, y + rowOff, kInlineLabelW, kCtrlH, L"Z-position", 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER);
+      kContentX + kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH, L"Z-position", 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER);
   m_Controls[L"__win_zpos_lbl"] = {L"", ControlKind::SelectLabel, ti};
   {
     PropertyParser::DropDownOptions dd;
@@ -685,20 +687,21 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
 
   // Opacity (same row: label left, input box right)
   Txt(panel, L"__win_opacity_lbl",
-      kContentX + kPadX, y + rowOff, kInlineLabelW, kCtrlH, L"Opacity (0 \u2013 100)", 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER);
+      kContentX + kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH, L"Opacity (0 \u2013 100)", 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER);
   m_Controls[L"__win_opacity_lbl"] = {L"", ControlKind::SelectLabel, ti};
   {
     const int pct = static_cast<int>(std::round(opts.windowOpacity / 255.0 * 100.0));
     wchar_t buf[8]; swprintf_s(buf, L"%d", pct);
     PropertyParser::InputBoxOptions io;
     io.id = L"__win_opacity";
-    io.x = ctrlX; io.y = y + rowOff; io.width = kInlineCtrlW; io.height = kCtrlH;
+    io.x = ctrlX; io.y = y + rowOff; io.width = kInlineCtrlW - 20; io.height = kCtrlH;
     io.text = buf; io.fontSize = 12;
     io.fontColor = m_Palette.text; io.fontAlpha = 255;
     io.hasFillColor = true; io.fillColor = m_Palette.controlFill; io.fillAlpha = 255;
     io.borderWidth = 1.0f; io.borderRadius = 7.0f;
     io.borderColor = m_Palette.controlBorder; io.borderColorAlpha = 255;
     io.caretColor = m_Palette.text; io.selectionColor = m_Palette.accent;
+    io.paddingLeft = 10; io.paddingRight = 10; // match dropdown default padding
     io.inputType = InputType::Float;
     panel->AddInputBox(io);
     m_Controls[io.id] = {L"__win_opacity", ControlKind::WindowOpacity, ti};
