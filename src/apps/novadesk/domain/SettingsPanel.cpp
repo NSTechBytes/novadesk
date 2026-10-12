@@ -309,6 +309,30 @@ void SettingsPanel::BuildPanel(Widget *target) {
     // Vertical center line of the entire row:
     const int midY = btnY + kTabBtnH / 2;
 
+    // Tab background pill (for smooth hover highlight)
+    {
+      const int tabPadX = 6;
+      const int tabBgH = 32;
+      const int tabBgY = midY - tabBgH / 2 -2;
+      PropertyParser::ShapeOptions bg;
+      bg.id = L"__tab_bg_" + std::to_wstring(ti);
+      bg.x = tabPadX;
+      bg.y = tabBgY;
+      bg.width = kSideW - tabPadX * 2;
+      bg.height = tabBgH;
+      bg.radiusX = 6.0f;
+      bg.radiusY = 6.0f;
+      bg.solidColorRadius = 6;
+      bg.strokeWidth = 0.0f;
+      bg.hasSolidColor = true;
+      COLORREF initColor = active ? m_Palette.controlFill : m_Palette.sidebar;
+      bg.solidColor = initColor; bg.solidAlpha = 255;
+      bg.fillColor  = initColor; bg.fillAlpha  = 255;
+      bg.mouseEventCursorName = L"hand";
+      panel->AddShape(bg);
+      m_Controls[bg.id] = {std::to_wstring(ti), ControlKind::TabButton, -1};
+    }
+
     // Active indicator bar: 16px high, centered around midY
     {
       PropertyParser::ShapeOptions ind;
@@ -747,6 +771,16 @@ void SettingsPanel::SwitchTab(int tabIndex) {
   for (int ti = 0; ti < m_TotalTabs; ++ti) {
     const bool active = (ti == tabIndex);
 
+    // Tab background shape
+    const std::wstring bgId = L"__tab_bg_" + std::to_wstring(ti);
+    if (Element *el = m_Panel->FindElementById(bgId)) {
+      COLORREF bgCol = active ? m_Palette.controlFill : m_Palette.sidebar;
+      el->SetSolidColor(bgCol, 255);
+      if (auto *shape = dynamic_cast<ShapeElement *>(el)) {
+        shape->SetFill(bgCol, 255);
+      }
+    }
+
     // Indicator bar
     const std::wstring indId = L"__tab_ind_" + std::to_wstring(ti);
     if (Element *el = m_Panel->FindElementById(indId))
@@ -882,6 +916,42 @@ void SettingsPanel::OnElementHoverChanged(Widget *widget, Element *element,
       }
     }
     m_Panel->Redraw();
+  } else if (id.rfind(L"__tab_", 0) == 0) {
+    // Hover effect for sidebar tab items (__tab_bg_X, __tab_ico_X, __tab_lbl_X)
+    int tabIdx = -1;
+    size_t lastUnderscore = id.rfind(L'_');
+    if (lastUnderscore != std::wstring::npos) {
+      try {
+        tabIdx = std::stoi(id.substr(lastUnderscore + 1));
+      } catch (...) {}
+    }
+    if (tabIdx >= 0 && tabIdx < m_TotalTabs && tabIdx != m_ActiveTab) {
+      Element *bgEl  = m_Panel->FindElementById(L"__tab_bg_" + std::to_wstring(tabIdx));
+      Element *lblEl = m_Panel->FindElementById(L"__tab_lbl_" + std::to_wstring(tabIdx));
+      Element *icoEl = m_Panel->FindElementById(L"__tab_ico_" + std::to_wstring(tabIdx));
+
+      COLORREF bgCol  = isHovered ? m_Palette.controlFill : m_Palette.sidebar;
+      COLORREF lblCol = isHovered ? m_Palette.text        : m_Palette.tabInactive;
+      COLORREF icoCol = isHovered ? m_Palette.text        : m_Palette.tabInactive;
+
+      if (bgEl) {
+        bgEl->SetSolidColor(bgCol, 255);
+        if (auto *shape = dynamic_cast<ShapeElement *>(bgEl)) {
+          shape->SetFill(bgCol, 255);
+        }
+      }
+      if (lblEl) {
+        if (auto *txt = dynamic_cast<TextElement *>(lblEl)) {
+          txt->SetFontColor(lblCol, 255);
+        }
+      }
+      if (icoEl) {
+        if (auto *txt = dynamic_cast<TextElement *>(icoEl)) {
+          txt->SetFontColor(icoCol, 255);
+        }
+      }
+      m_Panel->Redraw();
+    }
   }
 }
 
