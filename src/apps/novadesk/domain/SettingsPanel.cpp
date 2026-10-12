@@ -46,6 +46,7 @@ constexpr int kContentH = kPanelH - kHeaderH;        // = 432
 constexpr int kTabBtnH  = 40;    // height of each tab button
 constexpr int kTabBtnX  = 0;     // starts at sidebar left edge
 constexpr int kTabIndW  = 3;     // active-tab indicator bar width
+constexpr int kTabIndH  = 16;    // active-tab indicator bar height (compact pill)
 constexpr int kTabPadX  = 16;    // icon/text horizontal padding
 
 // Content area layout
@@ -304,12 +305,22 @@ void SettingsPanel::BuildPanel(Widget *target) {
     const int btnY = sideContentY + ti * kTabBtnH;
     const bool active = (ti == m_ActiveTab);
 
-    // Active indicator bar (left edge, always built, hidden when inactive)
+    // The tab row occupies [btnY, btnY + kTabBtnH].
+    // Vertical center line of the entire row:
+    const int midY = btnY + kTabBtnH / 2;
+
+    // Active indicator bar: 16px high, centered around midY
     {
       PropertyParser::ShapeOptions ind;
       ind.id = L"__tab_ind_" + std::to_wstring(ti);
-      ind.x = 0; ind.y = btnY; ind.width = kTabIndW; ind.height = kTabBtnH;
-      ind.solidColorRadius = 0;
+      ind.x = 2; // subtle inset from edge
+      ind.y = midY - kTabIndH / 2 - 3; // exact center
+      ind.width = kTabIndW;
+      ind.height = kTabIndH;
+      ind.radiusX = 1.5f;
+      ind.radiusY = 1.5f;
+      ind.solidColorRadius = 2;
+      ind.strokeWidth = 0.0f;
       ind.hasSolidColor = true;
       ind.solidColor = m_Palette.accent; ind.solidAlpha = 255;
       ind.fillColor  = m_Palette.accent; ind.fillAlpha  = 255;
@@ -318,27 +329,35 @@ void SettingsPanel::BuildPanel(Widget *target) {
       m_Controls[ind.id] = {std::to_wstring(ti), ControlKind::TabButton, -1};
     }
 
-    // Icon (Segoe MDL2) — shown at left side of button
+    // Icon (Segoe MDL2): 16px box, centered around midY
     if (!tabIcons[ti].empty()) {
+      constexpr int kIconSize = 16;
       PropertyParser::TextOptions ico;
       ico.id = L"__tab_ico_" + std::to_wstring(ti);
-      ico.x = kTabPadX; ico.y = btnY; ico.width = 20; ico.height = kTabBtnH;
+      ico.x = kTabPadX;
+      ico.y = midY - kIconSize / 2 - 1; //
+      ico.width = kIconSize;
+      ico.height = kIconSize;
       ico.text = tabIcons[ti];
       ico.fontFace = L"Segoe MDL2 Assets";
-      ico.fontSize = 11;
+      ico.fontSize = 12;
       ico.fontColor = active ? m_Palette.accent : m_Palette.tabInactive;
       ico.mouseEventCursorName = L"hand";
       panel->AddText(ico);
       m_Controls[ico.id] = {std::to_wstring(ti), ControlKind::TabButton, -1};
     }
 
-    // Label text
+    // Label text: 20px box, centered around midY
     {
+      constexpr int kLabelH = 20;
       PropertyParser::TextOptions lbl;
       lbl.id = L"__tab_lbl_" + std::to_wstring(ti);
       lbl.x = kTabPadX + (!tabIcons[ti].empty() ? 22 : 0);
-      lbl.y = btnY; lbl.width = kSideW - kTabPadX - 8; lbl.height = kTabBtnH;
-      lbl.text = tabLabels[ti]; lbl.fontSize = 12;
+      lbl.y = midY - kLabelH / 2;
+      lbl.width = kSideW - kTabPadX - 8;
+      lbl.height = kLabelH;
+      lbl.text = tabLabels[ti];
+      lbl.fontSize = 12;
       lbl.fontWeight = active ? 600 : 400;
       lbl.fontColor = active ? m_Palette.tabActive : m_Palette.tabInactive;
       lbl.mouseEventCursorName = L"hand";
@@ -370,8 +389,8 @@ void SettingsPanel::BuildPanel(Widget *target) {
     const int footerY = kHeaderH + kContentH - kFooterH;
     const int resetW  = 150;
     const int resetH  = 28;
-    // Center button horizontally within the content pane
-    const int resetX  = kContentX + (kContentW - resetW) / 2;
+    // Align button to the right bottom side of the content pane
+    const int resetX  = kContentX + kContentW - kPadX - resetW;
     const int resetY  = footerY + (kFooterH - resetH) / 2;
 
     Rect(panel, L"__settings_hr2",
@@ -384,7 +403,6 @@ void SettingsPanel::BuildPanel(Widget *target) {
     m_Controls[L"__settings_reset"] = {L"", ControlKind::ResetButton, 0};
 
     // Use TEXT_ALIGN_LEFT_TOP with calculated offsets so text position is strictly deterministic
-    // and does not get distorted by GetBounds offsets
     Txt(panel, L"__settings_reset_label",
         resetX + 22, resetY + 6, resetW - 44, resetH - 12,
         L"Reset to defaults", 12, m_Palette.text, 400, true, TEXT_ALIGN_LEFT_TOP);
@@ -835,13 +853,33 @@ void SettingsPanel::OnBeforeOpenDropDown(Widget *widget,
 void SettingsPanel::OnElementHoverChanged(Widget *widget, Element *element,
                                          bool isHovered) {
   if (widget != m_Panel || !element) return;
-  if (element->GetId() == L"__hdr_close") {
+  const std::wstring &id = element->GetId();
+  if (id == L"__hdr_close") {
     // Normal: rgb(239, 68, 68) (red)
-    // Hover: brighter/stronger red rgb(255, 80, 80) or darker red rgb(220, 38, 38)
+    // Hover: brighter/stronger red rgb(255, 90, 90)
     COLORREF color = isHovered ? RGB(255, 90, 90) : RGB(239, 68, 68);
     element->SetSolidColor(color, 255);
     if (auto *shape = dynamic_cast<ShapeElement *>(element)) {
       shape->SetFill(color, 255);
+    }
+    m_Panel->Redraw();
+  } else if (id == L"__settings_reset" || id == L"__settings_reset_label") {
+    // Hover effect for Reset to default button
+    Element *btnEl = m_Panel->FindElementById(L"__settings_reset");
+    Element *lblEl = m_Panel->FindElementById(L"__settings_reset_label");
+    COLORREF bgCol = isHovered ? m_Palette.controlBorder : m_Palette.controlFill;
+    COLORREF txtCol = isHovered ? m_Palette.tabActive : m_Palette.text;
+
+    if (btnEl) {
+      btnEl->SetSolidColor(bgCol, 255);
+      if (auto *shape = dynamic_cast<ShapeElement *>(btnEl)) {
+        shape->SetFill(bgCol, 255);
+      }
+    }
+    if (lblEl) {
+      if (auto *txt = dynamic_cast<TextElement *>(lblEl)) {
+        txt->SetFontColor(txtCol, 255);
+      }
     }
     m_Panel->Redraw();
   }
