@@ -1165,7 +1165,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
       const bool canDragWindow =
           widget->m_Options.draggable || ctrlHeld || isDragArea;
 
-      if (!widget->m_IsElementDragging && !widget->m_IsScrollbarDragging &&
+      if (!Widget::IsMenuActive() && (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0 &&
+          !widget->m_IsElementDragging && !widget->m_IsScrollbarDragging &&
           !hasSwipeContainer && !isSelectingText && !inputBoxFocused &&
           !sliderDragActive && !pressedDropDown && canDragWindow) {
         SetCapture(hWnd);
@@ -1243,45 +1244,74 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
     return 0;
 
   case WM_CAPTURECHANGED:
-    if (widget && widget->m_IsResizing) {
-      widget->m_IsResizing = false;
-      widget->m_ResizeEdge = WidgetResizeEdge::None;
-      Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
+    if (widget) {
+      if (widget->m_IsResizing) {
+        widget->m_IsResizing = false;
+        widget->m_ResizeEdge = WidgetResizeEdge::None;
+        Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
 
-      POINT ptCursor;
-      GetCursorPos(&ptCursor);
-      POINT ptClient = ptCursor;
-      ScreenToClient(hWnd, &ptClient);
-      JSEngine::MouseEventData eventData;
-      eventData.clientX = ptClient.x;
-      eventData.clientY = ptClient.y;
-      eventData.screenX = ptCursor.x;
-      eventData.screenY = ptCursor.y;
-      JSEngine::TriggerWidgetEvent(widget, "resizeEnd", &eventData);
-      JSEngine::TriggerWidgetEvent(widget, "resize-end", &eventData);
+        POINT ptCursor;
+        GetCursorPos(&ptCursor);
+        POINT ptClient = ptCursor;
+        ScreenToClient(hWnd, &ptClient);
+        JSEngine::MouseEventData eventData;
+        eventData.clientX = ptClient.x;
+        eventData.clientY = ptClient.y;
+        eventData.screenX = ptCursor.x;
+        eventData.screenY = ptCursor.y;
+        JSEngine::TriggerWidgetEvent(widget, "resizeEnd", &eventData);
+        JSEngine::TriggerWidgetEvent(widget, "resize-end", &eventData);
+      }
+      if (widget->m_IsDragging) {
+        widget->m_IsDragging = false;
+        if (widget->m_DragThresholdMet) {
+          RECT rc;
+          GetWindowRect(hWnd, &rc);
+          widget->m_Options.x = rc.left;
+          widget->m_Options.y = rc.top;
+          Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
+        }
+        widget->m_DragThresholdMet = false;
+      }
     }
     return 0;
 
   case WM_CANCELMODE:
-    if (widget && widget->m_IsResizing) {
-      widget->m_IsResizing = false;
-      widget->m_ResizeEdge = WidgetResizeEdge::None;
-      if (GetCapture() == hWnd) {
-        ReleaseCapture();
-      }
-      Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
+    if (widget) {
+      if (widget->m_IsResizing) {
+        widget->m_IsResizing = false;
+        widget->m_ResizeEdge = WidgetResizeEdge::None;
+        if (GetCapture() == hWnd) {
+          ReleaseCapture();
+        }
+        Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
 
-      POINT ptCursor;
-      GetCursorPos(&ptCursor);
-      POINT ptClient = ptCursor;
-      ScreenToClient(hWnd, &ptClient);
-      JSEngine::MouseEventData eventData;
-      eventData.clientX = ptClient.x;
-      eventData.clientY = ptClient.y;
-      eventData.screenX = ptCursor.x;
-      eventData.screenY = ptCursor.y;
-      JSEngine::TriggerWidgetEvent(widget, "resizeEnd", &eventData);
-      JSEngine::TriggerWidgetEvent(widget, "resize-end", &eventData);
+        POINT ptCursor;
+        GetCursorPos(&ptCursor);
+        POINT ptClient = ptCursor;
+        ScreenToClient(hWnd, &ptClient);
+        JSEngine::MouseEventData eventData;
+        eventData.clientX = ptClient.x;
+        eventData.clientY = ptClient.y;
+        eventData.screenX = ptCursor.x;
+        eventData.screenY = ptCursor.y;
+        JSEngine::TriggerWidgetEvent(widget, "resizeEnd", &eventData);
+        JSEngine::TriggerWidgetEvent(widget, "resize-end", &eventData);
+      }
+      if (widget->m_IsDragging) {
+        widget->m_IsDragging = false;
+        if (GetCapture() == hWnd) {
+          ReleaseCapture();
+        }
+        if (widget->m_DragThresholdMet) {
+          RECT rc;
+          GetWindowRect(hWnd, &rc);
+          widget->m_Options.x = rc.left;
+          widget->m_Options.y = rc.top;
+          Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
+        }
+        widget->m_DragThresholdMet = false;
+      }
     }
     return 0;
 
@@ -1436,6 +1466,24 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
         if (GetCapture() == hWnd) {
           ReleaseCapture();
         }
+      }
+
+      // If the left mouse button is no longer down (e.g. mouse up occurred while a
+      // modal menu or other window had focus, or widget just loaded), cancel dragging.
+      if (widget->m_IsDragging &&
+          ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) == 0 || Widget::IsMenuActive())) {
+        widget->m_IsDragging = false;
+        if (GetCapture() == hWnd) {
+          ReleaseCapture();
+        }
+        if (widget->m_DragThresholdMet) {
+          RECT rc;
+          GetWindowRect(hWnd, &rc);
+          widget->m_Options.x = rc.left;
+          widget->m_Options.y = rc.top;
+          Settings::SaveWidget(widget->m_Options.id, widget->m_Options);
+        }
+        widget->m_DragThresholdMet = false;
       }
 
       if (widget->m_IsDragging) {
