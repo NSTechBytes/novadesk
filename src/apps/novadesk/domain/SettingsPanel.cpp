@@ -426,10 +426,11 @@ void SettingsPanel::BuildPanel(Widget *target) {
          m_Palette.controlFill, 255, 6.0f, true);
     m_Controls[L"__settings_reset"] = {L"", ControlKind::ResetButton, 0};
 
-    // Use TEXT_ALIGN_LEFT_TOP with calculated offsets so text position is strictly deterministic
+    // TEXT_ALIGN_CENTER_CENTER does x -= w/2, y -= h/2 in GetBounds.
+    // Pass the button center so after offsets it renders over the full button rect.
     Txt(panel, L"__settings_reset_label",
-        resetX + 22, resetY + 6, resetW - 44, resetH - 12,
-        L"Reset to defaults", 12, m_Palette.text, 400, true, TEXT_ALIGN_LEFT_TOP);
+        resetX + resetW / 2, resetY + resetH / 2, resetW, resetH,
+        L"Reset to defaults", 12, m_Palette.text, 400, true, TEXT_ALIGN_CENTER_CENTER);
     m_Controls[L"__settings_reset_label"] = {L"", ControlKind::ResetLabel, 0};
   }
 
@@ -469,10 +470,10 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
   for (const WidgetSetting &setting : tab.settings) {
     const std::wstring value = target->GetSettings().ValueOrDefault(setting.id);
 
-    // Row label (left-aligned, vertically centered with control)
     const int rowOff = (kRowH - kCtrlH) / 2; // = 8 when kRowH=44, kCtrlH=28
+    // TEXT_ALIGN_LEFT_CENTER applies y -= h/2 in GetBounds, so offset by +kCtrlH/2 to compensate
     Txt(panel, CEId(ti, setting.id, L"label"),
-        kContentX + kPadX, y + rowOff, kInlineLabelW, kCtrlH,
+        kContentX + kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH,
         setting.label, 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER);
     m_Controls[CEId(ti, setting.id, L"label")] =
         {setting.id, ControlKind::SelectLabel, ti};
