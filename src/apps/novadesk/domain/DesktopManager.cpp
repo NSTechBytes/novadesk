@@ -203,15 +203,18 @@ bool System::CheckDesktopState(HWND desktopIconsHostWindow) {
 
 void System::ChangeZPosInOrder() {
   // Iterate known widgets directly instead of EnumWindows.
-  // EnumWindows enumerates ALL top-level windows system-wide and
-  // calls FindWidget (mutex + linear scan) for each — very expensive
-  // when called from a 50-100 ms timer.  ChangeZPos already sets
-  // absolute z-order via SetWindowPos, so enumeration order is
-  // irrelevant; we only need to reapply each widget's configured
-  // z-position.
-  std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
-  for (auto *w : widgets) {
-    w->ChangeZPos(w->GetWindowZPosition());
+  // Take a snapshot under s_WidgetMutex, then dispatch ChangeZPos outside
+  // the lock to prevent deadlock with methods like Widget::IsValid() called
+  // from ChangeZPos -> SettingsPanel::SyncTargetVisuals.
+  std::vector<Widget *> snapshot;
+  {
+    std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
+    snapshot = widgets;
+  }
+  for (auto *w : snapshot) {
+    if (Widget::IsValid(w)) {
+      w->ChangeZPos(w->GetWindowZPosition());
+    }
   }
 }
 
