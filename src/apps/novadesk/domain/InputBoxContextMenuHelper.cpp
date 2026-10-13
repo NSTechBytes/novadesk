@@ -16,6 +16,7 @@
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "../shared/System.h"
 #include "../shared/MenuUtils.h"
+#include "WindowsTheme.h"
 
 namespace {
 constexpr int CMD_UNDO = 50001;
@@ -114,6 +115,8 @@ bool ShowInputBoxContextMenu(Widget &widget, InputBoxElement *inputElem,
   } else {
     SetForegroundWindow(hWnd);
   }
+
+  WindowsTheme::PrepareMenu(hWnd);
 
   const int cmd = TrackPopupMenu(
       hMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_LEFTALIGN,

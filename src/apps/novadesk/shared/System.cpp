@@ -37,6 +37,7 @@
 #include <shobjidl.h>
 #include <wrl/client.h>
 #include <pdh.h>
+#include "../domain/WindowsTheme.h"
 
 #ifndef __IAudioMeterInformation_INTERFACE_DEFINED__
 #define __IAudioMeterInformation_INTERFACE_DEFINED__
@@ -1257,9 +1258,12 @@ std::string ShowMessageBox(const MessageBoxOptions &opts) {
     flags |= MB_OK;
   }
 
-  // Show the message box
-  int result =
-      MessageBoxW(opts.parent, opts.message.c_str(), opts.title.c_str(), flags);
+  // Show the message box (themed with dark/light mode via CBT hook)
+  int result = 0;
+  {
+    WindowsTheme::DialogHookScope hookScope;
+    result = MessageBoxW(opts.parent, opts.message.c_str(), opts.title.c_str(), flags);
+  }
 
   // Map result to string
   switch (result) {
@@ -1352,7 +1356,10 @@ OpenFileDialogResult ShowOpenFileDialog(const OpenFileDialogOptions &opts) {
                               filterSpecs.data());
     }
 
-    hr = pFileOpen->Show(opts.parent);
+    {
+      WindowsTheme::DialogHookScope hookScope;
+      hr = pFileOpen->Show(opts.parent);
+    }
     if (SUCCEEDED(hr)) {
       result.canceled = false;
       if (opts.multiSelections) {
@@ -1465,7 +1472,10 @@ SaveFileDialogResult ShowSaveFileDialog(const SaveFileDialogOptions &opts) {
                               filterSpecs.data());
     }
 
-    hr = pFileSave->Show(opts.parent);
+    {
+      WindowsTheme::DialogHookScope hookScope;
+      hr = pFileSave->Show(opts.parent);
+    }
     if (SUCCEEDED(hr)) {
       Microsoft::WRL::ComPtr<IShellItem> pItem;
       if (SUCCEEDED(pFileSave->GetResult(&pItem)) && pItem) {

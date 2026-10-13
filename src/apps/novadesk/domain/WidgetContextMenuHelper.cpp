@@ -20,6 +20,7 @@
 #include "../render/ImageCache.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "Settings.h"
+#include "WindowsTheme.h"
 
 namespace {
 constexpr int CMD_REFRESH = 1001;
@@ -213,6 +214,8 @@ int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
   } else {
     SetForegroundWindow(hWnd);
   }
+
+  WindowsTheme::PrepareMenu(hWnd);
 
   const int cmd = TrackPopupMenu(
       hMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_LEFTALIGN,

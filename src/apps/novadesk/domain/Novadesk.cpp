@@ -32,6 +32,7 @@
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "../scripting/quickjs/modules/NovadeskModule.h"
 #include "../scripting/quickjs/modules/SystemModule.h"
+#include "WindowsTheme.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -575,6 +576,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     if (!handledCommand && !onlyInternalLockArg) {
       std::wstring message = appTitle + L" is already running.";
+      WindowsTheme::DialogHookScope hookScope;
       MessageBoxW(nullptr, message.c_str(), appTitle.c_str(),
                   MB_OK | MB_ICONINFORMATION);
     }
@@ -598,6 +600,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
   // Initialize Settings
   Settings::Initialize();
+  WindowsTheme::Initialize();
 
   // Prepare the online-image and online-font disk caches before widgets
   // start loading.
@@ -620,6 +623,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     JSEngine::OnMessage(message, wParam, lParam);
 
     switch (message) {
+    case WM_SETTINGCHANGE:
+      WindowsTheme::Refresh();
+      break;
     case WM_TIMER:
       JSEngine::OnTimer(wParam);
       break;
@@ -1138,6 +1144,7 @@ static void ShowTrayMenuInternal(int trayId, const std::vector<MenuItem> *menu,
   HMENU hMenu = CreatePopupMenu();
   MenuUtils::BuildMenu(hMenu, useMenu);
   SetForegroundWindow(state->hWnd);
+  WindowsTheme::PrepareMenu(state->hWnd);
   TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0,
                  state->hWnd, nullptr);
   DestroyMenu(hMenu);
