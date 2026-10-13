@@ -38,7 +38,7 @@ ThemePalette DarkPalette();
 ThemePalette LightPalette();
 
 /**
- * @brief Reads the "theme" global setting and returns the matching palette.
+ * @brief Reads the "windowsTheme" global setting and returns the matching palette.
  *
  * - "dark"   → DarkPalette()
  * - "light"  → LightPalette()

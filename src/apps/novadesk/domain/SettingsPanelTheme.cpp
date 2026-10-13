@@ -50,7 +50,10 @@ ThemePalette LightPalette() {
 }
 
 ThemePalette ResolveTheme() {
-  const std::string pref = Settings::GetGlobalString("theme", "system");
+  std::string pref = Settings::GetGlobalString("windowsTheme", "");
+  if (pref.empty()) {
+    pref = Settings::GetGlobalString("theme", "system");
+  }
   if (pref == "dark")
     return DarkPalette();
   if (pref == "light")

@@ -18,6 +18,7 @@ var window = new widgetWindow({
 
     title: "My Widget",        // optional: overrides "Settings - <id>" in header
     showWindowTab: true,       // optional: show/hide built-in Window tab (default true)
+    theme: "light",              // optional: "light" or "dark" (default is "dark")
 
     about: {                   // optional: controls the About tab
       name:        "My Widget",
