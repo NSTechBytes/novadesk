@@ -97,6 +97,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="..\..\common\WindowsTheme.cpp" />
     <ClCompile Include="..\..\third_party\zlib\adler32.c" />
     <ClCompile Include="..\..\third_party\zlib\crc32.c" />
     <ClCompile Include="..\..\third_party\zlib\inflate.c" />
@@ -108,6 +109,7 @@
     <ClCompile Include="..\..\third_party\zlib\minizip\unzip.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\common\WindowsTheme.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>

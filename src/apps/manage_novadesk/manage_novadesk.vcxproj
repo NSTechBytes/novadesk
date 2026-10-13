@@ -95,8 +95,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="..\..\common\WindowsTheme.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\common\WindowsTheme.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>

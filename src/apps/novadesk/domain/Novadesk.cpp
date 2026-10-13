@@ -32,7 +32,7 @@
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "../scripting/quickjs/modules/NovadeskModule.h"
 #include "../scripting/quickjs/modules/SystemModule.h"
-#include "WindowsTheme.h"
+#include "../../common/WindowsTheme.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -600,6 +600,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
   // Initialize Settings
   Settings::Initialize();
+  WindowsTheme::SetSettingsHandlers(
+      []() {
+        std::string pref = Settings::GetGlobalString("windowsTheme", "");
+        if (pref.empty()) {
+          pref = Settings::GetGlobalString("theme", "system");
+        }
+        return pref;
+      },
+      [](const std::string &val) {
+        Settings::SetGlobalString("windowsTheme", val);
+      });
   WindowsTheme::Initialize();
 
   // Prepare the online-image and online-font disk caches before widgets

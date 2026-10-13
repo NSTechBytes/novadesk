@@ -7,8 +7,14 @@
 
 #pragma once
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
+#include <uxtheme.h>
+#include <dwmapi.h>
 #include <string>
+#include <functional>
 
 namespace WindowsTheme {
 
@@ -17,6 +23,13 @@ enum class Mode {
   Dark,
   Light
 };
+
+using SettingsReader = std::function<std::string()>;
+using SettingsWriter = std::function<void(const std::string &)>;
+
+/// Register callbacks for reading and persisting "windowsTheme" setting.
+/// If not registered, falls back to direct %APPDATA%\Novadesk\settings.json inspection.
+void SetSettingsHandlers(SettingsReader reader, SettingsWriter writer);
 
 /// Initialize theme hooks and uxtheme/dwmapi exports.
 void Initialize();
@@ -39,6 +52,9 @@ void SetMode(const std::string &modeStr);
 /// Apply theme (dark / light) to a standard Win32 window (including titlebar).
 void ApplyToWindow(HWND window);
 
+/// Apply theme to an individual control (ListView, Button, ComboBox, Edit, etc.).
+void ApplyToControl(HWND control);
+
 /// Apply theme to a dialog or control hierarchy.
 void ApplyToDialog(HWND dialog);
 
@@ -47,6 +63,9 @@ void ApplyToTooltip(HWND tooltipWindow);
 
 /// Prepare and update menu theme right before showing a popup menu.
 void PrepareMenu(HWND owner);
+
+/// Helper to resolve whether system uses dark mode directly from registry.
+bool IsSystemDarkMode();
 
 /// Scope-based helper to theme dialogs created in the current thread (e.g. MessageBox, FileDialog).
 class DialogHookScope {

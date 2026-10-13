@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -159,7 +159,7 @@
     <ClCompile Include="domain\WidgetSettings.cpp" />
     <ClCompile Include="domain\SettingsPanel.cpp" />
     <ClCompile Include="domain\SettingsPanelTheme.cpp" />
-    <ClCompile Include="domain\WindowsTheme.cpp" />
+    <ClCompile Include="..\..\common\WindowsTheme.cpp" />
     <ClCompile Include="domain\WidgetLayoutHelper.cpp" />
     <ClCompile Include="domain\ScrollbarRenderer.cpp" />
     <ClCompile Include="domain\WidgetDropTarget.cpp" />
@@ -293,7 +293,7 @@
     <ClInclude Include="domain\WidgetSettings.h" />
     <ClInclude Include="domain\SettingsPanel.h" />
     <ClInclude Include="domain\SettingsPanelTheme.h" />
-    <ClInclude Include="domain\WindowsTheme.h" />
+    <ClInclude Include="..\..\common\WindowsTheme.h" />
     <ClInclude Include="domain\WidgetLayoutHelper.h" />
     <ClInclude Include="domain\ScrollbarRenderer.h" />
     <ClInclude Include="domain\WidgetDropTarget.h" />

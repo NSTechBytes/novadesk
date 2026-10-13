@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 OfficialNovadesk
+﻿/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -31,11 +31,14 @@
 #include "..\..\third_party\json\json.hpp"
 #include "unzip.h"
 #include "resource.h"
+#include "../../common/WindowsTheme.h"
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "version.lib")
+#pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "uxtheme.lib")
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -123,6 +126,8 @@ struct AppState {
   HBITMAP hPreviewBitmap = nullptr;
   ULONG_PTR gdiplusToken = 0;
 
+  bool isDarkMode = false;
+  HBRUSH hbrWindowBg = nullptr;
   bool packageLoaded = false;
   bool installing = false;
   fs::path selectedPackagePath;
@@ -951,9 +956,9 @@ void ResetUiFromState(AppState *state) {
   SetEditText(state->hAuthor, L"");
   SetEditText(state->hWidgetStatus, L"");
   state->addonRows.clear();
-  if (state->hAddons) {
-    ListView_DeleteAllItems(state->hAddons);
-  }
+
+
+
   SetWindowTextW(state->hTitle, L"Select a package to view details");
   EnableWindow(state->hInstall, FALSE);
 
@@ -1340,6 +1345,25 @@ void HandleInstall(AppState *state) {
   DestroyWindow(state->hwnd);
 }
 
+
+static void InstallerApplyTheme(HWND hwnd, AppState *state) {
+  if (!state) return;
+
+  WindowsTheme::Refresh();
+  state->isDarkMode = WindowsTheme::IsUsingDarkMode();
+
+  WindowsTheme::ApplyToDialog(hwnd);
+
+  if (state->hbrWindowBg) { DeleteObject(state->hbrWindowBg); state->hbrWindowBg = nullptr; }
+  if (state->isDarkMode) {
+    state->hbrWindowBg = CreateSolidBrush(RGB(32, 32, 32));
+  }
+
+
+
+  RedrawWindow(hwnd, nullptr, nullptr,
+               RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+}
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   AppState *state =
       reinterpret_cast<AppState *>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
@@ -1349,6 +1373,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     auto *cs = reinterpret_cast<CREATESTRUCTW *>(lParam);
     auto *appState = reinterpret_cast<AppState *>(cs->lpCreateParams);
     appState->hwnd = hwnd;
+    WindowsTheme::Initialize();
+    InstallerApplyTheme(hwnd, appState);
     SetWindowLongPtrW(hwnd, GWLP_USERDATA,
                       reinterpret_cast<LONG_PTR>(appState));
     state = appState;
@@ -1497,19 +1523,34 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (state) {
       HDC hdc = reinterpret_cast<HDC>(wParam);
       HWND control = reinterpret_cast<HWND>(lParam);
-      SetBkColor(hdc, kWindowBgColor);
-      if (control == state->hNameLabel || control == state->hVersionLabel ||
-          control == state->hAuthorLabel ||
-          control == state->hWidgetStatusLabel ||
-          control == state->hAddonsLabel) {
-        SetTextColor(hdc, RGB(100, 108, 120));
-      } else if (control == state->hWidgetStatus) {
-        SetTextColor(hdc, RGB(0, 102, 180));
-      } else if (control == state->hName || control == state->hVersion ||
-                 control == state->hAuthor) {
-        SetTextColor(hdc, RGB(30, 35, 45));
+      if (state->isDarkMode && state->hbrWindowBg) {
+        SetBkColor(hdc, RGB(32, 32, 32));
+        if (control == state->hNameLabel || control == state->hVersionLabel ||
+            control == state->hAuthorLabel ||
+            control == state->hWidgetStatusLabel ||
+            control == state->hAddonsLabel) {
+          SetTextColor(hdc, RGB(148, 155, 165));
+        } else if (control == state->hWidgetStatus) {
+          SetTextColor(hdc, RGB(96, 205, 255));
+        } else {
+          SetTextColor(hdc, RGB(224, 224, 224));
+        }
+        return reinterpret_cast<LRESULT>(state->hbrWindowBg);
+      } else {
+        SetBkColor(hdc, kWindowBgColor);
+        if (control == state->hNameLabel || control == state->hVersionLabel ||
+            control == state->hAuthorLabel ||
+            control == state->hWidgetStatusLabel ||
+            control == state->hAddonsLabel) {
+          SetTextColor(hdc, RGB(100, 108, 120));
+        } else if (control == state->hWidgetStatus) {
+          SetTextColor(hdc, RGB(0, 102, 180));
+        } else if (control == state->hName || control == state->hVersion ||
+                   control == state->hAuthor) {
+          SetTextColor(hdc, RGB(30, 35, 45));
+        }
+        return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_3DFACE));
       }
-      return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_3DFACE));
     }
     break;
   case WM_CLOSE:
@@ -1535,10 +1576,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         DeleteObject(state->hStatusFont);
         state->hStatusFont = nullptr;
       }
+      if (state->hbrWindowBg) {
+        DeleteObject(state->hbrWindowBg);
+        state->hbrWindowBg = nullptr;
+      }
       DeleteDirectoryIfExists(state->workingDir);
     }
     PostQuitMessage(0);
     return 0;
+  case WM_SETTINGCHANGE:
+    InstallerApplyTheme(hwnd, state);
+    return 0;
+  case WM_ERASEBKGND:
+    if (state && state->isDarkMode && state->hbrWindowBg) {
+      RECT rc; GetClientRect(hwnd, &rc);
+      FillRect(reinterpret_cast<HDC>(wParam), &rc, state->hbrWindowBg);
+      return 1;
+    }
+    break;
   }
 
   return DefWindowProcW(hwnd, msg, wParam, lParam);
@@ -1551,6 +1606,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
   icc.dwSize = sizeof(icc);
   icc.dwICC = ICC_STANDARD_CLASSES;
   InitCommonControlsEx(&icc);
+
+  WindowsTheme::Initialize();
 
   Gdiplus::GdiplusStartupInput gdiplusInput;
   AppState state;

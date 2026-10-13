@@ -1,4 +1,4 @@
-﻿/* Copyright (C) 2026 OfficialNovadesk
+/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -33,11 +33,14 @@
 #include "../../third_party/json/json.hpp"
 
 #include "resource.h"
+#include "../../common/WindowsTheme.h"
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "wininet.lib")
 #pragma comment(lib, "version.lib")
+#pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "uxtheme.lib")
 
 // ============================================================================
 // Data Structures
@@ -98,6 +101,11 @@ static HWND g_chkEnableLogging = nullptr;
 static HWND g_chkEnableDebugging = nullptr;
 static HWND g_chkSaveLogToFile = nullptr;
 static HWND g_chkUseHardwareAcceleration = nullptr;
+static HWND g_lblWindowsTheme = nullptr;
+static HWND g_cboWindowsTheme = nullptr;
+static bool g_isDarkMode = false;
+static HBRUSH g_hbrWindowBg = nullptr;
+static HBRUSH g_hbrControlBg = nullptr;
 static HWND g_aboutLogo = nullptr;
 static HWND g_aboutAppName = nullptr;
 static HWND g_aboutVersion = nullptr;
@@ -147,6 +155,7 @@ static const int kControlIdEnableLogging = 304;
 static const int kControlIdEnableDebugging = 305;
 static const int kControlIdSaveLogToFile = 306;
 static const int kControlIdUseHardwareAcceleration = 307;
+static const int kControlIdWindowsTheme = 308;
 static const int kControlIdAboutHome = 201;
 static const int kControlIdAboutDocs = 202;
 static const int kControlIdAboutDonate = 203;
@@ -773,6 +782,26 @@ static bool GetNovadeskSettingBool(const std::string &key, bool defaultValue) {
 }
 
 static bool SetNovadeskSettingBool(const std::string &key, bool value) {
+  nlohmann::json doc;
+  std::wstring path;
+  LoadNovadeskSettings(doc, path);
+  doc[key] = value;
+  return SaveNovadeskSettings(doc, path);
+}
+
+static std::string GetNovadeskSettingString(const std::string &key,
+                                            const std::string &def) {
+  nlohmann::json doc;
+  std::wstring path;
+  LoadNovadeskSettings(doc, path);
+  if (doc.contains(key) && doc[key].is_string()) {
+    return doc[key].get<std::string>();
+  }
+  return def;
+}
+
+static bool SetNovadeskSettingString(const std::string &key,
+                                     const std::string &value) {
   nlohmann::json doc;
   std::wstring path;
   LoadNovadeskSettings(doc, path);
@@ -1770,6 +1799,14 @@ static void RefreshSettingsControls() {
                    ? BST_CHECKED
                    : BST_UNCHECKED,
                0);
+
+  if (g_cboWindowsTheme) {
+    const std::string curTheme = GetNovadeskSettingString("windowsTheme", "system");
+    int sel = 0;
+    if (curTheme == "dark")  sel = 1;
+    if (curTheme == "light") sel = 2;
+    SendMessageW(g_cboWindowsTheme, CB_SETCURSEL, sel, 0);
+  }
 }
 
 static void CheckForUpdates(bool silent) {
@@ -1989,6 +2026,10 @@ static void LayoutTabPages(const RECT &pageRect) {
   if (g_chkUseHardwareAcceleration)
     MoveWindow(g_chkUseHardwareAcceleration, settingsLeft, pageRect.top + 208,
                settingsWidth, 24, TRUE);
+  if (g_lblWindowsTheme)
+    MoveWindow(g_lblWindowsTheme, settingsLeft, pageRect.top + 244, 110, 20, TRUE);
+  if (g_cboWindowsTheme)
+    MoveWindow(g_cboWindowsTheme, settingsLeft + 114, pageRect.top + 240, 160, 120, TRUE);
 
   const int margin = 14;
   const int logoTop = pageRect.top + margin;
@@ -2068,6 +2109,8 @@ static void ApplyTabState() {
   ShowWindow(g_chkEnableDebugging, settingsTab ? SW_SHOW : SW_HIDE);
   ShowWindow(g_chkSaveLogToFile, settingsTab ? SW_SHOW : SW_HIDE);
   ShowWindow(g_chkUseHardwareAcceleration, settingsTab ? SW_SHOW : SW_HIDE);
+  ShowWindow(g_lblWindowsTheme, settingsTab ? SW_SHOW : SW_HIDE);
+  ShowWindow(g_cboWindowsTheme, settingsTab ? SW_SHOW : SW_HIDE);
   ShowWindow(g_aboutLogo, aboutTab ? SW_SHOW : SW_HIDE);
   ShowWindow(g_aboutAppName, aboutTab ? SW_SHOW : SW_HIDE);
   ShowWindow(g_aboutVersion, aboutTab ? SW_SHOW : SW_HIDE);
@@ -2150,6 +2193,31 @@ static void OnRefreshAll() {
   RefreshListView(targetScript);
 }
 
+static void ApplyThemeToManageWindow(HWND hWnd) {
+  if (!hWnd) return;
+
+  WindowsTheme::Refresh();
+  g_isDarkMode = WindowsTheme::IsUsingDarkMode();
+
+  WindowsTheme::ApplyToWindow(hWnd);
+
+  if (g_hbrWindowBg) { DeleteObject(g_hbrWindowBg); g_hbrWindowBg = nullptr; }
+  if (g_hbrControlBg) { DeleteObject(g_hbrControlBg); g_hbrControlBg = nullptr; }
+  if (g_isDarkMode) {
+    g_hbrWindowBg = CreateSolidBrush(RGB(32, 32, 32));
+    g_hbrControlBg = CreateSolidBrush(RGB(56, 56, 56));
+  }
+
+  WindowsTheme::ApplyToDialog(hWnd);
+
+
+
+
+
+  RedrawWindow(hWnd, nullptr, nullptr,
+               RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+}
+
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
                                 LPARAM lParam) {
   if (g_manageCloseMessage != 0 && message == g_manageCloseMessage) {
@@ -2169,6 +2237,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
     RECT rc{};
     GetClientRect(hWnd, &rc);
 
+    WindowsTheme::SetSettingsHandlers(
+        []() { return GetNovadeskSettingString("windowsTheme", "system"); },
+        [](const std::string &v) { SetNovadeskSettingString("windowsTheme", v); });
+    WindowsTheme::Initialize();
     LoadManageSettings();
     StartNovadesk();
     AddTrayIcon(hWnd);
@@ -2294,6 +2366,22 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
                         reinterpret_cast<HMENU>(static_cast<INT_PTR>(
                             kControlIdUseHardwareAcceleration)),
                         GetModuleHandleW(nullptr), nullptr);
+    g_lblWindowsTheme = CreateWindowExW(
+        0, L"STATIC", L"Window Theme:", WS_CHILD | SS_LEFT,
+        pageRect.left + 16, pageRect.top + 242, 110, 20, hWnd, nullptr,
+        GetModuleHandleW(nullptr), nullptr);
+    g_cboWindowsTheme = CreateWindowExW(
+        0, L"COMBOBOX", nullptr,
+        WS_CHILD | WS_TABSTOP | CBS_DROPDOWNLIST | CBS_HASSTRINGS,
+        pageRect.left + 130, pageRect.top + 238, 150, 120, hWnd,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdWindowsTheme)),
+        GetModuleHandleW(nullptr), nullptr);
+    SendMessageW(g_cboWindowsTheme, CB_ADDSTRING, 0,
+                 reinterpret_cast<LPARAM>(L"System (Default)"));
+    SendMessageW(g_cboWindowsTheme, CB_ADDSTRING, 0,
+                 reinterpret_cast<LPARAM>(L"Dark"));
+    SendMessageW(g_cboWindowsTheme, CB_ADDSTRING, 0,
+                 reinterpret_cast<LPARAM>(L"Light"));
     g_aboutLogo = CreateWindowExW(0, L"STATIC", L"",
                                   WS_CHILD | SS_BITMAP | SS_CENTERIMAGE,
                                   pageRect.left, pageRect.top, 90, 90, hWnd,
@@ -2478,6 +2566,8 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
       SendMessageW(g_chkSaveLogToFile, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       SendMessageW(g_chkUseHardwareAcceleration, WM_SETFONT,
                    (WPARAM)g_buttonFont, TRUE);
+      SendMessageW(g_lblWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+      SendMessageW(g_cboWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       SendMessageW(g_aboutAppName, WM_SETFONT, (WPARAM)g_aboutTitleFont, TRUE);
       SendMessageW(g_aboutVersion, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
       SendMessageW(g_aboutCopyright, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
@@ -2573,6 +2663,18 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
     case kControlIdUseHardwareAcceleration:
       if (HIWORD(wParam) == BN_CLICKED) {
         OnSettingsControlClicked(LOWORD(wParam));
+      }
+      break;
+    case kControlIdWindowsTheme:
+      if (HIWORD(wParam) == CBN_SELCHANGE && g_cboWindowsTheme) {
+        const int idx = (int)SendMessageW(g_cboWindowsTheme, CB_GETCURSEL, 0, 0);
+        const char *themes[] = {"system", "dark", "light"};
+        if (idx >= 0 && idx < 3) {
+          SetNovadeskSettingString("windowsTheme", themes[idx]);
+          ApplyThemeToManageWindow(hWnd);
+          SendNotifyMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
+                            reinterpret_cast<LPARAM>(L"ImmersiveColorSet"));
+        }
       }
       break;
     case kControlIdCheckUpdates:
@@ -2732,6 +2834,31 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
     StopNovadesk();
     PostQuitMessage(0);
     break;
+  case WM_SETTINGCHANGE:
+    ApplyThemeToManageWindow(hWnd);
+    break;
+  case WM_CTLCOLORSTATIC:
+  case WM_CTLCOLORBTN:
+  case WM_CTLCOLORLISTBOX: {
+    if (g_isDarkMode && g_hbrWindowBg) {
+      HDC hdc = reinterpret_cast<HDC>(wParam);
+      SetTextColor(hdc, RGB(224, 224, 224));
+      SetBkColor(hdc, RGB(32, 32, 32));
+      return reinterpret_cast<LRESULT>(g_hbrWindowBg);
+    }
+    break;
+  }
+  case WM_CTLCOLORDLG:
+  case WM_ERASEBKGND:
+    if (g_isDarkMode && g_hbrWindowBg) {
+      if (message == WM_ERASEBKGND) {
+        RECT rc; GetClientRect(hWnd, &rc);
+        FillRect(reinterpret_cast<HDC>(wParam), &rc, g_hbrWindowBg);
+        return 1;
+      }
+      return reinterpret_cast<LRESULT>(g_hbrWindowBg);
+    }
+    break;
   default:
     return DefWindowProcW(hWnd, message, wParam, lParam);
   }
@@ -2817,6 +2944,11 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
   icc.dwICC = ICC_LISTVIEW_CLASSES | ICC_TAB_CLASSES | ICC_LINK_CLASS;
   InitCommonControlsEx(&icc);
 
+  WindowsTheme::SetSettingsHandlers(
+      []() { return GetNovadeskSettingString("windowsTheme", "system"); },
+      [](const std::string &v) { SetNovadeskSettingString("windowsTheme", v); });
+  WindowsTheme::Initialize();
+
   const wchar_t *className = kManageWindowClassName;
   g_manageCloseMessage = RegisterWindowMessageW(kManageCloseMessageName);
   if (HasCommandLineFlag(L"--request-close")) {
@@ -2876,7 +3008,7 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
   wc.hIcon = g_windowIconLarge;
   wc.hIconSm = g_windowIconSmall;
   wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-  wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+  wc.hbrBackground = nullptr; // drawn dynamically in WM_ERASEBKGND
   wc.lpszClassName = className;
   ATOM windowClassAtom = RegisterClassExW(&wc);
   if (!windowClassAtom) {
@@ -2913,6 +3045,7 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
     return 0;
   }
 
+  ApplyThemeToManageWindow(hWnd);
   ShowWindow(hWnd, SW_HIDE);
   UpdateWindow(hWnd);
 

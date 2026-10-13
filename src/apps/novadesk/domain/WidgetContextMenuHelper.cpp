@@ -1,4 +1,4 @@
-/* Copyright (C) 2026 OfficialNovadesk
+﻿/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -20,7 +20,7 @@
 #include "../render/ImageCache.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "Settings.h"
-#include "WindowsTheme.h"
+#include "../../common/WindowsTheme.h"
 
 namespace {
 constexpr int CMD_REFRESH = 1001;
