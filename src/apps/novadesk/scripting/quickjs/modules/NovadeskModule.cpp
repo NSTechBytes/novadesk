@@ -23,6 +23,7 @@
 #include "../../../Version.h"
 #include "../../domain/Novadesk.h"
 #include "../../domain/Widget.h"
+#include "../../domain/WindowsTheme.h"
 #include "../../shared/Logging.h"
 #include "../../shared/PathUtils.h"
 #include "../../shared/Settings.h"
@@ -1640,6 +1641,40 @@ JSValue JsAppEnableDebugging(JSContext *ctx, JSValueConst, int argc,
   return JS_NewBool(ctx, 1);
 }
 
+JSValue JsAppSetWindowsTheme(JSContext *ctx, JSValueConst, int argc,
+                             JSValueConst *argv) {
+  if (argc < 1) {
+    return JS_ThrowTypeError(ctx, "app.setWindowsTheme(theme) requires string ('system' | 'dark' | 'light')");
+  }
+  const char *str = JS_ToCString(ctx, argv[0]);
+  if (!str) {
+    return JS_ThrowTypeError(ctx, "app.setWindowsTheme(theme) expects string");
+  }
+  std::string themeStr = str;
+  JS_FreeCString(ctx, str);
+
+  std::transform(themeStr.begin(), themeStr.end(), themeStr.begin(), ::tolower);
+  if (themeStr != "dark" && themeStr != "light" && themeStr != "system") {
+    return JS_ThrowTypeError(ctx, "app.setWindowsTheme: theme must be 'system', 'dark', or 'light'");
+  }
+
+  WindowsTheme::SetMode(themeStr);
+  Settings::Save();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsAppGetWindowsTheme(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  std::string pref = Settings::GetGlobalString("windowsTheme", "");
+  if (pref.empty()) {
+    pref = Settings::GetGlobalString("theme", "system");
+  }
+  return JS_NewString(ctx, pref.c_str());
+}
+
+JSValue JsAppIsDarkMode(JSContext *ctx, JSValueConst, int, JSValueConst *) {
+  return JS_NewBool(ctx, WindowsTheme::IsUsingDarkMode() ? 1 : 0);
+}
+
 JSValue JsAddonLoad(JSContext *ctx, JSValueConst, int argc,
                     JSValueConst *argv) {
   if (argc < 1) {
@@ -2428,6 +2463,15 @@ int InitAppExport(JSContext *ctx, JSModuleDef *m) {
   JS_SetPropertyStr(
       ctx, app, "enableDebugging",
       JS_NewCFunction(ctx, JsAppEnableDebugging, "enableDebugging", 1));
+  JS_SetPropertyStr(
+      ctx, app, "setWindowsTheme",
+      JS_NewCFunction(ctx, JsAppSetWindowsTheme, "setWindowsTheme", 1));
+  JS_SetPropertyStr(
+      ctx, app, "getWindowsTheme",
+      JS_NewCFunction(ctx, JsAppGetWindowsTheme, "getWindowsTheme", 0));
+  JS_SetPropertyStr(
+      ctx, app, "isDarkMode",
+      JS_NewCFunction(ctx, JsAppIsDarkMode, "isDarkMode", 0));
   JSValue storage = JS_NewObject(ctx);
   JS_SetPropertyStr(ctx, storage, "get",
                     JS_NewCFunction(ctx, JsAppStorageGet, "get", 2));
