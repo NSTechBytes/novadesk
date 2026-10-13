@@ -8,6 +8,7 @@
 #include "Tooltip.h"
 #include "Element.h"
 #include "../shared/Logging.h"
+#include "../domain/WindowsTheme.h"
 #include <algorithm>
 #include <windowsx.h>
 
@@ -75,6 +76,8 @@ void Tooltip::InitializeToolTip(HWND hwnd) {
 
   SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
 
+  WindowsTheme::ApplyToTooltip(hwnd);
+
   SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
@@ -125,6 +128,8 @@ void Tooltip::Update(Element *element) {
     m_IsMovePending = false;
 
     BOOL visible = IsWindowVisible(targetTT);
+
+    WindowsTheme::ApplyToTooltip(targetTT);
 
     if (previousTT != targetTT || !visible) {
       if (previousTT && previousTT != targetTT) {

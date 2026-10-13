@@ -42,6 +42,9 @@ void ApplyToWindow(HWND window);
 /// Apply theme to a dialog or control hierarchy.
 void ApplyToDialog(HWND dialog);
 
+/// Apply theme to a tooltip window (tooltips_class32).
+void ApplyToTooltip(HWND tooltipWindow);
+
 /// Prepare and update menu theme right before showing a popup menu.
 void PrepareMenu(HWND owner);
 

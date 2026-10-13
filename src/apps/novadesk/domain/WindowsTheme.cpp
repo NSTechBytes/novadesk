@@ -214,6 +214,29 @@ void ApplyToDialog(HWND dialog) {
   ApplyToWindow(dialog);
 }
 
+void ApplyToTooltip(HWND tooltipWindow) {
+  if (!tooltipWindow || !IsWindow(tooltipWindow)) return;
+
+  auto &state = GetState();
+  const bool dark = state.isDarkMode.load();
+
+  if (state.pfnAllowDarkModeForWindow) {
+    state.pfnAllowDarkModeForWindow(tooltipWindow, dark);
+  }
+
+  if (dark) {
+    SetWindowTheme(tooltipWindow, L"DarkMode_Explorer", L"ToolTip");
+    // Standard Win32 dark mode colors: background RGB(32,32,32), text RGB(224,224,224)
+    SendMessageW(tooltipWindow, TTM_SETTIPBKCOLOR, (WPARAM)RGB(32, 32, 32), 0);
+    SendMessageW(tooltipWindow, TTM_SETTIPTEXTCOLOR, (WPARAM)RGB(224, 224, 224), 0);
+  } else {
+    SetWindowTheme(tooltipWindow, L"Explorer", L"ToolTip");
+    // Standard Win32 light mode system colors: background RGB(255,255,255), text RGB(0,0,0)
+    SendMessageW(tooltipWindow, TTM_SETTIPBKCOLOR, (WPARAM)RGB(255, 255, 255), 0);
+    SendMessageW(tooltipWindow, TTM_SETTIPTEXTCOLOR, (WPARAM)RGB(0, 0, 0), 0);
+  }
+}
+
 void PrepareMenu(HWND owner) {
   Refresh();
   auto &state = GetState();
