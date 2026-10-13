@@ -11,20 +11,23 @@
 
 ThemePalette DarkPalette() {
   ThemePalette p{};
-  p.background    = RGB(22,  22,  28);
-  p.sidebar       = RGB(16,  16,  21);
-  p.sidebarBorder = RGB(38,  38,  48);
-  p.text          = RGB(236, 236, 241);
-  p.label         = RGB(160, 160, 175);
-  p.muted         = RGB(110, 110, 125);
-  p.accent        = RGB(99,  155, 255);
-  p.controlFill   = RGB(32,  32,  40);
-  p.controlBorder = RGB(55,  55,  68);
-  p.toggleOff     = RGB(55,  55,  68);
-  p.divider       = RGB(38,  38,  48);
-  p.tabActive     = RGB(236, 236, 241);
-  p.tabInactive   = RGB(100, 100, 118);
-  p.tabBar        = RGB(16,  16,  21);
+  // Win32 dark mode standard color scheme (matching win32-darkmodelib & Rainmeter)
+  // Background: RGB(32, 32, 32), Page/Sidebar: RGB(37, 37, 37), Control: RGB(56, 56, 56)
+  // Edge/Border: RGB(75, 75, 75), Text: RGB(224, 224, 224), Accent: RGB(96, 205, 255)
+  p.background    = RGB(32,  32,  32);
+  p.sidebar       = RGB(37,  37,  37);
+  p.sidebarBorder = RGB(48,  48,  48);
+  p.text          = RGB(224, 224, 224);
+  p.label         = RGB(170, 170, 170);
+  p.muted         = RGB(128, 128, 128);
+  p.accent        = RGB(96,  205, 255);
+  p.controlFill   = RGB(56,  56,  56);
+  p.controlBorder = RGB(75,  75,  75);
+  p.toggleOff     = RGB(75,  75,  75);
+  p.divider       = RGB(48,  48,  48);
+  p.tabActive     = RGB(224, 224, 224);
+  p.tabInactive   = RGB(140, 140, 140);
+  p.tabBar        = RGB(37,  37,  37);
   p.bgAlpha       = 255;
   return p;
 }
