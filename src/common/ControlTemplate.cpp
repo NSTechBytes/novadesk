@@ -1,0 +1,193 @@
+/* Copyright (C) 2026 OfficialNovadesk
+ * Derived from https://github.com/rainmeter/rainmeter/tree/master/Common
+ *
+ * This Source Code Form is subject to the terms of the GNU General Public
+ * License; either version 2 of the License, or (at your option) any later
+ * version. If a copy of the GPL was not distributed with this file, You can
+ * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
+
+#include "StdAfx.h"
+#include "DpiUtil.h"
+#include "ControlTemplate.h"
+
+namespace {
+
+BOOL GetNonClientMetricsForDpi(NONCLIENTMETRICS& metrics, UINT dpi)
+{
+	typedef BOOL (WINAPI* SystemParametersInfoForDpiProc)(UINT, UINT, PVOID, UINT, UINT);
+	static auto s_SystemParametersInfoForDpi = (SystemParametersInfoForDpiProc)GetProcAddress(
+		GetModuleHandle(L"user32"), "SystemParametersInfoForDpi");
+	if (s_SystemParametersInfoForDpi)
+	{
+		return s_SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0, dpi);
+	}
+
+	if (!SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0)) return FALSE;
+
+	HDC dc = GetDC(nullptr);
+	const int systemDpi = dc ? GetDeviceCaps(dc, LOGPIXELSX) : 96;
+	if (dc) ReleaseDC(nullptr, dc);
+	if (systemDpi > 0 && (UINT)systemDpi != dpi)
+	{
+		metrics.lfMenuFont.lfHeight = MulDiv(metrics.lfMenuFont.lfHeight, (int)dpi, systemDpi);
+		metrics.lfMenuFont.lfWidth = MulDiv(metrics.lfMenuFont.lfWidth, (int)dpi, systemDpi);
+	}
+
+	return TRUE;
+}
+
+// Mapping the position and the size separately lets their rounding drift apart, so two controls that
+// share a design edge can end up a pixel or two apart, and one at the edge of the dialog can end up
+// past it. Map the edges and derive the size from them instead.
+RECT MapControlRect(const Control& ct, UINT dpi)
+{
+	const RECT edges = DpiUtil::MapDialogUnits({ ct.x, ct.y, ct.x + ct.w, ct.y + ct.h }, dpi);
+	const LONG width = edges.right - edges.left;
+	const LONG height = (ct.options & Control::SQUARE) ? width : edges.bottom - edges.top;
+	return { edges.left, edges.top, width, height };
+}
+
+}  // namespace
+
+ControlTemplate::ControlTemplate() :
+	m_Parent(),
+	m_DesignSize(),
+	m_CurrentDpi(),
+	m_Font(),
+	m_FontBold()
+{
+}
+
+ControlTemplate::~ControlTemplate()
+{
+	if (m_Font) DeleteObject(m_Font);
+	if (m_FontBold) DeleteObject(m_FontBold);
+}
+
+void ControlTemplate::UpdateFonts(UINT dpi)
+{
+	NONCLIENTMETRICS metrics = { 0 };
+	metrics.cbSize = sizeof(metrics);
+	if (!GetNonClientMetricsForDpi(metrics, dpi)) return;
+
+	HFONT oldFont = m_Font;
+	HFONT oldFontBold = m_FontBold;
+
+	m_Font = CreateFontIndirect(&metrics.lfMenuFont);
+	metrics.lfMenuFont.lfWeight = FW_BOLD;
+	metrics.lfMenuFont.lfHeight -= MulDiv(2, (int)dpi, 96);
+	m_FontBold = CreateFontIndirect(&metrics.lfMenuFont);
+
+	SendMessage(m_Parent, WM_SETFONT, (WPARAM)m_Font, FALSE);
+	for (const auto& createdControl : m_Controls)
+	{
+		HFONT controlFont = (createdControl.control.options & Control::BOLD_FONT) ? m_FontBold : m_Font;
+		SendMessage(createdControl.window, WM_SETFONT, (WPARAM)controlFont, FALSE);
+	}
+
+	if (oldFont) DeleteObject(oldFont);
+	if (oldFontBold) DeleteObject(oldFontBold);
+}
+
+void ControlTemplate::Initialize(const Control* cts, UINT ctCount, HWND parent, SIZE designSize, UINT dpi, GetStringFunc getString)
+{
+	assert(!m_Parent);
+	if (m_Parent) return;
+
+	m_Parent = parent;
+	m_DesignSize = designSize;
+	m_CurrentDpi = dpi;
+	UpdateFonts(dpi);
+
+	m_Controls.reserve(ctCount);
+
+	WCHAR buffer[512];
+	for (UINT i = 0; i < ctCount; ++i)
+	{
+		const Control& ct = cts[i];
+		const WCHAR* text = ct.textId ? getString(ct.textId) : nullptr;
+		if (ct.options & Control::ELLIPSIS)
+		{
+			_snwprintf_s(buffer, _TRUNCATE, L"%s\u2026", text ? text : L"");
+			text = buffer;
+		}
+
+		const RECT r = MapControlRect(ct, dpi);
+		HWND wnd = CreateWindowEx(
+			ct.exStyle,
+			ct.name,
+			text,
+			ct.style,
+			r.left, r.top, r.right, r.bottom,
+			parent,
+			(HMENU)ct.id,
+			nullptr,
+			nullptr);
+
+		HFONT font = (ct.options & Control::BOLD_FONT) ? m_FontBold : m_Font;
+		SendMessage(wnd, WM_SETFONT, (WPARAM)font, FALSE);
+
+		m_Controls.push_back({ ct, wnd });
+	}
+}
+
+void ControlTemplate::Relayout(UINT dpi)
+{
+	if (m_Controls.empty()) return;
+
+	if (dpi != m_CurrentDpi)
+	{
+		m_CurrentDpi = dpi;
+		UpdateFonts(dpi);
+	}
+
+	RECT clientRect;
+	GetClientRect(m_Parent, &clientRect);
+
+	const SIZE designSize = DpiUtil::MapDialogUnits(m_DesignSize, dpi);
+	const int deltaX = clientRect.right - designSize.cx;
+	const int deltaY = clientRect.bottom - designSize.cy;
+
+	HDWP dwp = BeginDeferWindowPos((int)m_Controls.size());
+	for (const auto& createdControl : m_Controls)
+	{
+		const Control& ct = createdControl.control;
+		RECT rect = MapControlRect(ct, dpi);
+
+		const bool left = (ct.options & Control::ANCHOR_LEFT) != 0;
+		const bool top = (ct.options & Control::ANCHOR_TOP) != 0;
+		const bool right = (ct.options & Control::ANCHOR_RIGHT) != 0;
+		const bool bottom = (ct.options & Control::ANCHOR_BOTTOM) != 0;
+
+		if (right)
+		{
+			if (left) rect.right += deltaX;
+			else rect.left += deltaX;
+		}
+		if (bottom)
+		{
+			if (top) rect.bottom += deltaY;
+			else rect.top += deltaY;
+		}
+
+		if (dwp)
+		{
+			dwp = DeferWindowPos(dwp, createdControl.window, nullptr, rect.left, rect.top,
+				rect.right, rect.bottom,
+				SWP_NOACTIVATE | SWP_NOZORDER);
+		}
+		else
+		{
+			SetWindowPos(createdControl.window, nullptr, rect.left, rect.top,
+				rect.right, rect.bottom,
+				SWP_NOACTIVATE | SWP_NOZORDER);
+		}
+	}
+
+	if (dwp) EndDeferWindowPos(dwp);
+}
+
+UINT ControlTemplate::ScaleDialogUnits(int value) const
+{
+	return MulDiv(value, m_CurrentDpi, 96);
+}

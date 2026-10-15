@@ -1,4 +1,4 @@
-﻿/* Copyright (C) 2026 OfficialNovadesk
+/* Copyright (C) 2026 OfficialNovadesk
  *
  * This Source Code Form is subject to the terms of the GNU General Public
  * License; either version 2 of the License, or (at your option) any later
@@ -125,6 +125,7 @@ struct AppState {
   HFONT hStatusFont = nullptr;
   HBITMAP hPreviewBitmap = nullptr;
   ULONG_PTR gdiplusToken = 0;
+  UINT dpi = USER_DEFAULT_SCREEN_DPI;
 
   bool isDarkMode = false;
   HBRUSH hbrWindowBg = nullptr;
@@ -611,7 +612,8 @@ HBITMAP LoadScaledPreviewBitmap(const fs::path &imagePath, HWND hPreview) {
 
   Gdiplus::Bitmap canvas(targetW, targetH, PixelFormat32bppARGB);
   Gdiplus::Graphics g(&canvas);
-  g.Clear(Gdiplus::Color(255, 240, 240, 240));
+  const bool dark = WindowsTheme::IsUsingDarkMode();
+  g.Clear(dark ? Gdiplus::Color(255, 32, 32, 32) : Gdiplus::Color(255, 240, 240, 240));
   g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
   g.DrawImage(&source, Gdiplus::Rect(drawX, drawY, drawW, drawH));
 
@@ -1346,13 +1348,148 @@ void HandleInstall(AppState *state) {
 }
 
 
+// Scale a 96-DPI design pixel to the state's current DPI.
+static inline int S(int v, UINT dpi) {
+  return MulDiv(v, (int)dpi, 96);
+}
+
+// Create/recreate all fonts using the system UI font at the current DPI.
+static void CreateInstallerFonts(AppState *state) {
+  if (!state) return;
+
+  if (state->hTitleFont)  { DeleteObject(state->hTitleFont);  state->hTitleFont  = nullptr; }
+  if (state->hUiFont)     { DeleteObject(state->hUiFont);     state->hUiFont     = nullptr; }
+  if (state->hStatusFont) { DeleteObject(state->hStatusFont); state->hStatusFont = nullptr; }
+
+  NONCLIENTMETRICSW ncm{};
+  ncm.cbSize = sizeof(ncm);
+  SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+
+  // Scale to the requested DPI if it differs from the system DPI.
+  HDC screenDC = GetDC(nullptr);
+  const int sysDpi = screenDC ? GetDeviceCaps(screenDC, LOGPIXELSX) : 96;
+  if (screenDC) ReleaseDC(nullptr, screenDC);
+  if (sysDpi > 0 && (UINT)sysDpi != state->dpi)
+    ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, (int)state->dpi, sysDpi);
+
+  // Regular UI font — labels, values, buttons, list view.
+  state->hUiFont = CreateFontIndirectW(&ncm.lfMenuFont);
+
+  // Small caps font for category labels (WIDGET NAME, VERSION, etc.) — same size, normal weight.
+  state->hStatusFont = CreateFontIndirectW(&ncm.lfMenuFont);
+
+  // Title font — bold, ~1.6× bigger, for the widget/package name.
+  ncm.lfMenuFont.lfWeight = FW_BOLD;
+  ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, 16, 10);
+  state->hTitleFont = CreateFontIndirectW(&ncm.lfMenuFont);
+}
+
+// Reposition and resize all child controls to match current DPI / client size.
+static void RelayoutInstaller(AppState *state) {
+  if (!state || !state->hwnd) return;
+  const UINT dpi = state->dpi;
+
+  RECT rc{};
+  GetClientRect(state->hwnd, &rc);
+  const int cw = rc.right;
+  const int ch = rc.bottom;
+
+  // ── title bar label ────────────────────────────────────────────────────────
+  if (state->hTitle)
+    SetWindowPos(state->hTitle, nullptr, S(16,dpi), S(10,dpi),
+                 cw - S(32,dpi), S(34,dpi), SWP_NOZORDER|SWP_NOACTIVATE);
+
+  // ── Widget Details group box ───────────────────────────────────────────────
+  const int grpL = S(16,dpi);
+  const int grpT = S(58,dpi);
+  const int grpW = S(300,dpi);
+  const int grpH = S(346,dpi);
+  HWND hGrpD = GetDlgItem(state->hwnd, 0); // group boxes have no stored HWND,
+  // so move by enumerating — simpler to just rely on Relayout being called
+  // after creation which already set positions. We only need to move the
+  // content controls here.
+
+  // Details content
+  if (state->hNameLabel)
+    SetWindowPos(state->hNameLabel, nullptr, S(30,dpi), S(84,dpi), S(130,dpi), S(17,dpi), SWP_NOZORDER|SWP_NOACTIVATE);
+  if (state->hName)
+    SetWindowPos(state->hName, nullptr, S(30,dpi), S(103,dpi), S(272,dpi), S(25,dpi), SWP_NOZORDER|SWP_NOACTIVATE);
+  if (state->hVersionLabel)
+    SetWindowPos(state->hVersionLabel, nullptr, S(30,dpi), S(143,dpi), S(110,dpi), S(17,dpi), SWP_NOZORDER|SWP_NOACTIVATE);
+  if (state->hVersion)
+    SetWindowPos(state->hVersion, nullptr, S(30,dpi), S(161,dpi), S(110,dpi), S(23,dpi), SWP_NOZORDER|SWP_NOACTIVATE);
+  if (state->hAuthorLabel)
+    SetWindowPos(state->hAuthorLabel, nullptr, S(165,dpi), S(143,dpi), S(110,dpi), S(17,dpi), SWP_NOZORDER|SWP_NOACTIVATE);
+  if (state->hAuthor)
+    SetWindowPos(state->hAuthor, nullptr, S(165,dpi), S(161,dpi), S(110,dpi), S(23,dpi), SWP_NOZORDER|SWP_NOACTIVATE);
+  if (state->hWidgetStatusLabel)
+    SetWindowPos(state->hWidgetStatusLabel, nullptr, S(30,dpi), S(202,dpi), S(180,dpi), S(17,dpi), SWP_NOZORDER|SWP_NOACTIVATE);
+  if (state->hWidgetStatus)
+    SetWindowPos(state->hWidgetStatus, nullptr, S(30,dpi), S(220,dpi), S(272,dpi), S(22,dpi), SWP_NOZORDER|SWP_NOACTIVATE);
+  if (state->hAddonsLabel)
+    SetWindowPos(state->hAddonsLabel, nullptr, S(30,dpi), S(258,dpi), S(160,dpi), S(17,dpi), SWP_NOZORDER|SWP_NOACTIVATE);
+  if (state->hAddons)
+    SetWindowPos(state->hAddons, nullptr, S(30,dpi), S(278,dpi), S(272,dpi), S(116,dpi), SWP_NOZORDER|SWP_NOACTIVATE);
+
+  // Preview
+  if (state->hPreview)
+    SetWindowPos(state->hPreview, nullptr, S(340,dpi), S(86,dpi), S(324,dpi), S(266,dpi), SWP_NOZORDER|SWP_NOACTIVATE);
+
+  // Bottom buttons / progress
+  const int btnY = S(364,dpi);
+  const int btnH = S(30,dpi);
+  if (state->hInstall)
+    SetWindowPos(state->hInstall, nullptr, S(468,dpi), btnY, S(95,dpi), btnH, SWP_NOZORDER|SWP_NOACTIVATE);
+  if (state->hCancel)
+    SetWindowPos(state->hCancel, nullptr, S(571,dpi), btnY, S(95,dpi), btnH, SWP_NOZORDER|SWP_NOACTIVATE);
+  if (state->hProgress)
+    SetWindowPos(state->hProgress, nullptr, S(468,dpi), S(370,dpi), S(198,dpi), S(20,dpi), SWP_NOZORDER|SWP_NOACTIVATE);
+}
+
+// Push new fonts to every live control after font recreation.
+static void ResendInstallerFonts(AppState *state) {
+  if (!state) return;
+  auto sf = [](HWND h, HFONT f){ if (h && f) SendMessageW(h, WM_SETFONT, (WPARAM)f, TRUE); };
+  sf(state->hTitle,             state->hTitleFont);
+  sf(state->hNameLabel,         state->hStatusFont);
+  sf(state->hName,              state->hUiFont);
+  sf(state->hVersionLabel,      state->hStatusFont);
+  sf(state->hVersion,           state->hUiFont);
+  sf(state->hAuthorLabel,       state->hStatusFont);
+  sf(state->hAuthor,            state->hUiFont);
+  sf(state->hWidgetStatusLabel, state->hStatusFont);
+  sf(state->hWidgetStatus,      state->hStatusFont);
+  sf(state->hAddonsLabel,       state->hStatusFont);
+  sf(state->hAddons,            state->hUiFont);
+  sf(state->hInstall,           state->hUiFont);
+  sf(state->hCancel,            state->hUiFont);
+}
+
 static void InstallerApplyTheme(HWND hwnd, AppState *state) {
   if (!state) return;
 
   WindowsTheme::Refresh();
   state->isDarkMode = WindowsTheme::IsUsingDarkMode();
 
-  WindowsTheme::ApplyToDialog(hwnd);
+  // Dark titlebar via DWM — must be done before theming controls.
+  const BOOL dark = state->isDarkMode ? TRUE : FALSE;
+  DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1
+#define DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 19
+#endif
+  DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &dark, sizeof(dark));
+
+  // Apply theme to the window itself as a control (sets allowDarkModeForWindow
+  // + SetWindowTheme) but do NOT call ApplyToWindow/ApplyToDialog — those
+  // install a WM_CTLCOLORSTATIC subclass that would intercept our custom
+  // per-control colors before WndProc sees them.
+  WindowsTheme::ApplyToControl(hwnd);
+
+  // Theme every child control so buttons, listview, combobox etc. draw dark.
+  EnumChildWindows(hwnd, [](HWND child, LPARAM) -> BOOL {
+    WindowsTheme::ApplyToControl(child);
+    return TRUE;
+  }, 0);
 
   if (state->hbrWindowBg) { DeleteObject(state->hbrWindowBg); state->hbrWindowBg = nullptr; }
   if (state->isDarkMode) {
@@ -1374,137 +1511,117 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     auto *appState = reinterpret_cast<AppState *>(cs->lpCreateParams);
     appState->hwnd = hwnd;
     WindowsTheme::Initialize();
-    InstallerApplyTheme(hwnd, appState);
     SetWindowLongPtrW(hwnd, GWLP_USERDATA,
                       reinterpret_cast<LONG_PTR>(appState));
     state = appState;
+    state->dpi = GetDpiForWindow(hwnd);
 
     RECT rc{};
     GetClientRect(hwnd, &rc);
 
+    // Create fonts first (needed for WM_SETFONT calls below).
+    CreateInstallerFonts(state);
+
     state->hTitle = CreateWindowW(
         L"STATIC", L"Select a package to view details", WS_CHILD | WS_VISIBLE,
-        16, 10, 656, 34, hwnd, reinterpret_cast<HMENU>(IDC_WIDGET_TITLE),
-        nullptr, nullptr);
-    state->hTitleFont =
-        CreateFontW(-26, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                    OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                    DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-    state->hUiFont = CreateFontW(-16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-                                 CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                                 DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-    state->hStatusFont = CreateFontW(
-        -13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-        DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-    SendMessageW(state->hTitle, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hTitleFont), TRUE);
+        S(16,state->dpi), S(10,state->dpi), rc.right - S(32,state->dpi), S(34,state->dpi),
+        hwnd, reinterpret_cast<HMENU>(IDC_WIDGET_TITLE), nullptr, nullptr);
 
     HWND hGroupDetails = CreateWindowW(
-        L"BUTTON", L"Widget Details", WS_CHILD | WS_VISIBLE | BS_GROUPBOX, 16,
-        58, 300, 346, hwnd, nullptr, nullptr, nullptr);
+        L"BUTTON", L"Widget Details", WS_CHILD | WS_VISIBLE | BS_GROUPBOX | WS_CLIPSIBLINGS,
+        S(16,state->dpi), S(58,state->dpi), S(300,state->dpi), S(346,state->dpi),
+        hwnd, nullptr, nullptr, nullptr);
     state->hNameLabel = CreateWindowW(L"STATIC", L"WIDGET NAME",
-                                      WS_CHILD | WS_VISIBLE, 30, 84, 130, 17,
-                                      hwnd, nullptr, nullptr, nullptr);
-    state->hName = CreateWindowW(
-        L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 30, 103, 272, 25,
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+        S(30,state->dpi), S(84,state->dpi), S(130,state->dpi), S(17,state->dpi),
+        hwnd, nullptr, nullptr, nullptr);
+    state->hName = CreateWindowW(L"STATIC", L"",
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | SS_LEFT,
+        S(30,state->dpi), S(103,state->dpi), S(272,state->dpi), S(25,state->dpi),
         hwnd, reinterpret_cast<HMENU>(IDC_NAME), nullptr, nullptr);
     state->hVersionLabel = CreateWindowW(L"STATIC", L"VERSION",
-                                         WS_CHILD | WS_VISIBLE, 30, 143, 110,
-                                         17, hwnd, nullptr, nullptr, nullptr);
-    state->hVersion = CreateWindowW(
-        L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 30, 161, 110, 23,
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+        S(30,state->dpi), S(143,state->dpi), S(110,state->dpi), S(17,state->dpi),
+        hwnd, nullptr, nullptr, nullptr);
+    state->hVersion = CreateWindowW(L"STATIC", L"",
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | SS_LEFT,
+        S(30,state->dpi), S(161,state->dpi), S(110,state->dpi), S(23,state->dpi),
         hwnd, reinterpret_cast<HMENU>(IDC_VERSION), nullptr, nullptr);
     state->hAuthorLabel = CreateWindowW(L"STATIC", L"AUTHOR",
-                                        WS_CHILD | WS_VISIBLE, 165, 143, 110,
-                                        17, hwnd, nullptr, nullptr, nullptr);
-    state->hAuthor = CreateWindowW(
-        L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 165, 161, 110, 23,
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+        S(165,state->dpi), S(143,state->dpi), S(110,state->dpi), S(17,state->dpi),
+        hwnd, nullptr, nullptr, nullptr);
+    state->hAuthor = CreateWindowW(L"STATIC", L"",
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | SS_LEFT,
+        S(165,state->dpi), S(161,state->dpi), S(110,state->dpi), S(23,state->dpi),
         hwnd, reinterpret_cast<HMENU>(IDC_AUTHOR), nullptr, nullptr);
-    state->hWidgetStatusLabel = CreateWindowW(
-        L"STATIC", L"INSTALLATION STATUS", WS_CHILD | WS_VISIBLE, 30, 202,
-        180, 17, hwnd, nullptr, nullptr, nullptr);
-    state->hWidgetStatus = CreateWindowW(
-        L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT, 30, 220, 272, 22,
-        hwnd,
-        reinterpret_cast<HMENU>(IDC_WIDGET_STATUS), nullptr, nullptr);
-    state->hAddonsLabel = CreateWindowW(
-        L"STATIC", L"INCLUDED ADDONS", WS_CHILD | WS_VISIBLE, 30, 258, 160,
-        17, hwnd, nullptr, nullptr, nullptr);
-    state->hAddons = CreateWindowExW(
-        WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS, 30, 278, 272,
-        116, hwnd, reinterpret_cast<HMENU>(IDC_ADDONS), nullptr, nullptr);
-    ListView_SetExtendedListViewStyle(
-        state->hAddons, LVS_EX_CHECKBOXES | LVS_EX_FULLROWSELECT |
-                            LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
+    state->hWidgetStatusLabel = CreateWindowW(L"STATIC", L"INSTALLATION STATUS",
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+        S(30,state->dpi), S(202,state->dpi), S(180,state->dpi), S(17,state->dpi),
+        hwnd, nullptr, nullptr, nullptr);
+    state->hWidgetStatus = CreateWindowW(L"STATIC", L"",
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | SS_LEFT,
+        S(30,state->dpi), S(220,state->dpi), S(272,state->dpi), S(22,state->dpi),
+        hwnd, reinterpret_cast<HMENU>(IDC_WIDGET_STATUS), nullptr, nullptr);
+    state->hAddonsLabel = CreateWindowW(L"STATIC", L"INCLUDED ADDONS",
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+        S(30,state->dpi), S(258,state->dpi), S(160,state->dpi), S(17,state->dpi),
+        hwnd, nullptr, nullptr, nullptr);
+    state->hAddons = CreateWindowExW(0, WC_LISTVIEWW, L"",
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | LVS_REPORT | LVS_SHOWSELALWAYS,
+        S(30,state->dpi), S(278,state->dpi), S(272,state->dpi), S(116,state->dpi),
+        hwnd, reinterpret_cast<HMENU>(IDC_ADDONS), nullptr, nullptr);
+    ListView_SetExtendedListViewStyle(state->hAddons,
+        LVS_EX_CHECKBOXES | LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     LVCOLUMNW col{};
     col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
     col.pszText = const_cast<LPWSTR>(L"Addon");
-    col.cx = 140;
+    col.cx = S(140,state->dpi);
     col.iSubItem = 0;
     ListView_InsertColumn(state->hAddons, 0, &col);
     col.pszText = const_cast<LPWSTR>(L"Status");
-    col.cx = 120;
+    col.cx = S(120,state->dpi);
     col.iSubItem = 1;
     ListView_InsertColumn(state->hAddons, 1, &col);
 
     HWND hGroupVisuals = CreateWindowW(
-        L"BUTTON", L"Widget Visuals", WS_CHILD | WS_VISIBLE | BS_GROUPBOX, 324,
-        58, 356, 346, hwnd, nullptr, nullptr, nullptr);
-    state->hPreview = CreateWindowExW(
-        WS_EX_CLIENTEDGE, L"STATIC", L"",
-        WS_CHILD | WS_VISIBLE | SS_BITMAP | SS_CENTERIMAGE, 340, 86, 324, 266,
+        L"BUTTON", L"Widget Visuals", WS_CHILD | WS_VISIBLE | BS_GROUPBOX | WS_CLIPSIBLINGS,
+        S(324,state->dpi), S(58,state->dpi), S(356,state->dpi), S(346,state->dpi),
+        hwnd, nullptr, nullptr, nullptr);
+    state->hPreview = CreateWindowExW(0, L"STATIC", L"",
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | SS_BITMAP | SS_CENTERIMAGE,
+        S(340,state->dpi), S(86,state->dpi), S(324,state->dpi), S(266,state->dpi),
         hwnd, reinterpret_cast<HMENU>(IDC_PREVIEW), nullptr, nullptr);
 
-    state->hInstall = CreateWindowW(
-        L"BUTTON", L"Install", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON, 468,
-        364, 95, 30, hwnd, reinterpret_cast<HMENU>(IDC_INSTALL), nullptr,
-        nullptr);
-    state->hCancel = CreateWindowW(
-        L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 571, 364,
-        95, 30, hwnd, reinterpret_cast<HMENU>(IDC_CANCEL), nullptr, nullptr);
-    state->hProgress = CreateWindowExW(
-        0, PROGRESS_CLASSW, L"", WS_CHILD, 468, 370, 198, 20, hwnd,
-        reinterpret_cast<HMENU>(IDC_PROGRESS), nullptr, nullptr);
+    state->hInstall = CreateWindowW(L"BUTTON", L"Install",
+        WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+        S(468,state->dpi), S(364,state->dpi), S(95,state->dpi), S(30,state->dpi),
+        hwnd, reinterpret_cast<HMENU>(IDC_INSTALL), nullptr, nullptr);
+    state->hCancel = CreateWindowW(L"BUTTON", L"Cancel",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        S(571,state->dpi), S(364,state->dpi), S(95,state->dpi), S(30,state->dpi),
+        hwnd, reinterpret_cast<HMENU>(IDC_CANCEL), nullptr, nullptr);
+    state->hProgress = CreateWindowExW(0, PROGRESS_CLASSW, L"", WS_CHILD,
+        S(468,state->dpi), S(370,state->dpi), S(198,state->dpi), S(20,state->dpi),
+        hwnd, reinterpret_cast<HMENU>(IDC_PROGRESS), nullptr, nullptr);
     SendMessageW(state->hProgress, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
     SendMessageW(state->hProgress, PBM_SETPOS, 0, 0);
     ShowWindow(state->hProgress, SW_HIDE);
 
-    SendMessageW(hGroupDetails, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(state->hNameLabel, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
-    SendMessageW(state->hName, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(state->hVersionLabel, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
-    SendMessageW(state->hVersion, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(state->hAuthorLabel, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
-    SendMessageW(state->hAuthor, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(state->hWidgetStatus, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
-    SendMessageW(state->hWidgetStatusLabel, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
-    SendMessageW(state->hAddonsLabel, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hStatusFont), TRUE);
-    SendMessageW(state->hAddons, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(hGroupVisuals, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(state->hInstall, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
-    SendMessageW(state->hCancel, WM_SETFONT,
-                 reinterpret_cast<WPARAM>(state->hUiFont), TRUE);
+    // Push group boxes behind their sibling content controls.
+    SetWindowPos(hGroupDetails, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    SetWindowPos(hGroupVisuals, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+    // Send fonts to all controls.
+    SendMessageW(hGroupDetails, WM_SETFONT, (WPARAM)state->hUiFont, TRUE);
+    SendMessageW(hGroupVisuals, WM_SETFONT, (WPARAM)state->hUiFont, TRUE);
+    ResendInstallerFonts(state);
 
     EnableWindow(state->hInstall, FALSE);
     if (state->packageLoaded) {
       UpdateUiWithPackage(state);
     }
+    InstallerApplyTheme(hwnd, state);
     return 0;
   }
   case WM_COMMAND:
@@ -1587,6 +1704,31 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   case WM_SETTINGCHANGE:
     InstallerApplyTheme(hwnd, state);
     return 0;
+  case WM_DPICHANGED: {
+    if (!state) break;
+    state->dpi = LOWORD(wParam);
+    // Resize window to the rect Windows suggests for the new DPI.
+    const RECT *r = reinterpret_cast<const RECT *>(lParam);
+    SetWindowPos(hwnd, nullptr, r->left, r->top,
+                 r->right - r->left, r->bottom - r->top,
+                 SWP_NOZORDER | SWP_NOACTIVATE);
+    // Recreate fonts and reposition all controls at the new DPI.
+    CreateInstallerFonts(state);
+    ResendInstallerFonts(state);
+    RelayoutInstaller(state);
+    // Reload the preview bitmap at the new size.
+    if (state->hPreviewBitmap) {
+      DeleteObject(state->hPreviewBitmap);
+      state->hPreviewBitmap = nullptr;
+    }
+    if (state->packageLoaded && !state->info.previewImagePath.empty()) {
+      state->hPreviewBitmap = LoadScaledPreviewBitmap(state->info.previewImagePath, state->hPreview);
+      SendMessageW(state->hPreview, STM_SETIMAGE, IMAGE_BITMAP,
+                   state->hPreviewBitmap ? reinterpret_cast<LPARAM>(state->hPreviewBitmap) : 0);
+    }
+    RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+    return 0;
+  }
   case WM_ERASEBKGND:
     if (state && state->isDarkMode && state->hbrWindowBg) {
       RECT rc; GetClientRect(hwnd, &rc);
@@ -1664,17 +1806,21 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
 
   constexpr int kWindowWidth = 708;
   constexpr int kWindowHeight = 452;
+  // Get the DPI of the primary monitor to size the window correctly before creation.
+  const UINT primaryDpi = GetDpiForSystem();
+  const int scaledW = MulDiv(kWindowWidth, (int)primaryDpi, 96);
+  const int scaledH = MulDiv(kWindowHeight, (int)primaryDpi, 96);
   RECT workArea{};
   SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0);
   const int windowX =
-      workArea.left + ((workArea.right - workArea.left) - kWindowWidth) / 2;
+      workArea.left + ((workArea.right - workArea.left) - scaledW) / 2;
   const int windowY =
-      workArea.top + ((workArea.bottom - workArea.top) - kWindowHeight) / 2;
+      workArea.top + ((workArea.bottom - workArea.top) - scaledH) / 2;
 
   HWND hwnd =
       CreateWindowExW(0, kWindowClassName, kWindowTitle,
                       WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-                      windowX, windowY, kWindowWidth, kWindowHeight, nullptr,
+                      windowX, windowY, scaledW, scaledH, nullptr,
                       nullptr, hInstance, &state);
 
   if (!hwnd) {

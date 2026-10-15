@@ -64,6 +64,10 @@ void ApplyToTooltip(HWND tooltipWindow);
 /// Prepare and update menu theme right before showing a popup menu.
 void PrepareMenu(HWND owner);
 
+COLORREF GetTextColor();
+COLORREF GetDisabledTextColor();
+void EnableDialogTexture(HWND window, bool enable);
+
 /// Helper to resolve whether system uses dark mode directly from registry.
 bool IsSystemDarkMode();
 

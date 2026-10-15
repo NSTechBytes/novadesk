@@ -107,6 +107,44 @@ bool HasClass(HWND w, const WCHAR* name) {
   return GetClassNameW(w, cls, 64) && wcscmp(cls, name) == 0;
 }
 
+bool IsTabSurface(HWND ctrl) {
+  HWND parent = GetParent(ctrl);
+  if (!parent) return false;
+  if (HasClass(parent, WC_TABCONTROLW)) return true;
+  for (HWND p = parent; p; p = GetParent(p)) {
+    if (HasClass(p, L"#32770") && (GetWindowLongPtrW(p, GWL_STYLE) & WS_CHILD)) return true;
+  }
+  for (HWND sibling = GetWindow(parent, GW_CHILD); sibling; sibling = GetWindow(sibling, GW_HWNDNEXT)) {
+    if (sibling == ctrl || !HasClass(sibling, WC_TABCONTROLW)) continue;
+    RECT tabRc, ctrlRc;
+    GetWindowRect(sibling, &tabRc);
+    GetWindowRect(ctrl, &ctrlRc);
+    if (ctrlRc.left >= tabRc.left && ctrlRc.right <= tabRc.right &&
+        ctrlRc.top >= tabRc.top && ctrlRc.bottom <= tabRc.bottom) {
+      return true;
+    }
+  }
+  return false;
+}
+
+HBRUSH GetSurfaceBrush(HWND w) {
+  return IsTabSurface(w) ? GetState().brPageBackground : GetState().brBackground;
+}
+
+void ClipSiblings(HWND window, HDC dc) {
+  HWND parent = GetParent(window);
+  if (!parent) return;
+  for (HWND sibling = GetWindow(parent, GW_CHILD); sibling; sibling = GetWindow(sibling, GW_HWNDNEXT)) {
+    if (sibling == window || !IsWindowVisible(sibling)) continue;
+    if (HasClass(sibling, WC_BUTTON) && (GetWindowLongPtrW(sibling, GWL_STYLE) & BS_TYPEMASK) == BS_GROUPBOX) continue;
+
+    RECT rect;
+    GetWindowRect(sibling, &rect);
+    MapWindowPoints(nullptr, window, (POINT*)&rect, 2);
+    ExcludeClipRect(dc, rect.left, rect.top, rect.right, rect.bottom);
+  }
+}
+
 bool IsHot(HWND w, const RECT& r) {
   POINT pt; GetCursorPos(&pt); ScreenToClient(w, &pt);
   return PtInRect(&r, pt) != FALSE;
@@ -158,8 +196,6 @@ void DrawButton(HWND w, HDC dc, RECT r) {
   const LRESULT bstate = SendMessageW(w, BM_GETSTATE, 0, 0);
   const bool pressed = (bstate & BST_PUSHED) != 0;
   const bool hot = enabled && IsHot(w, r);
-  FillRect(dc, &r, st.brBackground);
-
   if (type == BS_GROUPBOX) {
     TEXTMETRICW tm; GetTextMetricsW(dc, &tm);
     RECT frame = r; frame.top += tm.tmHeight / 2;
@@ -167,10 +203,12 @@ void DrawButton(HWND w, HDC dc, RECT r) {
     WCHAR text[4096]; const int len = GetWindowTextW(w, text, 4096);
     SIZE sz; GetTextExtentPoint32W(dc, text, len, &sz);
     RECT label = {8, 0, 12 + sz.cx, tm.tmHeight};
-    FillRect(dc, &label, st.brBackground);
+    FillRect(dc, &label, GetSurfaceBrush(w));
     DrawLabel(w, dc, label, DT_LEFT | DT_SINGLELINE);
     return;
   }
+
+  FillRect(dc, &r, GetSurfaceBrush(w));
 
   const bool radio = type == BS_RADIOBUTTON || type == BS_AUTORADIOBUTTON;
   const bool check = radio || type == BS_CHECKBOX || type == BS_AUTOCHECKBOX || type == BS_3STATE || type == BS_AUTO3STATE;
@@ -179,6 +217,9 @@ void DrawButton(HWND w, HDC dc, RECT r) {
     RECT glyph = {r.left, (r.bottom - sz) / 2, r.left + sz, (r.bottom + sz) / 2};
     if (style & BS_LEFTTEXT) OffsetRect(&glyph, r.right - sz, 0);
     const int checked = (int)SendMessageW(w, BM_GETCHECK, 0, 0);
+    // Open the theme against the window's current DarkMode_Explorer app ID.
+    // DarkMode_Explorer::Button provides proper dark-mode glyph rendering for
+    // both checkboxes and radio buttons when SetWindowTheme used DarkMode_Explorer.
     HTHEME ht = OpenThemeData(w, L"DarkMode_Explorer::Button");
     if (!ht) ht = OpenThemeData(w, L"Button");
     if (ht) {
@@ -202,7 +243,7 @@ void DrawButton(HWND w, HDC dc, RECT r) {
 
 void DrawTabs(HWND w, HDC dc, RECT r) {
   auto& st = GetState();
-  FillRect(dc, &r, st.brBackground);
+  FillRect(dc, &r, GetSurfaceBrush(w));
 
   RECT page = r;
   TabCtrl_AdjustRect(w, FALSE, &page);
@@ -360,6 +401,18 @@ void PaintControlMessage(HWND w, UINT msg, WPARAM wParam, ControlType type) {
   PAINTSTRUCT ps{};
   HDC dc = (msg == WM_PAINT) ? BeginPaint(w, &ps) : (HDC)wParam;
   const int saved = SaveDC(dc);
+  if (type == ControlType::Button && (GetWindowLongPtrW(w, GWL_STYLE) & BS_TYPEMASK) == BS_GROUPBOX) {
+    // Group boxes are siblings of the controls they frame. Clip those siblings
+    // out so custom dark-mode painting cannot cover title/text/button content.
+    ClipSiblings(w, dc);
+    PaintControl(w, dc, type);
+    RestoreDC(dc, saved);
+    if (msg == WM_PAINT) EndPaint(w, &ps);
+    return;
+  }
+  if (type == ControlType::Tab) {
+    ClipSiblings(w, dc);
+  }
   RECT r; GetClientRect(w, &r);
   HDC buf = CreateCompatibleDC(dc);
   HBITMAP bmp = CreateCompatibleBitmap(dc, std::max(1L, (LONG)r.right), std::max(1L, (LONG)r.bottom));
@@ -394,6 +447,26 @@ void PaintEditBorder(HWND w) {
 // ---------------------------------------------------------------------------
 // Control subclass procedure
 // ---------------------------------------------------------------------------
+
+// For certain state-changing messages the native control paints itself
+// immediately inside DefSubclassProc before returning, overwriting our dark
+// background with a light-mode glyph.  Suppress redraws across the call so
+// only our WM_PAINT handler renders the updated control.
+static bool ShouldDeferPaint(UINT msg, ControlType type) {
+  if (type == ControlType::Edit) return false;
+  switch (msg) {
+  case WM_ENABLE:
+  case WM_SETTEXT:
+  case WM_SETFONT:
+  case BM_SETCHECK:
+  case BM_SETSTATE:
+  case CB_SETCURSEL:
+    return true;
+  default:
+    return false;
+  }
+}
+
 LRESULT CALLBACK ControlProc(HWND w, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR data) {
   const auto type = (ControlType)data;
   if (msg == WM_NCDESTROY) { RemoveWindowSubclass(w, ControlProc, id); return DefSubclassProc(w, msg, wp, lp); }
@@ -423,11 +496,35 @@ LRESULT CALLBACK ControlProc(HWND w, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id
     TrackMouseEvent(&tme);
   }
 
-  const LRESULT res = DefSubclassProc(w, msg, wp, lp);
+  // For state-change messages that trigger immediate native painting, suppress
+  // the native redraw and let our WM_PAINT handler draw the final state.
+  LRESULT res;
+  if (ShouldDeferPaint(msg, type)) {
+    DefSubclassProc(w, WM_SETREDRAW, FALSE, 0);
+    res = DefSubclassProc(w, msg, wp, lp);
+    DefSubclassProc(w, WM_SETREDRAW, TRUE, 0);
+    InvalidateRect(w, nullptr, FALSE);
+    return res;
+  }
+
+  res = DefSubclassProc(w, msg, wp, lp);
 
   // Invalidate after state-changing messages
   switch (msg) {
-  case WM_MOUSEMOVE: case WM_MOUSELEAVE: case WM_LBUTTONDOWN: case WM_LBUTTONUP:
+  case WM_MOUSEMOVE:
+  case WM_MOUSELEAVE:
+    if (type == ControlType::Tab) {
+      RECT tabStrip;
+      GetClientRect(w, &tabStrip);
+      RECT page = tabStrip;
+      TabCtrl_AdjustRect(w, FALSE, &page);
+      tabStrip.bottom = page.top;
+      InvalidateRect(w, &tabStrip, FALSE);
+    } else {
+      InvalidateRect(w, nullptr, FALSE);
+    }
+    break;
+  case WM_LBUTTONDOWN: case WM_LBUTTONUP:
   case WM_ENABLE: case WM_SETFOCUS: case WM_KILLFOCUS: case WM_UPDATEUISTATE:
   case WM_SETTEXT: case WM_SETFONT: case BM_SETCHECK: case BM_SETSTATE:
   case TCM_SETCURSEL: case CB_SETCURSEL: case LB_SETCURSEL:
@@ -454,8 +551,10 @@ LRESULT ControlColor(UINT msg, WPARAM wp, LPARAM lp) {
   const bool edit   = HasClass(ctrl, WC_EDIT);
   const bool borderlessRO = edit && (style & ES_READONLY) && !(style & WS_BORDER) && !(GetWindowLongPtrW(ctrl, GWL_EXSTYLE) & WS_EX_CLIENTEDGE);
   const bool input  = !borderlessRO && (msg == WM_CTLCOLOREDIT || msg == WM_CTLCOLORLISTBOX || edit);
-  SetBkColor(dc, input ? g_Background : g_Background);
-  return (LRESULT)(input ? st.brBackground : st.brBackground);
+  HBRUSH surfaceBr = GetSurfaceBrush(ctrl);
+  COLORREF bgCol = (surfaceBr == st.brPageBackground) ? g_PageBackground : g_Background;
+  SetBkColor(dc, input ? g_Background : bgCol);
+  return (LRESULT)(input ? st.brBackground : surfaceBr);
 }
 
 LRESULT CALLBACK ParentWindowProc(HWND w, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR data) {
@@ -463,8 +562,11 @@ LRESULT CALLBACK ParentWindowProc(HWND w, UINT msg, WPARAM wp, LPARAM lp, UINT_P
   if (msg == WM_SETTINGCHANGE) { WindowsTheme::Refresh(); }
   if (!WindowsTheme::IsUsingDarkMode()) return DefSubclassProc(w, msg, wp, lp);
   if (msg == WM_ERASEBKGND) {
-    RECT r; GetClientRect(w, &r);
-    FillRect((HDC)wp, &r, GetState().brBackground);
+    HDC dc = (HDC)wp;
+    RECT r;
+    // Fill with the appropriate surface brush (pageBackground for tabs, background for top-level).
+    if (!GetClipBox(dc, &r)) GetClientRect(w, &r);
+    FillRect(dc, &r, GetSurfaceBrush(w));
     return TRUE;
   }
   if (msg >= WM_CTLCOLORMSGBOX && msg <= WM_CTLCOLORSTATIC) return ControlColor(msg, wp, lp);
@@ -609,6 +711,14 @@ void ApplyToControl(HWND w) {
   if (state.pfnAllowDarkModeForWindow) state.pfnAllowDarkModeForWindow(w, dark);
 
   WCHAR cls[64]{}; GetClassNameW(w, cls, 64);
+  const DWORD style = (DWORD)GetWindowLongPtrW(w, GWL_STYLE);
+  const bool isGroupBox = (_wcsicmp(cls, L"BUTTON") == 0) &&
+                          ((style & BS_TYPEMASK) == BS_GROUPBOX);
+  // Keep WS_CLIPSIBLINGS off group boxes: they overlap sibling content by design,
+  // and clipping those siblings makes framed controls render blank.
+  if (!isGroupBox) {
+    SetWindowLongPtrW(w, GWL_STYLE, style | WS_CLIPSIBLINGS);
+  }
 
   if (_wcsicmp(cls, WC_LISTVIEWW) == 0) {
     SetWindowTheme(w, dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
@@ -629,13 +739,17 @@ void ApplyToControl(HWND w) {
       if (dark) SetControlSubclass(hdr, ControlType::Header);
     }
   } else if (_wcsicmp(cls, WC_TABCONTROLW) == 0) {
-    SetWindowTheme(w, dark ? L"DarkMode_ItemsView" : L"", nullptr);
+    SetWindowTheme(w, dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
     if (dark) SetControlSubclass(w, ControlType::Tab);
   } else if (_wcsicmp(cls, L"BUTTON") == 0) {
     const DWORD style = (DWORD)GetWindowLongPtrW(w, GWL_STYLE);
     const DWORD type  = style & BS_TYPEMASK;
     const bool isCheck = type == BS_AUTOCHECKBOX || type == BS_CHECKBOX ||
                          type == BS_AUTORADIOBUTTON || type == BS_RADIOBUTTON || type == BS_GROUPBOX;
+    const bool isGroupBox = (type == BS_GROUPBOX);
+    // Use DarkMode_Explorer for all button types including checkboxes and radios.
+    // DarkMode_Explorer provides correct dark glyph rendering when used consistently
+    // with OpenThemeData(L"DarkMode_Explorer::Button") in the custom draw path.
     SetWindowTheme(w, dark ? L"DarkMode_Explorer" : (isCheck ? L"" : L"Explorer"), nullptr);
     if (dark && (type != BS_OWNERDRAW)) SetControlSubclass(w, ControlType::Button);
   } else if (_wcsicmp(cls, L"COMBOBOX") == 0) {
@@ -688,6 +802,7 @@ void ApplyToWindow(HWND window) {
 
   // Install parent-window subclass for WM_ERASEBKGND / WM_CTLCOLOR*
   SetWindowSubclass(window, ParentWindowProc, 0, 0);
+  EnableDialogTexture(window, (GetWindowLongPtrW(window, GWL_STYLE) & WS_CHILD) != 0);
 }
 
 void ApplyToDialog(HWND dialog) {
@@ -718,6 +833,18 @@ void PrepareMenu(HWND owner) {
   if (owner && IsWindow(owner) && state.pfnAllowDarkModeForWindow)
     state.pfnAllowDarkModeForWindow(owner, state.isDarkMode.load());
   if (state.pfnFlushMenuThemes) state.pfnFlushMenuThemes();
+}
+
+COLORREF GetTextColor() {
+  return IsUsingDarkMode() ? g_Text : GetSysColor(COLOR_WINDOWTEXT);
+}
+
+COLORREF GetDisabledTextColor() {
+  return IsUsingDarkMode() ? g_DisabledText : GetSysColor(COLOR_GRAYTEXT);
+}
+
+void EnableDialogTexture(HWND window, bool enable) {
+  EnableThemeDialogTexture(window, enable && !IsUsingDarkMode() ? ETDT_ENABLETAB : ETDT_DISABLE);
 }
 
 DialogHookScope::DialogHookScope() {

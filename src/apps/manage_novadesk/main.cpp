@@ -34,6 +34,8 @@
 
 #include "resource.h"
 #include "../../common/WindowsTheme.h"
+#include "../../common/Dialog.h"
+#include "../../common/DpiUtil.h"
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdiplus.lib")
@@ -66,8 +68,8 @@ struct AddonEntry {
 static HWND g_list = nullptr;
 static std::vector<WidgetEntry> g_widgets;
 static HFONT g_buttonFont = nullptr;
-static const int kWindowWidth = 720;
-static const int kWindowHeight = 480;
+static const int kWindowWidth = 900;
+static const int kWindowHeight = 560;
 static const UINT kTrayMessage = WM_APP + 1;
 static const UINT kTrayMenuCommand = WM_APP + 2;
 static const int kTrayMenuExitId = 500;
@@ -187,6 +189,7 @@ static void RequestAppExit(HWND hWnd);
 static bool HasCommandLineFlag(const wchar_t *flag);
 static bool RequestExistingManageWindowClose();
 static bool RestartManageWindow();
+static void ResendFontsToAllControls();
 
 static void InitGdiPlus() {
   if (g_gdiplusToken != 0) {
@@ -261,6 +264,40 @@ static void UpdateAboutLogo() {
   g_aboutLogoBitmap = LoadScaledBitmapFromPng(GetAboutLogoPath(), 92, 92);
   SendMessageW(g_aboutLogo, STM_SETIMAGE, IMAGE_BITMAP,
                reinterpret_cast<LPARAM>(g_aboutLogoBitmap));
+}
+
+// BS_GROUPBOX is a sibling, not a container. With WS_CLIPSIBLINGS (forced by
+// WindowsTheme), controls framed by the group box are clipped away and appear
+// blank unless the group box stays below them in z-order.
+static void EnsureAboutSupportZOrder() {
+  if (!g_aboutSupportGroup) {
+    return;
+  }
+
+  const HWND framed[] = {g_aboutSupportTitle, g_aboutSupportText,
+                         g_aboutDonateButton};
+  for (HWND h : framed) {
+    if (!h) {
+      continue;
+    }
+    const LONG_PTR style = GetWindowLongPtrW(h, GWL_STYLE);
+    if (style & WS_CLIPSIBLINGS) {
+      SetWindowLongPtrW(h, GWL_STYLE, style & ~WS_CLIPSIBLINGS);
+    }
+  }
+
+  SetWindowPos(g_aboutSupportGroup, HWND_BOTTOM, 0, 0, 0, 0,
+               SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+  HWND insertAfter = g_aboutSupportGroup;
+  for (HWND h : framed) {
+    if (!h) {
+      continue;
+    }
+    SetWindowPos(h, insertAfter, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    insertAfter = h;
+  }
 }
 
 static void OpenUrl(const wchar_t *url) {
@@ -370,7 +407,91 @@ static void DeleteManageFonts() {
   DeleteOwnedFont(g_buttonFont);
   DeleteOwnedFont(g_aboutTitleFont);
   DeleteOwnedFont(g_aboutSectionFont);
-  DeleteOwnedFont(g_aboutBodyFont);
+  g_aboutBodyFont = nullptr; // alias of g_buttonFont, already deleted above
+}
+
+static void CreateManageFonts(UINT dpi = USER_DEFAULT_SCREEN_DPI) {
+  // Delete existing fonts so they are recreated at the new DPI.
+  g_aboutBodyFont = nullptr; // alias of g_buttonFont — clear before deleting buttonFont
+  DeleteOwnedFont(g_buttonFont);
+  DeleteOwnedFont(g_aboutTitleFont);
+  DeleteOwnedFont(g_aboutSectionFont);
+
+  // Use the system menu font (same source as Rainmeter / ControlTemplate).
+  // This gives the exact font Windows uses for its own UI at the current DPI.
+  NONCLIENTMETRICSW ncm{};
+  ncm.cbSize = sizeof(ncm);
+  SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+
+  // Scale lfHeight to the requested DPI if it differs from the system DPI.
+  HDC screenDC = GetDC(nullptr);
+  const int systemDpi = screenDC ? GetDeviceCaps(screenDC, LOGPIXELSX) : 96;
+  if (screenDC) ReleaseDC(nullptr, screenDC);
+  if (systemDpi > 0 && (UINT)systemDpi != dpi) {
+    ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, (int)dpi, systemDpi);
+  }
+
+  // Regular weight — used for all controls, checkboxes, buttons.
+  g_buttonFont = CreateFontIndirectW(&ncm.lfMenuFont);
+
+  // Bold variant used for the "Manage Settings" title.
+  ncm.lfMenuFont.lfWeight = FW_BOLD;
+  g_aboutSectionFont = CreateFontIndirectW(&ncm.lfMenuFont);
+
+  // Larger bold title for the About app name.
+  ncm.lfMenuFont.lfWeight = FW_BOLD;
+  ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, 16, 10); // ~1.6x bigger
+  g_aboutTitleFont = CreateFontIndirectW(&ncm.lfMenuFont);
+
+  // Body font for About section text — same as regular.
+  g_aboutBodyFont = g_buttonFont;
+}
+
+// Re-send WM_SETFONT to every control after fonts are recreated at a new DPI.
+// Controls that have not been initialized yet (tab pages not yet shown) will
+// get their font set when they initialize, so only live HWNDs are updated here.
+static void ResendFontsToAllControls() {
+  auto setFont = [](HWND h, HFONT f) {
+    if (h && f) SendMessageW(h, WM_SETFONT, (WPARAM)f, TRUE);
+  };
+  // Main window controls
+  setFont(g_tab,            g_buttonFont);
+  setFont(g_btnRefreshList, g_buttonFont);
+  setFont(g_btnClearLogs,   g_buttonFont);
+  setFont(g_btnLoad,        g_buttonFont);
+  setFont(g_btnRefresh,     g_buttonFont);
+  setFont(g_btnRefreshAll,  g_buttonFont);
+  setFont(g_btnClose,       g_buttonFont);
+  // Widgets tab
+  setFont(g_list,           g_buttonFont);
+  // Logs tab
+  setFont(g_logsList,       g_buttonFont);
+  // Addons tab
+  setFont(g_addonsList,     g_buttonFont);
+  // Settings tab
+  setFont(g_settingsTitle,             g_aboutSectionFont);
+  setFont(g_chkRunOnStartup,           g_buttonFont);
+  setFont(g_btnCheckUpdates,           g_buttonFont);
+  setFont(g_chkAutoUpdate,             g_buttonFont);
+  setFont(g_chkEnableLogging,          g_buttonFont);
+  setFont(g_chkEnableDebugging,        g_buttonFont);
+  setFont(g_chkSaveLogToFile,          g_buttonFont);
+  setFont(g_chkUseHardwareAcceleration,g_buttonFont);
+  setFont(g_lblWindowsTheme,           g_buttonFont);
+  setFont(g_cboWindowsTheme,           g_buttonFont);
+  // About tab
+  setFont(g_aboutAppName,      g_aboutTitleFont);
+  setFont(g_aboutVersion,      g_aboutBodyFont);
+  setFont(g_aboutCopyright,    g_aboutBodyFont);
+  setFont(g_aboutHomeLabel,    g_aboutBodyFont);
+  setFont(g_aboutHomeLink,     g_aboutBodyFont);
+  setFont(g_aboutDocsLabel,    g_aboutBodyFont);
+  setFont(g_aboutDocsLink,     g_aboutBodyFont);
+  setFont(g_aboutSupportGroup, g_aboutBodyFont);
+  setFont(g_aboutSupportTitle, g_aboutSectionFont);
+  setFont(g_aboutSupportText,  g_aboutBodyFont);
+  setFont(g_aboutDonateButton, g_aboutBodyFont);
+  setFont(g_aboutBottomNote,   g_aboutSectionFont);
 }
 
 static void LogLine(const std::wstring &line) {
@@ -1357,6 +1478,7 @@ static void OnClearLogs();
 static std::wstring GetListViewText(HWND list, int row, int subItem);
 static bool CopyTextToClipboard(HWND owner, const std::wstring &text);
 static void ShowLogsContextMenu(HWND hWnd, int x, int y);
+
 static void AutoExpandLogsMessageColumn(const std::wstring &message);
 
 static std::wstring GetListViewText(HWND list, int row, int subItem) {
@@ -1918,7 +2040,18 @@ static void StartAsyncUpdateCheck(bool silent) {
 }
 
 static void OnSettingsControlClicked(int controlId) {
-  const HWND ctrl = reinterpret_cast<HWND>(GetDlgItem(g_mainWindow, controlId));
+  // Controls live in the tab child window — use global HWNDs directly.
+  HWND ctrl = nullptr;
+  switch (controlId) {
+  case kControlIdRunOnStartup:           ctrl = g_chkRunOnStartup; break;
+  case kControlIdAutoCheckUpdates:       ctrl = g_chkAutoUpdate; break;
+  case kControlIdEnableLogging:          ctrl = g_chkEnableLogging; break;
+  case kControlIdEnableDebugging:        ctrl = g_chkEnableDebugging; break;
+  case kControlIdSaveLogToFile:          ctrl = g_chkSaveLogToFile; break;
+  case kControlIdUseHardwareAcceleration: ctrl = g_chkUseHardwareAcceleration; break;
+  default: break;
+  }
+  if (!ctrl) return;
   const bool checked = (SendMessageW(ctrl, BM_GETCHECK, 0, 0) == BST_CHECKED);
   switch (controlId) {
   case kControlIdRunOnStartup:
@@ -1976,174 +2109,6 @@ static void ConfigureAutoUpdateTimer(HWND hWnd) {
   }
 }
 
-static void LayoutTabPages(const RECT &pageRect) {
-  const int pageWidth = pageRect.right - pageRect.left;
-  const int pageHeight = pageRect.bottom - pageRect.top;
-
-  if (g_list) {
-    MoveWindow(g_list, pageRect.left, pageRect.top, pageWidth, pageHeight,
-               TRUE);
-  }
-  if (g_logsList) {
-    MoveWindow(g_logsList, pageRect.left, pageRect.top, pageWidth, pageHeight,
-               TRUE);
-  }
-  if (g_addonsList) {
-    MoveWindow(g_addonsList, pageRect.left, pageRect.top, pageWidth, pageHeight,
-               TRUE);
-  }
-  if (g_settingsPanel) {
-    MoveWindow(g_settingsPanel, pageRect.left, pageRect.top, pageWidth,
-               pageHeight, TRUE);
-  }
-  if (g_aboutPanel) {
-    MoveWindow(g_aboutPanel, pageRect.left, pageRect.top, pageWidth, pageHeight,
-               TRUE);
-  }
-  const int settingsLeft = pageRect.left + 16;
-  const int settingsWidth = pageWidth - 32;
-  if (g_settingsTitle)
-    MoveWindow(g_settingsTitle, settingsLeft, pageRect.top + 12, settingsWidth,
-               24, TRUE);
-  if (g_chkRunOnStartup)
-    MoveWindow(g_chkRunOnStartup, settingsLeft, pageRect.top + 46,
-               settingsWidth, 24, TRUE);
-  if (g_btnCheckUpdates)
-    MoveWindow(g_btnCheckUpdates, settingsLeft, pageRect.top + 78, 170, 28,
-               TRUE);
-  if (g_chkAutoUpdate)
-    MoveWindow(g_chkAutoUpdate, settingsLeft + 186, pageRect.top + 80,
-               settingsWidth - 186, 24, TRUE);
-  if (g_chkEnableLogging)
-    MoveWindow(g_chkEnableLogging, settingsLeft, pageRect.top + 118,
-               settingsWidth, 24, TRUE);
-  if (g_chkEnableDebugging)
-    MoveWindow(g_chkEnableDebugging, settingsLeft, pageRect.top + 148,
-               settingsWidth, 24, TRUE);
-  if (g_chkSaveLogToFile)
-    MoveWindow(g_chkSaveLogToFile, settingsLeft, pageRect.top + 178,
-               settingsWidth, 24, TRUE);
-  if (g_chkUseHardwareAcceleration)
-    MoveWindow(g_chkUseHardwareAcceleration, settingsLeft, pageRect.top + 208,
-               settingsWidth, 24, TRUE);
-  if (g_lblWindowsTheme)
-    MoveWindow(g_lblWindowsTheme, settingsLeft, pageRect.top + 244, 110, 20, TRUE);
-  if (g_cboWindowsTheme)
-    MoveWindow(g_cboWindowsTheme, settingsLeft + 114, pageRect.top + 240, 160, 120, TRUE);
-
-  const int margin = 14;
-  const int logoTop = pageRect.top + margin;
-  const int logoColLeft = pageRect.left + margin;
-  const int logoColWidth = 150;
-  const int logoSize = 92;
-  const int logoLeft = logoColLeft + (logoColWidth - logoSize) / 2;
-  const int infoLeft = logoColLeft + logoColWidth + 10;
-  const int infoWidth = pageRect.right - infoLeft - margin;
-
-  if (g_aboutLogo)
-    MoveWindow(g_aboutLogo, logoLeft, logoTop, logoSize, logoSize, TRUE);
-  if (g_aboutAppName)
-    MoveWindow(g_aboutAppName, infoLeft, logoTop, infoWidth, 34, TRUE);
-  if (g_aboutVersion)
-    MoveWindow(g_aboutVersion, infoLeft, logoTop + 36, infoWidth, 24, TRUE);
-  if (g_aboutCopyright)
-    MoveWindow(g_aboutCopyright, infoLeft, logoTop + 62, infoWidth, 24, TRUE);
-  if (g_aboutDivider)
-    MoveWindow(g_aboutDivider, infoLeft, logoTop + 88, infoWidth, 2, TRUE);
-  if (g_aboutHomeLabel)
-    MoveWindow(g_aboutHomeLabel, infoLeft, logoTop + 102, 64, 24, TRUE);
-  if (g_aboutHomeLink)
-    MoveWindow(g_aboutHomeLink, infoLeft + 66, logoTop + 102, infoWidth - 66,
-               24, TRUE);
-  if (g_aboutDocsLabel)
-    MoveWindow(g_aboutDocsLabel, infoLeft, logoTop + 128, 64, 24, TRUE);
-  if (g_aboutDocsLink)
-    MoveWindow(g_aboutDocsLink, infoLeft + 66, logoTop + 128, infoWidth - 66,
-               24, TRUE);
-
-  const int supportTop = logoTop + 162;
-  const int supportHeight = 126;
-  const int supportLeft = pageRect.left + margin;
-  const int supportWidth = pageWidth - (margin * 2);
-  const int supportButtonWidth = 230;
-  const int supportButtonHeight = 34;
-  const int supportContentLeft = supportLeft + 16;
-  const int supportButtonLeft =
-      supportLeft + supportWidth - supportButtonWidth - 16;
-  const int supportTextWidth = supportButtonLeft - supportContentLeft - 16;
-  if (g_aboutSupportGroup)
-    MoveWindow(g_aboutSupportGroup, supportLeft, supportTop, supportWidth,
-               supportHeight, TRUE);
-  if (g_aboutSupportTitle)
-    MoveWindow(g_aboutSupportTitle, supportContentLeft, supportTop + 20,
-               supportTextWidth, 28, TRUE);
-  if (g_aboutSupportText)
-    MoveWindow(g_aboutSupportText, supportContentLeft, supportTop + 52,
-               supportTextWidth, 62, TRUE);
-  if (g_aboutDonateButton)
-    MoveWindow(g_aboutDonateButton, supportButtonLeft, supportTop + 48,
-               supportButtonWidth, supportButtonHeight, TRUE);
-
-  if (g_aboutBottomNote)
-    MoveWindow(g_aboutBottomNote, pageRect.left + 150,
-               supportTop + supportHeight + 8, pageWidth - 300, 24, TRUE);
-}
-
-static void ApplyTabState() {
-  const bool widgetsTab = (g_activeTab == 0);
-  const bool logsTab = (g_activeTab == 1);
-  const bool addonsTab = (g_activeTab == 2);
-  const bool settingsTab = (g_activeTab == 3);
-  const bool aboutTab = (g_activeTab == 4);
-
-  ShowWindow(g_list, widgetsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_logsList, logsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_addonsList, addonsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_settingsPanel, settingsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutPanel, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_settingsTitle, settingsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_chkRunOnStartup, settingsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_btnCheckUpdates, settingsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_chkAutoUpdate, settingsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_chkEnableLogging, settingsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_chkEnableDebugging, settingsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_chkSaveLogToFile, settingsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_chkUseHardwareAcceleration, settingsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_lblWindowsTheme, settingsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_cboWindowsTheme, settingsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutLogo, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutAppName, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutVersion, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutCopyright, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutDivider, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutHomeLabel, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutHomeLink, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutDocsLabel, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutDocsLink, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutSupportGroup, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutSupportTitle, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutSupportText, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutDonateButton, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_aboutBottomNote, aboutTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_btnRefreshList, widgetsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_btnClearLogs, logsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_btnLoad, widgetsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_btnRefresh, widgetsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_btnRefreshAll, widgetsTab ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_btnClose, SW_SHOW);
-
-  if (logsTab) {
-    RefreshLogsView();
-  }
-  if (addonsTab) {
-    RefreshAddonsView();
-  }
-  if (settingsTab) {
-    RefreshSettingsControls();
-  }
-  UpdateButtonState();
-}
-
 static void OnToggleLoadSelected() {
   int idx = GetSelectedIndex();
   if (idx < 0 || idx >= static_cast<int>(g_widgets.size())) {
@@ -2193,354 +2158,586 @@ static void OnRefreshAll() {
   RefreshListView(targetScript);
 }
 
-static void ApplyThemeToManageWindow(HWND hWnd) {
-  if (!hWnd) return;
+class DialogManage;
+static void ApplyThemeToManageWindow(HWND hWnd);
 
-  WindowsTheme::Refresh();
-  g_isDarkMode = WindowsTheme::IsUsingDarkMode();
+// ============================================================================
+// DialogManage - Rainmeter-style Dialog Architecture
+// ============================================================================
 
-  WindowsTheme::ApplyToWindow(hWnd);
+class DialogManage : public Dialog {
+public:
+  class TabWidgets : public Dialog::Tab {
+  public:
+    TabWidgets() = default;
+    virtual ~TabWidgets() override = default;
 
-  if (g_hbrWindowBg) { DeleteObject(g_hbrWindowBg); g_hbrWindowBg = nullptr; }
-  if (g_hbrControlBg) { DeleteObject(g_hbrControlBg); g_hbrControlBg = nullptr; }
-  if (g_isDarkMode) {
-    g_hbrWindowBg = CreateSolidBrush(RGB(32, 32, 32));
-    g_hbrControlBg = CreateSolidBrush(RGB(56, 56, 56));
+    virtual void Create(HWND owner) override {
+      RECT tabRectOnParent{};
+      GetClientRect(DialogManage::Get()->m_TabControl, &tabRectOnParent);
+      TabCtrl_AdjustRect(DialogManage::Get()->m_TabControl, FALSE, &tabRectOnParent);
+      MapWindowPoints(DialogManage::Get()->m_TabControl, owner, reinterpret_cast<LPPOINT>(&tabRectOnParent), 2);
+      CreateTabWindowPixel(tabRectOnParent, owner);
+    }
+
+    virtual void Initialize() override {
+      m_Initialized = true;
+      RECT rc{};
+      GetClientRect(m_Window, &rc);
+      g_list = CreateWindowExW(
+          0, WC_LISTVIEWW, L"",
+          WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_CLIPSIBLINGS,
+          0, 0, rc.right, rc.bottom, m_Window, nullptr,
+          GetModuleHandleW(nullptr), nullptr);
+      ListView_SetExtendedListViewStyle(g_list, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+      LVCOLUMNW col{};
+      col.mask = LVCF_TEXT | LVCF_WIDTH;
+      col.pszText = const_cast<wchar_t *>(L"Widget");
+      col.cx = 160;
+      ListView_InsertColumn(g_list, 0, &col);
+      col.pszText = const_cast<wchar_t *>(L"Script Path");
+      col.cx = 360;
+      ListView_InsertColumn(g_list, 1, &col);
+      col.pszText = const_cast<wchar_t *>(L"Status");
+      col.cx = 120;
+      ListView_InsertColumn(g_list, 2, &col);
+
+      if (g_buttonFont) {
+        SendMessageW(g_list, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+      }
+      RefreshListView();
+      UpdateButtonState();
+    }
+
+    virtual INT_PTR HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override {
+      if (uMsg == WM_NOTIFY) {
+        LPNMHDR hdr = reinterpret_cast<LPNMHDR>(lParam);
+        if (hdr && hdr->hwndFrom == g_list) {
+          if (hdr->code == LVN_ITEMCHANGED) {
+            UpdateButtonState();
+            return TRUE;
+          } else if (hdr->code == NM_DBLCLK) {
+            OnToggleLoadSelected();
+            return TRUE;
+          }
+        }
+      }
+      return FALSE;
+    }
+
+    virtual void Relayout(int w, int h) override {
+      if (g_list) {
+        MoveWindow(g_list, 0, 0, w, h, TRUE);
+      }
+    }
+  };
+
+  class TabLogs : public Dialog::Tab {
+  public:
+    TabLogs() = default;
+    virtual ~TabLogs() override = default;
+
+    virtual void Create(HWND owner) override {
+      RECT tabRectOnParent{};
+      GetClientRect(DialogManage::Get()->m_TabControl, &tabRectOnParent);
+      TabCtrl_AdjustRect(DialogManage::Get()->m_TabControl, FALSE, &tabRectOnParent);
+      MapWindowPoints(DialogManage::Get()->m_TabControl, owner, reinterpret_cast<LPPOINT>(&tabRectOnParent), 2);
+      CreateTabWindowPixel(tabRectOnParent, owner);
+    }
+
+    virtual void Initialize() override {
+      m_Initialized = true;
+      RECT rc{};
+      GetClientRect(m_Window, &rc);
+      g_logsList = CreateWindowExW(
+          0, WC_LISTVIEWW, L"",
+          WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_HSCROLL | WS_CLIPSIBLINGS,
+          0, 0, rc.right, rc.bottom, m_Window, nullptr,
+          GetModuleHandleW(nullptr), nullptr);
+      ListView_SetExtendedListViewStyle(g_logsList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+      LVCOLUMNW lcol{};
+      lcol.mask = LVCF_TEXT | LVCF_WIDTH;
+      lcol.pszText = const_cast<wchar_t *>(L"Time");
+      lcol.cx = 190;
+      ListView_InsertColumn(g_logsList, 0, &lcol);
+      lcol.pszText = const_cast<wchar_t *>(L"Source");
+      lcol.cx = 120;
+      ListView_InsertColumn(g_logsList, 1, &lcol);
+      lcol.pszText = const_cast<wchar_t *>(L"Level");
+      lcol.cx = 80;
+      ListView_InsertColumn(g_logsList, 2, &lcol);
+      lcol.pszText = const_cast<wchar_t *>(L"Message");
+      lcol.cx = g_logsMessageColumnWidth;
+      ListView_InsertColumn(g_logsList, 3, &lcol);
+
+      if (g_buttonFont) {
+        SendMessageW(g_logsList, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+      }
+      RefreshLogsView();
+    }
+
+    virtual INT_PTR HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override {
+      if (uMsg == WM_CONTEXTMENU) {
+        if (reinterpret_cast<HWND>(wParam) == g_logsList) {
+          ShowLogsContextMenu(m_Window, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+          return TRUE;
+        }
+      }
+      return FALSE;
+    }
+
+    virtual void Relayout(int w, int h) override {
+      if (g_logsList) {
+        MoveWindow(g_logsList, 0, 0, w, h, TRUE);
+      }
+    }
+  };
+
+  class TabAddons : public Dialog::Tab {
+  public:
+    TabAddons() = default;
+    virtual ~TabAddons() override = default;
+
+    virtual void Create(HWND owner) override {
+      RECT tabRectOnParent{};
+      GetClientRect(DialogManage::Get()->m_TabControl, &tabRectOnParent);
+      TabCtrl_AdjustRect(DialogManage::Get()->m_TabControl, FALSE, &tabRectOnParent);
+      MapWindowPoints(DialogManage::Get()->m_TabControl, owner, reinterpret_cast<LPPOINT>(&tabRectOnParent), 2);
+      CreateTabWindowPixel(tabRectOnParent, owner);
+    }
+
+    virtual void Initialize() override {
+      m_Initialized = true;
+      RECT rc{};
+      GetClientRect(m_Window, &rc);
+      g_addonsList = CreateWindowExW(
+          0, WC_LISTVIEWW, L"",
+          WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_CLIPSIBLINGS,
+          0, 0, rc.right, rc.bottom, m_Window, nullptr,
+          GetModuleHandleW(nullptr), nullptr);
+      ListView_SetExtendedListViewStyle(g_addonsList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+      LVCOLUMNW acol{};
+      acol.mask = LVCF_TEXT | LVCF_WIDTH;
+      acol.pszText = const_cast<wchar_t *>(L"Addon Name");
+      acol.cx = 190;
+      ListView_InsertColumn(g_addonsList, 0, &acol);
+      acol.pszText = const_cast<wchar_t *>(L"Author");
+      acol.cx = 180;
+      ListView_InsertColumn(g_addonsList, 1, &acol);
+      acol.pszText = const_cast<wchar_t *>(L"Version");
+      acol.cx = 120;
+      ListView_InsertColumn(g_addonsList, 2, &acol);
+      acol.pszText = const_cast<wchar_t *>(L"Copyright");
+      acol.cx = 420;
+      ListView_InsertColumn(g_addonsList, 3, &acol);
+
+      if (g_buttonFont) {
+        SendMessageW(g_addonsList, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+      }
+      RefreshAddonsView();
+    }
+
+    virtual void Relayout(int w, int h) override {
+      if (g_addonsList) {
+        MoveWindow(g_addonsList, 0, 0, w, h, TRUE);
+      }
+    }
+  };
+
+  class TabSettings : public Dialog::Tab {
+  public:
+    TabSettings() = default;
+    virtual ~TabSettings() override = default;
+
+    virtual void Create(HWND owner) override {
+      RECT tabRectOnParent{};
+      GetClientRect(DialogManage::Get()->m_TabControl, &tabRectOnParent);
+      TabCtrl_AdjustRect(DialogManage::Get()->m_TabControl, FALSE, &tabRectOnParent);
+      MapWindowPoints(DialogManage::Get()->m_TabControl, owner, reinterpret_cast<LPPOINT>(&tabRectOnParent), 2);
+      CreateTabWindowPixel(tabRectOnParent, owner);
+    }
+
+    virtual void Initialize() override {
+      m_Initialized = true;
+      RECT rc{};
+      GetClientRect(m_Window, &rc);
+      const int w = rc.right;
+
+      g_settingsTitle = CreateWindowExW(0, L"STATIC", L"Manage Settings",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
+          16, 12, w - 32, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_chkRunOnStartup = CreateWindowExW(0, L"BUTTON", L"Run On Startup",
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
+          16, 46, 240, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRunOnStartup)),
+          GetModuleHandleW(nullptr), nullptr);
+      g_btnCheckUpdates = CreateWindowExW(0, L"BUTTON", L"Check for Update",
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON | WS_CLIPSIBLINGS,
+          16, 78, 170, 28, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdCheckUpdates)),
+          GetModuleHandleW(nullptr), nullptr);
+      g_chkAutoUpdate = CreateWindowExW(0, L"BUTTON", L"Automatically Check For the Update",
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
+          202, 80, w - 218, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAutoCheckUpdates)),
+          GetModuleHandleW(nullptr), nullptr);
+      g_chkEnableLogging = CreateWindowExW(0, L"BUTTON", L"Enable Logging",
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
+          16, 118, 220, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdEnableLogging)),
+          GetModuleHandleW(nullptr), nullptr);
+      g_chkEnableDebugging = CreateWindowExW(0, L"BUTTON", L"Enable Debugging",
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
+          16, 148, 220, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdEnableDebugging)),
+          GetModuleHandleW(nullptr), nullptr);
+      g_chkSaveLogToFile = CreateWindowExW(0, L"BUTTON", L"Save Logs to File",
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
+          16, 178, 260, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdSaveLogToFile)),
+          GetModuleHandleW(nullptr), nullptr);
+      g_chkUseHardwareAcceleration = CreateWindowExW(0, L"BUTTON", L"Use Hardware Acceleration",
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
+          16, 208, 300, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdUseHardwareAcceleration)),
+          GetModuleHandleW(nullptr), nullptr);
+      g_lblWindowsTheme = CreateWindowExW(0, L"STATIC", L"Window Theme:",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
+          16, 244, 110, 20, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_cboWindowsTheme = CreateWindowExW(0, L"COMBOBOX", nullptr,
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_CLIPSIBLINGS,
+          130, 240, 160, 120, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdWindowsTheme)),
+          GetModuleHandleW(nullptr), nullptr);
+      SendMessageW(g_cboWindowsTheme, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"System (Default)"));
+      SendMessageW(g_cboWindowsTheme, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Dark"));
+      SendMessageW(g_cboWindowsTheme, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Light"));
+
+      if (g_buttonFont) {
+        SendMessageW(g_settingsTitle, WM_SETFONT, (WPARAM)g_aboutSectionFont, TRUE);
+        SendMessageW(g_chkRunOnStartup, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_btnCheckUpdates, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_chkAutoUpdate, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_chkEnableLogging, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_chkEnableDebugging, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_chkSaveLogToFile, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_chkUseHardwareAcceleration, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_lblWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_cboWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+      }
+      RefreshSettingsControls();
+    }
+
+    virtual INT_PTR HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override {
+      if (uMsg == WM_COMMAND) {
+        switch (LOWORD(wParam)) {
+        case kControlIdRunOnStartup:
+        case kControlIdAutoCheckUpdates:
+        case kControlIdEnableLogging:
+        case kControlIdEnableDebugging:
+        case kControlIdSaveLogToFile:
+        case kControlIdUseHardwareAcceleration:
+          if (HIWORD(wParam) == BN_CLICKED) {
+            OnSettingsControlClicked(LOWORD(wParam));
+            return TRUE;
+          }
+          break;
+        case kControlIdCheckUpdates:
+          StartAsyncUpdateCheck(false);
+          return TRUE;
+        case kControlIdWindowsTheme:
+          if (HIWORD(wParam) == CBN_SELCHANGE && g_cboWindowsTheme) {
+            const int idx = (int)SendMessageW(g_cboWindowsTheme, CB_GETCURSEL, 0, 0);
+            const char *themes[] = {"system", "dark", "light"};
+            if (idx >= 0 && idx < 3) {
+              SetNovadeskSettingString("windowsTheme", themes[idx]);
+              ApplyThemeToManageWindow(g_mainWindow);
+              SendNotifyMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
+                                reinterpret_cast<LPARAM>(L"ImmersiveColorSet"));
+            }
+            return TRUE;
+          }
+          break;
+        }
+      }
+      return FALSE;
+    }
+
+    virtual void Relayout(int w, int h) override {
+      const int L = 20;              // left margin
+      const int sw = w - L - 20;    // control width to right margin
+      const int ch = 26;            // standard control height
+      const int bh = 30;            // button height
+      if (g_settingsTitle)              MoveWindow(g_settingsTitle,              L,       16,  sw,           20,  TRUE);
+      if (g_chkRunOnStartup)            MoveWindow(g_chkRunOnStartup,            L,       50,  sw,           ch,  TRUE);
+      if (g_btnCheckUpdates)            MoveWindow(g_btnCheckUpdates,            L,       86,  200,          bh,  TRUE);
+      if (g_chkAutoUpdate)              MoveWindow(g_chkAutoUpdate,              L + 216, 90,  sw - 216,     ch,  TRUE);
+      if (g_chkEnableLogging)           MoveWindow(g_chkEnableLogging,           L,       134, sw,           ch,  TRUE);
+      if (g_chkEnableDebugging)         MoveWindow(g_chkEnableDebugging,         L,       168, sw,           ch,  TRUE);
+      if (g_chkSaveLogToFile)           MoveWindow(g_chkSaveLogToFile,           L,       202, sw,           ch,  TRUE);
+      if (g_chkUseHardwareAcceleration) MoveWindow(g_chkUseHardwareAcceleration, L,       236, sw,           ch,  TRUE);
+      if (g_lblWindowsTheme)            MoveWindow(g_lblWindowsTheme,            L,       278, 120,          20,  TRUE);
+      if (g_cboWindowsTheme)            MoveWindow(g_cboWindowsTheme,            L + 130, 274, 180,          120, TRUE);
+    }
+  };
+
+  class TabAbout : public Dialog::Tab {
+  public:
+    TabAbout() = default;
+    virtual ~TabAbout() override = default;
+
+    virtual void Create(HWND owner) override {
+      RECT tabRectOnParent{};
+      GetClientRect(DialogManage::Get()->m_TabControl, &tabRectOnParent);
+      TabCtrl_AdjustRect(DialogManage::Get()->m_TabControl, FALSE, &tabRectOnParent);
+      MapWindowPoints(DialogManage::Get()->m_TabControl, owner, reinterpret_cast<LPPOINT>(&tabRectOnParent), 2);
+      CreateTabWindowPixel(tabRectOnParent, owner);
+    }
+
+    virtual void Initialize() override {
+      m_Initialized = true;
+      RECT rc{};
+      GetClientRect(m_Window, &rc);
+      const int w = rc.right;
+
+      const int margin = 14;
+      const int logoColLeft = margin;
+      const int logoColWidth = 150;
+      const int logoSize = 92;
+      const int logoLeft = logoColLeft + (logoColWidth - logoSize) / 2;
+      const int infoLeft = logoColLeft + logoColWidth + 10;
+      const int infoWidth = w - infoLeft - margin;
+
+      g_aboutLogo = CreateWindowExW(0, L"STATIC", L"",
+          WS_CHILD | WS_VISIBLE | SS_BITMAP | SS_CENTERIMAGE | WS_CLIPSIBLINGS,
+          logoLeft, margin, logoSize, logoSize, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutAppName = CreateWindowExW(0, L"STATIC", L"Novadesk",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
+          infoLeft, margin, infoWidth, 34, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutVersion = CreateWindowExW(0, L"STATIC", L"Version 0.9.13.0 (Beta)",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
+          infoLeft, margin + 36, infoWidth, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutCopyright = CreateWindowExW(0, L"STATIC", L"(c) 2026 OfficialNovadesk. All rights reserved.",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
+          infoLeft, margin + 62, infoWidth, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutDivider = CreateWindowExW(0, L"STATIC", L"",
+          WS_CHILD | WS_VISIBLE | SS_ETCHEDHORZ | WS_CLIPSIBLINGS,
+          infoLeft, margin + 88, infoWidth, 2, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutHomeLabel = CreateWindowExW(0, L"STATIC", L"Home:",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
+          infoLeft, margin + 102, 64, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutHomeLink = CreateWindowExW(0, WC_LINK,
+          L"<a href=\"https://novadesk.pages.dev/\">https://novadesk.pages.dev/</a>",
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_CLIPSIBLINGS,
+          infoLeft + 66, margin + 102, infoWidth - 66, 24, m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAboutHome)), GetModuleHandleW(nullptr), nullptr);
+      g_aboutDocsLabel = CreateWindowExW(0, L"STATIC", L"Docs:",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
+          infoLeft, margin + 128, 64, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutDocsLink = CreateWindowExW(0, WC_LINK,
+          L"<a href=\"https://novadesk-docs.pages.dev/\">https://novadesk-docs.pages.dev/</a>",
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_CLIPSIBLINGS,
+          infoLeft + 66, margin + 128, infoWidth - 66, 24, m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAboutDocs)), GetModuleHandleW(nullptr), nullptr);
+
+      const int supportTop = margin + 162;
+      const int supportHeight = 126;
+      const int supportLeft = margin;
+      const int supportWidth = w - (margin * 2);
+      const int supportButtonWidth = 230;
+      const int supportButtonHeight = 34;
+      const int supportContentLeft = supportLeft + 16;
+      const int supportButtonLeft = supportLeft + supportWidth - supportButtonWidth - 16;
+      const int supportTextWidth = supportButtonLeft - supportContentLeft - 16;
+
+      // Create framed content before the group box, then push the group box to
+      // the bottom of the z-order so WS_CLIPSIBLINGS cannot clip them away.
+      g_aboutSupportTitle = CreateWindowExW(0, L"STATIC", L"Support && Contribution",
+          WS_CHILD | WS_VISIBLE | SS_LEFT,
+          supportContentLeft, supportTop + 20, supportTextWidth, 28, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutSupportText = CreateWindowExW(0, L"STATIC",
+          L"We appreciate your support. If you find Novadesk helpful,\r\nconsider contributing to its ongoing development.",
+          WS_CHILD | WS_VISIBLE | SS_LEFT,
+          supportContentLeft, supportTop + 52, supportTextWidth, 62, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutDonateButton = CreateWindowExW(0, L"BUTTON", L"Support Project via Donation",
+          WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
+          supportButtonLeft, supportTop + 48, supportButtonWidth, supportButtonHeight, m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAboutDonate)), GetModuleHandleW(nullptr), nullptr);
+      g_aboutSupportGroup = CreateWindowExW(0, L"BUTTON", L"Support Section",
+          WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+          supportLeft, supportTop, supportWidth, supportHeight, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutBottomNote = CreateWindowExW(0, L"STATIC", L"Development depends on user support.",
+          WS_CHILD | WS_VISIBLE | SS_CENTER | WS_CLIPSIBLINGS,
+          150, supportTop + supportHeight + 8, w - 300, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      EnsureAboutSupportZOrder();
+
+      if (g_buttonFont) {
+        SendMessageW(g_aboutAppName, WM_SETFONT, (WPARAM)g_aboutTitleFont, TRUE);
+        SendMessageW(g_aboutVersion, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+        SendMessageW(g_aboutCopyright, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+        SendMessageW(g_aboutHomeLabel, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+        SendMessageW(g_aboutHomeLink, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+        SendMessageW(g_aboutDocsLabel, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+        SendMessageW(g_aboutDocsLink, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+        SendMessageW(g_aboutSupportGroup, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+        SendMessageW(g_aboutSupportTitle, WM_SETFONT, (WPARAM)g_aboutSectionFont, TRUE);
+        SendMessageW(g_aboutSupportText, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+        SendMessageW(g_aboutDonateButton, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+        SendMessageW(g_aboutBottomNote, WM_SETFONT, (WPARAM)g_aboutSectionFont, TRUE);
+      }
+      UpdateAboutLogo();
+    }
+
+    virtual void OnInitialized() override {
+      RECT rc{};
+      GetClientRect(m_Window, &rc);
+      Relayout(rc.right - rc.left, rc.bottom - rc.top);
+      EnsureAboutSupportZOrder();
+    }
+
+    virtual INT_PTR HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override {
+      if (uMsg == WM_NOTIFY) {
+        auto *hdr = reinterpret_cast<LPNMHDR>(lParam);
+        if (hdr && (hdr->hwndFrom == g_aboutHomeLink || hdr->hwndFrom == g_aboutDocsLink) &&
+            (hdr->code == NM_CLICK || hdr->code == NM_RETURN)) {
+          auto *link = reinterpret_cast<PNMLINK>(lParam);
+          if (link) {
+            OpenUrl(link->item.szUrl);
+            return TRUE;
+          }
+        }
+      } else if (uMsg == WM_COMMAND && LOWORD(wParam) == kControlIdAboutDonate) {
+        OpenUrl(L"https://www.patreon.com/cw/officialnovadesk");
+        return TRUE;
+      }
+      return FALSE;
+    }
+
+    virtual void Relayout(int w, int h) override {
+      const int margin = 16;
+      const int logoColWidth = 180;
+      const int logoSize = 110;
+      const int logoLeft = margin + (logoColWidth - logoSize) / 2;
+      const int infoLeft = margin + logoColWidth + 12;
+      const int infoWidth = w - infoLeft - margin;
+
+      if (g_aboutLogo)      MoveWindow(g_aboutLogo,      logoLeft,           margin,            logoSize,          logoSize, TRUE);
+      if (g_aboutAppName)   MoveWindow(g_aboutAppName,   infoLeft,           margin,            infoWidth,         36,  TRUE);
+      if (g_aboutVersion)   MoveWindow(g_aboutVersion,   infoLeft,           margin + 40,       infoWidth,         22,  TRUE);
+      if (g_aboutCopyright) MoveWindow(g_aboutCopyright, infoLeft,           margin + 66,       infoWidth,         22,  TRUE);
+      if (g_aboutDivider)   MoveWindow(g_aboutDivider,   infoLeft,           margin + 94,       infoWidth,         2,   TRUE);
+      if (g_aboutHomeLabel) MoveWindow(g_aboutHomeLabel, infoLeft,           margin + 106,      70,                22,  TRUE);
+      if (g_aboutHomeLink)  MoveWindow(g_aboutHomeLink,  infoLeft + 74,      margin + 106,      infoWidth - 74,    22,  TRUE);
+      if (g_aboutDocsLabel) MoveWindow(g_aboutDocsLabel, infoLeft,           margin + 134,      70,                22,  TRUE);
+      if (g_aboutDocsLink)  MoveWindow(g_aboutDocsLink,  infoLeft + 74,      margin + 134,      infoWidth - 74,    22,  TRUE);
+
+      const int supportTop         = margin + 180;
+      const int supportHeight      = 150;
+      const int supportLeft        = margin;
+      const int supportWidth       = w - (margin * 2);
+      const int supportButtonWidth = 260;
+      const int supportButtonHeight= 36;
+      const int supportContentLeft = supportLeft + 18;
+      const int supportButtonLeft  = supportLeft + supportWidth - supportButtonWidth - 18;
+      const int supportTextWidth   = supportButtonLeft - supportContentLeft - 16;
+
+      if (g_aboutSupportGroup)  MoveWindow(g_aboutSupportGroup,  supportLeft,         supportTop,              supportWidth,        supportHeight,        TRUE);
+      if (g_aboutSupportTitle)  MoveWindow(g_aboutSupportTitle,  supportContentLeft,  supportTop + 24,         supportTextWidth,    28,                   TRUE);
+      if (g_aboutSupportText)   MoveWindow(g_aboutSupportText,   supportContentLeft,  supportTop + 58,         supportTextWidth,    70,                   TRUE);
+      if (g_aboutDonateButton)  MoveWindow(g_aboutDonateButton,  supportButtonLeft,   supportTop + 56,         supportButtonWidth,  supportButtonHeight,  TRUE);
+      if (g_aboutBottomNote)    MoveWindow(g_aboutBottomNote,    margin,              supportTop + supportHeight + 10, w - margin*2, 22,                   TRUE);
+      EnsureAboutSupportZOrder();
+    }
+  };
+
+  DialogManage() : Dialog(),
+    m_TabWidgets(), m_TabLogs(), m_TabAddons(), m_TabSettings(), m_TabAbout() {
+    s_instance = this;
   }
 
-  WindowsTheme::ApplyToDialog(hWnd);
-
-
-
-
-
-  RedrawWindow(hWnd, nullptr, nullptr,
-               RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
-}
-
-static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
-                                LPARAM lParam) {
-  if (g_manageCloseMessage != 0 && message == g_manageCloseMessage) {
-    RequestAppExit(hWnd);
-    return 0;
+  virtual ~DialogManage() override {
+    s_instance = nullptr;
   }
 
-  switch (message) {
-  case WM_CREATE: {
-    LogLine(L"[Manage] Window created.");
-    g_mainWindow = hWnd;
-    g_pendingLogLine.clear();
-    SendMessageW(hWnd, WM_SETICON, ICON_BIG,
-                 reinterpret_cast<LPARAM>(g_windowIconLarge));
-    SendMessageW(hWnd, WM_SETICON, ICON_SMALL,
-                 reinterpret_cast<LPARAM>(g_windowIconSmall));
-    RECT rc{};
-    GetClientRect(hWnd, &rc);
+  static DialogManage* Get() { return s_instance; }
 
-    WindowsTheme::SetSettingsHandlers(
-        []() { return GetNovadeskSettingString("windowsTheme", "system"); },
-        [](const std::string &v) { SetNovadeskSettingString("windowsTheme", v); });
-    WindowsTheme::Initialize();
+  static void Open(int tab = 0) {
+    if (!s_instance) {
+      DialogManage* dlg = new DialogManage();
+      dlg->ShowDialogWindow(
+          L"Manage Novadesk",
+          0, 0, 600, 373,
+          DS_CENTER | WS_POPUP | WS_MINIMIZEBOX | WS_CAPTION | WS_SYSMENU,
+          WS_EX_APPWINDOW | WS_EX_CONTROLPARENT,
+          nullptr, true);
+    }
+    if (s_instance) {
+      s_instance->SelectTab(tab);
+    }
+  }
+
+  const std::vector<Tab*>& GetPages() const { return m_Pages; }
+
+  TabWidgets m_TabWidgets;
+  TabLogs m_TabLogs;
+  TabAddons m_TabAddons;
+  TabSettings m_TabSettings;
+  TabAbout m_TabAbout;
+
+  virtual void HandleInitDialog() override {
+    g_mainWindow = m_Window;
+
+    RECT wr{ 0, 0, kWindowWidth, kWindowHeight };
+    AdjustWindowRectEx(&wr, (DWORD)GetWindowLongPtrW(m_Window, GWL_STYLE), FALSE, (DWORD)GetWindowLongPtrW(m_Window, GWL_EXSTYLE));    const int winW = wr.right - wr.left;
+    const int winH = wr.bottom - wr.top;
+    RECT workArea{};
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0);
+    const int x = workArea.left + ((workArea.right - workArea.left) - winW) / 2;
+    const int y = workArea.top + ((workArea.bottom - workArea.top) - winH) / 2;
+    SetWindowPos(m_Window, nullptr, x, y, winW, winH, SWP_NOACTIVATE | SWP_NOZORDER);
+
+    SendMessageW(m_Window, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(g_windowIconLarge));
+    SendMessageW(m_Window, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(g_windowIconSmall));
+
     LoadManageSettings();
     StartNovadesk();
-    AddTrayIcon(hWnd);
+    AddTrayIcon(m_Window);
     InitGdiPlus();
 
-    g_buttonFont =
-        CreateFontW(-12, 0, 0, 0, FW_LIGHT, FALSE, FALSE, FALSE,
-                    DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                    CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
-    g_aboutTitleFont =
-        CreateFontW(-28, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                    OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                    DEFAULT_PITCH | FF_SWISS, L"Tahoma");
-    g_aboutSectionFont =
-        CreateFontW(-16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                    OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                    DEFAULT_PITCH | FF_SWISS, L"Tahoma");
-    g_aboutBodyFont =
-        CreateFontW(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                    DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                    CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Tahoma");
+    CreateManageFonts(GetDpiForWindow(m_Window));
+
+    RECT rc{};
+    GetClientRect(m_Window, &rc);
 
     g_tab = CreateWindowExW(
-        0, WC_TABCONTROLW, L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, 10, 10,
-        rc.right - 20, rc.bottom - 60, hWnd,
+        0, WC_TABCONTROLW, L"",
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_TABSTOP | TCS_FIXEDWIDTH,
+        12, 12, rc.right - 24, rc.bottom - 64, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdTabs)),
         GetModuleHandleW(nullptr), nullptr);
-    TCITEMW tabItem{};
-    tabItem.mask = TCIF_TEXT;
-    tabItem.pszText = const_cast<wchar_t *>(L"Widgets");
-    TabCtrl_InsertItem(g_tab, 0, &tabItem);
-    tabItem.pszText = const_cast<wchar_t *>(L"Logs");
-    TabCtrl_InsertItem(g_tab, 1, &tabItem);
-    tabItem.pszText = const_cast<wchar_t *>(L"Addons");
-    TabCtrl_InsertItem(g_tab, 2, &tabItem);
-    tabItem.pszText = const_cast<wchar_t *>(L"Settings");
-    TabCtrl_InsertItem(g_tab, 3, &tabItem);
-    tabItem.pszText = const_cast<wchar_t *>(L"About");
-    TabCtrl_InsertItem(g_tab, 4, &tabItem);
 
-    RECT tabRectOnParent{};
-    GetWindowRect(g_tab, &tabRectOnParent);
-    MapWindowPoints(HWND_DESKTOP, hWnd,
-                    reinterpret_cast<LPPOINT>(&tabRectOnParent), 2);
-    RECT pageRect{};
-    GetClientRect(g_tab, &pageRect);
-    TabCtrl_AdjustRect(g_tab, FALSE, &pageRect);
-    OffsetRect(&pageRect, tabRectOnParent.left, tabRectOnParent.top);
-
-    g_list = CreateWindowExW(0, WC_LISTVIEWW, L"",
-                             WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS,
-                             pageRect.left, pageRect.top,
-                             pageRect.right - pageRect.left,
-                             pageRect.bottom - pageRect.top, hWnd, nullptr,
-                             GetModuleHandleW(nullptr), nullptr);
-    g_logsList = CreateWindowExW(
-        WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
-        WS_CHILD | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_HSCROLL,
-        pageRect.left, pageRect.top, pageRect.right - pageRect.left,
-        pageRect.bottom - pageRect.top, hWnd, nullptr,
-        GetModuleHandleW(nullptr), nullptr);
-    g_addonsList = CreateWindowExW(
-        WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
-        WS_CHILD | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS,
-        pageRect.left, pageRect.top, pageRect.right - pageRect.left,
-        pageRect.bottom - pageRect.top, hWnd, nullptr,
-        GetModuleHandleW(nullptr), nullptr);
-    g_settingsPanel = CreateWindowExW(
-        0, L"STATIC", L"", WS_CHILD, pageRect.left, pageRect.top,
-        pageRect.right - pageRect.left, pageRect.bottom - pageRect.top, hWnd,
-        nullptr, GetModuleHandleW(nullptr), nullptr);
-    g_aboutPanel = CreateWindowExW(0, L"STATIC", L"", WS_CHILD, pageRect.left,
-                                   pageRect.top, pageRect.right - pageRect.left,
-                                   pageRect.bottom - pageRect.top, hWnd,
-                                   nullptr, GetModuleHandleW(nullptr), nullptr);
-    g_settingsTitle =
-        CreateWindowExW(0, L"STATIC", L"Manage Settings", WS_CHILD | SS_LEFT,
-                        pageRect.left + 16, pageRect.top + 12,
-                        pageRect.right - pageRect.left - 32, 24, hWnd, nullptr,
-                        GetModuleHandleW(nullptr), nullptr);
-    g_chkRunOnStartup = CreateWindowExW(
-        0, L"BUTTON", L"Run On Startup",
-        WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX, pageRect.left + 16,
-        pageRect.top + 46, 240, 24, hWnd,
-        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRunOnStartup)),
-        GetModuleHandleW(nullptr), nullptr);
-    g_btnCheckUpdates = CreateWindowExW(
-        0, L"BUTTON", L"Check for Update",
-        WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON, pageRect.left + 16,
-        pageRect.top + 78, 160, 28, hWnd,
-        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdCheckUpdates)),
-        GetModuleHandleW(nullptr), nullptr);
-    g_chkAutoUpdate =
-        CreateWindowExW(0, L"BUTTON", L"Automatically Check For the Update",
-                        WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
-                        pageRect.left + 190, pageRect.top + 80, 300, 24, hWnd,
-                        reinterpret_cast<HMENU>(
-                            static_cast<INT_PTR>(kControlIdAutoCheckUpdates)),
-                        GetModuleHandleW(nullptr), nullptr);
-    g_chkEnableLogging = CreateWindowExW(
-        0, L"BUTTON", L"Enable Logging",
-        WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX, pageRect.left + 16,
-        pageRect.top + 118, 220, 24, hWnd,
-        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdEnableLogging)),
-        GetModuleHandleW(nullptr), nullptr);
-    g_chkEnableDebugging =
-        CreateWindowExW(0, L"BUTTON", L"Enable Debugging",
-                        WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
-                        pageRect.left + 16, pageRect.top + 148, 220, 24, hWnd,
-                        reinterpret_cast<HMENU>(
-                            static_cast<INT_PTR>(kControlIdEnableDebugging)),
-                        GetModuleHandleW(nullptr), nullptr);
-    g_chkSaveLogToFile = CreateWindowExW(
-        0, L"BUTTON", L"Save Logs to File",
-        WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX, pageRect.left + 16,
-        pageRect.top + 178, 260, 24, hWnd,
-        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdSaveLogToFile)),
-        GetModuleHandleW(nullptr), nullptr);
-    g_chkUseHardwareAcceleration =
-        CreateWindowExW(0, L"BUTTON", L"Use Hardware Acceleration",
-                        WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
-                        pageRect.left + 16, pageRect.top + 208, 300, 24, hWnd,
-                        reinterpret_cast<HMENU>(static_cast<INT_PTR>(
-                            kControlIdUseHardwareAcceleration)),
-                        GetModuleHandleW(nullptr), nullptr);
-    g_lblWindowsTheme = CreateWindowExW(
-        0, L"STATIC", L"Window Theme:", WS_CHILD | SS_LEFT,
-        pageRect.left + 16, pageRect.top + 242, 110, 20, hWnd, nullptr,
-        GetModuleHandleW(nullptr), nullptr);
-    g_cboWindowsTheme = CreateWindowExW(
-        0, L"COMBOBOX", nullptr,
-        WS_CHILD | WS_TABSTOP | CBS_DROPDOWNLIST | CBS_HASSTRINGS,
-        pageRect.left + 130, pageRect.top + 238, 150, 120, hWnd,
-        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdWindowsTheme)),
-        GetModuleHandleW(nullptr), nullptr);
-    SendMessageW(g_cboWindowsTheme, CB_ADDSTRING, 0,
-                 reinterpret_cast<LPARAM>(L"System (Default)"));
-    SendMessageW(g_cboWindowsTheme, CB_ADDSTRING, 0,
-                 reinterpret_cast<LPARAM>(L"Dark"));
-    SendMessageW(g_cboWindowsTheme, CB_ADDSTRING, 0,
-                 reinterpret_cast<LPARAM>(L"Light"));
-    g_aboutLogo = CreateWindowExW(0, L"STATIC", L"",
-                                  WS_CHILD | SS_BITMAP | SS_CENTERIMAGE,
-                                  pageRect.left, pageRect.top, 90, 90, hWnd,
-                                  nullptr, GetModuleHandleW(nullptr), nullptr);
-    g_aboutAppName = CreateWindowExW(
-        0, L"STATIC", L"Novadesk", WS_CHILD | SS_LEFT, pageRect.left + 120,
-        pageRect.top, pageRect.right - pageRect.left - 140, 32, hWnd, nullptr,
-        GetModuleHandleW(nullptr), nullptr);
-    g_aboutVersion =
-        CreateWindowExW(0, L"STATIC", L"Version 0.9.13.0 (Beta)",
-                        WS_CHILD | SS_LEFT, pageRect.left + 120,
-                        pageRect.top + 34, pageRect.right - pageRect.left - 140,
-                        22, hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
-    g_aboutCopyright = CreateWindowExW(
-        0, L"STATIC", L"(c) 2026 OfficialNovadesk. All rights reserved.",
-        WS_CHILD | SS_LEFT, pageRect.left + 120, pageRect.top + 58,
-        pageRect.right - pageRect.left - 140, 22, hWnd, nullptr,
-        GetModuleHandleW(nullptr), nullptr);
-    g_aboutDivider = CreateWindowExW(
-        0, L"STATIC", L"", WS_CHILD | SS_ETCHEDHORZ, pageRect.left + 120,
-        pageRect.top + 84, pageRect.right - pageRect.left - 140, 2, hWnd,
-        nullptr, GetModuleHandleW(nullptr), nullptr);
-    g_aboutHomeLabel =
-        CreateWindowExW(0, L"STATIC", L"Home:", WS_CHILD | SS_LEFT,
-                        pageRect.left + 120, pageRect.top + 94, 60, 22, hWnd,
-                        nullptr, GetModuleHandleW(nullptr), nullptr);
-    g_aboutHomeLink = CreateWindowExW(
-        0, WC_LINK,
-        L"<a "
-        L"href=\"https://novadesk.pages.dev/\">https://novadesk.pages.dev/</a>",
-        WS_CHILD | WS_TABSTOP, pageRect.left + 178, pageRect.top + 94,
-        pageRect.right - pageRect.left - 200, 22, hWnd,
-        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAboutHome)),
-        GetModuleHandleW(nullptr), nullptr);
-    g_aboutDocsLabel =
-        CreateWindowExW(0, L"STATIC", L"Docs:", WS_CHILD | SS_LEFT,
-                        pageRect.left + 120, pageRect.top + 118, 60, 22, hWnd,
-                        nullptr, GetModuleHandleW(nullptr), nullptr);
-    g_aboutDocsLink = CreateWindowExW(
-        0, WC_LINK,
-        L"<a "
-        L"href=\"https://novadesk-docs.pages.dev/\">https://"
-        L"novadesk-docs.pages.dev/</a>",
-        WS_CHILD | WS_TABSTOP, pageRect.left + 178, pageRect.top + 118,
-        pageRect.right - pageRect.left - 200, 22, hWnd,
-        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAboutDocs)),
-        GetModuleHandleW(nullptr), nullptr);
-    g_aboutSupportGroup =
-        CreateWindowExW(0, L"BUTTON", L"Support Section",
-                        WS_CHILD | BS_GROUPBOX, pageRect.left + 8,
-                        pageRect.top + 146, pageRect.right - pageRect.left - 16,
-                        104, hWnd, nullptr, GetModuleHandleW(nullptr), nullptr);
-    g_aboutSupportTitle = CreateWindowExW(
-        0, L"STATIC", L"Support && Contribution", WS_CHILD | SS_LEFT,
-        pageRect.left + 22, pageRect.top + 168,
-        pageRect.right - pageRect.left - 210, 26, hWnd, nullptr,
-        GetModuleHandleW(nullptr), nullptr);
-    g_aboutSupportText = CreateWindowExW(
-        0, L"STATIC",
-        L"We appreciate your support. If you find Novadesk helpful,\r\n"
-        L"consider contributing to its ongoing development.",
-        WS_CHILD | SS_LEFT, pageRect.left + 22, pageRect.top + 194,
-        pageRect.right - pageRect.left - 220, 44, hWnd, nullptr,
-        GetModuleHandleW(nullptr), nullptr);
-    g_aboutDonateButton = CreateWindowExW(
-        0, L"BUTTON", L"Support Project via Donation",
-        WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON, pageRect.right - 190,
-        pageRect.top + 188, 176, 32, hWnd,
-        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAboutDonate)),
-        GetModuleHandleW(nullptr), nullptr);
-    g_aboutBottomNote = CreateWindowExW(
-        0, L"STATIC", L"Development depends on user support.",
-        WS_CHILD | SS_CENTER, pageRect.left + 120, pageRect.top + 262,
-        pageRect.right - pageRect.left - 240, 24, hWnd, nullptr,
-        GetModuleHandleW(nullptr), nullptr);
-
-    ListView_SetExtendedListViewStyle(g_list,
-                                      LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
-
-    LVCOLUMNW col{};
-    col.mask = LVCF_TEXT | LVCF_WIDTH;
-
-    col.pszText = const_cast<wchar_t *>(L"Widget");
-    col.cx = 160;
-    ListView_InsertColumn(g_list, 0, &col);
-
-    col.pszText = const_cast<wchar_t *>(L"Script Path");
-    col.cx = 360;
-    ListView_InsertColumn(g_list, 1, &col);
-
-    col.pszText = const_cast<wchar_t *>(L"Status");
-    col.cx = 120;
-    ListView_InsertColumn(g_list, 2, &col);
-
-    ListView_SetExtendedListViewStyle(g_logsList, LVS_EX_FULLROWSELECT |
-                                                      LVS_EX_GRIDLINES |
-                                                      LVS_EX_DOUBLEBUFFER);
-    LVCOLUMNW lcol{};
-    lcol.mask = LVCF_TEXT | LVCF_WIDTH;
-    lcol.pszText = const_cast<wchar_t *>(L"Time");
-    lcol.cx = 190;
-    ListView_InsertColumn(g_logsList, 0, &lcol);
-    lcol.pszText = const_cast<wchar_t *>(L"Source");
-    lcol.cx = 120;
-    ListView_InsertColumn(g_logsList, 1, &lcol);
-    lcol.pszText = const_cast<wchar_t *>(L"Level");
-    lcol.cx = 80;
-    ListView_InsertColumn(g_logsList, 2, &lcol);
-    lcol.pszText = const_cast<wchar_t *>(L"Message");
-    lcol.cx = g_logsMessageColumnWidth;
-    ListView_InsertColumn(g_logsList, 3, &lcol);
-
-    ListView_SetExtendedListViewStyle(g_addonsList, LVS_EX_FULLROWSELECT |
-                                                        LVS_EX_GRIDLINES |
-                                                        LVS_EX_DOUBLEBUFFER);
-    LVCOLUMNW acol{};
-    acol.mask = LVCF_TEXT | LVCF_WIDTH;
-    acol.pszText = const_cast<wchar_t *>(L"Addon Name");
-    acol.cx = 190;
-    ListView_InsertColumn(g_addonsList, 0, &acol);
-    acol.pszText = const_cast<wchar_t *>(L"Author");
-    acol.cx = 180;
-    ListView_InsertColumn(g_addonsList, 1, &acol);
-    acol.pszText = const_cast<wchar_t *>(L"Version");
-    acol.cx = 120;
-    ListView_InsertColumn(g_addonsList, 2, &acol);
-    acol.pszText = const_cast<wchar_t *>(L"Copyright");
-    acol.cx = 420;
-    ListView_InsertColumn(g_addonsList, 3, &acol);
-    UpdateAboutLogo();
+    TabCtrl_SetItemSize(g_tab, 100, 28);
 
     g_btnRefreshList = CreateWindowW(
-        L"BUTTON", L"Refresh List", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 10,
-        rc.bottom - 40, 110, 28, hWnd,
+        L"BUTTON", L"Refresh List", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        12, rc.bottom - 44, 120, 30, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefreshList)),
         GetModuleHandleW(nullptr), nullptr);
     g_btnClearLogs = CreateWindowW(
-        L"BUTTON", L"Clear Logs", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 10,
-        rc.bottom - 40, 110, 28, hWnd,
+        L"BUTTON", L"Clear Logs", WS_CHILD | BS_PUSHBUTTON,
+        12, rc.bottom - 44, 120, 30, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdClearLogs)),
         GetModuleHandleW(nullptr), nullptr);
     g_btnLoad = CreateWindowW(
-        L"BUTTON", L"Load", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 130,
-        rc.bottom - 40, 80, 28, hWnd,
+        L"BUTTON", L"Load", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        142, rc.bottom - 44, 90, 30, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdLoad)),
         GetModuleHandleW(nullptr), nullptr);
     g_btnRefresh = CreateWindowW(
-        L"BUTTON", L"Refresh", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 220,
-        rc.bottom - 40, 80, 28, hWnd,
+        L"BUTTON", L"Refresh", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        242, rc.bottom - 44, 90, 30, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefresh)),
         GetModuleHandleW(nullptr), nullptr);
     g_btnRefreshAll = CreateWindowW(
-        L"BUTTON", L"Refresh All", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 310,
-        rc.bottom - 40, 100, 28, hWnd,
+        L"BUTTON", L"Refresh All", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        342, rc.bottom - 44, 110, 30, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefreshAll)),
         GetModuleHandleW(nullptr), nullptr);
     g_btnClose = CreateWindowW(
         L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        rc.right - 90, rc.bottom - 40, 80, 28, hWnd,
+        rc.right - 100, rc.bottom - 44, 88, 30, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdClose)),
         GetModuleHandleW(nullptr), nullptr);
 
@@ -2552,317 +2749,297 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
       SendMessageW(g_btnRefresh, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       SendMessageW(g_btnRefreshAll, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       SendMessageW(g_btnClose, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-      SendMessageW(g_logsList, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-      SendMessageW(g_addonsList, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-      SendMessageW(g_settingsPanel, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-      SendMessageW(g_settingsTitle, WM_SETFONT, (WPARAM)g_aboutSectionFont,
-                   TRUE);
-      SendMessageW(g_chkRunOnStartup, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-      SendMessageW(g_btnCheckUpdates, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-      SendMessageW(g_chkAutoUpdate, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-      SendMessageW(g_chkEnableLogging, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-      SendMessageW(g_chkEnableDebugging, WM_SETFONT, (WPARAM)g_buttonFont,
-                   TRUE);
-      SendMessageW(g_chkSaveLogToFile, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-      SendMessageW(g_chkUseHardwareAcceleration, WM_SETFONT,
-                   (WPARAM)g_buttonFont, TRUE);
-      SendMessageW(g_lblWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-      SendMessageW(g_cboWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-      SendMessageW(g_aboutAppName, WM_SETFONT, (WPARAM)g_aboutTitleFont, TRUE);
-      SendMessageW(g_aboutVersion, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
-      SendMessageW(g_aboutCopyright, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
-      SendMessageW(g_aboutHomeLabel, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
-      SendMessageW(g_aboutHomeLink, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
-      SendMessageW(g_aboutDocsLabel, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
-      SendMessageW(g_aboutDocsLink, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
-      SendMessageW(g_aboutSupportGroup, WM_SETFONT, (WPARAM)g_aboutBodyFont,
-                   TRUE);
-      SendMessageW(g_aboutSupportTitle, WM_SETFONT, (WPARAM)g_aboutSectionFont,
-                   TRUE);
-      SendMessageW(g_aboutSupportText, WM_SETFONT, (WPARAM)g_aboutBodyFont,
-                   TRUE);
-      SendMessageW(g_aboutDonateButton, WM_SETFONT, (WPARAM)g_aboutBodyFont,
-                   TRUE);
-      SendMessageW(g_aboutBottomNote, WM_SETFONT, (WPARAM)g_aboutSectionFont,
-                   TRUE);
     }
 
-    LayoutTabPages(pageRect);
-    RefreshSettingsControls();
-    ConfigureAutoUpdateTimer(hWnd);
+    AddTab(kControlIdTabs, m_TabWidgets, L"Widgets");
+    AddTab(kControlIdTabs, m_TabLogs, L"Logs");
+    AddTab(kControlIdTabs, m_TabAddons, L"Addons");
+    AddTab(kControlIdTabs, m_TabSettings, L"Settings");
+    AddTab(kControlIdTabs, m_TabAbout, L"About");
+
+    Relayout();
+
+    // Apply theme while the window is still hidden (inside CreateDialogIndirectParam,
+    // before ShowDialogWindow calls ShowWindow). m_StartHidden then tells
+    // ShowDialogWindow to skip its ShowWindow call entirely, so the window
+    // never appears on screen during initialization — it is a tray-only app.
+    ApplyThemeToManageWindow(m_Window);
+    m_StartHidden = true;
+
+    SetTimer(m_Window, kStartupSyncTimerId, kStartupSyncDelayMs, nullptr);
+    SetTimer(m_Window, kLogsRefreshTimerId, 700, nullptr);
+    SetTimer(m_Window, kProcessMonitorTimerId, kProcessMonitorIntervalMs, nullptr);
+    ConfigureAutoUpdateTimer(m_Window);
     if (g_manageAutoCheckForUpdates) {
       StartAsyncUpdateCheck(true);
     }
-    RefreshListView();
-    RefreshAddonsView();
-    ApplyTabState();
-    SetTimer(hWnd, kStartupSyncTimerId, kStartupSyncDelayMs, nullptr);
-    SetTimer(hWnd, kLogsRefreshTimerId, 700, nullptr);
-    SetTimer(hWnd, kProcessMonitorTimerId, kProcessMonitorIntervalMs, nullptr);
-    UpdateButtonState();
-    return 0;
   }
-  case WM_GETMINMAXINFO: {
-    MINMAXINFO *mmi = reinterpret_cast<MINMAXINFO *>(lParam);
-    mmi->ptMinTrackSize.x = kWindowWidth;
-    mmi->ptMinTrackSize.y = kWindowHeight;
-    mmi->ptMaxTrackSize.x = kWindowWidth;
-    mmi->ptMaxTrackSize.y = kWindowHeight;
-    return 0;
+
+  virtual void HandleDpiChange() override {
+    const UINT dpi = GetDpiForWindow(m_Window);
+    CreateManageFonts(dpi);
+    ResendFontsToAllControls();
   }
-  case WM_SIZE: {
+
+  virtual void Relayout() override {
+    Dialog::Relayout();
+    if (!m_Window) return;
+
     RECT rc{};
-    GetClientRect(hWnd, &rc);
-    if (g_tab) {
-      MoveWindow(g_tab, 10, 10, rc.right - 20, rc.bottom - 60, TRUE);
+    GetClientRect(m_Window, &rc);
+    if (m_TabControl) {
+      MoveWindow(m_TabControl, 12, 12, rc.right - 24, rc.bottom - 64, TRUE);
       RECT tabRectOnParent{};
-      GetWindowRect(g_tab, &tabRectOnParent);
-      MapWindowPoints(HWND_DESKTOP, hWnd,
-                      reinterpret_cast<LPPOINT>(&tabRectOnParent), 2);
-      RECT pageRect{};
-      GetClientRect(g_tab, &pageRect);
-      TabCtrl_AdjustRect(g_tab, FALSE, &pageRect);
-      OffsetRect(&pageRect, tabRectOnParent.left, tabRectOnParent.top);
-      LayoutTabPages(pageRect);
-    }
-    if (g_btnRefreshList) {
-      MoveWindow(g_btnRefreshList, 10, rc.bottom - 40, 110, 28, TRUE);
-      MoveWindow(g_btnClearLogs, 10, rc.bottom - 40, 110, 28, TRUE);
-      MoveWindow(g_btnLoad, 130, rc.bottom - 40, 80, 28, TRUE);
-      MoveWindow(g_btnRefresh, 220, rc.bottom - 40, 80, 28, TRUE);
-      MoveWindow(g_btnRefreshAll, 310, rc.bottom - 40, 100, 28, TRUE);
-      MoveWindow(g_btnClose, rc.right - 90, rc.bottom - 40, 80, 28, TRUE);
-    }
-    return 0;
-  }
-  case WM_COMMAND:
-    switch (LOWORD(wParam)) {
-    case kControlIdRefreshList:
-      RefreshListView();
-      break;
-    case kControlIdClearLogs:
-      OnClearLogs();
-      break;
-    case kControlIdLoad:
-      OnToggleLoadSelected();
-      break;
-    case kControlIdRefresh:
-      OnRefreshSelected();
-      break;
-    case kControlIdRefreshAll:
-      OnRefreshAll();
-      break;
-    case kControlIdClose:
-      ShowWindow(hWnd, SW_HIDE);
-      break;
-    case kControlIdRunOnStartup:
-    case kControlIdAutoCheckUpdates:
-    case kControlIdEnableLogging:
-    case kControlIdEnableDebugging:
-    case kControlIdSaveLogToFile:
-    case kControlIdUseHardwareAcceleration:
-      if (HIWORD(wParam) == BN_CLICKED) {
-        OnSettingsControlClicked(LOWORD(wParam));
-      }
-      break;
-    case kControlIdWindowsTheme:
-      if (HIWORD(wParam) == CBN_SELCHANGE && g_cboWindowsTheme) {
-        const int idx = (int)SendMessageW(g_cboWindowsTheme, CB_GETCURSEL, 0, 0);
-        const char *themes[] = {"system", "dark", "light"};
-        if (idx >= 0 && idx < 3) {
-          SetNovadeskSettingString("windowsTheme", themes[idx]);
-          ApplyThemeToManageWindow(hWnd);
-          SendNotifyMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
-                            reinterpret_cast<LPARAM>(L"ImmersiveColorSet"));
+      GetClientRect(m_TabControl, &tabRectOnParent);
+      TabCtrl_AdjustRect(m_TabControl, FALSE, &tabRectOnParent);
+      MapWindowPoints(m_TabControl, m_Window, reinterpret_cast<LPPOINT>(&tabRectOnParent), 2);
+
+      const int w = tabRectOnParent.right - tabRectOnParent.left;
+      const int h = tabRectOnParent.bottom - tabRectOnParent.top;
+      for (auto* page : m_Pages) {
+        if (page && page->GetWindow()) {
+          page->SetPosition(tabRectOnParent.left, tabRectOnParent.top, w, h);
+          page->Relayout(w, h);
         }
       }
-      break;
-    case kControlIdCheckUpdates:
-      StartAsyncUpdateCheck(false);
-      break;
-    case kControlIdAboutDonate:
-      OpenUrl(L"https://www.patreon.com/cw/officialnovadesk");
-      break;
-    case kTrayMenuShowHideId:
-      if (IsWindowVisible(hWnd)) {
-        ShowWindow(hWnd, SW_HIDE);
-      } else {
-        ShowWindow(hWnd, SW_SHOW);
-        SetForegroundWindow(hWnd);
-      }
-      break;
-    case kTrayMenuHomeWebsiteId:
-      OpenUrl(L"https://novadesk.pages.dev/");
-      break;
-    case kTrayMenuHomeDonateId:
-      OpenUrl(L"https://www.patreon.com/cw/officialnovadesk");
-      break;
-    case kTrayMenuDocsMainId:
-      OpenUrl(L"https://novadesk-docs.pages.dev/");
-      break;
-    case kTrayMenuDocsApiId:
-      OpenUrl(L"https://novadesk-docs.pages.dev/api/logging.html");
-      break;
-    case kTrayMenuSettingsOpenId:
-      if (g_tab) {
-        g_activeTab = 3;
-        TabCtrl_SetCurSel(g_tab, g_activeTab);
-        ApplyTabState();
-      }
-      ShowWindow(hWnd, SW_SHOW);
-      SetForegroundWindow(hWnd);
-      break;
-    case kTrayMenuSettingsCheckUpdatesId:
-      ShowWindow(hWnd, SW_SHOW);
-      SetForegroundWindow(hWnd);
-      g_activeTab = 3;
-      if (g_tab) {
-        TabCtrl_SetCurSel(g_tab, g_activeTab);
-        ApplyTabState();
-      }
-      StartAsyncUpdateCheck(false);
-      break;
-    case kTrayMenuExitId:
-      RequestAppExit(hWnd);
-      break;
-    default:
-      break;
     }
-    break;
-  case WM_NOTIFY: {
-    LPNMHDR hdr = reinterpret_cast<LPNMHDR>(lParam);
-    if (hdr && hdr->hwndFrom == g_list) {
-      if (hdr->code == LVN_ITEMCHANGED) {
-        UpdateButtonState();
-      } else if (hdr->code == NM_DBLCLK) {
-        OnToggleLoadSelected();
-      }
-    } else if (hdr && hdr->hwndFrom == g_tab && hdr->code == TCN_SELCHANGE) {
-      g_activeTab = TabCtrl_GetCurSel(g_tab);
-      ApplyTabState();
-    } else if (hdr &&
-               (hdr->hwndFrom == g_aboutHomeLink ||
-                hdr->hwndFrom == g_aboutDocsLink) &&
-               (hdr->code == NM_CLICK || hdr->code == NM_RETURN)) {
-      auto *link = reinterpret_cast<PNMLINK>(lParam);
-      if (link) {
-        OpenUrl(link->item.szUrl);
-      }
+    if (g_btnRefreshList) {
+      MoveWindow(g_btnRefreshList, 12, rc.bottom - 44, 120, 30, TRUE);
+      MoveWindow(g_btnClearLogs,   12, rc.bottom - 44, 120, 30, TRUE);
+      MoveWindow(g_btnLoad,       142, rc.bottom - 44,  90, 30, TRUE);
+      MoveWindow(g_btnRefresh,    242, rc.bottom - 44,  90, 30, TRUE);
+      MoveWindow(g_btnRefreshAll, 342, rc.bottom - 44, 110, 30, TRUE);
+      MoveWindow(g_btnClose, rc.right - 100, rc.bottom - 44, 88, 30, TRUE);
     }
-    break;
   }
-  case WM_CONTEXTMENU:
-    if (reinterpret_cast<HWND>(wParam) == g_logsList) {
-      ShowLogsContextMenu(hWnd, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+
+  virtual void ActivateTab() override {
+    Dialog::ActivateTab();
+
+    const int active = TabCtrl_GetCurSel(m_TabControl);
+    g_activeTab = active;
+
+    ShowWindow(g_btnRefreshList, active == 0 ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnLoad, active == 0 ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnRefresh, active == 0 ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnRefreshAll, active == 0 ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnClearLogs, active == 1 ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnClose, SW_SHOW);
+
+    if (active == 0) {
+      UpdateButtonState();
+    } else if (active == 1) {
+      RefreshLogsView();
+    } else if (active == 2) {
+      RefreshAddonsView();
+    } else if (active == 3) {
+      RefreshSettingsControls();
+    } else if (active == 4) {
+      UpdateAboutLogo();
+      EnsureAboutSupportZOrder();
+    }
+  }
+
+  virtual INT_PTR HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override {
+    if (g_manageCloseMessage != 0 && uMsg == g_manageCloseMessage) {
+      RequestAppExit(m_Window);
+      return TRUE;
+    }
+
+    switch (uMsg) {
+    case WM_INITDIALOG:
+      // Do NOT call HandleInitDialog() here — BaseDialog::InitialDlgProc
+      // already calls HandleInitDialog() after HandleMessage() returns.
+      // Calling it here too was causing every AddTab to fire twice (duplicate tabs).
+      return Dialog::HandleMessage(uMsg, wParam, lParam); // DPI setup
+
+    case WM_GETMINMAXINFO: {
+      MINMAXINFO *mmi = reinterpret_cast<MINMAXINFO *>(lParam);
+      mmi->ptMinTrackSize.x = kWindowWidth;
+      mmi->ptMinTrackSize.y = kWindowHeight;
+      mmi->ptMaxTrackSize.x = kWindowWidth;
+      mmi->ptMaxTrackSize.y = kWindowHeight;
       return 0;
     }
-    break;
-  case WM_TIMER:
-    if (wParam == kLogsRefreshTimerId && g_activeTab == 1) {
-      RefreshLogsView();
-    } else if (wParam == kAutoUpdateTimerId && g_manageAutoCheckForUpdates) {
-      CheckForUpdates(true);
-    } else if (wParam == kStartupSyncTimerId) {
-      KillTimer(hWnd, kStartupSyncTimerId);
-      ApplySavedLoadedScripts();
-      RefreshListView();
-      UpdateButtonState();
-    } else if (wParam == kProcessMonitorTimerId) {
-      if (g_activeTab == 3) {
-        RefreshSettingsControls();
+
+    case WM_SIZE:
+      Relayout();
+      return 0;
+
+    case WM_COMMAND:
+      switch (LOWORD(wParam)) {
+      case kControlIdRefreshList:
+        RefreshListView();
+        return TRUE;
+      case kControlIdClearLogs:
+        OnClearLogs();
+        return TRUE;
+      case kControlIdLoad:
+        OnToggleLoadSelected();
+        return TRUE;
+      case kControlIdRefresh:
+        OnRefreshSelected();
+        return TRUE;
+      case kControlIdRefreshAll:
+        OnRefreshAll();
+        return TRUE;
+      case kControlIdClose:
+        ShowWindow(m_Window, SW_HIDE);
+        return TRUE;
+      case kTrayMenuShowHideId:
+        if (IsWindowVisible(m_Window)) {
+          ShowWindow(m_Window, SW_HIDE);
+        } else {
+          ShowWindow(m_Window, SW_SHOW);
+          SetForegroundWindow(m_Window);
+        }
+        return TRUE;
+      case kTrayMenuHomeWebsiteId:
+        OpenUrl(L"https://novadesk.pages.dev/");
+        return TRUE;
+      case kTrayMenuHomeDonateId:
+        OpenUrl(L"https://www.patreon.com/cw/officialnovadesk");
+        return TRUE;
+      case kTrayMenuDocsMainId:
+        OpenUrl(L"https://novadesk-docs.pages.dev/");
+        return TRUE;
+      case kTrayMenuDocsApiId:
+        OpenUrl(L"https://novadesk-docs.pages.dev/api/logging.html");
+        return TRUE;
+      case kTrayMenuSettingsOpenId:
+        SelectTab(3);
+        ShowWindow(m_Window, SW_SHOW);
+        SetForegroundWindow(m_Window);
+        return TRUE;
+      case kTrayMenuSettingsCheckUpdatesId:
+        ShowWindow(m_Window, SW_SHOW);
+        SetForegroundWindow(m_Window);
+        SelectTab(3);
+        StartAsyncUpdateCheck(false);
+        return TRUE;
+      case kTrayMenuExitId:
+        RequestAppExit(m_Window);
+        return TRUE;
       }
-      if (g_novadeskRunning && g_novadeskProcess.hProcess) {
-        DWORD exitCode = 0;
-        if (GetExitCodeProcess(g_novadeskProcess.hProcess, &exitCode)) {
-          if (exitCode != STILL_ACTIVE) {
-            LogLine(
-                L"[Manage] Novadesk process exited. Shutting down Manager.");
-            RequestAppExit(hWnd);
+      break;
+
+    case WM_TIMER:
+      if (wParam == kLogsRefreshTimerId && g_activeTab == 1) {
+        RefreshLogsView();
+      } else if (wParam == kAutoUpdateTimerId && g_manageAutoCheckForUpdates) {
+        CheckForUpdates(true);
+      } else if (wParam == kStartupSyncTimerId) {
+        KillTimer(m_Window, kStartupSyncTimerId);
+        ApplySavedLoadedScripts();
+        RefreshListView();
+        UpdateButtonState();
+      } else if (wParam == kProcessMonitorTimerId) {
+        if (g_activeTab == 3) {
+          RefreshSettingsControls();
+        }
+        if (g_novadeskRunning && g_novadeskProcess.hProcess) {
+          DWORD exitCode = 0;
+          if (GetExitCodeProcess(g_novadeskProcess.hProcess, &exitCode)) {
+            if (exitCode != STILL_ACTIVE) {
+              LogLine(L"[Manage] Novadesk process exited. Shutting down Manager.");
+              RequestAppExit(m_Window);
+            }
           }
         }
       }
-    }
-    return 0;
-  case WM_ACTIVATE:
-    if (LOWORD(wParam) != WA_INACTIVE && g_activeTab == 3) {
-      RefreshSettingsControls();
-    }
-    return 0;
-  case kLogAppendMessage: {
-    auto *chunk = reinterpret_cast<std::wstring *>(lParam);
-    if (!chunk)
       return 0;
-    ProcessLogChunk(*chunk);
-    delete chunk;
-    if (g_activeTab == 1) {
-      RefreshLogsView();
-    }
-    return 0;
-  }
-  case WM_CLOSE:
-    if (g_forceExitOnClose) {
-      DestroyWindow(hWnd);
-    } else {
-      ShowWindow(hWnd, SW_HIDE);
-    }
-    return 0;
-  case WM_APP + 1:
-    if (lParam == WM_LBUTTONUP || lParam == WM_LBUTTONDBLCLK) {
-      ShowWindow(hWnd, SW_SHOW);
-      SetForegroundWindow(hWnd);
-    } else if (lParam == WM_RBUTTONUP) {
-      ShowTrayMenu(hWnd);
-    }
-    return 0;
-  case WM_DESTROY:
-    g_mainWindow = nullptr;
-    KillTimer(hWnd, kLogsRefreshTimerId);
-    KillTimer(hWnd, kAutoUpdateTimerId);
-    KillTimer(hWnd, kStartupSyncTimerId);
-    KillTimer(hWnd, kProcessMonitorTimerId);
-    DeleteManageFonts();
-    if (g_aboutLogoBitmap) {
-      DeleteObject(g_aboutLogoBitmap);
-      g_aboutLogoBitmap = nullptr;
-    }
-    ShutdownGdiPlus();
-    if (g_trayMenu) {
-      DestroyMenu(g_trayMenu);
-      g_trayMenu = nullptr;
-    }
-    RemoveTrayIcon();
-    StopNovadesk();
-    PostQuitMessage(0);
-    break;
-  case WM_SETTINGCHANGE:
-    ApplyThemeToManageWindow(hWnd);
-    break;
-  case WM_CTLCOLORSTATIC:
-  case WM_CTLCOLORBTN:
-  case WM_CTLCOLORLISTBOX: {
-    if (g_isDarkMode && g_hbrWindowBg) {
-      HDC hdc = reinterpret_cast<HDC>(wParam);
-      SetTextColor(hdc, RGB(224, 224, 224));
-      SetBkColor(hdc, RGB(32, 32, 32));
-      return reinterpret_cast<LRESULT>(g_hbrWindowBg);
-    }
-    break;
-  }
-  case WM_CTLCOLORDLG:
-  case WM_ERASEBKGND:
-    if (g_isDarkMode && g_hbrWindowBg) {
-      if (message == WM_ERASEBKGND) {
-        RECT rc; GetClientRect(hWnd, &rc);
-        FillRect(reinterpret_cast<HDC>(wParam), &rc, g_hbrWindowBg);
-        return 1;
+
+    case WM_ACTIVATE:
+      if (LOWORD(wParam) != WA_INACTIVE && g_activeTab == 3) {
+        RefreshSettingsControls();
       }
-      return reinterpret_cast<LRESULT>(g_hbrWindowBg);
+      break;
+
+    case kLogAppendMessage: {
+      auto *chunk = reinterpret_cast<std::wstring *>(lParam);
+      if (chunk) {
+        ProcessLogChunk(*chunk);
+        delete chunk;
+        if (g_activeTab == 1) {
+          RefreshLogsView();
+        }
+      }
+      return 0;
     }
-    break;
-  default:
-    return DefWindowProcW(hWnd, message, wParam, lParam);
+
+    case WM_CLOSE:
+      if (g_forceExitOnClose) {
+        DestroyWindow(m_Window);
+      } else {
+        ShowWindow(m_Window, SW_HIDE);
+      }
+      return TRUE;
+
+    case kTrayMessage:
+      if (lParam == WM_LBUTTONUP || lParam == WM_LBUTTONDBLCLK) {
+        ShowWindow(m_Window, SW_SHOW);
+        SetForegroundWindow(m_Window);
+      } else if (lParam == WM_RBUTTONUP) {
+        ShowTrayMenu(m_Window);
+      }
+      return 0;
+
+    case WM_DESTROY:
+      g_mainWindow = nullptr;
+      KillTimer(m_Window, kLogsRefreshTimerId);
+      KillTimer(m_Window, kAutoUpdateTimerId);
+      KillTimer(m_Window, kStartupSyncTimerId);
+      KillTimer(m_Window, kProcessMonitorTimerId);
+      DeleteManageFonts();
+      if (g_aboutLogoBitmap) {
+        DeleteObject(g_aboutLogoBitmap);
+        g_aboutLogoBitmap = nullptr;
+      }
+      ShutdownGdiPlus();
+      if (g_trayMenu) {
+        DestroyMenu(g_trayMenu);
+        g_trayMenu = nullptr;
+      }
+      RemoveTrayIcon();
+      StopNovadesk();
+      PostQuitMessage(0);
+      return 0;
+
+    case WM_SETTINGCHANGE:
+      ApplyThemeToManageWindow(m_Window);
+      return 0;
+    }
+
+    return Dialog::HandleMessage(uMsg, wParam, lParam);
   }
-  return 0;
+
+private:
+  static DialogManage* s_instance;
+};
+
+DialogManage* DialogManage::s_instance = nullptr;
+
+static void ApplyThemeToManageWindow(HWND hWnd) {
+  if (!hWnd) return;
+
+  WindowsTheme::Refresh();
+  g_isDarkMode = WindowsTheme::IsUsingDarkMode();
+
+  WindowsTheme::ApplyToDialog(hWnd);
+
+  if (DialogManage::Get()) {
+    for (auto* page : DialogManage::Get()->GetPages()) {
+      if (page && page->GetWindow()) {
+        WindowsTheme::ApplyToDialog(page->GetWindow());
+      }
+    }
+  }
+
+  // Theme re-applies WS_CLIPSIBLINGS; keep Support Section content visible.
+  EnsureAboutSupportZOrder();
+
+  RedrawWindow(hWnd, nullptr, nullptr,
+               RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
 }
 
 static bool HasCommandLineFlag(const wchar_t *flag) {
@@ -2892,7 +3069,10 @@ static bool RequestExistingManageWindowClose() {
     return false;
   }
 
-  HWND existing = FindWindowW(kManageWindowClassName, nullptr);
+  HWND existing = FindWindowW(L"#32770", L"Manage Novadesk");
+  if (!existing) {
+    existing = FindWindowW(kManageWindowClassName, nullptr);
+  }
   if (!existing) {
     return true;
   }
@@ -2901,17 +3081,14 @@ static bool RequestExistingManageWindowClose() {
   SendMessageTimeoutW(existing, g_manageCloseMessage, 0, 0, SMTO_ABORTIFHUNG,
                       1500, &result);
   for (int i = 0; i < 80; ++i) {
-    if (!FindWindowW(kManageWindowClassName, nullptr)) {
+    if (!FindWindowW(L"#32770", L"Manage Novadesk") && !FindWindowW(kManageWindowClassName, nullptr)) {
       return true;
     }
     Sleep(100);
   }
-  return !FindWindowW(kManageWindowClassName, nullptr);
+  return (!FindWindowW(L"#32770", L"Manage Novadesk") && !FindWindowW(kManageWindowClassName, nullptr));
 }
 
-// Relaunch the manager through its own executable. The temporary launcher
-// process waits for the current manager to close before starting a normal
-// instance, so no separate helper executable is required.
 static bool RestartManageWindow() {
   wchar_t currentExe[MAX_PATH + 1] = {};
   if (GetModuleFileNameW(nullptr, currentExe, MAX_PATH) == 0)
@@ -2949,7 +3126,6 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
       [](const std::string &v) { SetNovadeskSettingString("windowsTheme", v); });
   WindowsTheme::Initialize();
 
-  const wchar_t *className = kManageWindowClassName;
   g_manageCloseMessage = RegisterWindowMessageW(kManageCloseMessageName);
   if (HasCommandLineFlag(L"--request-close")) {
     return RequestExistingManageWindowClose() ? 0 : 1;
@@ -2958,8 +3134,6 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
     if (!RequestExistingManageWindowClose())
       return 1;
 
-    // Window destruction precedes process termination. Wait for the old
-    // process to release its singleton mutex before starting the replacement.
     for (int i = 0; i < 80; ++i) {
       HANDLE existingMutex = OpenMutexW(
           SYNCHRONIZE, FALSE, L"Global\\NovadeskManageWindowSingleton");
@@ -2988,10 +3162,14 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
     }
     return started ? 0 : 1;
   }
+
   HANDLE instanceMutex =
       CreateMutexW(nullptr, FALSE, L"Global\\NovadeskManageWindowSingleton");
   if (instanceMutex && GetLastError() == ERROR_ALREADY_EXISTS) {
-    HWND existing = FindWindowW(className, nullptr);
+    HWND existing = FindWindowW(L"#32770", L"Manage Novadesk");
+    if (!existing) {
+      existing = FindWindowW(kManageWindowClassName, nullptr);
+    }
     if (existing) {
       ShowWindow(existing, SW_SHOW);
       SetForegroundWindow(existing);
@@ -3001,63 +3179,29 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
   }
 
   LoadWindowIcons(hInstance);
-  WNDCLASSEXW wc{};
-  wc.cbSize = sizeof(wc);
-  wc.lpfnWndProc = WndProc;
-  wc.hInstance = hInstance;
-  wc.hIcon = g_windowIconLarge;
-  wc.hIconSm = g_windowIconSmall;
-  wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-  wc.hbrBackground = nullptr; // drawn dynamically in WM_ERASEBKGND
-  wc.lpszClassName = className;
-  ATOM windowClassAtom = RegisterClassExW(&wc);
-  if (!windowClassAtom) {
-    DestroyWindowIcons();
-    if (instanceMutex) {
-      CloseHandle(instanceMutex);
-    }
-    return 0;
-  }
 
-  const DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-  RECT wr{0, 0, kWindowWidth, kWindowHeight};
-  AdjustWindowRectEx(&wr, style, FALSE, 0);
-  const int windowWidth = wr.right - wr.left;
-  const int windowHeight = wr.bottom - wr.top;
+  DialogManage::Open(0);
 
-  RECT workArea{};
-  SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0);
-  const int x =
-      workArea.left + ((workArea.right - workArea.left) - windowWidth) / 2;
-  const int y =
-      workArea.top + ((workArea.bottom - workArea.top) - windowHeight) / 2;
-
-  HWND hWnd = CreateWindowExW(0, className, L"Manage Novadesk", style, x, y,
-                              windowWidth, windowHeight, nullptr, nullptr,
-                              hInstance, nullptr);
-
+  HWND hWnd = DialogManage::Get() ? DialogManage::Get()->GetWindow() : nullptr;
   if (!hWnd) {
-    UnregisterClassW(className, hInstance);
     DestroyWindowIcons();
     if (instanceMutex) {
       CloseHandle(instanceMutex);
     }
     return 0;
   }
-
-  ApplyThemeToManageWindow(hWnd);
-  ShowWindow(hWnd, SW_HIDE);
-  UpdateWindow(hWnd);
 
   MSG msg{};
   while (GetMessageW(&msg, nullptr, 0, 0)) {
-    TranslateMessage(&msg);
-    DispatchMessageW(&msg);
+    if (!Dialog::HandleMessage(msg)) {
+      TranslateMessage(&msg);
+      DispatchMessageW(&msg);
+    }
   }
+
   if (instanceMutex) {
     CloseHandle(instanceMutex);
   }
-  UnregisterClassW(className, hInstance);
   DestroyWindowIcons();
   return (int)msg.wParam;
 }
