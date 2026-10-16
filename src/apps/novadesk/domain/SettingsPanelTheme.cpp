@@ -53,14 +53,6 @@ ThemePalette LightPalette() {
 }
 
 ThemePalette ResolveTheme() {
-  std::string pref = Settings::GetGlobalString("windowsTheme", "");
-  if (pref.empty()) {
-    pref = Settings::GetGlobalString("theme", "system");
-  }
-  if (pref == "dark")
-    return DarkPalette();
-  if (pref == "light")
-    return LightPalette();
-  // "system" or anything unrecognised — follow OS
+  // Always follow the OS system dark/light mode setting.
   return novadesk::shared::system::IsSystemDarkMode() ? DarkPalette() : LightPalette();
 }

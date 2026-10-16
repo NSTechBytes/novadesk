@@ -667,19 +667,13 @@ void Initialize() {
 
 void Refresh() {
   auto& state = GetState();
-  std::string pref;
-  { std::lock_guard<std::mutex> lock(state.handlerMutex); if (state.settingsReader) pref = state.settingsReader(); }
-  if (pref.empty()) pref = FallbackReadSettings();
+  // Always follow the OS system theme — user-configurable theme selection
+  // has been removed. Mode is always System.
+  state.mode = Mode::System;
+  state.isDarkMode = IsSystemDarkMode();
 
-  if      (pref == "dark")  { state.mode = Mode::Dark;   state.isDarkMode = true; }
-  else if (pref == "light") { state.mode = Mode::Light;  state.isDarkMode = false; }
-  else                      { state.mode = Mode::System; state.isDarkMode = IsSystemDarkMode(); }
-
-  int appMode = 0; // Default
-  if (state.mode == Mode::Dark)  appMode = 2; // ForceDark
-  else if (state.mode == Mode::Light) appMode = 3; // ForceLight
-  else appMode = 1; // AllowDark
-
+  // AllowDark lets the OS apply dark mode to this process when the system is dark.
+  const int appMode = 1; // AllowDark
   if (state.pfnSetPreferredAppMode) state.pfnSetPreferredAppMode(appMode);
   else if (state.pfnAllowDarkModeForApp) state.pfnAllowDarkModeForApp(state.isDarkMode);
   if (state.pfnRefreshImmersiveColorPolicyState) state.pfnRefreshImmersiveColorPolicyState();

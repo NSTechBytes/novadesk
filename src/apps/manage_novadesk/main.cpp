@@ -104,8 +104,7 @@ static HWND g_chkEnableDebugging = nullptr;
 static HWND g_chkSaveLogToFile = nullptr;
 static HWND g_chkUseHardwareAcceleration = nullptr;
 static HWND g_lblWindowsTheme = nullptr;
-static HWND g_cboWindowsTheme = nullptr;
-static bool g_isDarkMode = false;
+static HWND g_cboWindowsTheme = nullptr;static bool g_isDarkMode = false;
 static HBRUSH g_hbrWindowBg = nullptr;
 static HBRUSH g_hbrControlBg = nullptr;
 static HWND g_aboutLogo = nullptr;
@@ -478,8 +477,7 @@ static void ResendFontsToAllControls() {
   setFont(g_chkSaveLogToFile,          g_buttonFont);
   setFont(g_chkUseHardwareAcceleration,g_buttonFont);
   setFont(g_lblWindowsTheme,           g_buttonFont);
-  setFont(g_cboWindowsTheme,           g_buttonFont);
-  // About tab
+  setFont(g_cboWindowsTheme,           g_buttonFont);  // About tab
   setFont(g_aboutAppName,      g_aboutTitleFont);
   setFont(g_aboutVersion,      g_aboutBodyFont);
   setFont(g_aboutCopyright,    g_aboutBodyFont);
@@ -1922,13 +1920,7 @@ static void RefreshSettingsControls() {
                    : BST_UNCHECKED,
                0);
 
-  if (g_cboWindowsTheme) {
-    const std::string curTheme = GetNovadeskSettingString("windowsTheme", "system");
-    int sel = 0;
-    if (curTheme == "dark")  sel = 1;
-    if (curTheme == "light") sel = 2;
-    SendMessageW(g_cboWindowsTheme, CB_SETCURSEL, sel, 0);
-  }
+  // Window Theme setting removed — always follows system theme.
 }
 
 static void CheckForUpdates(bool silent) {
@@ -2394,16 +2386,6 @@ public:
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
           16, 208, 300, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdUseHardwareAcceleration)),
           GetModuleHandleW(nullptr), nullptr);
-      g_lblWindowsTheme = CreateWindowExW(0, L"STATIC", L"Window Theme:",
-          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
-          16, 244, 110, 20, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
-      g_cboWindowsTheme = CreateWindowExW(0, L"COMBOBOX", nullptr,
-          WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_CLIPSIBLINGS,
-          130, 240, 160, 120, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdWindowsTheme)),
-          GetModuleHandleW(nullptr), nullptr);
-      SendMessageW(g_cboWindowsTheme, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"System (Default)"));
-      SendMessageW(g_cboWindowsTheme, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Dark"));
-      SendMessageW(g_cboWindowsTheme, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Light"));
 
       if (g_buttonFont) {
         SendMessageW(g_settingsTitle, WM_SETFONT, (WPARAM)g_aboutSectionFont, TRUE);
@@ -2414,8 +2396,6 @@ public:
         SendMessageW(g_chkEnableDebugging, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkSaveLogToFile, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkUseHardwareAcceleration, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-        SendMessageW(g_lblWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-        SendMessageW(g_cboWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       }
       RefreshSettingsControls();
     }
@@ -2437,19 +2417,6 @@ public:
         case kControlIdCheckUpdates:
           StartAsyncUpdateCheck(false);
           return TRUE;
-        case kControlIdWindowsTheme:
-          if (HIWORD(wParam) == CBN_SELCHANGE && g_cboWindowsTheme) {
-            const int idx = (int)SendMessageW(g_cboWindowsTheme, CB_GETCURSEL, 0, 0);
-            const char *themes[] = {"system", "dark", "light"};
-            if (idx >= 0 && idx < 3) {
-              SetNovadeskSettingString("windowsTheme", themes[idx]);
-              ApplyThemeToManageWindow(g_mainWindow);
-              SendNotifyMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, 0,
-                                reinterpret_cast<LPARAM>(L"ImmersiveColorSet"));
-            }
-            return TRUE;
-          }
-          break;
         }
       }
       return FALSE;
@@ -2468,8 +2435,6 @@ public:
       if (g_chkEnableDebugging)         MoveWindow(g_chkEnableDebugging,         L,       168, sw,           ch,  TRUE);
       if (g_chkSaveLogToFile)           MoveWindow(g_chkSaveLogToFile,           L,       202, sw,           ch,  TRUE);
       if (g_chkUseHardwareAcceleration) MoveWindow(g_chkUseHardwareAcceleration, L,       236, sw,           ch,  TRUE);
-      if (g_lblWindowsTheme)            MoveWindow(g_lblWindowsTheme,            L,       278, 120,          20,  TRUE);
-      if (g_cboWindowsTheme)            MoveWindow(g_cboWindowsTheme,            L + 130, 274, 180,          120, TRUE);
     }
   };
 
@@ -3121,9 +3086,6 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
   icc.dwICC = ICC_LISTVIEW_CLASSES | ICC_TAB_CLASSES | ICC_LINK_CLASS;
   InitCommonControlsEx(&icc);
 
-  WindowsTheme::SetSettingsHandlers(
-      []() { return GetNovadeskSettingString("windowsTheme", "system"); },
-      [](const std::string &v) { SetNovadeskSettingString("windowsTheme", v); });
   WindowsTheme::Initialize();
 
   g_manageCloseMessage = RegisterWindowMessageW(kManageCloseMessageName);

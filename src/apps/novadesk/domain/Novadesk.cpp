@@ -600,17 +600,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
   // Initialize Settings
   Settings::Initialize();
-  WindowsTheme::SetSettingsHandlers(
-      []() {
-        std::string pref = Settings::GetGlobalString("windowsTheme", "");
-        if (pref.empty()) {
-          pref = Settings::GetGlobalString("theme", "system");
-        }
-        return pref;
-      },
-      [](const std::string &val) {
-        Settings::SetGlobalString("windowsTheme", val);
-      });
   WindowsTheme::Initialize();
 
   // Prepare the online-image and online-font disk caches before widgets
