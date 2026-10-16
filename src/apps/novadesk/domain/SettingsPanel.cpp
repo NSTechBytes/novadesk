@@ -130,6 +130,16 @@ void SettingsPanel::FlushPending() {
   std::vector<SettingsPanel *> tmp; tmp.swap(s_PendingDestroy);
   for (auto *p : tmp) delete p;
 }
+
+void SettingsPanel::RefreshAllThemes() {
+  const ThemePalette newPalette = ResolveTheme();
+  for (SettingsPanel *p : s_Panels) {
+    if (!p || !p->m_Panel || !Widget::IsValid(p->m_Panel)) continue;
+    p->m_Palette = newPalette;
+    p->ApplyPaletteToPanel();
+    p->m_Panel->Redraw();
+  }
+}
 void SettingsPanel::CloseAllForTarget(Widget *target) {
   if (!target) return;
   std::vector<SettingsPanel *> copy = s_Panels;
@@ -203,8 +213,7 @@ static void Ellipse(Widget *panel, const std::wstring &id,
 
 // ─── BuildPanel ───────────────────────────────────────────────────────────────
 
-void SettingsPanel::BuildPanel(Widget *target) {
-  m_Palette = ResolveTheme();
+void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
 
   const WidgetSettingsCatalog &cat = target->GetSettings();
   const int nCustom    = static_cast<int>(cat.tabs.size());
@@ -820,13 +829,25 @@ void SettingsPanel::SwitchTab(int tabIndex) {
 void SettingsPanel::ApplyPaletteToPanel() {
   if (!m_Panel || !Widget::IsValid(m_Panel)) return;
 
+  // Update the Widget window's own background color (no save side-effect for
+  // the settings panel because its id is empty and Settings::SaveWidget is a
+  // no-op for empty ids).
   wchar_t bgBuf[64];
   swprintf_s(bgBuf, L"rgba(%d,%d,%d,255)",
              GetRValue(m_Palette.background),
              GetGValue(m_Palette.background),
              GetBValue(m_Palette.background));
-  m_Panel->SetBackgroundColor(bgBuf);
+  // Directly update the underlying options without triggering SaveWidget.
+  {
+    WidgetOptions &opts = const_cast<WidgetOptions &>(m_Panel->GetOptions());
+    opts.backgroundColor = bgBuf;
+    opts.color           = m_Palette.background;
+    opts.bgAlpha         = 255;
+  }
+  // Force the widget to recreate its render target background with the new color.
+  m_Panel->Redraw();
 
+  // Helper: update a TextElement's font color (and optionally weight).
   auto T = [&](const wchar_t *id, COLORREF c, int w = -1) {
     if (Element *el = m_Panel->FindElementById(id))
       if (auto *te = dynamic_cast<TextElement *>(el)) {
@@ -834,14 +855,21 @@ void SettingsPanel::ApplyPaletteToPanel() {
         if (w >= 0) te->SetFontWeight(w);
       }
   };
+
+  // Helper: update a shape element's solid color AND fill color together.
   auto S = [&](const wchar_t *id, COLORREF c) {
-    if (Element *el = m_Panel->FindElementById(id)) el->SetSolidColor(c, 255);
+    if (Element *el = m_Panel->FindElementById(id)) {
+      el->SetSolidColor(c, 255);
+      if (auto *sh = dynamic_cast<ShapeElement *>(el))
+        sh->SetFill(c, 255);
+    }
   };
 
   T(L"__hdr_title",      m_Palette.text);
   T(L"__about_name",     m_Palette.accent);
   T(L"__about_ver",      m_Palette.label);
   T(L"__about_desc",     m_Palette.muted);
+  T(L"__sb_ver",         m_Palette.muted);
   S(L"__hdr_bg",         m_Palette.sidebar);
   S(L"__hdr_border",     m_Palette.divider);
   S(L"__sb_bg",          m_Palette.sidebar);
@@ -849,6 +877,126 @@ void SettingsPanel::ApplyPaletteToPanel() {
   S(L"__content_bg",     m_Palette.background);
   S(L"__about_hr",       m_Palette.divider);
   S(L"__settings_hr2",   m_Palette.divider);
+
+  // Recolor all dynamically-built content controls in-place so we don't need
+  // to rebuild the panel (which causes flickering).
+  for (auto &[id, info] : m_Controls) {
+    Element *el = m_Panel->FindElementById(id);
+    if (!el) continue;
+
+    // Determine suffix (role) from the ID — everything after the last '_'
+    const std::wstring &eid = id;
+    auto lastUs = eid.rfind(L'_');
+    const std::wstring role = (lastUs != std::wstring::npos) ? eid.substr(lastUs + 1) : eid;
+
+    switch (info.kind) {
+    case ControlKind::SelectLabel:
+      // Row labels, section headings, dividers — dispatch on element type.
+      if (auto *te = dynamic_cast<TextElement *>(el)) {
+        if (role == L"label")        te->SetFontColor(m_Palette.label, 255);
+        else if (role == L"heading") te->SetFontColor(m_Palette.text,  255);
+        else                         te->SetFontColor(m_Palette.text,  255);
+      } else {
+        // Shape elements used as dividers / row separators (hdivider, sep).
+        el->SetSolidColor(m_Palette.divider, 255);
+        if (auto *sh = dynamic_cast<ShapeElement *>(el)) sh->SetFill(m_Palette.divider, 255);
+      }
+      break;
+    case ControlKind::ResetLabel:
+      if (auto *te = dynamic_cast<TextElement *>(el)) te->SetFontColor(m_Palette.text, 255);
+      break;
+    case ControlKind::ResetButton:
+      el->SetSolidColor(m_Palette.controlFill, 255);
+      if (auto *sh = dynamic_cast<ShapeElement *>(el)) sh->SetFill(m_Palette.controlFill, 255);
+      break;
+    case ControlKind::Input:
+      if (auto *ib = dynamic_cast<InputBoxElement *>(el)) {
+        ib->SetFontColor(m_Palette.text, 255);
+        ib->SetFillColor(m_Palette.controlFill, 255);
+        ib->SetBorderColor(m_Palette.controlBorder, 255);
+        ib->SetCaretColor(m_Palette.text, 255);
+        ib->SetSelectionColor(m_Palette.accent, 128);
+      }
+      break;
+    case ControlKind::PanelDropDown:
+    case ControlKind::WindowZPos:
+      if (auto *dd = dynamic_cast<DropDownElement *>(el)) {
+        dd->m_FontColor        = m_Palette.text;
+        dd->m_BackgroundColor  = m_Palette.controlFill;
+        dd->m_BorderColor      = m_Palette.controlBorder;
+        dd->m_PopupBackground  = m_Palette.controlFill;
+        dd->m_PopupBorderColor = m_Palette.controlBorder;
+        dd->m_PopupTextColor   = m_Palette.text;
+      }
+      break;
+    case ControlKind::TogglePill:
+    case ControlKind::WindowToggle:
+      if (auto *ts = dynamic_cast<ToggleSwitchElement *>(el)) {
+        ts->m_OnColor  = m_Palette.accent;
+        ts->m_OffColor = m_Palette.toggleOff;
+      }
+      break;
+    case ControlKind::SelectButton:
+      el->SetSolidColor(m_Palette.controlFill, 255);
+      if (auto *sh = dynamic_cast<ShapeElement *>(el)) sh->SetFill(m_Palette.controlFill, 255);
+      break;
+    case ControlKind::BoundSwitch:
+    case ControlKind::BoundSlider:
+    default:
+      if (auto *te = dynamic_cast<TextElement *>(el)) te->SetFontColor(m_Palette.text, 255);
+      break;
+    }
+  }
+
+  // Window tab inline labels
+  for (const wchar_t *lid : {L"__win_zpos_lbl", L"__win_opacity_lbl"})
+    if (Element *el = m_Panel->FindElementById(lid))
+      if (auto *te = dynamic_cast<TextElement *>(el)) te->SetFontColor(m_Palette.label, 255);
+
+  // Window opacity input
+  if (Element *el = m_Panel->FindElementById(L"__win_opacity"))
+    if (auto *ib = dynamic_cast<InputBoxElement *>(el)) {
+      ib->SetFontColor(m_Palette.text, 255);
+      ib->SetFillColor(m_Palette.controlFill, 255);
+      ib->SetBorderColor(m_Palette.controlBorder, 255);
+      ib->SetCaretColor(m_Palette.text, 255);
+      ib->SetSelectionColor(m_Palette.accent, 128);
+    }
+
+  // Update caret and selection colors on every InputBox in the panel
+  // (covers both custom-tab Input boxes and the Window-tab opacity box).
+  for (auto &[id, info] : m_Controls) {
+    if (info.kind != ControlKind::Input && info.kind != ControlKind::WindowOpacity)
+      continue;
+    Element *el = m_Panel->FindElementById(id);
+    if (!el) continue;
+    if (auto *ib = dynamic_cast<InputBoxElement *>(el)) {
+      ib->SetCaretColor(m_Palette.text, 255);
+      ib->SetSelectionColor(m_Palette.accent, 128);
+    }
+  }
+
+  // Update all ColorPickerElements' popup theme colors
+  for (auto &[id, info] : m_Controls) {
+    if (info.kind != ControlKind::ColorSwatch)
+      continue;
+    Element *el = m_Panel->FindElementById(id);
+    if (!el) continue;
+    if (auto *cp = dynamic_cast<ColorPickerElement *>(el)) {
+      cp->m_PopupBackground = m_Palette.controlFill;
+      cp->m_PopupBackgroundAlpha = 255;
+      cp->m_PopupAccentColor = m_Palette.accent;
+      cp->m_PopupAccentAlpha = 255;
+      cp->m_PopupBorderColor = m_Palette.divider;
+      cp->m_PopupBorderAlpha = 255;
+      cp->m_PopupInputBackground = m_Palette.controlFill;
+      cp->m_PopupInputBackgroundAlpha = 255;
+      cp->m_HasPopupInputBackground = true;
+      cp->m_PopupInputColor = m_Palette.text;
+      cp->m_PopupInputColorAlpha = 255;
+      cp->m_HasPopupInputColor = true;
+    }
+  }
 
   SwitchTab(m_ActiveTab);
 }

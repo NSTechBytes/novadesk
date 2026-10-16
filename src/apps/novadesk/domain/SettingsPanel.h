@@ -29,6 +29,7 @@ public:
   static void CloseAllForTarget(Widget *target);
   static void CloseAll();
   static void SyncTargetVisuals(Widget *target);
+  static void RefreshAllThemes();
 
   ~SettingsPanel() override;
 

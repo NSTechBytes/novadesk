@@ -33,6 +33,7 @@
 #include "../scripting/quickjs/modules/NovadeskModule.h"
 #include "../scripting/quickjs/modules/SystemModule.h"
 #include "../../common/WindowsTheme.h"
+#include "SettingsPanel.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -625,6 +626,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     switch (message) {
     case WM_SETTINGCHANGE:
       WindowsTheme::Refresh();
+      SettingsPanel::RefreshAllThemes();
       break;
     case WM_TIMER:
       JSEngine::OnTimer(wParam);
