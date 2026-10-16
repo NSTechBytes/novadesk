@@ -1491,6 +1491,20 @@ static void InstallerApplyTheme(HWND hwnd, AppState *state) {
     return TRUE;
   }, 0);
 
+  // Progress bar: PBM_SETBARCOLOR is ignored when visual styles are active.
+  // Disable the theme on the progress bar first, then set explicit colors.
+  if (state->hProgress) {
+    if (state->isDarkMode) {
+      SetWindowTheme(state->hProgress, L"", L""); // disable visual styles
+      SendMessageW(state->hProgress, PBM_SETBARCOLOR, 0, (LPARAM)RGB(0, 120, 215));
+      SendMessageW(state->hProgress, PBM_SETBKCOLOR,  0, (LPARAM)RGB(48, 48, 48));
+    } else {
+      SetWindowTheme(state->hProgress, L"Explorer", L""); // restore visual styles
+      SendMessageW(state->hProgress, PBM_SETBARCOLOR, 0, (LPARAM)CLR_DEFAULT);
+      SendMessageW(state->hProgress, PBM_SETBKCOLOR,  0, (LPARAM)CLR_DEFAULT);
+    }
+  }
+
   if (state->hbrWindowBg) { DeleteObject(state->hbrWindowBg); state->hbrWindowBg = nullptr; }
   if (state->isDarkMode) {
     state->hbrWindowBg = CreateSolidBrush(RGB(32, 32, 32));

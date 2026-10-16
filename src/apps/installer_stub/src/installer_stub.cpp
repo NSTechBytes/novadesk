@@ -5,28 +5,26 @@
  * version. If a copy of the GPL was not distributed with this file, You can
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
-#include <windows.h>
+// StdAfx.h pulls in windows.h, commctrl.h, uxtheme.h, dwmapi.h, shlobj.h etc.
+#include "StdAfx.h"
+#include "WindowsTheme.h"
+#include "DpiUtil.h"
 #include <winreg.h>
-#include <commctrl.h>
-#include <shlobj.h>
 #include <shobjidl.h>
 #include <objbase.h>
 #include <wrl/client.h>
-#include <string>
 #include <thread>
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
-#include <vector>
 #include <filesystem>
 #include <fstream>
-#include <cstdint>
-#include <cstring>
 #include <tlhelp32.h>
 #include "../../../third_party/json/json.hpp"
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "shell32.lib")
 
 namespace fs = std::filesystem;
 using Microsoft::WRL::ComPtr;
@@ -802,20 +800,97 @@ bool UninstallSelf() {
 // Window Message Handler & Main Entry Point
 // ============================================================================
 
+// Apply dark/light theme to the window: DWM titlebar + per-control theming.
+// Does NOT install the WindowsTheme parent subclass so WndProc keeps ownership
+// of WM_CTLCOLORSTATIC and WM_ERASEBKGND.
+static void ApplyInstallerTheme(HWND hwnd) {
+  const BOOL dark = WindowsTheme::IsUsingDarkMode() ? TRUE : FALSE;
+  DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+  constexpr DWORD DWMWA_BEFORE = 19;
+  DwmSetWindowAttribute(hwnd, DWMWA_BEFORE, &dark, sizeof(dark));
+  WindowsTheme::ApplyToControl(hwnd);
+  EnumChildWindows(hwnd, [](HWND child, LPARAM) -> BOOL {
+    WindowsTheme::ApplyToControl(child);
+    return TRUE;
+  }, 0);
+
+  // Progress bar: PBM_SETBARCOLOR is ignored when visual styles are active.
+  // Disable the theme on the progress bar first, then set explicit colors.
+  if (g_progress) {
+    if (dark) {
+      SetWindowTheme(g_progress, L"", L""); // disable visual styles so PBM_SETBARCOLOR works
+      SendMessageW(g_progress, PBM_SETBARCOLOR, 0, (LPARAM)RGB(0, 120, 215));
+      SendMessageW(g_progress, PBM_SETBKCOLOR,  0, (LPARAM)RGB(48, 48, 48));
+    } else {
+      SetWindowTheme(g_progress, L"Explorer", L""); // restore visual styles
+      SendMessageW(g_progress, PBM_SETBARCOLOR, 0, (LPARAM)CLR_DEFAULT);
+      SendMessageW(g_progress, PBM_SETBKCOLOR,  0, (LPARAM)CLR_DEFAULT);
+    }
+  }
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   switch (msg) {
+  case WM_ERASEBKGND: {
+    if (WindowsTheme::IsUsingDarkMode()) {
+      RECT rc{}; GetClientRect(hwnd, &rc);
+      HBRUSH br = CreateSolidBrush(RGB(32, 32, 32));
+      FillRect(reinterpret_cast<HDC>(wParam), &rc, br);
+      DeleteObject(br);
+      return 1;
+    }
+    break;
+  }
   case WM_CTLCOLORSTATIC: {
     HDC hdc = reinterpret_cast<HDC>(wParam);
+    SetBkMode(hdc, TRANSPARENT);
+    if (WindowsTheme::IsUsingDarkMode()) {
+      SetTextColor(hdc, WindowsTheme::GetTextColor());
+      SetBkColor(hdc, RGB(32, 32, 32));
+      static HBRUSH brDark = CreateSolidBrush(RGB(32, 32, 32));
+      return reinterpret_cast<LRESULT>(brDark);
+    }
     SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
     SetBkColor(hdc, GetSysColor(COLOR_WINDOW));
-    SetBkMode(hdc, TRANSPARENT);
     return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_WINDOW));
   }
-  case WM_CTLCOLORBTN: {
-    HDC hdc = reinterpret_cast<HDC>(wParam);
-    SetBkColor(hdc, GetSysColor(COLOR_WINDOW));
-    SetBkMode(hdc, TRANSPARENT);
-    return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_WINDOW));
+  case WM_SETTINGCHANGE:
+    WindowsTheme::Refresh();
+    ApplyInstallerTheme(hwnd);
+    RedrawWindow(hwnd, nullptr, nullptr,
+                 RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+    return 0;
+  case WM_DPICHANGED: {
+    const UINT dpi = LOWORD(wParam);
+    const RECT *r  = reinterpret_cast<const RECT *>(lParam);
+    SetWindowPos(hwnd, nullptr, r->left, r->top,
+                 r->right - r->left, r->bottom - r->top,
+                 SWP_NOZORDER | SWP_NOACTIVATE);
+    // Recreate fonts at the new DPI using the system UI font.
+    NONCLIENTMETRICSW ncm{}; ncm.cbSize = sizeof(ncm);
+    SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+    HDC dc = GetDC(nullptr);
+    const int sysDpi = dc ? GetDeviceCaps(dc, LOGPIXELSX) : 96;
+    if (dc) ReleaseDC(nullptr, dc);
+    if (sysDpi > 0 && (UINT)sysDpi != dpi)
+      ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, (int)dpi, sysDpi);
+    if (g_textFont)  { DeleteObject(g_textFont);  g_textFont  = nullptr; }
+    if (g_titleFont) { DeleteObject(g_titleFont); g_titleFont = nullptr; }
+    g_textFont = CreateFontIndirectW(&ncm.lfMenuFont);
+    ncm.lfMenuFont.lfWeight = FW_SEMIBOLD;
+    ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, 14, 10);
+    g_titleFont = CreateFontIndirectW(&ncm.lfMenuFont);
+    // Reposition and resize all controls.
+    auto S = [dpi](int v){ return MulDiv(v, (int)dpi, 96); };
+    if (g_title)         { SendMessageW(g_title,            WM_SETFONT, (WPARAM)g_titleFont, TRUE); SetWindowPos(g_title,            nullptr, S(24),  S(20),  S(460), S(28), SWP_NOZORDER); }
+    if (g_status)        { SendMessageW(g_status,           WM_SETFONT, (WPARAM)g_textFont,  TRUE); SetWindowPos(g_status,           nullptr, S(24),  S(60),  S(460), S(20), SWP_NOZORDER); }
+    if (g_progress)      {                                                                           SetWindowPos(g_progress,         nullptr, S(24),  S(92),  S(460), S(22), SWP_NOZORDER); }
+    if (g_repairButton)  { SendMessageW(g_repairButton,     WM_SETFONT, (WPARAM)g_textFont,  TRUE); SetWindowPos(g_repairButton,     nullptr, S(24),  S(130), S(100), S(28), SWP_NOZORDER); }
+    if (g_uninstallButton){SendMessageW(g_uninstallButton,  WM_SETFONT, (WPARAM)g_textFont,  TRUE); SetWindowPos(g_uninstallButton,  nullptr, S(134), S(130), S(100), S(28), SWP_NOZORDER); }
+    if (g_closeButton)   { SendMessageW(g_closeButton,      WM_SETFONT, (WPARAM)g_textFont,  TRUE); SetWindowPos(g_closeButton,      nullptr, S(384), S(130), S(100), S(28), SWP_NOZORDER); }
+    RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+    ApplyInstallerTheme(hwnd);
+    return 0;
   }
   case WM_TIMER:
     RefreshUi();
@@ -915,12 +990,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
   INITCOMMONCONTROLSEX icc = {sizeof(icc), ICC_PROGRESS_CLASS};
   InitCommonControlsEx(&icc);
 
+  WindowsTheme::Initialize();
+
   const wchar_t *className = L"NovadeskInstallerWindow";
   WNDCLASSEXW wc = {};
   wc.cbSize = sizeof(wc);
   wc.lpfnWndProc = WndProc;
   wc.hInstance = hInstance;
-  wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+  wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
   wc.lpszClassName = className;
   wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
   wc.hIcon = (HICON)LoadImageW(hInstance, MAKEINTRESOURCEW(101), IMAGE_ICON, 32,
@@ -929,12 +1006,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
                                  16, 16, LR_DEFAULTCOLOR);
   RegisterClassExW(&wc);
 
-  int width = 520;
-  int height = 220;
-  int screenW = GetSystemMetrics(SM_CXSCREEN);
-  int screenH = GetSystemMetrics(SM_CYSCREEN);
-  int x = (screenW - width) / 2;
-  int y = (screenH - height) / 2;
+  // Scale the window size to the primary monitor DPI.
+  const UINT primaryDpi = GetDpiForSystem();
+  const int width  = MulDiv(520, (int)primaryDpi, 96);
+  const int height = MulDiv(220, (int)primaryDpi, 96);
+  RECT workArea{}; SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0);
+  const int x = workArea.left + ((workArea.right  - workArea.left) - width)  / 2;
+  const int y = workArea.top  + ((workArea.bottom - workArea.top)  - height) / 2;
 
   std::wstring windowTitle =
       g_appNameUi + (g_uninstall.load() ? L" Uninstaller" : L" Installer");
@@ -962,46 +1040,59 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
   std::wstring headerText = g_uninstall.load()
                                 ? (L"Uninstalling " + g_appNameUi)
                                 : (L"Installing " + g_appNameUi);
+
+  // Build fonts from the system UI font at the window's actual DPI.
+  g_titleFont = nullptr;
+  g_textFont  = nullptr;
+  {
+    const UINT dpi = GetDpiForWindow(g_hwnd);
+    NONCLIENTMETRICSW ncm{}; ncm.cbSize = sizeof(ncm);
+    SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+    HDC dc = GetDC(nullptr);
+    const int sysDpi = dc ? GetDeviceCaps(dc, LOGPIXELSX) : 96;
+    if (dc) ReleaseDC(nullptr, dc);
+    if (sysDpi > 0 && (UINT)sysDpi != dpi)
+      ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, (int)dpi, sysDpi);
+    g_textFont = CreateFontIndirectW(&ncm.lfMenuFont);
+    ncm.lfMenuFont.lfWeight = FW_SEMIBOLD;
+    ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, 14, 10);
+    g_titleFont = CreateFontIndirectW(&ncm.lfMenuFont);
+  }
+
+  // Create all controls at DPI-scaled positions.
+  const UINT cdpi = GetDpiForWindow(g_hwnd);
+  auto S = [cdpi](int v){ return MulDiv(v, (int)cdpi, 96); };
+
   g_title = CreateWindowW(L"STATIC", headerText.c_str(), WS_CHILD | WS_VISIBLE,
-                          24, 20, 460, 28, g_hwnd, nullptr, hInstance, nullptr);
-  g_titleFont =
-      CreateFontW(-20, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
-                  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                  CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
-  g_textFont =
-      CreateFontW(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                  OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                  DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+                          S(24), S(20), S(460), S(28), g_hwnd, nullptr, hInstance, nullptr);
   SendMessageW(g_title, WM_SETFONT, (WPARAM)g_titleFont, TRUE);
 
-  g_status =
-      CreateWindowW(L"STATIC", L"Preparing...", WS_CHILD | WS_VISIBLE, 24, 60,
-                    460, 20, g_hwnd, nullptr, hInstance, nullptr);
+  g_status = CreateWindowW(L"STATIC", L"Preparing...", WS_CHILD | WS_VISIBLE,
+                           S(24), S(60), S(460), S(20), g_hwnd, nullptr, hInstance, nullptr);
   SendMessageW(g_status, WM_SETFONT, (WPARAM)g_textFont, TRUE);
 
-  g_progress =
-      CreateWindowW(PROGRESS_CLASSW, nullptr, WS_CHILD | WS_VISIBLE, 24, 92,
-                    460, 22, g_hwnd, nullptr, hInstance, nullptr);
+  g_progress = CreateWindowW(PROGRESS_CLASSW, nullptr, WS_CHILD | WS_VISIBLE,
+                             S(24), S(92), S(460), S(22), g_hwnd, nullptr, hInstance, nullptr);
   SendMessageW(g_progress, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
 
-  g_repairButton =
-      CreateWindowW(L"BUTTON", L"Repair", WS_CHILD | WS_VISIBLE, 24, 130, 100,
-                    28, g_hwnd, (HMENU)1001, hInstance, nullptr);
-  g_uninstallButton =
-      CreateWindowW(L"BUTTON", L"Uninstall", WS_CHILD | WS_VISIBLE, 134, 130,
-                    100, 28, g_hwnd, (HMENU)1002, hInstance, nullptr);
-  g_closeButton =
-      CreateWindowW(L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE, 384, 130, 100,
-                    28, g_hwnd, (HMENU)1003, hInstance, nullptr);
-  SendMessageW(g_repairButton, WM_SETFONT, (WPARAM)g_textFont, TRUE);
-  SendMessageW(g_uninstallButton, WM_SETFONT, (WPARAM)g_textFont, TRUE);
-  SendMessageW(g_closeButton, WM_SETFONT, (WPARAM)g_textFont, TRUE);
-  ShowWindow(g_repairButton, SW_HIDE);
+  g_repairButton = CreateWindowW(L"BUTTON", L"Repair", WS_CHILD | WS_VISIBLE,
+                                 S(24), S(130), S(100), S(28), g_hwnd, (HMENU)1001, hInstance, nullptr);
+  g_uninstallButton = CreateWindowW(L"BUTTON", L"Uninstall", WS_CHILD | WS_VISIBLE,
+                                    S(134), S(130), S(100), S(28), g_hwnd, (HMENU)1002, hInstance, nullptr);
+  g_closeButton = CreateWindowW(L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE,
+                                S(384), S(130), S(100), S(28), g_hwnd, (HMENU)1003, hInstance, nullptr);
+  SendMessageW(g_repairButton,   WM_SETFONT, (WPARAM)g_textFont, TRUE);
+  SendMessageW(g_uninstallButton,WM_SETFONT, (WPARAM)g_textFont, TRUE);
+  SendMessageW(g_closeButton,    WM_SETFONT, (WPARAM)g_textFont, TRUE);
+  ShowWindow(g_repairButton,    SW_HIDE);
   ShowWindow(g_uninstallButton, SW_HIDE);
-  ShowWindow(g_closeButton, SW_HIDE);
+  ShowWindow(g_closeButton,     SW_HIDE);
 
   ShowWindow(g_hwnd, SW_SHOW);
   UpdateWindow(g_hwnd);
+  // Apply dark/light theme — uses ApplyToControl per child so WndProc
+  // retains ownership of WM_CTLCOLORSTATIC and WM_ERASEBKGND.
+  ApplyInstallerTheme(g_hwnd);
   SetCloseEnabled(g_hwnd, false);
 
   std::thread worker([&]() {
