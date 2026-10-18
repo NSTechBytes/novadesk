@@ -5637,6 +5637,13 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         ToggleToggleSwitch(toggleSwitch);
         if (!Widget::IsValid(this))
           return true;
+      } else {
+        // Sink path: the element has NOT been toggled yet — the sink's
+        // OnElementMouseUp handler is responsible for calling Toggle() itself.
+        handled = true;
+        m_InputSink->OnElementMouseUp(this, toggleSwitch, x, y);
+        if (!Widget::IsValid(this))
+          return true;
       }
     }
 

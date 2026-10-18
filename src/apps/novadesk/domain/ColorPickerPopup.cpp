@@ -197,6 +197,22 @@ ColorPickerPopup::ColorPickerPopup(Widget *w, ColorPickerElement *p)
 }
 ColorPickerPopup::~ColorPickerPopup() { Close(); }
 
+// Returns the picker element's bounds in widget-client coordinates,
+// correctly adjusted for any scroll container it lives inside.
+static GfxRect GetPickerScreenBounds(const ColorPickerElement *picker) {
+  if (!picker)
+    return GfxRect(0, 0, 0, 0);
+  GfxRect b = const_cast<ColorPickerElement *>(picker)->GetBounds();
+  const Element *container = picker->GetContainer();
+  while (container) {
+    GfxRect cb = const_cast<Element *>(container)->GetBounds();
+    b.X += cb.X - const_cast<Element *>(container)->GetScrollX();
+    b.Y += cb.Y - const_cast<Element *>(container)->GetScrollY();
+    container = container->GetContainer();
+  }
+  return b;
+}
+
 void ColorPickerPopup::Show() {
   static ATOM atom = 0;
   if (!atom) {
@@ -217,7 +233,7 @@ void ColorPickerPopup::Show() {
   }
   RECT r{};
   GetWindowRect(m_Widget->GetWindow(), &r);
-  GfxRect b = m_Picker->GetBounds();
+  GfxRect b = GetPickerScreenBounds(m_Picker);
   int x = r.left + b.X, y = r.top + b.Y + b.Height;
   HMONITOR mon = MonitorFromPoint({x, y}, MONITOR_DEFAULTTONEAREST);
   MONITORINFO mi{sizeof(mi)};
@@ -261,7 +277,7 @@ void ColorPickerPopup::UpdatePosition() {
     return;
   RECT r{};
   GetWindowRect(m_Widget->GetWindow(), &r);
-  GfxRect b = m_Picker->GetBounds();
+  GfxRect b = GetPickerScreenBounds(m_Picker);
   int x = r.left + b.X, y = r.top + b.Y + b.Height;
   HMONITOR mon = MonitorFromPoint({x, y}, MONITOR_DEFAULTTONEAREST);
   MONITORINFO mi{sizeof(mi)};

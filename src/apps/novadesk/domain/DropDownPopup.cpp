@@ -42,8 +42,10 @@ GfxRect GetAbsoluteBounds(const Element *element) {
   const Element *container = element->GetContainer();
   while (container) {
     GfxRect cb = const_cast<Element *>(container)->GetBounds();
-    b.X += cb.X;
-    b.Y += cb.Y;
+    // Add the container's origin, then subtract any scroll offset so the
+    // popup anchors to the element's visible screen position.
+    b.X += cb.X - const_cast<Element *>(container)->GetScrollX();
+    b.Y += cb.Y - const_cast<Element *>(container)->GetScrollY();
     container = container->GetContainer();
   }
   return b;

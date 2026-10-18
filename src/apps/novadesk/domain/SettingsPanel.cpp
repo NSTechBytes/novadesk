@@ -66,6 +66,59 @@ constexpr int kWinRows  = 7;
 // About tab minimum height
 constexpr int kAboutH   = 180;
 
+// Scroll container — the scrollable area inside each tab.
+// Custom tabs reserve kFooterH at the bottom for the Reset button; the
+// Window and About tabs use the full content height.
+constexpr int kScrollH     = kContentH - kFooterH; // custom tab scrollable height
+constexpr int kScrollHFull = kContentH;             // window / about tab scrollable height
+
+// Scrollbar appearance
+constexpr int   kSbWidth  = 4;     // thin pill thumb
+constexpr float kSbRadius = 2.0f;
+constexpr float kSbInset  = 3.0f;
+
+// Returns the per-tab scroll-container element ID.
+inline std::wstring ScrollId(int ti) {
+  return L"__scroll_" + std::to_wstring(ti);
+}
+
+// Creates the scroll-container shape for a tab and returns its ID.
+// The container clips children and shows a vertical scrollbar when content
+// overflows.  Pass isDark so the scrollbar thumb is tinted appropriately.
+static std::wstring MakeScrollContainer(Widget *panel, int ti,
+                                        int x, int y, int w, int h,
+                                        COLORREF thumbColor,
+                                        COLORREF bgColor) {
+  const std::wstring sid = ScrollId(ti);
+  PropertyParser::ShapeOptions o;
+  o.id      = sid;
+  o.x       = x; o.y = y; o.width = w; o.height = h;
+  o.hasSolidColor = true;
+  o.solidColor = bgColor; o.solidAlpha = 255;
+  o.fillColor  = bgColor; o.fillAlpha  = 255;
+  o.strokeWidth = 0.0f;
+  // overflow: auto — clip content, show scrollbar only when needed
+  o.hasOverflow  = true; o.overflow = L"auto";
+  o.hasOverflowX = true; o.overflowX = L"hidden"; // no horizontal scroll
+  o.hasShowScrollbarX = true; o.showScrollbarX = false;
+  o.hasShowScrollbarY = true; o.showScrollbarY = true;
+  o.hasScrollbarWidth = true; o.scrollbarWidth = kSbWidth;
+  o.hasScrollbarRadius = true; o.scrollbarRadius = kSbRadius;
+  o.hasScrollbarInset  = true; o.scrollbarInset  = kSbInset;
+  o.hasScrollbarColor  = true;
+  o.scrollbarColor = thumbColor; o.scrollbarAlpha = 140;
+  o.hasScrollbarHoverColor = true;
+  o.scrollbarHoverColor = thumbColor; o.scrollbarHoverAlpha = 210;
+  o.hasScrollbarActiveColor = true;
+  o.scrollbarActiveColor = thumbColor; o.scrollbarActiveAlpha = 255;
+  o.hasScrollbarTrackColor = true;
+  o.scrollbarTrackColor = bgColor; o.scrollbarTrackAlpha = 0; // transparent track
+  o.hasScrollbarButtonBgColor = true;
+  o.scrollbarButtonBgColor = bgColor; o.scrollbarButtonBgAlpha = 0;
+  panel->AddShape(o);
+  return sid;
+}
+
 // Z-position options
 const std::vector<std::wstring> kZPosLabels = {
   L"Normal", L"On Top", L"Always on Top", L"On Bottom", L"On Desktop"
@@ -168,12 +221,14 @@ static void Txt(Widget *panel, const std::wstring &id,
                 int x, int y, int w, int h,
                 const std::wstring &text, int size, COLORREF color,
                 int weight = 400, bool hand = false,
-                TextAlignment align = TEXT_ALIGN_LEFT_TOP) {
+                TextAlignment align = TEXT_ALIGN_LEFT_TOP,
+                const std::wstring &containerId = L"") {
   PropertyParser::TextOptions o;
   o.id = id; o.x = x; o.y = y; o.width = w; o.height = h;
   o.text = text; o.fontSize = size; o.fontColor = color;
   o.fontWeight = weight;
   o.textAlign = align;
+  o.containerId = containerId;
   if (hand) o.mouseEventCursorName = L"hand";
   panel->AddText(o);
 }
@@ -181,13 +236,15 @@ static void Txt(Widget *panel, const std::wstring &id,
 static void Rect(Widget *panel, const std::wstring &id,
                  int x, int y, int w, int h,
                  COLORREF color, BYTE alpha = 255,
-                 float radius = 0.0f, bool hand = false) {
+                 float radius = 0.0f, bool hand = false,
+                 const std::wstring &containerId = L"") {
   PropertyParser::ShapeOptions o;
   o.id = id; o.x = x; o.y = y; o.width = w; o.height = h;
   o.hasSolidColor = true;
   o.solidColor = color; o.solidAlpha = alpha;
   o.fillColor  = color; o.fillAlpha  = alpha;
   o.strokeWidth = 0.0f;
+  o.containerId = containerId;
   if (radius > 0.0f) {
     o.radiusX = radius;
     o.radiusY = radius;
@@ -462,40 +519,52 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
 void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
                                    const WidgetSettingsTab &tab,
                                    int ti, int startY) {
-  int y = startY;
+  // ── Scroll container ─────────────────────────────────────────────────────
+  // Container origin: (kContentX, kHeaderH). All child elements MUST use
+  // coordinates relative to this origin.
+  const std::wstring scrollId = MakeScrollContainer(
+      panel, ti,
+      kContentX, kHeaderH,
+      kContentW, kScrollH,
+      m_Palette.label,
+      m_Palette.background);
+  m_Controls[scrollId] = {L"", ControlKind::SelectLabel, ti};
+
+  // startY is an absolute panel Y (kHeaderH + 16). Convert to container-relative.
+  int y = startY - kHeaderH; // relative to container top
+
   // Tab heading
   Txt(panel, CEId(ti, L"", L"heading"),
-      kContentX + kPadX, y, kCtrlW, 22,
-      tab.label, 14, m_Palette.text, 700);
+      kPadX, y, kCtrlW, 22,
+      tab.label, 14, m_Palette.text, 700, false, TEXT_ALIGN_LEFT_TOP, scrollId);
   m_Controls[CEId(ti, L"", L"heading")] = {L"", ControlKind::SelectLabel, ti};
   y += 30;
 
   // Thin heading underline
   Rect(panel, CEId(ti, L"", L"hdivider"),
-       kContentX + kPadX, y, kCtrlW, 1, m_Palette.divider);
+       kPadX, y, kCtrlW, 1, m_Palette.divider, 255, 0.0f, false, scrollId);
   m_Controls[CEId(ti, L"", L"hdivider")] = {L"", ControlKind::SelectLabel, ti};
   y += 12;
 
   for (const WidgetSetting &setting : tab.settings) {
     const std::wstring value = target->GetSettings().ValueOrDefault(setting.id);
 
-    const int rowOff = (kRowH - kCtrlH) / 2; // = 8 when kRowH=44, kCtrlH=28
-    // TEXT_ALIGN_LEFT_CENTER applies y -= h/2 in GetBounds, so offset by +kCtrlH/2 to compensate
+    const int rowOff = (kRowH - kCtrlH) / 2;
     Txt(panel, CEId(ti, setting.id, L"label"),
-        kContentX + kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH,
-        setting.label, 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER);
+        kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH,
+        setting.label, 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER, scrollId);
     m_Controls[CEId(ti, setting.id, L"label")] =
         {setting.id, ControlKind::SelectLabel, ti};
 
-    const int ctrlX = kContentX + kPadX + kCtrlW - kInlineCtrlW;
+    const int ctrlX = kPadX + kCtrlW - kInlineCtrlW;
     const int ctrlY = y + rowOff;
 
     switch (setting.type) {
     case WidgetSettingType::Color: {
       PropertyParser::ColorPickerOptions co;
       co.id = CEId(ti, setting.id, L"swatch");
-      // Square swatch: width == height == kCtrlH, right-aligned in control zone
-      co.x = kContentX + kPadX + kCtrlW - kCtrlH; co.y = ctrlY;
+      co.containerId = scrollId;
+      co.x = kPadX + kCtrlW - kCtrlH; co.y = ctrlY;
       co.width = kCtrlH; co.height = kCtrlH;
       COLORREF col = RGB(0,0,0); BYTE alp = 255;
       if (!value.empty()) ColorUtil::ParseRGBA(value, col, alp);
@@ -525,6 +594,7 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
       }
       PropertyParser::InputBoxOptions io;
       io.id = CEId(ti, setting.id, L"input");
+      io.containerId = scrollId;
       io.x = ctrlX; io.y = ctrlY;
       io.width = kInlineCtrlW - 20; io.height = kCtrlH;
       io.text = value; io.fontSize = 12;
@@ -534,7 +604,7 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
       io.borderWidth = 1.0f; io.borderRadius = 7.0f;
       io.borderColor = m_Palette.controlBorder; io.borderColorAlpha = 255;
       io.caretColor = m_Palette.text; io.selectionColor = m_Palette.accent;
-      io.paddingLeft = 10; io.paddingRight = 10; // match dropdown default padding
+      io.paddingLeft = 10; io.paddingRight = 10;
       if (setting.type == WidgetSettingType::Number) io.inputType = InputType::Float;
       panel->AddInputBox(io);
       m_Controls[io.id] = {setting.id, ControlKind::Input, ti};
@@ -559,7 +629,8 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
       }
       PropertyParser::ToggleSwitchOptions ts;
       ts.id = CEId(ti, setting.id, L"pill");
-      ts.x = kContentX + kCtrlW - 46 + kPadX; ts.y = ctrlY;
+      ts.containerId = scrollId;
+      ts.x = kCtrlW - 46 + kPadX; ts.y = ctrlY;
       ts.width = 46; ts.height = 24;
       ts.checked = on; ts.onColor = m_Palette.accent; ts.onAlpha = 255;
       ts.offColor = m_Palette.toggleOff; ts.offAlpha = 255;
@@ -574,6 +645,7 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
       if (!setting.options.empty()) {
         PropertyParser::DropDownOptions dd;
         dd.id = CEId(ti, setting.id, L"dropdown");
+        dd.containerId = scrollId;
         dd.x = ctrlX; dd.y = ctrlY;
         dd.width = kInlineCtrlW; dd.height = kCtrlH;
         for (const auto &opt : setting.options) dd.options.push_back({opt, opt});
@@ -597,12 +669,12 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
       // Fallback button
       Rect(panel, CEId(ti, setting.id, L"btn"),
            ctrlX, ctrlY, kInlineCtrlW, kCtrlH,
-           m_Palette.controlFill, 255, 7.0f, true);
+           m_Palette.controlFill, 255, 7.0f, true, scrollId);
       m_Controls[CEId(ti, setting.id, L"btn")] =
           {setting.id, ControlKind::SelectButton, ti};
       Txt(panel, CEId(ti, setting.id, L"btnlabel"),
           ctrlX + 8, ctrlY, kInlineCtrlW - 16, kCtrlH,
-          value, 12, m_Palette.text, 400, true, TEXT_ALIGN_CENTER_CENTER);
+          value, 12, m_Palette.text, 400, true, TEXT_ALIGN_CENTER_CENTER, scrollId);
       m_Controls[CEId(ti, setting.id, L"btnlabel")] =
           {setting.id, ControlKind::SelectLabel, ti};
       break;
@@ -619,14 +691,26 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
   if (!target || !Widget::IsValid(target)) return;
   const WidgetOptions &opts = target->GetOptions();
 
-  int y = startY;
+  // ── Scroll container ─────────────────────────────────────────────────────
+  const std::wstring scrollId = MakeScrollContainer(
+      panel, ti,
+      kContentX, kHeaderH,
+      kContentW, kScrollHFull,
+      m_Palette.label,
+      m_Palette.background);
+  m_Controls[scrollId] = {L"", ControlKind::SelectLabel, ti};
+
+  // All coordinates below are container-relative (origin = kContentX, kHeaderH).
+  int y = startY - kHeaderH;
+
   Txt(panel, CEId(ti, L"", L"heading"),
-      kContentX + kPadX, y, kCtrlW, 22,
-      L"Window Settings", 14, m_Palette.text, 700);
+      kPadX, y, kCtrlW, 22,
+      L"Window Settings", 14, m_Palette.text, 700, false, TEXT_ALIGN_LEFT_TOP, scrollId);
   m_Controls[CEId(ti, L"", L"heading")] = {L"", ControlKind::SelectLabel, ti};
   y += 30;
+
   Rect(panel, CEId(ti, L"", L"hdivider"),
-       kContentX + kPadX, y, kCtrlW, 1, m_Palette.divider);
+       kPadX, y, kCtrlW, 1, m_Palette.divider, 255, 0.0f, false, scrollId);
   m_Controls[CEId(ti, L"", L"hdivider")] = {L"", ControlKind::SelectLabel, ti};
   y += 16;
 
@@ -639,16 +723,15 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
   };
 
   for (const auto &r : toggleRows) {
-    // Label + toggle on the same row (toggle right-aligned)
     Txt(panel, std::wstring(r.id) + L"_lbl",
-        kContentX + kPadX, y + 4, kCtrlW - 56, 24,
-        r.label, 12, m_Palette.label, 400);
-    m_Controls[std::wstring(r.id) + L"_lbl"] =
-        {r.id, ControlKind::SelectLabel, ti};
+        kPadX, y + 4, kCtrlW - 56, 24,
+        r.label, 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_TOP, scrollId);
+    m_Controls[std::wstring(r.id) + L"_lbl"] = {r.id, ControlKind::SelectLabel, ti};
 
     PropertyParser::ToggleSwitchOptions ts;
     ts.id = r.id;
-    ts.x = kContentX + kCtrlW - 46 + kPadX; ts.y = y + 4;
+    ts.containerId = scrollId;
+    ts.x = kCtrlW - 46 + kPadX; ts.y = y + 4;
     ts.width = 46; ts.height = 24;
     ts.checked = r.value;
     ts.onColor = m_Palette.accent; ts.onAlpha = 255;
@@ -660,23 +743,24 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
     m_Controls[ts.id] = {r.id, ControlKind::WindowToggle, ti};
 
     y += 36;
-    // Light separator between rows
     Rect(panel, std::wstring(r.id) + L"_sep",
-         kContentX + kPadX, y, kCtrlW, 1, m_Palette.divider);
+         kPadX, y, kCtrlW, 1, m_Palette.divider, 255, 0.0f, false, scrollId);
     m_Controls[std::wstring(r.id) + L"_sep"] = {L"", ControlKind::SelectLabel, ti};
     y += 8;
   }
 
-  const int ctrlX  = kContentX + kPadX + kCtrlW - kInlineCtrlW;
+  const int ctrlX  = kPadX + kCtrlW - kInlineCtrlW;
   const int rowOff = (kRowH - kCtrlH) / 2;
 
-  // Z-position (same row: label left, dropdown right)
+  // Z-position label + dropdown
   Txt(panel, L"__win_zpos_lbl",
-      kContentX + kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH, L"Z-position", 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER);
+      kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH,
+      L"Z-position", 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER, scrollId);
   m_Controls[L"__win_zpos_lbl"] = {L"", ControlKind::SelectLabel, ti};
   {
     PropertyParser::DropDownOptions dd;
     dd.id = L"__win_zpos";
+    dd.containerId = scrollId;
     dd.x = ctrlX; dd.y = y + rowOff; dd.width = kInlineCtrlW; dd.height = kCtrlH;
     for (const auto &l : kZPosLabels) dd.options.push_back({l, l});
     dd.hasOptions = true; dd.selectedIndex = ZPosToIndex(opts.zPos);
@@ -694,15 +778,17 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
   }
   y += kRowH;
 
-  // Opacity (same row: label left, input box right)
+  // Opacity label + input
   Txt(panel, L"__win_opacity_lbl",
-      kContentX + kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH, L"Opacity (0 \u2013 100)", 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER);
+      kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH,
+      L"Opacity (0 \u2013 100)", 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER, scrollId);
   m_Controls[L"__win_opacity_lbl"] = {L"", ControlKind::SelectLabel, ti};
   {
     const int pct = static_cast<int>(std::round(opts.windowOpacity / 255.0 * 100.0));
     wchar_t buf[8]; swprintf_s(buf, L"%d", pct);
     PropertyParser::InputBoxOptions io;
     io.id = L"__win_opacity";
+    io.containerId = scrollId;
     io.x = ctrlX; io.y = y + rowOff; io.width = kInlineCtrlW - 20; io.height = kCtrlH;
     io.text = buf; io.fontSize = 12;
     io.fontColor = m_Palette.text; io.fontAlpha = 255;
@@ -710,7 +796,7 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
     io.borderWidth = 1.0f; io.borderRadius = 7.0f;
     io.borderColor = m_Palette.controlBorder; io.borderColorAlpha = 255;
     io.caretColor = m_Palette.text; io.selectionColor = m_Palette.accent;
-    io.paddingLeft = 10; io.paddingRight = 10; // match dropdown default padding
+    io.paddingLeft = 10; io.paddingRight = 10;
     io.inputType = InputType::Float;
     panel->AddInputBox(io);
     m_Controls[io.id] = {L"__win_opacity", ControlKind::WindowOpacity, ti};
@@ -724,15 +810,26 @@ void SettingsPanel::BuildAboutTab(Widget *panel, int ti, int startY) {
       m_Target ? m_Target->GetSettings() : WidgetSettingsCatalog{};
   const auto &about = cat.about;
 
-  int y = startY;
+  // ── Scroll container ─────────────────────────────────────────────────────
+  const std::wstring scrollId = MakeScrollContainer(
+      panel, ti,
+      kContentX, kHeaderH,
+      kContentW, kScrollHFull,
+      m_Palette.label,
+      m_Palette.background);
+  m_Controls[scrollId] = {L"", ControlKind::SelectLabel, ti};
+
+  // All coordinates are container-relative (origin = kContentX, kHeaderH).
+  int y = startY - kHeaderH;
 
   // App / widget name (large accent)
   const std::wstring nameText =
       about.hasName ? about.name
       : (m_Target ? m_Target->GetOptions().id : L"Novadesk");
   Txt(panel, L"__about_name",
-      kContentX + kPadX, y, kCtrlW, 32,
-      nameText.empty() ? L"Novadesk" : nameText, 20, m_Palette.accent, 700);
+      kPadX, y, kCtrlW, 32,
+      nameText.empty() ? L"Novadesk" : nameText, 20, m_Palette.accent, 700,
+      false, TEXT_ALIGN_LEFT_TOP, scrollId);
   m_Controls[L"__about_name"] = {L"", ControlKind::SelectLabel, ti};
   y += 36;
 
@@ -741,15 +838,17 @@ void SettingsPanel::BuildAboutTab(Widget *panel, int ti, int startY) {
       ? (L"Version " + about.version)
       : (L"Version " NOVADESK_VERSION);
   Txt(panel, L"__about_ver",
-      kContentX + kPadX, y, kCtrlW, 18, verText, 12, m_Palette.label);
+      kPadX, y, kCtrlW, 18, verText, 12, m_Palette.label, 400,
+      false, TEXT_ALIGN_LEFT_TOP, scrollId);
   m_Controls[L"__about_ver"] = {L"", ControlKind::SelectLabel, ti};
   y += 22;
 
   // Description
   if (about.hasDescription) {
     Txt(panel, L"__about_desc",
-        kContentX + kPadX, y, kCtrlW, 18,
-        about.description, 11, m_Palette.muted);
+        kPadX, y, kCtrlW, 18,
+        about.description, 11, m_Palette.muted, 400,
+        false, TEXT_ALIGN_LEFT_TOP, scrollId);
     m_Controls[L"__about_desc"] = {L"", ControlKind::SelectLabel, ti};
     y += 24;
   }
@@ -757,7 +856,7 @@ void SettingsPanel::BuildAboutTab(Widget *panel, int ti, int startY) {
   // Divider
   y += 8;
   Rect(panel, L"__about_hr",
-       kContentX + kPadX, y, kCtrlW, 1, m_Palette.divider);
+       kPadX, y, kCtrlW, 1, m_Palette.divider, 255, 0.0f, false, scrollId);
   m_Controls[L"__about_hr"] = {L"", ControlKind::SelectLabel, ti};
 }
 
@@ -892,6 +991,8 @@ void SettingsPanel::ApplyPaletteToPanel() {
     switch (info.kind) {
     case ControlKind::SelectLabel:
       // Row labels, section headings, dividers — dispatch on element type.
+      // Skip scroll containers (__scroll_N) — they are recolored separately below.
+      if (id.rfind(L"__scroll_", 0) == 0) break;
       if (auto *te = dynamic_cast<TextElement *>(el)) {
         if (role == L"label")        te->SetFontColor(m_Palette.label, 255);
         else if (role == L"heading") te->SetFontColor(m_Palette.text,  255);
@@ -995,6 +1096,19 @@ void SettingsPanel::ApplyPaletteToPanel() {
       cp->m_PopupInputColor = m_Palette.text;
       cp->m_PopupInputColorAlpha = 255;
       cp->m_HasPopupInputColor = true;
+    }
+  }
+
+  // Recolor scrollbar thumbs in all per-tab scroll containers
+  for (int ti = 0; ti < m_TotalTabs; ++ti) {
+    if (Element *el = m_Panel->FindElementById(ScrollId(ti))) {
+      el->SetScrollbarColor(m_Palette.label, 140);
+      el->SetScrollbarHoverColor(m_Palette.label, 210);
+      el->SetScrollbarActiveColor(m_Palette.label, 255);
+      // Keep the container background in sync with the content background
+      el->SetSolidColor(m_Palette.background, 255);
+      if (auto *sh = dynamic_cast<ShapeElement *>(el))
+        sh->SetFill(m_Palette.background, 255);
     }
   }
 
