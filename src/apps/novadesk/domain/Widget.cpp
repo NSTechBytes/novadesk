@@ -4374,8 +4374,12 @@ void Widget::StampInteractiveBounds(Element *element, int offsetX, int offsetY,
   }
 
   if (element->IsContainer()) {
+    // Children are rendered at (absLeft - scrollX, absTop - scrollY) relative
+    // to the container's top-left, so pass the scroll-adjusted origin.
+    const int childOffsetX = absLeft - element->GetScrollX();
+    const int childOffsetY = absTop  - element->GetScrollY();
     for (Element *child : element->GetContainerItems()) {
-      StampInteractiveBounds(child, absLeft, absTop, pvBits, surfW, surfH);
+      StampInteractiveBounds(child, childOffsetX, childOffsetY, pvBits, surfW, surfH);
     }
   }
 }
@@ -5616,6 +5620,12 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         handled = true;
         needRedraw = true;
         ToggleCheckBox(checkBox);
+        if (!Widget::IsValid(this))
+          return true;
+      } else {
+        // Sink path: element has NOT been toggled yet — sink handles Toggle().
+        handled = true;
+        m_InputSink->OnElementMouseUp(this, checkBox, x, y);
         if (!Widget::IsValid(this))
           return true;
       }

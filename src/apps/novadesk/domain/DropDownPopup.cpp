@@ -90,7 +90,7 @@ void DropDownPopup::LayoutRows() {
   // Width: at least the control, wide enough for the longest label, capped to
   // the work area.
   RECT r{};
-  GfxRect b = m_DropDown->GetBounds();
+  GfxRect b = GetAbsoluteBounds(m_DropDown);
   GetWindowRect(m_Widget ? m_Widget->GetWindow() : nullptr, &r);
   int width = (std::max)(1, b.Width);
   HDC dc = GetDC(m_hWnd ? m_hWnd : GetDesktopWindow());
