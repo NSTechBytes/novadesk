@@ -28,6 +28,8 @@
 #include "rescle.h"
 #include "../../../third_party/zlib/minizip/zip.h"
 #include "../../../third_party/json/json.hpp"
+#include "../../../common/AppPaths.h"
+#include "../../../common/NovadeskPaths.h"
 
 #pragma comment(lib, "version.lib")
 #pragma comment(lib, "shell32.lib")
@@ -150,9 +152,7 @@ std::ostream &LogSuccess() { return LogLine(LogColor::Success); }
 
 // Helper to get executable directory
 fs::path GetExeDir() {
-  wchar_t path[MAX_PATH];
-  GetModuleFileNameW(NULL, path, MAX_PATH);
-  return fs::path(path).parent_path();
+  return AppPaths::GetExeDir();
 }
 
 // Helper to execute a command and wait
@@ -239,16 +239,17 @@ bool IsDefaultAddonName(const std::string &addonName) {
 }
 
 std::string GetProductVersion() {
-  wchar_t szExePath[MAX_PATH];
-  GetModuleFileNameW(NULL, szExePath, MAX_PATH);
+  const fs::path szExePath = AppPaths::GetExePath();
+  if (szExePath.empty())
+    return "Unknown";
 
   DWORD dwHandle = 0;
-  DWORD dwSize = GetFileVersionInfoSizeW(szExePath, &dwHandle);
+  DWORD dwSize = GetFileVersionInfoSizeW(szExePath.c_str(), &dwHandle);
   if (dwSize == 0)
     return "Unknown";
 
   std::vector<BYTE> data(dwSize);
-  if (!GetFileVersionInfoW(szExePath, dwHandle, dwSize, data.data()))
+  if (!GetFileVersionInfoW(szExePath.c_str(), dwHandle, dwSize, data.data()))
     return "Unknown";
 
   struct LANGANDCODEPAGE {
@@ -333,13 +334,12 @@ bool IsRunningAsAdmin() {
 }
 
 bool RelaunchAsAdmin(const std::wstring &arguments) {
-  wchar_t exePathBuf[MAX_PATH];
-  GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
+  const fs::path exePath = AppPaths::GetExePath();
   SHELLEXECUTEINFOW sei = {};
   sei.cbSize = sizeof(sei);
   sei.fMask = SEE_MASK_NOCLOSEPROCESS;
   sei.lpVerb = L"runas";
-  sei.lpFile = exePathBuf;
+  sei.lpFile = exePath.c_str();
   sei.lpParameters = arguments.c_str();
   sei.nShow = SW_SHOWNORMAL;
   if (!ShellExecuteExW(&sei)) {
@@ -381,9 +381,10 @@ struct InstallerFileEntry {
 };
 
 bool InstallFromSelf() {
-  wchar_t exePathBuf[MAX_PATH];
-  GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
-  fs::path exePath = exePathBuf;
+  fs::path exePath = AppPaths::GetExePath();
+  if (exePath.empty()) {
+    return false;
+  }
 
   InstallerFooter footer{};
   uint64_t footerOffset = 0;
@@ -487,35 +488,28 @@ bool InstallFromSelf() {
   HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
   if (SUCCEEDED(hr)) {
     if (!options.startMenuFolder.empty()) {
-      PWSTR programsPath = nullptr;
-      if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Programs, 0, nullptr,
-                                         &programsPath))) {
-        fs::path startMenuDir =
-            fs::path(programsPath) / fs::path(options.startMenuFolder);
+      const fs::path programsDir = NovadeskPaths::GetProgramsDir();
+      if (!programsDir.empty()) {
+        fs::path startMenuDir = programsDir / fs::path(options.startMenuFolder);
         fs::create_directories(startMenuDir);
         fs::path shortcutPath = startMenuDir / (appName + ".lnk");
         CreateShortcut(appExeW, shortcutPath.wstring(), workingDirW, appNameW);
-        CoTaskMemFree(programsPath);
       }
     }
 
     if (options.createDesktopShortcut) {
-      PWSTR desktopPath = nullptr;
-      if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Desktop, 0, nullptr,
-                                         &desktopPath))) {
-        fs::path shortcutPath = fs::path(desktopPath) / (appName + ".lnk");
+      const fs::path desktopDir = NovadeskPaths::GetDesktopDir();
+      if (!desktopDir.empty()) {
+        fs::path shortcutPath = desktopDir / (appName + ".lnk");
         CreateShortcut(appExeW, shortcutPath.wstring(), workingDirW, appNameW);
-        CoTaskMemFree(desktopPath);
       }
     }
 
     if (options.createStartupShortcut || options.runOnStartup) {
-      PWSTR startupPath = nullptr;
-      if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Startup, 0, nullptr,
-                                         &startupPath))) {
-        fs::path shortcutPath = fs::path(startupPath) / (appName + ".lnk");
+      const fs::path startupDir = NovadeskPaths::GetStartupDir();
+      if (!startupDir.empty()) {
+        fs::path shortcutPath = startupDir / (appName + ".lnk");
         CreateShortcut(appExeW, shortcutPath.wstring(), workingDirW, appNameW);
-        CoTaskMemFree(startupPath);
       }
     }
 
@@ -842,14 +836,7 @@ bool IsPortableNovadeskInstall(const fs::path &novadeskExePath) {
 }
 
 fs::path GetDocumentsAddonsPath() {
-  PWSTR docs = nullptr;
-  fs::path out;
-  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docs)) &&
-      docs) {
-    out = fs::path(docs) / "Novadesk" / "Addons";
-    CoTaskMemFree(docs);
-  }
-  return out;
+  return NovadeskPaths::GetAddonsDir();
 }
 
 fs::path ResolveAddonsSourcePath(const fs::path &novadeskExePath) {

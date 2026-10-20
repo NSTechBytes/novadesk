@@ -99,6 +99,9 @@
     <ClCompile Include="..\..\common\Dialog.cpp" />
     <ClCompile Include="..\..\common\DpiUtil.cpp" />
     <ClCompile Include="..\..\common\ControlTemplate.cpp" />
+    <ClCompile Include="..\..\common\FontUtil.cpp" />
+    <ClCompile Include="..\..\common\AppPaths.cpp" />
+    <ClCompile Include="..\..\common\NovadeskPaths.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\common\WindowsTheme.h" />
@@ -106,6 +109,9 @@
     <ClInclude Include="..\..\common\DpiUtil.h" />
     <ClInclude Include="..\..\common\ControlTemplate.h" />
     <ClInclude Include="..\..\common\StdAfx.h" />
+    <ClInclude Include="..\..\common\FontUtil.h" />
+    <ClInclude Include="..\..\common\AppPaths.h" />
+    <ClInclude Include="..\..\common\NovadeskPaths.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>

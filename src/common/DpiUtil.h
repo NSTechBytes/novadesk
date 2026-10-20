@@ -10,6 +10,10 @@
 
 #include <Windows.h>
 
+#ifndef USER_DEFAULT_SCREEN_DPI
+#define USER_DEFAULT_SCREEN_DPI 96
+#endif
+
 namespace DpiUtil {
 
 class DpiUnawareScope
@@ -27,6 +31,13 @@ public:
 private:
 	DPI_AWARENESS_CONTEXT m_PreviousContext;
 };
+
+// Scales a 96-DPI design value to the given DPI. UI layout code declares sizes/positions at
+// 96 DPI and scales them at use so windows track per-monitor DPI changes.
+inline int Scale(int value, UINT dpi)
+{
+	return MulDiv(value, (int)dpi, USER_DEFAULT_SCREEN_DPI);
+}
 
 // The dialog manager bakes the base units into a dialog when it is created, so MapDialogRect() keeps
 // mapping for the DPI the dialog happened to be created at even after it has moved to a monitor with

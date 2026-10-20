@@ -95,6 +95,9 @@
     <ClCompile Include="src\installer_stub.cpp" />
     <ClCompile Include="..\..\common\WindowsTheme.cpp" />
     <ClCompile Include="..\..\common\DpiUtil.cpp" />
+    <ClCompile Include="..\..\common\FontUtil.cpp" />
+    <ClCompile Include="..\..\common\AppPaths.cpp" />
+    <ClCompile Include="..\..\common\NovadeskPaths.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Manifest Include="installer_stub.manifest" />

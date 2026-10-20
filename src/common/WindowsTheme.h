@@ -52,6 +52,15 @@ void SetMode(const std::string &modeStr);
 /// Apply theme (dark / light) to a standard Win32 window (including titlebar).
 void ApplyToWindow(HWND window);
 
+/// Apply theme to a window and every child control WITHOUT installing the
+/// WindowsTheme parent subclass — the host WndProc keeps ownership of
+/// WM_ERASEBKGND / WM_CTLCOLORSTATIC and can apply per-control colors.
+/// Also themes the dark titlebar via DWM.
+/// @param window Top-level window to theme.
+/// @param progressBar Optional progress bar to recolor (PBM_SET* is ignored
+///                    while visual styles are active, so the theme is toggled).
+void ApplyToControlTree(HWND window, HWND progressBar = nullptr);
+
 /// Apply theme to an individual control (ListView, Button, ComboBox, Edit, etc.).
 void ApplyToControl(HWND control);
 
@@ -66,6 +75,13 @@ void PrepareMenu(HWND owner);
 
 COLORREF GetTextColor();
 COLORREF GetDisabledTextColor();
+
+/// Returns the dark-mode window background color.
+COLORREF GetDarkBackgroundColor();
+
+/// Returns a shared, persistent brush for the dark-mode background color.
+/// @warning Owned by WindowsTheme — do NOT DeleteObject it.
+HBRUSH GetDarkBackgroundBrush();
 void EnableDialogTexture(HWND window, bool enable);
 
 /// Helper to resolve whether system uses dark mode directly from registry.

@@ -29,9 +29,13 @@
 #include <vector>
 
 #include "..\..\third_party\json\json.hpp"
-#include "unzip.h"
 #include "resource.h"
+#include "../../common/AppPaths.h"
+#include "../../common/DpiUtil.h"
+#include "../../common/FontUtil.h"
+#include "../../common/NovadeskPaths.h"
 #include "../../common/WindowsTheme.h"
+#include "../../common/ZipUtils.h"
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdiplus.lib")
@@ -128,7 +132,6 @@ struct AppState {
   UINT dpi = USER_DEFAULT_SCREEN_DPI;
 
   bool isDarkMode = false;
-  HBRUSH hbrWindowBg = nullptr;
   bool packageLoaded = false;
   bool installing = false;
   fs::path selectedPackagePath;
@@ -234,9 +237,7 @@ std::wstring FormatVersionQuad(uint64_t version) {
 }
 
 fs::path FindNovadeskExecutable() {
-  wchar_t exePath[MAX_PATH]{};
-  GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-  const fs::path exeDir = fs::path(exePath).parent_path();
+  const fs::path exeDir = AppPaths::GetExeDir();
 
   const fs::path adjacent = exeDir / "Novadesk.exe";
   if (fs::exists(adjacent))
@@ -399,95 +400,14 @@ bool CopyPayloadToTempZip(const fs::path &ndpkgPath, const fs::path &zipOutPath,
   return true;
 }
 
+// Thin wrapper over the shared ZipUtils implementation so ndpkg payload
+// extraction uses the same zip-slip-protected code path as the rest of the
+// app ecosystem.
 bool ExtractZip(const fs::path &zipPath, const fs::path &outputDir,
                 std::wstring &errorOut) {
-  unzFile uf = unzOpen64(zipPath.string().c_str());
-  if (!uf) {
-    errorOut = L"Failed to open ZIP payload.";
-    return false;
-  }
-
-  auto closeUnz = [&]() { unzClose(uf); };
-
-  int rc = unzGoToFirstFile(uf);
-  if (rc == UNZ_END_OF_LIST_OF_FILE) {
-    closeUnz();
-    return true;
-  }
-  if (rc != UNZ_OK) {
-    closeUnz();
-    errorOut = L"Failed to read ZIP entries.";
-    return false;
-  }
-
-  do {
-    unz_file_info64 fileInfo{};
-    char rawName[1024]{};
-    rc = unzGetCurrentFileInfo64(uf, &fileInfo, rawName, sizeof(rawName),
-                                 nullptr, 0, nullptr, 0);
-    if (rc != UNZ_OK) {
-      closeUnz();
-      errorOut = L"Failed to read ZIP file info.";
-      return false;
-    }
-
-    std::string entryName(rawName);
-    std::replace(entryName.begin(), entryName.end(), '\\', '/');
-    fs::path targetPath = outputDir / fs::path(entryName);
-
-    const bool isDir = !entryName.empty() && entryName.back() == '/';
-    if (isDir) {
-      std::error_code ec;
-      fs::create_directories(targetPath, ec);
-    } else {
-      std::error_code ec;
-      fs::create_directories(targetPath.parent_path(), ec);
-
-      rc = unzOpenCurrentFile(uf);
-      if (rc != UNZ_OK) {
-        closeUnz();
-        errorOut = L"Failed to open ZIP entry.";
-        return false;
-      }
-
-      std::ofstream out(targetPath, std::ios::binary | std::ios::trunc);
-      if (!out) {
-        unzCloseCurrentFile(uf);
-        closeUnz();
-        errorOut = L"Failed to create extracted file.";
-        return false;
-      }
-
-      std::vector<char> buffer(64 * 1024);
-      while (true) {
-        const int bytes = unzReadCurrentFile(
-            uf, buffer.data(), static_cast<unsigned int>(buffer.size()));
-        if (bytes < 0) {
-          unzCloseCurrentFile(uf);
-          closeUnz();
-          errorOut = L"Failed while extracting ZIP entry.";
-          return false;
-        }
-        if (bytes == 0)
-          break;
-        out.write(buffer.data(), bytes);
-        if (!out) {
-          unzCloseCurrentFile(uf);
-          closeUnz();
-          errorOut = L"Failed while writing extracted file.";
-          return false;
-        }
-      }
-
-      unzCloseCurrentFile(uf);
-    }
-
-    rc = unzGoToNextFile(uf);
-  } while (rc == UNZ_OK);
-
-  closeUnz();
-  if (rc != UNZ_END_OF_LIST_OF_FILE) {
-    errorOut = L"Failed while iterating ZIP entries.";
+  std::string error;
+  if (!novadesk::shared::ExtractFromZip(zipPath, outputDir, {}, error)) {
+    errorOut = Utf8ToWide(error);
     return false;
   }
   return true;
@@ -624,17 +544,6 @@ HBITMAP LoadScaledPreviewBitmap(const fs::path &imagePath, HWND hPreview) {
   return hBmp;
 }
 
-std::wstring GetDocumentsPathSuffix(const wchar_t *subdir) {
-  PWSTR docs = nullptr;
-  std::wstring result;
-  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docs)) &&
-      docs) {
-    result = std::wstring(docs) + L"\\Novadesk\\" + subdir;
-    CoTaskMemFree(docs);
-  }
-  return result;
-}
-
 bool CopyDirectoryRecursive(
     const fs::path &src, const fs::path &dst, std::wstring &errorOut,
     const std::function<void()> &onFileCopied = nullptr) {
@@ -698,12 +607,12 @@ bool ResolveInstallTargets(fs::path &widgetsOut, fs::path &addonsOut) {
     return true;
   }
 
-  const std::wstring docsWidgets = GetDocumentsPathSuffix(L"Widgets");
-  const std::wstring docsAddons = GetDocumentsPathSuffix(L"Addons");
+  const fs::path docsWidgets = NovadeskPaths::GetWidgetsDir();
+  const fs::path docsAddons = NovadeskPaths::GetAddonsDir();
   if (docsWidgets.empty() || docsAddons.empty())
     return false;
-  widgetsOut = fs::path(docsWidgets);
-  addonsOut = fs::path(docsAddons);
+  widgetsOut = docsWidgets;
+  addonsOut = docsAddons;
   return true;
 }
 
@@ -879,9 +788,7 @@ bool RequestManageQuit() {
   // Fallback for elevation mismatch (non-admin installer vs admin
   // Manage/Novadesk): invoke manage_novadesk with elevation so it can request
   // close at same integrity level.
-  wchar_t exePath[MAX_PATH]{};
-  GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-  fs::path exeDir = fs::path(exePath).parent_path();
+  fs::path exeDir = AppPaths::GetExeDir();
   fs::path manageExe = exeDir / "manage_novadesk.exe";
   if (!fs::exists(manageExe)) {
     fs::path parentCandidate = exeDir.parent_path() / "manage_novadesk.exe";
@@ -918,9 +825,7 @@ bool RequestManageQuit() {
 }
 
 bool StartManageWindow() {
-  wchar_t exePath[MAX_PATH]{};
-  GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-  fs::path exeDir = fs::path(exePath).parent_path();
+  fs::path exeDir = AppPaths::GetExeDir();
   fs::path manageExe = exeDir / "manage_novadesk.exe";
 
   if (!fs::exists(manageExe)) {
@@ -1350,7 +1255,7 @@ void HandleInstall(AppState *state) {
 
 // Scale a 96-DPI design pixel to the state's current DPI.
 static inline int S(int v, UINT dpi) {
-  return MulDiv(v, (int)dpi, 96);
+  return DpiUtil::Scale(v, dpi);
 }
 
 // Create/recreate all fonts using the system UI font at the current DPI.
@@ -1361,27 +1266,14 @@ static void CreateInstallerFonts(AppState *state) {
   if (state->hUiFont)     { DeleteObject(state->hUiFont);     state->hUiFont     = nullptr; }
   if (state->hStatusFont) { DeleteObject(state->hStatusFont); state->hStatusFont = nullptr; }
 
-  NONCLIENTMETRICSW ncm{};
-  ncm.cbSize = sizeof(ncm);
-  SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-
-  // Scale to the requested DPI if it differs from the system DPI.
-  HDC screenDC = GetDC(nullptr);
-  const int sysDpi = screenDC ? GetDeviceCaps(screenDC, LOGPIXELSX) : 96;
-  if (screenDC) ReleaseDC(nullptr, screenDC);
-  if (sysDpi > 0 && (UINT)sysDpi != state->dpi)
-    ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, (int)state->dpi, sysDpi);
-
   // Regular UI font — labels, values, buttons, list view.
-  state->hUiFont = CreateFontIndirectW(&ncm.lfMenuFont);
+  state->hUiFont = FontUtil::CreateSystemFont(state->dpi);
 
   // Small caps font for category labels (WIDGET NAME, VERSION, etc.) — same size, normal weight.
-  state->hStatusFont = CreateFontIndirectW(&ncm.lfMenuFont);
+  state->hStatusFont = FontUtil::CreateSystemFont(state->dpi);
 
   // Title font — bold, ~1.6× bigger, for the widget/package name.
-  ncm.lfMenuFont.lfWeight = FW_BOLD;
-  ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, 16, 10);
-  state->hTitleFont = CreateFontIndirectW(&ncm.lfMenuFont);
+  state->hTitleFont = FontUtil::CreateSystemFont(state->dpi, FW_BOLD, 160);
 }
 
 // Reposition and resize all child controls to match current DPI / client size.
@@ -1471,46 +1363,11 @@ static void InstallerApplyTheme(HWND hwnd, AppState *state) {
   WindowsTheme::Refresh();
   state->isDarkMode = WindowsTheme::IsUsingDarkMode();
 
-  // Dark titlebar via DWM — must be done before theming controls.
-  const BOOL dark = state->isDarkMode ? TRUE : FALSE;
-  DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
-#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1
-#define DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 19
-#endif
-  DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &dark, sizeof(dark));
-
-  // Apply theme to the window itself as a control (sets allowDarkModeForWindow
-  // + SetWindowTheme) but do NOT call ApplyToWindow/ApplyToDialog — those
-  // install a WM_CTLCOLORSTATIC subclass that would intercept our custom
-  // per-control colors before WndProc sees them.
-  WindowsTheme::ApplyToControl(hwnd);
-
-  // Theme every child control so buttons, listview, combobox etc. draw dark.
-  EnumChildWindows(hwnd, [](HWND child, LPARAM) -> BOOL {
-    WindowsTheme::ApplyToControl(child);
-    return TRUE;
-  }, 0);
-
-  // Progress bar: PBM_SETBARCOLOR is ignored when visual styles are active.
-  // Disable the theme on the progress bar first, then set explicit colors.
-  if (state->hProgress) {
-    if (state->isDarkMode) {
-      SetWindowTheme(state->hProgress, L"", L""); // disable visual styles
-      SendMessageW(state->hProgress, PBM_SETBARCOLOR, 0, (LPARAM)RGB(0, 120, 215));
-      SendMessageW(state->hProgress, PBM_SETBKCOLOR,  0, (LPARAM)RGB(48, 48, 48));
-    } else {
-      SetWindowTheme(state->hProgress, L"Explorer", L""); // restore visual styles
-      SendMessageW(state->hProgress, PBM_SETBARCOLOR, 0, (LPARAM)CLR_DEFAULT);
-      SendMessageW(state->hProgress, PBM_SETBKCOLOR,  0, (LPARAM)CLR_DEFAULT);
-    }
-  }
-
-  if (state->hbrWindowBg) { DeleteObject(state->hbrWindowBg); state->hbrWindowBg = nullptr; }
-  if (state->isDarkMode) {
-    state->hbrWindowBg = CreateSolidBrush(RGB(32, 32, 32));
-  }
-
-
+  // Theme the dark titlebar and every child control WITHOUT installing the
+  // WindowsTheme parent subclass — this WndProc keeps ownership of
+  // WM_CTLCOLORSTATIC / WM_ERASEBKGND below. The progress bar is recolored too,
+  // since PBM_SETBARCOLOR is ignored while visual styles are active.
+  WindowsTheme::ApplyToControlTree(hwnd, state->hProgress);
 
   RedrawWindow(hwnd, nullptr, nullptr,
                RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
@@ -1654,8 +1511,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (state) {
       HDC hdc = reinterpret_cast<HDC>(wParam);
       HWND control = reinterpret_cast<HWND>(lParam);
-      if (state->isDarkMode && state->hbrWindowBg) {
-        SetBkColor(hdc, RGB(32, 32, 32));
+      if (state->isDarkMode) {
+        SetBkColor(hdc, WindowsTheme::GetDarkBackgroundColor());
         if (control == state->hNameLabel || control == state->hVersionLabel ||
             control == state->hAuthorLabel ||
             control == state->hWidgetStatusLabel ||
@@ -1666,7 +1523,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         } else {
           SetTextColor(hdc, RGB(224, 224, 224));
         }
-        return reinterpret_cast<LRESULT>(state->hbrWindowBg);
+        return reinterpret_cast<LRESULT>(WindowsTheme::GetDarkBackgroundBrush());
       } else {
         SetBkColor(hdc, kWindowBgColor);
         if (control == state->hNameLabel || control == state->hVersionLabel ||
@@ -1707,10 +1564,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         DeleteObject(state->hStatusFont);
         state->hStatusFont = nullptr;
       }
-      if (state->hbrWindowBg) {
-        DeleteObject(state->hbrWindowBg);
-        state->hbrWindowBg = nullptr;
-      }
       DeleteDirectoryIfExists(state->workingDir);
     }
     PostQuitMessage(0);
@@ -1744,9 +1597,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return 0;
   }
   case WM_ERASEBKGND:
-    if (state && state->isDarkMode && state->hbrWindowBg) {
+    if (state && state->isDarkMode) {
       RECT rc; GetClientRect(hwnd, &rc);
-      FillRect(reinterpret_cast<HDC>(wParam), &rc, state->hbrWindowBg);
+      FillRect(reinterpret_cast<HDC>(wParam), &rc,
+               WindowsTheme::GetDarkBackgroundBrush());
       return 1;
     }
     break;
@@ -1822,8 +1676,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
   constexpr int kWindowHeight = 452;
   // Get the DPI of the primary monitor to size the window correctly before creation.
   const UINT primaryDpi = GetDpiForSystem();
-  const int scaledW = MulDiv(kWindowWidth, (int)primaryDpi, 96);
-  const int scaledH = MulDiv(kWindowHeight, (int)primaryDpi, 96);
+  const int scaledW = DpiUtil::Scale(kWindowWidth, primaryDpi);
+  const int scaledH = DpiUtil::Scale(kWindowHeight, primaryDpi);
   RECT workArea{};
   SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0);
   const int windowX =

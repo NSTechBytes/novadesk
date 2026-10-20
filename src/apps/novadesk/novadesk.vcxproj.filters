@@ -279,7 +279,7 @@
     <ClCompile Include="shared\Utils.cpp">
       <Filter>shared</Filter>
     </ClCompile>
-    <ClCompile Include="shared\ZipUtils.cpp">
+    <ClCompile Include="..\..\common\ZipUtils.cpp">
       <Filter>shared</Filter>
     </ClCompile>
     <ClCompile Include="..\..\third_party\zlib\adler32.c">
@@ -335,7 +335,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="shared\ZipUtils.h">
+    <ClInclude Include="..\..\common\ZipUtils.h">
       <Filter>shared</Filter>
     </ClInclude>
     <ClInclude Include="domain\DesktopManager.h">

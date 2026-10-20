@@ -9,6 +9,9 @@
 #include "StdAfx.h"
 #include "WindowsTheme.h"
 #include "DpiUtil.h"
+#include "FontUtil.h"
+#include "AppPaths.h"
+#include "NovadeskPaths.h"
 #include <winreg.h>
 #include <shobjidl.h>
 #include <objbase.h>
@@ -112,13 +115,14 @@ bool IsRunningAsAdmin() {
 }
 
 bool RelaunchAsAdmin(const std::wstring &arguments) {
-  wchar_t exePathBuf[MAX_PATH];
-  GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
+  const fs::path exePath = AppPaths::GetExePath();
+  if (exePath.empty())
+    return false;
   SHELLEXECUTEINFOW sei = {};
   sei.cbSize = sizeof(sei);
   sei.fMask = SEE_MASK_NOCLOSEPROCESS;
   sei.lpVerb = L"runas";
-  sei.lpFile = exePathBuf;
+  sei.lpFile = exePath.c_str();
   sei.lpParameters = arguments.c_str();
   sei.nShow = SW_SHOWNORMAL;
   if (!ShellExecuteExW(&sei)) {
@@ -280,9 +284,7 @@ void RefreshUi() {
 // ============================================================================
 
 std::wstring LoadAppNameFromManifest() {
-  wchar_t exePathBuf[MAX_PATH];
-  GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
-  fs::path exePath = exePathBuf;
+  const fs::path exePath = AppPaths::GetExePath();
 
   InstallerFooter footer{};
   uint64_t footerOffset = 0;
@@ -321,9 +323,7 @@ bool InstallFromSelf(bool skipInstalledCheck) {
   // Extract embedded payload and manifest from self, then perform installation.
   // NOTE: This function requires admin privileges to write to system
   // directories.
-  wchar_t exePathBuf[MAX_PATH];
-  GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
-  fs::path exePath = exePathBuf;
+  const fs::path exePath = AppPaths::GetExePath();
 
   InstallerFooter footer{};
   uint64_t footerOffset = 0;
@@ -458,35 +458,28 @@ bool InstallFromSelf(bool skipInstalledCheck) {
   if (SUCCEEDED(hr)) {
     UpdateStatus(L"Creating shortcuts...");
     if (!startMenuFolder.empty()) {
-      PWSTR programsPath = nullptr;
-      if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Programs, 0, nullptr,
-                                         &programsPath))) {
-        fs::path startMenuDir =
-            fs::path(programsPath) / fs::path(startMenuFolder);
+      const fs::path programsDir = NovadeskPaths::GetProgramsDir();
+      if (!programsDir.empty()) {
+        fs::path startMenuDir = programsDir / fs::path(startMenuFolder);
         fs::create_directories(startMenuDir);
         fs::path shortcutPath = startMenuDir / (appName + ".lnk");
         CreateShortcut(appExeW, shortcutPath.wstring(), workingDirW, appNameW);
-        CoTaskMemFree(programsPath);
       }
     }
 
     if (createDesktopShortcut) {
-      PWSTR desktopPath = nullptr;
-      if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Desktop, 0, nullptr,
-                                         &desktopPath))) {
-        fs::path shortcutPath = fs::path(desktopPath) / (appName + ".lnk");
+      const fs::path desktopDir = NovadeskPaths::GetDesktopDir();
+      if (!desktopDir.empty()) {
+        fs::path shortcutPath = desktopDir / (appName + ".lnk");
         CreateShortcut(appExeW, shortcutPath.wstring(), workingDirW, appNameW);
-        CoTaskMemFree(desktopPath);
       }
     }
 
     if (createStartupShortcut || runOnStartup) {
-      PWSTR startupPath = nullptr;
-      if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Startup, 0, nullptr,
-                                         &startupPath))) {
-        fs::path shortcutPath = fs::path(startupPath) / (appName + ".lnk");
+      const fs::path startupDir = NovadeskPaths::GetStartupDir();
+      if (!startupDir.empty()) {
+        fs::path shortcutPath = startupDir / (appName + ".lnk");
         CreateShortcut(appExeW, shortcutPath.wstring(), workingDirW, appNameW);
-        CoTaskMemFree(startupPath);
       }
     }
 
@@ -567,9 +560,7 @@ bool UninstallSelf() {
     return true;
   }
 
-  wchar_t exePathBuf[MAX_PATH];
-  GetModuleFileNameW(NULL, exePathBuf, MAX_PATH);
-  fs::path exePath = exePathBuf;
+  const fs::path exePath = AppPaths::GetExePath();
 
   fs::path installDirPath = exePath.parent_path();
 
@@ -691,27 +682,21 @@ bool UninstallSelf() {
   UpdateStatus(L"Removing shortcuts...");
   std::wstring appNameW = ToWString(appName);
 
-  PWSTR programsPath = nullptr;
-  if (SUCCEEDED(
-          SHGetKnownFolderPath(FOLDERID_Programs, 0, nullptr, &programsPath))) {
-    fs::path startMenuDir = fs::path(programsPath) / ToWString(startMenuFolder);
+  const fs::path programsDir = NovadeskPaths::GetProgramsDir();
+  if (!programsDir.empty()) {
+    fs::path startMenuDir = programsDir / ToWString(startMenuFolder);
     fs::remove_all(startMenuDir);
-    CoTaskMemFree(programsPath);
   }
 
-  PWSTR desktopPath = nullptr;
-  if (SUCCEEDED(
-          SHGetKnownFolderPath(FOLDERID_Desktop, 0, nullptr, &desktopPath))) {
-    fs::remove(fs::path(desktopPath) / (appNameW + L".lnk"));
-    CoTaskMemFree(desktopPath);
+  const fs::path desktopDir = NovadeskPaths::GetDesktopDir();
+  if (!desktopDir.empty()) {
+    fs::remove(desktopDir / (appNameW + L".lnk"));
   }
 
   if (createStartupShortcut || runOnStartup) {
-    PWSTR startupPath = nullptr;
-    if (SUCCEEDED(
-            SHGetKnownFolderPath(FOLDERID_Startup, 0, nullptr, &startupPath))) {
-      fs::remove(fs::path(startupPath) / (appNameW + L".lnk"));
-      CoTaskMemFree(startupPath);
+    const fs::path startupDir = NovadeskPaths::GetStartupDir();
+    if (!startupDir.empty()) {
+      fs::remove(startupDir / (appNameW + L".lnk"));
     }
   }
 
@@ -801,32 +786,10 @@ bool UninstallSelf() {
 // ============================================================================
 
 // Apply dark/light theme to the window: DWM titlebar + per-control theming.
-// Does NOT install the WindowsTheme parent subclass so WndProc keeps ownership
-// of WM_CTLCOLORSTATIC and WM_ERASEBKGND.
+// ApplyToControlTree does NOT install the WindowsTheme parent subclass, so
+// WndProc keeps ownership of WM_CTLCOLORSTATIC and WM_ERASEBKGND.
 static void ApplyInstallerTheme(HWND hwnd) {
-  const BOOL dark = WindowsTheme::IsUsingDarkMode() ? TRUE : FALSE;
-  DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
-  constexpr DWORD DWMWA_BEFORE = 19;
-  DwmSetWindowAttribute(hwnd, DWMWA_BEFORE, &dark, sizeof(dark));
-  WindowsTheme::ApplyToControl(hwnd);
-  EnumChildWindows(hwnd, [](HWND child, LPARAM) -> BOOL {
-    WindowsTheme::ApplyToControl(child);
-    return TRUE;
-  }, 0);
-
-  // Progress bar: PBM_SETBARCOLOR is ignored when visual styles are active.
-  // Disable the theme on the progress bar first, then set explicit colors.
-  if (g_progress) {
-    if (dark) {
-      SetWindowTheme(g_progress, L"", L""); // disable visual styles so PBM_SETBARCOLOR works
-      SendMessageW(g_progress, PBM_SETBARCOLOR, 0, (LPARAM)RGB(0, 120, 215));
-      SendMessageW(g_progress, PBM_SETBKCOLOR,  0, (LPARAM)RGB(48, 48, 48));
-    } else {
-      SetWindowTheme(g_progress, L"Explorer", L""); // restore visual styles
-      SendMessageW(g_progress, PBM_SETBARCOLOR, 0, (LPARAM)CLR_DEFAULT);
-      SendMessageW(g_progress, PBM_SETBKCOLOR,  0, (LPARAM)CLR_DEFAULT);
-    }
-  }
+  WindowsTheme::ApplyToControlTree(hwnd, g_progress);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -834,9 +797,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   case WM_ERASEBKGND: {
     if (WindowsTheme::IsUsingDarkMode()) {
       RECT rc{}; GetClientRect(hwnd, &rc);
-      HBRUSH br = CreateSolidBrush(RGB(32, 32, 32));
-      FillRect(reinterpret_cast<HDC>(wParam), &rc, br);
-      DeleteObject(br);
+      FillRect(reinterpret_cast<HDC>(wParam), &rc,
+               WindowsTheme::GetDarkBackgroundBrush());
       return 1;
     }
     break;
@@ -846,9 +808,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     SetBkMode(hdc, TRANSPARENT);
     if (WindowsTheme::IsUsingDarkMode()) {
       SetTextColor(hdc, WindowsTheme::GetTextColor());
-      SetBkColor(hdc, RGB(32, 32, 32));
-      static HBRUSH brDark = CreateSolidBrush(RGB(32, 32, 32));
-      return reinterpret_cast<LRESULT>(brDark);
+      SetBkColor(hdc, WindowsTheme::GetDarkBackgroundColor());
+      return reinterpret_cast<LRESULT>(WindowsTheme::GetDarkBackgroundBrush());
     }
     SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
     SetBkColor(hdc, GetSysColor(COLOR_WINDOW));
@@ -867,21 +828,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                  r->right - r->left, r->bottom - r->top,
                  SWP_NOZORDER | SWP_NOACTIVATE);
     // Recreate fonts at the new DPI using the system UI font.
-    NONCLIENTMETRICSW ncm{}; ncm.cbSize = sizeof(ncm);
-    SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-    HDC dc = GetDC(nullptr);
-    const int sysDpi = dc ? GetDeviceCaps(dc, LOGPIXELSX) : 96;
-    if (dc) ReleaseDC(nullptr, dc);
-    if (sysDpi > 0 && (UINT)sysDpi != dpi)
-      ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, (int)dpi, sysDpi);
     if (g_textFont)  { DeleteObject(g_textFont);  g_textFont  = nullptr; }
     if (g_titleFont) { DeleteObject(g_titleFont); g_titleFont = nullptr; }
-    g_textFont = CreateFontIndirectW(&ncm.lfMenuFont);
-    ncm.lfMenuFont.lfWeight = FW_SEMIBOLD;
-    ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, 14, 10);
-    g_titleFont = CreateFontIndirectW(&ncm.lfMenuFont);
+    g_textFont  = FontUtil::CreateSystemFont(dpi);
+    g_titleFont = FontUtil::CreateSystemFont(dpi, FW_SEMIBOLD, 140);
     // Reposition and resize all controls.
-    auto S = [dpi](int v){ return MulDiv(v, (int)dpi, 96); };
+    auto S = [dpi](int v){ return DpiUtil::Scale(v, dpi); };
     if (g_title)         { SendMessageW(g_title,            WM_SETFONT, (WPARAM)g_titleFont, TRUE); SetWindowPos(g_title,            nullptr, S(24),  S(20),  S(460), S(28), SWP_NOZORDER); }
     if (g_status)        { SendMessageW(g_status,           WM_SETFONT, (WPARAM)g_textFont,  TRUE); SetWindowPos(g_status,           nullptr, S(24),  S(60),  S(460), S(20), SWP_NOZORDER); }
     if (g_progress)      {                                                                           SetWindowPos(g_progress,         nullptr, S(24),  S(92),  S(460), S(22), SWP_NOZORDER); }
@@ -1042,26 +994,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int) {
                                 : (L"Installing " + g_appNameUi);
 
   // Build fonts from the system UI font at the window's actual DPI.
-  g_titleFont = nullptr;
-  g_textFont  = nullptr;
   {
     const UINT dpi = GetDpiForWindow(g_hwnd);
-    NONCLIENTMETRICSW ncm{}; ncm.cbSize = sizeof(ncm);
-    SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-    HDC dc = GetDC(nullptr);
-    const int sysDpi = dc ? GetDeviceCaps(dc, LOGPIXELSX) : 96;
-    if (dc) ReleaseDC(nullptr, dc);
-    if (sysDpi > 0 && (UINT)sysDpi != dpi)
-      ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, (int)dpi, sysDpi);
-    g_textFont = CreateFontIndirectW(&ncm.lfMenuFont);
-    ncm.lfMenuFont.lfWeight = FW_SEMIBOLD;
-    ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, 14, 10);
-    g_titleFont = CreateFontIndirectW(&ncm.lfMenuFont);
+    g_textFont  = FontUtil::CreateSystemFont(dpi);
+    g_titleFont = FontUtil::CreateSystemFont(dpi, FW_SEMIBOLD, 140);
   }
 
   // Create all controls at DPI-scaled positions.
   const UINT cdpi = GetDpiForWindow(g_hwnd);
-  auto S = [cdpi](int v){ return MulDiv(v, (int)cdpi, 96); };
+  auto S = [cdpi](int v){ return DpiUtil::Scale(v, cdpi); };
 
   g_title = CreateWindowW(L"STATIC", headerText.c_str(), WS_CHILD | WS_VISIBLE,
                           S(24), S(20), S(460), S(28), g_hwnd, nullptr, hInstance, nullptr);

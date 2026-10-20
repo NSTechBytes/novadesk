@@ -228,7 +228,7 @@
     <ClCompile Include="shared\Settings.cpp" />
     <ClCompile Include="shared\System.cpp" />
     <ClCompile Include="shared\Utils.cpp" />
-    <ClCompile Include="shared\ZipUtils.cpp" />
+    <ClCompile Include="..\..\common\ZipUtils.cpp" />
     <ClCompile Include="..\..\third_party\zlib\adler32.c">
       <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -282,7 +282,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="shared\ZipUtils.h" />
+    <ClInclude Include="..\..\common\ZipUtils.h" />
     <ClInclude Include="domain\DesktopManager.h" />
     <ClInclude Include="domain\InputBoxContextMenuHelper.h" />
     <ClInclude Include="domain\ColorPickerPopup.h" />

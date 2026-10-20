@@ -101,15 +101,22 @@
     <ClCompile Include="..\..\common\Dialog.cpp" />
     <ClCompile Include="..\..\common\DpiUtil.cpp" />
     <ClCompile Include="..\..\common\ControlTemplate.cpp" />
+    <ClCompile Include="..\..\common\FontUtil.cpp" />
+    <ClCompile Include="..\..\common\AppPaths.cpp" />
+    <ClCompile Include="..\..\common\NovadeskPaths.cpp" />
+    <ClCompile Include="..\..\common\ZipUtils.cpp" />
     <ClCompile Include="..\..\third_party\zlib\adler32.c" />
     <ClCompile Include="..\..\third_party\zlib\crc32.c" />
+    <ClCompile Include="..\..\third_party\zlib\deflate.c" />
     <ClCompile Include="..\..\third_party\zlib\inflate.c" />
     <ClCompile Include="..\..\third_party\zlib\inftrees.c" />
     <ClCompile Include="..\..\third_party\zlib\inffast.c" />
+    <ClCompile Include="..\..\third_party\zlib\trees.c" />
     <ClCompile Include="..\..\third_party\zlib\zutil.c" />
     <ClCompile Include="..\..\third_party\zlib\minizip\ioapi.c" />
     <ClCompile Include="..\..\third_party\zlib\minizip\mztools.c" />
     <ClCompile Include="..\..\third_party\zlib\minizip\unzip.c" />
+    <ClCompile Include="..\..\third_party\zlib\minizip\zip.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\common\WindowsTheme.h" />
@@ -117,6 +124,10 @@
     <ClInclude Include="..\..\common\DpiUtil.h" />
     <ClInclude Include="..\..\common\ControlTemplate.h" />
     <ClInclude Include="..\..\common\StdAfx.h" />
+    <ClInclude Include="..\..\common\FontUtil.h" />
+    <ClInclude Include="..\..\common\AppPaths.h" />
+    <ClInclude Include="..\..\common\NovadeskPaths.h" />
+    <ClInclude Include="..\..\common\ZipUtils.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>

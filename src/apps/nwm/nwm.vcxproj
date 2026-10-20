@@ -90,6 +90,8 @@
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\rescle.cc" />
+    <ClCompile Include="..\..\common\AppPaths.cpp" />
+    <ClCompile Include="..\..\common\NovadeskPaths.cpp" />
     <ClCompile Include="..\..\third_party\zlib\adler32.c" />
     <ClCompile Include="..\..\third_party\zlib\crc32.c" />
     <ClCompile Include="..\..\third_party\zlib\deflate.c" />
@@ -101,6 +103,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\rescle.h" />
+    <ClInclude Include="..\..\common\AppPaths.h" />
+    <ClInclude Include="..\..\common\NovadeskPaths.h" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>

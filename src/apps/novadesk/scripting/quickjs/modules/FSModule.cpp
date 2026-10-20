@@ -13,7 +13,7 @@
 
 #include "../../shared/PathUtils.h"
 #include "../../shared/Utils.h"
-#include "../../shared/ZipUtils.h"
+#include "../../../../common/ZipUtils.h"
 #include "../engine/JSEngine.h"
 
 namespace novadesk::scripting::quickjs {

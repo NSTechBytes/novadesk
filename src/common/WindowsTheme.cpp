@@ -805,6 +805,35 @@ void ApplyToDialog(HWND dialog) {
   EnumChildWindows(dialog, ApplyControlEnum, 0);
 }
 
+void ApplyToControlTree(HWND window, HWND progressBar) {
+  if (!window || !IsWindow(window)) return;
+  const BOOL dark = IsUsingDarkMode() ? TRUE : FALSE;
+
+  // Dark titlebar via DWM — must be done before theming the controls.
+  DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+  DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, &dark, sizeof(dark));
+
+  // Theme the window itself and every child so buttons, listview, combobox
+  // etc. draw dark. Deliberately does NOT install the parent subclass so the
+  // host WndProc keeps ownership of WM_CTLCOLORSTATIC / WM_ERASEBKGND.
+  ApplyToControl(window);
+  EnumChildWindows(window, ApplyControlEnum, 0);
+
+  // Progress bar: PBM_SETBARCOLOR is ignored when visual styles are active.
+  // Disable the theme on the progress bar first, then set explicit colors.
+  if (progressBar && IsWindow(progressBar)) {
+    if (dark) {
+      SetWindowTheme(progressBar, L"", L""); // disable visual styles
+      SendMessageW(progressBar, PBM_SETBARCOLOR, 0, (LPARAM)RGB(0, 120, 215));
+      SendMessageW(progressBar, PBM_SETBKCOLOR,  0, (LPARAM)RGB(48, 48, 48));
+    } else {
+      SetWindowTheme(progressBar, L"Explorer", L""); // restore visual styles
+      SendMessageW(progressBar, PBM_SETBARCOLOR, 0, (LPARAM)CLR_DEFAULT);
+      SendMessageW(progressBar, PBM_SETBKCOLOR,  0, (LPARAM)CLR_DEFAULT);
+    }
+  }
+}
+
 void ApplyToTooltip(HWND w) {
   if (!w || !IsWindow(w)) return;
   auto& state = GetState();
@@ -835,6 +864,15 @@ COLORREF GetTextColor() {
 
 COLORREF GetDisabledTextColor() {
   return IsUsingDarkMode() ? g_DisabledText : GetSysColor(COLOR_GRAYTEXT);
+}
+
+COLORREF GetDarkBackgroundColor() {
+  return g_Background;
+}
+
+HBRUSH GetDarkBackgroundBrush() {
+  // Persistent brush owned by ThemeState; shared across all callers.
+  return GetState().brBackground;
 }
 
 void EnableDialogTexture(HWND window, bool enable) {

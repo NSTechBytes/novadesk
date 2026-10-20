@@ -36,6 +36,9 @@
 #include "../../common/WindowsTheme.h"
 #include "../../common/Dialog.h"
 #include "../../common/DpiUtil.h"
+#include "../../common/AppPaths.h"
+#include "../../common/FontUtil.h"
+#include "../../common/NovadeskPaths.h"
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdiplus.lib")
@@ -307,10 +310,7 @@ static void OpenUrl(const wchar_t *url) {
 }
 
 static std::wstring GetExeDir() {
-  wchar_t buf[MAX_PATH + 1] = {};
-  GetModuleFileNameW(nullptr, buf, MAX_PATH);
-  std::filesystem::path p(buf);
-  return p.parent_path().wstring();
+  return AppPaths::GetExeDir().wstring();
 }
 
 static std::wstring JoinPath(const std::wstring &a, const std::wstring &b) {
@@ -418,29 +418,14 @@ static void CreateManageFonts(UINT dpi = USER_DEFAULT_SCREEN_DPI) {
 
   // Use the system menu font (same source as Rainmeter / ControlTemplate).
   // This gives the exact font Windows uses for its own UI at the current DPI.
-  NONCLIENTMETRICSW ncm{};
-  ncm.cbSize = sizeof(ncm);
-  SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
-
-  // Scale lfHeight to the requested DPI if it differs from the system DPI.
-  HDC screenDC = GetDC(nullptr);
-  const int systemDpi = screenDC ? GetDeviceCaps(screenDC, LOGPIXELSX) : 96;
-  if (screenDC) ReleaseDC(nullptr, screenDC);
-  if (systemDpi > 0 && (UINT)systemDpi != dpi) {
-    ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, (int)dpi, systemDpi);
-  }
-
   // Regular weight — used for all controls, checkboxes, buttons.
-  g_buttonFont = CreateFontIndirectW(&ncm.lfMenuFont);
+  g_buttonFont = FontUtil::CreateSystemFont(dpi);
 
   // Bold variant used for the "Manage Settings" title.
-  ncm.lfMenuFont.lfWeight = FW_BOLD;
-  g_aboutSectionFont = CreateFontIndirectW(&ncm.lfMenuFont);
+  g_aboutSectionFont = FontUtil::CreateSystemFont(dpi, FW_BOLD);
 
-  // Larger bold title for the About app name.
-  ncm.lfMenuFont.lfWeight = FW_BOLD;
-  ncm.lfMenuFont.lfHeight = MulDiv(ncm.lfMenuFont.lfHeight, 16, 10); // ~1.6x bigger
-  g_aboutTitleFont = CreateFontIndirectW(&ncm.lfMenuFont);
+  // Larger bold title for the About app name (~1.6x bigger).
+  g_aboutTitleFont = FontUtil::CreateSystemFont(dpi, FW_BOLD, 160);
 
   // Body font for About section text — same as regular.
   g_aboutBodyFont = g_buttonFont;
@@ -639,30 +624,14 @@ static std::wstring GetWidgetsRoot() {
   if (IsPortableMode()) {
     return JoinPath(GetExeDir(), L"Widgets");
   }
-
-  PWSTR docs = nullptr;
-  std::wstring out;
-  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docs)) &&
-      docs) {
-    out = std::wstring(docs) + L"\\Novadesk\\Widgets";
-    CoTaskMemFree(docs);
-  }
-  return out;
+  return NovadeskPaths::GetWidgetsDir().wstring();
 }
 
 static std::wstring GetAddonsRoot() {
   if (IsPortableMode()) {
     return JoinPath(GetExeDir(), L"Addons");
   }
-
-  PWSTR docs = nullptr;
-  std::wstring out;
-  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docs)) &&
-      docs) {
-    out = std::wstring(docs) + L"\\Novadesk\\Addons";
-    CoTaskMemFree(docs);
-  }
-  return out;
+  return NovadeskPaths::GetAddonsDir().wstring();
 }
 
 static std::wstring GetAddonVersionField(const std::wstring &dllPath,
@@ -795,9 +764,7 @@ static std::wstring GetNovadeskExePath() {
 }
 
 static std::wstring GetManageExePath() {
-  wchar_t buf[MAX_PATH + 1] = {};
-  GetModuleFileNameW(nullptr, buf, MAX_PATH);
-  return std::wstring(buf);
+  return AppPaths::GetExePath().wstring();
 }
 
 static std::wstring GetManageSettingsPath() {
@@ -808,12 +775,8 @@ static std::wstring GetManageSettingsPath() {
     return exePath;
   }
 
-  PWSTR roaming = nullptr;
-  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr,
-                                     &roaming)) &&
-      roaming) {
-    const std::wstring appDataDir = std::wstring(roaming) + L"\\Novadesk";
-    CoTaskMemFree(roaming);
+  const std::wstring appDataDir = NovadeskPaths::GetAppDataDir().wstring();
+  if (!appDataDir.empty()) {
     std::filesystem::create_directories(std::filesystem::path(appDataDir), ec);
     if (!ec) {
       return JoinPath(appDataDir, L"manage_novadesk_settings.json");
@@ -825,15 +788,7 @@ static std::wstring GetManageSettingsPath() {
 }
 
 static std::wstring GetNovadeskAppDataDir() {
-  PWSTR roaming = nullptr;
-  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr,
-                                     &roaming)) &&
-      roaming) {
-    const std::wstring appDataDir = std::wstring(roaming) + L"\\Novadesk";
-    CoTaskMemFree(roaming);
-    return appDataDir;
-  }
-  return L"";
+  return NovadeskPaths::GetAppDataDir().wstring();
 }
 
 static std::wstring GetNovadeskSettingsPath() {
@@ -3055,12 +3010,11 @@ static bool RequestExistingManageWindowClose() {
 }
 
 static bool RestartManageWindow() {
-  wchar_t currentExe[MAX_PATH + 1] = {};
-  if (GetModuleFileNameW(nullptr, currentExe, MAX_PATH) == 0)
+  const std::wstring currentExe = AppPaths::GetExePath().wstring();
+  if (currentExe.empty())
     return false;
 
-  const std::wstring commandLine =
-      L"\"" + std::wstring(currentExe) + L"\" --restart-manager";
+  const std::wstring commandLine = L"\"" + currentExe + L"\" --restart-manager";
   std::vector<wchar_t> mutableCommand(commandLine.begin(), commandLine.end());
   mutableCommand.push_back(L'\0');
 
@@ -3105,10 +3059,10 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
       Sleep(50);
     }
 
-    wchar_t currentExe[MAX_PATH + 1] = {};
-    if (GetModuleFileNameW(nullptr, currentExe, MAX_PATH) == 0)
+    const std::wstring currentExe = AppPaths::GetExePath().wstring();
+    if (currentExe.empty())
       return 1;
-    std::wstring commandLine = L"\"" + std::wstring(currentExe) + L"\"";
+    std::wstring commandLine = L"\"" + currentExe + L"\"";
     std::vector<wchar_t> mutableCommand(commandLine.begin(),
                                         commandLine.end());
     mutableCommand.push_back(L'\0');
