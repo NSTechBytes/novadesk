@@ -44,6 +44,8 @@ try {
     $distWidgetsDir = Join-Path $distDir "Widgets"
     $distImagesDir = Join-Path $distDir "images"
     $distAddonsDir = Join-Path $distDir "Addons"
+    $localesSrc = Join-Path $RepoRoot "src\locales"
+    $distLocalesDir = Join-Path $distDir "locales"
     $distNwmTemplateDir = Join-Path $distNwmDir "template"
 
     $novadeskExeSrc = Join-Path $RepoRoot "src\apps\x64\$Configuration\novadesk\novadesk.exe"
@@ -66,6 +68,7 @@ try {
     Assert-PathExists -PathValue $manageExeSrc -Label "manage_novadesk.exe"
     Assert-PathExists -PathValue $ndpkgInstallerExeSrc -Label "ndpkg_installer.exe"
     Assert-PathExists -PathValue $addonsBuildRoot -Label "addons build root"
+    Assert-PathExists -PathValue $localesSrc -Label "locales source"
 
     New-Item -ItemType Directory -Path $distDir -Force | Out-Null
     New-Item -ItemType Directory -Path $distNwmDir -Force | Out-Null
@@ -76,6 +79,7 @@ try {
     Copy-Item -Path $ndpkgInstallerExeSrc -Destination (Join-Path $distDir "ndpkg_installer.exe") -Force
     Copy-DirectoryContent -SourceDir $widgetsSrc -DestinationDir $distWidgetsDir
     Copy-DirectoryContent -SourceDir $imagesSrc -DestinationDir $distImagesDir -Exclude "image-fallback.jpg"
+    Copy-DirectoryContent -SourceDir $localesSrc -DestinationDir $distLocalesDir
     Copy-Item -Path $nwmExeSrc -Destination (Join-Path $distNwmDir "nwm.exe") -Force
     Copy-DirectoryContent -SourceDir $nwmTemplateSrc -DestinationDir $distNwmTemplateDir
     Copy-Item -Path $installerStubExeSrc -Destination (Join-Path $distNwmDir "installer_stub.exe") -Force

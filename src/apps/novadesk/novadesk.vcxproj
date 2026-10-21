@@ -228,6 +228,12 @@
     <ClCompile Include="shared\Settings.cpp" />
     <ClCompile Include="shared\System.cpp" />
     <ClCompile Include="shared\Utils.cpp" />
+    <ClCompile Include="..\..\common\CommonSettings.cpp" />
+    <ClCompile Include="..\..\common\Localization.cpp">
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\..\common\AppPaths.cpp" />
+    <ClCompile Include="..\..\common\NovadeskPaths.cpp" />
     <ClCompile Include="..\..\common\ZipUtils.cpp" />
     <ClCompile Include="..\..\third_party\zlib\adler32.c">
       <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
@@ -283,6 +289,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\common\ZipUtils.h" />
+    <ClInclude Include="..\..\common\CommonSettings.h" />
+    <ClInclude Include="..\..\common\Localization.h" />
+    <ClInclude Include="..\..\common\AppPaths.h" />
+    <ClInclude Include="..\..\common\NovadeskPaths.h" />
     <ClInclude Include="domain\DesktopManager.h" />
     <ClInclude Include="domain\InputBoxContextMenuHelper.h" />
     <ClInclude Include="domain\ColorPickerPopup.h" />

@@ -2,7 +2,7 @@ param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Debug",
     [string]$Platform = "x64",
-    [int]$Jobs = 0
+    [int]$Jobs = 1
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,7 +38,8 @@ function Build-Solution {
     }
 
     Write-Host "Building $SolutionPath ($Config|$Plat) with MSBuild..." -ForegroundColor Cyan
-    & $MSBuildPath $SolutionPath /t:Build /m /nologo /v:minimal /p:Configuration=$Config /p:Platform=$Plat
+    $parallelism = if ($Jobs -gt 0) { "/m:$Jobs" } else { "/m" }
+    & $MSBuildPath $SolutionPath /t:Build $parallelism /nologo /v:minimal /p:Configuration=$Config /p:Platform=$Plat
     if ($LASTEXITCODE -ne 0) {
         throw "MSBuild failed for $SolutionPath ($Config|$Plat)"
     }

@@ -34,6 +34,7 @@
 #include "../../common/DpiUtil.h"
 #include "../../common/FontUtil.h"
 #include "../../common/NovadeskPaths.h"
+#include "../../common/Localization.h"
 #include "../../common/WindowsTheme.h"
 #include "../../common/ZipUtils.h"
 
@@ -49,14 +50,20 @@ using json = nlohmann::json;
 
 namespace {
 
+const std::wstring &Tr(const char *key, const wchar_t *fallback) {
+  return Localization::TextOr(key, fallback);
+}
+
 // ============================================================================
 // Constants & Enums
 // ============================================================================
 
 constexpr wchar_t kWindowClassName[] = L"NovadeskNdpkgInstaller";
-constexpr wchar_t kWindowTitle[] = L"ndpkg Installer";
+constexpr wchar_t kWindowTitle[] = L"NDPKG Installer";
 constexpr wchar_t kManageWindowClassName[] = L"NovadeskManagerWindow";
 constexpr wchar_t kManageCloseMessageName[] = L"Novadesk.Manage.RequestClose";
+constexpr wchar_t kLanguageChangedMessageName[] = L"Novadesk.LanguageChanged";
+UINT g_languageChangedMessage = 0;
 constexpr char kNdpkgMagic[] = "NDPKG1";
 constexpr COLORREF kWindowBgColor = RGB(240, 240, 240);
 
@@ -110,6 +117,8 @@ struct AddonRow {
 struct AppState {
   HWND hwnd = nullptr;
   HWND hTitle = nullptr;
+  HWND hGroupDetails = nullptr;
+  HWND hGroupVisuals = nullptr;
   HWND hNameLabel = nullptr;
   HWND hName = nullptr;
   HWND hVersionLabel = nullptr;
@@ -284,48 +293,48 @@ WidgetInstallStatus GetWidgetInstallStatus(const fs::path &widgetsTarget,
   }
 }
 
-const wchar_t *WidgetInstallStatusText(WidgetInstallStatus status) {
+const std::wstring &WidgetInstallStatusText(WidgetInstallStatus status) {
   switch (status) {
   case WidgetInstallStatus::NewInstall:
-    return L"New widget";
+    return Tr("ndpkg.status.newWidget", L"New widget");
   case WidgetInstallStatus::UpdateAvailable:
-    return L"Update available";
+    return Tr("ndpkg.status.updateAvailable", L"Update available");
   case WidgetInstallStatus::SameVersion:
-    return L"Already installed";
+    return Tr("ndpkg.status.alreadyInstalled", L"Already installed");
   case WidgetInstallStatus::NewerVersionInstalled:
-    return L"Newer version installed";
+    return Tr("ndpkg.status.newerInstalled", L"Newer version installed");
   case WidgetInstallStatus::ExistingInstallation:
-    return L"Existing installation detected";
+    return Tr("ndpkg.status.existingInstallation", L"Existing installation detected");
   }
-  return L"Existing installation detected";
+  return Tr("ndpkg.status.existingInstallation", L"Existing installation detected");
 }
 
-const wchar_t *WidgetInstallButtonText(WidgetInstallStatus status) {
+const std::wstring &WidgetInstallButtonText(WidgetInstallStatus status) {
   switch (status) {
   case WidgetInstallStatus::NewInstall:
-    return L"Install";
+    return Tr("button.install", L"Install");
   case WidgetInstallStatus::UpdateAvailable:
-    return L"Update";
+    return Tr("ndpkg.action.update", L"Update");
   case WidgetInstallStatus::SameVersion:
-    return L"Reinstall";
+    return Tr("ndpkg.action.reinstall", L"Reinstall");
   case WidgetInstallStatus::NewerVersionInstalled:
-    return L"Downgrade";
+    return Tr("ndpkg.action.downgrade", L"Downgrade");
   case WidgetInstallStatus::ExistingInstallation:
-    return L"Replace";
+    return Tr("ndpkg.action.replace", L"Replace");
   }
-  return L"Install";
+  return Tr("button.install", L"Install");
 }
 
-const wchar_t *AddonStatusText(AddonInstallStatus status) {
+const std::wstring &AddonStatusText(AddonInstallStatus status) {
   switch (status) {
   case AddonInstallStatus::Add:
-    return L"Add";
+    return Tr("ndpkg.action.add", L"Add");
   case AddonInstallStatus::Replace:
-    return L"Replace";
+    return Tr("ndpkg.action.replace", L"Replace");
   case AddonInstallStatus::NewerVersionFound:
-    return L"Newer Version Found";
+    return Tr("ndpkg.status.newerVersionFound", L"Newer Version Found");
   }
-  return L"Add";
+  return Tr("ndpkg.action.add", L"Add");
 }
 
 bool EnsureDirectory(const fs::path &path, std::wstring &errorOut) {
@@ -719,9 +728,9 @@ void PopulateAddonsListView(AppState *state) {
     item.pszText = name.empty() ? const_cast<LPWSTR>(L"") : name.data();
     const int itemIndex = ListView_InsertItem(state->hAddons, &item);
     if (itemIndex >= 0) {
-      const wchar_t *statusText = AddonStatusText(row.status);
+      const std::wstring &statusText = AddonStatusText(row.status);
       ListView_SetItemText(state->hAddons, itemIndex, 1,
-                           const_cast<LPWSTR>(statusText));
+                           const_cast<LPWSTR>(statusText.c_str()));
       ListView_SetCheckState(state->hAddons, itemIndex,
                              row.checked ? TRUE : FALSE);
     }
@@ -866,7 +875,7 @@ void ResetUiFromState(AppState *state) {
 
 
 
-  SetWindowTextW(state->hTitle, L"Select a package to view details");
+  SetWindowTextW(state->hTitle, Tr("ndpkg.selectPackage", L"Select a package to view details").c_str());
   EnableWindow(state->hInstall, FALSE);
 
   if (state->hPreviewBitmap) {
@@ -899,7 +908,7 @@ void UpdateUiWithPackage(AppState *state) {
   }
   SetEditText(state->hWidgetStatus, status);
   SetWindowTextW(state->hInstall,
-                 WidgetInstallButtonText(state->widgetInstallStatus));
+                 WidgetInstallButtonText(state->widgetInstallStatus).c_str());
 
   BuildAddonRows(state);
   PopulateAddonsListView(state);
@@ -919,6 +928,39 @@ void UpdateUiWithPackage(AppState *state) {
   }
 
   EnableWindow(state->hInstall, TRUE);
+}
+
+void RefreshLocalizedUi(AppState *state) {
+  if (!state || !state->hwnd) return;
+
+  SetWindowTextW(state->hwnd, Tr("ndpkg.title", L"NDPKG Installer").c_str());
+  SetWindowTextW(state->hGroupDetails, Tr("ndpkg.widgetDetails", L"Widget Details").c_str());
+  SetWindowTextW(state->hGroupVisuals, Tr("ndpkg.widgetVisuals", L"Widget Visuals").c_str());
+  SetWindowTextW(state->hNameLabel, Tr("ndpkg.name", L"Name").c_str());
+  SetWindowTextW(state->hVersionLabel, Tr("ndpkg.version", L"Version").c_str());
+  SetWindowTextW(state->hAuthorLabel, Tr("ndpkg.author", L"Author").c_str());
+  SetWindowTextW(state->hWidgetStatusLabel, Tr("ndpkg.installationStatus", L"Installation Status").c_str());
+  SetWindowTextW(state->hAddonsLabel, Tr("ndpkg.includedAddons", L"Included Addons").c_str());
+  SetWindowTextW(state->hCancel, Tr("button.cancel", L"Cancel").c_str());
+  LVCOLUMNW column{};
+  column.mask = LVCF_TEXT;
+  column.pszText = const_cast<wchar_t *>(Tr("ndpkg.addon", L"Addon").c_str());
+  ListView_SetColumn(state->hAddons, 0, &column);
+  column.pszText = const_cast<wchar_t *>(Tr("ndpkg.status", L"Status").c_str());
+  ListView_SetColumn(state->hAddons, 1, &column);
+  if (state->packageLoaded) UpdateUiWithPackage(state);
+  else {
+    SetWindowTextW(state->hTitle, Tr("ndpkg.selectPackage", L"Select a package to view details").c_str());
+    SetWindowTextW(state->hInstall, Tr("button.install", L"Install").c_str());
+  }
+  LONG_PTR style = GetWindowLongPtrW(state->hwnd, GWL_EXSTYLE);
+  if (Localization::IsRtl()) style |= WS_EX_LAYOUTRTL;
+  else style &= ~static_cast<LONG_PTR>(WS_EX_LAYOUTRTL);
+  style &= ~static_cast<LONG_PTR>(WS_EX_RTLREADING);
+  SetWindowLongPtrW(state->hwnd, GWL_EXSTYLE, style);
+  SetWindowPos(state->hwnd, nullptr, 0, 0, 0, 0,
+               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+  RedrawWindow(state->hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
 
 bool LoadPackageFromPath(AppState *state, const fs::path &packagePath,
@@ -1376,6 +1418,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   AppState *state =
       reinterpret_cast<AppState *>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 
+  if (msg == g_languageChangedMessage && state) {
+    Localization::Initialize();
+    RefreshLocalizedUi(state);
+    return 0;
+  }
+
   switch (msg) {
   case WM_CREATE: {
     auto *cs = reinterpret_cast<CREATESTRUCTW *>(lParam);
@@ -1394,15 +1442,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     CreateInstallerFonts(state);
 
     state->hTitle = CreateWindowW(
-        L"STATIC", L"Select a package to view details", WS_CHILD | WS_VISIBLE,
+        L"STATIC", Localization::Text("ndpkg.selectPackage").c_str(), WS_CHILD | WS_VISIBLE,
         S(16,state->dpi), S(10,state->dpi), rc.right - S(32,state->dpi), S(34,state->dpi),
         hwnd, reinterpret_cast<HMENU>(IDC_WIDGET_TITLE), nullptr, nullptr);
 
-    HWND hGroupDetails = CreateWindowW(
-        L"BUTTON", L"Widget Details", WS_CHILD | WS_VISIBLE | BS_GROUPBOX | WS_CLIPSIBLINGS,
+    state->hGroupDetails = CreateWindowW(
+        L"BUTTON", Localization::Text("ndpkg.widgetDetails").c_str(), WS_CHILD | WS_VISIBLE | BS_GROUPBOX | WS_CLIPSIBLINGS,
         S(16,state->dpi), S(58,state->dpi), S(300,state->dpi), S(346,state->dpi),
         hwnd, nullptr, nullptr, nullptr);
-    state->hNameLabel = CreateWindowW(L"STATIC", L"WIDGET NAME",
+    state->hNameLabel = CreateWindowW(L"STATIC", Localization::Text("ndpkg.name").c_str(),
         WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
         S(30,state->dpi), S(84,state->dpi), S(130,state->dpi), S(17,state->dpi),
         hwnd, nullptr, nullptr, nullptr);
@@ -1410,7 +1458,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | SS_LEFT,
         S(30,state->dpi), S(103,state->dpi), S(272,state->dpi), S(25,state->dpi),
         hwnd, reinterpret_cast<HMENU>(IDC_NAME), nullptr, nullptr);
-    state->hVersionLabel = CreateWindowW(L"STATIC", L"VERSION",
+    state->hVersionLabel = CreateWindowW(L"STATIC", Localization::Text("ndpkg.version").c_str(),
         WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
         S(30,state->dpi), S(143,state->dpi), S(110,state->dpi), S(17,state->dpi),
         hwnd, nullptr, nullptr, nullptr);
@@ -1418,7 +1466,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | SS_LEFT,
         S(30,state->dpi), S(161,state->dpi), S(110,state->dpi), S(23,state->dpi),
         hwnd, reinterpret_cast<HMENU>(IDC_VERSION), nullptr, nullptr);
-    state->hAuthorLabel = CreateWindowW(L"STATIC", L"AUTHOR",
+    state->hAuthorLabel = CreateWindowW(L"STATIC", Localization::Text("ndpkg.author").c_str(),
         WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
         S(165,state->dpi), S(143,state->dpi), S(110,state->dpi), S(17,state->dpi),
         hwnd, nullptr, nullptr, nullptr);
@@ -1426,7 +1474,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | SS_LEFT,
         S(165,state->dpi), S(161,state->dpi), S(110,state->dpi), S(23,state->dpi),
         hwnd, reinterpret_cast<HMENU>(IDC_AUTHOR), nullptr, nullptr);
-    state->hWidgetStatusLabel = CreateWindowW(L"STATIC", L"INSTALLATION STATUS",
+    state->hWidgetStatusLabel = CreateWindowW(L"STATIC", Localization::Text("ndpkg.installationStatus").c_str(),
         WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
         S(30,state->dpi), S(202,state->dpi), S(180,state->dpi), S(17,state->dpi),
         hwnd, nullptr, nullptr, nullptr);
@@ -1434,7 +1482,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | SS_LEFT,
         S(30,state->dpi), S(220,state->dpi), S(272,state->dpi), S(22,state->dpi),
         hwnd, reinterpret_cast<HMENU>(IDC_WIDGET_STATUS), nullptr, nullptr);
-    state->hAddonsLabel = CreateWindowW(L"STATIC", L"INCLUDED ADDONS",
+    state->hAddonsLabel = CreateWindowW(L"STATIC", Localization::Text("ndpkg.includedAddons").c_str(),
         WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
         S(30,state->dpi), S(258,state->dpi), S(160,state->dpi), S(17,state->dpi),
         hwnd, nullptr, nullptr, nullptr);
@@ -1446,17 +1494,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         LVS_EX_CHECKBOXES | LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     LVCOLUMNW col{};
     col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
-    col.pszText = const_cast<LPWSTR>(L"Addon");
+    col.pszText = const_cast<LPWSTR>(Localization::Text("ndpkg.addon").c_str());
     col.cx = S(140,state->dpi);
     col.iSubItem = 0;
     ListView_InsertColumn(state->hAddons, 0, &col);
-    col.pszText = const_cast<LPWSTR>(L"Status");
+    col.pszText = const_cast<LPWSTR>(Localization::Text("ndpkg.status").c_str());
     col.cx = S(120,state->dpi);
     col.iSubItem = 1;
     ListView_InsertColumn(state->hAddons, 1, &col);
 
-    HWND hGroupVisuals = CreateWindowW(
-        L"BUTTON", L"Widget Visuals", WS_CHILD | WS_VISIBLE | BS_GROUPBOX | WS_CLIPSIBLINGS,
+    state->hGroupVisuals = CreateWindowW(
+        L"BUTTON", Localization::Text("ndpkg.widgetVisuals").c_str(), WS_CHILD | WS_VISIBLE | BS_GROUPBOX | WS_CLIPSIBLINGS,
         S(324,state->dpi), S(58,state->dpi), S(356,state->dpi), S(346,state->dpi),
         hwnd, nullptr, nullptr, nullptr);
     state->hPreview = CreateWindowExW(0, L"STATIC", L"",
@@ -1464,11 +1512,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         S(340,state->dpi), S(86,state->dpi), S(324,state->dpi), S(266,state->dpi),
         hwnd, reinterpret_cast<HMENU>(IDC_PREVIEW), nullptr, nullptr);
 
-    state->hInstall = CreateWindowW(L"BUTTON", L"Install",
+    state->hInstall = CreateWindowW(L"BUTTON", Localization::Text("button.install").c_str(),
         WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
         S(468,state->dpi), S(364,state->dpi), S(95,state->dpi), S(30,state->dpi),
         hwnd, reinterpret_cast<HMENU>(IDC_INSTALL), nullptr, nullptr);
-    state->hCancel = CreateWindowW(L"BUTTON", L"Cancel",
+    state->hCancel = CreateWindowW(L"BUTTON", Localization::Text("button.cancel").c_str(),
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         S(571,state->dpi), S(364,state->dpi), S(95,state->dpi), S(30,state->dpi),
         hwnd, reinterpret_cast<HMENU>(IDC_CANCEL), nullptr, nullptr);
@@ -1480,12 +1528,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     ShowWindow(state->hProgress, SW_HIDE);
 
     // Push group boxes behind their sibling content controls.
-    SetWindowPos(hGroupDetails, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    SetWindowPos(hGroupVisuals, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    SetWindowPos(state->hGroupDetails, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    SetWindowPos(state->hGroupVisuals, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 
     // Send fonts to all controls.
-    SendMessageW(hGroupDetails, WM_SETFONT, (WPARAM)state->hUiFont, TRUE);
-    SendMessageW(hGroupVisuals, WM_SETFONT, (WPARAM)state->hUiFont, TRUE);
+    SendMessageW(state->hGroupDetails, WM_SETFONT, (WPARAM)state->hUiFont, TRUE);
+    SendMessageW(state->hGroupVisuals, WM_SETFONT, (WPARAM)state->hUiFont, TRUE);
     ResendInstallerFonts(state);
 
     EnableWindow(state->hInstall, FALSE);
@@ -1618,6 +1666,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
   InitCommonControlsEx(&icc);
 
   WindowsTheme::Initialize();
+  Localization::Initialize();
+  g_languageChangedMessage = RegisterWindowMessageW(kLanguageChangedMessageName);
 
   Gdiplus::GdiplusStartupInput gdiplusInput;
   AppState state;
@@ -1686,7 +1736,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
       workArea.top + ((workArea.bottom - workArea.top) - scaledH) / 2;
 
   HWND hwnd =
-      CreateWindowExW(0, kWindowClassName, kWindowTitle,
+      CreateWindowExW(Localization::IsRtl() ? WS_EX_LAYOUTRTL : 0,
+                      kWindowClassName, Localization::Text("ndpkg.title").c_str(),
                       WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
                       windowX, windowY, scaledW, scaledH, nullptr,
                       nullptr, hInstance, &state);

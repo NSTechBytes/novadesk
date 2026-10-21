@@ -39,7 +39,7 @@ namespace WindowsTheme {
 namespace {
 
 // ---------------------------------------------------------------------------
-// Color constants (matching Rainmeter palette)
+// Color constants
 // ---------------------------------------------------------------------------
 constexpr COLORREF g_Background     = RGB(32, 32, 32);
 constexpr COLORREF g_PageBackground = RGB(37, 37, 37);

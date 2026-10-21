@@ -33,6 +33,7 @@
 #include "../scripting/quickjs/modules/NovadeskModule.h"
 #include "../scripting/quickjs/modules/SystemModule.h"
 #include "../../common/WindowsTheme.h"
+#include "../../common/Localization.h"
 #include "SettingsPanel.h"
 #include <filesystem>
 #include <fstream>
@@ -601,6 +602,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
   // Initialize Settings
   Settings::Initialize();
+  Localization::Initialize();
   WindowsTheme::Initialize();
 
   // Prepare the online-image and online-font disk caches before widgets

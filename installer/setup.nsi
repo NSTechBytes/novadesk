@@ -170,6 +170,7 @@ Section -CoreFiles SecCoreFiles
   File "..\dist\novadesk.exe"
   File "..\dist\manage_novadesk.exe"
   File "..\dist\ndpkg_installer.exe"
+  File /r "..\dist\locales"
   File /r "..\dist\images"
 
   ; Add installer stub from dist
@@ -213,6 +214,11 @@ Section -CoreFiles SecCoreFiles
     FileWrite $0 "  ]$\r$\n"
     FileWrite $0 "}$\r$\n"
     FileClose $0
+    ${IfNot} ${FileExists} "$UserAppDataDir\Novadesk\common_settings.json"
+      FileOpen $0 "$UserAppDataDir\Novadesk\common_settings.json" "w"
+      FileWrite $0 "{$\r$\n  $\"schemaVersion$\": 1,$\r$\n  $\"uiLanguage$\": $\"en$\"$\r$\n}$\r$\n"
+      FileClose $0
+    ${EndIf}
 
     ; Store installation folder
     WriteRegStr HKLM "Software\Novadesk" "Install_Dir" "$INSTDIR"
@@ -277,6 +283,11 @@ Section -CoreFiles SecCoreFiles
     FileWrite $0 "  ]$\r$\n"
     FileWrite $0 "}$\r$\n"
     FileClose $0
+    ${IfNot} ${FileExists} "$INSTDIR\common_settings.json"
+      FileOpen $0 "$INSTDIR\common_settings.json" "w"
+      FileWrite $0 "{$\r$\n  $\"schemaVersion$\": 1,$\r$\n  $\"uiLanguage$\": $\"en$\"$\r$\n}$\r$\n"
+      FileClose $0
+    ${EndIf}
 
     DetailPrint "Portable mode selected: skipped uninstaller and global registry writes."
   ${EndIf}

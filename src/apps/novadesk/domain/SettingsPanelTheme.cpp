@@ -11,9 +11,6 @@
 
 ThemePalette DarkPalette() {
   ThemePalette p{};
-  // Win32 dark mode standard color scheme (matching win32-darkmodelib & Rainmeter)
-  // Background: RGB(32, 32, 32), Page/Sidebar: RGB(37, 37, 37), Control: RGB(56, 56, 56)
-  // Edge/Border: RGB(75, 75, 75), Text: RGB(224, 224, 224), Accent: RGB(96, 205, 255)
   p.background    = RGB(32,  32,  32);
   p.sidebar       = RGB(37,  37,  37);
   p.sidebarBorder = RGB(48,  48,  48);

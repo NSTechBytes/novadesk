@@ -39,6 +39,8 @@
 #include "../../common/AppPaths.h"
 #include "../../common/FontUtil.h"
 #include "../../common/NovadeskPaths.h"
+#include "../../common/CommonSettings.h"
+#include "../../common/Localization.h"
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdiplus.lib")
@@ -108,6 +110,8 @@ static HWND g_chkSaveLogToFile = nullptr;
 static HWND g_chkUseHardwareAcceleration = nullptr;
 static HWND g_lblWindowsTheme = nullptr;
 static HWND g_cboWindowsTheme = nullptr;static bool g_isDarkMode = false;
+static HWND g_lblLanguage = nullptr;
+static HWND g_cboLanguage = nullptr;
 static HBRUSH g_hbrWindowBg = nullptr;
 static HBRUSH g_hbrControlBg = nullptr;
 static HWND g_aboutLogo = nullptr;
@@ -160,6 +164,7 @@ static const int kControlIdEnableDebugging = 305;
 static const int kControlIdSaveLogToFile = 306;
 static const int kControlIdUseHardwareAcceleration = 307;
 static const int kControlIdWindowsTheme = 308;
+static const int kControlIdLanguage = 309;
 static const int kControlIdAboutHome = 201;
 static const int kControlIdAboutDocs = 202;
 static const int kControlIdAboutDonate = 203;
@@ -192,6 +197,11 @@ static bool HasCommandLineFlag(const wchar_t *flag);
 static bool RequestExistingManageWindowClose();
 static bool RestartManageWindow();
 static void ResendFontsToAllControls();
+static void ApplyLocalizedText();
+static UINT g_languageChangedMessage = 0;
+static const std::wstring &Tr(const char *key, const wchar_t *fallback) {
+  return Localization::TextOr(key, fallback);
+}
 
 static void InitGdiPlus() {
   if (g_gdiplusToken != 0) {
@@ -416,9 +426,6 @@ static void CreateManageFonts(UINT dpi = USER_DEFAULT_SCREEN_DPI) {
   DeleteOwnedFont(g_aboutTitleFont);
   DeleteOwnedFont(g_aboutSectionFont);
 
-  // Use the system menu font (same source as Rainmeter / ControlTemplate).
-  // This gives the exact font Windows uses for its own UI at the current DPI.
-  // Regular weight — used for all controls, checkboxes, buttons.
   g_buttonFont = FontUtil::CreateSystemFont(dpi);
 
   // Bold variant used for the "Manage Settings" title.
@@ -463,6 +470,8 @@ static void ResendFontsToAllControls() {
   setFont(g_chkUseHardwareAcceleration,g_buttonFont);
   setFont(g_lblWindowsTheme,           g_buttonFont);
   setFont(g_cboWindowsTheme,           g_buttonFont);  // About tab
+  setFont(g_lblLanguage,               g_buttonFont);
+  setFont(g_cboLanguage,               g_buttonFont);
   setFont(g_aboutAppName,      g_aboutTitleFont);
   setFont(g_aboutVersion,      g_aboutBodyFont);
   setFont(g_aboutCopyright,    g_aboutBodyFont);
@@ -1308,35 +1317,35 @@ static void EnsureTrayMenu() {
     return;
   g_trayMenu = CreatePopupMenu();
   HMENU homeMenu = CreatePopupMenu();
-  AppendMenuW(homeMenu, MF_STRING, kTrayMenuHomeWebsiteId, L"Official Website");
-  AppendMenuW(homeMenu, MF_STRING, kTrayMenuHomeDonateId, L"Donate");
+  AppendMenuW(homeMenu, MF_STRING, kTrayMenuHomeWebsiteId, Tr("manage.menu.website", L"Official Website").c_str());
+  AppendMenuW(homeMenu, MF_STRING, kTrayMenuHomeDonateId, Tr("manage.menu.donate", L"Donate").c_str());
 
   HMENU docsMenu = CreatePopupMenu();
-  AppendMenuW(docsMenu, MF_STRING, kTrayMenuDocsMainId, L"Documentation");
-  AppendMenuW(docsMenu, MF_STRING, kTrayMenuDocsApiId, L"API Reference");
+  AppendMenuW(docsMenu, MF_STRING, kTrayMenuDocsMainId, Tr("manage.menu.documentation", L"Documentation").c_str());
+  AppendMenuW(docsMenu, MF_STRING, kTrayMenuDocsApiId, Tr("manage.menu.apiReference", L"API Reference").c_str());
 
   HMENU settingsMenu = CreatePopupMenu();
   AppendMenuW(settingsMenu, MF_STRING, kTrayMenuSettingsOpenId,
-              L"Open Settings");
+              Tr("manage.menu.openSettings", L"Open Settings").c_str());
   AppendMenuW(settingsMenu, MF_STRING, kTrayMenuSettingsCheckUpdatesId,
-              L"Check for Updates");
+              Tr("manage.menu.checkUpdates", L"Check for Updates").c_str());
 
-  AppendMenuW(g_trayMenu, MF_STRING, kTrayMenuShowHideId, L"Show");
+  AppendMenuW(g_trayMenu, MF_STRING, kTrayMenuShowHideId, Tr("manage.button.show", L"Show").c_str());
   AppendMenuW(g_trayMenu, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(g_trayMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(homeMenu),
-              L"Home");
+              Tr("manage.menu.home", L"Home").c_str());
   AppendMenuW(g_trayMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(docsMenu),
-              L"Docs");
+              Tr("manage.menu.docs", L"Docs").c_str());
   AppendMenuW(g_trayMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(settingsMenu),
-              L"Settings");
+              Tr("tab.settings", L"Settings").c_str());
   AppendMenuW(g_trayMenu, MF_SEPARATOR, 0, nullptr);
-  AppendMenuW(g_trayMenu, MF_STRING, kTrayMenuExitId, L"Exit");
+  AppendMenuW(g_trayMenu, MF_STRING, kTrayMenuExitId, Tr("manage.button.exit", L"Exit").c_str());
 }
 
 static void ShowTrayMenu(HWND hWnd) {
   EnsureTrayMenu();
   ModifyMenuW(g_trayMenu, kTrayMenuShowHideId, MF_BYCOMMAND | MF_STRING,
-              kTrayMenuShowHideId, IsWindowVisible(hWnd) ? L"Hide" : L"Show");
+              kTrayMenuShowHideId, IsWindowVisible(hWnd) ? Tr("manage.button.hide", L"Hide").c_str() : Tr("manage.button.show", L"Show").c_str());
   POINT pt{};
   GetCursorPos(&pt);
   SetForegroundWindow(hWnd);
@@ -2109,7 +2118,7 @@ class DialogManage;
 static void ApplyThemeToManageWindow(HWND hWnd);
 
 // ============================================================================
-// DialogManage - Rainmeter-style Dialog Architecture
+// DialogManage
 // ============================================================================
 
 class DialogManage : public Dialog {
@@ -2139,13 +2148,13 @@ public:
       ListView_SetExtendedListViewStyle(g_list, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
       LVCOLUMNW col{};
       col.mask = LVCF_TEXT | LVCF_WIDTH;
-      col.pszText = const_cast<wchar_t *>(L"Widget");
+      col.pszText = const_cast<wchar_t *>(Tr("manage.column.widget", L"Widget").c_str());
       col.cx = 160;
       ListView_InsertColumn(g_list, 0, &col);
-      col.pszText = const_cast<wchar_t *>(L"Script Path");
+      col.pszText = const_cast<wchar_t *>(Tr("manage.column.scriptPath", L"Script Path").c_str());
       col.cx = 360;
       ListView_InsertColumn(g_list, 1, &col);
-      col.pszText = const_cast<wchar_t *>(L"Status");
+      col.pszText = const_cast<wchar_t *>(Tr("manage.column.status", L"Status").c_str());
       col.cx = 120;
       ListView_InsertColumn(g_list, 2, &col);
 
@@ -2204,16 +2213,16 @@ public:
       ListView_SetExtendedListViewStyle(g_logsList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
       LVCOLUMNW lcol{};
       lcol.mask = LVCF_TEXT | LVCF_WIDTH;
-      lcol.pszText = const_cast<wchar_t *>(L"Time");
+      lcol.pszText = const_cast<wchar_t *>(Tr("manage.column.time", L"Time").c_str());
       lcol.cx = 190;
       ListView_InsertColumn(g_logsList, 0, &lcol);
-      lcol.pszText = const_cast<wchar_t *>(L"Source");
+      lcol.pszText = const_cast<wchar_t *>(Tr("manage.column.source", L"Source").c_str());
       lcol.cx = 120;
       ListView_InsertColumn(g_logsList, 1, &lcol);
-      lcol.pszText = const_cast<wchar_t *>(L"Level");
+      lcol.pszText = const_cast<wchar_t *>(Tr("manage.column.level", L"Level").c_str());
       lcol.cx = 80;
       ListView_InsertColumn(g_logsList, 2, &lcol);
-      lcol.pszText = const_cast<wchar_t *>(L"Message");
+      lcol.pszText = const_cast<wchar_t *>(Tr("manage.column.message", L"Message").c_str());
       lcol.cx = g_logsMessageColumnWidth;
       ListView_InsertColumn(g_logsList, 3, &lcol);
 
@@ -2310,37 +2319,57 @@ public:
       GetClientRect(m_Window, &rc);
       const int w = rc.right;
 
-      g_settingsTitle = CreateWindowExW(0, L"STATIC", L"Manage Settings",
+      g_settingsTitle = CreateWindowExW(0, L"STATIC", Tr("settings.title", L"Manage Settings").c_str(),
           WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
           16, 12, w - 32, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
-      g_chkRunOnStartup = CreateWindowExW(0, L"BUTTON", L"Run On Startup",
+      g_chkRunOnStartup = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.runOnStartup", L"Run On Startup").c_str(),
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
           16, 46, 240, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRunOnStartup)),
           GetModuleHandleW(nullptr), nullptr);
-      g_btnCheckUpdates = CreateWindowExW(0, L"BUTTON", L"Check for Update",
+      g_btnCheckUpdates = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.checkUpdates", L"Check for Updates").c_str(),
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON | WS_CLIPSIBLINGS,
           16, 78, 170, 28, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdCheckUpdates)),
           GetModuleHandleW(nullptr), nullptr);
-      g_chkAutoUpdate = CreateWindowExW(0, L"BUTTON", L"Automatically Check For the Update",
+      g_chkAutoUpdate = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.autoCheckUpdates", L"Automatically check for updates").c_str(),
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
           202, 80, w - 218, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAutoCheckUpdates)),
           GetModuleHandleW(nullptr), nullptr);
-      g_chkEnableLogging = CreateWindowExW(0, L"BUTTON", L"Enable Logging",
+      g_chkEnableLogging = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.enableLogging", L"Enable Logging").c_str(),
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
           16, 118, 220, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdEnableLogging)),
           GetModuleHandleW(nullptr), nullptr);
-      g_chkEnableDebugging = CreateWindowExW(0, L"BUTTON", L"Enable Debugging",
+      g_chkEnableDebugging = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.enableDebugging", L"Enable Debugging").c_str(),
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
           16, 148, 220, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdEnableDebugging)),
           GetModuleHandleW(nullptr), nullptr);
-      g_chkSaveLogToFile = CreateWindowExW(0, L"BUTTON", L"Save Logs to File",
+      g_chkSaveLogToFile = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.saveLogs", L"Save Logs to File").c_str(),
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
           16, 178, 260, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdSaveLogToFile)),
           GetModuleHandleW(nullptr), nullptr);
-      g_chkUseHardwareAcceleration = CreateWindowExW(0, L"BUTTON", L"Use Hardware Acceleration",
+      g_chkUseHardwareAcceleration = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.hardwareAcceleration", L"Use Hardware Acceleration").c_str(),
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
           16, 208, 300, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdUseHardwareAcceleration)),
           GetModuleHandleW(nullptr), nullptr);
+      g_lblLanguage = CreateWindowExW(0, L"STATIC", Tr("settings.language", L"Language").c_str(),
+          WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+          16, 244, 120, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_cboLanguage = CreateWindowExW(0, WC_COMBOBOXW, L"",
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
+          140, 240, 260, 360, m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdLanguage)),
+          GetModuleHandleW(nullptr), nullptr);
+      const std::string currentLanguage = CommonSettings::GetUiLanguage();
+      int selectedLanguage = 0;
+      int languageIndex = 0;
+      for (const auto &language : Localization::SupportedLanguages()) {
+        const int added = static_cast<int>(SendMessageW(g_cboLanguage, CB_ADDSTRING, 0,
+            reinterpret_cast<LPARAM>(language.nativeName)));
+        SendMessageW(g_cboLanguage, CB_SETITEMDATA, added,
+                     reinterpret_cast<LPARAM>(language.tag));
+        if (currentLanguage == language.tag) selectedLanguage = languageIndex;
+        ++languageIndex;
+      }
+      SendMessageW(g_cboLanguage, CB_SETCURSEL, selectedLanguage, 0);
 
       if (g_buttonFont) {
         SendMessageW(g_settingsTitle, WM_SETFONT, (WPARAM)g_aboutSectionFont, TRUE);
@@ -2351,6 +2380,8 @@ public:
         SendMessageW(g_chkEnableDebugging, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkSaveLogToFile, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkUseHardwareAcceleration, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_lblLanguage, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_cboLanguage, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       }
       RefreshSettingsControls();
     }
@@ -2372,6 +2403,19 @@ public:
         case kControlIdCheckUpdates:
           StartAsyncUpdateCheck(false);
           return TRUE;
+        case kControlIdLanguage:
+          if (HIWORD(wParam) == CBN_SELCHANGE) {
+            const int selected = static_cast<int>(SendMessageW(g_cboLanguage, CB_GETCURSEL, 0, 0));
+            const char *tag = reinterpret_cast<const char *>(SendMessageW(g_cboLanguage, CB_GETITEMDATA, selected, 0));
+            if (tag && CommonSettings::SetUiLanguage(tag)) {
+              Localization::Initialize();
+              ApplyLocalizedText();
+              if (g_languageChangedMessage)
+                PostMessageW(HWND_BROADCAST, g_languageChangedMessage, 0, 0);
+            }
+            return TRUE;
+          }
+          break;
         }
       }
       return FALSE;
@@ -2383,6 +2427,8 @@ public:
       const int ch = 26;            // standard control height
       const int bh = 30;            // button height
       if (g_settingsTitle)              MoveWindow(g_settingsTitle,              L,       16,  sw,           20,  TRUE);
+      if (g_lblLanguage)                MoveWindow(g_lblLanguage,                L,      244, 120,           24,  TRUE);
+      if (g_cboLanguage)                MoveWindow(g_cboLanguage,            L + 124,  240, 260,          360,  TRUE);
       if (g_chkRunOnStartup)            MoveWindow(g_chkRunOnStartup,            L,       50,  sw,           ch,  TRUE);
       if (g_btnCheckUpdates)            MoveWindow(g_btnCheckUpdates,            L,       86,  200,          bh,  TRUE);
       if (g_chkAutoUpdate)              MoveWindow(g_chkAutoUpdate,              L + 216, 90,  sw - 216,     ch,  TRUE);
@@ -2580,7 +2626,8 @@ public:
           L"Manage Novadesk",
           0, 0, 600, 373,
           DS_CENTER | WS_POPUP | WS_MINIMIZEBOX | WS_CAPTION | WS_SYSMENU,
-          WS_EX_APPWINDOW | WS_EX_CONTROLPARENT,
+          WS_EX_APPWINDOW | WS_EX_CONTROLPARENT |
+              (Localization::IsRtl() ? WS_EX_LAYOUTRTL : 0),
           nullptr, true);
     }
     if (s_instance) {
@@ -2631,32 +2678,32 @@ public:
     TabCtrl_SetItemSize(g_tab, 100, 28);
 
     g_btnRefreshList = CreateWindowW(
-        L"BUTTON", L"Refresh List", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        L"BUTTON", Tr("manage.button.refreshList", L"Refresh List").c_str(), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         12, rc.bottom - 44, 120, 30, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefreshList)),
         GetModuleHandleW(nullptr), nullptr);
     g_btnClearLogs = CreateWindowW(
-        L"BUTTON", L"Clear Logs", WS_CHILD | BS_PUSHBUTTON,
+        L"BUTTON", Tr("manage.button.clearLogs", L"Clear Logs").c_str(), WS_CHILD | BS_PUSHBUTTON,
         12, rc.bottom - 44, 120, 30, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdClearLogs)),
         GetModuleHandleW(nullptr), nullptr);
     g_btnLoad = CreateWindowW(
-        L"BUTTON", L"Load", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        L"BUTTON", Tr("manage.button.load", L"Load").c_str(), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         142, rc.bottom - 44, 90, 30, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdLoad)),
         GetModuleHandleW(nullptr), nullptr);
     g_btnRefresh = CreateWindowW(
-        L"BUTTON", L"Refresh", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        L"BUTTON", Tr("manage.button.refresh", L"Refresh").c_str(), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         242, rc.bottom - 44, 90, 30, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefresh)),
         GetModuleHandleW(nullptr), nullptr);
     g_btnRefreshAll = CreateWindowW(
-        L"BUTTON", L"Refresh All", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        L"BUTTON", Tr("manage.button.refreshAll", L"Refresh All").c_str(), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         342, rc.bottom - 44, 110, 30, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefreshAll)),
         GetModuleHandleW(nullptr), nullptr);
     g_btnClose = CreateWindowW(
-        L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        L"BUTTON", Tr("button.close", L"Close").c_str(), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         rc.right - 100, rc.bottom - 44, 88, 30, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdClose)),
         GetModuleHandleW(nullptr), nullptr);
@@ -2671,11 +2718,11 @@ public:
       SendMessageW(g_btnClose, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
     }
 
-    AddTab(kControlIdTabs, m_TabWidgets, L"Widgets");
-    AddTab(kControlIdTabs, m_TabLogs, L"Logs");
-    AddTab(kControlIdTabs, m_TabAddons, L"Addons");
-    AddTab(kControlIdTabs, m_TabSettings, L"Settings");
-    AddTab(kControlIdTabs, m_TabAbout, L"About");
+    AddTab(kControlIdTabs, m_TabWidgets, Tr("tab.widgets", L"Widgets").c_str());
+    AddTab(kControlIdTabs, m_TabLogs, Tr("tab.logs", L"Logs").c_str());
+    AddTab(kControlIdTabs, m_TabAddons, Tr("tab.addons", L"Addons").c_str());
+    AddTab(kControlIdTabs, m_TabSettings, Tr("tab.settings", L"Settings").c_str());
+    AddTab(kControlIdTabs, m_TabAbout, Tr("tab.about", L"About").c_str());
 
     Relayout();
 
@@ -2939,6 +2986,73 @@ private:
 
 DialogManage* DialogManage::s_instance = nullptr;
 
+static void SetListColumnText(HWND list, int index, const std::wstring &text) {
+  if (!list) return;
+  LVCOLUMNW column{};
+  column.mask = LVCF_TEXT;
+  column.pszText = const_cast<wchar_t *>(text.c_str());
+  ListView_SetColumn(list, index, &column);
+}
+
+static void ApplyLocalizedText() {
+  if (!g_mainWindow) return;
+  SetWindowTextW(g_mainWindow, Tr("app.manage.title", L"Manage Novadesk").c_str());
+  SetWindowTextW(g_btnRefreshList, Tr("manage.button.refreshList", L"Refresh List").c_str());
+  SetWindowTextW(g_btnClearLogs, Tr("manage.button.clearLogs", L"Clear Logs").c_str());
+  SetWindowTextW(g_btnRefresh, Tr("manage.button.refresh", L"Refresh").c_str());
+  SetWindowTextW(g_btnRefreshAll, Tr("manage.button.refreshAll", L"Refresh All").c_str());
+  SetWindowTextW(g_btnClose, Tr("button.close", L"Close").c_str());
+  SetWindowTextW(g_settingsTitle, Tr("settings.title", L"Manage Settings").c_str());
+  SetWindowTextW(g_chkRunOnStartup, Tr("manage.setting.runOnStartup", L"Run On Startup").c_str());
+  SetWindowTextW(g_btnCheckUpdates, Tr("manage.setting.checkUpdates", L"Check for Updates").c_str());
+  SetWindowTextW(g_chkAutoUpdate, Tr("manage.setting.autoCheckUpdates", L"Automatically check for updates").c_str());
+  SetWindowTextW(g_chkEnableLogging, Tr("manage.setting.enableLogging", L"Enable Logging").c_str());
+  SetWindowTextW(g_chkEnableDebugging, Tr("manage.setting.enableDebugging", L"Enable Debugging").c_str());
+  SetWindowTextW(g_chkSaveLogToFile, Tr("manage.setting.saveLogs", L"Save Logs to File").c_str());
+  SetWindowTextW(g_chkUseHardwareAcceleration, Tr("manage.setting.hardwareAcceleration", L"Use Hardware Acceleration").c_str());
+  SetWindowTextW(g_lblLanguage, Tr("settings.language", L"Language").c_str());
+  if (g_btnLoad) UpdateButtonState();
+
+  const std::wstring tabs[] = {Tr("tab.widgets", L"Widgets"), Tr("tab.logs", L"Logs"),
+                               Tr("tab.addons", L"Addons"), Tr("tab.settings", L"Settings"),
+                               Tr("tab.about", L"About")};
+  for (int i = 0; g_tab && i < static_cast<int>(ARRAYSIZE(tabs)); ++i) {
+    TCITEMW item{};
+    item.mask = TCIF_TEXT;
+    item.pszText = const_cast<wchar_t *>(tabs[i].c_str());
+    TabCtrl_SetItem(g_tab, i, &item);
+  }
+  SetListColumnText(g_list, 0, Tr("manage.column.widget", L"Widget"));
+  SetListColumnText(g_list, 1, Tr("manage.column.scriptPath", L"Script Path"));
+  SetListColumnText(g_list, 2, Tr("manage.column.status", L"Status"));
+  SetListColumnText(g_logsList, 0, Tr("manage.column.time", L"Time"));
+  SetListColumnText(g_logsList, 1, Tr("manage.column.source", L"Source"));
+  SetListColumnText(g_logsList, 2, Tr("manage.column.level", L"Level"));
+  SetListColumnText(g_logsList, 3, Tr("manage.column.message", L"Message"));
+
+  LONG_PTR style = GetWindowLongPtrW(g_mainWindow, GWL_EXSTYLE);
+
+  if (Localization::IsRtl()) style |= WS_EX_LAYOUTRTL;
+  else style &= ~static_cast<LONG_PTR>(WS_EX_LAYOUTRTL);
+  style &= ~static_cast<LONG_PTR>(WS_EX_RTLREADING);
+  SetWindowLongPtrW(g_mainWindow, GWL_EXSTYLE, style);
+  SetWindowPos(g_mainWindow, nullptr, 0, 0, 0, 0,
+               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+  if (DialogManage::Get()) {
+    for (auto *page : DialogManage::Get()->GetPages()) {
+      if (!page || !page->GetWindow()) continue;
+      LONG_PTR pageStyle = GetWindowLongPtrW(page->GetWindow(), GWL_EXSTYLE);
+      if (Localization::IsRtl()) pageStyle |= WS_EX_LAYOUTRTL | WS_EX_RTLREADING;
+      else pageStyle &= ~(static_cast<LONG_PTR>(WS_EX_LAYOUTRTL) | WS_EX_RTLREADING);
+      SetWindowLongPtrW(page->GetWindow(), GWL_EXSTYLE, pageStyle);
+      SetWindowPos(page->GetWindow(), nullptr, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+    }
+  }
+  DrawMenuBar(g_mainWindow);
+  RedrawWindow(g_mainWindow, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN);
+}
+
 static void ApplyThemeToManageWindow(HWND hWnd) {
   if (!hWnd) return;
 
@@ -3041,8 +3155,10 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
   InitCommonControlsEx(&icc);
 
   WindowsTheme::Initialize();
+  Localization::Initialize();
 
   g_manageCloseMessage = RegisterWindowMessageW(kManageCloseMessageName);
+  g_languageChangedMessage = RegisterWindowMessageW(L"Novadesk.LanguageChanged");
   if (HasCommandLineFlag(L"--request-close")) {
     return RequestExistingManageWindowClose() ? 0 : 1;
   }
