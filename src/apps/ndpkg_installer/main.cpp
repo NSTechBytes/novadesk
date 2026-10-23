@@ -31,6 +31,7 @@
 #include "..\..\third_party\json\json.hpp"
 #include "resource.h"
 #include "../../common/AppPaths.h"
+#include "../../common/CommonSettings.h"
 #include "../../common/DpiUtil.h"
 #include "../../common/FontUtil.h"
 #include "../../common/NovadeskPaths.h"
@@ -62,10 +63,28 @@ constexpr wchar_t kWindowClassName[] = L"NovadeskNdpkgInstaller";
 constexpr wchar_t kWindowTitle[] = L"NDPKG Installer";
 constexpr wchar_t kManageWindowClassName[] = L"NovadeskManagerWindow";
 constexpr wchar_t kManageCloseMessageName[] = L"Novadesk.Manage.RequestClose";
-constexpr wchar_t kLanguageChangedMessageName[] = L"Novadesk.LanguageChanged";
 UINT g_languageChangedMessage = 0;
+std::wstring g_manageWindowScopeProperty;
 constexpr char kNdpkgMagic[] = "NDPKG1";
 constexpr COLORREF kWindowBgColor = RGB(240, 240, 240);
+
+HWND FindManageWindowForCurrentInstallation() {
+  struct Search {
+    const wchar_t *property;
+    HWND window = nullptr;
+  } search{g_manageWindowScopeProperty.c_str()};
+  EnumWindows(
+      [](HWND window, LPARAM value) -> BOOL {
+        auto *search = reinterpret_cast<Search *>(value);
+        if (GetPropW(window, search->property)) {
+          search->window = window;
+          return FALSE;
+        }
+        return TRUE;
+      },
+      reinterpret_cast<LPARAM>(&search));
+  return search.window;
+}
 
 enum ControlId : int {
   IDC_WIDGET_TITLE = 1003,
@@ -772,11 +791,13 @@ bool RequestManageQuit() {
   constexpr int kInitialWaitIters = 24;  // ~1.2s
   constexpr int kFallbackWaitIters = 36; // ~1.8s
 
-  HWND manageWindow = FindWindowW(kManageWindowClassName, nullptr);
+  HWND manageWindow = FindManageWindowForCurrentInstallation();
   if (!manageWindow)
     return true;
 
-  const UINT closeMessage = RegisterWindowMessageW(kManageCloseMessageName);
+  const std::wstring closeMessageName =
+      std::wstring(kManageCloseMessageName) + L"." + CommonSettings::GetInstallationScopeId();
+  const UINT closeMessage = RegisterWindowMessageW(closeMessageName.c_str());
   if (closeMessage == 0)
     return false;
 
@@ -785,12 +806,12 @@ bool RequestManageQuit() {
                       &result);
 
   for (int i = 0; i < kInitialWaitIters; ++i) {
-    if (!FindWindowW(kManageWindowClassName, nullptr)) {
+    if (!FindManageWindowForCurrentInstallation()) {
       return true;
     }
     Sleep(kPollIntervalMs);
   }
-  if (!FindWindowW(kManageWindowClassName, nullptr)) {
+  if (!FindManageWindowForCurrentInstallation()) {
     return true;
   }
 
@@ -825,12 +846,12 @@ bool RequestManageQuit() {
   }
 
   for (int i = 0; i < kFallbackWaitIters; ++i) {
-    if (!FindWindowW(kManageWindowClassName, nullptr)) {
+    if (!FindManageWindowForCurrentInstallation()) {
       return true;
     }
     Sleep(kPollIntervalMs);
   }
-  return !FindWindowW(kManageWindowClassName, nullptr);
+  return !FindManageWindowForCurrentInstallation();
 }
 
 bool StartManageWindow() {
@@ -1667,7 +1688,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
 
   WindowsTheme::Initialize();
   Localization::Initialize();
-  g_languageChangedMessage = RegisterWindowMessageW(kLanguageChangedMessageName);
+  const std::wstring installationScope = CommonSettings::GetInstallationScopeId();
+  g_manageWindowScopeProperty = L"Novadesk.Manage.InstallationScope." + installationScope;
+  const std::wstring languageMessageName = L"Novadesk.LanguageChanged." + installationScope;
+  g_languageChangedMessage = RegisterWindowMessageW(languageMessageName.c_str());
 
   Gdiplus::GdiplusStartupInput gdiplusInput;
   AppState state;

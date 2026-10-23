@@ -7,6 +7,8 @@
 #include <filesystem>
 #include <fstream>
 #include <set>
+#include <cwctype>
+#include <cstdint>
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -48,6 +50,21 @@ std::wstring GetDirectory() {
 }
 
 std::wstring GetPath() { return (fs::path(GetDirectory()) / L"common_settings.json").wstring(); }
+
+std::wstring GetInstallationScopeId() {
+  std::wstring path = GetPath();
+  std::uint64_t hash = 14695981039346656037ull; // FNV-1a
+  for (wchar_t character : path) {
+    const std::uint16_t unit = static_cast<std::uint16_t>(std::towlower(character));
+    hash ^= static_cast<std::uint8_t>(unit & 0xff);
+    hash *= 1099511628211ull;
+    hash ^= static_cast<std::uint8_t>(unit >> 8);
+    hash *= 1099511628211ull;
+  }
+  wchar_t result[17]{};
+  swprintf_s(result, L"%016llX", static_cast<unsigned long long>(hash));
+  return result;
+}
 
 std::string GetUiLanguage() {
   const json value = Load();

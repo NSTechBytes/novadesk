@@ -185,6 +185,8 @@ static const wchar_t *kSingleInstanceLockArg =
 static const wchar_t *kManageWindowClassName = L"NovadeskManagerWindow";
 static const wchar_t *kManageCloseMessageName = L"Novadesk.Manage.RequestClose";
 static UINT g_manageCloseMessage = 0;
+static std::wstring g_manageMutexName;
+static std::wstring g_manageWindowScopeProperty;
 static int ShowManageMessageBox(const std::wstring &message,
                                 const std::wstring &title, UINT type);
 static bool ExecuteNovadeskCommand(const std::wstring &cmd,
@@ -199,6 +201,23 @@ static bool RestartManageWindow();
 static void ResendFontsToAllControls();
 static void ApplyLocalizedText();
 static UINT g_languageChangedMessage = 0;
+static HWND FindManageWindowForCurrentInstallation() {
+  struct Search {
+    const wchar_t *property;
+    HWND window = nullptr;
+  } search{g_manageWindowScopeProperty.c_str()};
+  EnumWindows(
+      [](HWND window, LPARAM value) -> BOOL {
+        auto *search = reinterpret_cast<Search *>(value);
+        if (GetPropW(window, search->property)) {
+          search->window = window;
+          return FALSE;
+        }
+        return TRUE;
+      },
+      reinterpret_cast<LPARAM>(&search));
+  return search.window;
+}
 static const std::wstring &Tr(const char *key, const wchar_t *fallback) {
   return Localization::TextOr(key, fallback);
 }
@@ -2645,6 +2664,8 @@ public:
 
   virtual void HandleInitDialog() override {
     g_mainWindow = m_Window;
+    SetPropW(m_Window, g_manageWindowScopeProperty.c_str(),
+             reinterpret_cast<HANDLE>(1));
 
     RECT wr{ 0, 0, kWindowWidth, kWindowHeight };
     AdjustWindowRectEx(&wr, (DWORD)GetWindowLongPtrW(m_Window, GWL_STYLE), FALSE, (DWORD)GetWindowLongPtrW(m_Window, GWL_EXSTYLE));    const int winW = wr.right - wr.left;
@@ -2952,6 +2973,7 @@ public:
       return 0;
 
     case WM_DESTROY:
+      RemovePropW(m_Window, g_manageWindowScopeProperty.c_str());
       g_mainWindow = nullptr;
       KillTimer(m_Window, kLogsRefreshTimerId);
       KillTimer(m_Window, kAutoUpdateTimerId);
@@ -3103,10 +3125,7 @@ static bool RequestExistingManageWindowClose() {
     return false;
   }
 
-  HWND existing = FindWindowW(L"#32770", L"Manage Novadesk");
-  if (!existing) {
-    existing = FindWindowW(kManageWindowClassName, nullptr);
-  }
+  HWND existing = FindManageWindowForCurrentInstallation();
   if (!existing) {
     return true;
   }
@@ -3115,12 +3134,12 @@ static bool RequestExistingManageWindowClose() {
   SendMessageTimeoutW(existing, g_manageCloseMessage, 0, 0, SMTO_ABORTIFHUNG,
                       1500, &result);
   for (int i = 0; i < 80; ++i) {
-    if (!FindWindowW(L"#32770", L"Manage Novadesk") && !FindWindowW(kManageWindowClassName, nullptr)) {
+    if (!FindManageWindowForCurrentInstallation()) {
       return true;
     }
     Sleep(100);
   }
-  return (!FindWindowW(L"#32770", L"Manage Novadesk") && !FindWindowW(kManageWindowClassName, nullptr));
+  return !FindManageWindowForCurrentInstallation();
 }
 
 static bool RestartManageWindow() {
@@ -3157,8 +3176,13 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
   WindowsTheme::Initialize();
   Localization::Initialize();
 
-  g_manageCloseMessage = RegisterWindowMessageW(kManageCloseMessageName);
-  g_languageChangedMessage = RegisterWindowMessageW(L"Novadesk.LanguageChanged");
+  const std::wstring installationScope = CommonSettings::GetInstallationScopeId();
+  g_manageMutexName = L"Global\\NovadeskManageWindowSingleton." + installationScope;
+  g_manageWindowScopeProperty = L"Novadesk.Manage.InstallationScope." + installationScope;
+  const std::wstring closeMessageName = std::wstring(kManageCloseMessageName) + L"." + installationScope;
+  const std::wstring languageMessageName = L"Novadesk.LanguageChanged." + installationScope;
+  g_manageCloseMessage = RegisterWindowMessageW(closeMessageName.c_str());
+  g_languageChangedMessage = RegisterWindowMessageW(languageMessageName.c_str());
   if (HasCommandLineFlag(L"--request-close")) {
     return RequestExistingManageWindowClose() ? 0 : 1;
   }
@@ -3168,7 +3192,7 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
 
     for (int i = 0; i < 80; ++i) {
       HANDLE existingMutex = OpenMutexW(
-          SYNCHRONIZE, FALSE, L"Global\\NovadeskManageWindowSingleton");
+          SYNCHRONIZE, FALSE, g_manageMutexName.c_str());
       if (!existingMutex)
         break;
       CloseHandle(existingMutex);
@@ -3196,12 +3220,9 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
   }
 
   HANDLE instanceMutex =
-      CreateMutexW(nullptr, FALSE, L"Global\\NovadeskManageWindowSingleton");
+      CreateMutexW(nullptr, FALSE, g_manageMutexName.c_str());
   if (instanceMutex && GetLastError() == ERROR_ALREADY_EXISTS) {
-    HWND existing = FindWindowW(L"#32770", L"Manage Novadesk");
-    if (!existing) {
-      existing = FindWindowW(kManageWindowClassName, nullptr);
-    }
+    HWND existing = FindManageWindowForCurrentInstallation();
     if (existing) {
       ShowWindow(existing, SW_SHOW);
       SetForegroundWindow(existing);

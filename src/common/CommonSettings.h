@@ -6,6 +6,8 @@
 namespace CommonSettings {
 std::wstring GetDirectory();
 std::wstring GetPath();
+// Stable identifier for this installation's shared settings location.
+std::wstring GetInstallationScopeId();
 std::string GetUiLanguage();
 bool SetUiLanguage(const std::string &language);
 } // namespace CommonSettings

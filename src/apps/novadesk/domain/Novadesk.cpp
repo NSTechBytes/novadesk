@@ -34,6 +34,7 @@
 #include "../scripting/quickjs/modules/SystemModule.h"
 #include "../../common/WindowsTheme.h"
 #include "../../common/Localization.h"
+#include "../../common/CommonSettings.h"
 #include "SettingsPanel.h"
 #include <filesystem>
 #include <fstream>
@@ -206,7 +207,8 @@ static bool SendIpcCommand(HWND hWnd, const std::wstring &command,
 
 static std::wstring BuildSingleInstanceMutexName() {
   std::wstring appTitle = PathUtils::GetProductName();
-  return L"Global\\NovadeskMutex_" + appTitle;
+  return L"Global\\NovadeskMutex_" + appTitle + L"." +
+         CommonSettings::GetInstallationScopeId();
 }
 
 bool RequestSingleInstanceLock() {
@@ -325,7 +327,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
   std::wstring appTitle = PathUtils::GetProductName();
   std::wstring mutexName = BuildSingleInstanceMutexName();
-  std::wstring className = L"NovadeskTrayClass_" + appTitle;
+  std::wstring className = L"NovadeskTrayClass_" + appTitle + L"." +
+                           CommonSettings::GetInstallationScopeId();
   bool requestSingleInstanceLock = false;
   bool forceNewInstance = false;
   {
