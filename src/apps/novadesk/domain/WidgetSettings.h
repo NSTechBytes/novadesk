@@ -73,9 +73,15 @@ struct WidgetSettingsCatalog {
   bool showWindowTab = true;             ///< Show/hide built-in Window tab.
 
   struct AboutInfo {
+    struct Link {
+      std::wstring service;
+      std::wstring url;
+    };
     std::wstring name;
     std::wstring version;
     std::wstring description;
+    std::vector<Link> supportLinks;
+    std::vector<Link> socialLinks;
     bool hasName        = false;
     bool hasVersion     = false;
     bool hasDescription = false;

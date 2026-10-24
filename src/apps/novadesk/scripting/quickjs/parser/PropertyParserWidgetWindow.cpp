@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cwctype>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace PropertyParser {
@@ -170,6 +171,25 @@ bool ParseSettingsConfig(JSContext *ctx, JSValueConst val,
       if (!nm.empty())  { catalog.about.name    = nm;  catalog.about.hasName        = true; }
       if (!ver.empty()) { catalog.about.version = ver; catalog.about.hasVersion     = true; }
       if (!dsc.empty()) { catalog.about.description = dsc; catalog.about.hasDescription = true; }
+
+      const auto readLinks = [&](const char *group,
+                                 const std::vector<std::pair<const char *, const wchar_t *>> &services,
+                                 std::vector<WidgetSettingsCatalog::AboutInfo::Link> &out) {
+        JSValue linksV = JS_GetPropertyStr(ctx, aboutV, group);
+        if (JS_IsObject(linksV)) {
+          for (const auto &[key, label] : services) {
+            std::wstring url = Js::GetStringProp(ctx, linksV, key);
+            if (!url.empty()) out.push_back({label, std::move(url)});
+          }
+        }
+        JS_FreeValue(ctx, linksV);
+      };
+      readLinks("support", {{"paypal", L"PayPal"}, {"patreon", L"Patreon"}},
+                catalog.about.supportLinks);
+      readLinks("social", {{"youtube", L"YouTube"}, {"tiktok", L"TikTok"},
+                           {"instagram", L"Instagram"}, {"github", L"GitHub"},
+                           {"deviantart", L"DeviantArt"}, {"discord", L"Discord"}},
+                catalog.about.socialLinks);
     }
     JS_FreeValue(ctx, aboutV);
   }
@@ -208,6 +228,8 @@ bool ParseSettingsConfig(JSContext *ctx, JSValueConst val,
   catalog.hasSchema = !catalog.schema.empty() || !catalog.tabs.empty();
   return catalog.hasSchema || !catalog.panelTitle.empty()
                            || catalog.about.hasName
+                           || !catalog.about.supportLinks.empty()
+                           || !catalog.about.socialLinks.empty()
                            || !catalog.showWindowTab;
 }
 

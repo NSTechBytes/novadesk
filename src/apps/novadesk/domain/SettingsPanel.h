@@ -48,7 +48,7 @@ private:
     // Footer
     ResetButton, ResetLabel,
     // Chrome
-    CloseButton, TabButton,
+    CloseButton, TabButton, ExternalLink,
     // Window tab
     WindowToggle, WindowZPos, WindowOpacity
   };

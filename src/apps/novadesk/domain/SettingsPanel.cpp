@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cwchar>
+#include <cwctype>
 #include <windows.h>
 
 #include "../scripting/quickjs/parser/PropertyParser.h"
@@ -24,67 +25,49 @@ extern std::vector<Widget *> widgets;
 std::vector<SettingsPanel *> SettingsPanel::s_Panels;
 std::vector<SettingsPanel *> SettingsPanel::s_PendingDestroy;
 
-// ─── Layout constants ─────────────────────────────────────────────────────────
 namespace {
 
-// Overall panel
 constexpr int kPanelW  = 520;
 constexpr int kPanelH  = 480;
 
-// Header strip (title + close button) — spans full width
 constexpr int kHeaderH = 48;
 
-// Left sidebar (tab navigation)
-constexpr int kSideW   = 140;   // sidebar width
+constexpr int kSideW   = 140;
 
-// Right content pane
-constexpr int kContentX = kSideW;                    // content starts here
-constexpr int kContentW = kPanelW - kSideW;          // = 380
-constexpr int kContentH = kPanelH - kHeaderH;        // = 432
+constexpr int kContentX = kSideW;
+constexpr int kContentW = kPanelW - kSideW;
+constexpr int kContentH = kPanelH - kHeaderH;
 
-// Sidebar tab button geometry
-constexpr int kTabBtnH  = 40;    // height of each tab button
-constexpr int kTabBtnX  = 0;     // starts at sidebar left edge
-constexpr int kTabIndW  = 3;     // active-tab indicator bar width
-constexpr int kTabIndH  = 16;    // active-tab indicator bar height (compact pill)
-constexpr int kTabPadX  = 16;    // icon/text horizontal padding
+constexpr int kTabBtnH  = 40;
+constexpr int kTabBtnX  = 0;
+constexpr int kTabIndW  = 3;
+constexpr int kTabIndH  = 16;
+constexpr int kTabPadX  = 16;
 
-// Content area layout
-constexpr int kPadX     = 20;    // horizontal content padding
-constexpr int kRowH     = 44;    // height per inline settings row (label left, control right)
-constexpr int kCtrlH    = 28;    // height of individual control (input/toggle/dropdown)
-constexpr int kCtrlW    = kContentW - kPadX * 2;  // = 340
+constexpr int kPadX     = 20;
+constexpr int kRowH     = 44;
+constexpr int kCtrlH    = 28;
+constexpr int kCtrlW    = kContentW - kPadX * 2;
 constexpr int kInlineLabelW = 220;
 constexpr int kInlineCtrlW  = 100;
 
-// Footer within content pane
 constexpr int kFooterH  = 52;
 
-// Window tab
 constexpr int kWinRows  = 7;
 
-// About tab minimum height
 constexpr int kAboutH   = 180;
 
-// Scroll container — the scrollable area inside each tab.
-// Custom tabs reserve kFooterH at the bottom for the Reset button; the
-// Window and About tabs use the full content height.
-constexpr int kScrollH     = kContentH - kFooterH; // custom tab scrollable height
-constexpr int kScrollHFull = kContentH;             // window / about tab scrollable height
+constexpr int kScrollH     = kContentH - kFooterH;
+constexpr int kScrollHFull = kContentH;
 
-// Scrollbar appearance
-constexpr int   kSbWidth  = 4;     // thin pill thumb
+constexpr int   kSbWidth  = 4;
 constexpr float kSbRadius = 2.0f;
 constexpr float kSbInset  = 3.0f;
 
-// Returns the per-tab scroll-container element ID.
 inline std::wstring ScrollId(int ti) {
   return L"__scroll_" + std::to_wstring(ti);
 }
 
-// Creates the scroll-container shape for a tab and returns its ID.
-// The container clips children and shows a vertical scrollbar when content
-// overflows.  Pass isDark so the scrollbar thumb is tinted appropriately.
 static std::wstring MakeScrollContainer(Widget *panel, int ti,
                                         int x, int y, int w, int h,
                                         COLORREF thumbColor,
@@ -97,9 +80,8 @@ static std::wstring MakeScrollContainer(Widget *panel, int ti,
   o.solidColor = bgColor; o.solidAlpha = 255;
   o.fillColor  = bgColor; o.fillAlpha  = 255;
   o.strokeWidth = 0.0f;
-  // overflow: auto — clip content, show scrollbar only when needed
   o.hasOverflow  = true; o.overflow = L"auto";
-  o.hasOverflowX = true; o.overflowX = L"hidden"; // no horizontal scroll
+  o.hasOverflowX = true; o.overflowX = L"hidden";
   o.hasShowScrollbarX = true; o.showScrollbarX = false;
   o.hasShowScrollbarY = true; o.showScrollbarY = true;
   o.hasScrollbarWidth = true; o.scrollbarWidth = kSbWidth;
@@ -112,14 +94,13 @@ static std::wstring MakeScrollContainer(Widget *panel, int ti,
   o.hasScrollbarActiveColor = true;
   o.scrollbarActiveColor = thumbColor; o.scrollbarActiveAlpha = 255;
   o.hasScrollbarTrackColor = true;
-  o.scrollbarTrackColor = bgColor; o.scrollbarTrackAlpha = 0; // transparent track
+  o.scrollbarTrackColor = bgColor; o.scrollbarTrackAlpha = 0;
   o.hasScrollbarButtonBgColor = true;
   o.scrollbarButtonBgColor = bgColor; o.scrollbarButtonBgAlpha = 0;
   panel->AddShape(o);
   return sid;
 }
 
-// Z-position options
 const std::vector<std::wstring> kZPosLabels = {
   L"Normal", L"On Top", L"Always on Top", L"On Bottom", L"On Desktop"
 };
@@ -142,7 +123,6 @@ bool ParseDbl(const std::wstring &v, double &out) {
   out = d; return true;
 }
 
-// IDs for content elements (scoped per tab to avoid collisions)
 std::wstring CEId(int ti, const std::wstring &sid, const wchar_t *role) {
   return L"__t" + std::to_wstring(ti) + L"_" + sid + L"_" + role;
 }
@@ -156,9 +136,7 @@ int OptIndex(const std::vector<std::wstring> &opts, const std::wstring &v) {
 
 struct BoolRow { const wchar_t *id; const wchar_t *label; bool value; };
 
-} // anonymous namespace
-
-// ─── Statics ─────────────────────────────────────────────────────────────────
+}
 
 Widget *SettingsPanel::OpenFor(Widget *target) {
   FlushPending();
@@ -215,8 +193,6 @@ void SettingsPanel::SyncTargetVisuals(Widget *target) {
   }
 }
 
-// ─── Element creation helpers ─────────────────────────────────────────────────
-
 static void Txt(Widget *panel, const std::wstring &id,
                 int x, int y, int w, int h,
                 const std::wstring &text, int size, COLORREF color,
@@ -256,7 +232,8 @@ static void Rect(Widget *panel, const std::wstring &id,
 
 static void Ellipse(Widget *panel, const std::wstring &id,
                     int x, int y, int w, int h,
-                    COLORREF color, BYTE alpha = 255, bool hand = false) {
+                    COLORREF color, BYTE alpha = 255, bool hand = false,
+                    const std::wstring &containerId = L"") {
   PropertyParser::ShapeOptions o;
   o.id = id; o.x = x; o.y = y; o.width = w; o.height = h;
   o.shapeType = L"ellipse";
@@ -264,11 +241,53 @@ static void Ellipse(Widget *panel, const std::wstring &id,
   o.solidColor = color; o.solidAlpha = alpha;
   o.fillColor  = color; o.fillAlpha  = alpha;
   o.strokeWidth = 0.0f;
+  o.containerId = containerId;
   if (hand) o.mouseEventCursorName = L"hand";
   panel->AddShape(o);
 }
 
-// ─── BuildPanel ───────────────────────────────────────────────────────────────
+static void Path(Widget *panel, const std::wstring &id, int x, int y,
+                 const std::wstring &data, COLORREF color, bool hand,
+                 const std::wstring &containerId) {
+  PropertyParser::ShapeOptions o;
+  o.id = id; o.x = x; o.y = y; o.width = 32; o.height = 32;
+  o.shapeType = L"path"; o.pathData = data;
+  o.hasSolidColor = false;
+  o.fillColor = color; o.fillAlpha = 255; o.strokeWidth = 0.0f;
+  o.containerId = containerId;
+  if (hand) o.mouseEventCursorName = L"hand";
+  panel->AddShape(o);
+}
+
+static bool IsSafeExternalUrl(const std::wstring &url) {
+  if (url.size() < 9 || url.find_first_of(L"\r\n") != std::wstring::npos)
+    return false;
+  std::wstring scheme = url.substr(0, 8);
+  std::transform(scheme.begin(), scheme.end(), scheme.begin(), towlower);
+  return scheme == L"https://";
+}
+
+static void BrandIcon(Widget *panel, const std::wstring &id,
+                      const std::wstring &service, int x, int y,
+                      bool hand, const std::wstring &containerId) {
+  if (service == L"PayPal") {
+    Path(panel, id, x, y, L"M15.607 4.653H8.941L6.645 19.251H1.82L4.862 0h7.995c3.754 0 6.375 2.294 6.473 5.513-.648-.478-2.105-.86-3.722-.86m6.57 5.546c0 3.41-3.01 6.853-6.958 6.853h-2.493L11.595 24H6.74l1.845-11.538h3.592c4.208 0 7.346-3.634 7.153-6.949a5.24 5.24 0 0 1 2.848 4.686M9.653 5.546h6.408c.907 0 1.942.222 2.363.541-.195 2.741-2.655 5.483-6.441 5.483H8.714Z", RGB(0, 69, 124), hand, containerId);
+  } else if (service == L"Patreon") {
+    Path(panel, id, x, y, L"M22.957 7.21c-.004-3.064-2.391-5.576-5.191-6.482-3.478-1.125-8.064-.962-11.384.604C2.357 3.231 1.093 7.391 1.046 11.54c-.039 3.411.302 12.396 5.369 12.46 3.765.047 4.326-4.804 6.068-7.141 1.24-1.662 2.836-2.132 4.801-2.618 3.376-.836 5.678-3.501 5.673-7.031Z", RGB(255, 66, 77), hand, containerId);
+  } else if (service == L"YouTube") {
+    Path(panel, id, x, y, L"M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z", RGB(255, 0, 0), hand, containerId);
+  } else if (service == L"Instagram") {
+    Path(panel, id, x, y, L"M7.03.084c-1.277.06-2.149.264-2.911.563-.789.308-1.458.72-2.123 1.388C1.33 2.703.92 3.372.616 4.162c-.295.764-.496 1.637-.552 2.914C.008 8.354-.005 8.765.001 12.023c.006 3.259.021 3.667.083 4.947.061 1.277.264 2.148.564 2.911.308.789.72 1.457 1.388 2.123.668.665 1.337 1.074 2.129 1.38.763.295 1.636.496 2.913.552 1.277.056 1.688.069 4.946.063 3.258-.006 3.668-.021 4.948-.081 1.28-.061 2.147-.265 2.91-.564.789-.308 1.458-.72 2.123-1.388.665-.668 1.074-1.338 1.38-2.128.296-.763.497-1.636.552-2.912.056-1.281.069-1.69.063-4.948-.006-3.258-.021-3.667-.082-4.946-.061-1.28-.264-2.149-.563-2.912-.308-.789-.72-1.457-1.388-2.123C21.298 1.33 20.628.921 19.838.617 19.074.321 18.202.12 16.924.065 15.647.009 15.236-.005 11.977.001 8.718.008 8.31.022 7.03.084m.14 21.693c-1.17-.051-1.805-.245-2.229-.408-.56-.216-.96-.477-1.382-.895-.422-.418-.681-.819-.9-1.378-.164-.423-.362-1.058-.417-2.228-.059-1.264-.072-1.644-.079-4.848-.007-3.204.005-3.583.061-4.848.05-1.169.245-1.805.408-2.228.216-.561.476-.96.895-1.382.419-.422.818-.681 1.378-.9.423-.165 1.058-.361 2.227-.417 1.266-.06 1.645-.072 4.848-.079 3.203-.007 3.584.005 4.85.061 1.169.051 1.805.245 2.228.408.561.216.96.475 1.382.895.422.419.682.818.9 1.379.166.422.362 1.056.417 2.226.06 1.266.074 1.645.08 4.848.006 3.203-.005 3.583-.061 4.848-.051 1.17-.245 1.806-.408 2.229-.216.56-.476.96-.895 1.381-.419.422-.818.681-1.378.9-.422.165-1.058.362-2.226.417-1.266.06-1.645.072-4.849.079-3.204.007-3.583-.006-4.848-.061M16.953 5.586A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.442M5.839 12.012c.007 3.403 2.771 6.156 6.173 6.149 3.403-.006 6.157-2.77 6.151-6.173-.007-3.403-2.771-6.156-6.174-6.15-3.403.007-6.156 2.771-6.15 6.174M8 12.008a4 4 0 1 1 4.008 3.992A4 4 0 0 1 8 12.008", RGB(228, 64, 95), hand, containerId);
+  } else if (service == L"DeviantArt") {
+    Path(panel, id, x, y, L"M19.207 4.794l.23-.43V0H15.07l-.436.44-2.058 3.925-.646.436H4.58v5.993h4.04l.36.436-4.175 7.98-.24.43V24H8.93l.436-.44 2.07-3.925.644-.436h7.35v-5.993h-4.05l-.36-.438 4.186-7.977z", RGB(5, 204, 71), hand, containerId);
+  } else if (service == L"TikTok") {
+    Path(panel, id, x, y, L"M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z", RGB(0, 0, 0), hand, containerId);
+  } else if (service == L"GitHub") {
+    Path(panel, id, x, y, L"M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12", RGB(24, 23, 23), hand, containerId);
+  } else {
+    Path(panel, id, x, y, L"M20.317 4.37a19.79 19.79 0 00-4.885-1.515.074.074 0 00-.079.037c-.211.375-.445.865-.608 1.25a20.02 20.02 0 00-5.487 0c-.164-.393-.406-.874-.618-1.25a.077.077 0 00-.078-.037A19.74 19.74 0 003.677 4.37a.07.07 0 00-.032.028C.533 9.046-.319 13.58.099 18.058a.082.082 0 00.031.056c2.053 1.508 4.041 2.423 5.993 3.029a.078.078 0 00.084-.028c.462-.63.873-1.295 1.226-1.994a.076.076 0 00-.042-.106 12.3 12.3 0 01-1.872-.892.077.077 0 01-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 01.078-.011c3.928 1.793 8.18 1.793 12.061 0a.074.074 0 01.079.01c.12.099.246.198.373.292a.077.077 0 01-.007.128c-.6.35-1.221.64-1.873.891a.077.077 0 00-.041.107c.36.698.772 1.363 1.225 1.993a.076.076 0 00.084.029c1.961-.607 3.95-1.522 6.002-3.03a.077.077 0 00.031-.055c.5-5.177-.838-9.674-3.548-13.66a.061.061 0 00-.031-.029zM8.02 15.331c-1.183 0-2.157-1.086-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.211 0 2.176 1.095 2.157 2.419 0 1.333-.956 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.086-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.211 0 2.176 1.095 2.157 2.419 0 1.333-.946 2.419-2.157 2.419Z", RGB(88, 101, 242), hand, containerId);
+  }
+}
 
 void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
 
@@ -283,7 +302,6 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
                    : (showWin     ? m_WindowTabIndex
                                   : m_AboutTabIndex);
 
-  // Position panel beside target
   RECT tr{};
   GetWindowRect(target->GetWindow(), &tr);
   const int screenW = GetSystemMetrics(SM_CXSCREEN);
@@ -308,9 +326,6 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
   po.keepOnScreen = true; po.snapEdges = false;
   po.showInToolbar = false; po.zPos = ZPOSITION_ONTOPMOST;
   po.show = false; po.windowOpacity = 255;
-  // A non-empty scriptPath makes the widget treat every element as an action
-  // target (sinkHandlesClicks=true), routing WM_LBUTTONUP to OnElementMouseUp
-  // even for elements that have no JS callbacks (all settings panel controls).
   po.scriptPath = L"__settings_panel__";
 
   Widget *panel = new Widget(po);
@@ -319,23 +334,18 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
   panel->SetInputSink(this);
   panel->BeginUpdate();
 
-  // ── Header (full width) ───────────────────────────────────────────────────
-  // Header background
   Rect(panel, L"__hdr_bg", 0, 0, kPanelW, kHeaderH, m_Palette.sidebar);
 
-  // Title — left-aligned starting at kPadX, vertically centered with TEXT_ALIGN_LEFT_TOP
   std::wstring hdrTitle = cat.panelTitle;
   if (hdrTitle.empty()) {
     hdrTitle = target->GetOptions().id;
     if (hdrTitle.empty() || hdrTitle == L"widget") hdrTitle = target->GetTitle();
     if (hdrTitle.empty()) hdrTitle = L"Widget";
-    hdrTitle = L"Settings \u2014 " + hdrTitle; // em dash
+    hdrTitle = L"Settings \u2014 " + hdrTitle;
   }
-  // FluentWidgets style: fixed y = 14 with standard TEXT_ALIGN_LEFT_TOP
   Txt(panel, L"__hdr_title", kPadX, 14, kPanelW - kPadX - 48,
       22, hdrTitle, 13, m_Palette.text, 600, false, TEXT_ALIGN_LEFT_TOP);
 
-  // Close button — circular button like FluentWidgets (radius = size/2)
   {
     constexpr int kCloseSize = 16;
     const int closeX = kPanelW - kCloseSize - 16;
@@ -345,18 +355,13 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
     m_Controls[L"__hdr_close"] = {L"", ControlKind::CloseButton, -1};
   }
 
-  // Header bottom border
   Rect(panel, L"__hdr_border", 0, kHeaderH - 1, kPanelW, 1, m_Palette.divider);
 
-  // ── Left sidebar ──────────────────────────────────────────────────────────
-  // Sidebar background
   Rect(panel, L"__sb_bg", 0, kHeaderH, kSideW, kContentH, m_Palette.sidebar);
 
-  // Sidebar right border (1px)
   Rect(panel, L"__sb_border", kSideW - 1, kHeaderH, 1, kContentH,
        m_Palette.sidebarBorder);
 
-  // Build tab button labels
   std::vector<std::wstring> tabLabels, tabIcons;
   for (const auto &t : cat.tabs) {
     tabLabels.push_back(t.label);
@@ -365,17 +370,14 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
   if (showWin) { tabLabels.push_back(L"Window");  tabIcons.push_back(L"\uE770"); }
   tabLabels.push_back(L"About"); tabIcons.push_back(L"\uE946");
 
-  const int sideContentY = kHeaderH + 12; // top padding in sidebar
+  const int sideContentY = kHeaderH + 12;
 
   for (int ti = 0; ti < m_TotalTabs; ++ti) {
     const int btnY = sideContentY + ti * kTabBtnH;
     const bool active = (ti == m_ActiveTab);
 
-    // The tab row occupies [btnY, btnY + kTabBtnH].
-    // Vertical center line of the entire row:
     const int midY = btnY + kTabBtnH / 2;
 
-    // Tab background pill (for smooth hover highlight)
     {
       const int tabPadX = 6;
       const int tabBgH = 32;
@@ -399,12 +401,11 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
       m_Controls[bg.id] = {std::to_wstring(ti), ControlKind::TabButton, -1};
     }
 
-    // Active indicator bar: 16px high, centered around midY
     {
       PropertyParser::ShapeOptions ind;
       ind.id = L"__tab_ind_" + std::to_wstring(ti);
-      ind.x = 2; // subtle inset from edge
-      ind.y = midY - kTabIndH / 2 - 3; // exact center
+      ind.x = 2;
+      ind.y = midY - kTabIndH / 2 - 3;
       ind.width = kTabIndW;
       ind.height = kTabIndH;
       ind.radiusX = 1.5f;
@@ -415,17 +416,15 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
       ind.solidColor = m_Palette.accent; ind.solidAlpha = 255;
       ind.fillColor  = m_Palette.accent; ind.fillAlpha  = 255;
       panel->AddShape(ind);
-      // indicator is always registered at tabIndex=-1 but we manage show manually
       m_Controls[ind.id] = {std::to_wstring(ti), ControlKind::TabButton, -1};
     }
 
-    // Icon (Segoe MDL2): 16px box, centered around midY
     if (!tabIcons[ti].empty()) {
       constexpr int kIconSize = 16;
       PropertyParser::TextOptions ico;
       ico.id = L"__tab_ico_" + std::to_wstring(ti);
       ico.x = kTabPadX;
-      ico.y = midY - kIconSize / 2 - 1; //
+      ico.y = midY - kIconSize / 2 - 1;
       ico.width = kIconSize;
       ico.height = kIconSize;
       ico.text = tabIcons[ti];
@@ -437,7 +436,6 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
       m_Controls[ico.id] = {std::to_wstring(ti), ControlKind::TabButton, -1};
     }
 
-    // Label text: 20px box, centered around midY
     {
       constexpr int kLabelH = 20;
       PropertyParser::TextOptions lbl;
@@ -456,17 +454,14 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
     }
   }
 
-  // Sidebar bottom — version micro-text
   Txt(panel, L"__sb_ver",
       kTabPadX, kHeaderH + kContentH - 22, kSideW - kTabPadX, 18,
       Utils::ToWString(NOVADESK_VERSION), 9, m_Palette.muted);
 
-  // ── Content area background ───────────────────────────────────────────────
   Rect(panel, L"__content_bg",
        kContentX, kHeaderH, kContentW, kContentH, m_Palette.background);
 
-  // ── Build each tab content ────────────────────────────────────────────────
-  const int contentY0 = kHeaderH + 16; // top padding in content area
+  const int contentY0 = kHeaderH + 16;
 
   for (int ti = 0; ti < nCustom; ++ti)
     BuildCustomTab(panel, target, cat.tabs[ti], ti, contentY0);
@@ -474,12 +469,10 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
   if (showWin) BuildWindowTab(panel, target, m_WindowTabIndex, contentY0);
   BuildAboutTab(panel, m_AboutTabIndex, contentY0);
 
-  // ── Footer (Reset to defaults) — belongs to tab 0 ────────────────────────
   if (nCustom > 0) {
     const int footerY = kHeaderH + kContentH - kFooterH;
     const int resetW  = 150;
     const int resetH  = 28;
-    // Align button to the right bottom side of the content pane
     const int resetX  = kContentX + kContentW - kPadX - resetW;
     const int resetY  = footerY + (kFooterH - resetH) / 2;
 
@@ -492,15 +485,12 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
          m_Palette.controlFill, 255, 6.0f, true);
     m_Controls[L"__settings_reset"] = {L"", ControlKind::ResetButton, 0};
 
-    // TEXT_ALIGN_CENTER_CENTER does x -= w/2, y -= h/2 in GetBounds.
-    // Pass the button center so after offsets it renders over the full button rect.
     Txt(panel, L"__settings_reset_label",
         resetX + resetW / 2, resetY + resetH / 2, resetW, resetH,
         L"Reset to defaults", 12, m_Palette.text, 400, true, TEXT_ALIGN_CENTER_CENTER);
     m_Controls[L"__settings_reset_label"] = {L"", ControlKind::ResetLabel, 0};
   }
 
-  // Register widget
   {
     std::lock_guard<std::mutex> lock(Widget::s_WidgetMutex);
     widgets.push_back(panel);
@@ -514,14 +504,9 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
   if (panel->GetWindow()) SetForegroundWindow(panel->GetWindow());
 }
 
-// ─── BuildCustomTab ──────────────────────────────────────────────────────────
-
 void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
                                    const WidgetSettingsTab &tab,
                                    int ti, int startY) {
-  // ── Scroll container ─────────────────────────────────────────────────────
-  // Container origin: (kContentX, kHeaderH). All child elements MUST use
-  // coordinates relative to this origin.
   const std::wstring scrollId = MakeScrollContainer(
       panel, ti,
       kContentX, kHeaderH,
@@ -530,17 +515,14 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
       m_Palette.background);
   m_Controls[scrollId] = {L"", ControlKind::SelectLabel, ti};
 
-  // startY is an absolute panel Y (kHeaderH + 16). Convert to container-relative.
-  int y = startY - kHeaderH; // relative to container top
+  int y = startY - kHeaderH;
 
-  // Tab heading
   Txt(panel, CEId(ti, L"", L"heading"),
       kPadX, y, kCtrlW, 22,
       tab.label, 14, m_Palette.text, 700, false, TEXT_ALIGN_LEFT_TOP, scrollId);
   m_Controls[CEId(ti, L"", L"heading")] = {L"", ControlKind::SelectLabel, ti};
   y += 30;
 
-  // Thin heading underline
   Rect(panel, CEId(ti, L"", L"hdivider"),
        kPadX, y, kCtrlW, 1, m_Palette.divider, 255, 0.0f, false, scrollId);
   m_Controls[CEId(ti, L"", L"hdivider")] = {L"", ControlKind::SelectLabel, ti};
@@ -666,7 +648,6 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
         m_Controls[dd.id] = {setting.id, ControlKind::PanelDropDown, ti};
         break;
       }
-      // Fallback button
       Rect(panel, CEId(ti, setting.id, L"btn"),
            ctrlX, ctrlY, kInlineCtrlW, kCtrlH,
            m_Palette.controlFill, 255, 7.0f, true, scrollId);
@@ -684,14 +665,11 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
   }
 }
 
-// ─── BuildWindowTab ───────────────────────────────────────────────────────────
-
 void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
                                    int ti, int startY) {
   if (!target || !Widget::IsValid(target)) return;
   const WidgetOptions &opts = target->GetOptions();
 
-  // ── Scroll container ─────────────────────────────────────────────────────
   const std::wstring scrollId = MakeScrollContainer(
       panel, ti,
       kContentX, kHeaderH,
@@ -700,7 +678,6 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
       m_Palette.background);
   m_Controls[scrollId] = {L"", ControlKind::SelectLabel, ti};
 
-  // All coordinates below are container-relative (origin = kContentX, kHeaderH).
   int y = startY - kHeaderH;
 
   Txt(panel, CEId(ti, L"", L"heading"),
@@ -752,7 +729,6 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
   const int ctrlX  = kPadX + kCtrlW - kInlineCtrlW;
   const int rowOff = (kRowH - kCtrlH) / 2;
 
-  // Z-position label + dropdown
   Txt(panel, L"__win_zpos_lbl",
       kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH,
       L"Z-position", 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER, scrollId);
@@ -778,7 +754,6 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
   }
   y += kRowH;
 
-  // Opacity label + input
   Txt(panel, L"__win_opacity_lbl",
       kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH,
       L"Opacity (0 \u2013 100)", 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER, scrollId);
@@ -803,14 +778,11 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
   }
 }
 
-// ─── BuildAboutTab ────────────────────────────────────────────────────────────
-
 void SettingsPanel::BuildAboutTab(Widget *panel, int ti, int startY) {
   const WidgetSettingsCatalog &cat =
       m_Target ? m_Target->GetSettings() : WidgetSettingsCatalog{};
   const auto &about = cat.about;
 
-  // ── Scroll container ─────────────────────────────────────────────────────
   const std::wstring scrollId = MakeScrollContainer(
       panel, ti,
       kContentX, kHeaderH,
@@ -819,10 +791,8 @@ void SettingsPanel::BuildAboutTab(Widget *panel, int ti, int startY) {
       m_Palette.background);
   m_Controls[scrollId] = {L"", ControlKind::SelectLabel, ti};
 
-  // All coordinates are container-relative (origin = kContentX, kHeaderH).
   int y = startY - kHeaderH;
 
-  // App / widget name (large accent)
   const std::wstring nameText =
       about.hasName ? about.name
       : (m_Target ? m_Target->GetOptions().id : L"Novadesk");
@@ -833,7 +803,6 @@ void SettingsPanel::BuildAboutTab(Widget *panel, int ti, int startY) {
   m_Controls[L"__about_name"] = {L"", ControlKind::SelectLabel, ti};
   y += 36;
 
-  // Version
   const std::wstring verText = about.hasVersion
       ? (L"Version " + about.version)
       : (L"Version " NOVADESK_VERSION);
@@ -843,7 +812,6 @@ void SettingsPanel::BuildAboutTab(Widget *panel, int ti, int startY) {
   m_Controls[L"__about_ver"] = {L"", ControlKind::SelectLabel, ti};
   y += 22;
 
-  // Description
   if (about.hasDescription) {
     Txt(panel, L"__about_desc",
         kPadX, y, kCtrlW, 18,
@@ -853,22 +821,58 @@ void SettingsPanel::BuildAboutTab(Widget *panel, int ti, int startY) {
     y += 24;
   }
 
-  // Divider
   y += 8;
   Rect(panel, L"__about_hr",
        kPadX, y, kCtrlW, 1, m_Palette.divider, 255, 0.0f, false, scrollId);
   m_Controls[L"__about_hr"] = {L"", ControlKind::SelectLabel, ti};
-}
+  y += 18;
 
-// ─── SwitchTab ────────────────────────────────────────────────────────────────
+  const auto addLinkCard = [&](const WidgetSettingsCatalog::AboutInfo::Link &link,
+                               int x, int cardY, int width) {
+    const std::wstring id = L"__about_link_" + link.service;
+    Rect(panel, id, x, cardY, width, 38, m_Palette.controlFill, 255, 6.0f,
+         true, scrollId);
+    BrandIcon(panel, id + L"_icon", link.service, x + 9, cardY + 7, true, scrollId);
+    Txt(panel, id + L"_label", x + 39, cardY + 12, width - 45, 18,
+        link.service, 11, m_Palette.text, 600, true, TEXT_ALIGN_LEFT_TOP, scrollId);
+    const ControlInfo info{link.url, ControlKind::ExternalLink, ti};
+    m_Controls[id] = info;
+    m_Controls[id + L"_icon"] = info;
+    m_Controls[id + L"_icon_p"] = info;
+    m_Controls[id + L"_icon_circle"] = info;
+    m_Controls[id + L"_icon_play"] = info;
+    m_Controls[id + L"_label"] = info;
+  };
+
+  const auto addSection = [&](const wchar_t *title,
+                              const std::vector<WidgetSettingsCatalog::AboutInfo::Link> &links) {
+    std::vector<WidgetSettingsCatalog::AboutInfo::Link> valid;
+    for (const auto &link : links)
+      if (IsSafeExternalUrl(link.url)) valid.push_back(link);
+    if (valid.empty()) return;
+    Txt(panel, L"__about_" + std::wstring(title) + L"_heading", kPadX, y,
+        kCtrlW, 20, title, 13, m_Palette.text, 700, false, TEXT_ALIGN_LEFT_TOP, scrollId);
+    m_Controls[L"__about_" + std::wstring(title) + L"_heading"] =
+        {L"", ControlKind::SelectLabel, ti};
+    y += 26;
+    for (size_t index = 0; index < valid.size(); ++index) {
+      const int column = static_cast<int>(index % 2);
+      const int row = static_cast<int>(index / 2);
+      addLinkCard(valid[index], kPadX + column * 172, y + row * 46, 160);
+    }
+    y += static_cast<int>((valid.size() + 1) / 2) * 46 + 10;
+  };
+
+  addSection(L"Support", about.supportLinks);
+  addSection(L"Social", about.socialLinks);
+}
 
 void SettingsPanel::SwitchTab(int tabIndex) {
   if (!m_Panel || !Widget::IsValid(m_Panel)) return;
   m_ActiveTab = tabIndex;
 
-  // Show/hide content elements
   for (auto &[id, info] : m_Controls) {
-    if (info.tabIndex == -1) continue; // sidebar chrome: manage separately
+    if (info.tabIndex == -1) continue;
     Element *el = m_Panel->FindElementById(id);
     if (!el) continue;
     if (id == L"__settings_reset" || id == L"__settings_reset_label" ||
@@ -879,11 +883,9 @@ void SettingsPanel::SwitchTab(int tabIndex) {
     el->SetShow(info.tabIndex == tabIndex);
   }
 
-  // Update sidebar tab buttons (active indicator, label weight/color, icon color)
   for (int ti = 0; ti < m_TotalTabs; ++ti) {
     const bool active = (ti == tabIndex);
 
-    // Tab background shape
     const std::wstring bgId = L"__tab_bg_" + std::to_wstring(ti);
     if (Element *el = m_Panel->FindElementById(bgId)) {
       COLORREF bgCol = active ? m_Palette.controlFill : m_Palette.sidebar;
@@ -893,18 +895,15 @@ void SettingsPanel::SwitchTab(int tabIndex) {
       }
     }
 
-    // Indicator bar
     const std::wstring indId = L"__tab_ind_" + std::to_wstring(ti);
     if (Element *el = m_Panel->FindElementById(indId))
       el->SetShow(active);
 
-    // Icon
     const std::wstring icoId = L"__tab_ico_" + std::to_wstring(ti);
     if (Element *el = m_Panel->FindElementById(icoId))
       if (auto *te = dynamic_cast<TextElement *>(el))
         te->SetFontColor(active ? m_Palette.accent : m_Palette.tabInactive, 255);
 
-    // Label
     const std::wstring lblId = L"__tab_lbl_" + std::to_wstring(ti);
     if (Element *el = m_Panel->FindElementById(lblId))
       if (auto *te = dynamic_cast<TextElement *>(el)) {
@@ -913,7 +912,6 @@ void SettingsPanel::SwitchTab(int tabIndex) {
       }
   }
 
-  // Always-visible structural elements
   for (const wchar_t *id : {L"__hdr_bg",L"__hdr_title",L"__hdr_border",
                               L"__hdr_close",L"__sb_bg",L"__sb_border",
                               L"__sb_ver",L"__content_bg"})
@@ -923,30 +921,22 @@ void SettingsPanel::SwitchTab(int tabIndex) {
   m_Panel->Redraw();
 }
 
-// ─── ApplyPaletteToPanel ──────────────────────────────────────────────────────
-
 void SettingsPanel::ApplyPaletteToPanel() {
   if (!m_Panel || !Widget::IsValid(m_Panel)) return;
 
-  // Update the Widget window's own background color (no save side-effect for
-  // the settings panel because its id is empty and Settings::SaveWidget is a
-  // no-op for empty ids).
   wchar_t bgBuf[64];
   swprintf_s(bgBuf, L"rgba(%d,%d,%d,255)",
              GetRValue(m_Palette.background),
              GetGValue(m_Palette.background),
              GetBValue(m_Palette.background));
-  // Directly update the underlying options without triggering SaveWidget.
   {
     WidgetOptions &opts = const_cast<WidgetOptions &>(m_Panel->GetOptions());
     opts.backgroundColor = bgBuf;
     opts.color           = m_Palette.background;
     opts.bgAlpha         = 255;
   }
-  // Force the widget to recreate its render target background with the new color.
   m_Panel->Redraw();
 
-  // Helper: update a TextElement's font color (and optionally weight).
   auto T = [&](const wchar_t *id, COLORREF c, int w = -1) {
     if (Element *el = m_Panel->FindElementById(id))
       if (auto *te = dynamic_cast<TextElement *>(el)) {
@@ -955,7 +945,6 @@ void SettingsPanel::ApplyPaletteToPanel() {
       }
   };
 
-  // Helper: update a shape element's solid color AND fill color together.
   auto S = [&](const wchar_t *id, COLORREF c) {
     if (Element *el = m_Panel->FindElementById(id)) {
       el->SetSolidColor(c, 255);
@@ -977,28 +966,22 @@ void SettingsPanel::ApplyPaletteToPanel() {
   S(L"__about_hr",       m_Palette.divider);
   S(L"__settings_hr2",   m_Palette.divider);
 
-  // Recolor all dynamically-built content controls in-place so we don't need
-  // to rebuild the panel (which causes flickering).
   for (auto &[id, info] : m_Controls) {
     Element *el = m_Panel->FindElementById(id);
     if (!el) continue;
 
-    // Determine suffix (role) from the ID — everything after the last '_'
     const std::wstring &eid = id;
     auto lastUs = eid.rfind(L'_');
     const std::wstring role = (lastUs != std::wstring::npos) ? eid.substr(lastUs + 1) : eid;
 
     switch (info.kind) {
     case ControlKind::SelectLabel:
-      // Row labels, section headings, dividers — dispatch on element type.
-      // Skip scroll containers (__scroll_N) — they are recolored separately below.
       if (id.rfind(L"__scroll_", 0) == 0) break;
       if (auto *te = dynamic_cast<TextElement *>(el)) {
         if (role == L"label")        te->SetFontColor(m_Palette.label, 255);
         else if (role == L"heading") te->SetFontColor(m_Palette.text,  255);
         else                         te->SetFontColor(m_Palette.text,  255);
       } else {
-        // Shape elements used as dividers / row separators (hdivider, sep).
         el->SetSolidColor(m_Palette.divider, 255);
         if (auto *sh = dynamic_cast<ShapeElement *>(el)) sh->SetFill(m_Palette.divider, 255);
       }
@@ -1041,6 +1024,14 @@ void SettingsPanel::ApplyPaletteToPanel() {
       el->SetSolidColor(m_Palette.controlFill, 255);
       if (auto *sh = dynamic_cast<ShapeElement *>(el)) sh->SetFill(m_Palette.controlFill, 255);
       break;
+    case ControlKind::ExternalLink:
+      if (id.find(L"_label") != std::wstring::npos) {
+        if (auto *te = dynamic_cast<TextElement *>(el)) te->SetFontColor(m_Palette.text, 255);
+      } else if (id.find(L"_icon") == std::wstring::npos) {
+        el->SetSolidColor(m_Palette.controlFill, 255);
+        if (auto *sh = dynamic_cast<ShapeElement *>(el)) sh->SetFill(m_Palette.controlFill, 255);
+      }
+      break;
     case ControlKind::BoundSwitch:
     case ControlKind::BoundSlider:
     default:
@@ -1049,12 +1040,10 @@ void SettingsPanel::ApplyPaletteToPanel() {
     }
   }
 
-  // Window tab inline labels
   for (const wchar_t *lid : {L"__win_zpos_lbl", L"__win_opacity_lbl"})
     if (Element *el = m_Panel->FindElementById(lid))
       if (auto *te = dynamic_cast<TextElement *>(el)) te->SetFontColor(m_Palette.label, 255);
 
-  // Window opacity input
   if (Element *el = m_Panel->FindElementById(L"__win_opacity"))
     if (auto *ib = dynamic_cast<InputBoxElement *>(el)) {
       ib->SetFontColor(m_Palette.text, 255);
@@ -1064,8 +1053,6 @@ void SettingsPanel::ApplyPaletteToPanel() {
       ib->SetSelectionColor(m_Palette.accent, 128);
     }
 
-  // Update caret and selection colors on every InputBox in the panel
-  // (covers both custom-tab Input boxes and the Window-tab opacity box).
   for (auto &[id, info] : m_Controls) {
     if (info.kind != ControlKind::Input && info.kind != ControlKind::WindowOpacity)
       continue;
@@ -1077,7 +1064,6 @@ void SettingsPanel::ApplyPaletteToPanel() {
     }
   }
 
-  // Update all ColorPickerElements' popup theme colors
   for (auto &[id, info] : m_Controls) {
     if (info.kind != ControlKind::ColorSwatch)
       continue;
@@ -1099,13 +1085,11 @@ void SettingsPanel::ApplyPaletteToPanel() {
     }
   }
 
-  // Recolor scrollbar thumbs in all per-tab scroll containers
   for (int ti = 0; ti < m_TotalTabs; ++ti) {
     if (Element *el = m_Panel->FindElementById(ScrollId(ti))) {
       el->SetScrollbarColor(m_Palette.label, 140);
       el->SetScrollbarHoverColor(m_Palette.label, 210);
       el->SetScrollbarActiveColor(m_Palette.label, 255);
-      // Keep the container background in sync with the content background
       el->SetSolidColor(m_Palette.background, 255);
       if (auto *sh = dynamic_cast<ShapeElement *>(el))
         sh->SetFill(m_Palette.background, 255);
@@ -1114,8 +1098,6 @@ void SettingsPanel::ApplyPaletteToPanel() {
 
   SwitchTab(m_ActiveTab);
 }
-
-// ─── UpdateWindowTabVisuals ───────────────────────────────────────────────────
 
 void SettingsPanel::UpdateWindowTabVisuals() {
   if (!m_Target || !Widget::IsValid(m_Target) ||
@@ -1155,8 +1137,6 @@ void SettingsPanel::OnElementHoverChanged(Widget *widget, Element *element,
   if (widget != m_Panel || !element) return;
   const std::wstring &id = element->GetId();
   if (id == L"__hdr_close") {
-    // Normal: rgb(239, 68, 68) (red)
-    // Hover: brighter/stronger red rgb(255, 90, 90)
     COLORREF color = isHovered ? RGB(255, 90, 90) : RGB(239, 68, 68);
     element->SetSolidColor(color, 255);
     if (auto *shape = dynamic_cast<ShapeElement *>(element)) {
@@ -1164,7 +1144,6 @@ void SettingsPanel::OnElementHoverChanged(Widget *widget, Element *element,
     }
     m_Panel->Redraw();
   } else if (id == L"__settings_reset" || id == L"__settings_reset_label") {
-    // Hover effect for Reset to default button
     Element *btnEl = m_Panel->FindElementById(L"__settings_reset");
     Element *lblEl = m_Panel->FindElementById(L"__settings_reset_label");
     COLORREF bgCol = isHovered ? m_Palette.controlBorder : m_Palette.controlFill;
@@ -1182,8 +1161,22 @@ void SettingsPanel::OnElementHoverChanged(Widget *widget, Element *element,
       }
     }
     m_Panel->Redraw();
+  } else if (id.rfind(L"__about_link_", 0) == 0) {
+    std::wstring cardId = id;
+    const size_t suffix = cardId.find(L"_icon", 13);
+    if (suffix != std::wstring::npos) cardId.resize(suffix);
+    const size_t labelSuffix = cardId.find(L"_label", 13);
+    if (labelSuffix != std::wstring::npos) cardId.resize(labelSuffix);
+    if (Element *card = m_Panel->FindElementById(cardId)) {
+      const COLORREF color = isHovered ? m_Palette.controlBorder : m_Palette.controlFill;
+      card->SetSolidColor(color, 255);
+      if (auto *shape = dynamic_cast<ShapeElement *>(card)) shape->SetFill(color, 255);
+    }
+    if (Element *label = m_Panel->FindElementById(cardId + L"_label"))
+      if (auto *text = dynamic_cast<TextElement *>(label))
+        text->SetFontColor(isHovered ? m_Palette.accent : m_Palette.text, 255);
+    m_Panel->Redraw();
   } else if (id.rfind(L"__tab_", 0) == 0) {
-    // Hover effect for sidebar tab items (__tab_bg_X, __tab_ico_X, __tab_lbl_X)
     int tabIdx = -1;
     size_t lastUnderscore = id.rfind(L'_');
     if (lastUnderscore != std::wstring::npos) {
@@ -1221,8 +1214,6 @@ void SettingsPanel::OnElementHoverChanged(Widget *widget, Element *element,
   }
 }
 
-// ─── Destructor / Close ───────────────────────────────────────────────────────
-
 SettingsPanel::~SettingsPanel() {
   auto it = std::find(s_Panels.begin(), s_Panels.end(), this);
   if (it != s_Panels.end()) s_Panels.erase(it);
@@ -1255,8 +1246,6 @@ void SettingsPanel::Close() {
   delete this;
 }
 
-// ─── Commit helpers ───────────────────────────────────────────────────────────
-
 void SettingsPanel::Commit(const std::wstring &sid, const std::wstring &val) {
   if (!m_Target || !Widget::IsValid(m_Target)) { Close(); return; }
   CommitWidgetSetting(m_Target, sid, val);
@@ -1271,14 +1260,11 @@ void SettingsPanel::ResetAll() {
   if (m_Panel && Widget::IsValid(m_Panel)) m_Panel->Redraw();
 }
 
-// ─── Visual updates ───────────────────────────────────────────────────────────
-
 void SettingsPanel::UpdateRowVisuals(const WidgetSetting &setting) {
   if (!m_Panel || !Widget::IsValid(m_Panel) ||
       !m_Target || !Widget::IsValid(m_Target)) return;
   const std::wstring value = m_Target->GetSettings().ValueOrDefault(setting.id);
 
-  // Determine which tab index owns this setting
   int ti = 0;
   for (auto &[id, info] : m_Controls)
     if (info.settingId == setting.id && info.tabIndex >= 0)
@@ -1327,8 +1313,6 @@ void SettingsPanel::UpdateAllVisuals() {
     UpdateRowVisuals(s);
 }
 
-// ─── Input sink ───────────────────────────────────────────────────────────────
-
 void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int, int) {
   if (!widget || widget != m_Panel || !element) return;
   auto it = m_Controls.find(element->GetId());
@@ -1342,13 +1326,16 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int, int)
   if (info.kind == ControlKind::CloseButton) { Close(); return; }
   if (info.kind == ControlKind::ResetButton ||
       info.kind == ControlKind::ResetLabel)  { ResetAll(); return; }
+  if (info.kind == ControlKind::ExternalLink) {
+    if (IsSafeExternalUrl(info.settingId))
+      ShellExecuteW(nullptr, L"open", info.settingId.c_str(), nullptr, nullptr,
+                    SW_SHOWNORMAL);
+    return;
+  }
   if (!m_Target || !Widget::IsValid(m_Target)) { Close(); return; }
 
   if (info.kind == ControlKind::WindowToggle) {
     if (auto *ts = dynamic_cast<ToggleSwitchElement *>(element)) {
-      // When scriptPath is non-empty (our sentinel), the widget skips
-      // ToggleToggleSwitch() and routes straight here — the element has NOT
-      // been flipped yet. Flip it manually, then apply to the target.
       ts->Toggle();
       m_Panel->Redraw();
       const bool on = ts->IsChecked(); const std::wstring &sid = info.settingId;
@@ -1383,7 +1370,6 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int, int)
   if (info.kind == ControlKind::BoundSwitch) {
     bool checked = false;
     if (auto *sw = dynamic_cast<ToggleSwitchElement *>(element)) {
-      // consumedBySink path: element was not flipped by the widget — flip it now
       sw->Toggle();
       m_Panel->Redraw();
       checked = sw->IsChecked();

@@ -23,7 +23,20 @@ var window = new widgetWindow({
     about: {                   // optional: controls the About tab
       name:        "My Widget",
       version:     "1.2.0",
-      description: "Does awesome things",
+      description: "Does awesome things \n With line 2",
+      // Optional HTTPS links. Only provided links appear in the About tab.
+      support: {
+        paypal:  "https://paypal.me/example",
+        patreon: "https://patreon.com/example",
+      },
+      social: {
+        youtube:    "https://youtube.com/@example",
+        tiktok:     "https://tiktok.com/@example",
+        instagram:  "https://instagram.com/example",
+        github:     "https://github.com/example",
+        deviantart: "https://example.deviantart.com",
+        discord:    "https://discord.gg/example",
+      },
     },
 
     tabs: [
