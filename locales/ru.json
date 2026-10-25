@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Непрозрачность (0–100)",
   "settingspanel.window.snapEdges": "Привязать края",
   "settingspanel.window.title": "Настройки окна",
-  "settingspanel.window.zPosition": "Позиция Z"
+  "settingspanel.window.zPosition": "Позиция Z",
+
+  "installer.chooseInstallationType": "Выберите тип установки:",
+  "installer.portable": "Портативный",
+  "installer.run": "Пробежка по Новадеску",
+  "installer.standardRecommended": "Стандарт (рекомендуется)"
 }

@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Непрозрачност (0 – 100)",
   "settingspanel.window.snapEdges": "Прилепване на ръбове",
   "settingspanel.window.title": "Настройки на прозореца",
-  "settingspanel.window.zPosition": "Z-позиция"
+  "settingspanel.window.zPosition": "Z-позиция",
+
+  "installer.chooseInstallationType": "Изберете тип инсталация:",
+  "installer.portable": "Преносим",
+  "installer.run": "Стартиране на Новадеск",
+  "installer.standardRecommended": "Стандарт (препоръчително)"
 }

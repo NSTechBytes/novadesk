@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Opacitet (0–100)",
   "settingspanel.window.snapEdges": "Snäppa kanter",
   "settingspanel.window.title": "Fönsterinställningar",
-  "settingspanel.window.zPosition": "Z-position"
+  "settingspanel.window.zPosition": "Z-position",
+
+  "installer.chooseInstallationType": "Välj installationstyp:",
+  "installer.portable": "Portabelt",
+  "installer.run": "Kör Novadesk",
+  "installer.standardRecommended": "Standard (rekommenderas)"
 }

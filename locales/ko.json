@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "불투명도(0 – 100)",
   "settingspanel.window.snapEdges": "가장자리 스냅",
   "settingspanel.window.title": "창 설정",
-  "settingspanel.window.zPosition": "Z 위치"
+  "settingspanel.window.zPosition": "Z 위치",
+
+  "installer.chooseInstallationType": "설치 유형 선택:",
+  "installer.portable": "휴대용",
+  "installer.run": "노바데스크 달리기",
+  "installer.standardRecommended": "표준 (권장)"
 }

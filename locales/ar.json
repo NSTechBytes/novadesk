@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "العتامة (0 – 100)",
   "settingspanel.window.snapEdges": "حواف المفاجئة",
   "settingspanel.window.title": "إعدادات النافذة",
-  "settingspanel.window.zPosition": "موضع Z"
+  "settingspanel.window.zPosition": "موضع Z",
+
+  "installer.chooseInstallationType": "اختر نوع التثبيت:",
+  "installer.portable": "[ترجمة المصطلح: Portable]",
+  "installer.run": "تشغيل Novadesk",
+  "installer.standardRecommended": "القياسات (مستحسن)"
 }

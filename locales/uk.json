@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Непрозорість (0 – 100)",
   "settingspanel.window.snapEdges": "Зафіксуйте краї",
   "settingspanel.window.title": "Параметри вікна",
-  "settingspanel.window.zPosition": "Позиція Z"
+  "settingspanel.window.zPosition": "Позиція Z",
+
+  "installer.chooseInstallationType": "Виберіть тип установки:",
+  "installer.portable": "Портативний",
+  "installer.run": "Пробіжіть Новадек",
+  "installer.standardRecommended": "Стандарт (рекомендовано)"
 }

@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Độ mờ (0 – 100)",
   "settingspanel.window.snapEdges": "Chụp cạnh",
   "settingspanel.window.title": "Cài đặt cửa sổ",
-  "settingspanel.window.zPosition": "Vị trí Z"
+  "settingspanel.window.zPosition": "Vị trí Z",
+
+  "installer.chooseInstallationType": "Chọn loại cài đặt:",
+  "installer.portable": "Di động",
+  "installer.run": "Chạy Novadesk",
+  "installer.standardRecommended": "Tiêu chuẩn (khuyến nghị)"
 }

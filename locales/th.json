@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "ความทึบ (0 – 100)",
   "settingspanel.window.snapEdges": "ชิดขอบ",
   "settingspanel.window.title": "การตั้งค่าหน้าต่าง",
-  "settingspanel.window.zPosition": "ตำแหน่ง Z"
+  "settingspanel.window.zPosition": "ตำแหน่ง Z",
+
+  "installer.chooseInstallationType": "เลือกประเภทการติดตั้ง:",
+  "installer.portable": "คอมพิวเตอร์เคลื่อนย้ายได้",
+  "installer.run": "วิ่ง Novadesk",
+  "installer.standardRecommended": "มาตรฐาน (แนะนำ)"
 }

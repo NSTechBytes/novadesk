@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Αδιαφάνεια (0 – 100)",
   "settingspanel.window.snapEdges": "Κουμπωτά άκρα",
   "settingspanel.window.title": "Ρυθμίσεις παραθύρου",
-  "settingspanel.window.zPosition": "Θέση Z"
+  "settingspanel.window.zPosition": "Θέση Z",
+
+  "installer.chooseInstallationType": "Επιλέξτε έναν τύπο εγκατάστασης.",
+  "installer.portable": "Φορητό",
+  "installer.run": "Εκτέλεση Novadesk",
+  "installer.standardRecommended": "Πρότυπο (συνιστάται)"
 }

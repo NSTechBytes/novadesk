@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "不透明度 (0 ～ 100)",
   "settingspanel.window.snapEdges": "スナップエッジ",
   "settingspanel.window.title": "ウィンドウの設定",
-  "settingspanel.window.zPosition": "Z 位置"
+  "settingspanel.window.zPosition": "Z 位置",
+
+  "installer.chooseInstallationType": "インストールの種類を選択してください：",
+  "installer.portable": "ポータブル版",
+  "installer.run": "ノヴァデスクを走る",
+  "installer.standardRecommended": "標準（推奨）"
 }

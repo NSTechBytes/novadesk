@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Непрозирност (0 – 100)",
   "settingspanel.window.snapEdges": "Снап едгес",
   "settingspanel.window.title": "Подешавања прозора",
-  "settingspanel.window.zPosition": "Z-позиција"
+  "settingspanel.window.zPosition": "Z-позиција",
+
+  "installer.chooseInstallationType": "Izaberite tip instalacije:",
+  "installer.portable": "prenosno",
+  "installer.run": "Pokreni Novadesk",
+  "installer.standardRecommended": "Standard (preporučeno)"
 }

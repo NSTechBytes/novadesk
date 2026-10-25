@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Átlátszatlanság (0–100)",
   "settingspanel.window.snapEdges": "Pattintsa be az éleket",
   "settingspanel.window.title": "Ablakbeállítások",
-  "settingspanel.window.zPosition": "Z-pozíció"
+  "settingspanel.window.zPosition": "Z-pozíció",
+
+  "installer.chooseInstallationType": "Válassza ki a telepítés típusát:",
+  "installer.portable": "Hordozható",
+  "installer.run": "Novadesk futtatása",
+  "installer.standardRecommended": "Standard (ajánlott)"
 }

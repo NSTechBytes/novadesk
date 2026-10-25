@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "אטימות (0 - 100)",
   "settingspanel.window.snapEdges": "הצמד קצוות",
   "settingspanel.window.title": "הגדרות חלון",
-  "settingspanel.window.zPosition": "מיקום Z"
+  "settingspanel.window.zPosition": "מיקום Z",
+
+  "installer.chooseInstallationType": "בחר סוג התקנה:",
+  "installer.portable": "נייד",
+  "installer.run": "Run Novadesk",
+  "installer.standardRecommended": "רגיל (מומלץ)"
 }

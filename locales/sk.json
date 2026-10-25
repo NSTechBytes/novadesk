@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Nepriehľadnosť (0 – 100)",
   "settingspanel.window.snapEdges": "Zachyťte okraje",
   "settingspanel.window.title": "Nastavenia okna",
-  "settingspanel.window.zPosition": "Pozícia Z"
+  "settingspanel.window.zPosition": "Pozícia Z",
+
+  "installer.chooseInstallationType": "Výber montáže svietidla",
+  "installer.portable": "Prenosný",
+  "installer.run": "Spustiť Novadesk",
+  "installer.standardRecommended": "Štandard (odporúčané)"
 }

@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Opacitate (0 – 100)",
   "settingspanel.window.snapEdges": "Strângeți marginile",
   "settingspanel.window.title": "Setările ferestrei",
-  "settingspanel.window.zPosition": "Poziția Z"
+  "settingspanel.window.zPosition": "Poziția Z",
+
+  "installer.chooseInstallationType": "Alegeți tipul de instalare:",
+  "installer.portable": "Portabil",
+  "installer.run": "Rulați Novadesk",
+  "installer.standardRecommended": "Standard (recomandat)"
 }

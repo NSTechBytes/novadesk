@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Dekking (0 – 100)",
   "settingspanel.window.snapEdges": "Snap randen",
   "settingspanel.window.title": "Vensterinstellingen",
-  "settingspanel.window.zPosition": "Z-positie"
+  "settingspanel.window.zPosition": "Z-positie",
+
+  "installer.chooseInstallationType": "Kies installatietype:",
+  "installer.portable": "Draagbaar",
+  "installer.run": "Novadesk uitvoeren",
+  "installer.standardRecommended": "Standaard (aanbevolen)"
 }

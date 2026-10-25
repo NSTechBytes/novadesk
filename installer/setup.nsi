@@ -67,6 +67,9 @@ BrandingText " "
 !define MUI_HEADERIMAGE_BITMAP "assets\header.bmp"
 !define MUI_WELCOMEFINISHPAGE_BITMAP "assets\banner.bmp"
 !define MUI_UNWELCOMEFINISHPAGE_BITMAP "assets\banner.bmp"
+; Always show the complete Unicode language list. This prevents NSIS from
+; hiding a catalog simply because the legacy system ANSI code page differs.
+!define MUI_LANGDLL_ALLLANGUAGES
 
 ;--------------------------------
 ; Pages
@@ -83,7 +86,7 @@ Page custom InstallModePageCreate InstallModePageLeave
 
 ; Finish page settings
 !define MUI_FINISHPAGE_RUN
-!define MUI_FINISHPAGE_RUN_TEXT "Run Novadesk"
+!define MUI_FINISHPAGE_RUN_TEXT "$(InstallerRunNovadesk)"
 !define MUI_FINISHPAGE_RUN_FUNCTION FinishRun
 !insertmacro MUI_PAGE_FINISH
 
@@ -91,7 +94,48 @@ Page custom InstallModePageCreate InstallModePageLeave
 UninstPage custom un.CompleteRemovePageCreate un.CompleteRemovePageLeave
 !insertmacro MUI_UNPAGE_INSTFILES
 
+; Keep this list aligned with locales/*.json. NSIS supplies the translated
+; Modern UI page text, button text, and RTL layout for Arabic and Hebrew.
 !insertmacro MUI_LANGUAGE "English"
+!insertmacro MUI_LANGUAGE "Arabic"
+!insertmacro MUI_LANGUAGE "Bulgarian"
+!insertmacro MUI_LANGUAGE "SimpChinese"
+!insertmacro MUI_LANGUAGE "TradChinese"
+!insertmacro MUI_LANGUAGE "Croatian"
+!insertmacro MUI_LANGUAGE "Czech"
+!insertmacro MUI_LANGUAGE "Danish"
+!insertmacro MUI_LANGUAGE "Dutch"
+!insertmacro MUI_LANGUAGE "Estonian"
+!insertmacro MUI_LANGUAGE "Finnish"
+!insertmacro MUI_LANGUAGE "French"
+!insertmacro MUI_LANGUAGE "German"
+!insertmacro MUI_LANGUAGE "Greek"
+!insertmacro MUI_LANGUAGE "Hebrew"
+!insertmacro MUI_LANGUAGE "Hungarian"
+!insertmacro MUI_LANGUAGE "Indonesian"
+!insertmacro MUI_LANGUAGE "Italian"
+!insertmacro MUI_LANGUAGE "Japanese"
+!insertmacro MUI_LANGUAGE "Korean"
+!insertmacro MUI_LANGUAGE "Latvian"
+!insertmacro MUI_LANGUAGE "Lithuanian"
+!insertmacro MUI_LANGUAGE "Malay"
+!insertmacro MUI_LANGUAGE "Norwegian"
+!insertmacro MUI_LANGUAGE "Polish"
+!insertmacro MUI_LANGUAGE "PortugueseBR"
+!insertmacro MUI_LANGUAGE "Portuguese"
+!insertmacro MUI_LANGUAGE "Romanian"
+!insertmacro MUI_LANGUAGE "Russian"
+!insertmacro MUI_LANGUAGE "Serbian"
+!insertmacro MUI_LANGUAGE "SerbianLatin"
+!insertmacro MUI_LANGUAGE "Slovak"
+!insertmacro MUI_LANGUAGE "Slovenian"
+!insertmacro MUI_LANGUAGE "Spanish"
+!insertmacro MUI_LANGUAGE "Swedish"
+!insertmacro MUI_LANGUAGE "Thai"
+!insertmacro MUI_LANGUAGE "Turkish"
+!insertmacro MUI_LANGUAGE "Ukrainian"
+!insertmacro MUI_LANGUAGE "Vietnamese"
+!include "InstallerStrings.nsh"
 
 ;--------------------------------
 ; Data
@@ -105,6 +149,7 @@ Var RemoveCompletely
 Var UnRemoveCheckbox
 Var UserDocsDir
 Var UserAppDataDir
+Var InstallerLocale
 
 ; The UAC plug-in keeps the UI process unelevated and launches an elevated
 ; companion only when a standard installation actually needs administrator
@@ -216,7 +261,7 @@ Section -CoreFiles SecCoreFiles
     FileClose $0
     ${IfNot} ${FileExists} "$UserAppDataDir\Novadesk\common_settings.json"
       FileOpen $0 "$UserAppDataDir\Novadesk\common_settings.json" "w"
-      FileWrite $0 "{$\r$\n  $\"schemaVersion$\": 1,$\r$\n  $\"uiLanguage$\": $\"en$\"$\r$\n}$\r$\n"
+      FileWrite $0 "{$\r$\n  $\"uiLanguage$\": $\"$InstallerLocale$\"$\r$\n}$\r$\n"
       FileClose $0
     ${EndIf}
 
@@ -285,7 +330,7 @@ Section -CoreFiles SecCoreFiles
     FileClose $0
     ${IfNot} ${FileExists} "$INSTDIR\common_settings.json"
       FileOpen $0 "$INSTDIR\common_settings.json" "w"
-      FileWrite $0 "{$\r$\n  $\"schemaVersion$\": 1,$\r$\n  $\"uiLanguage$\": $\"en$\"$\r$\n}$\r$\n"
+      FileWrite $0 "{$\r$\n  $\"uiLanguage$\": $\"$InstallerLocale$\"$\r$\n}$\r$\n"
       FileClose $0
     ${EndIf}
 
@@ -306,11 +351,11 @@ Function InstallModePageCreate
     Abort
   ${EndIf}
 
-  ${NSD_CreateLabel} 0 0 100% 24u "Choose installation type:"
+  ${NSD_CreateLabel} 0 0 100% 24u "$(InstallerChooseInstallationType)"
   Pop $0
-  ${NSD_CreateRadioButton} 0 28u 100% 12u "Standard (recommended): install with uninstaller and registry entries"
+  ${NSD_CreateRadioButton} 0 28u 100% 12u "$(InstallerStandardRecommended)"
   Pop $RadioStandard
-  ${NSD_CreateRadioButton} 0 44u 100% 12u "Portable: no uninstaller, no registry entries"
+  ${NSD_CreateRadioButton} 0 44u 100% 12u "$(InstallerPortable)"
   Pop $RadioPortable
 
   ${NSD_Check} $RadioStandard
@@ -319,7 +364,7 @@ Function InstallModePageCreate
 FunctionEnd
 
 ; Called by the inner (elevated) instance on the outer (unelevated) process to
-; retrieve the user's selections via UAC sync registers ($1=InstallMode, $2=INSTDIR, $3=UserDocs, $4=UserAppData).
+; retrieve the user's selections via UAC sync registers ($1=InstallMode, $2=INSTDIR, $3=UserDocs, $4=UserAppData, $5=Language).
 ; HideWindow hides the outer's installer window so the user only sees the inner
 ; instance's INSTFILES + Finish pages — the same pattern Rainmeter uses in ExchangeSettings.
 Function SyncSettingsToInner
@@ -328,6 +373,7 @@ Function SyncSettingsToInner
   StrCpy $2 $INSTDIR
   StrCpy $3 "$DOCUMENTS"
   StrCpy $4 "$APPDATA"
+  StrCpy $5 $LANGUAGE
   HideWindow
 FunctionEnd
 
@@ -345,7 +391,95 @@ Function FinishRun
   ExecShell "" "$WINDIR\explorer.exe" '$\"$INSTDIR\manage_novadesk.exe$\"'
 FunctionEnd
 
+; Convert the selected NSIS MUI language into the locale filename used by all
+; Novadesk applications. The setting is written only for a new installation;
+; upgrades preserve the user's existing application-language choice.
+Function SetInstallerLocale
+  StrCpy $InstallerLocale "en"
+  ${If} $LANGUAGE == ${LANG_ARABIC}
+    StrCpy $InstallerLocale "ar"
+  ${ElseIf} $LANGUAGE == ${LANG_BULGARIAN}
+    StrCpy $InstallerLocale "bg"
+  ${ElseIf} $LANGUAGE == ${LANG_SIMPCHINESE}
+    StrCpy $InstallerLocale "zh-Hans"
+  ${ElseIf} $LANGUAGE == ${LANG_TRADCHINESE}
+    StrCpy $InstallerLocale "zh-Hant"
+  ${ElseIf} $LANGUAGE == ${LANG_CROATIAN}
+    StrCpy $InstallerLocale "hr"
+  ${ElseIf} $LANGUAGE == ${LANG_CZECH}
+    StrCpy $InstallerLocale "cs"
+  ${ElseIf} $LANGUAGE == ${LANG_DANISH}
+    StrCpy $InstallerLocale "da"
+  ${ElseIf} $LANGUAGE == ${LANG_DUTCH}
+    StrCpy $InstallerLocale "nl"
+  ${ElseIf} $LANGUAGE == ${LANG_ESTONIAN}
+    StrCpy $InstallerLocale "et"
+  ${ElseIf} $LANGUAGE == ${LANG_FINNISH}
+    StrCpy $InstallerLocale "fi"
+  ${ElseIf} $LANGUAGE == ${LANG_FRENCH}
+    StrCpy $InstallerLocale "fr"
+  ${ElseIf} $LANGUAGE == ${LANG_GERMAN}
+    StrCpy $InstallerLocale "de"
+  ${ElseIf} $LANGUAGE == ${LANG_GREEK}
+    StrCpy $InstallerLocale "el"
+  ${ElseIf} $LANGUAGE == ${LANG_HEBREW}
+    StrCpy $InstallerLocale "he"
+  ${ElseIf} $LANGUAGE == ${LANG_HUNGARIAN}
+    StrCpy $InstallerLocale "hu"
+  ${ElseIf} $LANGUAGE == ${LANG_INDONESIAN}
+    StrCpy $InstallerLocale "id"
+  ${ElseIf} $LANGUAGE == ${LANG_ITALIAN}
+    StrCpy $InstallerLocale "it"
+  ${ElseIf} $LANGUAGE == ${LANG_JAPANESE}
+    StrCpy $InstallerLocale "ja"
+  ${ElseIf} $LANGUAGE == ${LANG_KOREAN}
+    StrCpy $InstallerLocale "ko"
+  ${ElseIf} $LANGUAGE == ${LANG_LATVIAN}
+    StrCpy $InstallerLocale "lv"
+  ${ElseIf} $LANGUAGE == ${LANG_LITHUANIAN}
+    StrCpy $InstallerLocale "lt"
+  ${ElseIf} $LANGUAGE == ${LANG_MALAY}
+    StrCpy $InstallerLocale "ms"
+  ${ElseIf} $LANGUAGE == ${LANG_NORWEGIAN}
+    StrCpy $InstallerLocale "nb"
+  ${ElseIf} $LANGUAGE == ${LANG_POLISH}
+    StrCpy $InstallerLocale "pl"
+  ${ElseIf} $LANGUAGE == ${LANG_PORTUGUESEBR}
+    StrCpy $InstallerLocale "pt-BR"
+  ${ElseIf} $LANGUAGE == ${LANG_PORTUGUESE}
+    StrCpy $InstallerLocale "pt-PT"
+  ${ElseIf} $LANGUAGE == ${LANG_ROMANIAN}
+    StrCpy $InstallerLocale "ro"
+  ${ElseIf} $LANGUAGE == ${LANG_RUSSIAN}
+    StrCpy $InstallerLocale "ru"
+  ${ElseIf} $LANGUAGE == ${LANG_SERBIAN}
+    StrCpy $InstallerLocale "sr-Cyrl"
+  ${ElseIf} $LANGUAGE == ${LANG_SERBIANLATIN}
+    StrCpy $InstallerLocale "sr-Latn"
+  ${ElseIf} $LANGUAGE == ${LANG_SLOVAK}
+    StrCpy $InstallerLocale "sk"
+  ${ElseIf} $LANGUAGE == ${LANG_SLOVENIAN}
+    StrCpy $InstallerLocale "sl"
+  ${ElseIf} $LANGUAGE == ${LANG_SPANISH}
+    StrCpy $InstallerLocale "es"
+  ${ElseIf} $LANGUAGE == ${LANG_SWEDISH}
+    StrCpy $InstallerLocale "sv"
+  ${ElseIf} $LANGUAGE == ${LANG_THAI}
+    StrCpy $InstallerLocale "th"
+  ${ElseIf} $LANGUAGE == ${LANG_TURKISH}
+    StrCpy $InstallerLocale "tr"
+  ${ElseIf} $LANGUAGE == ${LANG_UKRAINIAN}
+    StrCpy $InstallerLocale "uk"
+  ${ElseIf} $LANGUAGE == ${LANG_VIETNAMESE}
+    StrCpy $InstallerLocale "vi"
+  ${EndIf}
+FunctionEnd
+
 Function .onInit
+  ${IfNot} ${UAC_IsInnerInstance}
+    !insertmacro MUI_LANGDLL_DISPLAY
+  ${EndIf}
+  Call SetInstallerLocale
   SetShellVarContext current
   StrCpy $UserDocsDir "$DOCUMENTS"
   StrCpy $UserAppDataDir "$APPDATA"
@@ -372,6 +506,8 @@ Function .onInit
     StrCpy $INSTDIR $2
     StrCpy $UserDocsDir $3
     StrCpy $UserAppDataDir $4
+    StrCpy $LANGUAGE $5
+    Call SetInstallerLocale
   ${EndIf}
 FunctionEnd
 

@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Kelegapan (0 – 100)",
   "settingspanel.window.snapEdges": "Snap tepi",
   "settingspanel.window.title": "Tetapan Tetingkap",
-  "settingspanel.window.zPosition": "Kedudukan Z"
+  "settingspanel.window.zPosition": "Kedudukan Z",
+
+  "installer.chooseInstallationType": "Pilih jenis pemasangan:",
+  "installer.portable": "Mudah Alih",
+  "installer.run": "Jalankan Novadesk",
+  "installer.standardRecommended": "Standard (disyorkan)"
 }

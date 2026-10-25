@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Opacidad (0 – 100)",
   "settingspanel.window.snapEdges": "Bordes a presión",
   "settingspanel.window.title": "Configuración de ventana",
-  "settingspanel.window.zPosition": "Posición Z"
+  "settingspanel.window.zPosition": "Posición Z",
+
+  "installer.chooseInstallationType": "Elija el tipo de instalación:",
+  "installer.portable": "Portátil",
+  "installer.run": "Ejecutar Novadesk",
+  "installer.standardRecommended": "Estándar (recomendado)"
 }

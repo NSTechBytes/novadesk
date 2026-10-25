@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Necaurredzamība (0–100)",
   "settingspanel.window.snapEdges": "Nospiediet malas",
   "settingspanel.window.title": "Logu iestatījumi",
-  "settingspanel.window.zPosition": "Z pozīcija"
+  "settingspanel.window.zPosition": "Z pozīcija",
+
+  "installer.chooseInstallationType": "Izvēlieties uzstādīšanas veidu:",
+  "installer.portable": "Pārnēsājams",
+  "installer.run": "Run Novadesk",
+  "installer.standardRecommended": "Standarta (ieteicams)"
 }

@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Peittävyys (0–100)",
   "settingspanel.window.snapEdges": "Kiinnitä reunat",
   "settingspanel.window.title": "Ikkuna-asetukset",
-  "settingspanel.window.zPosition": "Z-sijainti"
+  "settingspanel.window.zPosition": "Z-sijainti",
+
+  "installer.chooseInstallationType": "Valitse asennustyyppi:",
+  "installer.portable": "Kannettava",
+  "installer.run": "Aja Novadesk",
+  "installer.standardRecommended": "Tavallinen käyttäjä (suositus)"
 }

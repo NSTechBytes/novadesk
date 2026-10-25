@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Opaklık (0 – 100)",
   "settingspanel.window.snapEdges": "Kenarları tutturun",
   "settingspanel.window.title": "Pencere Ayarları",
-  "settingspanel.window.zPosition": "Z konumu"
+  "settingspanel.window.zPosition": "Z konumu",
+
+  "installer.chooseInstallationType": "Kurulum türünü seçin:",
+  "installer.portable": "Portatif",
+  "installer.run": "Novadesk\u0027i çalıştır",
+  "installer.standardRecommended": "Standart (önerilen)"
 }

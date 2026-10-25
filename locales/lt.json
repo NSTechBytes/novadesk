@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Nepermatomumas (0–100)",
   "settingspanel.window.snapEdges": "Užfiksuokite kraštus",
   "settingspanel.window.title": "Lango nustatymai",
-  "settingspanel.window.zPosition": "Z pozicija"
+  "settingspanel.window.zPosition": "Z pozicija",
+
+  "installer.chooseInstallationType": "Pasirinkite montavimo tipą:",
+  "installer.portable": "Nešiojama",
+  "installer.run": "Paleisti Novadešą",
+  "installer.standardRecommended": "Standartinė (rekomenduojama)"
 }

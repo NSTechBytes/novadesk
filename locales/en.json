@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Opacity (0 – 100)",
   "settingspanel.window.snapEdges": "Snap edges",
   "settingspanel.window.title": "Window Settings",
-  "settingspanel.window.zPosition": "Z-position"
+  "settingspanel.window.zPosition": "Z-position",
+
+  "installer.chooseInstallationType": "Choose installation type:",
+  "installer.portable": "Portable",
+  "installer.run": "Run Novadesk",
+  "installer.standardRecommended": "Standard (recommended)"
 }

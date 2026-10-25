@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "不透明度 (0 – 100)",
   "settingspanel.window.snapEdges": "對齊邊緣",
   "settingspanel.window.title": "視窗設定",
-  "settingspanel.window.zPosition": "Z 軸位置"
+  "settingspanel.window.zPosition": "Z 軸位置",
+
+  "installer.chooseInstallationType": "選擇安裝類型：",
+  "installer.portable": "攜帶式",
+  "installer.run": "Run Novadesk",
+  "installer.standardRecommended": "標準（建議）"
 }

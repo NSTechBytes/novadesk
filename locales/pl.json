@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Krycie (0 – 100)",
   "settingspanel.window.snapEdges": "Zatrzaśnij krawędzie",
   "settingspanel.window.title": "Ustawienia okna",
-  "settingspanel.window.zPosition": "Pozycja Z"
+  "settingspanel.window.zPosition": "Pozycja Z",
+
+  "installer.chooseInstallationType": "Wybierz typ instalacji:",
+  "installer.portable": "Przenośne",
+  "installer.run": "Uruchom Novadesk",
+  "installer.standardRecommended": "Standardowy (zalecany)"
 }

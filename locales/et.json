@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Läbipaistmatus (0–100)",
   "settingspanel.window.snapEdges": "Kinnitage servad",
   "settingspanel.window.title": "Akna sätted",
-  "settingspanel.window.zPosition": "Z-asend"
+  "settingspanel.window.zPosition": "Z-asend",
+
+  "installer.chooseInstallationType": "Valige paigalduse tüüp:",
+  "installer.portable": "Kaasaskantav",
+  "installer.run": "Käivita Novadesk",
+  "installer.standardRecommended": "Standard (soovitatav)"
 }

@@ -85,5 +85,10 @@
   "settingspanel.window.opacity": "Opacitet (0 – 100)",
   "settingspanel.window.snapEdges": "Snap kanter",
   "settingspanel.window.title": "Vinduesindstillinger",
-  "settingspanel.window.zPosition": "Z-position"
+  "settingspanel.window.zPosition": "Z-position",
+
+  "installer.chooseInstallationType": "Vælg installationstype:",
+  "installer.portable": "Bærbar",
+  "installer.run": "K�r Novadesk",
+  "installer.standardRecommended": "Standard (anbefales)"
 }
