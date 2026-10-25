@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Z-positie",
 
   "installer.chooseInstallationType": "Kies installatietype:",
+  "installer.completeRemove": "Verwijder Novadesk volledig (verwijder Documenten\\Novadesk en AppData\\Novadesk)",
   "installer.portable": "Draagbaar",
   "installer.run": "Novadesk uitvoeren",
-  "installer.standardRecommended": "Standaard (aanbevolen)"
+  "installer.standardRecommended": "Standaard (aanbevolen)",
+  "installer.uninstallOptions": "Opties om installatie ongedaan te maken"
 }

@@ -540,9 +540,9 @@ Function un.CompleteRemovePageCreate
     Abort
   ${EndIf}
 
-  ${NSD_CreateLabel} 0 0 100% 24u "Uninstall Options"
+  ${NSD_CreateLabel} 0 0 100% 24u "$(InstallerUninstallOptions)"
   Pop $0
-  ${NSD_CreateCheckbox} 0 28u 100% 14u "Completely Remove Novadesk (remove Documents\Novadesk and AppData\Novadesk)"
+  ${NSD_CreateCheckbox} 0 28u 100% 28u "$(InstallerCompleteRemove)"
   Pop $UnRemoveCheckbox
   ${NSD_Check} $UnRemoveCheckbox
   StrCpy $RemoveCompletely ${BST_CHECKED}

@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Z pozicija",
 
   "installer.chooseInstallationType": "Pasirinkite montavimo tipą:",
+  "installer.completeRemove": "Visiškai pašalinti Novadesk (pašalinti dokumentus\\Novadesk ir AppData\\Novadesk)",
   "installer.portable": "Nešiojama",
   "installer.run": "Paleisti Novadešą",
-  "installer.standardRecommended": "Standartinė (rekomenduojama)"
+  "installer.standardRecommended": "Standartinė (rekomenduojama)",
+  "installer.uninstallOptions": "Pašalinimo parinktys"
 }

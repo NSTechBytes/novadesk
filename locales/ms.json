@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Kedudukan Z",
 
   "installer.chooseInstallationType": "Pilih jenis pemasangan:",
+  "installer.completeRemove": "Buang Novadesk Sepenuhnya (buang Dokumen\\Novadesk dan AppData\\Novadesk)",
   "installer.portable": "Mudah Alih",
   "installer.run": "Jalankan Novadesk",
-  "installer.standardRecommended": "Standard (disyorkan)"
+  "installer.standardRecommended": "Standard (disyorkan)",
+  "installer.uninstallOptions": "Nyahpasang Pilihan"
 }

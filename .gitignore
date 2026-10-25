@@ -449,7 +449,6 @@ installer/dist_output
 # NSIS UAC resources are source dependencies, not generated installer output.
 !installer/
 installer/*
-!installer/InstallerStrings.nsh
 !installer/nsis/
 !installer/nsis/UAC.nsh
 !installer/nsis/LICENSE-UAC.txt

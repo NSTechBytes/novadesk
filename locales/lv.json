@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Z pozīcija",
 
   "installer.chooseInstallationType": "Izvēlieties uzstādīšanas veidu:",
+  "installer.completeRemove": "Pilnībā noņemt Novadesk (noņemt dokumentus\\Novadesk un AppData\\Novadesk)",
   "installer.portable": "Pārnēsājams",
   "installer.run": "Run Novadesk",
-  "installer.standardRecommended": "Standarta (ieteicams)"
+  "installer.standardRecommended": "Standarta (ieteicams)",
+  "installer.uninstallOptions": "Atinstalēšanas opcijas"
 }

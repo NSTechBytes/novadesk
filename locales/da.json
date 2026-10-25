@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Z-position",
 
   "installer.chooseInstallationType": "Vælg installationstype:",
+  "installer.completeRemove": "Fjern Novadesk fuldstændigt (fjern Dokumenter\\Novadesk og AppData\\Novadesk)",
   "installer.portable": "Bærbar",
   "installer.run": "K�r Novadesk",
-  "installer.standardRecommended": "Standard (anbefales)"
+  "installer.standardRecommended": "Standard (anbefales)",
+  "installer.uninstallOptions": "Afinstallationsindstillinger"
 }

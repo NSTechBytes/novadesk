@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Posição Z",
 
   "installer.chooseInstallationType": "Escolha o tipo de instala��o:",
+  "installer.completeRemove": "Remover completamente o Novadesk (remover Documentos\\Novadesk e AppData\\Novadesk)",
   "installer.portable": "Portátil",
   "installer.run": "Executar Novadesk",
-  "installer.standardRecommended": "Padr�o (recomendado)"
+  "installer.standardRecommended": "Padr�o (recomendado)",
+  "installer.uninstallOptions": "Op��es de Desinstala��o"
 }

@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Poziția Z",
 
   "installer.chooseInstallationType": "Alegeți tipul de instalare:",
+  "installer.completeRemove": "Eliminați complet Novadesk (eliminați documentele\\Novadesk și AppData\\Novadesk)",
   "installer.portable": "Portabil",
   "installer.run": "Rulați Novadesk",
-  "installer.standardRecommended": "Standard (recomandat)"
+  "installer.standardRecommended": "Standard (recomandat)",
+  "installer.uninstallOptions": "Opțiuni de dezinstalare"
 }

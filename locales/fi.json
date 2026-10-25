@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Z-sijainti",
 
   "installer.chooseInstallationType": "Valitse asennustyyppi:",
+  "installer.completeRemove": "Poista Novadesk kokonaan (poista Documents\\Novadesk ja AppData\\Novadesk)",
   "installer.portable": "Kannettava",
   "installer.run": "Aja Novadesk",
-  "installer.standardRecommended": "Tavallinen käyttäjä (suositus)"
+  "installer.standardRecommended": "Tavallinen käyttäjä (suositus)",
+  "installer.uninstallOptions": "Asennuksen poiston vaihtoehdot"
 }

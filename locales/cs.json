@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Pozice Z",
 
   "installer.chooseInstallationType": "Vyberte typ instalace:",
+  "installer.completeRemove": "Úplně odstranit Novadesk (odstranit dokumenty\\Novadesk a AppData\\Novadesk)",
   "installer.portable": "Přenosná",
   "installer.run": "Spustit Novadesk",
-  "installer.standardRecommended": "Standardní (doporučeno)"
+  "installer.standardRecommended": "Standardní (doporučeno)",
+  "installer.uninstallOptions": "Možnosti odinstalace"
 }

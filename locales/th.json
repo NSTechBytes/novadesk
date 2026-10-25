@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "ตำแหน่ง Z",
 
   "installer.chooseInstallationType": "เลือกประเภทการติดตั้ง:",
+  "installer.completeRemove": "ลบ Novadesk อย่างสมบูรณ์ (ลบเอกสาร\\ Novadesk และ AppData\\ Novadesk)",
   "installer.portable": "คอมพิวเตอร์เคลื่อนย้ายได้",
   "installer.run": "วิ่ง Novadesk",
-  "installer.standardRecommended": "มาตรฐาน (แนะนำ)"
+  "installer.standardRecommended": "มาตรฐาน (แนะนำ)",
+  "installer.uninstallOptions": "ตัวเลือกการถอนการติดตั้ง"
 }

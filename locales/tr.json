@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Z konumu",
 
   "installer.chooseInstallationType": "Kurulum türünü seçin:",
+  "installer.completeRemove": "Novadesk\u0027i Tamamen Kaldır (Documents\\ Novadesk ve AppData\\ Novadesk\u0027i kaldırın)",
   "installer.portable": "Portatif",
   "installer.run": "Novadesk\u0027i çalıştır",
-  "installer.standardRecommended": "Standart (önerilen)"
+  "installer.standardRecommended": "Standart (önerilen)",
+  "installer.uninstallOptions": "Seçenekleri Kaldır"
 }

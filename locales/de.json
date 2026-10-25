@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Z-Position",
 
   "installer.chooseInstallationType": "Installationsart wählen:",
+  "installer.completeRemove": "Novadesk vollständig entfernen (Dokumente\\ Novadeskund AppData\\ Novadeskentfernen)",
   "installer.portable": "Tragbar",
   "installer.run": "Run Novadesk",
-  "installer.standardRecommended": "720P: Standard (empfohlen)"
+  "installer.standardRecommended": "720P: Standard (empfohlen)",
+  "installer.uninstallOptions": "Deinstallationsoptionen"
 }

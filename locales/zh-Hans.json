@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Z 轴位置",
 
   "installer.chooseInstallationType": "选择安装类型：",
+  "installer.completeRemove": "完全删除Novadesk （删除Documents\\ Novadesk和AppData\\ Novadesk ）",
   "installer.portable": "绿色版",
   "installer.run": "Run Novadesk",
-  "installer.standardRecommended": "标准（推荐）"
+  "installer.standardRecommended": "标准（推荐）",
+  "installer.uninstallOptions": "卸载设置"
 }

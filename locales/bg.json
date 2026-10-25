@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Z-позиция",
 
   "installer.chooseInstallationType": "Изберете тип инсталация:",
+  "installer.completeRemove": "Изцяло премахване на Novadesk (премахване на Documents\\ Novadesk и AppData\\Novadesk)",
   "installer.portable": "Преносим",
   "installer.run": "Стартиране на Новадеск",
-  "installer.standardRecommended": "Стандарт (препоръчително)"
+  "installer.standardRecommended": "Стандарт (препоръчително)",
+  "installer.uninstallOptions": "Опции за деинсталиране"
 }

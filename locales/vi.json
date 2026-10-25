@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Vị trí Z",
 
   "installer.chooseInstallationType": "Chọn loại cài đặt:",
+  "installer.completeRemove": "Xóa hoàn toàn Novadesk (xóa Documents\\Novadesk và AppData\\Novadesk)",
   "installer.portable": "Di động",
   "installer.run": "Chạy Novadesk",
-  "installer.standardRecommended": "Tiêu chuẩn (khuyến nghị)"
+  "installer.standardRecommended": "Tiêu chuẩn (khuyến nghị)",
+  "installer.uninstallOptions": "Tùy chọn gỡ cài đặt"
 }

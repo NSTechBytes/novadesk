@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Z 위치",
 
   "installer.chooseInstallationType": "설치 유형 선택:",
+  "installer.completeRemove": "Novadesk 완전히 제거 (Documents\\ Novadesk 및 AppData\\ Novadesk 제거)",
   "installer.portable": "휴대용",
   "installer.run": "노바데스크 달리기",
-  "installer.standardRecommended": "표준 (권장)"
+  "installer.standardRecommended": "표준 (권장)",
+  "installer.uninstallOptions": "제거 옵션"
 }

@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Z-pozíció",
 
   "installer.chooseInstallationType": "Válassza ki a telepítés típusát:",
+  "installer.completeRemove": "Novadesk teljes eltávolítása (Documents\\ Novadeskés AppData\\ Novadeskeltávolítása)",
   "installer.portable": "Hordozható",
   "installer.run": "Novadesk futtatása",
-  "installer.standardRecommended": "Standard (ajánlott)"
+  "installer.standardRecommended": "Standard (ajánlott)",
+  "installer.uninstallOptions": "Eltávolítási beállítások"
 }

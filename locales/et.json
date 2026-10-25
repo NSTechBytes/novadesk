@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Z-asend",
 
   "installer.chooseInstallationType": "Valige paigalduse tüüp:",
+  "installer.completeRemove": "Eemalda Novadesk täielikult (eemalda Documents\\Novadesk ja AppData\\Novadesk)",
   "installer.portable": "Kaasaskantav",
   "installer.run": "Käivita Novadesk",
-  "installer.standardRecommended": "Standard (soovitatav)"
+  "installer.standardRecommended": "Standard (soovitatav)",
+  "installer.uninstallOptions": "Desinstalli valikud"
 }

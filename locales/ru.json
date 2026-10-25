@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Позиция Z",
 
   "installer.chooseInstallationType": "Выберите тип установки:",
+  "installer.completeRemove": "Полностью удалить Novadesk (удалить Documents\\Novadesk и AppData\\Novadesk)",
   "installer.portable": "Портативный",
   "installer.run": "Пробежка по Новадеску",
-  "installer.standardRecommended": "Стандарт (рекомендуется)"
+  "installer.standardRecommended": "Стандарт (рекомендуется)",
+  "installer.uninstallOptions": "Удалить настройки"
 }

@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Z 位置",
 
   "installer.chooseInstallationType": "インストールの種類を選択してください：",
+  "installer.completeRemove": "Novadeskを完全に削除（ Documents\\ NovadeskとAppData\\ Novadeskを削除）",
   "installer.portable": "ポータブル版",
   "installer.run": "ノヴァデスクを走る",
-  "installer.standardRecommended": "標準（推奨）"
+  "installer.standardRecommended": "標準（推奨）",
+  "installer.uninstallOptions": "アンインストール設定"
 }

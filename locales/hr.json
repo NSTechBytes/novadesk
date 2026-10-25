@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Položaj Z",
 
   "installer.chooseInstallationType": "Odaberite vrstu instalacije:",
+  "installer.completeRemove": "Potpuno uklonite Novadesk (uklonite dokumente\\Novadesk i AppData\\Novadesk)",
   "installer.portable": "Prijenosna verzija",
   "installer.run": "Pokreni Novadesk",
-  "installer.standardRecommended": "Standard (preporučeno)"
+  "installer.standardRecommended": "Standard (preporučeno)",
+  "installer.uninstallOptions": "Mogućnosti deinstalacije"
 }

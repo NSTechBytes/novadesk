@@ -88,7 +88,9 @@
   "settingspanel.window.zPosition": "Θέση Z",
 
   "installer.chooseInstallationType": "Επιλέξτε έναν τύπο εγκατάστασης.",
+  "installer.completeRemove": "Αφαιρέστε εντελώς το Novadesk (αφαιρέστε τα έγγραφα\\ Novadesk και AppData\\Novadesk)",
   "installer.portable": "Φορητό",
   "installer.run": "Εκτέλεση Novadesk",
-  "installer.standardRecommended": "Πρότυπο (συνιστάται)"
+  "installer.standardRecommended": "Πρότυπο (συνιστάται)",
+  "installer.uninstallOptions": "Επιλογές απεγκατάστασης"
 }
