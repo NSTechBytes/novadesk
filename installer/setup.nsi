@@ -135,7 +135,7 @@ UninstPage custom un.CompleteRemovePageCreate un.CompleteRemovePageLeave
 !insertmacro MUI_LANGUAGE "Turkish"
 !insertmacro MUI_LANGUAGE "Ukrainian"
 !insertmacro MUI_LANGUAGE "Vietnamese"
-!include "InstallerStrings.nsh"
+!include "installer\InstallerStrings.nsh"
 
 ;--------------------------------
 ; Data
