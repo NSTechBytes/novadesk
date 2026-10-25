@@ -108,9 +108,11 @@ void ScrollbarRenderer::DrawScrollbars(const Widget &widget, Element *container,
                              (2.0f * btnSize) -
                              (hasHoriz ? (layoutHorizW + inset) : 0.0f));
 
-    // Pin right edge; visual width expands inward
-    const float sbRight = (float)(bounds.X + bounds.Width) - inset;
-    const float sbLeft = sbRight - visualVertW;
+    // Pin to the requested edge; expanded hover width grows inward.
+    const bool onLeft = container->GetScrollbarOnLeft();
+    const float sbLeft = onLeft ? (float)bounds.X + inset
+                                : (float)(bounds.X + bounds.Width) - inset - visualVertW;
+    const float sbRight = sbLeft + visualVertW;
     const float fullTop = (float)bounds.Y + inset;
     const float fullBottom = (float)(bounds.Y + bounds.Height) - inset -
                              (hasHoriz ? (layoutHorizW + inset) : 0.0f);

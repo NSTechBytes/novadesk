@@ -44,7 +44,7 @@ try {
     $distWidgetsDir = Join-Path $distDir "Widgets"
     $distImagesDir = Join-Path $distDir "images"
     $distAddonsDir = Join-Path $distDir "Addons"
-    $localesSrc = Join-Path $RepoRoot "src\locales"
+    $localesSrc = Join-Path $RepoRoot "locales"
     $distLocalesDir = Join-Path $distDir "locales"
     $distNwmTemplateDir = Join-Path $distNwmDir "template"
 

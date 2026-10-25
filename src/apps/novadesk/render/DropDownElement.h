@@ -118,6 +118,7 @@ public:
   float m_DropdownOpacity = 1.0f; ///< Overall opacity.
   float m_PaddingLeft = 10.0f;
   float m_PaddingRight = 10.0f;
+  bool m_RightToLeft = false;
 
   // ============================================================================
   // Chevron
@@ -180,6 +181,7 @@ public:
   int m_PopupItemHeight = 28;    ///< Row height in pixels.
   int m_PopupMaxVisibleItems = 8;///< Rows before the list scrolls.
   int m_PopupPadding = 4;        ///< Inner padding in pixels.
+  int m_PopupMinWidth = 0;       ///< Optional minimum popup width.
 
   // ============================================================================
   // Event callbacks

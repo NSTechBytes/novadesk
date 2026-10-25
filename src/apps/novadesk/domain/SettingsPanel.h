@@ -30,6 +30,9 @@ public:
   static void CloseAll();
   static void SyncTargetVisuals(Widget *target);
   static void RefreshAllThemes();
+  /// Recreate open panels after a locale reload so every built-in label is
+  /// constructed from the newly selected catalog.
+  static void RefreshAllLocalizedText();
 
   ~SettingsPanel() override;
 

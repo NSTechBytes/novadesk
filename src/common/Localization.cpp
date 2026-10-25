@@ -55,11 +55,18 @@ void Initialize() {
   g_rtl = false;
   for (const Language &language : kLanguages)
     if (g_language == language.tag) g_rtl = language.rtl;
-  SetProcessDefaultLayout(g_rtl ? LAYOUT_RTL : 0);
-  std::vector<fs::path> localeDirectories = {AppPaths::GetExeDir() / L"locales", fs::current_path() / L"locales"};
+  // GDI's process-default RTL layout also changes DirectWrite text placement
+  // in custom-rendered windows.  Those windows mirror their own geometry, so
+  // applying it here produces a second transform and clipped text.  Native
+  // title bars that need mirroring set it on their own window instead.
+  SetProcessDefaultLayout(0);
+  std::vector<fs::path> localeDirectories = {
+      AppPaths::GetExeDir() / L"locales", fs::current_path() / L"locales"};
   fs::path parent = fs::current_path();
   while (parent.has_parent_path()) {
-    localeDirectories.push_back(parent / L"src" / L"locales");
+    // Project-root catalogs support launching each application directly from
+    // its build directory, while installed applications use exeDir/locales.
+    localeDirectories.push_back(parent / L"locales");
     const fs::path next = parent.parent_path();
     if (next == parent) break;
     parent = next;

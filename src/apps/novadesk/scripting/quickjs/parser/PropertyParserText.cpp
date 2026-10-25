@@ -183,6 +183,7 @@ void ApplyTextOptions(TextElement *element, const TextOptions &options) {
   element->SetFontWeight(options.fontWeight);
   element->SetItalic(options.italic);
   element->SetTextAlign(options.textAlign);
+  element->SetRightToLeft(options.rightToLeft);
   element->SetClip(options.clip);
   if (!options.fontPath.empty()) {
     if (PathUtils::IsURL(options.fontPath)) {
@@ -229,6 +230,7 @@ void PreFillTextOptions(TextOptions &options, TextElement *element) {
   options.fontWeight = element->GetFontWeight();
   options.italic = element->IsItalic();
   options.textAlign = element->GetTextAlign();
+  options.rightToLeft = element->IsRightToLeft();
   options.clip = element->GettextClip();
   options.fontPath = element->GetFontPath();
 

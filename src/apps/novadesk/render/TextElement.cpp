@@ -291,6 +291,8 @@ void TextElement::Render(ID2D1DeviceContext *context) {
   }
 
   ApplyTextAlignment(pTextFormat.Get(), m_TextAlign);
+  if (m_RightToLeft)
+    pTextFormat->SetReadingDirection(DWRITE_READING_DIRECTION_RIGHT_TO_LEFT);
   ApplyClipSettings(pTextFormat.Get(), m_textClip);
 
   GfxRect bounds = GetBounds();
@@ -762,6 +764,8 @@ bool TextElement::HitTest(int x, int y) {
     layoutH = 1;
 
   ApplyTextAlignment(pTextFormat.Get(), m_TextAlign);
+  if (m_RightToLeft)
+    pTextFormat->SetReadingDirection(DWRITE_READING_DIRECTION_RIGHT_TO_LEFT);
   ApplyClipSettings(pTextFormat.Get(), m_textClip);
 
   std::wstring processedText = GetProcessedText();
@@ -1044,6 +1048,8 @@ UINT32 TextElement::HitTestTextPosition(int x, int y) {
     layoutH = 1;
 
   ApplyTextAlignment(pTextFormat.Get(), m_TextAlign);
+  if (m_RightToLeft)
+    pTextFormat->SetReadingDirection(DWRITE_READING_DIRECTION_RIGHT_TO_LEFT);
   ApplyClipSettings(pTextFormat.Get(), m_textClip);
 
   std::wstring processedText = GetProcessedText();

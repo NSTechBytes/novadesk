@@ -215,6 +215,8 @@ void ParseElementOptions(JSContext *ctx, JSValueConst obj,
     options.hasShowScrollbarX = true;
   if (GetBoolProp(ctx, obj, "showScrollbarY", options.showScrollbarY))
     options.hasShowScrollbarY = true;
+  if (GetBoolProp(ctx, obj, "scrollbarOnLeft", options.scrollbarOnLeft))
+    options.hasScrollbarOnLeft = true;
   if (GetIntProp(ctx, obj, "scrollbarWidth", options.scrollbarWidth))
     options.hasScrollbarWidth = true;
   if (GetIntProp(ctx, obj, "scrollbarHoverWidth", options.scrollbarHoverWidth))
@@ -449,6 +451,9 @@ void ApplyElementOptions(Element *element, const ElementOptions &options) {
   if (options.hasShowScrollbarY) {
     element->SetShowScrollbarY(options.showScrollbarY);
   }
+  if (options.hasScrollbarOnLeft) {
+    element->SetScrollbarOnLeft(options.scrollbarOnLeft);
+  }
   if (options.hasScrollbarWidth) {
     element->SetScrollbarWidth(options.scrollbarWidth);
   }
@@ -591,6 +596,8 @@ void PreFillElementOptions(ElementOptions &options, Element *element) {
   options.showScrollbarX = element->GetShowScrollbarX();
   options.hasShowScrollbarY = true;
   options.showScrollbarY = element->GetShowScrollbarY();
+  options.hasScrollbarOnLeft = true;
+  options.scrollbarOnLeft = element->GetScrollbarOnLeft();
   options.hasScrollbarWidth = true;
   options.scrollbarWidth = element->GetScrollbarWidth();
   options.hasScrollbarHoverWidth = true;

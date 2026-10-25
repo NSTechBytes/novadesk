@@ -3238,8 +3238,10 @@ bool Widget::HitTestContainerScrollbar(int x, int y,
                                (2.0f * btnSize) -
                                (hasHoriz ? (baseHorizW + inset) : 0.0f));
 
-      const float sbRight = (float)(bounds.X + bounds.Width) - inset;
-      const float sbLeft = sbRight - hitVertW;
+      const bool onLeft = element->GetScrollbarOnLeft();
+      const float sbLeft = onLeft ? (float)bounds.X + inset
+                                  : (float)(bounds.X + bounds.Width) - inset - hitVertW;
+      const float sbRight = sbLeft + hitVertW;
       const float fullTop = (float)bounds.Y + inset;
       const float fullBottom = (float)(bounds.Y + bounds.Height) - inset -
                                (hasHoriz ? (baseHorizW + inset) : 0.0f);

@@ -171,6 +171,7 @@ void ParseDropDownOptions(JSContext *ctx, JSValueConst obj,
   ParseIntProp(ctx, obj, "popupItemHeight", o.popupItemHeight);
   ParseIntProp(ctx, obj, "popupMaxVisibleItems", o.popupMaxVisibleItems);
   ParseIntProp(ctx, obj, "popupPadding", o.popupPadding);
+  ParseIntProp(ctx, obj, "popupMinWidth", o.popupMinWidth);
 
   // Callbacks.
   Js::GetEventCallbackProp(ctx, obj, "onChange", o.onChangeCallbackId);
@@ -197,6 +198,7 @@ void ApplyDropDownOptions(DropDownElement *e, const DropDownOptions &o) {
   e->m_BorderRadius = o.borderRadius;
   e->m_PaddingLeft = o.paddingLeft;
   e->m_PaddingRight = o.paddingRight;
+  e->m_RightToLeft = o.rightToLeft;
 
   e->m_ChevronColor = o.chevronColor;
   e->m_ChevronAlpha = o.chevronAlpha;
@@ -238,6 +240,7 @@ void ApplyDropDownOptions(DropDownElement *e, const DropDownOptions &o) {
   e->m_PopupItemHeight = o.popupItemHeight;
   e->m_PopupMaxVisibleItems = o.popupMaxVisibleItems;
   e->m_PopupPadding = o.popupPadding;
+  e->m_PopupMinWidth = (std::max)(0, o.popupMinWidth);
 
   e->m_OnChangeCallbackId = o.onChangeCallbackId;
   e->m_OnOpenCallbackId = o.onOpenCallbackId;
@@ -286,6 +289,7 @@ void PreFillDropDownOptions(DropDownOptions &o, DropDownElement *e) {
   o.borderRadius = e->m_BorderRadius;
   o.paddingLeft = e->m_PaddingLeft;
   o.paddingRight = e->m_PaddingRight;
+  o.rightToLeft = e->m_RightToLeft;
 
   o.chevronColor = e->m_ChevronColor;
   o.chevronAlpha = e->m_ChevronAlpha;
@@ -327,6 +331,7 @@ void PreFillDropDownOptions(DropDownOptions &o, DropDownElement *e) {
   o.popupItemHeight = e->m_PopupItemHeight;
   o.popupMaxVisibleItems = e->m_PopupMaxVisibleItems;
   o.popupPadding = e->m_PopupPadding;
+  o.popupMinWidth = e->m_PopupMinWidth;
 
   o.onChangeCallbackId = e->m_OnChangeCallbackId;
   o.onOpenCallbackId = e->m_OnOpenCallbackId;

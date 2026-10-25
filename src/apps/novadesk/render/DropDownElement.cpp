@@ -162,8 +162,10 @@ void DropDownElement::Render(ID2D1DeviceContext *context) {
               chevronLayout.GetAddressOf()))) {
         auto chevronBrush = MakeBrush(m_ChevronColor, m_ChevronAlpha);
         if (chevronBrush) {
-          // Position so the glyph sits flush against the right padding.
-          const float glyphX = left + width - m_PaddingRight - chevronFontSize * 1.5f;
+          // Keep the chevron at the text's trailing edge in either direction.
+          const float glyphX = m_RightToLeft
+              ? left + m_PaddingLeft - chevronFontSize * 0.5f
+              : left + width - m_PaddingRight - chevronFontSize * 1.5f;
           context->DrawTextLayout(D2D1::Point2F(glyphX, top),
                                   chevronLayout.Get(), chevronBrush.Get(),
                                   D2D1_DRAW_TEXT_OPTIONS_NONE);
@@ -186,13 +188,20 @@ void DropDownElement::Render(ID2D1DeviceContext *context) {
   if (FAILED(hr) || !format)
     return;
   format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+  if (m_RightToLeft)
+    format->SetReadingDirection(DWRITE_READING_DIRECTION_RIGHT_TO_LEFT);
   format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
   format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
 
-  const float textLeft = left + m_PaddingLeft;
-  // Reserve space on the right for the Segoe MDL2 chevron glyph.
+  // Reserve space at the chevron edge for the Segoe MDL2 glyph.
   const float chevronFontSize = std::max(4.0f, m_ChevronSize * 1.4f);
-  const float textWidth = (left + width - m_PaddingRight - chevronFontSize * 1.5f) - m_ChevronGap - textLeft;
+  const float textLeft = m_RightToLeft
+      ? left + m_PaddingLeft + chevronFontSize * 1.5f + m_ChevronGap
+      : left + m_PaddingLeft;
+  const float textRight = m_RightToLeft
+      ? left + width - m_PaddingRight
+      : left + width - m_PaddingRight - chevronFontSize * 1.5f - m_ChevronGap;
+  const float textWidth = textRight - textLeft;
   if (textWidth <= 0.0f)
     return;
 

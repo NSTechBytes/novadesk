@@ -6,6 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "SettingsPanel.h"
+#include "../../common/Localization.h"
 
 #include <algorithm>
 #include <cwchar>
@@ -26,6 +27,10 @@ std::vector<SettingsPanel *> SettingsPanel::s_Panels;
 std::vector<SettingsPanel *> SettingsPanel::s_PendingDestroy;
 
 namespace {
+
+const std::wstring &Loc(const char *key, const wchar_t *fallback) {
+  return Localization::TextOr(key, fallback);
+}
 
 constexpr int kPanelW  = 520;
 constexpr int kPanelH  = 480;
@@ -50,10 +55,11 @@ constexpr int kCtrlH    = 28;
 constexpr int kCtrlW    = kContentW - kPadX * 2;
 constexpr int kInlineLabelW = 220;
 constexpr int kInlineCtrlW  = 100;
+// InputBoxElement's bounds include its 10px left and right padding. Keep the
+// declared size 20px smaller so its visible box matches a 100px dropdown.
+constexpr int kInputDeclaredW = kInlineCtrlW - 20;
 
 constexpr int kFooterH  = 52;
-
-constexpr int kWinRows  = 7;
 
 constexpr int kAboutH   = 180;
 
@@ -63,6 +69,23 @@ constexpr int kScrollHFull = kContentH;
 constexpr int   kSbWidth  = 4;
 constexpr float kSbRadius = 2.0f;
 constexpr float kSbInset  = 3.0f;
+
+// Settings-panel content is authored in logical LTR coordinates.  Keeping the
+// conversion here means every built-in tab (including widget custom tabs) gets
+// the same mirrored layout whenever the selected catalog is RTL.
+inline bool IsRtlLayout() { return Localization::IsRtl(); }
+inline int MirrorX(int x, int width, int surfaceWidth) {
+  return IsRtlLayout() ? surfaceWidth - x - width : x;
+}
+inline int ContentX(int x, int width) { return MirrorX(x, width, kContentW); }
+inline int ContentOriginX() { return IsRtlLayout() ? 0 : kContentX; }
+inline int SidebarX() { return IsRtlLayout() ? kContentW : 0; }
+inline TextAlignment DirectionalAlign(TextAlignment align) {
+  // DirectWrite's leading/trailing alignment follows the reading direction.
+  // Keeping the logical alignment lets an RTL text format place "left" at the
+  // visual right edge and "right" at the visual left edge.
+  return align;
+}
 
 inline std::wstring ScrollId(int ti) {
   return L"__scroll_" + std::to_wstring(ti);
@@ -84,6 +107,7 @@ static std::wstring MakeScrollContainer(Widget *panel, int ti,
   o.hasOverflowX = true; o.overflowX = L"hidden";
   o.hasShowScrollbarX = true; o.showScrollbarX = false;
   o.hasShowScrollbarY = true; o.showScrollbarY = true;
+  o.hasScrollbarOnLeft = true; o.scrollbarOnLeft = IsRtlLayout();
   o.hasScrollbarWidth = true; o.scrollbarWidth = kSbWidth;
   o.hasScrollbarRadius = true; o.scrollbarRadius = kSbRadius;
   o.hasScrollbarInset  = true; o.scrollbarInset  = kSbInset;
@@ -101,9 +125,9 @@ static std::wstring MakeScrollContainer(Widget *panel, int ti,
   return sid;
 }
 
-const std::vector<std::wstring> kZPosLabels = {
-  L"Normal", L"On Top", L"Always on Top", L"On Bottom", L"On Desktop"
-};
+std::vector<std::wstring> ZPosLabels() {
+  return {L"Normal", L"On Top", L"Always on Top", L"On Bottom", L"On Desktop"};
+}
 const ZPOSITION kZPosValues[] = {
   ZPOSITION_NORMAL, ZPOSITION_ONTOP, ZPOSITION_ONTOPMOST,
   ZPOSITION_ONBOTTOM, ZPOSITION_ONDESKTOP
@@ -171,6 +195,20 @@ void SettingsPanel::RefreshAllThemes() {
     p->m_Panel->Redraw();
   }
 }
+void SettingsPanel::RefreshAllLocalizedText() {
+  std::vector<Widget *> targets;
+  targets.reserve(s_Panels.size());
+  for (SettingsPanel *panel : s_Panels)
+    if (panel && panel->m_Target && Widget::IsValid(panel->m_Target))
+      targets.push_back(panel->m_Target);
+
+  // Rebuilding is intentional: labels, dropdown options, and RTL-aware layout
+  // are all created with the current catalog. It also avoids stale text-format
+  // objects while a panel is being rendered.
+  CloseAll();
+  for (Widget *target : targets)
+    if (Widget::IsValid(target)) OpenFor(target);
+}
 void SettingsPanel::CloseAllForTarget(Widget *target) {
   if (!target) return;
   std::vector<SettingsPanel *> copy = s_Panels;
@@ -200,10 +238,12 @@ static void Txt(Widget *panel, const std::wstring &id,
                 TextAlignment align = TEXT_ALIGN_LEFT_TOP,
                 const std::wstring &containerId = L"") {
   PropertyParser::TextOptions o;
-  o.id = id; o.x = x; o.y = y; o.width = w; o.height = h;
+  o.id = id; o.x = containerId.empty() ? x : ContentX(x, w);
+  o.y = y; o.width = w; o.height = h;
   o.text = text; o.fontSize = size; o.fontColor = color;
   o.fontWeight = weight;
-  o.textAlign = align;
+  o.textAlign = DirectionalAlign(align);
+  o.rightToLeft = IsRtlLayout();
   o.containerId = containerId;
   if (hand) o.mouseEventCursorName = L"hand";
   panel->AddText(o);
@@ -215,7 +255,8 @@ static void Rect(Widget *panel, const std::wstring &id,
                  float radius = 0.0f, bool hand = false,
                  const std::wstring &containerId = L"") {
   PropertyParser::ShapeOptions o;
-  o.id = id; o.x = x; o.y = y; o.width = w; o.height = h;
+  o.id = id; o.x = containerId.empty() ? x : ContentX(x, w);
+  o.y = y; o.width = w; o.height = h;
   o.hasSolidColor = true;
   o.solidColor = color; o.solidAlpha = alpha;
   o.fillColor  = color; o.fillAlpha  = alpha;
@@ -235,7 +276,8 @@ static void Ellipse(Widget *panel, const std::wstring &id,
                     COLORREF color, BYTE alpha = 255, bool hand = false,
                     const std::wstring &containerId = L"") {
   PropertyParser::ShapeOptions o;
-  o.id = id; o.x = x; o.y = y; o.width = w; o.height = h;
+  o.id = id; o.x = containerId.empty() ? x : ContentX(x, w);
+  o.y = y; o.width = w; o.height = h;
   o.shapeType = L"ellipse";
   o.hasSolidColor = true;
   o.solidColor = color; o.solidAlpha = alpha;
@@ -250,7 +292,8 @@ static void Path(Widget *panel, const std::wstring &id, int x, int y,
                  const std::wstring &data, COLORREF color, bool hand,
                  const std::wstring &containerId) {
   PropertyParser::ShapeOptions o;
-  o.id = id; o.x = x; o.y = y; o.width = 32; o.height = 32;
+  o.id = id; o.x = containerId.empty() ? x : ContentX(x, 32);
+  o.y = y; o.width = 32; o.height = 32;
   o.shapeType = L"path"; o.pathData = data;
   o.hasSolidColor = false;
   o.fillColor = color; o.fillAlpha = 255; o.strokeWidth = 0.0f;
@@ -330,6 +373,16 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
 
   Widget *panel = new Widget(po);
   if (!panel->Create()) { delete panel; return; }
+  // Localization intentionally mirrors native title bars process-wide.  This
+  // panel owns a custom header and mirrors its elements explicitly, so opt it
+  // out of the inherited GDI mirror to avoid applying RTL twice.
+  if (HWND hwnd = panel->GetWindow()) {
+    const LONG_PTR exStyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_LAYOUTRTL);
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                 SWP_FRAMECHANGED);
+  }
   m_Panel = panel;
   panel->SetInputSink(this);
   panel->BeginUpdate();
@@ -340,15 +393,15 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
   if (hdrTitle.empty()) {
     hdrTitle = target->GetOptions().id;
     if (hdrTitle.empty() || hdrTitle == L"widget") hdrTitle = target->GetTitle();
-    if (hdrTitle.empty()) hdrTitle = L"Widget";
-    hdrTitle = L"Settings \u2014 " + hdrTitle;
+    if (hdrTitle.empty()) hdrTitle = Loc("settingspanel.widget", L"Widget");
+    hdrTitle = Loc("settingspanel.titlePrefix", L"Settings \u2014 ") + hdrTitle;
   }
-  Txt(panel, L"__hdr_title", kPadX, 14, kPanelW - kPadX - 48,
+  Txt(panel, L"__hdr_title", MirrorX(kPadX, kPanelW - kPadX - 48, kPanelW), 14, kPanelW - kPadX - 48,
       22, hdrTitle, 13, m_Palette.text, 600, false, TEXT_ALIGN_LEFT_TOP);
 
   {
     constexpr int kCloseSize = 16;
-    const int closeX = kPanelW - kCloseSize - 16;
+    const int closeX = MirrorX(kPanelW - kCloseSize - 16, kCloseSize, kPanelW);
     const int closeY = (kHeaderH - kCloseSize) / 2;
     Rect(panel, L"__hdr_close", closeX, closeY, kCloseSize, kCloseSize,
          RGB(239, 68, 68), 255, static_cast<float>(kCloseSize) / 2.0f, true);
@@ -357,9 +410,9 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
 
   Rect(panel, L"__hdr_border", 0, kHeaderH - 1, kPanelW, 1, m_Palette.divider);
 
-  Rect(panel, L"__sb_bg", 0, kHeaderH, kSideW, kContentH, m_Palette.sidebar);
+  Rect(panel, L"__sb_bg", SidebarX(), kHeaderH, kSideW, kContentH, m_Palette.sidebar);
 
-  Rect(panel, L"__sb_border", kSideW - 1, kHeaderH, 1, kContentH,
+  Rect(panel, L"__sb_border", IsRtlLayout() ? kContentW : kSideW - 1, kHeaderH, 1, kContentH,
        m_Palette.sidebarBorder);
 
   std::vector<std::wstring> tabLabels, tabIcons;
@@ -367,8 +420,8 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
     tabLabels.push_back(t.label);
     tabIcons.push_back(t.icon);
   }
-  if (showWin) { tabLabels.push_back(L"Window");  tabIcons.push_back(L"\uE770"); }
-  tabLabels.push_back(L"About"); tabIcons.push_back(L"\uE946");
+  if (showWin) { tabLabels.push_back(Loc("settingspanel.tab.window", L"Window"));  tabIcons.push_back(L"\uE770"); }
+  tabLabels.push_back(Loc("settingspanel.tab.about", L"About")); tabIcons.push_back(L"\uE946");
 
   const int sideContentY = kHeaderH + 12;
 
@@ -384,7 +437,7 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
       const int tabBgY = midY - tabBgH / 2 -2;
       PropertyParser::ShapeOptions bg;
       bg.id = L"__tab_bg_" + std::to_wstring(ti);
-      bg.x = tabPadX;
+      bg.x = SidebarX() + tabPadX;
       bg.y = tabBgY;
       bg.width = kSideW - tabPadX * 2;
       bg.height = tabBgH;
@@ -404,7 +457,7 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
     {
       PropertyParser::ShapeOptions ind;
       ind.id = L"__tab_ind_" + std::to_wstring(ti);
-      ind.x = 2;
+      ind.x = SidebarX() + (IsRtlLayout() ? kSideW - kTabIndW - 2 : 2);
       ind.y = midY - kTabIndH / 2 - 3;
       ind.width = kTabIndW;
       ind.height = kTabIndH;
@@ -423,7 +476,7 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
       constexpr int kIconSize = 16;
       PropertyParser::TextOptions ico;
       ico.id = L"__tab_ico_" + std::to_wstring(ti);
-      ico.x = kTabPadX;
+      ico.x = SidebarX() + (IsRtlLayout() ? kSideW - kTabPadX - kIconSize : kTabPadX);
       ico.y = midY - kIconSize / 2 - 1;
       ico.width = kIconSize;
       ico.height = kIconSize;
@@ -437,17 +490,28 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
     }
 
     {
-      constexpr int kLabelH = 20;
+      constexpr int kTabLabelFontSize = 12;
+      constexpr int kLabelH = 14;
       PropertyParser::TextOptions lbl;
       lbl.id = L"__tab_lbl_" + std::to_wstring(ti);
-      lbl.x = kTabPadX + (!tabIcons[ti].empty() ? 22 : 0);
-      lbl.y = midY - kLabelH / 2;
-      lbl.width = kSideW - kTabPadX - 8;
+      lbl.x = SidebarX() + (IsRtlLayout()
+          ? 8
+          : kTabPadX + (!tabIcons[ti].empty() ? 22 : 0));
+      // TextElement's paragraph-center mode has a visible baseline offset in
+      // a SettingsPanel tab. Position a top-aligned glyph line directly at
+      // the card's midpoint instead.
+      lbl.y = midY - kLabelH / 2 - 2;
+      // In RTL the icon occupies the visual right edge, so the label must
+      // stop before it rather than drawing underneath it.
+      lbl.width = kSideW - kTabPadX - 8 -
+          (IsRtlLayout() && !tabIcons[ti].empty() ? 22 : 0);
       lbl.height = kLabelH;
       lbl.text = tabLabels[ti];
-      lbl.fontSize = 12;
+      lbl.fontSize = kTabLabelFontSize;
       lbl.fontWeight = active ? 600 : 400;
       lbl.fontColor = active ? m_Palette.tabActive : m_Palette.tabInactive;
+      lbl.textAlign = TEXT_ALIGN_LEFT_TOP;
+      lbl.rightToLeft = IsRtlLayout();
       lbl.mouseEventCursorName = L"hand";
       panel->AddText(lbl);
       m_Controls[lbl.id] = {std::to_wstring(ti), ControlKind::TabButton, -1};
@@ -455,11 +519,12 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
   }
 
   Txt(panel, L"__sb_ver",
-      kTabPadX, kHeaderH + kContentH - 22, kSideW - kTabPadX, 18,
-      Utils::ToWString(NOVADESK_VERSION), 9, m_Palette.muted);
+      SidebarX() + (IsRtlLayout() ? 8 : kTabPadX), kHeaderH + kContentH - 22,
+      kSideW - kTabPadX, 18, Utils::ToWString(NOVADESK_VERSION), 9, m_Palette.muted,
+      400, false, TEXT_ALIGN_LEFT_TOP);
 
   Rect(panel, L"__content_bg",
-       kContentX, kHeaderH, kContentW, kContentH, m_Palette.background);
+       ContentOriginX(), kHeaderH, kContentW, kContentH, m_Palette.background);
 
   const int contentY0 = kHeaderH + 16;
 
@@ -473,11 +538,11 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
     const int footerY = kHeaderH + kContentH - kFooterH;
     const int resetW  = 150;
     const int resetH  = 28;
-    const int resetX  = kContentX + kContentW - kPadX - resetW;
+    const int resetX  = ContentOriginX() + ContentX(kContentW - kPadX - resetW, resetW);
     const int resetY  = footerY + (kFooterH - resetH) / 2;
 
     Rect(panel, L"__settings_hr2",
-         kContentX, footerY, kContentW, 1, m_Palette.divider);
+         ContentOriginX(), footerY, kContentW, 1, m_Palette.divider);
     m_Controls[L"__settings_hr2"] = {L"", ControlKind::ResetLabel, 0};
 
     Rect(panel, L"__settings_reset",
@@ -487,7 +552,8 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
 
     Txt(panel, L"__settings_reset_label",
         resetX + resetW / 2, resetY + resetH / 2, resetW, resetH,
-        L"Reset to defaults", 12, m_Palette.text, 400, true, TEXT_ALIGN_CENTER_CENTER);
+        Loc("settingspanel.resetToDefaults", L"Reset to defaults"),
+        12, m_Palette.text, 400, true, TEXT_ALIGN_CENTER_CENTER);
     m_Controls[L"__settings_reset_label"] = {L"", ControlKind::ResetLabel, 0};
   }
 
@@ -509,7 +575,7 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
                                    int ti, int startY) {
   const std::wstring scrollId = MakeScrollContainer(
       panel, ti,
-      kContentX, kHeaderH,
+      ContentOriginX(), kHeaderH,
       kContentW, kScrollH,
       m_Palette.label,
       m_Palette.background);
@@ -546,7 +612,7 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
       PropertyParser::ColorPickerOptions co;
       co.id = CEId(ti, setting.id, L"swatch");
       co.containerId = scrollId;
-      co.x = kPadX + kCtrlW - kCtrlH; co.y = ctrlY;
+      co.x = ContentX(kPadX + kCtrlW - kCtrlH, kCtrlH); co.y = ctrlY;
       co.width = kCtrlH; co.height = kCtrlH;
       COLORREF col = RGB(0,0,0); BYTE alp = 255;
       if (!value.empty()) ColorUtil::ParseRGBA(value, col, alp);
@@ -577,8 +643,8 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
       PropertyParser::InputBoxOptions io;
       io.id = CEId(ti, setting.id, L"input");
       io.containerId = scrollId;
-      io.x = ctrlX; io.y = ctrlY;
-      io.width = kInlineCtrlW - 20; io.height = kCtrlH;
+      io.x = ContentX(ctrlX, kInlineCtrlW); io.y = ctrlY;
+      io.width = kInputDeclaredW; io.height = kCtrlH;
       io.text = value; io.fontSize = 12;
       io.fontColor = m_Palette.text; io.fontAlpha = 255;
       io.hasFillColor = true;
@@ -587,6 +653,7 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
       io.borderColor = m_Palette.controlBorder; io.borderColorAlpha = 255;
       io.caretColor = m_Palette.text; io.selectionColor = m_Palette.accent;
       io.paddingLeft = 10; io.paddingRight = 10;
+      io.textAlign = DirectionalAlign(TEXT_ALIGN_LEFT_CENTER);
       if (setting.type == WidgetSettingType::Number) io.inputType = InputType::Float;
       panel->AddInputBox(io);
       m_Controls[io.id] = {setting.id, ControlKind::Input, ti};
@@ -612,7 +679,7 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
       PropertyParser::ToggleSwitchOptions ts;
       ts.id = CEId(ti, setting.id, L"pill");
       ts.containerId = scrollId;
-      ts.x = kCtrlW - 46 + kPadX; ts.y = ctrlY;
+      ts.x = ContentX(kCtrlW - 46 + kPadX, 46); ts.y = ctrlY;
       ts.width = 46; ts.height = 24;
       ts.checked = on; ts.onColor = m_Palette.accent; ts.onAlpha = 255;
       ts.offColor = m_Palette.toggleOff; ts.offAlpha = 255;
@@ -628,11 +695,12 @@ void SettingsPanel::BuildCustomTab(Widget *panel, Widget *target,
         PropertyParser::DropDownOptions dd;
         dd.id = CEId(ti, setting.id, L"dropdown");
         dd.containerId = scrollId;
-        dd.x = ctrlX; dd.y = ctrlY;
+        dd.x = ContentX(ctrlX, kInlineCtrlW); dd.y = ctrlY;
         dd.width = kInlineCtrlW; dd.height = kCtrlH;
         for (const auto &opt : setting.options) dd.options.push_back({opt, opt});
         dd.hasOptions = true;
         dd.selectedIndex = OptIndex(setting.options, value);
+        dd.rightToLeft = IsRtlLayout();
         dd.backgroundColor    = m_Palette.controlFill;
         dd.borderColor        = m_Palette.controlBorder;
         dd.borderWidth = 1.0f; dd.borderRadius = 7.0f;
@@ -672,7 +740,7 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
 
   const std::wstring scrollId = MakeScrollContainer(
       panel, ti,
-      kContentX, kHeaderH,
+      ContentOriginX(), kHeaderH,
       kContentW, kScrollHFull,
       m_Palette.label,
       m_Palette.background);
@@ -682,7 +750,7 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
 
   Txt(panel, CEId(ti, L"", L"heading"),
       kPadX, y, kCtrlW, 22,
-      L"Window Settings", 14, m_Palette.text, 700, false, TEXT_ALIGN_LEFT_TOP, scrollId);
+      Loc("settingspanel.window.title", L"Window Settings"), 14, m_Palette.text, 700, false, TEXT_ALIGN_LEFT_TOP, scrollId);
   m_Controls[CEId(ti, L"", L"heading")] = {L"", ControlKind::SelectLabel, ti};
   y += 30;
 
@@ -692,11 +760,10 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
   y += 16;
 
   const BoolRow toggleRows[] = {
-    { L"__win_draggable",    L"Draggable",      opts.draggable    },
-    { L"__win_clickthrough", L"Click-through",  opts.clickThrough },
-    { L"__win_keeponscreen", L"Keep on screen", opts.keepOnScreen },
-    { L"__win_snapedges",    L"Snap edges",     opts.snapEdges    },
-    { L"__win_resizable",    L"Resizable",      opts.resizable    },
+    { L"__win_draggable",    Loc("settingspanel.window.draggable", L"Draggable").c_str(),       opts.draggable    },
+    { L"__win_clickthrough", Loc("settingspanel.window.clickThrough", L"Click-through").c_str(), opts.clickThrough },
+    { L"__win_keeponscreen", Loc("settingspanel.window.keepOnScreen", L"Keep on screen").c_str(), opts.keepOnScreen },
+    { L"__win_snapedges",    Loc("settingspanel.window.snapEdges", L"Snap edges").c_str(),      opts.snapEdges    },
   };
 
   for (const auto &r : toggleRows) {
@@ -708,7 +775,7 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
     PropertyParser::ToggleSwitchOptions ts;
     ts.id = r.id;
     ts.containerId = scrollId;
-    ts.x = kCtrlW - 46 + kPadX; ts.y = y + 4;
+    ts.x = ContentX(kCtrlW - 46 + kPadX, 46); ts.y = y + 4;
     ts.width = 46; ts.height = 24;
     ts.checked = r.value;
     ts.onColor = m_Palette.accent; ts.onAlpha = 255;
@@ -731,24 +798,27 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
 
   Txt(panel, L"__win_zpos_lbl",
       kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH,
-      L"Z-position", 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER, scrollId);
+      Loc("settingspanel.window.zPosition", L"Z-position"), 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER, scrollId);
   m_Controls[L"__win_zpos_lbl"] = {L"", ControlKind::SelectLabel, ti};
   {
     PropertyParser::DropDownOptions dd;
     dd.id = L"__win_zpos";
     dd.containerId = scrollId;
-    dd.x = ctrlX; dd.y = y + rowOff; dd.width = kInlineCtrlW; dd.height = kCtrlH;
-    for (const auto &l : kZPosLabels) dd.options.push_back({l, l});
+    dd.x = ContentX(ctrlX, kInlineCtrlW); dd.y = y + rowOff;
+    dd.width = kInlineCtrlW; dd.height = kCtrlH;
+    dd.popupMinWidth = 150;
+    for (const auto &label : ZPosLabels()) dd.options.push_back({label, label});
     dd.hasOptions = true; dd.selectedIndex = ZPosToIndex(opts.zPos);
-    dd.backgroundColor    = m_Palette.controlFill;
-    dd.borderColor        = m_Palette.controlBorder;
+    dd.rightToLeft = IsRtlLayout();
+    dd.backgroundColor = m_Palette.controlFill;
+    dd.borderColor = m_Palette.controlBorder;
     dd.borderWidth = 1.0f; dd.borderRadius = 7.0f;
-    dd.fontColor          = m_Palette.text; dd.placeholderColor = m_Palette.muted;
-    dd.popupBackground    = m_Palette.controlFill;
-    dd.popupBorderColor   = m_Palette.controlBorder;
-    dd.popupHoverColor    = m_Palette.controlBorder;
+    dd.fontColor = m_Palette.text; dd.placeholderColor = m_Palette.muted;
+    dd.popupBackground = m_Palette.controlFill;
+    dd.popupBorderColor = m_Palette.controlBorder;
+    dd.popupHoverColor = m_Palette.controlBorder;
     dd.popupSelectedColor = m_Palette.accent;
-    dd.popupTextColor     = m_Palette.text; dd.mouseEventCursorName = L"hand";
+    dd.popupTextColor = m_Palette.text; dd.mouseEventCursorName = L"hand";
     panel->AddDropDown(dd);
     m_Controls[dd.id] = {L"__win_zpos", ControlKind::WindowZPos, ti};
   }
@@ -756,7 +826,7 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
 
   Txt(panel, L"__win_opacity_lbl",
       kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH,
-      L"Opacity (0 \u2013 100)", 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER, scrollId);
+      Loc("settingspanel.window.opacity", L"Opacity (0 \u2013 100)"), 12, m_Palette.label, 400, false, TEXT_ALIGN_LEFT_CENTER, scrollId);
   m_Controls[L"__win_opacity_lbl"] = {L"", ControlKind::SelectLabel, ti};
   {
     const int pct = static_cast<int>(std::round(opts.windowOpacity / 255.0 * 100.0));
@@ -764,7 +834,8 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
     PropertyParser::InputBoxOptions io;
     io.id = L"__win_opacity";
     io.containerId = scrollId;
-    io.x = ctrlX; io.y = y + rowOff; io.width = kInlineCtrlW - 20; io.height = kCtrlH;
+    io.x = ContentX(ctrlX, kInlineCtrlW); io.y = y + rowOff;
+    io.width = kInputDeclaredW; io.height = kCtrlH;
     io.text = buf; io.fontSize = 12;
     io.fontColor = m_Palette.text; io.fontAlpha = 255;
     io.hasFillColor = true; io.fillColor = m_Palette.controlFill; io.fillAlpha = 255;
@@ -772,6 +843,7 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
     io.borderColor = m_Palette.controlBorder; io.borderColorAlpha = 255;
     io.caretColor = m_Palette.text; io.selectionColor = m_Palette.accent;
     io.paddingLeft = 10; io.paddingRight = 10;
+    io.textAlign = DirectionalAlign(TEXT_ALIGN_LEFT_CENTER);
     io.inputType = InputType::Float;
     panel->AddInputBox(io);
     m_Controls[io.id] = {L"__win_opacity", ControlKind::WindowOpacity, ti};
@@ -785,7 +857,7 @@ void SettingsPanel::BuildAboutTab(Widget *panel, int ti, int startY) {
 
   const std::wstring scrollId = MakeScrollContainer(
       panel, ti,
-      kContentX, kHeaderH,
+      ContentOriginX(), kHeaderH,
       kContentW, kScrollHFull,
       m_Palette.label,
       m_Palette.background);
@@ -795,17 +867,17 @@ void SettingsPanel::BuildAboutTab(Widget *panel, int ti, int startY) {
 
   const std::wstring nameText =
       about.hasName ? about.name
-      : (m_Target ? m_Target->GetOptions().id : L"Novadesk");
+      : (m_Target ? m_Target->GetOptions().id : Loc("settingspanel.appName", L"Novadesk"));
   Txt(panel, L"__about_name",
       kPadX, y, kCtrlW, 32,
-      nameText.empty() ? L"Novadesk" : nameText, 20, m_Palette.accent, 700,
+      nameText.empty() ? Loc("settingspanel.appName", L"Novadesk") : nameText, 20, m_Palette.accent, 700,
       false, TEXT_ALIGN_LEFT_TOP, scrollId);
   m_Controls[L"__about_name"] = {L"", ControlKind::SelectLabel, ti};
   y += 36;
 
   const std::wstring verText = about.hasVersion
-      ? (L"Version " + about.version)
-      : (L"Version " NOVADESK_VERSION);
+      ? (Loc("settingspanel.versionPrefix", L"Version ") + about.version)
+      : (Loc("settingspanel.versionPrefix", L"Version ") + Utils::ToWString(NOVADESK_VERSION));
   Txt(panel, L"__about_ver",
       kPadX, y, kCtrlW, 18, verText, 12, m_Palette.label, 400,
       false, TEXT_ALIGN_LEFT_TOP, scrollId);
@@ -832,8 +904,16 @@ void SettingsPanel::BuildAboutTab(Widget *panel, int ti, int startY) {
     const std::wstring id = L"__about_link_" + link.service;
     Rect(panel, id, x, cardY, width, 38, m_Palette.controlFill, 255, 6.0f,
          true, scrollId);
-    BrandIcon(panel, id + L"_icon", link.service, x + 9, cardY + 7, true, scrollId);
-    Txt(panel, id + L"_label", x + 39, cardY + 12, width - 45, 18,
+    const int iconY = cardY +
+        ((link.service == L"YouTube" || link.service == L"Discord") ? 10 : 7);
+    const int iconX = x + (link.service == L"DeviantArt" ? 11 : 9);
+    BrandIcon(panel, id + L"_icon", link.service, iconX, iconY, true, scrollId);
+    // The icon moves to the visual right in RTL. Keep its 32px area plus a
+    // gap out of the text layout, otherwise a right-to-left label can paint
+    // underneath the icon.
+    const int labelX = x + (IsRtlLayout() ? 49 : 39);
+    const int labelW = width - (IsRtlLayout() ? 54 : 45);
+    Txt(panel, id + L"_label", labelX, cardY + 12, labelW, 18,
         link.service, 11, m_Palette.text, 600, true, TEXT_ALIGN_LEFT_TOP, scrollId);
     const ControlInfo info{link.url, ControlKind::ExternalLink, ti};
     m_Controls[id] = info;
@@ -863,8 +943,8 @@ void SettingsPanel::BuildAboutTab(Widget *panel, int ti, int startY) {
     y += static_cast<int>((valid.size() + 1) / 2) * 46 + 10;
   };
 
-  addSection(L"Support", about.supportLinks);
-  addSection(L"Social", about.socialLinks);
+  addSection(Loc("settingspanel.about.support", L"Support").c_str(), about.supportLinks);
+  addSection(Loc("settingspanel.about.social", L"Social").c_str(), about.socialLinks);
 }
 
 void SettingsPanel::SwitchTab(int tabIndex) {
@@ -1108,7 +1188,6 @@ void SettingsPanel::UpdateWindowTabVisuals() {
     {L"__win_clickthrough", L"", opts.clickThrough},
     {L"__win_keeponscreen", L"", opts.keepOnScreen},
     {L"__win_snapedges",    L"", opts.snapEdges   },
-    {L"__win_resizable",    L"", opts.resizable   },
   };
   for (const auto &b : bools)
     if (Element *el = m_Panel->FindElementById(b.id))
@@ -1127,9 +1206,8 @@ void SettingsPanel::UpdateWindowTabVisuals() {
 
 void SettingsPanel::OnBeforeOpenDropDown(Widget *widget,
                                          DropDownElement *dropDown) {
-  if (widget == m_Panel && dropDown && dropDown->GetId() == L"__win_zpos") {
+  if (widget == m_Panel && dropDown && dropDown->GetId() == L"__win_zpos")
     UpdateWindowTabVisuals();
-  }
 }
 
 void SettingsPanel::OnElementHoverChanged(Widget *widget, Element *element,
@@ -1343,20 +1421,17 @@ void SettingsPanel::OnElementMouseUp(Widget *widget, Element *element, int, int)
       else if (sid == L"__win_clickthrough") m_Target->SetClickThrough(on);
       else if (sid == L"__win_keeponscreen") m_Target->SetKeepOnScreen(on);
       else if (sid == L"__win_snapedges")    m_Target->SetSnapEdges(on);
-      else if (sid == L"__win_resizable")    m_Target->SetResizable(on);
       Settings::SaveWidget(m_Target->GetOptions().id, m_Target->GetOptions());
     }
     return;
   }
   if (info.kind == ControlKind::WindowZPos) {
     if (auto *dd = dynamic_cast<DropDownElement *>(element)) {
-      const int idx = dd->GetSelectedIndex();
-      if (idx >= 0 && idx < kZPosCount) {
-        m_Target->ChangeZPos(kZPosValues[idx], false);
-        if (m_Target && Widget::IsValid(m_Target)) {
-          Settings::SaveWidget(m_Target->GetOptions().id, m_Target->GetOptions());
-          UpdateWindowTabVisuals();
-        }
+      const int index = dd->GetSelectedIndex();
+      if (index >= 0 && index < kZPosCount) {
+        m_Target->ChangeZPos(kZPosValues[index], false);
+        Settings::SaveWidget(m_Target->GetOptions().id, m_Target->GetOptions());
+        UpdateWindowTabVisuals();
       }
     }
     return;

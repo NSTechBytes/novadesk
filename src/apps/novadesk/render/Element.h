@@ -424,6 +424,8 @@ public:
   void SetShowScrollbarX(bool show) { m_ShowScrollbarX = show; }
   bool GetShowScrollbarY() const { return m_ShowScrollbarY; }
   void SetShowScrollbarY(bool show) { m_ShowScrollbarY = show; }
+  bool GetScrollbarOnLeft() const { return m_ScrollbarOnLeft; }
+  void SetScrollbarOnLeft(bool onLeft) { m_ScrollbarOnLeft = onLeft; }
   int GetScrollbarWidth() const { return m_ScrollbarWidth; }
   void SetScrollbarWidth(int w) { m_ScrollbarWidth = w > 0 ? w : 1; }
   int GetScrollbarHoverWidth() const {
@@ -748,6 +750,7 @@ protected:
   bool m_ShowScrollbarX = true;
   bool m_ShowScrollbarY = true;
   int m_ScrollbarWidth = 6;
+  bool m_ScrollbarOnLeft = false;
   int m_ScrollbarHoverWidth = -1;
   float m_ScrollbarRadius = 3.0f;
   float m_ScrollbarTrackRadius = -1.0f;

@@ -226,6 +226,8 @@ public:
   int GetFontWeight() const { return m_FontWeight; }
   bool IsItalic() const { return m_Italic; }
   TextAlignment GetTextAlign() const { return m_TextAlign; }
+  void SetRightToLeft(bool value) { m_RightToLeft = value; }
+  bool IsRightToLeft() const { return m_RightToLeft; }
   TextClip GettextClip() const { return m_textClip; }
   const std::wstring &GetFontPath() const { return m_FontPath; }
 
@@ -287,6 +289,7 @@ private:
   int m_FontWeight;
   bool m_Italic;
   TextAlignment m_TextAlign;
+  bool m_RightToLeft = false;
   TextClip m_textClip;
   std::wstring m_FontPath;
 

@@ -92,7 +92,7 @@ void DropDownPopup::LayoutRows() {
   RECT r{};
   GfxRect b = GetAbsoluteBounds(m_DropDown);
   GetWindowRect(m_Widget ? m_Widget->GetWindow() : nullptr, &r);
-  int width = (std::max)(1, b.Width);
+  int width = (std::max)({1, b.Width, m_DropDown->m_PopupMinWidth});
   HDC dc = GetDC(m_hWnd ? m_hWnd : GetDesktopWindow());
   if (dc) {
     HFONT oldFont = m_Font ? static_cast<HFONT>(SelectObject(dc, m_Font))
@@ -161,7 +161,8 @@ void DropDownPopup::Show() {
   RECT r{};
   GetWindowRect(m_Widget->GetWindow(), &r);
   GfxRect b = GetAbsoluteBounds(m_DropDown);
-  int x = r.left + b.X;
+  // A wider RTL popup stays aligned to the control's trailing (right) edge.
+  int x = r.left + b.X + (m_DropDown->m_RightToLeft ? b.Width - m_Width : 0);
   int y = r.top + b.Y + b.Height;
   HMONITOR mon = MonitorFromPoint({x, y}, MONITOR_DEFAULTTONEAREST);
   MONITORINFO mi{sizeof(mi)};
@@ -206,7 +207,7 @@ void DropDownPopup::UpdatePosition() {
   RECT r{};
   GetWindowRect(m_Widget->GetWindow(), &r);
   GfxRect b = GetAbsoluteBounds(m_DropDown);
-  int x = r.left + b.X;
+  int x = r.left + b.X + (m_DropDown->m_RightToLeft ? b.Width - m_Width : 0);
   int y = r.top + b.Y + b.Height;
   HMONITOR mon = MonitorFromPoint({x, y}, MONITOR_DEFAULTTONEAREST);
   MONITORINFO mi{sizeof(mi)};
@@ -470,8 +471,10 @@ void DropDownPopup::Paint(HDC targetDc) {
 
   const COLORREF oldTextColor = SetTextColor(dc, textColor);
   const int oldBackMode = SetBkMode(dc, TRANSPARENT);
-  // TA_TOP is zero, so this reads as "left edge, no update CP".
-  const UINT oldAlign = SetTextAlign(dc, TA_LEFT | TA_NOUPDATECP);
+  const bool rtl = dropDown && dropDown->m_RightToLeft;
+  // TA_TOP is zero; use the text's trailing edge for RTL catalog entries.
+  const UINT oldAlign = SetTextAlign(dc,
+      (rtl ? TA_RIGHT : TA_LEFT) | TA_NOUPDATECP);
 
   const int count = dropDown ? dropDown->OptionCount() : 0;
   const int textLeft = m_Padding + 4;
@@ -525,7 +528,7 @@ void DropDownPopup::Paint(HDC targetDc) {
     const int textY = (measured.cy <= textBottom - textTop)
                           ? textTop + (textBottom - textTop - measured.cy) / 2
                           : rowTop;
-    TextOutW(dc, textLeft, label.empty() ? rowTop : textY, label.c_str(),
+    TextOutW(dc, rtl ? textRight : textLeft, label.empty() ? rowTop : textY, label.c_str(),
              static_cast<int>(label.length()));
   }
 

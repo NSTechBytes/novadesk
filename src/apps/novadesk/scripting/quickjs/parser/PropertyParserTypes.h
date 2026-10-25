@@ -170,6 +170,8 @@ struct ElementOptions {
   bool showScrollbarX = true;
   bool hasShowScrollbarY = false;
   bool showScrollbarY = true;
+  bool hasScrollbarOnLeft = false;
+  bool scrollbarOnLeft = false;
   bool hasScrollbarWidth = false;
   int scrollbarWidth = 6;
   bool hasScrollbarHoverWidth = false;
@@ -317,6 +319,7 @@ struct TextOptions : public ElementOptions {
   int fontWeight = 400;
   bool italic = false;
   TextAlignment textAlign = TEXT_ALIGN_LEFT_TOP;
+  bool rightToLeft = false;
   TextClip clip = TEXT_CLIP_NONE;
   std::wstring fontPath;
   std::vector<TextShadow> shadows;
@@ -546,6 +549,7 @@ struct DropDownOptions : public ElementOptions {
   float borderRadius = 6.0f;
   float paddingLeft = 10.0f;
   float paddingRight = 10.0f;
+  bool rightToLeft = false;
 
   COLORREF chevronColor = RGB(200, 200, 208);
   BYTE chevronAlpha = 255;
@@ -588,6 +592,7 @@ struct DropDownOptions : public ElementOptions {
   int popupItemHeight = 28;
   int popupMaxVisibleItems = 8;
   int popupPadding = 4;
+  int popupMinWidth = 0; ///< 0 keeps the popup at least as wide as its control.
 
   int onChangeCallbackId = -1;
   int onOpenCallbackId = -1;
