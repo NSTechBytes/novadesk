@@ -166,7 +166,7 @@ int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
     AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hManageMenu, L"Manage");
 
     if (hasSettings) {
-      AppendMenuW(hMenu, MF_STRING, CMD_OPEN_SETTINGS, L"Settings…");
+      AppendMenuW(hMenu, MF_STRING, CMD_OPEN_SETTINGS, L"SettingsPanel");
     }
 
     HMENU hAppMenu = CreatePopupMenu();
