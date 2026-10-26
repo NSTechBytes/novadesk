@@ -40,6 +40,7 @@ jobs:
         shell: powershell
         run: |
           New-Item -ItemType Directory -Path "installer\dist_output" -Force | Out-Null
+          .\Generate-InstallerStrings.ps1
           & makensis.exe installer\setup.nsi
 
       - name: Upload Binaries (dist)

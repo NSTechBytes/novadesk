@@ -32,6 +32,7 @@ try {
 
     $buildScript = Join-Path $RepoRoot "Build.ps1"
     $setupScriptPath = Join-Path $RepoRoot $SetupScript
+    $installerStringsScript = Join-Path $RepoRoot "Generate-InstallerStrings.ps1"
     $distDir = Join-Path $RepoRoot "dist"
     $setupOutputDir = Join-Path $RepoRoot "installer\dist_output"
     $makensis = Resolve-Makensis
@@ -44,12 +45,22 @@ try {
         throw "NSIS script not found: $setupScriptPath"
     }
 
+    if (-not (Test-Path $installerStringsScript)) {
+        throw "Installer string generator not found: $installerStringsScript"
+    }
+
     if (Test-Path $distDir) {
         Write-Host "Cleaning dist..." -ForegroundColor Cyan
         Remove-Item -Recurse -Force $distDir
     }
 
     New-Item -ItemType Directory -Path $setupOutputDir -Force | Out-Null
+
+    Write-Host "Generating installer translations..." -ForegroundColor Cyan
+    & powershell -ExecutionPolicy Bypass -File $installerStringsScript
+    if ($LASTEXITCODE -ne 0) {
+        throw "Generate-InstallerStrings.ps1 failed."
+    }
 
     Write-Host "Running release build..." -ForegroundColor Cyan
     & powershell -ExecutionPolicy Bypass -File $buildScript -Configuration $Configuration -Platform $Platform
