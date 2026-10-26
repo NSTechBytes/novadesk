@@ -79,6 +79,7 @@ private:
   void SwitchTab(int tabIndex);
   void ApplyPaletteToPanel();
 
+  static Widget *OpenForRestored(Widget *target, int activeTab, int x, int y);
   static bool IsAlive(SettingsPanel *panel);
   static void FlushPending();
 
@@ -92,6 +93,10 @@ private:
   int  m_AboutTabIndex  = 0;
   int  m_TotalTabs      = 1;
   bool m_ShowTabBar     = true; ///< False when only one custom tab & no window tab
+  int  m_InitialActiveTab = -1;
+  int  m_InitialX = 0;
+  int  m_InitialY = 0;
+  bool m_HasInitialPosition = false;
 
   ThemePalette m_Palette;
 

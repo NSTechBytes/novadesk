@@ -163,6 +163,11 @@ struct BoolRow { const wchar_t *id; const wchar_t *label; bool value; };
 }
 
 Widget *SettingsPanel::OpenFor(Widget *target) {
+  return OpenForRestored(target, -1, 0, 0);
+}
+
+Widget *SettingsPanel::OpenForRestored(Widget *target, int activeTab, int x,
+                                       int y) {
   FlushPending();
   if (!target || !Widget::IsValid(target)) return nullptr;
   for (SettingsPanel *p : s_Panels)
@@ -171,6 +176,10 @@ Widget *SettingsPanel::OpenFor(Widget *target) {
 
   SettingsPanel *self = new SettingsPanel();
   self->m_Target = target;
+  self->m_InitialActiveTab = activeTab;
+  self->m_InitialX = x;
+  self->m_InitialY = y;
+  self->m_HasInitialPosition = (activeTab >= 0);
   target->SetInputSink(self);
   self->BuildPanel(target);
   if (!self->m_Panel) { delete self; return nullptr; }
@@ -196,18 +205,30 @@ void SettingsPanel::RefreshAllThemes() {
   }
 }
 void SettingsPanel::RefreshAllLocalizedText() {
-  std::vector<Widget *> targets;
-  targets.reserve(s_Panels.size());
-  for (SettingsPanel *panel : s_Panels)
-    if (panel && panel->m_Target && Widget::IsValid(panel->m_Target))
-      targets.push_back(panel->m_Target);
+  struct PanelState {
+    Widget *target;
+    int activeTab;
+    int x;
+    int y;
+  };
+  std::vector<PanelState> panels;
+  panels.reserve(s_Panels.size());
+  for (SettingsPanel *panel : s_Panels) {
+    if (!panel || !panel->m_Target || !panel->m_Panel ||
+        !Widget::IsValid(panel->m_Target) || !Widget::IsValid(panel->m_Panel)) {
+      continue;
+    }
+    const WidgetOptions &options = panel->m_Panel->GetOptions();
+    panels.push_back({panel->m_Target, panel->m_ActiveTab, options.x, options.y});
+  }
 
   // Rebuilding is intentional: labels, dropdown options, and RTL-aware layout
   // are all created with the current catalog. It also avoids stale text-format
   // objects while a panel is being rendered.
   CloseAll();
-  for (Widget *target : targets)
-    if (Widget::IsValid(target)) OpenFor(target);
+  for (const PanelState &state : panels)
+    if (Widget::IsValid(state.target))
+      OpenForRestored(state.target, state.activeTab, state.x, state.y);
 }
 void SettingsPanel::CloseAllForTarget(Widget *target) {
   if (!target) return;
@@ -344,6 +365,9 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
   m_ActiveTab      = (nCustom > 0) ? 0
                    : (showWin     ? m_WindowTabIndex
                                   : m_AboutTabIndex);
+  if (m_InitialActiveTab >= 0 && m_InitialActiveTab < m_TotalTabs) {
+    m_ActiveTab = m_InitialActiveTab;
+  }
 
   RECT tr{};
   GetWindowRect(target->GetWindow(), &tr);
@@ -353,6 +377,10 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
   if (px + kPanelW > screenW) px = std::max(8, (int)tr.left - 12 - kPanelW);
   int py = tr.top;
   if (py + kPanelH > screenH) py = std::max(0, screenH - kPanelH - 8);
+  if (m_HasInitialPosition) {
+    px = m_InitialX;
+    py = m_InitialY;
+  }
 
   WidgetOptions po;
   po.id = L""; po.x = px; po.y = py; po.width = kPanelW; po.height = kPanelH;
