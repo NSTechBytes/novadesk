@@ -619,6 +619,7 @@ Section "Uninstall"
   Delete "$INSTDIR\nwm\nwm.exe"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir /r "$INSTDIR\images"
+  RMDir /r "$INSTDIR\locales"
   RMDir /r "$INSTDIR\Widgets"
   RMDir /r "$INSTDIR\Addons"
   

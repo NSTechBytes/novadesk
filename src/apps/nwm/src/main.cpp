@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -1195,6 +1196,31 @@ bool InitWidget(const std::string &name) {
 
     if (fs::exists(templateDir)) {
       fs::copy(templateDir, baseDir, fs::copy_options::recursive);
+
+      // Keep generated widgets self-contained. In an installed copy nwm.exe
+      // lives in <install>\\nwm and the shared catalogs live in
+      // <install>\\locales. Walking ancestors also supports invoking a build
+      // output directly from the source tree.
+      fs::path localesDir;
+      for (fs::path candidate = exeDir; !candidate.empty();
+           candidate = candidate.parent_path()) {
+        const fs::path possibleLocales = candidate / "locales";
+        if (fs::exists(possibleLocales) && fs::is_directory(possibleLocales)) {
+          localesDir = possibleLocales;
+          break;
+        }
+
+        const fs::path parent = candidate.parent_path();
+        if (parent == candidate) {
+          break;
+        }
+      }
+
+      if (localesDir.empty()) {
+        throw std::runtime_error("Locales directory was not found near nwm.exe");
+      }
+
+      fs::copy(localesDir, baseDir / "locales", fs::copy_options::recursive);
 
       // Replace name in meta.json
       fs::path metaPath = baseDir / "meta.json";
