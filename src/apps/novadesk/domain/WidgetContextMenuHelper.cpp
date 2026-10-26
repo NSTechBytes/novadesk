@@ -20,6 +20,7 @@
 #include "../render/ImageCache.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "Settings.h"
+#include "../../common/Localization.h"
 #include "../../common/WindowsTheme.h"
 
 namespace {
@@ -47,6 +48,10 @@ constexpr int CMD_SETTINGS_USE_HW_ACCEL = 1143;
 constexpr int CMD_SETTINGS_CLEAR_IMAGE_CACHE = 1144;
 constexpr int CMD_SETTINGS_CLEAR_FONT_CACHE = 1145;
 constexpr int CMD_OPEN_SETTINGS = 1146;
+
+const std::wstring &Loc(const char *key, const wchar_t *fallback) {
+  return Localization::TextOr(key, fallback);
+}
 
 static void PromptRestartForHardwareAcceleration(HWND hwndParent) {
   const std::wstring appTitle = PathUtils::GetProductName();
@@ -124,22 +129,23 @@ int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
     HMENU hZPosMenu = CreatePopupMenu();
     AppendMenuW(hZPosMenu,
                 MF_STRING | (windowZPos == ZPOSITION_NORMAL ? MF_CHECKED : 0),
-                CMD_MANAGE_ZPOS_NORMAL, L"Normal");
+                CMD_MANAGE_ZPOS_NORMAL, Loc("context.zpos.normal", L"Normal").c_str());
     AppendMenuW(hZPosMenu,
                 MF_STRING |
                     (windowZPos == ZPOSITION_ONDESKTOP ? MF_CHECKED : 0),
-                CMD_MANAGE_ZPOS_DESKTOP, L"OnDesktop");
+                CMD_MANAGE_ZPOS_DESKTOP, Loc("context.zpos.onDesktop", L"OnDesktop").c_str());
     AppendMenuW(hZPosMenu,
                 MF_STRING | (windowZPos == ZPOSITION_ONTOP ? MF_CHECKED : 0),
-                CMD_MANAGE_ZPOS_ONTOP, L"OnTop");
+                CMD_MANAGE_ZPOS_ONTOP, Loc("context.zpos.onTop", L"OnTop").c_str());
     AppendMenuW(hZPosMenu,
                 MF_STRING |
                     (windowZPos == ZPOSITION_ONTOPMOST ? MF_CHECKED : 0),
-                CMD_MANAGE_ZPOS_ONTOPMOST, L"OnTopMost");
+                CMD_MANAGE_ZPOS_ONTOPMOST, Loc("context.zpos.onTopMost", L"OnTopMost").c_str());
     AppendMenuW(hZPosMenu,
                 MF_STRING | (windowZPos == ZPOSITION_ONBOTTOM ? MF_CHECKED : 0),
-                CMD_MANAGE_ZPOS_BOTTOM, L"Bottom");
-    AppendMenuW(hManageMenu, MF_POPUP, (UINT_PTR)hZPosMenu, L"Zpos");
+                CMD_MANAGE_ZPOS_BOTTOM, Loc("context.zpos.bottom", L"Bottom").c_str());
+    AppendMenuW(hManageMenu, MF_POPUP, (UINT_PTR)hZPosMenu,
+                Loc("context.zPosition", L"Zpos").c_str());
 
     HMENU hOpacityMenu = CreatePopupMenu();
     for (int i = 0; i <= 100; i += 10) {
@@ -150,23 +156,26 @@ int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
       AppendMenuW(hOpacityMenu, MF_STRING | (isCurrent ? MF_CHECKED : 0),
                   CMD_MANAGE_OPACITY_START + (i / 10), label.c_str());
     }
-    AppendMenuW(hManageMenu, MF_POPUP, (UINT_PTR)hOpacityMenu, L"Opacity");
+    AppendMenuW(hManageMenu, MF_POPUP, (UINT_PTR)hOpacityMenu,
+                Loc("context.opacity", L"Opacity").c_str());
     AppendMenuW(hManageMenu, MF_SEPARATOR, 0, nullptr);
 
     AppendMenuW(hManageMenu, MF_STRING | (options.draggable ? MF_CHECKED : 0),
-                CMD_MANAGE_DRAGGABLE, L"Draggable");
+                CMD_MANAGE_DRAGGABLE, Loc("context.draggable", L"Draggable").c_str());
     AppendMenuW(hManageMenu,
                 MF_STRING | (options.clickThrough ? MF_CHECKED : 0),
-                CMD_MANAGE_CLICKTHROUGH, L"Clickthrough");
+                CMD_MANAGE_CLICKTHROUGH, Loc("context.clickThrough", L"Clickthrough").c_str());
     AppendMenuW(hManageMenu, MF_STRING | (options.snapEdges ? MF_CHECKED : 0),
-                CMD_MANAGE_SNAPEDGES, L"Snap to Edges");
+                CMD_MANAGE_SNAPEDGES, Loc("context.snapEdges", L"Snap to Edges").c_str());
     AppendMenuW(hManageMenu,
                 MF_STRING | (options.keepOnScreen ? MF_CHECKED : 0),
-                CMD_MANAGE_KEEPOFFSCREEN, L"Keep On Screen");
-    AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hManageMenu, L"Manage");
+                CMD_MANAGE_KEEPOFFSCREEN, Loc("context.keepOnScreen", L"Keep On Screen").c_str());
+    AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hManageMenu,
+                Loc("context.manage", L"Manage").c_str());
 
     if (hasSettings) {
-      AppendMenuW(hMenu, MF_STRING, CMD_OPEN_SETTINGS, L"SettingsPanel");
+      AppendMenuW(hMenu, MF_STRING, CMD_OPEN_SETTINGS,
+                  Loc("context.settingsPanel", L"SettingsPanel").c_str());
     }
 
     HMENU hAppMenu = CreatePopupMenu();
@@ -181,22 +190,23 @@ int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
         Settings::GetGlobalBool("useHardwareAcceleration", false);
 
     AppendMenuW(hSettingsMenu, MF_STRING | (enableLogging ? MF_CHECKED : 0),
-                CMD_SETTINGS_ENABLE_LOGGING, L"Enable Logging");
+                CMD_SETTINGS_ENABLE_LOGGING, Loc("context.enableLogging", L"Enable Logging").c_str());
     AppendMenuW(hSettingsMenu, MF_STRING | (enableDebugging ? MF_CHECKED : 0),
-                CMD_SETTINGS_ENABLE_DEBUGGING, L"Enable Debugging");
+                CMD_SETTINGS_ENABLE_DEBUGGING, Loc("context.enableDebugging", L"Enable Debugging").c_str());
     AppendMenuW(hSettingsMenu, MF_STRING | (saveLogToFile ? MF_CHECKED : 0),
-                CMD_SETTINGS_SAVE_LOG_TO_FILE, L"Save Log to file");
+                CMD_SETTINGS_SAVE_LOG_TO_FILE, Loc("context.saveLogToFile", L"Save Log to file").c_str());
     AppendMenuW(hSettingsMenu, MF_STRING | (useHwAccel ? MF_CHECKED : 0),
-                CMD_SETTINGS_USE_HW_ACCEL, L"Use hardware acceleration");
+                CMD_SETTINGS_USE_HW_ACCEL, Loc("context.useHardwareAcceleration", L"Use hardware acceleration").c_str());
     AppendMenuW(hSettingsMenu, MF_STRING, CMD_SETTINGS_CLEAR_IMAGE_CACHE,
-                L"Clear Image Cache");
+                Loc("context.clearImageCache", L"Clear Image Cache").c_str());
     AppendMenuW(hSettingsMenu, MF_STRING, CMD_SETTINGS_CLEAR_FONT_CACHE,
-                L"Clear Font Cache");
+                Loc("context.clearFontCache", L"Clear Font Cache").c_str());
 
-    AppendMenuW(hAppMenu, MF_POPUP, (UINT_PTR)hSettingsMenu, L"Settings");
+    AppendMenuW(hAppMenu, MF_POPUP, (UINT_PTR)hSettingsMenu,
+                Loc("context.settings", L"Settings").c_str());
     AppendMenuW(hAppMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(hAppMenu, MF_STRING, CMD_REFRESH, L"Refresh");
-    AppendMenuW(hAppMenu, MF_STRING, CMD_EXIT, L"Exit");
+    AppendMenuW(hAppMenu, MF_STRING, CMD_REFRESH, Loc("context.refresh", L"Refresh").c_str());
+    AppendMenuW(hAppMenu, MF_STRING, CMD_EXIT, Loc("context.exit", L"Exit").c_str());
     std::wstring appTitle = PathUtils::GetProductName();
     AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hAppMenu, appTitle.c_str());
   }
