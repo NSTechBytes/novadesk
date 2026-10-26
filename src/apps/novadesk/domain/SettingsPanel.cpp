@@ -9,11 +9,13 @@
 #include "../../common/Localization.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cwchar>
 #include <cwctype>
 #include <windows.h>
 
 #include "../scripting/quickjs/parser/PropertyParser.h"
+#include "../render/Direct2DHelper.h"
 #include "../shared/ColorUtil.h"
 #include "../shared/Settings.h"
 #include "../shared/Utils.h"
@@ -156,6 +158,38 @@ bool IsOn(const std::wstring &v) { return v == L"true" || v == L"1"; }
 int OptIndex(const std::vector<std::wstring> &opts, const std::wstring &v) {
   for (size_t i = 0; i < opts.size(); ++i) if (opts[i] == v) return (int)i;
   return -1;
+}
+
+int MeasureFooterButtonWidth(const std::wstring &text) {
+  constexpr int kMinimumWidth = 150;
+  constexpr int kHorizontalPadding = 32;
+  constexpr int kMaximumWidth = kContentW - kPadX * 2;
+
+  IDWriteFactory1 *factory = Direct2D::GetWriteFactory();
+  if (!factory || text.empty()) return kMinimumWidth;
+
+  Microsoft::WRL::ComPtr<IDWriteTextFormat> format;
+  if (FAILED(factory->CreateTextFormat(
+          L"Arial", nullptr, DWRITE_FONT_WEIGHT_NORMAL,
+          DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 12.0f, L"",
+          format.GetAddressOf()))) {
+    return kMinimumWidth;
+  }
+  format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+
+  Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
+  if (FAILED(factory->CreateTextLayout(text.c_str(),
+                                       static_cast<UINT32>(text.size()),
+                                       format.Get(), 4096.0f, 40.0f,
+                                       layout.GetAddressOf()))) {
+    return kMinimumWidth;
+  }
+
+  DWRITE_TEXT_METRICS metrics{};
+  if (FAILED(layout->GetMetrics(&metrics))) return kMinimumWidth;
+  return std::clamp(static_cast<int>(std::ceil(metrics.widthIncludingTrailingWhitespace)) +
+                        kHorizontalPadding,
+                    kMinimumWidth, kMaximumWidth);
 }
 
 struct BoolRow { const wchar_t *id; const wchar_t *label; bool value; };
@@ -564,7 +598,9 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
 
   if (nCustom > 0) {
     const int footerY = kHeaderH + kContentH - kFooterH;
-    const int resetW  = 150;
+    const std::wstring resetText =
+        Loc("settingspanel.resetToDefaults", L"Reset to defaults");
+    const int resetW  = MeasureFooterButtonWidth(resetText);
     const int resetH  = 28;
     const int resetX  = ContentOriginX() + ContentX(kContentW - kPadX - resetW, resetW);
     const int resetY  = footerY + (kFooterH - resetH) / 2;
@@ -580,7 +616,7 @@ void SettingsPanel::BuildPanel(Widget *target) {  m_Palette = ResolveTheme();
 
     Txt(panel, L"__settings_reset_label",
         resetX + resetW / 2, resetY + resetH / 2, resetW, resetH,
-        Loc("settingspanel.resetToDefaults", L"Reset to defaults"),
+        resetText,
         12, m_Palette.text, 400, true, TEXT_ALIGN_CENTER_CENTER);
     m_Controls[L"__settings_reset_label"] = {L"", ControlKind::ResetLabel, 0};
   }
