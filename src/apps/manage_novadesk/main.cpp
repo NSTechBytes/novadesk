@@ -283,6 +283,59 @@ static HBITMAP LoadScaledBitmapFromPng(const std::wstring &path, int maxWidth,
   return outBitmap;
 }
 
+static const int kAboutLogoSize = 110;
+
+static std::wstring GetAboutVersionText() {
+  return Tr("settingspanel.versionPrefix", L"Version ") +
+         std::wstring(kCurrentVersion) + L" " +
+         Tr("manage.about.beta", L"(Beta)");
+}
+
+static void ApplyAboutLocalizedText() {
+  if (g_aboutAppName)
+    SetWindowTextW(g_aboutAppName,
+                   Tr("settingspanel.appName", L"Novadesk").c_str());
+  if (g_aboutVersion)
+    SetWindowTextW(g_aboutVersion, GetAboutVersionText().c_str());
+  if (g_aboutCopyright)
+    SetWindowTextW(g_aboutCopyright,
+                   Tr("manage.about.copyright",
+                      L"(c) 2026 OfficialNovadesk. All rights reserved.")
+                       .c_str());
+  if (g_aboutHomeLabel)
+    SetWindowTextW(g_aboutHomeLabel,
+                   Tr("manage.about.home", L"Home:").c_str());
+  if (g_aboutDocsLabel)
+    SetWindowTextW(g_aboutDocsLabel,
+                   Tr("manage.about.docs", L"Docs:").c_str());
+  if (g_aboutSupportTitle)
+    SetWindowTextW(g_aboutSupportTitle,
+                   Tr("manage.about.supportTitle",
+                      L"Support & Contribution")
+                       .c_str());
+  if (g_aboutSupportText)
+    SetWindowTextW(
+        g_aboutSupportText,
+        Tr("manage.about.supportText",
+           L"We appreciate your support. If you find Novadesk helpful,\r\n"
+           L"consider contributing to its ongoing development.")
+            .c_str());
+  if (g_aboutDonateButton)
+    SetWindowTextW(g_aboutDonateButton,
+                   Tr("manage.about.donate",
+                      L"Support Project via Donation")
+                       .c_str());
+  if (g_aboutSupportGroup)
+    SetWindowTextW(g_aboutSupportGroup,
+                   Tr("manage.about.supportSection", L"Support Section")
+                       .c_str());
+  if (g_aboutBottomNote)
+    SetWindowTextW(g_aboutBottomNote,
+                   Tr("manage.about.bottomNote",
+                      L"Development depends on user support.")
+                       .c_str());
+}
+
 static void UpdateAboutLogo() {
   if (!g_aboutLogo) {
     return;
@@ -293,7 +346,8 @@ static void UpdateAboutLogo() {
     g_aboutLogoBitmap = nullptr;
   }
 
-  g_aboutLogoBitmap = LoadScaledBitmapFromPng(GetAboutLogoPath(), 92, 92);
+  g_aboutLogoBitmap =
+      LoadScaledBitmapFromPng(GetAboutLogoPath(), kAboutLogoSize, kAboutLogoSize);
   SendMessageW(g_aboutLogo, STM_SETIMAGE, IMAGE_BITMAP,
                reinterpret_cast<LPARAM>(g_aboutLogoBitmap));
 }
@@ -2487,79 +2541,59 @@ public:
 
     virtual void Initialize() override {
       m_Initialized = true;
-      RECT rc{};
-      GetClientRect(m_Window, &rc);
-      const int w = rc.right;
 
-      const int margin = 14;
-      const int logoColLeft = margin;
-      const int logoColWidth = 150;
-      const int logoSize = 92;
-      const int logoLeft = logoColLeft + (logoColWidth - logoSize) / 2;
-      const int infoLeft = logoColLeft + logoColWidth + 10;
-      const int infoWidth = w - infoLeft - margin;
-
+      // Positions are applied in Relayout so Create and Relayout stay in sync.
       g_aboutLogo = CreateWindowExW(0, L"STATIC", L"",
           WS_CHILD | WS_VISIBLE | SS_BITMAP | SS_CENTERIMAGE | WS_CLIPSIBLINGS,
-          logoLeft, margin, logoSize, logoSize, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
-      g_aboutAppName = CreateWindowExW(0, L"STATIC", L"Novadesk",
-          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
-          infoLeft, margin, infoWidth, 34, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
-      g_aboutVersion = CreateWindowExW(0, L"STATIC", L"Version 0.9.13.0 (Beta)",
-          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
-          infoLeft, margin + 36, infoWidth, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
-      g_aboutCopyright = CreateWindowExW(0, L"STATIC", L"(c) 2026 OfficialNovadesk. All rights reserved.",
-          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
-          infoLeft, margin + 62, infoWidth, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+          0, 0, kAboutLogoSize, kAboutLogoSize, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutAppName = CreateWindowExW(0, L"STATIC", L"",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | WS_CLIPSIBLINGS,
+          0, 0, 0, 0, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutVersion = CreateWindowExW(0, L"STATIC", L"",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | WS_CLIPSIBLINGS,
+          0, 0, 0, 0, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutCopyright = CreateWindowExW(0, L"STATIC", L"",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | WS_CLIPSIBLINGS,
+          0, 0, 0, 0, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
       g_aboutDivider = CreateWindowExW(0, L"STATIC", L"",
           WS_CHILD | WS_VISIBLE | SS_ETCHEDHORZ | WS_CLIPSIBLINGS,
-          infoLeft, margin + 88, infoWidth, 2, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
-      g_aboutHomeLabel = CreateWindowExW(0, L"STATIC", L"Home:",
-          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
-          infoLeft, margin + 102, 64, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+          0, 0, 0, 0, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutHomeLabel = CreateWindowExW(0, L"STATIC", L"",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | WS_CLIPSIBLINGS,
+          0, 0, 0, 0, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
       g_aboutHomeLink = CreateWindowExW(0, WC_LINK,
           L"<a href=\"https://novadesk.pages.dev/\">https://novadesk.pages.dev/</a>",
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_CLIPSIBLINGS,
-          infoLeft + 66, margin + 102, infoWidth - 66, 24, m_Window,
+          0, 0, 0, 0, m_Window,
           reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAboutHome)), GetModuleHandleW(nullptr), nullptr);
-      g_aboutDocsLabel = CreateWindowExW(0, L"STATIC", L"Docs:",
-          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
-          infoLeft, margin + 128, 64, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutDocsLabel = CreateWindowExW(0, L"STATIC", L"",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | WS_CLIPSIBLINGS,
+          0, 0, 0, 0, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
       g_aboutDocsLink = CreateWindowExW(0, WC_LINK,
           L"<a href=\"https://novadesk-docs.pages.dev/\">https://novadesk-docs.pages.dev/</a>",
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_CLIPSIBLINGS,
-          infoLeft + 66, margin + 128, infoWidth - 66, 24, m_Window,
+          0, 0, 0, 0, m_Window,
           reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAboutDocs)), GetModuleHandleW(nullptr), nullptr);
-
-      const int supportTop = margin + 162;
-      const int supportHeight = 126;
-      const int supportLeft = margin;
-      const int supportWidth = w - (margin * 2);
-      const int supportButtonWidth = 230;
-      const int supportButtonHeight = 34;
-      const int supportContentLeft = supportLeft + 16;
-      const int supportButtonLeft = supportLeft + supportWidth - supportButtonWidth - 16;
-      const int supportTextWidth = supportButtonLeft - supportContentLeft - 16;
 
       // Create framed content before the group box, then push the group box to
       // the bottom of the z-order so WS_CLIPSIBLINGS cannot clip them away.
-      g_aboutSupportTitle = CreateWindowExW(0, L"STATIC", L"Support && Contribution",
-          WS_CHILD | WS_VISIBLE | SS_LEFT,
-          supportContentLeft, supportTop + 20, supportTextWidth, 28, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
-      g_aboutSupportText = CreateWindowExW(0, L"STATIC",
-          L"We appreciate your support. If you find Novadesk helpful,\r\nconsider contributing to its ongoing development.",
-          WS_CHILD | WS_VISIBLE | SS_LEFT,
-          supportContentLeft, supportTop + 52, supportTextWidth, 62, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
-      g_aboutDonateButton = CreateWindowExW(0, L"BUTTON", L"Support Project via Donation",
+      g_aboutSupportTitle = CreateWindowExW(0, L"STATIC", L"",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
+          0, 0, 0, 0, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutSupportText = CreateWindowExW(0, L"STATIC", L"",
+          WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX,
+          0, 0, 0, 0, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutDonateButton = CreateWindowExW(0, L"BUTTON", L"",
           WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
-          supportButtonLeft, supportTop + 48, supportButtonWidth, supportButtonHeight, m_Window,
+          0, 0, 0, 0, m_Window,
           reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAboutDonate)), GetModuleHandleW(nullptr), nullptr);
-      g_aboutSupportGroup = CreateWindowExW(0, L"BUTTON", L"Support Section",
+      g_aboutSupportGroup = CreateWindowExW(0, L"BUTTON", L"",
           WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-          supportLeft, supportTop, supportWidth, supportHeight, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
-      g_aboutBottomNote = CreateWindowExW(0, L"STATIC", L"Development depends on user support.",
-          WS_CHILD | WS_VISIBLE | SS_CENTER | WS_CLIPSIBLINGS,
-          150, supportTop + supportHeight + 8, w - 300, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+          0, 0, 0, 0, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_aboutBottomNote = CreateWindowExW(0, L"STATIC", L"",
+          WS_CHILD | WS_VISIBLE | SS_CENTER | SS_NOPREFIX | WS_CLIPSIBLINGS,
+          0, 0, 0, 0, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      ApplyAboutLocalizedText();
       EnsureAboutSupportZOrder();
 
       if (g_buttonFont) {
@@ -2607,7 +2641,7 @@ public:
     virtual void Relayout(int w, int h) override {
       const int margin = 16;
       const int logoColWidth = 180;
-      const int logoSize = 110;
+      const int logoSize = kAboutLogoSize;
       const int logoLeft = margin + (logoColWidth - logoSize) / 2;
       const int infoLeft = margin + logoColWidth + 12;
       const int infoWidth = w - infoLeft - margin;
@@ -3117,6 +3151,7 @@ static void ApplyLocalizedText() {
   SetWindowTextW(g_chkSaveLogToFile, Tr("manage.setting.saveLogs", L"Save Logs to File").c_str());
   SetWindowTextW(g_chkUseHardwareAcceleration, Tr("manage.setting.hardwareAcceleration", L"Use Hardware Acceleration").c_str());
   SetWindowTextW(g_lblLanguage, Tr("settings.language", L"Language").c_str());
+  ApplyAboutLocalizedText();
 
   const std::wstring tabs[] = {Tr("tab.widgets", L"Widgets"), Tr("tab.logs", L"Logs"),
       Tr("tab.addons", L"Addons"), Tr("tab.settings", L"Settings"), Tr("tab.about", L"About")};
