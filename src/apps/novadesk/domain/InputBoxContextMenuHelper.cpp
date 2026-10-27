@@ -16,6 +16,7 @@
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "../shared/System.h"
 #include "../shared/MenuUtils.h"
+#include "../../common/Localization.h"
 #include "../../common/WindowsTheme.h"
 
 namespace {
@@ -26,6 +27,10 @@ constexpr int CMD_COPY = 50004;
 constexpr int CMD_PASTE = 50005;
 constexpr int CMD_DELETE = 50006;
 constexpr int CMD_SELECTALL = 50007;
+
+const std::wstring &Loc(const char *key, const wchar_t *fallback) {
+  return Localization::TextOr(key, fallback);
+}
 } // namespace
 
 namespace InputBoxContextMenuHelper {
@@ -75,26 +80,29 @@ bool ShowInputBoxContextMenu(Widget &widget, InputBoxElement *inputElem,
       novadesk::shared::system::ClipboardGetText(clipText) && !clipText.empty();
 
   std::vector<MenuItem> menuItems;
-  menuItems.push_back(
-      {L"&Undo", CMD_UNDO, false, false, !inputElem->CanUndo()});
-  menuItems.push_back(
-      {L"&Redo", CMD_REDO, false, false, !inputElem->CanRedo()});
+  menuItems.push_back({Loc("context.input.undo", L"&Undo"), CMD_UNDO, false,
+                       false, !inputElem->CanUndo()});
+  menuItems.push_back({Loc("context.input.redo", L"&Redo"), CMD_REDO, false,
+                       false, !inputElem->CanRedo()});
 
   MenuItem sep;
   sep.isSeparator = true;
   menuItems.push_back(sep);
 
-  menuItems.push_back(
-      {L"Cu&t", CMD_CUT, false, false, !(hasSelection && !isPassword)});
-  menuItems.push_back(
-      {L"&Copy", CMD_COPY, false, false, !(hasSelection && !isPassword)});
-  menuItems.push_back({L"&Paste", CMD_PASTE, false, false, !canPaste});
-  menuItems.push_back({L"&Delete", CMD_DELETE, false, false, !hasSelection});
+  menuItems.push_back({Loc("context.input.cut", L"Cu&t"), CMD_CUT, false, false,
+                       !(hasSelection && !isPassword)});
+  menuItems.push_back({Loc("context.input.copy", L"&Copy"), CMD_COPY, false,
+                       false, !(hasSelection && !isPassword)});
+  menuItems.push_back({Loc("context.input.paste", L"&Paste"), CMD_PASTE, false,
+                       false, !canPaste});
+  menuItems.push_back({Loc("context.input.delete", L"&Delete"), CMD_DELETE,
+                       false, false, !hasSelection});
 
   menuItems.push_back(sep);
 
-  menuItems.push_back({L"Select &All", CMD_SELECTALL, false, false,
-                       inputElem->GetText().empty()});
+  menuItems.push_back(
+      {Loc("context.input.selectAll", L"Select &All"), CMD_SELECTALL, false,
+       false, inputElem->GetText().empty()});
 
   HMENU hMenu = CreatePopupMenu();
   MenuUtils::BuildMenu(hMenu, menuItems);
