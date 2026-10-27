@@ -200,6 +200,7 @@ static bool RequestExistingManageWindowClose();
 static bool RestartManageWindow();
 static void ResendFontsToAllControls();
 static void ApplyLocalizedText();
+static void RecreateManagerTabsForLayoutDirection(int activeTab);
 static UINT g_languageChangedMessage = 0;
 static HWND FindManageWindowForCurrentInstallation() {
   struct Search {
@@ -2372,7 +2373,8 @@ public:
       g_lblLanguage = CreateWindowExW(0, L"STATIC", Tr("settings.language", L"Language").c_str(),
           WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
           16, 244, 120, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
-      g_cboLanguage = CreateWindowExW(0, WC_COMBOBOXW, L"",
+      g_cboLanguage = CreateWindowExW(
+          Localization::IsRtl() ? WS_EX_RTLREADING : 0, WC_COMBOBOXW, L"",
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
           140, 240, 260, 360, m_Window,
           reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdLanguage)),
@@ -2381,7 +2383,8 @@ public:
       int selectedLanguage = 0;
       int languageIndex = 0;
       for (const auto &language : Localization::SupportedLanguages()) {
-        const int added = static_cast<int>(SendMessageW(g_cboLanguage, CB_ADDSTRING, 0,
+        const int added = static_cast<int>(SendMessageW(
+            g_cboLanguage, CB_ADDSTRING, 0,
             reinterpret_cast<LPARAM>(language.nativeName)));
         SendMessageW(g_cboLanguage, CB_SETITEMDATA, added,
                      reinterpret_cast<LPARAM>(language.tag));
@@ -2403,6 +2406,9 @@ public:
         SendMessageW(g_cboLanguage, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       }
       RefreshSettingsControls();
+      if (Localization::IsRtl()) {
+        ApplyLocalizedText();
+      }
     }
 
     virtual INT_PTR HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override {
@@ -2424,11 +2430,19 @@ public:
           return TRUE;
         case kControlIdLanguage:
           if (HIWORD(wParam) == CBN_SELCHANGE) {
-            const int selected = static_cast<int>(SendMessageW(g_cboLanguage, CB_GETCURSEL, 0, 0));
-            const char *tag = reinterpret_cast<const char *>(SendMessageW(g_cboLanguage, CB_GETITEMDATA, selected, 0));
+            const int selected = static_cast<int>(
+                SendMessageW(g_cboLanguage, CB_GETCURSEL, 0, 0));
+            const char *tag = reinterpret_cast<const char *>(
+                SendMessageW(g_cboLanguage, CB_GETITEMDATA, selected, 0));
             if (tag && CommonSettings::SetUiLanguage(tag)) {
+              const bool wasRtl = Localization::IsRtl();
               Localization::Initialize();
+              const bool directionChanged = wasRtl != Localization::IsRtl();
+              SetProcessDefaultLayout(
+                  Localization::IsRtl() ? LAYOUT_RTL : 0);
               ApplyLocalizedText();
+              if (directionChanged)
+                RecreateManagerTabsForLayoutDirection(g_activeTab);
               if (g_languageChangedMessage)
                 PostMessageW(HWND_BROADCAST, g_languageChangedMessage, 0, 0);
             }
@@ -2445,16 +2459,16 @@ public:
       const int sw = w - L - 20;    // control width to right margin
       const int ch = 26;            // standard control height
       const int bh = 30;            // button height
-      if (g_settingsTitle)              MoveWindow(g_settingsTitle,              L,       16,  sw,           20,  TRUE);
-      if (g_lblLanguage)                MoveWindow(g_lblLanguage,                L,      244, 120,           24,  TRUE);
-      if (g_cboLanguage)                MoveWindow(g_cboLanguage,            L + 124,  240, 260,          360,  TRUE);
-      if (g_chkRunOnStartup)            MoveWindow(g_chkRunOnStartup,            L,       50,  sw,           ch,  TRUE);
-      if (g_btnCheckUpdates)            MoveWindow(g_btnCheckUpdates,            L,       86,  200,          bh,  TRUE);
-      if (g_chkAutoUpdate)              MoveWindow(g_chkAutoUpdate,              L + 216, 90,  sw - 216,     ch,  TRUE);
-      if (g_chkEnableLogging)           MoveWindow(g_chkEnableLogging,           L,       134, sw,           ch,  TRUE);
-      if (g_chkEnableDebugging)         MoveWindow(g_chkEnableDebugging,         L,       168, sw,           ch,  TRUE);
-      if (g_chkSaveLogToFile)           MoveWindow(g_chkSaveLogToFile,           L,       202, sw,           ch,  TRUE);
-      if (g_chkUseHardwareAcceleration) MoveWindow(g_chkUseHardwareAcceleration, L,       236, sw,           ch,  TRUE);
+      if (g_settingsTitle)              MoveWindow(g_settingsTitle,              L,       16, sw,       20, TRUE);
+      if (g_lblLanguage)                MoveWindow(g_lblLanguage,                L,      244, 120,      24, TRUE);
+      if (g_cboLanguage)                MoveWindow(g_cboLanguage,            L + 124,  240, 260,     360, TRUE);
+      if (g_chkRunOnStartup)            MoveWindow(g_chkRunOnStartup,            L,       50, sw,       ch, TRUE);
+      if (g_btnCheckUpdates)            MoveWindow(g_btnCheckUpdates,            L,       86, 200,      bh, TRUE);
+      if (g_chkAutoUpdate)              MoveWindow(g_chkAutoUpdate,          L + 216,    90, sw - 216, ch, TRUE);
+      if (g_chkEnableLogging)           MoveWindow(g_chkEnableLogging,           L,      134, sw,       ch, TRUE);
+      if (g_chkEnableDebugging)         MoveWindow(g_chkEnableDebugging,         L,      168, sw,       ch, TRUE);
+      if (g_chkSaveLogToFile)           MoveWindow(g_chkSaveLogToFile,           L,      202, sw,       ch, TRUE);
+      if (g_chkUseHardwareAcceleration) MoveWindow(g_chkUseHardwareAcceleration, L,      236, sw,       ch, TRUE);
     }
   };
 
@@ -2655,6 +2669,71 @@ public:
   }
 
   const std::vector<Tab*>& GetPages() const { return m_Pages; }
+
+  void RecreateTabsForLayoutDirection(int activeTab) {
+    // Windows applies inherited RTL layout at native-child creation time.
+    // Rebuilding pages keeps the Manager process and its top-level window
+    // alive while giving every control a clean native RTL/LTR layout.
+    LONG_PTR exStyle = GetWindowLongPtrW(m_Window, GWL_EXSTYLE);
+    if (Localization::IsRtl()) exStyle |= WS_EX_LAYOUTRTL;
+    else exStyle &= ~static_cast<LONG_PTR>(WS_EX_LAYOUTRTL);
+    SetWindowLongPtrW(m_Window, GWL_EXSTYLE, exStyle);
+    SetWindowPos(m_Window, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+
+    ResetTabs();
+
+    // The tab strip is itself a native child of the manager. Recreate it as
+    // well so its item order and text direction inherit the new layout.
+    if (g_tab) {
+      DestroyWindow(g_tab);
+      g_tab = nullptr;
+      m_TabControl = nullptr;
+    }
+    RECT client{};
+    GetClientRect(m_Window, &client);
+    g_tab = CreateWindowExW(
+        0, WC_TABCONTROLW, L"",
+        WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_TABSTOP | TCS_FIXEDWIDTH,
+        12, 12, client.right - 24, client.bottom - 64, m_Window,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdTabs)),
+        GetModuleHandleW(nullptr), nullptr);
+    m_TabControl = g_tab;
+    TabCtrl_SetItemSize(g_tab, 100, 28);
+    if (g_buttonFont) SendMessageW(g_tab, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+    WindowsTheme::ApplyToDialog(m_Window);
+
+    g_list = g_logsList = g_addonsList = nullptr;
+    g_settingsPanel = g_aboutPanel = nullptr;
+    g_settingsTitle = g_chkRunOnStartup = g_btnCheckUpdates = nullptr;
+    g_chkAutoUpdate = g_chkEnableLogging = g_chkEnableDebugging = nullptr;
+    g_chkSaveLogToFile = g_chkUseHardwareAcceleration = nullptr;
+    g_lblLanguage = g_cboLanguage = nullptr;
+    g_aboutLogo = g_aboutAppName = g_aboutVersion = g_aboutCopyright = nullptr;
+    g_aboutDivider = g_aboutHomeLabel = g_aboutHomeLink = nullptr;
+    g_aboutDocsLabel = g_aboutDocsLink = g_aboutSupportGroup = nullptr;
+    g_aboutSupportTitle = g_aboutSupportText = g_aboutDonateButton = nullptr;
+    g_aboutBottomNote = nullptr;
+
+    AddTab(kControlIdTabs, m_TabWidgets, Tr("tab.widgets", L"Widgets").c_str());
+    AddTab(kControlIdTabs, m_TabLogs, Tr("tab.logs", L"Logs").c_str());
+    AddTab(kControlIdTabs, m_TabAddons, Tr("tab.addons", L"Addons").c_str());
+    AddTab(kControlIdTabs, m_TabSettings, Tr("tab.settings", L"Settings").c_str());
+    AddTab(kControlIdTabs, m_TabAbout, Tr("tab.about", L"About").c_str());
+    Relayout();
+    const int restoredTab = std::clamp(activeTab, 0, 4);
+    SelectTab(restoredTab);
+
+    // These controls belong to the main window rather than a tab page, so
+    // they survive ResetTabs(). Restore their state explicitly instead of
+    // depending on notification ordering while the new tab strip initializes.
+    ShowWindow(g_btnRefreshList, restoredTab == 0 ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnLoad, restoredTab == 0 ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnRefresh, restoredTab == 0 ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnRefreshAll, restoredTab == 0 ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnClearLogs, restoredTab == 1 ? SW_SHOW : SW_HIDE);
+    ShowWindow(g_btnClose, SW_SHOW);
+  }
 
   TabWidgets m_TabWidgets;
   TabLogs m_TabLogs;
@@ -3008,6 +3087,11 @@ private:
 
 DialogManage* DialogManage::s_instance = nullptr;
 
+static void RecreateManagerTabsForLayoutDirection(int activeTab) {
+  if (DialogManage::Get())
+    DialogManage::Get()->RecreateTabsForLayoutDirection(activeTab);
+}
+
 static void SetListColumnText(HWND list, int index, const std::wstring &text) {
   if (!list) return;
   LVCOLUMNW column{};
@@ -3033,14 +3117,11 @@ static void ApplyLocalizedText() {
   SetWindowTextW(g_chkSaveLogToFile, Tr("manage.setting.saveLogs", L"Save Logs to File").c_str());
   SetWindowTextW(g_chkUseHardwareAcceleration, Tr("manage.setting.hardwareAcceleration", L"Use Hardware Acceleration").c_str());
   SetWindowTextW(g_lblLanguage, Tr("settings.language", L"Language").c_str());
-  if (g_btnLoad) UpdateButtonState();
 
   const std::wstring tabs[] = {Tr("tab.widgets", L"Widgets"), Tr("tab.logs", L"Logs"),
-                               Tr("tab.addons", L"Addons"), Tr("tab.settings", L"Settings"),
-                               Tr("tab.about", L"About")};
+      Tr("tab.addons", L"Addons"), Tr("tab.settings", L"Settings"), Tr("tab.about", L"About")};
   for (int i = 0; g_tab && i < static_cast<int>(ARRAYSIZE(tabs)); ++i) {
-    TCITEMW item{};
-    item.mask = TCIF_TEXT;
+    TCITEMW item{}; item.mask = TCIF_TEXT;
     item.pszText = const_cast<wchar_t *>(tabs[i].c_str());
     TabCtrl_SetItem(g_tab, i, &item);
   }
@@ -3052,25 +3133,15 @@ static void ApplyLocalizedText() {
   SetListColumnText(g_logsList, 2, Tr("manage.column.level", L"Level"));
   SetListColumnText(g_logsList, 3, Tr("manage.column.message", L"Message"));
 
-  LONG_PTR style = GetWindowLongPtrW(g_mainWindow, GWL_EXSTYLE);
+  // Footer controls are owned by the main window. A language update must not
+  // leave the Widgets footer visible over another active page.
+  ShowWindow(g_btnRefreshList, g_activeTab == 0 ? SW_SHOW : SW_HIDE);
+  ShowWindow(g_btnLoad, g_activeTab == 0 ? SW_SHOW : SW_HIDE);
+  ShowWindow(g_btnRefresh, g_activeTab == 0 ? SW_SHOW : SW_HIDE);
+  ShowWindow(g_btnRefreshAll, g_activeTab == 0 ? SW_SHOW : SW_HIDE);
+  ShowWindow(g_btnClearLogs, g_activeTab == 1 ? SW_SHOW : SW_HIDE);
+  ShowWindow(g_btnClose, SW_SHOW);
 
-  if (Localization::IsRtl()) style |= WS_EX_LAYOUTRTL;
-  else style &= ~static_cast<LONG_PTR>(WS_EX_LAYOUTRTL);
-  style &= ~static_cast<LONG_PTR>(WS_EX_RTLREADING);
-  SetWindowLongPtrW(g_mainWindow, GWL_EXSTYLE, style);
-  SetWindowPos(g_mainWindow, nullptr, 0, 0, 0, 0,
-               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-  if (DialogManage::Get()) {
-    for (auto *page : DialogManage::Get()->GetPages()) {
-      if (!page || !page->GetWindow()) continue;
-      LONG_PTR pageStyle = GetWindowLongPtrW(page->GetWindow(), GWL_EXSTYLE);
-      if (Localization::IsRtl()) pageStyle |= WS_EX_LAYOUTRTL | WS_EX_RTLREADING;
-      else pageStyle &= ~(static_cast<LONG_PTR>(WS_EX_LAYOUTRTL) | WS_EX_RTLREADING);
-      SetWindowLongPtrW(page->GetWindow(), GWL_EXSTYLE, pageStyle);
-      SetWindowPos(page->GetWindow(), nullptr, 0, 0, 0, 0,
-                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-    }
-  }
   DrawMenuBar(g_mainWindow);
   RedrawWindow(g_mainWindow, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
@@ -3175,6 +3246,9 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
 
   WindowsTheme::Initialize();
   Localization::Initialize();
+  // Match Rainmeter's native-dialog RTL model before any manager window or
+  // common control is created.
+  SetProcessDefaultLayout(Localization::IsRtl() ? LAYOUT_RTL : 0);
 
   const std::wstring installationScope = CommonSettings::GetInstallationScopeId();
   g_manageMutexName = L"Global\\NovadeskManageWindowSingleton." + installationScope;

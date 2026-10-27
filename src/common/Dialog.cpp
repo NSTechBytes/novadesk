@@ -350,6 +350,17 @@ void Dialog::AddPage(Tab& tab)
 	m_Pages.push_back(&tab);
 }
 
+void Dialog::ResetTabs()
+{
+	for (auto* tab : m_Pages)
+	{
+		tab->ResetWindow();
+	}
+	m_Pages.clear();
+	m_Tabs.clear();
+	if (m_TabControl) TabCtrl_DeleteAllItems(m_TabControl);
+}
+
 void Dialog::SelectTab(int index)
 {
 	assert(index >= 0 && index < (int)m_Tabs.size());
@@ -644,7 +655,12 @@ void Dialog::Tab::CreateTabWindowPixel(const RECT& pixelRect, HWND parent)
 	m_Dpi = GetDpiForWindow(parent);
 
 	const DWORD style = DS_CONTROL | WS_CHILD | WS_CLIPSIBLINGS;
-	const DWORD exStyle = WS_EX_CONTROLPARENT;
+	// Each tab is a separate dialog. RTL layout does not propagate to dialog
+	// pages, so copy it explicitly from the parent dialog before creating the
+	// page and its native child controls.
+	const DWORD parentExStyle = static_cast<DWORD>(GetWindowLongPtr(parent, GWL_EXSTYLE));
+	const DWORD exStyle = WS_EX_CONTROLPARENT |
+		(parentExStyle & WS_EX_LAYOUTRTL);
 	const short w = (short)(pixelRect.right - pixelRect.left);
 	const short h = (short)(pixelRect.bottom - pixelRect.top);
 	Show(L"", 0, 0, w, h, style, exStyle, parent, true);
@@ -675,6 +691,16 @@ RECT Dialog::Tab::GetLayoutRect(UINT dpi)
 Dialog::Tab::~Tab()
 {
 	if (m_Window) DestroyWindow(m_Window);
+}
+
+void Dialog::Tab::ResetWindow()
+{
+	if (m_Window)
+	{
+		DestroyWindow(m_Window);
+		m_Window = nullptr;
+	}
+	m_Initialized = false;
 }
 
 void Dialog::Tab::Activate()

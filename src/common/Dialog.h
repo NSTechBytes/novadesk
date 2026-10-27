@@ -64,6 +64,9 @@ protected:
 		bool IsInitialized() { return m_Initialized; }
 		virtual void Create(HWND owner) = 0;
 		void Activate();
+		// Destroys the native page so it can be created again after a live
+		// layout-direction change. The Tab object and its state remain valid.
+		void ResetWindow();
 		void UpdateDpi(UINT dpi) { m_Dpi = dpi; }
 		void SetParentDesignSize(const SIZE& size) { m_ParentDesignSize = size; }
 		RECT GetLayoutRect(UINT dpi);
@@ -112,6 +115,7 @@ protected:
 
 	void AddTab(WORD controlId, Tab& tab, const WCHAR* text);
 	void AddPage(Tab& tab);
+	void ResetTabs();
 	void SelectTab(int index);
 	Tab& GetActiveTab();
 	virtual void ActivateTab();
