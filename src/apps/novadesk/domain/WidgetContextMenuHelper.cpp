@@ -121,31 +121,37 @@ int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
 
   if (showDefaultItems) {
     if (!customMenu.empty()) {
-      AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+      MenuUtils::AppendItem(hMenu, MF_SEPARATOR, 0, nullptr);
     }
 
     HMENU hManageMenu = CreatePopupMenu();
 
     HMENU hZPosMenu = CreatePopupMenu();
-    AppendMenuW(hZPosMenu,
-                MF_STRING | (windowZPos == ZPOSITION_NORMAL ? MF_CHECKED : 0),
-                CMD_MANAGE_ZPOS_NORMAL, Loc("context.zpos.normal", L"Normal").c_str());
-    AppendMenuW(hZPosMenu,
-                MF_STRING |
-                    (windowZPos == ZPOSITION_ONDESKTOP ? MF_CHECKED : 0),
-                CMD_MANAGE_ZPOS_DESKTOP, Loc("context.zpos.onDesktop", L"OnDesktop").c_str());
-    AppendMenuW(hZPosMenu,
-                MF_STRING | (windowZPos == ZPOSITION_ONTOP ? MF_CHECKED : 0),
-                CMD_MANAGE_ZPOS_ONTOP, Loc("context.zpos.onTop", L"OnTop").c_str());
-    AppendMenuW(hZPosMenu,
-                MF_STRING |
-                    (windowZPos == ZPOSITION_ONTOPMOST ? MF_CHECKED : 0),
-                CMD_MANAGE_ZPOS_ONTOPMOST, Loc("context.zpos.onTopMost", L"OnTopMost").c_str());
-    AppendMenuW(hZPosMenu,
-                MF_STRING | (windowZPos == ZPOSITION_ONBOTTOM ? MF_CHECKED : 0),
-                CMD_MANAGE_ZPOS_BOTTOM, Loc("context.zpos.bottom", L"Bottom").c_str());
-    AppendMenuW(hManageMenu, MF_POPUP, (UINT_PTR)hZPosMenu,
-                Loc("context.zPosition", L"Zpos").c_str());
+    MenuUtils::AppendItem(
+        hZPosMenu,
+        MF_STRING | (windowZPos == ZPOSITION_NORMAL ? MF_CHECKED : 0),
+        CMD_MANAGE_ZPOS_NORMAL, Loc("context.zpos.normal", L"Normal").c_str());
+    MenuUtils::AppendItem(
+        hZPosMenu,
+        MF_STRING | (windowZPos == ZPOSITION_ONDESKTOP ? MF_CHECKED : 0),
+        CMD_MANAGE_ZPOS_DESKTOP,
+        Loc("context.zpos.onDesktop", L"OnDesktop").c_str());
+    MenuUtils::AppendItem(
+        hZPosMenu,
+        MF_STRING | (windowZPos == ZPOSITION_ONTOP ? MF_CHECKED : 0),
+        CMD_MANAGE_ZPOS_ONTOP, Loc("context.zpos.onTop", L"OnTop").c_str());
+    MenuUtils::AppendItem(
+        hZPosMenu,
+        MF_STRING | (windowZPos == ZPOSITION_ONTOPMOST ? MF_CHECKED : 0),
+        CMD_MANAGE_ZPOS_ONTOPMOST,
+        Loc("context.zpos.onTopMost", L"OnTopMost").c_str());
+    MenuUtils::AppendItem(
+        hZPosMenu,
+        MF_STRING | (windowZPos == ZPOSITION_ONBOTTOM ? MF_CHECKED : 0),
+        CMD_MANAGE_ZPOS_BOTTOM, Loc("context.zpos.bottom", L"Bottom").c_str());
+    MenuUtils::AppendItem(hManageMenu, MF_POPUP,
+                          reinterpret_cast<UINT_PTR>(hZPosMenu),
+                          Loc("context.zPosition", L"Zpos").c_str());
 
     HMENU hOpacityMenu = CreatePopupMenu();
     for (int i = 0; i <= 100; i += 10) {
@@ -153,29 +159,39 @@ int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
       const std::wstring label = std::to_wstring(i) + L"%";
       const bool isCurrent = std::abs(static_cast<int>(options.windowOpacity) -
                                       static_cast<int>(targetOpacity)) < 5;
-      AppendMenuW(hOpacityMenu, MF_STRING | (isCurrent ? MF_CHECKED : 0),
-                  CMD_MANAGE_OPACITY_START + (i / 10), label.c_str());
+      MenuUtils::AppendItem(hOpacityMenu,
+                            MF_STRING | (isCurrent ? MF_CHECKED : 0),
+                            CMD_MANAGE_OPACITY_START + (i / 10), label.c_str());
     }
-    AppendMenuW(hManageMenu, MF_POPUP, (UINT_PTR)hOpacityMenu,
-                Loc("context.opacity", L"Opacity").c_str());
-    AppendMenuW(hManageMenu, MF_SEPARATOR, 0, nullptr);
+    MenuUtils::AppendItem(hManageMenu, MF_POPUP,
+                          reinterpret_cast<UINT_PTR>(hOpacityMenu),
+                          Loc("context.opacity", L"Opacity").c_str());
+    MenuUtils::AppendItem(hManageMenu, MF_SEPARATOR, 0, nullptr);
 
-    AppendMenuW(hManageMenu, MF_STRING | (options.draggable ? MF_CHECKED : 0),
-                CMD_MANAGE_DRAGGABLE, Loc("context.draggable", L"Draggable").c_str());
-    AppendMenuW(hManageMenu,
-                MF_STRING | (options.clickThrough ? MF_CHECKED : 0),
-                CMD_MANAGE_CLICKTHROUGH, Loc("context.clickThrough", L"Clickthrough").c_str());
-    AppendMenuW(hManageMenu, MF_STRING | (options.snapEdges ? MF_CHECKED : 0),
-                CMD_MANAGE_SNAPEDGES, Loc("context.snapEdges", L"Snap to Edges").c_str());
-    AppendMenuW(hManageMenu,
-                MF_STRING | (options.keepOnScreen ? MF_CHECKED : 0),
-                CMD_MANAGE_KEEPOFFSCREEN, Loc("context.keepOnScreen", L"Keep On Screen").c_str());
-    AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hManageMenu,
-                Loc("context.manage", L"Manage").c_str());
+    MenuUtils::AppendItem(hManageMenu,
+                          MF_STRING | (options.draggable ? MF_CHECKED : 0),
+                          CMD_MANAGE_DRAGGABLE,
+                          Loc("context.draggable", L"Draggable").c_str());
+    MenuUtils::AppendItem(hManageMenu,
+                          MF_STRING | (options.clickThrough ? MF_CHECKED : 0),
+                          CMD_MANAGE_CLICKTHROUGH,
+                          Loc("context.clickThrough", L"Clickthrough").c_str());
+    MenuUtils::AppendItem(hManageMenu,
+                          MF_STRING | (options.snapEdges ? MF_CHECKED : 0),
+                          CMD_MANAGE_SNAPEDGES,
+                          Loc("context.snapEdges", L"Snap to Edges").c_str());
+    MenuUtils::AppendItem(hManageMenu,
+                          MF_STRING | (options.keepOnScreen ? MF_CHECKED : 0),
+                          CMD_MANAGE_KEEPOFFSCREEN,
+                          Loc("context.keepOnScreen", L"Keep On Screen").c_str());
+    MenuUtils::AppendItem(hMenu, MF_POPUP,
+                          reinterpret_cast<UINT_PTR>(hManageMenu),
+                          Loc("context.manage", L"Manage").c_str());
 
     if (hasSettings) {
-      AppendMenuW(hMenu, MF_STRING, CMD_OPEN_SETTINGS,
-                  Loc("context.settingsPanel", L"SettingsPanel").c_str());
+      MenuUtils::AppendItem(hMenu, MF_STRING, CMD_OPEN_SETTINGS,
+                            Loc("context.settingsPanel", L"SettingsPanel")
+                                .c_str());
     }
 
     HMENU hAppMenu = CreatePopupMenu();
@@ -189,26 +205,44 @@ int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
     const bool useHwAccel =
         Settings::GetGlobalBool("useHardwareAcceleration", false);
 
-    AppendMenuW(hSettingsMenu, MF_STRING | (enableLogging ? MF_CHECKED : 0),
-                CMD_SETTINGS_ENABLE_LOGGING, Loc("context.enableLogging", L"Enable Logging").c_str());
-    AppendMenuW(hSettingsMenu, MF_STRING | (enableDebugging ? MF_CHECKED : 0),
-                CMD_SETTINGS_ENABLE_DEBUGGING, Loc("context.enableDebugging", L"Enable Debugging").c_str());
-    AppendMenuW(hSettingsMenu, MF_STRING | (saveLogToFile ? MF_CHECKED : 0),
-                CMD_SETTINGS_SAVE_LOG_TO_FILE, Loc("context.saveLogToFile", L"Save Log to file").c_str());
-    AppendMenuW(hSettingsMenu, MF_STRING | (useHwAccel ? MF_CHECKED : 0),
-                CMD_SETTINGS_USE_HW_ACCEL, Loc("context.useHardwareAcceleration", L"Use hardware acceleration").c_str());
-    AppendMenuW(hSettingsMenu, MF_STRING, CMD_SETTINGS_CLEAR_IMAGE_CACHE,
-                Loc("context.clearImageCache", L"Clear Image Cache").c_str());
-    AppendMenuW(hSettingsMenu, MF_STRING, CMD_SETTINGS_CLEAR_FONT_CACHE,
-                Loc("context.clearFontCache", L"Clear Font Cache").c_str());
+    MenuUtils::AppendItem(
+        hSettingsMenu, MF_STRING | (enableLogging ? MF_CHECKED : 0),
+        CMD_SETTINGS_ENABLE_LOGGING,
+        Loc("context.enableLogging", L"Enable Logging").c_str());
+    MenuUtils::AppendItem(
+        hSettingsMenu, MF_STRING | (enableDebugging ? MF_CHECKED : 0),
+        CMD_SETTINGS_ENABLE_DEBUGGING,
+        Loc("context.enableDebugging", L"Enable Debugging").c_str());
+    MenuUtils::AppendItem(
+        hSettingsMenu, MF_STRING | (saveLogToFile ? MF_CHECKED : 0),
+        CMD_SETTINGS_SAVE_LOG_TO_FILE,
+        Loc("context.saveLogToFile", L"Save Log to file").c_str());
+    MenuUtils::AppendItem(
+        hSettingsMenu, MF_STRING | (useHwAccel ? MF_CHECKED : 0),
+        CMD_SETTINGS_USE_HW_ACCEL,
+        Loc("context.useHardwareAcceleration", L"Use hardware acceleration")
+            .c_str());
+    MenuUtils::AppendItem(hSettingsMenu, MF_STRING,
+                          CMD_SETTINGS_CLEAR_IMAGE_CACHE,
+                          Loc("context.clearImageCache", L"Clear Image Cache")
+                              .c_str());
+    MenuUtils::AppendItem(hSettingsMenu, MF_STRING,
+                          CMD_SETTINGS_CLEAR_FONT_CACHE,
+                          Loc("context.clearFontCache", L"Clear Font Cache")
+                              .c_str());
 
-    AppendMenuW(hAppMenu, MF_POPUP, (UINT_PTR)hSettingsMenu,
-                Loc("context.settings", L"Settings").c_str());
-    AppendMenuW(hAppMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(hAppMenu, MF_STRING, CMD_REFRESH, Loc("context.refresh", L"Refresh").c_str());
-    AppendMenuW(hAppMenu, MF_STRING, CMD_EXIT, Loc("context.exit", L"Exit").c_str());
+    MenuUtils::AppendItem(hAppMenu, MF_POPUP,
+                          reinterpret_cast<UINT_PTR>(hSettingsMenu),
+                          Loc("context.settings", L"Settings").c_str());
+    MenuUtils::AppendItem(hAppMenu, MF_SEPARATOR, 0, nullptr);
+    MenuUtils::AppendItem(hAppMenu, MF_STRING, CMD_REFRESH,
+                          Loc("context.refresh", L"Refresh").c_str());
+    MenuUtils::AppendItem(hAppMenu, MF_STRING, CMD_EXIT,
+                          Loc("context.exit", L"Exit").c_str());
     std::wstring appTitle = PathUtils::GetProductName();
-    AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hAppMenu, appTitle.c_str());
+    MenuUtils::AppendItem(hMenu, MF_POPUP,
+                          reinterpret_cast<UINT_PTR>(hAppMenu),
+                          appTitle.c_str());
   }
 
   Widget::SetMenuActive(true);
@@ -227,9 +261,11 @@ int ShowContextMenu(HWND hWnd, const std::vector<MenuItem> &customMenu,
 
   WindowsTheme::PrepareMenu(hWnd);
 
-  const int cmd = TrackPopupMenu(
+  // Same pattern as Rainmeter ContextMenu::DisplayMenu: TPM_LEFTALIGN and
+  // TPM_LAYOUTRTL (applied inside MenuUtils::TrackPopup when UI is RTL).
+  const int cmd = MenuUtils::TrackPopup(
       hMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_LEFTALIGN,
-      pt.x, pt.y, 0, hWnd, NULL);
+      pt.x, pt.y, hWnd);
   DestroyMenu(hMenu);
 
   Widget::SetMenuActive(false);

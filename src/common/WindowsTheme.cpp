@@ -467,12 +467,35 @@ static bool ShouldDeferPaint(UINT msg, ControlType type) {
   }
 }
 
+void SetControlSubclass(HWND w, ControlType type);
+
+static void ThemeComboDropList(HWND combo) {
+  if (!combo || !IsWindow(combo)) return;
+  auto &state = GetState();
+  const bool dark = state.isDarkMode.load();
+  COMBOBOXINFO info = {sizeof(COMBOBOXINFO)};
+  if (!GetComboBoxInfo(combo, &info) || !info.hwndList) return;
+  if (state.pfnAllowDarkModeForWindow)
+    state.pfnAllowDarkModeForWindow(info.hwndList, dark);
+  SetWindowTheme(info.hwndList, dark ? L"DarkMode_Explorer" : L"Explorer",
+                 nullptr);
+  if (dark) SetControlSubclass(info.hwndList, ControlType::ListBox);
+}
+
 LRESULT CALLBACK ControlProc(HWND w, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR data) {
   const auto type = (ControlType)data;
   if (msg == WM_NCDESTROY) { RemoveWindowSubclass(w, ControlProc, id); return DefSubclassProc(w, msg, wp, lp); }
 
   // Forward non-paint if dark mode is off
   if (!WindowsTheme::IsUsingDarkMode()) return DefSubclassProc(w, msg, wp, lp);
+
+  // Re-apply dark theme to the popup list/scrollbar when the drop-down opens.
+  // GetComboBoxInfo can succeed before first open, but theming is cheapest and
+  // most reliable right as the list becomes visible.
+  if (type == ControlType::ComboBox &&
+      ((msg == CB_SHOWDROPDOWN && wp) || msg == WM_LBUTTONDOWN)) {
+    ThemeComboDropList(w);
+  }
 
   // Edit: intercept NC painting for border
   if (type == ControlType::Edit) {
@@ -747,15 +770,22 @@ void ApplyToControl(HWND w) {
     SetWindowTheme(w, dark ? L"DarkMode_Explorer" : (isCheck ? L"" : L"Explorer"), nullptr);
     if (dark && (type != BS_OWNERDRAW)) SetControlSubclass(w, ControlType::Button);
   } else if (_wcsicmp(cls, L"COMBOBOX") == 0) {
-    SetWindowTheme(w, dark ? L"CFD" : L"", nullptr);
+    SetWindowTheme(w, dark ? L"DarkMode_CFD" : L"", nullptr);
     const DWORD style = (DWORD)GetWindowLongPtrW(w, GWL_STYLE);
-    if (dark && !(style & (CBS_OWNERDRAWFIXED | CBS_OWNERDRAWVARIABLE)) && (style & CBS_DROPDOWNLIST) != CBS_SIMPLE) {
+    COMBOBOXINFO info = {sizeof(COMBOBOXINFO)};
+    if (GetComboBoxInfo(w, &info) && info.hwndList) {
+      // Theme the popup list so its scrollbar matches dark mode. Without this,
+      // custom list painting is dark while the scroll bar stays light/white.
+      if (state.pfnAllowDarkModeForWindow)
+        state.pfnAllowDarkModeForWindow(info.hwndList, dark);
+      SetWindowTheme(info.hwndList,
+                     dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
+    }
+    if (dark && !(style & (CBS_OWNERDRAWFIXED | CBS_OWNERDRAWVARIABLE)) &&
+        (style & CBS_DROPDOWNLIST) != CBS_SIMPLE) {
       SetControlSubclass(w, ControlType::ComboBox);
-      COMBOBOXINFO info = {sizeof(COMBOBOXINFO)};
-      if (GetComboBoxInfo(w, &info) && info.hwndList) {
-        if (state.pfnAllowDarkModeForWindow) state.pfnAllowDarkModeForWindow(info.hwndList, dark);
+      if (info.hwndList)
         SetControlSubclass(info.hwndList, ControlType::ListBox);
-      }
     }
   } else if (_wcsicmp(cls, L"EDIT") == 0) {
     SetWindowTheme(w, dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);

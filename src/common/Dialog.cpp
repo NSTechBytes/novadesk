@@ -611,7 +611,15 @@ UINT Dialog::ShowMenuButtonPopupMenu(HMENU menu, HWND button, HWND window, UINT 
 	};
 	c_PopupMenuFilterHook = SetWindowsHookEx(WH_MSGFILTER, popupMenuFilter, nullptr, GetCurrentThreadId());
 
-	const UINT flags = TPM_RIGHTBUTTON | TPM_LEFTALIGN | extraFlags;
+	UINT flags = TPM_RIGHTBUTTON | extraFlags;
+	if (rtl) {
+#ifndef TPM_LAYOUTRTL
+#define TPM_LAYOUTRTL 0x00008000L
+#endif
+		flags |= TPM_LAYOUTRTL | TPM_RIGHTALIGN;
+	} else {
+		flags |= TPM_LEFTALIGN;
+	}
 	const int x = rtl ? rect.right : rect.left;
 	const UINT result = ::TrackPopupMenu(menu, flags, x, --rect.bottom, 0, window, nullptr);
 	if (c_PopupMenuFilterHook)

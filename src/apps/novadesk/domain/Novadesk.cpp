@@ -1162,8 +1162,8 @@ static void ShowTrayMenuInternal(int trayId, const std::vector<MenuItem> *menu,
   MenuUtils::BuildMenu(hMenu, useMenu);
   SetForegroundWindow(state->hWnd);
   WindowsTheme::PrepareMenu(state->hWnd);
-  TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0,
-                 state->hWnd, nullptr);
+  MenuUtils::TrackPopup(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y,
+                        state->hWnd);
   DestroyMenu(hMenu);
 }
 

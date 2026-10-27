@@ -1423,8 +1423,14 @@ static void ShowTrayMenu(HWND hWnd) {
   POINT pt{};
   GetCursorPos(&pt);
   SetForegroundWindow(hWnd);
-  TrackPopupMenu(g_trayMenu, TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, pt.x, pt.y, 0,
-                 hWnd, nullptr);
+  UINT trayFlags = TPM_RIGHTBUTTON | TPM_BOTTOMALIGN;
+  if (Localization::IsRtl()) {
+#ifndef TPM_LAYOUTRTL
+#define TPM_LAYOUTRTL 0x00008000L
+#endif
+    trayFlags |= TPM_LAYOUTRTL | TPM_RIGHTALIGN;
+  }
+  TrackPopupMenu(g_trayMenu, trayFlags, pt.x, pt.y, 0, hWnd, nullptr);
   PostMessageW(hWnd, kTrayMenuCommand, 0, 0);
 }
 
@@ -1634,9 +1640,27 @@ static void ShowLogsContextMenu(HWND hWnd, int x, int y) {
 
   AppendMenuW(menu, MF_STRING, kLogMenuCopyMessage, L"Copy Message");
   AppendMenuW(menu, MF_STRING, kLogMenuCopyFullLog, L"Copy Full Log");
+  if (Localization::IsRtl()) {
+    for (int i = 0, n = GetMenuItemCount(menu); i < n; ++i) {
+      MENUITEMINFOW info{};
+      info.cbSize = sizeof(info);
+      info.fMask = MIIM_FTYPE;
+      if (!GetMenuItemInfoW(menu, i, TRUE, &info))
+        continue;
+      info.fType |= MFT_RIGHTORDER | MFT_RIGHTJUSTIFY;
+      SetMenuItemInfoW(menu, i, TRUE, &info);
+    }
+  }
   SetForegroundWindow(hWnd);
-  const UINT cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x,
-                                  pt.y, 0, hWnd, nullptr);
+  UINT logMenuFlags = TPM_RETURNCMD | TPM_RIGHTBUTTON;
+  if (Localization::IsRtl()) {
+#ifndef TPM_LAYOUTRTL
+#define TPM_LAYOUTRTL 0x00008000L
+#endif
+    logMenuFlags |= TPM_LAYOUTRTL | TPM_RIGHTALIGN;
+  }
+  const UINT cmd =
+      TrackPopupMenu(menu, logMenuFlags, pt.x, pt.y, 0, hWnd, nullptr);
   DestroyMenu(menu);
   // Ensure the popup menu is dismissed reliably after TrackPopupMenu.
   PostMessageW(hWnd, WM_NULL, 0, 0);

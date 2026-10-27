@@ -118,9 +118,9 @@ bool ShowInputBoxContextMenu(Widget &widget, InputBoxElement *inputElem,
 
   WindowsTheme::PrepareMenu(hWnd);
 
-  const int cmd = TrackPopupMenu(
+  const int cmd = MenuUtils::TrackPopup(
       hMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_LEFTALIGN,
-      screenPt.x, screenPt.y, 0, hWnd, NULL);
+      screenPt.x, screenPt.y, hWnd);
   DestroyMenu(hMenu);
 
   Widget::SetMenuActive(false);
