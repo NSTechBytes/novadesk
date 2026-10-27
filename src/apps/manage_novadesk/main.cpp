@@ -2430,16 +2430,22 @@ public:
       g_cboLanguage = CreateWindowExW(
           Localization::IsRtl() ? WS_EX_RTLREADING : 0, WC_COMBOBOXW, L"",
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
-          140, 240, 260, 360, m_Window,
+          140, 240, 360, 360, m_Window,
           reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdLanguage)),
           GetModuleHandleW(nullptr), nullptr);
       const std::string currentLanguage = CommonSettings::GetUiLanguage();
       int selectedLanguage = 0;
       int languageIndex = 0;
       for (const auto &language : Localization::SupportedLanguages()) {
+        std::wstring label = language.nativeName;
+        if (language.englishName && language.englishName[0] &&
+            _wcsicmp(language.nativeName, language.englishName) != 0) {
+          label += L" - ";
+          label += language.englishName;
+        }
         const int added = static_cast<int>(SendMessageW(
             g_cboLanguage, CB_ADDSTRING, 0,
-            reinterpret_cast<LPARAM>(language.nativeName)));
+            reinterpret_cast<LPARAM>(label.c_str())));
         SendMessageW(g_cboLanguage, CB_SETITEMDATA, added,
                      reinterpret_cast<LPARAM>(language.tag));
         if (currentLanguage == language.tag) selectedLanguage = languageIndex;
@@ -2515,7 +2521,7 @@ public:
       const int bh = 30;            // button height
       if (g_settingsTitle)              MoveWindow(g_settingsTitle,              L,       16, sw,       20, TRUE);
       if (g_lblLanguage)                MoveWindow(g_lblLanguage,                L,      244, 120,      24, TRUE);
-      if (g_cboLanguage)                MoveWindow(g_cboLanguage,            L + 124,  240, 260,     360, TRUE);
+      if (g_cboLanguage)                MoveWindow(g_cboLanguage,            L + 124,  240, 360,     360, TRUE);
       if (g_chkRunOnStartup)            MoveWindow(g_chkRunOnStartup,            L,       50, sw,       ch, TRUE);
       if (g_btnCheckUpdates)            MoveWindow(g_btnCheckUpdates,            L,       86, 200,      bh, TRUE);
       if (g_chkAutoUpdate)              MoveWindow(g_chkAutoUpdate,          L + 216,    90, sw - 216, ch, TRUE);

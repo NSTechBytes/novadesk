@@ -7,6 +7,7 @@ namespace Localization {
 struct Language {
   const char *tag;
   const wchar_t *nativeName;
+  const wchar_t *englishName;
   bool rtl;
 };
 
