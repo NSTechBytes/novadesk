@@ -21,6 +21,7 @@
 #include <gdiplus.h>
 #include <string>
 #include <vector>
+#include <deque>
 #include <unordered_set>
 #include <unordered_map>
 #include <filesystem>
@@ -136,6 +137,15 @@ static HANDLE g_novadeskLogRead = nullptr;
 static HANDLE g_novadeskLogWrite = nullptr;
 static HANDLE g_novadeskLogThread = nullptr;
 static std::wstring g_pendingLogLine;
+struct ManagedLogRow {
+  std::wstring time;
+  std::wstring source;
+  std::wstring level;
+  std::wstring message;
+};
+// Newest entries at the front. Survives lazy Logs-tab creation so pipe
+// output captured before the list exists is not discarded.
+static std::deque<ManagedLogRow> g_logRows;
 static int g_activeTab = 0;
 static int g_logsMessageColumnWidth = 600;
 static std::unordered_map<std::wstring, std::wstring> g_savedLoadedScripts;
@@ -1675,49 +1685,54 @@ static void ShowLogsContextMenu(HWND hWnd, int x, int y) {
   }
 }
 
-static void AppendLogRow(const std::wstring &time, const std::wstring &source,
-                         const std::wstring &level,
-                         const std::wstring &message) {
+static void InsertLogRowIntoList(const ManagedLogRow &row) {
   if (!g_logsList)
     return;
-
-  const int first = ListView_GetItemCount(g_logsList) > 0 ? 0 : -1;
-  if (first >= 0) {
-    const std::wstring firstTime = GetListViewText(g_logsList, first, 0);
-    const std::wstring firstSource = GetListViewText(g_logsList, first, 1);
-    const std::wstring firstLevel = GetListViewText(g_logsList, first, 2);
-    const std::wstring firstMessage = GetListViewText(g_logsList, first, 3);
-    if (time == firstTime && source == firstSource && level == firstLevel &&
-        message == firstMessage) {
-      return;
-    }
-  }
 
   LVITEMW item{};
   item.mask = LVIF_TEXT;
   item.iItem = 0;
-  item.pszText = const_cast<wchar_t *>(time.c_str());
-  int row = ListView_InsertItem(g_logsList, &item);
-  ListView_SetItemText(g_logsList, row, 1,
-                       const_cast<wchar_t *>(source.c_str()));
-  ListView_SetItemText(g_logsList, row, 2,
-                       const_cast<wchar_t *>(level.c_str()));
-  ListView_SetItemText(g_logsList, row, 3,
-                       const_cast<wchar_t *>(message.c_str()));
-  AutoExpandLogsMessageColumn(message);
+  item.pszText = const_cast<wchar_t *>(row.time.c_str());
+  const int index = ListView_InsertItem(g_logsList, &item);
+  ListView_SetItemText(g_logsList, index, 1,
+                       const_cast<wchar_t *>(row.source.c_str()));
+  ListView_SetItemText(g_logsList, index, 2,
+                       const_cast<wchar_t *>(row.level.c_str()));
+  ListView_SetItemText(g_logsList, index, 3,
+                       const_cast<wchar_t *>(row.message.c_str()));
+  AutoExpandLogsMessageColumn(row.message);
 
   while (ListView_GetItemCount(g_logsList) > kMaxLogRows) {
     const int last = ListView_GetItemCount(g_logsList) - 1;
-    if (last >= 0) {
+    if (last >= 0)
       ListView_DeleteItem(g_logsList, last);
-    } else {
+    else
       break;
+  }
+
+  if (ListView_GetItemCount(g_logsList) > 0)
+    ListView_EnsureVisible(g_logsList, 0, FALSE);
+}
+
+static void AppendLogRow(const std::wstring &time, const std::wstring &source,
+                         const std::wstring &level,
+                         const std::wstring &message) {
+  if (!g_logRows.empty()) {
+    const ManagedLogRow &first = g_logRows.front();
+    if (time == first.time && source == first.source && level == first.level &&
+        message == first.message) {
+      return;
     }
   }
 
-  if (ListView_GetItemCount(g_logsList) > 0) {
-    ListView_EnsureVisible(g_logsList, 0, FALSE);
-  }
+  g_logRows.push_front(ManagedLogRow{time, source, level, message});
+  while (static_cast<int>(g_logRows.size()) > kMaxLogRows)
+    g_logRows.pop_back();
+
+  // Logs list is created lazily with the Logs tab. Buffer until then so
+  // Novadesk stdout captured at startup is not dropped.
+  if (g_logsList)
+    InsertLogRowIntoList(g_logRows.front());
 }
 
 static void ParseAndAppendLogLine(const std::wstring &line) {
@@ -1942,14 +1957,28 @@ static void UpdateButtonState() {
 static void RefreshLogsView() {
   if (!g_logsList)
     return;
+
+  // Already in sync with the in-memory buffer (live AppendLogRow path).
+  if (ListView_GetItemCount(g_logsList) == static_cast<int>(g_logRows.size()))
+    return;
+
+  SendMessageW(g_logsList, WM_SETREDRAW, FALSE, 0);
+  ListView_DeleteAllItems(g_logsList);
+  // g_logRows is newest-first; insert from back so index 0 stays newest.
+  for (auto it = g_logRows.rbegin(); it != g_logRows.rend(); ++it)
+    InsertLogRowIntoList(*it);
+  SendMessageW(g_logsList, WM_SETREDRAW, TRUE, 0);
+  RedrawWindow(g_logsList, nullptr, nullptr,
+               RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
+  if (!g_logRows.empty())
+    ListView_EnsureVisible(g_logsList, 0, FALSE);
 }
 
 static void OnClearLogs() {
-  if (!g_logsList)
-    return;
-
-  ListView_DeleteAllItems(g_logsList);
+  g_logRows.clear();
   g_pendingLogLine.clear();
+  if (g_logsList)
+    ListView_DeleteAllItems(g_logsList);
 }
 
 static bool ExecuteNovadeskCommandNoPath(const std::wstring &cmd) {
