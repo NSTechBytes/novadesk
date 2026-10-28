@@ -314,6 +314,11 @@ void DrawHeader(HWND w, HDC dc, RECT r) {
   }
 }
 
+// While the drop-down is open, Windows tracks the list highlight into the combo
+// selection/text. Keep painting the pre-drop selection so the closed label does
+// not change until the user confirms an item.
+constexpr wchar_t kComboAnchorSelProp[] = L"Novadesk.ComboAnchorSel";
+
 void DrawComboBox(HWND w, HDC dc, RECT r) {
   auto& st = GetState();
   FillRect(dc, &r, st.brBackground);
@@ -328,7 +333,27 @@ void DrawComboBox(HWND w, HDC dc, RECT r) {
       enabled ? st.brControlBg : st.brBackground);
   if (list) {
     RECT label = info.rcItem;
-    DrawLabel(w, dc, label, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+    const bool dropped = SendMessageW(w, CB_GETDROPPEDSTATE, 0, 0) != 0;
+    HANDLE anchor = dropped ? GetPropW(w, kComboAnchorSelProp) : nullptr;
+    if (anchor) {
+      const int sel = static_cast<int>(reinterpret_cast<INT_PTR>(anchor)) - 1;
+      WCHAR text[4096]{};
+      if (sel >= 0 &&
+          SendMessageW(w, CB_GETLBTEXT, sel, reinterpret_cast<LPARAM>(text)) !=
+              CB_ERR) {
+        DrawTextW(dc, text, -1, &label,
+                  DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX |
+                      DT_END_ELLIPSIS);
+      } else {
+        DrawLabel(w, dc, label,
+                  DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX |
+                      DT_END_ELLIPSIS);
+      }
+    } else {
+      DrawLabel(w, dc, label,
+                DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX |
+                    DT_END_ELLIPSIS);
+    }
     if (GetFocus() == w && !(SendMessageW(w, WM_QUERYUISTATE, 0, 0) & UISF_HIDEFOCUS))
       DrawFocusRect(dc, &info.rcItem);
   }
@@ -497,6 +522,16 @@ LRESULT CALLBACK ControlProc(HWND w, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id
   if (type == ControlType::ComboBox &&
       ((msg == CB_SHOWDROPDOWN && wp) || msg == WM_LBUTTONDOWN)) {
     ThemeComboDropList(w);
+  }
+  if (type == ControlType::ComboBox && msg == CB_SHOWDROPDOWN) {
+    if (wp) {
+      const int sel = static_cast<int>(SendMessageW(w, CB_GETCURSEL, 0, 0));
+      SetPropW(w, kComboAnchorSelProp,
+               reinterpret_cast<HANDLE>(static_cast<INT_PTR>(sel + 1)));
+    } else {
+      RemovePropW(w, kComboAnchorSelProp);
+      InvalidateRect(w, nullptr, FALSE);
+    }
   }
 
   // Edit: intercept NC painting for border

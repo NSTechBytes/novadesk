@@ -1985,14 +1985,21 @@ static void RefreshSettingsControls() {
                    : BST_UNCHECKED,
                0);
 
-  if (g_cboWindowsTheme) {
+  // Never CB_SETCURSEL while the drop-down is open — the settings timer
+  // otherwise snaps the highlight back to the saved theme (e.g. Dark) on
+  // every tick. Language combo is not refreshed here, which is why it was fine.
+  if (g_cboWindowsTheme &&
+      !SendMessageW(g_cboWindowsTheme, CB_GETDROPPEDSTATE, 0, 0)) {
     const std::string theme = CommonSettings::GetWindowsTheme();
     int selected = 0; // system
     if (theme == "light")
       selected = 1;
     else if (theme == "dark")
       selected = 2;
-    SendMessageW(g_cboWindowsTheme, CB_SETCURSEL, selected, 0);
+    const int current = static_cast<int>(
+        SendMessageW(g_cboWindowsTheme, CB_GETCURSEL, 0, 0));
+    if (current != selected)
+      SendMessageW(g_cboWindowsTheme, CB_SETCURSEL, selected, 0);
   }
 }
 
@@ -2570,7 +2577,21 @@ public:
           StartAsyncUpdateCheck(false);
           return TRUE;
         case kControlIdWindowsTheme:
-          if (HIWORD(wParam) == CBN_SELCHANGE) {
+          // Commit only on CBN_SELENDOK so hover/keyboard preview in the
+          // drop-down does not apply theme or stick a temporary label.
+          if (HIWORD(wParam) == CBN_DROPDOWN) {
+            SetWindowLongPtrW(g_cboWindowsTheme, GWLP_USERDATA,
+                              SendMessageW(g_cboWindowsTheme, CB_GETCURSEL, 0, 0));
+            return TRUE;
+          }
+          if (HIWORD(wParam) == CBN_SELENDCANCEL) {
+            const int previous = static_cast<int>(
+                GetWindowLongPtrW(g_cboWindowsTheme, GWLP_USERDATA));
+            if (previous >= 0)
+              SendMessageW(g_cboWindowsTheme, CB_SETCURSEL, previous, 0);
+            return TRUE;
+          }
+          if (HIWORD(wParam) == CBN_SELENDOK) {
             const int selected = static_cast<int>(
                 SendMessageW(g_cboWindowsTheme, CB_GETCURSEL, 0, 0));
             const char *tag = reinterpret_cast<const char *>(
@@ -2585,7 +2606,19 @@ public:
           }
           break;
         case kControlIdLanguage:
-          if (HIWORD(wParam) == CBN_SELCHANGE) {
+          if (HIWORD(wParam) == CBN_DROPDOWN) {
+            SetWindowLongPtrW(g_cboLanguage, GWLP_USERDATA,
+                              SendMessageW(g_cboLanguage, CB_GETCURSEL, 0, 0));
+            return TRUE;
+          }
+          if (HIWORD(wParam) == CBN_SELENDCANCEL) {
+            const int previous = static_cast<int>(
+                GetWindowLongPtrW(g_cboLanguage, GWLP_USERDATA));
+            if (previous >= 0)
+              SendMessageW(g_cboLanguage, CB_SETCURSEL, previous, 0);
+            return TRUE;
+          }
+          if (HIWORD(wParam) == CBN_SELENDOK) {
             const int selected = static_cast<int>(
                 SendMessageW(g_cboLanguage, CB_GETCURSEL, 0, 0));
             const char *tag = reinterpret_cast<const char *>(
