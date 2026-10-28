@@ -17,6 +17,7 @@
 #include <windowsx.h>
 #include <shlobj.h>
 #include <shellapi.h>
+#include <shlwapi.h>
 #include <wininet.h>
 #include <gdiplus.h>
 #include <string>
@@ -49,6 +50,7 @@
 #pragma comment(lib, "version.lib")
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "uxtheme.lib")
+#pragma comment(lib, "shlwapi.lib")
 
 // ============================================================================
 // Data Structures
@@ -98,6 +100,7 @@ static HWND g_btnRefreshAll = nullptr;
 static HWND g_btnClose = nullptr;
 static HWND g_tab = nullptr;
 static HWND g_logsList = nullptr;
+static HIMAGELIST g_logsImageList = nullptr;
 static HWND g_addonsList = nullptr;
 static HWND g_settingsPanel = nullptr;
 static HWND g_aboutPanel = nullptr;
@@ -181,6 +184,7 @@ static const int kControlIdAboutDocs = 202;
 static const int kControlIdAboutDonate = 203;
 static const int kLogMenuCopyMessage = 401;
 static const int kLogMenuCopyFullLog = 402;
+static const int kLogMenuCopyAllLogs = 403;
 static const UINT kLogAppendMessage = WM_APP + 20;
 static const UINT_PTR kLogsRefreshTimerId = 1;
 static const UINT_PTR kAutoUpdateTimerId = 2;
@@ -252,22 +256,15 @@ static void ShutdownGdiPlus() {
   }
 }
 
-static HBITMAP LoadScaledBitmapFromPng(const std::wstring &path, int maxWidth,
-                                       int maxHeight) {
-  if (path.empty() || maxWidth <= 0 || maxHeight <= 0) {
+static HBITMAP ScaleGdiplusBitmap(Gdiplus::Bitmap &source, int maxWidth,
+                                  int maxHeight) {
+  if (maxWidth <= 0 || maxHeight <= 0)
     return nullptr;
-  }
-
-  Gdiplus::Bitmap source(path.c_str());
-  if (source.GetLastStatus() != Gdiplus::Ok) {
-    return nullptr;
-  }
 
   const UINT srcW = source.GetWidth();
   const UINT srcH = source.GetHeight();
-  if (srcW == 0 || srcH == 0) {
+  if (srcW == 0 || srcH == 0)
     return nullptr;
-  }
 
   const double scaleW =
       static_cast<double>(maxWidth) / static_cast<double>(srcW);
@@ -289,11 +286,115 @@ static HBITMAP LoadScaledBitmapFromPng(const std::wstring &path, int maxWidth,
   graphics.DrawImage(&source, Gdiplus::Rect(0, 0, dstW, dstH));
 
   HBITMAP outBitmap = nullptr;
-  if (canvas.GetHBITMAP(Gdiplus::Color::Transparent, &outBitmap) !=
+  if (canvas.GetHBITMAP(Gdiplus::Color(0, 0, 0, 0), &outBitmap) !=
       Gdiplus::Ok) {
     return nullptr;
   }
   return outBitmap;
+}
+
+static HBITMAP LoadScaledBitmapFromPng(const std::wstring &path, int maxWidth,
+                                       int maxHeight) {
+  if (path.empty())
+    return nullptr;
+  Gdiplus::Bitmap source(path.c_str());
+  if (source.GetLastStatus() != Gdiplus::Ok)
+    return nullptr;
+  return ScaleGdiplusBitmap(source, maxWidth, maxHeight);
+}
+
+static HBITMAP LoadScaledBitmapFromPngResource(int resourceId, int maxWidth,
+                                               int maxHeight) {
+  HMODULE module = GetModuleHandleW(nullptr);
+  HRSRC resource = FindResourceW(module, MAKEINTRESOURCEW(resourceId), L"PNG");
+  if (!resource)
+    return nullptr;
+  const DWORD size = SizeofResource(module, resource);
+  HGLOBAL handle = LoadResource(module, resource);
+  if (!handle || size == 0)
+    return nullptr;
+  const void *data = LockResource(handle);
+  if (!data)
+    return nullptr;
+
+  IStream *stream = SHCreateMemStream(static_cast<const BYTE *>(data), size);
+  if (!stream)
+    return nullptr;
+
+  Gdiplus::Bitmap source(stream);
+  stream->Release();
+  if (source.GetLastStatus() != Gdiplus::Ok)
+    return nullptr;
+  return ScaleGdiplusBitmap(source, maxWidth, maxHeight);
+}
+
+enum LogIconIndex : int {
+  kLogIconDebug = 0,
+  kLogIconInfo = 1,
+  kLogIconWarning = 2,
+  kLogIconError = 3,
+  kLogIconCount = 4,
+};
+
+static constexpr int kLogIconSize = 16;
+
+static int LogLevelToIconIndex(const std::wstring &level) {
+  std::wstring normalized = level;
+  while (!normalized.empty() &&
+         (normalized.front() == L'[' || normalized.front() == L' '))
+    normalized.erase(normalized.begin());
+  while (!normalized.empty() &&
+         (normalized.back() == L']' || normalized.back() == L' '))
+    normalized.pop_back();
+  std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+                 ::towupper);
+
+  if (normalized == L"DEBUG" || normalized == L"DBG")
+    return kLogIconDebug;
+  if (normalized == L"WARN" || normalized == L"WARNING")
+    return kLogIconWarning;
+  if (normalized == L"ERROR" || normalized == L"ERR" ||
+      normalized == L"FATAL" || normalized == L"CRITICAL")
+    return kLogIconError;
+  // INFO / LOG / unknown → info icon
+  return kLogIconInfo;
+}
+
+static void DestroyLogsImageList() {
+  if (g_logsImageList) {
+    ImageList_Destroy(g_logsImageList);
+    g_logsImageList = nullptr;
+  }
+}
+
+static HIMAGELIST EnsureLogsImageList() {
+  if (g_logsImageList)
+    return g_logsImageList;
+
+  g_logsImageList =
+      ImageList_Create(kLogIconSize, kLogIconSize, ILC_COLOR32 | ILC_MASK,
+                       kLogIconCount, 1);
+  if (!g_logsImageList)
+    return nullptr;
+
+  const int resourceIds[kLogIconCount] = {
+      IDB_LOG_DEBUG, IDB_LOG_INFO, IDB_LOG_WARNING, IDB_LOG_ERROR};
+  for (int i = 0; i < kLogIconCount; ++i) {
+    HBITMAP bitmap =
+        LoadScaledBitmapFromPngResource(resourceIds[i], kLogIconSize,
+                                        kLogIconSize);
+    if (!bitmap) {
+      DestroyLogsImageList();
+      return nullptr;
+    }
+    if (ImageList_Add(g_logsImageList, bitmap, nullptr) < 0) {
+      DeleteObject(bitmap);
+      DestroyLogsImageList();
+      return nullptr;
+    }
+    DeleteObject(bitmap);
+  }
+  return g_logsImageList;
 }
 
 static const int kAboutLogoSize = 110;
@@ -1429,21 +1530,78 @@ static void EnsureTrayMenu() {
   AppendMenuW(g_trayMenu, MF_STRING, kTrayMenuExitId, Tr("manage.button.exit", L"Exit").c_str());
 }
 
+#ifndef TPM_LAYOUTRTL
+#define TPM_LAYOUTRTL 0x00008000L
+#endif
+
+// Match Novadesk MenuUtils::TrackPopup / Rainmeter DisplayMenu.
+// Manage dialogs use WS_EX_LAYOUTRTL; that conflicts with TPM_LAYOUTRTL and
+// leaves popup item text LTR. Clear the owner style for the menu loop only.
+static int TrackRtlAwarePopup(HMENU menu, UINT flags, int x, int y,
+                              HWND owner) {
+  if (!menu)
+    return 0;
+
+  DWORD previousLayout = 0;
+  LONG_PTR previousExStyle = 0;
+  bool clearedOwnerRtl = false;
+  const bool rtl = Localization::IsRtl();
+
+  if (rtl) {
+    GetProcessDefaultLayout(&previousLayout);
+    SetProcessDefaultLayout(LAYOUT_RTL);
+    flags = (flags & ~TPM_RIGHTALIGN) | TPM_LEFTALIGN | TPM_LAYOUTRTL;
+  }
+
+  if (owner && IsWindow(owner)) {
+    if (rtl) {
+      previousExStyle = GetWindowLongPtrW(owner, GWL_EXSTYLE);
+      if (previousExStyle & WS_EX_LAYOUTRTL) {
+        SetWindowLongPtrW(owner, GWL_EXSTYLE,
+                          previousExStyle & ~static_cast<LONG_PTR>(WS_EX_LAYOUTRTL));
+        clearedOwnerRtl = true;
+      }
+    }
+
+    HWND foregroundWindow = GetForegroundWindow();
+    if (foregroundWindow && foregroundWindow != owner) {
+      const DWORD foregroundThreadID =
+          GetWindowThreadProcessId(foregroundWindow, nullptr);
+      const DWORD currentThreadID = GetCurrentThreadId();
+      AttachThreadInput(currentThreadID, foregroundThreadID, TRUE);
+      SetForegroundWindow(owner);
+      AttachThreadInput(currentThreadID, foregroundThreadID, FALSE);
+    } else {
+      SetForegroundWindow(owner);
+    }
+
+    WindowsTheme::PrepareMenu(owner);
+  }
+
+  const int result = static_cast<int>(
+      TrackPopupMenu(menu, flags, x, y, 0, owner, nullptr));
+
+  if (clearedOwnerRtl && owner && IsWindow(owner))
+    SetWindowLongPtrW(owner, GWL_EXSTYLE, previousExStyle);
+
+  if (rtl)
+    SetProcessDefaultLayout(previousLayout);
+
+  if (owner && IsWindow(owner))
+    PostMessageW(owner, WM_NULL, 0, 0);
+
+  return result;
+}
+
 static void ShowTrayMenu(HWND hWnd) {
   EnsureTrayMenu();
   ModifyMenuW(g_trayMenu, kTrayMenuShowHideId, MF_BYCOMMAND | MF_STRING,
               kTrayMenuShowHideId, IsWindowVisible(hWnd) ? Tr("manage.button.hide", L"Hide").c_str() : Tr("manage.button.show", L"Show").c_str());
   POINT pt{};
   GetCursorPos(&pt);
-  SetForegroundWindow(hWnd);
-  UINT trayFlags = TPM_RIGHTBUTTON | TPM_BOTTOMALIGN;
-  if (Localization::IsRtl()) {
-#ifndef TPM_LAYOUTRTL
-#define TPM_LAYOUTRTL 0x00008000L
-#endif
-    trayFlags |= TPM_LAYOUTRTL | TPM_RIGHTALIGN;
-  }
-  TrackPopupMenu(g_trayMenu, trayFlags, pt.x, pt.y, 0, hWnd, nullptr);
+  TrackRtlAwarePopup(g_trayMenu,
+                     TPM_RIGHTBUTTON | TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x,
+                     pt.y, hWnd);
   PostMessageW(hWnd, kTrayMenuCommand, 0, 0);
 }
 
@@ -1604,8 +1762,25 @@ static void AutoExpandLogsMessageColumn(const std::wstring &message) {
   const int desiredWidth = textWidth + 24;
   if (desiredWidth > g_logsMessageColumnWidth) {
     g_logsMessageColumnWidth = desiredWidth;
+    // Columns: Level, Time, Source, Message
     ListView_SetColumnWidth(g_logsList, 3, g_logsMessageColumnWidth);
   }
+}
+
+static std::wstring FormatLogRowLine(const ManagedLogRow &row) {
+  return L"[" + row.time + L"] [" + row.source + L"] [" + row.level + L"] " +
+         row.message;
+}
+
+static std::wstring BuildAllLogsClipboardText() {
+  // g_logRows is newest-first; emit oldest-first for readable paste order.
+  std::wstring out;
+  for (auto it = g_logRows.rbegin(); it != g_logRows.rend(); ++it) {
+    if (!out.empty())
+      out += L"\r\n";
+    out += FormatLogRowLine(*it);
+  }
+  return out;
 }
 
 static void ShowLogsContextMenu(HWND hWnd, int x, int y) {
@@ -1615,14 +1790,18 @@ static void ShowLogsContextMenu(HWND hWnd, int x, int y) {
   POINT pt{x, y};
   if (pt.x == -1 && pt.y == -1) {
     const int selected = ListView_GetNextItem(g_logsList, -1, LVNI_SELECTED);
-    if (selected < 0)
-      return;
-    RECT rc{};
-    if (!ListView_GetItemRect(g_logsList, selected, &rc, LVIR_BOUNDS))
-      return;
-    POINT localPt{rc.left + 6, rc.top + 6};
-    ClientToScreen(g_logsList, &localPt);
-    pt = localPt;
+    if (selected >= 0) {
+      RECT rc{};
+      if (ListView_GetItemRect(g_logsList, selected, &rc, LVIR_BOUNDS)) {
+        POINT localPt{rc.left + 6, rc.top + 6};
+        ClientToScreen(g_logsList, &localPt);
+        pt = localPt;
+      }
+    } else {
+      POINT localPt{8, 8};
+      ClientToScreen(g_logsList, &localPt);
+      pt = localPt;
+    }
   } else {
     POINT clientPt = pt;
     ScreenToClient(g_logsList, &clientPt);
@@ -1637,51 +1816,49 @@ static void ShowLogsContextMenu(HWND hWnd, int x, int y) {
   }
 
   const int row = ListView_GetNextItem(g_logsList, -1, LVNI_SELECTED);
-  if (row < 0)
+  const bool hasSelection = row >= 0;
+  const bool hasAnyLogs = !g_logRows.empty();
+  if (!hasSelection && !hasAnyLogs)
     return;
 
-  const std::wstring time = GetListViewText(g_logsList, row, 0);
-  const std::wstring source = GetListViewText(g_logsList, row, 1);
-  const std::wstring level = GetListViewText(g_logsList, row, 2);
-  const std::wstring message = GetListViewText(g_logsList, row, 3);
-  const std::wstring full =
-      L"[" + time + L"] [" + source + L"] [" + level + L"] " + message;
+  std::wstring message;
+  std::wstring full;
+  if (hasSelection) {
+    const std::wstring level = GetListViewText(g_logsList, row, 0);
+    const std::wstring time = GetListViewText(g_logsList, row, 1);
+    const std::wstring source = GetListViewText(g_logsList, row, 2);
+    message = GetListViewText(g_logsList, row, 3);
+    full = L"[" + time + L"] [" + source + L"] [" + level + L"] " + message;
+  }
 
   HMENU menu = CreatePopupMenu();
   if (!menu)
     return;
 
-  AppendMenuW(menu, MF_STRING, kLogMenuCopyMessage, L"Copy Message");
-  AppendMenuW(menu, MF_STRING, kLogMenuCopyFullLog, L"Copy Full Log");
-  if (Localization::IsRtl()) {
-    for (int i = 0, n = GetMenuItemCount(menu); i < n; ++i) {
-      MENUITEMINFOW info{};
-      info.cbSize = sizeof(info);
-      info.fMask = MIIM_FTYPE;
-      if (!GetMenuItemInfoW(menu, i, TRUE, &info))
-        continue;
-      info.fType |= MFT_RIGHTORDER | MFT_RIGHTJUSTIFY;
-      SetMenuItemInfoW(menu, i, TRUE, &info);
-    }
-  }
-  SetForegroundWindow(hWnd);
-  UINT logMenuFlags = TPM_RETURNCMD | TPM_RIGHTBUTTON;
-  if (Localization::IsRtl()) {
-#ifndef TPM_LAYOUTRTL
-#define TPM_LAYOUTRTL 0x00008000L
-#endif
-    logMenuFlags |= TPM_LAYOUTRTL | TPM_RIGHTALIGN;
-  }
-  const UINT cmd =
-      TrackPopupMenu(menu, logMenuFlags, pt.x, pt.y, 0, hWnd, nullptr);
+  const UINT rowFlags = MF_STRING | (hasSelection ? 0 : MF_GRAYED);
+  const UINT allFlags = MF_STRING | (hasAnyLogs ? 0 : MF_GRAYED);
+  AppendMenuW(menu, rowFlags, kLogMenuCopyMessage,
+              Tr("manage.context.copyMessage", L"Copy Message").c_str());
+  AppendMenuW(menu, rowFlags, kLogMenuCopyFullLog,
+              Tr("manage.context.copyFullLog", L"Copy Full Log").c_str());
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, allFlags, kLogMenuCopyAllLogs,
+              Tr("manage.context.copyAllLogs", L"Copy All Logs").c_str());
+  // Same flags as Novadesk widget menus / Rainmeter DisplayMenu.
+  const UINT cmd = static_cast<UINT>(TrackRtlAwarePopup(
+      menu,
+      TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_LEFTALIGN, pt.x,
+      pt.y, hWnd));
   DestroyMenu(menu);
-  // Ensure the popup menu is dismissed reliably after TrackPopupMenu.
-  PostMessageW(hWnd, WM_NULL, 0, 0);
 
   if (cmd == kLogMenuCopyMessage) {
-    CopyTextToClipboard(hWnd, message);
+    if (hasSelection)
+      CopyTextToClipboard(hWnd, message);
   } else if (cmd == kLogMenuCopyFullLog) {
-    CopyTextToClipboard(hWnd, full);
+    if (hasSelection)
+      CopyTextToClipboard(hWnd, full);
+  } else if (cmd == kLogMenuCopyAllLogs) {
+    CopyTextToClipboard(hWnd, BuildAllLogsClipboardText());
   }
 }
 
@@ -1690,14 +1867,15 @@ static void InsertLogRowIntoList(const ManagedLogRow &row) {
     return;
 
   LVITEMW item{};
-  item.mask = LVIF_TEXT;
+  item.mask = LVIF_TEXT | LVIF_IMAGE;
   item.iItem = 0;
-  item.pszText = const_cast<wchar_t *>(row.time.c_str());
+  item.iImage = LogLevelToIconIndex(row.level);
+  item.pszText = const_cast<wchar_t *>(row.level.c_str());
   const int index = ListView_InsertItem(g_logsList, &item);
   ListView_SetItemText(g_logsList, index, 1,
-                       const_cast<wchar_t *>(row.source.c_str()));
+                       const_cast<wchar_t *>(row.time.c_str()));
   ListView_SetItemText(g_logsList, index, 2,
-                       const_cast<wchar_t *>(row.level.c_str()));
+                       const_cast<wchar_t *>(row.source.c_str()));
   ListView_SetItemText(g_logsList, index, 3,
                        const_cast<wchar_t *>(row.message.c_str()));
   AutoExpandLogsMessageColumn(row.message);
@@ -2389,17 +2567,23 @@ public:
           WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_HSCROLL | WS_CLIPSIBLINGS,
           0, 0, rc.right, rc.bottom, m_Window, nullptr,
           GetModuleHandleW(nullptr), nullptr);
-      ListView_SetExtendedListViewStyle(g_logsList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+      ListView_SetExtendedListViewStyle(g_logsList,
+                                        LVS_EX_FULLROWSELECT |
+                                            LVS_EX_DOUBLEBUFFER);
+      if (HIMAGELIST images = EnsureLogsImageList())
+        ListView_SetImageList(g_logsList, images, LVSIL_SMALL);
+
       LVCOLUMNW lcol{};
       lcol.mask = LVCF_TEXT | LVCF_WIDTH;
+      // Level first so the icon + type are visible at the start of each row.
+      lcol.pszText = const_cast<wchar_t *>(Tr("manage.column.level", L"Level").c_str());
+      lcol.cx = 90;
+      ListView_InsertColumn(g_logsList, 0, &lcol);
       lcol.pszText = const_cast<wchar_t *>(Tr("manage.column.time", L"Time").c_str());
       lcol.cx = 190;
-      ListView_InsertColumn(g_logsList, 0, &lcol);
+      ListView_InsertColumn(g_logsList, 1, &lcol);
       lcol.pszText = const_cast<wchar_t *>(Tr("manage.column.source", L"Source").c_str());
       lcol.cx = 120;
-      ListView_InsertColumn(g_logsList, 1, &lcol);
-      lcol.pszText = const_cast<wchar_t *>(Tr("manage.column.level", L"Level").c_str());
-      lcol.cx = 80;
       ListView_InsertColumn(g_logsList, 2, &lcol);
       lcol.pszText = const_cast<wchar_t *>(Tr("manage.column.message", L"Message").c_str());
       lcol.cx = g_logsMessageColumnWidth;
@@ -3268,6 +3452,9 @@ public:
         DeleteObject(g_aboutLogoBitmap);
         g_aboutLogoBitmap = nullptr;
       }
+      if (g_logsList)
+        ListView_SetImageList(g_logsList, nullptr, LVSIL_SMALL);
+      DestroyLogsImageList();
       ShutdownGdiPlus();
       if (g_trayMenu) {
         DestroyMenu(g_trayMenu);
@@ -3336,9 +3523,9 @@ static void ApplyLocalizedText() {
   SetListColumnText(g_list, 0, Tr("manage.column.widget", L"Widget"));
   SetListColumnText(g_list, 1, Tr("manage.column.scriptPath", L"Script Path"));
   SetListColumnText(g_list, 2, Tr("manage.column.status", L"Status"));
-  SetListColumnText(g_logsList, 0, Tr("manage.column.time", L"Time"));
-  SetListColumnText(g_logsList, 1, Tr("manage.column.source", L"Source"));
-  SetListColumnText(g_logsList, 2, Tr("manage.column.level", L"Level"));
+  SetListColumnText(g_logsList, 0, Tr("manage.column.level", L"Level"));
+  SetListColumnText(g_logsList, 1, Tr("manage.column.time", L"Time"));
+  SetListColumnText(g_logsList, 2, Tr("manage.column.source", L"Source"));
   SetListColumnText(g_logsList, 3, Tr("manage.column.message", L"Message"));
 
   // Footer controls are owned by the main window. A language update must not

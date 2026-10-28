@@ -29,6 +29,16 @@ LANGUAGE 9, 1
 
 IDI_MANAGE_NOVADESK ICON "..\\assets\\icon.ico"
 
+/////////////////////////////////////////////////////////////////////////////
+//
+// PNG (log level icons)
+//
+
+IDB_LOG_DEBUG   PNG "..\\assets\\images\\logs_icons\\debug.png"
+IDB_LOG_ERROR   PNG "..\\assets\\images\\logs_icons\\error.png"
+IDB_LOG_INFO    PNG "..\\assets\\images\\logs_icons\\info.png"
+IDB_LOG_WARNING PNG "..\\assets\\images\\logs_icons\\warning.png"
+
 #endif
 /////////////////////////////////////////////////////////////////////////////
 
