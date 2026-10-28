@@ -4,6 +4,10 @@
   "app.manage.title": "Upravljajte Novadeskom",
   "settings.language": "Jezik",
   "settings.languageRestart": "Promjene jezika stupaju na snagu nakon ponovnog pokretanja Novadeska.",
+  "settings.theme": "Tema",
+  "settings.theme.system": "Sustav",
+  "settings.theme.light": "Svijetla",
+  "settings.theme.dark": "Tamna",
   "settings.title": "Upravljanje postavkama",
 
   "tab.about": "O",

@@ -4,6 +4,10 @@
   "app.manage.title": "Spravujte Novadesk",
   "settings.language": "Jazyk",
   "settings.languageRestart": "Zmeny jazyka sa prejavia po reštartovaní Novadesk.",
+  "settings.theme": "Motív",
+  "settings.theme.system": "Systémový",
+  "settings.theme.light": "Svetlý",
+  "settings.theme.dark": "Tmavý",
   "settings.title": "Spravovať nastavenia",
 
   "tab.about": "O",

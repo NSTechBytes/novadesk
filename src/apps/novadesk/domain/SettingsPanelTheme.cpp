@@ -6,8 +6,7 @@
  * obtain one at <https://www.gnu.org/licenses/gpl-2.0.html>. */
 
 #include "SettingsPanelTheme.h"
-#include "../shared/Settings.h"
-#include "../shared/System.h"
+#include "../../common/WindowsTheme.h"
 
 ThemePalette DarkPalette() {
   ThemePalette p{};
@@ -50,6 +49,5 @@ ThemePalette LightPalette() {
 }
 
 ThemePalette ResolveTheme() {
-  // Always follow the OS system dark/light mode setting.
-  return novadesk::shared::system::IsSystemDarkMode() ? DarkPalette() : LightPalette();
+  return WindowsTheme::IsUsingDarkMode() ? DarkPalette() : LightPalette();
 }

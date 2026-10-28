@@ -4,6 +4,10 @@
   "app.manage.title": "إدارة نوفاديسك",
   "settings.language": "اللغة",
   "settings.languageRestart": "تسري تغييرات اللغة بعد إعادة تشغيل Novadesk.",
+  "settings.theme": "المظهر",
+  "settings.theme.system": "النظام",
+  "settings.theme.light": "فاتح",
+  "settings.theme.dark": "داكن",
   "settings.title": "إدارة الإعدادات",
 
   "tab.about": "حول",

@@ -23,7 +23,9 @@
 #include "../../../Version.h"
 #include "../../domain/Novadesk.h"
 #include "../../domain/Widget.h"
+#include "../../../../common/CommonSettings.h"
 #include "../../../../common/WindowsTheme.h"
+#include "../../domain/SettingsPanel.h"
 #include "../../shared/Logging.h"
 #include "../../shared/PathUtils.h"
 #include "../../shared/Settings.h"
@@ -1659,16 +1661,18 @@ JSValue JsAppSetWindowsTheme(JSContext *ctx, JSValueConst, int argc,
   }
 
   WindowsTheme::SetMode(themeStr);
-  Settings::Save();
+  SettingsPanel::RefreshAllThemes();
+  const std::wstring themeMessageName =
+      L"Novadesk.ThemeChanged." + CommonSettings::GetInstallationScopeId();
+  const UINT themeChangedMessage =
+      RegisterWindowMessageW(themeMessageName.c_str());
+  if (themeChangedMessage)
+    PostMessageW(HWND_BROADCAST, themeChangedMessage, 0, 0);
   return JS_NewBool(ctx, 1);
 }
 
 JSValue JsAppGetWindowsTheme(JSContext *ctx, JSValueConst, int, JSValueConst *) {
-  std::string pref = Settings::GetGlobalString("windowsTheme", "");
-  if (pref.empty()) {
-    pref = Settings::GetGlobalString("theme", "system");
-  }
-  return JS_NewString(ctx, pref.c_str());
+  return JS_NewString(ctx, CommonSettings::GetWindowsTheme().c_str());
 }
 
 JSValue JsAppIsDarkMode(JSContext *ctx, JSValueConst, int, JSValueConst *) {

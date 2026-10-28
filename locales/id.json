@@ -4,6 +4,10 @@
   "app.manage.title": "Kelola Novadesk",
   "settings.language": "Bahasa",
   "settings.languageRestart": "Perubahan bahasa berlaku setelah Novadesk dimulai ulang.",
+  "settings.theme": "Tema",
+  "settings.theme.system": "Sistem",
+  "settings.theme.light": "Terang",
+  "settings.theme.dark": "Gelap",
   "settings.title": "Kelola Pengaturan",
 
   "tab.about": "Tentang",

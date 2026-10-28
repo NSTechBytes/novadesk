@@ -4,6 +4,10 @@
   "app.manage.title": "Gestionați Novadesk",
   "settings.language": "Limba",
   "settings.languageRestart": "Modificările de limbă intră în vigoare după repornirea Novadesk.",
+  "settings.theme": "Temă",
+  "settings.theme.system": "Sistem",
+  "settings.theme.light": "Deschis",
+  "settings.theme.dark": "Întunecat",
   "settings.title": "Gestionați setările",
 
   "tab.about": "Despre",

@@ -64,6 +64,7 @@ constexpr wchar_t kWindowTitle[] = L"NDPKG Installer";
 constexpr wchar_t kManageWindowClassName[] = L"NovadeskManagerWindow";
 constexpr wchar_t kManageCloseMessageName[] = L"Novadesk.Manage.RequestClose";
 UINT g_languageChangedMessage = 0;
+UINT g_themeChangedMessage = 0;
 std::wstring g_manageWindowScopeProperty;
 constexpr char kNdpkgMagic[] = "NDPKG1";
 constexpr COLORREF kWindowBgColor = RGB(240, 240, 240);
@@ -1444,6 +1445,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     RefreshLocalizedUi(state);
     return 0;
   }
+  if (msg == g_themeChangedMessage && state) {
+    InstallerApplyTheme(hwnd, state);
+    return 0;
+  }
 
   switch (msg) {
   case WM_CREATE: {
@@ -1691,7 +1696,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
   const std::wstring installationScope = CommonSettings::GetInstallationScopeId();
   g_manageWindowScopeProperty = L"Novadesk.Manage.InstallationScope." + installationScope;
   const std::wstring languageMessageName = L"Novadesk.LanguageChanged." + installationScope;
+  const std::wstring themeMessageName = L"Novadesk.ThemeChanged." + installationScope;
   g_languageChangedMessage = RegisterWindowMessageW(languageMessageName.c_str());
+  g_themeChangedMessage = RegisterWindowMessageW(themeMessageName.c_str());
 
   Gdiplus::GdiplusStartupInput gdiplusInput;
   AppState state;

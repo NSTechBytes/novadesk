@@ -4,6 +4,10 @@
   "app.manage.title": "Novadesk\u0027i yönet",
   "settings.language": "Dil",
   "settings.languageRestart": "Dil değişiklikleri Novadesk yeniden başlatıldıktan sonra etkili olur.",
+  "settings.theme": "Tema",
+  "settings.theme.system": "Sistem",
+  "settings.theme.light": "Açık",
+  "settings.theme.dark": "Koyu",
   "settings.title": "Ayarları Yönet",
 
   "tab.about": "Hakkında",

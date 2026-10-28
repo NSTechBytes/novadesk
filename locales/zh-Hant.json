@@ -4,6 +4,10 @@
   "app.manage.title": "管理 Novadesk",
   "settings.language": "語言",
   "settings.languageRestart": "語言變更在重新啟動 Novadesk 後生效。",
+  "settings.theme": "主題",
+  "settings.theme.system": "系統",
+  "settings.theme.light": "淺色",
+  "settings.theme.dark": "深色",
   "settings.title": "管理設定",
 
   "tab.about": "關於",

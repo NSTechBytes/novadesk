@@ -4,6 +4,10 @@
   "app.manage.title": "Novadesk verwalten",
   "settings.language": "Sprache",
   "settings.languageRestart": "Sprachänderungen werden nach dem Neustart von Novadesk wirksam.",
+  "settings.theme": "Design",
+  "settings.theme.system": "System",
+  "settings.theme.light": "Hell",
+  "settings.theme.dark": "Dunkel",
   "settings.title": "Einstellungen verwalten",
 
   "tab.about": "Über",

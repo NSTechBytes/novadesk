@@ -4,6 +4,10 @@
   "app.manage.title": "จัดการโนวาเดสก์",
   "settings.language": "ภาษา",
   "settings.languageRestart": "การเปลี่ยนแปลงภาษาจะมีผลหลังจากรีสตาร์ท Novadesk",
+  "settings.theme": "ธีม",
+  "settings.theme.system": "ระบบ",
+  "settings.theme.light": "สว่าง",
+  "settings.theme.dark": "มืด",
   "settings.title": "จัดการการตั้งค่า",
 
   "tab.about": "เกี่ยวกับ",

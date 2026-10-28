@@ -4,6 +4,10 @@
   "app.manage.title": "Управление Новадеск",
   "settings.language": "Язык",
   "settings.languageRestart": "Изменения языка вступят в силу после перезапуска Novadesk.",
+  "settings.theme": "Тема",
+  "settings.theme.system": "Системная",
+  "settings.theme.light": "Светлая",
+  "settings.theme.dark": "Тёмная",
   "settings.title": "Управление настройками",
 
   "tab.about": "О",

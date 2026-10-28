@@ -109,7 +109,8 @@ static HWND g_chkEnableDebugging = nullptr;
 static HWND g_chkSaveLogToFile = nullptr;
 static HWND g_chkUseHardwareAcceleration = nullptr;
 static HWND g_lblWindowsTheme = nullptr;
-static HWND g_cboWindowsTheme = nullptr;static bool g_isDarkMode = false;
+static HWND g_cboWindowsTheme = nullptr;
+static bool g_isDarkMode = false;
 static HWND g_lblLanguage = nullptr;
 static HWND g_cboLanguage = nullptr;
 static HBRUSH g_hbrWindowBg = nullptr;
@@ -201,7 +202,9 @@ static bool RestartManageWindow();
 static void ResendFontsToAllControls();
 static void ApplyLocalizedText();
 static void RecreateManagerTabsForLayoutDirection(int activeTab);
+static void PopulateWindowsThemeCombo();
 static UINT g_languageChangedMessage = 0;
+static UINT g_themeChangedMessage = 0;
 static HWND FindManageWindowForCurrentInstallation() {
   struct Search {
     const wchar_t *property;
@@ -543,7 +546,7 @@ static void ResendFontsToAllControls() {
   setFont(g_chkSaveLogToFile,          g_buttonFont);
   setFont(g_chkUseHardwareAcceleration,g_buttonFont);
   setFont(g_lblWindowsTheme,           g_buttonFont);
-  setFont(g_cboWindowsTheme,           g_buttonFont);  // About tab
+  setFont(g_cboWindowsTheme,           g_buttonFont);
   setFont(g_lblLanguage,               g_buttonFont);
   setFont(g_cboLanguage,               g_buttonFont);
   setFont(g_aboutAppName,      g_aboutTitleFont);
@@ -1982,7 +1985,49 @@ static void RefreshSettingsControls() {
                    : BST_UNCHECKED,
                0);
 
-  // Window Theme setting removed — always follows system theme.
+  if (g_cboWindowsTheme) {
+    const std::string theme = CommonSettings::GetWindowsTheme();
+    int selected = 0; // system
+    if (theme == "light")
+      selected = 1;
+    else if (theme == "dark")
+      selected = 2;
+    SendMessageW(g_cboWindowsTheme, CB_SETCURSEL, selected, 0);
+  }
+}
+
+static void PopulateWindowsThemeCombo() {
+  if (!g_cboWindowsTheme) return;
+
+  SendMessageW(g_cboWindowsTheme, CB_RESETCONTENT, 0, 0);
+
+  struct ThemeOption {
+    const char *tag;
+    const char *key;
+    const wchar_t *fallback;
+  };
+  static const ThemeOption kOptions[] = {
+      {"system", "settings.theme.system", L"System"},
+      {"light", "settings.theme.light", L"Light"},
+      {"dark", "settings.theme.dark", L"Dark"},
+  };
+
+  for (const auto &option : kOptions) {
+    const std::wstring label = Tr(option.key, option.fallback);
+    const int added = static_cast<int>(SendMessageW(
+        g_cboWindowsTheme, CB_ADDSTRING, 0,
+        reinterpret_cast<LPARAM>(label.c_str())));
+    SendMessageW(g_cboWindowsTheme, CB_SETITEMDATA, added,
+                 reinterpret_cast<LPARAM>(option.tag));
+  }
+
+  const std::string theme = CommonSettings::GetWindowsTheme();
+  int selected = 0;
+  if (theme == "light")
+    selected = 1;
+  else if (theme == "dark")
+    selected = 2;
+  SendMessageW(g_cboWindowsTheme, CB_SETCURSEL, selected, 0);
 }
 
 static void CheckForUpdates(bool silent) {
@@ -2446,15 +2491,25 @@ public:
           GetModuleHandleW(nullptr), nullptr);
       g_chkUseHardwareAcceleration = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.hardwareAcceleration", L"Use Hardware Acceleration").c_str(),
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
-          16, 208, 300, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdUseHardwareAcceleration)),
+          16, 236, 300, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdUseHardwareAcceleration)),
           GetModuleHandleW(nullptr), nullptr);
+      g_lblWindowsTheme = CreateWindowExW(0, L"STATIC", Tr("settings.theme", L"Theme").c_str(),
+          WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+          16, 272, 120, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      g_cboWindowsTheme = CreateWindowExW(
+          Localization::IsRtl() ? WS_EX_RTLREADING : 0, WC_COMBOBOXW, L"",
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
+          140, 268, 260, 360, m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdWindowsTheme)),
+          GetModuleHandleW(nullptr), nullptr);
+      PopulateWindowsThemeCombo();
       g_lblLanguage = CreateWindowExW(0, L"STATIC", Tr("settings.language", L"Language").c_str(),
           WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
-          16, 244, 120, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+          16, 308, 120, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
       g_cboLanguage = CreateWindowExW(
           Localization::IsRtl() ? WS_EX_RTLREADING : 0, WC_COMBOBOXW, L"",
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
-          140, 240, 360, 360, m_Window,
+          140, 304, 360, 360, m_Window,
           reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdLanguage)),
           GetModuleHandleW(nullptr), nullptr);
       const std::string currentLanguage = CommonSettings::GetUiLanguage();
@@ -2486,6 +2541,8 @@ public:
         SendMessageW(g_chkEnableDebugging, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkSaveLogToFile, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkUseHardwareAcceleration, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_lblWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_cboWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_lblLanguage, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_cboLanguage, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       }
@@ -2512,6 +2569,21 @@ public:
         case kControlIdCheckUpdates:
           StartAsyncUpdateCheck(false);
           return TRUE;
+        case kControlIdWindowsTheme:
+          if (HIWORD(wParam) == CBN_SELCHANGE) {
+            const int selected = static_cast<int>(
+                SendMessageW(g_cboWindowsTheme, CB_GETCURSEL, 0, 0));
+            const char *tag = reinterpret_cast<const char *>(
+                SendMessageW(g_cboWindowsTheme, CB_GETITEMDATA, selected, 0));
+            if (tag && CommonSettings::SetWindowsTheme(tag)) {
+              WindowsTheme::SetMode(tag);
+              ApplyThemeToManageWindow(g_mainWindow);
+              if (g_themeChangedMessage)
+                PostMessageW(HWND_BROADCAST, g_themeChangedMessage, 0, 0);
+            }
+            return TRUE;
+          }
+          break;
         case kControlIdLanguage:
           if (HIWORD(wParam) == CBN_SELCHANGE) {
             const int selected = static_cast<int>(
@@ -2544,8 +2616,6 @@ public:
       const int ch = 26;            // standard control height
       const int bh = 30;            // button height
       if (g_settingsTitle)              MoveWindow(g_settingsTitle,              L,       16, sw,       20, TRUE);
-      if (g_lblLanguage)                MoveWindow(g_lblLanguage,                L,      244, 120,      24, TRUE);
-      if (g_cboLanguage)                MoveWindow(g_cboLanguage,            L + 124,  240, 360,     360, TRUE);
       if (g_chkRunOnStartup)            MoveWindow(g_chkRunOnStartup,            L,       50, sw,       ch, TRUE);
       if (g_btnCheckUpdates)            MoveWindow(g_btnCheckUpdates,            L,       86, 200,      bh, TRUE);
       if (g_chkAutoUpdate)              MoveWindow(g_chkAutoUpdate,          L + 216,    90, sw - 216, ch, TRUE);
@@ -2553,6 +2623,10 @@ public:
       if (g_chkEnableDebugging)         MoveWindow(g_chkEnableDebugging,         L,      168, sw,       ch, TRUE);
       if (g_chkSaveLogToFile)           MoveWindow(g_chkSaveLogToFile,           L,      202, sw,       ch, TRUE);
       if (g_chkUseHardwareAcceleration) MoveWindow(g_chkUseHardwareAcceleration, L,      236, sw,       ch, TRUE);
+      if (g_lblWindowsTheme)            MoveWindow(g_lblWindowsTheme,            L,      272, 120,      24, TRUE);
+      if (g_cboWindowsTheme)            MoveWindow(g_cboWindowsTheme,        L + 124,  268, 260,     360, TRUE);
+      if (g_lblLanguage)                MoveWindow(g_lblLanguage,                L,      308, 120,      24, TRUE);
+      if (g_cboLanguage)                MoveWindow(g_cboLanguage,            L + 124,  304, 360,     360, TRUE);
     }
   };
 
@@ -2976,6 +3050,11 @@ public:
       RequestAppExit(m_Window);
       return TRUE;
     }
+    if (g_themeChangedMessage != 0 && uMsg == g_themeChangedMessage) {
+      ApplyThemeToManageWindow(m_Window);
+      if (g_activeTab == 3) RefreshSettingsControls();
+      return TRUE;
+    }
 
     switch (uMsg) {
     case WM_INITDIALOG:
@@ -3180,7 +3259,9 @@ static void ApplyLocalizedText() {
   SetWindowTextW(g_chkEnableDebugging, Tr("manage.setting.enableDebugging", L"Enable Debugging").c_str());
   SetWindowTextW(g_chkSaveLogToFile, Tr("manage.setting.saveLogs", L"Save Logs to File").c_str());
   SetWindowTextW(g_chkUseHardwareAcceleration, Tr("manage.setting.hardwareAcceleration", L"Use Hardware Acceleration").c_str());
+  SetWindowTextW(g_lblWindowsTheme, Tr("settings.theme", L"Theme").c_str());
   SetWindowTextW(g_lblLanguage, Tr("settings.language", L"Language").c_str());
+  PopulateWindowsThemeCombo();
   ApplyAboutLocalizedText();
 
   const std::wstring tabs[] = {Tr("tab.widgets", L"Widgets"), Tr("tab.logs", L"Logs"),
@@ -3320,8 +3401,10 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR,
   g_manageWindowScopeProperty = L"Novadesk.Manage.InstallationScope." + installationScope;
   const std::wstring closeMessageName = std::wstring(kManageCloseMessageName) + L"." + installationScope;
   const std::wstring languageMessageName = L"Novadesk.LanguageChanged." + installationScope;
+  const std::wstring themeMessageName = L"Novadesk.ThemeChanged." + installationScope;
   g_manageCloseMessage = RegisterWindowMessageW(closeMessageName.c_str());
   g_languageChangedMessage = RegisterWindowMessageW(languageMessageName.c_str());
+  g_themeChangedMessage = RegisterWindowMessageW(themeMessageName.c_str());
   if (HasCommandLineFlag(L"--request-close")) {
     return RequestExistingManageWindowClose() ? 0 : 1;
   }

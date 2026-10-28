@@ -4,6 +4,10 @@
   "app.manage.title": "Управљајте Новадеском",
   "settings.language": "Језик",
   "settings.languageRestart": "Промене језика ступају на снагу након поновног покретања Новадеска.",
+  "settings.theme": "Tema",
+  "settings.theme.system": "Sistem",
+  "settings.theme.light": "Svetla",
+  "settings.theme.dark": "Tamna",
   "settings.title": "Управљајте подешавањима",
 
   "tab.about": "Абоут",

@@ -4,6 +4,10 @@
   "app.manage.title": "Hallake Novadeskit",
   "settings.language": "Keel",
   "settings.languageRestart": "Keelemuudatused jõustuvad pärast Novadeski taaskäivitamist.",
+  "settings.theme": "Teema",
+  "settings.theme.system": "Süsteem",
+  "settings.theme.light": "Hele",
+  "settings.theme.dark": "Tume",
   "settings.title": "Seadete haldamine",
 
   "tab.about": "Umbes",

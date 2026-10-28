@@ -10,4 +10,8 @@ std::wstring GetPath();
 std::wstring GetInstallationScopeId();
 std::string GetUiLanguage();
 bool SetUiLanguage(const std::string &language);
+
+/// Preferred Windows UI theme: "system", "dark", or "light".
+std::string GetWindowsTheme();
+bool SetWindowsTheme(const std::string &theme);
 } // namespace CommonSettings

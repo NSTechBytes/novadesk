@@ -4,6 +4,10 @@
   "app.manage.title": "Tvarkyti Novadeską",
   "settings.language": "Kalba",
   "settings.languageRestart": "Kalbos pakeitimai įsigalioja iš naujo paleidus Novadesk.",
+  "settings.theme": "Tema",
+  "settings.theme.system": "Sistema",
+  "settings.theme.light": "Šviesi",
+  "settings.theme.dark": "Tamsi",
   "settings.title": "Tvarkyti nustatymus",
 
   "tab.about": "Apie",

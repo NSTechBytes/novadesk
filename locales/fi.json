@@ -4,6 +4,10 @@
   "app.manage.title": "Hallitse Novadeskia",
   "settings.language": "Kieli",
   "settings.languageRestart": "Kielimuutokset tulevat voimaan Novadeskin uudelleenkäynnistyksen jälkeen.",
+  "settings.theme": "Teema",
+  "settings.theme.system": "Järjestelmä",
+  "settings.theme.light": "Vaalea",
+  "settings.theme.dark": "Tumma",
   "settings.title": "Hallinnoi asetuksia",
 
   "tab.about": "Tietoja",

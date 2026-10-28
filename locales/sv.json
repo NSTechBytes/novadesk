@@ -4,6 +4,10 @@
   "app.manage.title": "Hantera Novadesk",
   "settings.language": "Språk",
   "settings.languageRestart": "Språkändringar träder i kraft efter omstart av Novadesk.",
+  "settings.theme": "Tema",
+  "settings.theme.system": "System",
+  "settings.theme.light": "Ljust",
+  "settings.theme.dark": "Mörkt",
   "settings.title": "Hantera inställningar",
 
   "tab.about": "Om",

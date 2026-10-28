@@ -4,6 +4,10 @@
   "app.manage.title": "Beheer Novadesk",
   "settings.language": "Taal",
   "settings.languageRestart": "Taalwijzigingen worden van kracht na het opnieuw opstarten van Novadesk.",
+  "settings.theme": "Thema",
+  "settings.theme.system": "Systeem",
+  "settings.theme.light": "Licht",
+  "settings.theme.dark": "Donker",
   "settings.title": "Beheer instellingen",
 
   "tab.about": "Over",

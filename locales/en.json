@@ -4,6 +4,10 @@
   "app.manage.title": "Manage Novadesk",
   "settings.language": "Language",
   "settings.languageRestart": "Language changes take effect after restarting Novadesk.",
+  "settings.theme": "Theme",
+  "settings.theme.system": "System",
+  "settings.theme.light": "Light",
+  "settings.theme.dark": "Dark",
   "settings.title": "Manage Settings",
 
   "tab.about": "About",

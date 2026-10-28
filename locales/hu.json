@@ -4,6 +4,10 @@
   "app.manage.title": "A Novadesk kezelése",
   "settings.language": "Nyelv",
   "settings.languageRestart": "A nyelvi módosítások a Novadesk újraindítása után lépnek életbe.",
+  "settings.theme": "Téma",
+  "settings.theme.system": "Rendszer",
+  "settings.theme.light": "Világos",
+  "settings.theme.dark": "Sötét",
   "settings.title": "Beállítások kezelése",
 
   "tab.about": "Körülbelül",

@@ -4,6 +4,10 @@
   "app.manage.title": "Διαχείριση Novadesk",
   "settings.language": "Γλώσσα",
   "settings.languageRestart": "Οι αλλαγές γλώσσας τίθενται σε ισχύ μετά την επανεκκίνηση του Novadesk.",
+  "settings.theme": "Θέμα",
+  "settings.theme.system": "Σύστημα",
+  "settings.theme.light": "Φωτεινό",
+  "settings.theme.dark": "Σκοτεινό",
   "settings.title": "Διαχείριση ρυθμίσεων",
 
   "tab.about": "Περίπου",

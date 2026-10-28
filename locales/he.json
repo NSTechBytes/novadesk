@@ -4,6 +4,10 @@
   "app.manage.title": "ניהול Novadesk",
   "settings.language": "שפה",
   "settings.languageRestart": "שינויי השפה נכנסים לתוקף לאחר הפעלה מחדש של Novadesk.",
+  "settings.theme": "ערכת נושא",
+  "settings.theme.system": "מערכת",
+  "settings.theme.light": "בהיר",
+  "settings.theme.dark": "כהה",
   "settings.title": "נהל הגדרות",
 
   "tab.about": "בערך",

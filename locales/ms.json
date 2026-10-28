@@ -4,6 +4,10 @@
   "app.manage.title": "Urus Novadesk",
   "settings.language": "Bahasa",
   "settings.languageRestart": "Perubahan bahasa berkuat kuasa selepas memulakan semula Novadesk.",
+  "settings.theme": "Tema",
+  "settings.theme.system": "Sistem",
+  "settings.theme.light": "Cerah",
+  "settings.theme.dark": "Gelap",
   "settings.title": "Urus Tetapan",
 
   "tab.about": "Tentang",

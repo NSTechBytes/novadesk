@@ -69,6 +69,7 @@ static HANDLE g_singleInstanceMutex = nullptr;
 static std::wstring g_singleInstanceMutexName;
 static HHOOK g_trayMouseHook = nullptr;
 static UINT g_languageChangedMessage = 0;
+static UINT g_themeChangedMessage = 0;
 
 static BOOL WINAPI NovadeskConsoleCtrlHandler(DWORD ctrlType) {
   switch (ctrlType) {
@@ -607,9 +608,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   // Initialize Settings
   Settings::Initialize();
   Localization::Initialize();
+  const std::wstring installationScope = CommonSettings::GetInstallationScopeId();
   const std::wstring languageMessageName =
-      L"Novadesk.LanguageChanged." + CommonSettings::GetInstallationScopeId();
+      L"Novadesk.LanguageChanged." + installationScope;
+  const std::wstring themeMessageName =
+      L"Novadesk.ThemeChanged." + installationScope;
   g_languageChangedMessage = RegisterWindowMessageW(languageMessageName.c_str());
+  g_themeChangedMessage = RegisterWindowMessageW(themeMessageName.c_str());
   WindowsTheme::Initialize();
 
   // Prepare the online-image and online-font disk caches before widgets
@@ -635,6 +640,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     if (message == g_languageChangedMessage) {
       Localization::Initialize();
       SettingsPanel::RefreshAllLocalizedText();
+      return 0;
+    }
+    if (message == g_themeChangedMessage) {
+      WindowsTheme::Refresh();
+      SettingsPanel::RefreshAllThemes();
       return 0;
     }
 

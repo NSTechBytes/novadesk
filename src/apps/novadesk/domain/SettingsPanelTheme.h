@@ -38,10 +38,7 @@ ThemePalette DarkPalette();
 ThemePalette LightPalette();
 
 /**
- * @brief Reads the "windowsTheme" global setting and returns the matching palette.
- *
- * - "dark"   → DarkPalette()
- * - "light"  → LightPalette()
- * - "system" → DarkPalette() or LightPalette() based on IsSystemDarkMode()
+ * @brief Returns the palette matching the effective Windows theme
+ *        (CommonSettings windowsTheme: system / dark / light).
  */
 ThemePalette ResolveTheme();

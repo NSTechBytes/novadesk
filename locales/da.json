@@ -4,6 +4,10 @@
   "app.manage.title": "Administrer Novadesk",
   "settings.language": "Sprog",
   "settings.languageRestart": "Sprogændringer træder i kraft efter genstart af Novadesk.",
+  "settings.theme": "Tema",
+  "settings.theme.system": "System",
+  "settings.theme.light": "Lys",
+  "settings.theme.dark": "Mørk",
   "settings.title": "Administrer indstillinger",
 
   "tab.about": "Om",

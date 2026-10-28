@@ -4,6 +4,10 @@
   "app.manage.title": "Novadesk の管理",
   "settings.language": "言語",
   "settings.languageRestart": "言語の変更は、Novadesk を再起動した後に有効になります。",
+  "settings.theme": "テーマ",
+  "settings.theme.system": "システム",
+  "settings.theme.light": "ライト",
+  "settings.theme.dark": "ダーク",
   "settings.title": "設定の管理",
 
   "tab.about": "について",

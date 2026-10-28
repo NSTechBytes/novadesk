@@ -4,6 +4,10 @@
   "app.manage.title": "Quản lý Novadesk",
   "settings.language": "Ngôn ngữ",
   "settings.languageRestart": "Thay đổi ngôn ngữ có hiệu lực sau khi khởi động lại Novadesk.",
+  "settings.theme": "Giao diện",
+  "settings.theme.system": "Hệ thống",
+  "settings.theme.light": "Sáng",
+  "settings.theme.dark": "Tối",
   "settings.title": "Quản lý cài đặt",
 
   "tab.about": "Giới thiệu",

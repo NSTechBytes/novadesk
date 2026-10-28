@@ -9,6 +9,8 @@
 #define NOMINMAX
 #include "WindowsTheme.h"
 
+#include "CommonSettings.h"
+
 #include <atomic>
 #include <fstream>
 #include <mutex>
@@ -607,32 +609,47 @@ BOOL CALLBACK ApplyControlEnum(HWND w, LPARAM) {
 // ---------------------------------------------------------------------------
 // Settings persistence helpers
 // ---------------------------------------------------------------------------
-std::string FallbackReadSettings() {
-  wchar_t appData[MAX_PATH]{};
-  if (FAILED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, appData))) return "system";
-  std::wstring path = std::wstring(appData) + L"\\Novadesk\\settings.json";
-  std::ifstream f(path); if (!f.is_open()) return "system";
-  try {
-    nlohmann::json doc; f >> doc;
-    if (doc.contains("windowsTheme") && doc["windowsTheme"].is_string()) return doc["windowsTheme"].get<std::string>();
-    if (doc.contains("theme") && doc["theme"].is_string()) return doc["theme"].get<std::string>();
-  } catch (...) {}
+std::string ReadThemePreference() {
+  auto &st = GetState();
+  {
+    std::lock_guard<std::mutex> lock(st.handlerMutex);
+    if (st.settingsReader) {
+      const std::string value = st.settingsReader();
+      if (value == "system" || value == "dark" || value == "light")
+        return value;
+    }
+  }
+  return CommonSettings::GetWindowsTheme();
+}
+
+void WriteThemePreference(const std::string &value) {
+  auto &st = GetState();
+  {
+    std::lock_guard<std::mutex> lock(st.handlerMutex);
+    if (st.settingsWriter) {
+      st.settingsWriter(value);
+      return;
+    }
+  }
+  CommonSettings::SetWindowsTheme(value);
+}
+
+Mode ModeFromString(const std::string &value) {
+  if (value == "dark") return Mode::Dark;
+  if (value == "light") return Mode::Light;
+  return Mode::System;
+}
+
+std::string ModeToString(Mode mode) {
+  if (mode == Mode::Dark) return "dark";
+  if (mode == Mode::Light) return "light";
   return "system";
 }
 
-void FallbackWriteSettings(const std::string& value) {
-  wchar_t appData[MAX_PATH]{};
-  if (FAILED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, appData))) return;
-  std::wstring dir = std::wstring(appData) + L"\\Novadesk";
-  CreateDirectoryW(dir.c_str(), nullptr);
-  std::wstring path = dir + L"\\settings.json";
-  nlohmann::json doc;
-  std::ifstream in(path);
-  if (in.is_open()) { try { in >> doc; } catch (...) { doc = nlohmann::json::object(); } in.close(); }
-  doc["windowsTheme"] = value;
-  std::ofstream out(path);
-  if (out.is_open()) out << doc.dump(4);
-}
+// uxtheme PreferredAppMode (ordinal 135)
+constexpr int kPreferredAppModeAllowDark = 1;
+constexpr int kPreferredAppModeForceDark = 2;
+constexpr int kPreferredAppModeForceLight = 3;
 
 // CBT hook for MessageBox / FileDialog
 LRESULT CALLBACK CBTDialogHookProc(int code, WPARAM wParam, LPARAM lParam) {
@@ -690,34 +707,41 @@ void Initialize() {
 
 void Refresh() {
   auto& state = GetState();
-  // Always follow the OS system theme — user-configurable theme selection
-  // has been removed. Mode is always System.
-  state.mode = Mode::System;
-  state.isDarkMode = IsSystemDarkMode();
+  state.mode = ModeFromString(ReadThemePreference());
+  if (state.mode == Mode::Dark)
+    state.isDarkMode = true;
+  else if (state.mode == Mode::Light)
+    state.isDarkMode = false;
+  else
+    state.isDarkMode = IsSystemDarkMode();
 
-  // AllowDark lets the OS apply dark mode to this process when the system is dark.
-  const int appMode = 1; // AllowDark
-  if (state.pfnSetPreferredAppMode) state.pfnSetPreferredAppMode(appMode);
-  else if (state.pfnAllowDarkModeForApp) state.pfnAllowDarkModeForApp(state.isDarkMode);
-  if (state.pfnRefreshImmersiveColorPolicyState) state.pfnRefreshImmersiveColorPolicyState();
-  if (state.pfnFlushMenuThemes) state.pfnFlushMenuThemes();
+  int appMode = kPreferredAppModeAllowDark;
+  if (state.mode == Mode::Dark)
+    appMode = kPreferredAppModeForceDark;
+  else if (state.mode == Mode::Light)
+    appMode = kPreferredAppModeForceLight;
+
+  if (state.pfnSetPreferredAppMode)
+    state.pfnSetPreferredAppMode(appMode);
+  else if (state.pfnAllowDarkModeForApp)
+    state.pfnAllowDarkModeForApp(state.isDarkMode.load());
+  if (state.pfnRefreshImmersiveColorPolicyState)
+    state.pfnRefreshImmersiveColorPolicyState();
+  if (state.pfnFlushMenuThemes)
+    state.pfnFlushMenuThemes();
 }
 
 bool IsUsingDarkMode() { return GetState().isDarkMode.load(); }
 Mode GetMode()         { return GetState().mode; }
 
 void SetMode(Mode mode) {
-  auto& state = GetState(); state.mode = mode;
-  std::string val = "system";
-  if (mode == Mode::Dark) val = "dark"; else if (mode == Mode::Light) val = "light";
-  { std::lock_guard<std::mutex> lock(state.handlerMutex);
-    if (state.settingsWriter) state.settingsWriter(val); else FallbackWriteSettings(val); }
+  WriteThemePreference(ModeToString(mode));
   Refresh();
 }
 void SetMode(const std::string& modeStr) {
-  auto& state = GetState();
-  { std::lock_guard<std::mutex> lock(state.handlerMutex);
-    if (state.settingsWriter) state.settingsWriter(modeStr); else FallbackWriteSettings(modeStr); }
+  if (modeStr != "system" && modeStr != "dark" && modeStr != "light")
+    return;
+  WriteThemePreference(modeStr);
   Refresh();
 }
 

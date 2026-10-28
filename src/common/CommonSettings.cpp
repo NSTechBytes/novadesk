@@ -75,10 +75,7 @@ std::string GetUiLanguage() {
   return "en";
 }
 
-bool SetUiLanguage(const std::string &language) {
-  if (!kSupported.count(language)) return false;
-  json value = Load();
-  value["uiLanguage"] = language;
+bool WriteObject(const json &value) {
   const fs::path target(GetPath());
   std::error_code ec;
   fs::create_directories(target.parent_path(), ec);
@@ -95,5 +92,32 @@ bool SetUiLanguage(const std::string &language) {
   ec.clear();
   fs::rename(temporary, target, ec);
   return !ec;
+}
+
+bool SetUiLanguage(const std::string &language) {
+  if (!kSupported.count(language)) return false;
+  json value = Load();
+  value["uiLanguage"] = language;
+  return WriteObject(value);
+}
+
+std::string GetWindowsTheme() {
+  const json value = Load();
+  if (value.contains("windowsTheme") && value["windowsTheme"].is_string()) {
+    const std::string theme = value["windowsTheme"].get<std::string>();
+    if (theme == "system" || theme == "dark" || theme == "light") return theme;
+  }
+  if (value.contains("theme") && value["theme"].is_string()) {
+    const std::string theme = value["theme"].get<std::string>();
+    if (theme == "system" || theme == "dark" || theme == "light") return theme;
+  }
+  return "system";
+}
+
+bool SetWindowsTheme(const std::string &theme) {
+  if (theme != "system" && theme != "dark" && theme != "light") return false;
+  json value = Load();
+  value["windowsTheme"] = theme;
+  return WriteObject(value);
 }
 } // namespace CommonSettings
