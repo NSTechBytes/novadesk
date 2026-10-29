@@ -3085,16 +3085,16 @@ public:
       ListView_SetExtendedListViewStyle(g_addonsList, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
       LVCOLUMNW acol{};
       acol.mask = LVCF_TEXT | LVCF_WIDTH;
-      acol.pszText = const_cast<wchar_t *>(L"Addon Name");
+      acol.pszText = const_cast<wchar_t *>(Tr("manage.column.addonName", L"Addon Name").c_str());
       acol.cx = 190;
       ListView_InsertColumn(g_addonsList, 0, &acol);
-      acol.pszText = const_cast<wchar_t *>(L"Author");
+      acol.pszText = const_cast<wchar_t *>(Tr("manage.column.author", L"Author").c_str());
       acol.cx = 180;
       ListView_InsertColumn(g_addonsList, 1, &acol);
-      acol.pszText = const_cast<wchar_t *>(L"Version");
+      acol.pszText = const_cast<wchar_t *>(Tr("manage.column.version", L"Version").c_str());
       acol.cx = 120;
       ListView_InsertColumn(g_addonsList, 2, &acol);
-      acol.pszText = const_cast<wchar_t *>(L"Copyright");
+      acol.pszText = const_cast<wchar_t *>(Tr("manage.column.copyright", L"Copyright").c_str());
       acol.cx = 420;
       ListView_InsertColumn(g_addonsList, 3, &acol);
 
@@ -4243,6 +4243,10 @@ static void ApplyLocalizedText() {
   SetListColumnText(g_logsList, 1, Tr("manage.column.time", L"Time"));
   SetListColumnText(g_logsList, 2, Tr("manage.column.source", L"Source"));
   SetListColumnText(g_logsList, 3, Tr("manage.column.message", L"Message"));
+  SetListColumnText(g_addonsList, 0, Tr("manage.column.addonName", L"Addon Name"));
+  SetListColumnText(g_addonsList, 1, Tr("manage.column.author", L"Author"));
+  SetListColumnText(g_addonsList, 2, Tr("manage.column.version", L"Version"));
+  SetListColumnText(g_addonsList, 3, Tr("manage.column.copyright", L"Copyright"));
 
   // Footer controls are owned by the main window. A language update must not
   // leave the Widgets footer visible over another active page.
