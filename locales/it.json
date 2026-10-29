@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Abilita debug",
   "manage.setting.enableLogging": "Abilita registrazione",
   "manage.setting.hardwareAcceleration": "Utilizza l\u0027accelerazione hardware",
+  "manage.setting.disableWidgetDragging": "Disabilita trascinamento widget",
   "manage.setting.runOnStartup": "Esegui all\u0027avvio",
   "manage.setting.saveLogs": "Salva i registri su file",
   "manage.about.beta": "(Beta)",

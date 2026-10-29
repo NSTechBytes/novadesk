@@ -2591,7 +2591,9 @@ bool IsInternalEngineArg(const std::wstring &arg) {
          arg == L"--enable-debugging" || arg == L"--disable-debugging" ||
          arg == L"--enable-logging" || arg == L"--disable-logging" ||
          arg == L"--enable-save-log-to-file" ||
-         arg == L"--disable-save-log-to-file" || arg == L"--refresh" ||
+         arg == L"--disable-save-log-to-file" ||
+         arg == L"--disable-widget-dragging" ||
+         arg == L"--enable-widget-dragging" || arg == L"--refresh" ||
          arg == L"--refresh-all" || arg == L"--unload";
 }
 } // namespace

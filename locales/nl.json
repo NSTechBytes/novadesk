@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Schakel foutopsporing in",
   "manage.setting.enableLogging": "Logboekregistratie inschakelen",
   "manage.setting.hardwareAcceleration": "Gebruik hardwareversnelling",
+  "manage.setting.disableWidgetDragging": "Widgetverslepen uitschakelen",
   "manage.setting.runOnStartup": "Uitvoeren bij opstarten",
   "manage.setting.saveLogs": "Logboeken opslaan in bestand",
   "manage.about.beta": "(Beta)",

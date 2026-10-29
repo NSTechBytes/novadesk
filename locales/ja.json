@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "デバッグを有効にする",
   "manage.setting.enableLogging": "ロギングを有効にする",
   "manage.setting.hardwareAcceleration": "ハードウェア アクセラレーションを使用する",
+  "manage.setting.disableWidgetDragging": "ウィジェットのドラッグを無効にする",
   "manage.setting.runOnStartup": "起動時に実行",
   "manage.setting.saveLogs": "ログをファイルに保存",
   "manage.about.beta": "(ベータ)",

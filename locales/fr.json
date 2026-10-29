@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Activer le débogage",
   "manage.setting.enableLogging": "Activer la journalisation",
   "manage.setting.hardwareAcceleration": "Utiliser l\u0027accélération matérielle",
+  "manage.setting.disableWidgetDragging": "Désactiver le déplacement des widgets",
   "manage.setting.runOnStartup": "Exécuter au démarrage",
   "manage.setting.saveLogs": "Enregistrer les journaux dans un fichier",
   "manage.about.beta": "(Bêta)",

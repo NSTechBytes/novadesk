@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Aktiver fejlfinding",
   "manage.setting.enableLogging": "Aktiver logning",
   "manage.setting.hardwareAcceleration": "Brug hardwareacceleration",
+  "manage.setting.disableWidgetDragging": "Deaktiver trækning af widgets",
   "manage.setting.runOnStartup": "Kør ved opstart",
   "manage.setting.saveLogs": "Gem logfiler til fil",
   "manage.about.beta": "(Beta)",

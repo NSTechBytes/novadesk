@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Bật gỡ lỗi",
   "manage.setting.enableLogging": "Bật ghi nhật ký",
   "manage.setting.hardwareAcceleration": "Sử dụng tăng tốc phần cứng",
+  "manage.setting.disableWidgetDragging": "Tắt kéo thả widget",
   "manage.setting.runOnStartup": "Chạy khi khởi động",
   "manage.setting.saveLogs": "Lưu nhật ký vào tệp",
   "manage.about.beta": "(Beta)",

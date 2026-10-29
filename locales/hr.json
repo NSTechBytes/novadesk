@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Omogući uklanjanje pogrešaka",
   "manage.setting.enableLogging": "Omogući bilježenje",
   "manage.setting.hardwareAcceleration": "Koristite hardversko ubrzanje",
+  "manage.setting.disableWidgetDragging": "Onemogući povlačenje widgeta",
   "manage.setting.runOnStartup": "Pokreni pri pokretanju",
   "manage.setting.saveLogs": "Spremi zapise u datoteku",
   "manage.about.beta": "(Beta)",

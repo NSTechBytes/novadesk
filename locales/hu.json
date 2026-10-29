@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Hibakeresés engedélyezése",
   "manage.setting.enableLogging": "Naplózás engedélyezése",
   "manage.setting.hardwareAcceleration": "Használja a hardveres gyorsítást",
+  "manage.setting.disableWidgetDragging": "Widgetek húzásának tiltása",
   "manage.setting.runOnStartup": "Futtatás indításkor",
   "manage.setting.saveLogs": "Naplók mentése fájlba",
   "manage.about.beta": "(Béta)",

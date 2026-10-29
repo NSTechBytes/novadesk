@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Увімкнути налагодження",
   "manage.setting.enableLogging": "Увімкнути журналювання",
   "manage.setting.hardwareAcceleration": "Використовуйте апаратне прискорення",
+  "manage.setting.disableWidgetDragging": "Вимкнути перетягування віджетів",
   "manage.setting.runOnStartup": "Запуск під час запуску",
   "manage.setting.saveLogs": "Зберегти журнали у файл",
   "manage.about.beta": "(Бета)",

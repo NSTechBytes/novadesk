@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Povoliť ladenie",
   "manage.setting.enableLogging": "Povoliť protokolovanie",
   "manage.setting.hardwareAcceleration": "Použite hardvérovú akceleráciu",
+  "manage.setting.disableWidgetDragging": "Zakázať ťahanie widgetov",
   "manage.setting.runOnStartup": "Spustiť pri spustení",
   "manage.setting.saveLogs": "Uložiť protokoly do súboru",
   "manage.about.beta": "(Beta)",

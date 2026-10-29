@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Ενεργοποίηση εντοπισμού σφαλμάτων",
   "manage.setting.enableLogging": "Ενεργοποίηση καταγραφής",
   "manage.setting.hardwareAcceleration": "Χρησιμοποιήστε την επιτάχυνση υλικού",
+  "manage.setting.disableWidgetDragging": "Απενεργοποίηση μεταφοράς γραφικών στοιχείων",
   "manage.setting.runOnStartup": "Εκτέλεση κατά την εκκίνηση",
   "manage.setting.saveLogs": "Αποθήκευση αρχείων καταγραφής στο αρχείο",
   "manage.about.beta": "(Beta)",

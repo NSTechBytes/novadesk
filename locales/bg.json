@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Активирайте отстраняването на грешки",
   "manage.setting.enableLogging": "Активиране на регистриране",
   "manage.setting.hardwareAcceleration": "Използвайте хардуерно ускорение",
+  "manage.setting.disableWidgetDragging": "Деактивиране на влаченето на уиджети",
   "manage.setting.runOnStartup": "Изпълнение при стартиране",
   "manage.setting.saveLogs": "Запазване на регистрационни файлове във файл",
   "manage.about.beta": "(Бета)",

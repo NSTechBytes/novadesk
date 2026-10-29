@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Iespējot atkļūdošanu",
   "manage.setting.enableLogging": "Iespējot reģistrēšanu",
   "manage.setting.hardwareAcceleration": "Izmantojiet aparatūras paātrinājumu",
+  "manage.setting.disableWidgetDragging": "Atspējot logrīku vilkšanu",
   "manage.setting.runOnStartup": "Palaist startēšanas laikā",
   "manage.setting.saveLogs": "Saglabāt žurnālus failā",
   "manage.about.beta": "(Beta)",

@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "啟用偵錯",
   "manage.setting.enableLogging": "啟用日誌記錄",
   "manage.setting.hardwareAcceleration": "使用硬體加速",
+  "manage.setting.disableWidgetDragging": "停用小工具拖曳",
   "manage.setting.runOnStartup": "啟動時運行",
   "manage.setting.saveLogs": "將日誌儲存到文件",
   "manage.about.beta": "（測試版）",

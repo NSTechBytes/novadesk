@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "אפשר איתור באגים",
   "manage.setting.enableLogging": "אפשר רישום",
   "manage.setting.hardwareAcceleration": "השתמש בהאצת חומרה",
+  "manage.setting.disableWidgetDragging": "השבת גרירת ווידג'טים",
   "manage.setting.runOnStartup": "הפעל בעת הפעלה",
   "manage.setting.saveLogs": "שמור יומנים לקובץ",
   "manage.about.beta": "(בטא)",

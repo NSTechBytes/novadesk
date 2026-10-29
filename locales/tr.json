@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Hata Ayıklamayı Etkinleştir",
   "manage.setting.enableLogging": "Günlük Kaydını Etkinleştir",
   "manage.setting.hardwareAcceleration": "Donanım Hızlandırmasını Kullan",
+  "manage.setting.disableWidgetDragging": "Widget sürüklemeyi devre dışı bırak",
   "manage.setting.runOnStartup": "Başlangıçta Çalıştır",
   "manage.setting.saveLogs": "Günlükleri Dosyaya Kaydet",
   "manage.about.beta": "(Beta)",

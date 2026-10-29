@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "디버깅 활성화",
   "manage.setting.enableLogging": "로깅 활성화",
   "manage.setting.hardwareAcceleration": "하드웨어 가속 사용",
+  "manage.setting.disableWidgetDragging": "위젯 끌기 사용 안 함",
   "manage.setting.runOnStartup": "시작 시 실행",
   "manage.setting.saveLogs": "로그를 파일에 저장",
   "manage.about.beta": "(베타)",

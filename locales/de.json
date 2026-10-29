@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Aktivieren Sie das Debuggen",
   "manage.setting.enableLogging": "Aktivieren Sie die Protokollierung",
   "manage.setting.hardwareAcceleration": "Verwenden Sie Hardwarebeschleunigung",
+  "manage.setting.disableWidgetDragging": "Widget-Ziehen deaktivieren",
   "manage.setting.runOnStartup": "Beim Start ausführen",
   "manage.setting.saveLogs": "Protokolle in Datei speichern",
   "manage.about.beta": "(Beta)",

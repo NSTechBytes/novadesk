@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Omogoči odpravljanje napak",
   "manage.setting.enableLogging": "Omogoči beleženje",
   "manage.setting.hardwareAcceleration": "Uporabite strojno pospeševanje",
+  "manage.setting.disableWidgetDragging": "Onemogoči vlečenje pripomočkov",
   "manage.setting.runOnStartup": "Zaženi ob zagonu",
   "manage.setting.saveLogs": "Shrani dnevnike v datoteko",
   "manage.about.beta": "(Beta)",

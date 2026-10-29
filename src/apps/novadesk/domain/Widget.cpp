@@ -1163,7 +1163,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
       const bool isDragArea = (widget->m_MouseOverElement &&
                                widget->m_MouseOverElement->IsDragArea());
       const bool canDragWindow =
-          widget->m_Options.draggable || ctrlHeld || isDragArea;
+          !Settings::GetGlobalBool("disableWidgetDragging", false) &&
+          (widget->m_Options.draggable || ctrlHeld || isDragArea);
 
       if (!Widget::IsMenuActive() && (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0 &&
           !widget->m_IsElementDragging && !widget->m_IsScrollbarDragging &&

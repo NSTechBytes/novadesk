@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Įgalinti derinimą",
   "manage.setting.enableLogging": "Įjungti registravimą",
   "manage.setting.hardwareAcceleration": "Naudokite aparatūros pagreitį",
+  "manage.setting.disableWidgetDragging": "Išjungti valdiklių vilkimą",
   "manage.setting.runOnStartup": "Vykdyti paleidžiant",
   "manage.setting.saveLogs": "Išsaugoti žurnalus į failą",
   "manage.about.beta": "(Beta)",

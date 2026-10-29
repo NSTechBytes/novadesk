@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Включить отладку",
   "manage.setting.enableLogging": "Включить ведение журнала",
   "manage.setting.hardwareAcceleration": "Используйте аппаратное ускорение",
+  "manage.setting.disableWidgetDragging": "Отключить перетаскивание виджетов",
   "manage.setting.runOnStartup": "Запускать при запуске",
   "manage.setting.saveLogs": "Сохранение журналов в файл",
   "manage.about.beta": "(Бета)",

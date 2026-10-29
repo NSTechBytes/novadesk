@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Activați Depanarea",
   "manage.setting.enableLogging": "Activați înregistrarea",
   "manage.setting.hardwareAcceleration": "Utilizați accelerația hardware",
+  "manage.setting.disableWidgetDragging": "Dezactivează tragerea widgeturilor",
   "manage.setting.runOnStartup": "Rulați la pornire",
   "manage.setting.saveLogs": "Salvați jurnalele în fișier",
   "manage.about.beta": "(Beta)",

@@ -112,6 +112,7 @@ static HWND g_chkEnableLogging = nullptr;
 static HWND g_chkEnableDebugging = nullptr;
 static HWND g_chkSaveLogToFile = nullptr;
 static HWND g_chkUseHardwareAcceleration = nullptr;
+static HWND g_chkDisableWidgetDragging = nullptr;
 static HWND g_lblWindowsTheme = nullptr;
 static HWND g_cboWindowsTheme = nullptr;
 static bool g_isDarkMode = false;
@@ -177,6 +178,7 @@ static const int kControlIdEnableLogging = 304;
 static const int kControlIdEnableDebugging = 305;
 static const int kControlIdSaveLogToFile = 306;
 static const int kControlIdUseHardwareAcceleration = 307;
+static const int kControlIdDisableWidgetDragging = 310;
 static const int kControlIdWindowsTheme = 308;
 static const int kControlIdLanguage = 309;
 static const int kControlIdAboutHome = 201;
@@ -656,6 +658,7 @@ static void ResendFontsToAllControls() {
   setFont(g_chkEnableDebugging,        g_buttonFont);
   setFont(g_chkSaveLogToFile,          g_buttonFont);
   setFont(g_chkUseHardwareAcceleration,g_buttonFont);
+  setFont(g_chkDisableWidgetDragging,  g_buttonFont);
   setFont(g_lblWindowsTheme,           g_buttonFont);
   setFont(g_cboWindowsTheme,           g_buttonFont);
   setFont(g_lblLanguage,               g_buttonFont);
@@ -2191,6 +2194,13 @@ static void RefreshSettingsControls() {
                    ? BST_CHECKED
                    : BST_UNCHECKED,
                0);
+  if (g_chkDisableWidgetDragging) {
+    SendMessageW(g_chkDisableWidgetDragging, BM_SETCHECK,
+                 GetNovadeskSettingBool("disableWidgetDragging", false)
+                     ? BST_CHECKED
+                     : BST_UNCHECKED,
+                 0);
+  }
 
   // Never CB_SETCURSEL while the drop-down is open — the settings timer
   // otherwise snaps the highlight back to the saved theme (e.g. Dark) on
@@ -2362,6 +2372,7 @@ static void OnSettingsControlClicked(int controlId) {
   case kControlIdEnableDebugging:        ctrl = g_chkEnableDebugging; break;
   case kControlIdSaveLogToFile:          ctrl = g_chkSaveLogToFile; break;
   case kControlIdUseHardwareAcceleration: ctrl = g_chkUseHardwareAcceleration; break;
+  case kControlIdDisableWidgetDragging:  ctrl = g_chkDisableWidgetDragging; break;
   default: break;
   }
   if (!ctrl) return;
@@ -2405,6 +2416,11 @@ static void OnSettingsControlClicked(int controlId) {
     }
     break;
   }
+  case kControlIdDisableWidgetDragging:
+    SetNovadeskSettingBool("disableWidgetDragging", checked);
+    ExecuteNovadeskCommandNoPath(checked ? L"--disable-widget-dragging"
+                                         : L"--enable-widget-dragging");
+    break;
   default:
     break;
   }
@@ -2713,23 +2729,27 @@ public:
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
           16, 236, 300, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdUseHardwareAcceleration)),
           GetModuleHandleW(nullptr), nullptr);
+      g_chkDisableWidgetDragging = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.disableWidgetDragging", L"Disable Widget Dragging").c_str(),
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
+          16, 270, 320, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdDisableWidgetDragging)),
+          GetModuleHandleW(nullptr), nullptr);
       g_lblWindowsTheme = CreateWindowExW(0, L"STATIC", Tr("settings.theme", L"Theme").c_str(),
           WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
-          16, 272, 120, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+          16, 304, 120, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
       g_cboWindowsTheme = CreateWindowExW(
           Localization::IsRtl() ? WS_EX_RTLREADING : 0, WC_COMBOBOXW, L"",
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
-          140, 268, 260, 360, m_Window,
+          140, 300, 260, 360, m_Window,
           reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdWindowsTheme)),
           GetModuleHandleW(nullptr), nullptr);
       PopulateWindowsThemeCombo();
       g_lblLanguage = CreateWindowExW(0, L"STATIC", Tr("settings.language", L"Language").c_str(),
           WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
-          16, 308, 120, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+          16, 340, 120, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
       g_cboLanguage = CreateWindowExW(
           Localization::IsRtl() ? WS_EX_RTLREADING : 0, WC_COMBOBOXW, L"",
           WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
-          140, 304, 360, 360, m_Window,
+          140, 336, 360, 360, m_Window,
           reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdLanguage)),
           GetModuleHandleW(nullptr), nullptr);
       const std::string currentLanguage = CommonSettings::GetUiLanguage();
@@ -2761,6 +2781,7 @@ public:
         SendMessageW(g_chkEnableDebugging, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkSaveLogToFile, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkUseHardwareAcceleration, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_chkDisableWidgetDragging, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_lblWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_cboWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_lblLanguage, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
@@ -2781,6 +2802,7 @@ public:
         case kControlIdEnableDebugging:
         case kControlIdSaveLogToFile:
         case kControlIdUseHardwareAcceleration:
+        case kControlIdDisableWidgetDragging:
           if (HIWORD(wParam) == BN_CLICKED) {
             OnSettingsControlClicked(LOWORD(wParam));
             return TRUE;
@@ -2869,10 +2891,11 @@ public:
       if (g_chkEnableDebugging)         MoveWindow(g_chkEnableDebugging,         L,      168, sw,       ch, TRUE);
       if (g_chkSaveLogToFile)           MoveWindow(g_chkSaveLogToFile,           L,      202, sw,       ch, TRUE);
       if (g_chkUseHardwareAcceleration) MoveWindow(g_chkUseHardwareAcceleration, L,      236, sw,       ch, TRUE);
-      if (g_lblWindowsTheme)            MoveWindow(g_lblWindowsTheme,            L,      272, 120,      24, TRUE);
-      if (g_cboWindowsTheme)            MoveWindow(g_cboWindowsTheme,        L + 124,  268, 260,     360, TRUE);
-      if (g_lblLanguage)                MoveWindow(g_lblLanguage,                L,      308, 120,      24, TRUE);
-      if (g_cboLanguage)                MoveWindow(g_cboLanguage,            L + 124,  304, 360,     360, TRUE);
+      if (g_chkDisableWidgetDragging)   MoveWindow(g_chkDisableWidgetDragging,   L,      270, sw,       ch, TRUE);
+      if (g_lblWindowsTheme)            MoveWindow(g_lblWindowsTheme,            L,      304, 120,      24, TRUE);
+      if (g_cboWindowsTheme)            MoveWindow(g_cboWindowsTheme,        L + 124,  300, 260,     360, TRUE);
+      if (g_lblLanguage)                MoveWindow(g_lblLanguage,                L,      340, 120,      24, TRUE);
+      if (g_cboLanguage)                MoveWindow(g_cboLanguage,            L + 124,  336, 360,     360, TRUE);
     }
   };
 
@@ -3091,7 +3114,8 @@ public:
     g_settingsPanel = g_aboutPanel = nullptr;
     g_settingsTitle = g_chkRunOnStartup = g_btnCheckUpdates = nullptr;
     g_chkAutoUpdate = g_chkEnableLogging = g_chkEnableDebugging = nullptr;
-    g_chkSaveLogToFile = g_chkUseHardwareAcceleration = nullptr;
+    g_chkSaveLogToFile = g_chkUseHardwareAcceleration =
+        g_chkDisableWidgetDragging = nullptr;
     g_lblLanguage = g_cboLanguage = nullptr;
     g_aboutLogo = g_aboutAppName = g_aboutVersion = g_aboutCopyright = nullptr;
     g_aboutDivider = g_aboutHomeLabel = g_aboutHomeLink = nullptr;
@@ -3508,6 +3532,7 @@ static void ApplyLocalizedText() {
   SetWindowTextW(g_chkEnableDebugging, Tr("manage.setting.enableDebugging", L"Enable Debugging").c_str());
   SetWindowTextW(g_chkSaveLogToFile, Tr("manage.setting.saveLogs", L"Save Logs to File").c_str());
   SetWindowTextW(g_chkUseHardwareAcceleration, Tr("manage.setting.hardwareAcceleration", L"Use Hardware Acceleration").c_str());
+  SetWindowTextW(g_chkDisableWidgetDragging, Tr("manage.setting.disableWidgetDragging", L"Disable Widget Dragging").c_str());
   SetWindowTextW(g_lblWindowsTheme, Tr("settings.theme", L"Theme").c_str());
   SetWindowTextW(g_lblLanguage, Tr("settings.language", L"Language").c_str());
   PopulateWindowsThemeCombo();

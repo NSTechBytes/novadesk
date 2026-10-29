@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Luba silumine",
   "manage.setting.enableLogging": "Luba logimine",
   "manage.setting.hardwareAcceleration": "Kasutage riistvarakiirendust",
+  "manage.setting.disableWidgetDragging": "Keela vidinate lohistamine",
   "manage.setting.runOnStartup": "Käivitage käivitamisel",
   "manage.setting.saveLogs": "Salvesta logid faili",
   "manage.about.beta": "(Beeta)",

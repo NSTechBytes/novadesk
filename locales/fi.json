@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Ota virheenkorjaus käyttöön",
   "manage.setting.enableLogging": "Ota kirjaus käyttöön",
   "manage.setting.hardwareAcceleration": "Käytä laitteistokiihdytystä",
+  "manage.setting.disableWidgetDragging": "Poista widgetien vetäminen käytöstä",
   "manage.setting.runOnStartup": "Suorita käynnistyksen yhteydessä",
   "manage.setting.saveLogs": "Tallenna lokit tiedostoon",
   "manage.about.beta": "(Beta)",

@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Aktifkan Debug",
   "manage.setting.enableLogging": "Aktifkan Pencatatan",
   "manage.setting.hardwareAcceleration": "Gunakan Akselerasi Perangkat Keras",
+  "manage.setting.disableWidgetDragging": "Nonaktifkan penyeretan widget",
   "manage.setting.runOnStartup": "Jalankan Saat Startup",
   "manage.setting.saveLogs": "Simpan Log ke File",
   "manage.about.beta": "(Beta)",

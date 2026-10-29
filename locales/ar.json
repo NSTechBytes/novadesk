@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "تمكين تصحيح الأخطاء",
   "manage.setting.enableLogging": "تمكين التسجيل",
   "manage.setting.hardwareAcceleration": "استخدم تسريع الأجهزة",
+  "manage.setting.disableWidgetDragging": "تعطيل سحب الأدوات",
   "manage.setting.runOnStartup": "تشغيل عند بدء التشغيل",
   "manage.setting.saveLogs": "حفظ السجلات إلى ملف",
   "manage.about.beta": "(تجريبي)",

@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "เปิดใช้งานการดีบัก",
   "manage.setting.enableLogging": "เปิดใช้งานการบันทึก",
   "manage.setting.hardwareAcceleration": "ใช้การเร่งด้วยฮาร์ดแวร์",
+  "manage.setting.disableWidgetDragging": "ปิดการลากวิดเจ็ต",
   "manage.setting.runOnStartup": "ทำงานบนการเริ่มต้น",
   "manage.setting.saveLogs": "บันทึกบันทึกลงในไฟล์",
   "manage.about.beta": "(เบต้า)",

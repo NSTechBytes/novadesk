@@ -104,6 +104,7 @@
   "manage.setting.enableDebugging": "Włącz debugowanie",
   "manage.setting.enableLogging": "Włącz rejestrowanie",
   "manage.setting.hardwareAcceleration": "Użyj akceleracji sprzętowej",
+  "manage.setting.disableWidgetDragging": "Wyłącz przeciąganie widżetów",
   "manage.setting.runOnStartup": "Uruchom przy uruchomieniu",
   "manage.setting.saveLogs": "Zapisz dzienniki do pliku",
   "manage.about.beta": "(Beta)",

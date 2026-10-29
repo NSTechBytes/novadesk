@@ -395,6 +395,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
       std::optional<bool> setDebugging;
       std::optional<bool> setLogging;
       std::optional<bool> setSaveLogToFile;
+      std::optional<bool> setDisableWidgetDragging;
       for (int i = 1; i < argc; ++i) {
         if (!cmd.empty())
           cmd += L" ";
@@ -474,6 +475,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         }
         if (arg == L"--disable-save-log-to-file") {
           setSaveLogToFile = false;
+          continue;
+        }
+        if (arg == L"--disable-widget-dragging") {
+          setDisableWidgetDragging = true;
+          continue;
+        }
+        if (arg == L"--enable-widget-dragging") {
+          setDisableWidgetDragging = false;
           continue;
         }
         if (!arg.empty() && arg[0] != L'-') {
@@ -572,6 +581,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
               SendIpcCommand(hExisting,
                              *setSaveLogToFile ? L"set-save-log-to-file-on"
                                                : L"set-save-log-to-file-off",
+                             L"") ||
+              handledCommand;
+        }
+        if (setDisableWidgetDragging.has_value()) {
+          handledCommand =
+              SendIpcCommand(hExisting,
+                             *setDisableWidgetDragging
+                                 ? L"set-disable-widget-dragging-on"
+                                 : L"set-disable-widget-dragging-off",
                              L"") ||
               handledCommand;
         }
@@ -761,6 +779,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
       } else if (command == L"set-save-log-to-file-off") {
         Settings::SetGlobalBool("saveLogToFile", false);
         Settings::ApplyGlobalSettings();
+      } else if (command == L"set-disable-widget-dragging-on") {
+        Settings::SetGlobalBool("disableWidgetDragging", true);
+        Settings::Flush();
+      } else if (command == L"set-disable-widget-dragging-off") {
+        Settings::SetGlobalBool("disableWidgetDragging", false);
+        Settings::Flush();
       }
       return TRUE;
     }
@@ -822,6 +846,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   std::optional<bool> setDebugging;
   std::optional<bool> setLogging;
   std::optional<bool> setSaveLogToFile;
+  std::optional<bool> setDisableWidgetDragging;
   bool clearImageCache = false;
   bool clearFontCache = false;
   int argc = 0;
@@ -887,6 +912,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
           setSaveLogToFile = false;
           continue;
         }
+        if (arg == L"--disable-widget-dragging") {
+          setDisableWidgetDragging = true;
+          continue;
+        }
+        if (arg == L"--enable-widget-dragging") {
+          setDisableWidgetDragging = false;
+          continue;
+        }
         if (!arg.empty() && arg[0] == L'-')
           continue;
         if (scriptPaths.empty()) {
@@ -919,6 +952,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   }
   if (setSaveLogToFile.has_value()) {
     Settings::SetGlobalBool("saveLogToFile", *setSaveLogToFile);
+    appliedCliSettings = true;
+  }
+  if (setDisableWidgetDragging.has_value()) {
+    Settings::SetGlobalBool("disableWidgetDragging",
+                            *setDisableWidgetDragging);
     appliedCliSettings = true;
   }
   if (appliedCliSettings) {
