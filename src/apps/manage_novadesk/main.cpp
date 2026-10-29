@@ -2766,6 +2766,23 @@ static void OnRefreshAll() {
 class DialogManage;
 static void ApplyThemeToManageWindow(HWND hWnd);
 
+static int MeasureControlTextWidth(HWND hwnd, int extraPadding = 24) {
+  if (!hwnd) return 0;
+  wchar_t text[256]{};
+  const int len = GetWindowTextW(hwnd, text, static_cast<int>(ARRAYSIZE(text)));
+  if (len <= 0) return 0;
+  HDC hdc = GetDC(hwnd);
+  if (!hdc) return 0;
+  HFONT font = reinterpret_cast<HFONT>(SendMessageW(hwnd, WM_GETFONT, 0, 0));
+  if (!font) font = g_buttonFont;
+  HGDIOBJ old = font ? SelectObject(hdc, font) : nullptr;
+  SIZE size{};
+  GetTextExtentPoint32W(hdc, text, len, &size);
+  if (old) SelectObject(hdc, old);
+  ReleaseDC(hwnd, hdc);
+  return size.cx + extraPadding;
+}
+
 // ============================================================================
 // DialogManage
 // ============================================================================
@@ -3004,9 +3021,9 @@ public:
       const int toolbarH = 30;
       const int gapBelow = 12;
       const int gap = 8;
-      const int severityW = 118;
-      const int outputW = 128;
-      const int clearW = 118;
+      const int severityW = (std::max)(110, MeasureControlTextWidth(g_btnLogSeverity, 38));
+      const int outputW   = (std::max)(120, MeasureControlTextWidth(g_btnLogOutput, 38));
+      const int clearW    = (std::max)(100, MeasureControlTextWidth(g_btnClearLogs, 28));
       const int innerW = (std::max)(0, w - 2 * hPad);
       if (g_btnLogSeverity)
         MoveWindow(g_btnLogSeverity, hPad, topPad, severityW, toolbarH, TRUE);
@@ -3418,8 +3435,10 @@ public:
 
       const int gL = leftX + pad;
       const int gW = colW - pad * 2;
-      const int labelW = (std::min)(100, gW / 3);
-      const int comboW = gW - labelW - 8;
+      const int measuredLabelW = (std::max)(MeasureControlTextWidth(g_lblLanguage, 4),
+                                            MeasureControlTextWidth(g_lblWindowsTheme, 4));
+      const int labelW = std::clamp(measuredLabelW, 60, (std::max)(60, gW / 2));
+      const int comboW = (std::max)(80, gW - labelW - 8);
       place(g_lblLanguage, gL, topY + 28, labelW, 22);
       place(g_cboLanguage, gL + labelW + 8, topY + 24, comboW, comboH);
       place(g_lblWindowsTheme, gL, topY + 64, labelW, 22);
@@ -3429,44 +3448,32 @@ public:
       const int uL = rightX + pad;
       const int uW = colW - pad * 2;
       place(g_chkAutoUpdate, uL, topY + 28, uW, row);
-      place(g_btnCheckUpdates, uL, topY + 64, (std::min)(200, uW), btnH);
+      const int checkUpdatesW = (std::min)(uW, (std::max)(140, MeasureControlTextWidth(g_btnCheckUpdates, 28)));
+      place(g_btnCheckUpdates, uL, topY + 64, checkUpdatesW, btnH);
 
       const int dL = leftX + pad;
       const int dW = colW - pad * 2;
       place(g_chkEnableLogging, dL, bottomY + 28, dW, row);
       place(g_chkEnableDebugging, dL, bottomY + 58, dW, row);
       place(g_chkSaveLogToFile, dL, bottomY + 88, dW, row);
-      const int logBtnW = (dW - 8) / 2;
-      place(g_btnShowLogsFile, dL, bottomY + 124, logBtnW, btnH);
-      place(g_btnDeleteLogsFile, dL + logBtnW + 8, bottomY + 124, logBtnW, btnH);
+      const int showW = (std::max)(90, MeasureControlTextWidth(g_btnShowLogsFile, 24));
+      const int deleteW = (std::max)(90, MeasureControlTextWidth(g_btnDeleteLogsFile, 24));
+      int logBtnW1 = showW;
+      int logBtnW2 = deleteW;
+      if (logBtnW1 + logBtnW2 + 8 > dW) {
+        logBtnW1 = (showW * (dW - 8)) / (showW + deleteW);
+        logBtnW2 = (dW - 8) - logBtnW1;
+      }
+      place(g_btnShowLogsFile, dL, bottomY + 124, logBtnW1, btnH);
+      place(g_btnDeleteLogsFile, dL + logBtnW1 + 8, bottomY + 124, logBtnW2, btnH);
 
       const int pL = rightX + pad;
       const int pW = colW - pad * 2;
       place(g_chkUseHardwareAcceleration, pL, bottomY + 28, pW, row);
       place(g_chkDisableWidgetDragging, pL, bottomY + 58, pW, row);
-      // Size to label text (plus padding), shared width, capped by the group.
-      auto buttonTextWidth = [](HWND hwnd) -> int {
-        if (!hwnd)
-          return 0;
-        wchar_t text[256]{};
-        const int len = GetWindowTextW(hwnd, text, static_cast<int>(ARRAYSIZE(text)));
-        if (len <= 0)
-          return 0;
-        HDC hdc = GetDC(hwnd);
-        if (!hdc)
-          return 0;
-        HFONT font = reinterpret_cast<HFONT>(SendMessageW(hwnd, WM_GETFONT, 0, 0));
-        HGDIOBJ old = font ? SelectObject(hdc, font) : nullptr;
-        SIZE size{};
-        GetTextExtentPoint32W(hdc, text, len, &size);
-        if (old)
-          SelectObject(hdc, old);
-        ReleaseDC(hwnd, hdc);
-        return size.cx + 28; // left/right button chrome
-      };
       const int cacheBtnW = (std::min)(
-          pW, (std::max)({200, buttonTextWidth(g_btnClearImageCache),
-                          buttonTextWidth(g_btnClearFontCache)}));
+          pW, (std::max)({160, MeasureControlTextWidth(g_btnClearImageCache, 28),
+                          MeasureControlTextWidth(g_btnClearFontCache, 28)}));
       place(g_btnClearImageCache, pL, bottomY + 100, cacheBtnW, btnH);
       place(g_btnClearFontCache, pL, bottomY + 136, cacheBtnW, btnH);
 
@@ -3630,23 +3637,7 @@ public:
       const int supportLeft         = margin;
       const int supportWidth        = (std::max)(0, w - margin * 2);
       const int supportPadX         = 24;
-      // Measure button width based on text width with comfortable padding
-      int supportButtonWidth = 240;
-      if (g_aboutDonateButton) {
-        wchar_t btnText[256]{};
-        const int textLen = GetWindowTextW(g_aboutDonateButton, btnText, static_cast<int>(ARRAYSIZE(btnText)));
-        if (textLen > 0) {
-          if (HDC hdc = GetDC(g_aboutDonateButton)) {
-            HFONT font = reinterpret_cast<HFONT>(SendMessageW(g_aboutDonateButton, WM_GETFONT, 0, 0));
-            HGDIOBJ old = font ? SelectObject(hdc, font) : nullptr;
-            SIZE sz{};
-            GetTextExtentPoint32W(hdc, btnText, textLen, &sz);
-            if (old) SelectObject(hdc, old);
-            ReleaseDC(g_aboutDonateButton, hdc);
-            supportButtonWidth = sz.cx + 32; // text width + horizontal padding
-          }
-        }
-      }
+      const int supportButtonWidth  = (std::max)(180, MeasureControlTextWidth(g_aboutDonateButton, 32));
       const int supportButtonHeight = 40;
       const int supportContentLeft  = supportLeft + supportPadX;
       const int supportButtonLeft   = supportLeft + supportWidth - supportButtonWidth - supportPadX;
@@ -3879,7 +3870,14 @@ public:
     RECT rc{};
     GetClientRect(m_Window, &rc);
     if (m_TabControl) {
-      MoveWindow(m_TabControl, 12, 12, rc.right - 24, rc.bottom - 64, TRUE);
+      RECT tabCur{};
+      GetWindowRect(m_TabControl, &tabCur);
+      MapWindowPoints(HWND_DESKTOP, m_Window, reinterpret_cast<LPPOINT>(&tabCur), 2);
+      if (tabCur.left != 12 || tabCur.top != 12 ||
+          (tabCur.right - tabCur.left) != (rc.right - 24) ||
+          (tabCur.bottom - tabCur.top) != (rc.bottom - 64)) {
+        MoveWindow(m_TabControl, 12, 12, rc.right - 24, rc.bottom - 64, TRUE);
+      }
       RECT tabRectOnParent{};
       GetClientRect(m_TabControl, &tabRectOnParent);
       TabCtrl_AdjustRect(m_TabControl, FALSE, &tabRectOnParent);
@@ -3895,11 +3893,26 @@ public:
       }
     }
     if (g_btnRefreshList) {
-      MoveWindow(g_btnRefreshList, 12, rc.bottom - 44, 120, 30, TRUE);
-      MoveWindow(g_btnLoad,       142, rc.bottom - 44,  90, 30, TRUE);
-      MoveWindow(g_btnRefresh,    242, rc.bottom - 44,  90, 30, TRUE);
-      MoveWindow(g_btnRefreshAll, 342, rc.bottom - 44, 110, 30, TRUE);
-      MoveWindow(g_btnClose, rc.right - 100, rc.bottom - 44, 88, 30, TRUE);
+      const int btnH = 30;
+      const int gap = 8;
+      const int btnY = rc.bottom - 44;
+
+      const int wRefreshList = (std::max)(110, MeasureControlTextWidth(g_btnRefreshList, 28));
+      const int wLoad        = (std::max)(80,  MeasureControlTextWidth(g_btnLoad, 24));
+      const int wRefresh     = (std::max)(80,  MeasureControlTextWidth(g_btnRefresh, 24));
+      const int wRefreshAll  = (std::max)(100, MeasureControlTextWidth(g_btnRefreshAll, 28));
+      const int wClose       = (std::max)(80,  MeasureControlTextWidth(g_btnClose, 24));
+
+      int curX = 12;
+      MoveWindow(g_btnRefreshList, curX, btnY, wRefreshList, btnH, TRUE);
+      curX += wRefreshList + gap;
+      MoveWindow(g_btnLoad,       curX, btnY, wLoad,        btnH, TRUE);
+      curX += wLoad + gap;
+      MoveWindow(g_btnRefresh,    curX, btnY, wRefresh,     btnH, TRUE);
+      curX += wRefresh + gap;
+      MoveWindow(g_btnRefreshAll, curX, btnY, wRefreshAll,  btnH, TRUE);
+
+      MoveWindow(g_btnClose, rc.right - 12 - wClose, btnY, wClose, btnH, TRUE);
     }
   }
 
@@ -4216,6 +4229,9 @@ static void ApplyLocalizedText() {
   ShowWindow(g_btnClose, SW_SHOW);
 
   DrawMenuBar(g_mainWindow);
+  if (DialogManage::Get()) {
+    DialogManage::Get()->Relayout();
+  }
   RedrawWindow(g_mainWindow, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
 
