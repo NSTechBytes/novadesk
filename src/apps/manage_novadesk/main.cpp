@@ -77,7 +77,7 @@ static HWND g_list = nullptr;
 static std::vector<WidgetEntry> g_widgets;
 static HFONT g_buttonFont = nullptr;
 static const int kWindowWidth = 900;
-static const int kWindowHeight = 560;
+static const int kWindowHeight = 660;
 static const UINT kTrayMessage = WM_APP + 1;
 static const UINT kTrayMenuCommand = WM_APP + 2;
 static const int kTrayMenuExitId = 500;
@@ -105,14 +105,22 @@ static HWND g_addonsList = nullptr;
 static HWND g_settingsPanel = nullptr;
 static HWND g_aboutPanel = nullptr;
 static HWND g_settingsTitle = nullptr;
+static HWND g_grpGeneral = nullptr;
+static HWND g_grpUpdates = nullptr;
+static HWND g_grpDiagnostics = nullptr;
+static HWND g_grpPerformance = nullptr;
 static HWND g_chkRunOnStartup = nullptr;
 static HWND g_btnCheckUpdates = nullptr;
 static HWND g_chkAutoUpdate = nullptr;
 static HWND g_chkEnableLogging = nullptr;
 static HWND g_chkEnableDebugging = nullptr;
 static HWND g_chkSaveLogToFile = nullptr;
+static HWND g_btnShowLogsFile = nullptr;
+static HWND g_btnDeleteLogsFile = nullptr;
 static HWND g_chkUseHardwareAcceleration = nullptr;
 static HWND g_chkDisableWidgetDragging = nullptr;
+static HWND g_btnClearImageCache = nullptr;
+static HWND g_btnClearFontCache = nullptr;
 static HWND g_lblWindowsTheme = nullptr;
 static HWND g_cboWindowsTheme = nullptr;
 static bool g_isDarkMode = false;
@@ -181,6 +189,10 @@ static const int kControlIdUseHardwareAcceleration = 307;
 static const int kControlIdDisableWidgetDragging = 310;
 static const int kControlIdWindowsTheme = 308;
 static const int kControlIdLanguage = 309;
+static const int kControlIdShowLogsFile = 311;
+static const int kControlIdDeleteLogsFile = 312;
+static const int kControlIdClearImageCache = 313;
+static const int kControlIdClearFontCache = 314;
 static const int kControlIdAboutHome = 201;
 static const int kControlIdAboutDocs = 202;
 static const int kControlIdAboutDonate = 203;
@@ -650,15 +662,22 @@ static void ResendFontsToAllControls() {
   // Addons tab
   setFont(g_addonsList,     g_buttonFont);
   // Settings tab
-  setFont(g_settingsTitle,             g_aboutSectionFont);
+  setFont(g_grpGeneral,                g_buttonFont);
+  setFont(g_grpUpdates,                g_buttonFont);
+  setFont(g_grpDiagnostics,            g_buttonFont);
+  setFont(g_grpPerformance,            g_buttonFont);
   setFont(g_chkRunOnStartup,           g_buttonFont);
   setFont(g_btnCheckUpdates,           g_buttonFont);
   setFont(g_chkAutoUpdate,             g_buttonFont);
   setFont(g_chkEnableLogging,          g_buttonFont);
   setFont(g_chkEnableDebugging,        g_buttonFont);
   setFont(g_chkSaveLogToFile,          g_buttonFont);
+  setFont(g_btnShowLogsFile,           g_buttonFont);
+  setFont(g_btnDeleteLogsFile,         g_buttonFont);
   setFont(g_chkUseHardwareAcceleration,g_buttonFont);
   setFont(g_chkDisableWidgetDragging,  g_buttonFont);
+  setFont(g_btnClearImageCache,        g_buttonFont);
+  setFont(g_btnClearFontCache,         g_buttonFont);
   setFont(g_lblWindowsTheme,           g_buttonFont);
   setFont(g_cboWindowsTheme,           g_buttonFont);
   setFont(g_lblLanguage,               g_buttonFont);
@@ -2362,6 +2381,86 @@ static void StartAsyncUpdateCheck(bool silent) {
   }
 }
 
+static std::wstring GetNovadeskLogFilePath() {
+  const std::wstring settingsPath = GetNovadeskSettingsPath();
+  std::filesystem::path parent = std::filesystem::path(settingsPath).parent_path();
+  if (parent.empty())
+    return JoinPath(GetNovadeskAppDataDir(), L"logs.log");
+  return (parent / L"logs.log").wstring();
+}
+
+static void EnsureSettingsGroupsZOrder() {
+  const HWND groups[] = {g_grpGeneral, g_grpUpdates, g_grpDiagnostics,
+                         g_grpPerformance};
+  const HWND framed[] = {
+      g_lblLanguage,           g_cboLanguage,        g_lblWindowsTheme,
+      g_cboWindowsTheme,       g_chkRunOnStartup,    g_chkAutoUpdate,
+      g_btnCheckUpdates,       g_chkEnableLogging,   g_chkEnableDebugging,
+      g_chkSaveLogToFile,      g_btnShowLogsFile,    g_btnDeleteLogsFile,
+      g_chkUseHardwareAcceleration, g_chkDisableWidgetDragging,
+      g_btnClearImageCache,    g_btnClearFontCache};
+  for (HWND h : framed) {
+    if (!h)
+      continue;
+    const LONG_PTR style = GetWindowLongPtrW(h, GWL_STYLE);
+    if (style & WS_CLIPSIBLINGS)
+      SetWindowLongPtrW(h, GWL_STYLE, style & ~WS_CLIPSIBLINGS);
+  }
+  HWND insertAfter = HWND_BOTTOM;
+  for (HWND group : groups) {
+    if (!group)
+      continue;
+    SetWindowPos(group, insertAfter, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    insertAfter = group;
+  }
+  for (HWND h : framed) {
+    if (!h)
+      continue;
+    SetWindowPos(h, insertAfter, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    insertAfter = h;
+  }
+}
+
+static void OnShowLogsFile() {
+  const std::wstring path = GetNovadeskLogFilePath();
+  std::error_code ec;
+  if (!std::filesystem::exists(path, ec) || ec) {
+    ShowManageMessageBox(
+        Tr("manage.setting.logsFileMissing", L"Log file not found."),
+        Tr("app.manage.title", L"Manage Novadesk"),
+        MB_OK | MB_ICONINFORMATION);
+    return;
+  }
+  ShellExecuteW(g_mainWindow, L"open", path.c_str(), nullptr, nullptr,
+                SW_SHOWNORMAL);
+}
+
+static void OnDeleteLogsFile() {
+  const std::wstring path = GetNovadeskLogFilePath();
+  const int confirm = ShowManageMessageBox(
+      Tr("manage.setting.deleteLogsConfirm",
+         L"Delete the Novadesk log file?"),
+      Tr("app.manage.title", L"Manage Novadesk"),
+      MB_YESNO | MB_ICONWARNING);
+  if (confirm != IDYES)
+    return;
+  std::error_code ec;
+  std::filesystem::remove(path, ec);
+  OnClearLogs();
+  if (ec) {
+    ShowManageMessageBox(
+        Tr("manage.setting.deleteLogsFailed", L"Failed to delete log file."),
+        Tr("app.manage.title", L"Manage Novadesk"),
+        MB_OK | MB_ICONWARNING);
+  }
+}
+
+static void OnClearDiskCache(const wchar_t *cliFlag) {
+  ExecuteNovadeskCommandNoPath(cliFlag);
+}
+
 static void OnSettingsControlClicked(int controlId) {
   // Controls live in the tab child window — use global HWNDs directly.
   HWND ctrl = nullptr;
@@ -2694,64 +2793,141 @@ public:
 
     virtual void Initialize() override {
       m_Initialized = true;
-      RECT rc{};
-      GetClientRect(m_Window, &rc);
-      const int w = rc.right;
+      HINSTANCE instance = GetModuleHandleW(nullptr);
+      const DWORD btnStyle =
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON;
+      const DWORD chkStyle =
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX;
+      const DWORD groupStyle = WS_CHILD | WS_VISIBLE | BS_GROUPBOX;
+      const DWORD staticStyle = WS_CHILD | WS_VISIBLE;
+      const DWORD comboStyle =
+          WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL;
+      const DWORD comboEx = Localization::IsRtl() ? WS_EX_RTLREADING : 0;
 
-      g_settingsTitle = CreateWindowExW(0, L"STATIC", Tr("settings.title", L"Manage Settings").c_str(),
-          WS_CHILD | WS_VISIBLE | SS_LEFT | WS_CLIPSIBLINGS,
-          16, 12, w - 32, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
-      g_chkRunOnStartup = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.runOnStartup", L"Run On Startup").c_str(),
-          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
-          16, 46, 240, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRunOnStartup)),
-          GetModuleHandleW(nullptr), nullptr);
-      g_btnCheckUpdates = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.checkUpdates", L"Check for Updates").c_str(),
-          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON | WS_CLIPSIBLINGS,
-          16, 78, 170, 28, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdCheckUpdates)),
-          GetModuleHandleW(nullptr), nullptr);
-      g_chkAutoUpdate = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.autoCheckUpdates", L"Automatically check for updates").c_str(),
-          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
-          202, 80, w - 218, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdAutoCheckUpdates)),
-          GetModuleHandleW(nullptr), nullptr);
-      g_chkEnableLogging = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.enableLogging", L"Enable Logging").c_str(),
-          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
-          16, 118, 220, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdEnableLogging)),
-          GetModuleHandleW(nullptr), nullptr);
-      g_chkEnableDebugging = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.enableDebugging", L"Enable Debugging").c_str(),
-          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
-          16, 148, 220, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdEnableDebugging)),
-          GetModuleHandleW(nullptr), nullptr);
-      g_chkSaveLogToFile = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.saveLogs", L"Save Logs to File").c_str(),
-          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
-          16, 178, 260, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdSaveLogToFile)),
-          GetModuleHandleW(nullptr), nullptr);
-      g_chkUseHardwareAcceleration = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.hardwareAcceleration", L"Use Hardware Acceleration").c_str(),
-          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
-          16, 236, 300, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdUseHardwareAcceleration)),
-          GetModuleHandleW(nullptr), nullptr);
-      g_chkDisableWidgetDragging = CreateWindowExW(0, L"BUTTON", Tr("manage.setting.disableWidgetDragging", L"Disable Widget Dragging").c_str(),
-          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX | WS_CLIPSIBLINGS,
-          16, 270, 320, 24, m_Window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdDisableWidgetDragging)),
-          GetModuleHandleW(nullptr), nullptr);
-      g_lblWindowsTheme = CreateWindowExW(0, L"STATIC", Tr("settings.theme", L"Theme").c_str(),
-          WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
-          16, 304, 120, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
-      g_cboWindowsTheme = CreateWindowExW(
-          Localization::IsRtl() ? WS_EX_RTLREADING : 0, WC_COMBOBOXW, L"",
-          WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
-          140, 300, 260, 360, m_Window,
-          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdWindowsTheme)),
-          GetModuleHandleW(nullptr), nullptr);
-      PopulateWindowsThemeCombo();
-      g_lblLanguage = CreateWindowExW(0, L"STATIC", Tr("settings.language", L"Language").c_str(),
-          WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
-          16, 340, 120, 24, m_Window, nullptr, GetModuleHandleW(nullptr), nullptr);
+      // Create framed content before the group boxes, then push groups to the
+      // bottom of the z-order so WS_CLIPSIBLINGS cannot clip them away.
+      g_settingsTitle = nullptr;
+      g_lblLanguage = CreateWindowExW(
+          0, L"STATIC", Tr("settings.language", L"Language").c_str(),
+          staticStyle, 0, 0, 0, 0, m_Window, nullptr, instance, nullptr);
       g_cboLanguage = CreateWindowExW(
-          Localization::IsRtl() ? WS_EX_RTLREADING : 0, WC_COMBOBOXW, L"",
-          WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
-          140, 336, 360, 360, m_Window,
+          comboEx, WC_COMBOBOXW, L"", comboStyle, 0, 0, 0, 0, m_Window,
           reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdLanguage)),
-          GetModuleHandleW(nullptr), nullptr);
+          instance, nullptr);
+      g_lblWindowsTheme = CreateWindowExW(
+          0, L"STATIC", Tr("settings.theme", L"Theme").c_str(), staticStyle, 0,
+          0, 0, 0, m_Window, nullptr, instance, nullptr);
+      g_cboWindowsTheme = CreateWindowExW(
+          comboEx, WC_COMBOBOXW, L"", comboStyle, 0, 0, 0, 0, m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdWindowsTheme)),
+          instance, nullptr);
+      PopulateWindowsThemeCombo();
+      g_chkRunOnStartup = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.runOnStartup", L"Run On Startup").c_str(),
+          chkStyle, 0, 0, 0, 0, m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRunOnStartup)),
+          instance, nullptr);
+
+      g_chkAutoUpdate = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.autoCheckUpdates",
+             L"Automatic check for updates")
+              .c_str(),
+          chkStyle, 0, 0, 0, 0, m_Window,
+          reinterpret_cast<HMENU>(
+              static_cast<INT_PTR>(kControlIdAutoCheckUpdates)),
+          instance, nullptr);
+      g_btnCheckUpdates = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.checkUpdates", L"Check for updates...").c_str(),
+          btnStyle, 0, 0, 0, 0, m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdCheckUpdates)),
+          instance, nullptr);
+
+      g_chkEnableLogging = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.enableLogging", L"Enable logging").c_str(),
+          chkStyle, 0, 0, 0, 0, m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdEnableLogging)),
+          instance, nullptr);
+      g_chkEnableDebugging = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.enableDebugging", L"Enable Debugging").c_str(),
+          chkStyle, 0, 0, 0, 0, m_Window,
+          reinterpret_cast<HMENU>(
+              static_cast<INT_PTR>(kControlIdEnableDebugging)),
+          instance, nullptr);
+      g_chkSaveLogToFile = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.saveLogs", L"Save Logs to File").c_str(), chkStyle,
+          0, 0, 0, 0, m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdSaveLogToFile)),
+          instance, nullptr);
+      g_btnShowLogsFile = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.showLogsFile", L"Show Logs file").c_str(),
+          btnStyle, 0, 0, 0, 0, m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdShowLogsFile)),
+          instance, nullptr);
+      g_btnDeleteLogsFile = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.deleteLogsFile", L"Delete Logs file").c_str(),
+          btnStyle, 0, 0, 0, 0, m_Window,
+          reinterpret_cast<HMENU>(
+              static_cast<INT_PTR>(kControlIdDeleteLogsFile)),
+          instance, nullptr);
+
+      g_chkUseHardwareAcceleration = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.hardwareAcceleration",
+             L"Use Hardware Acceleration")
+              .c_str(),
+          chkStyle, 0, 0, 0, 0, m_Window,
+          reinterpret_cast<HMENU>(
+              static_cast<INT_PTR>(kControlIdUseHardwareAcceleration)),
+          instance, nullptr);
+      g_chkDisableWidgetDragging = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.disableWidgetDragging",
+             L"Disable Widget Dragging")
+              .c_str(),
+          chkStyle, 0, 0, 0, 0, m_Window,
+          reinterpret_cast<HMENU>(
+              static_cast<INT_PTR>(kControlIdDisableWidgetDragging)),
+          instance, nullptr);
+      g_btnClearImageCache = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.clearImageCache", L"Clear Image Cache").c_str(),
+          btnStyle, 0, 0, 0, 0, m_Window,
+          reinterpret_cast<HMENU>(
+              static_cast<INT_PTR>(kControlIdClearImageCache)),
+          instance, nullptr);
+      g_btnClearFontCache = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.clearFontCache", L"Clear Font Cache").c_str(),
+          btnStyle, 0, 0, 0, 0, m_Window,
+          reinterpret_cast<HMENU>(
+              static_cast<INT_PTR>(kControlIdClearFontCache)),
+          instance, nullptr);
+
+      g_grpGeneral = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.group.general", L"General & Appearance").c_str(),
+          groupStyle, 0, 0, 0, 0, m_Window, nullptr, instance, nullptr);
+      g_grpUpdates = CreateWindowExW(
+          0, L"BUTTON", Tr("manage.setting.group.updates", L"Updates").c_str(),
+          groupStyle, 0, 0, 0, 0, m_Window, nullptr, instance, nullptr);
+      g_grpDiagnostics = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.group.diagnostics", L"Diagnostics & Logging")
+              .c_str(),
+          groupStyle, 0, 0, 0, 0, m_Window, nullptr, instance, nullptr);
+      g_grpPerformance = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.setting.group.performance", L"Performance & UI").c_str(),
+          groupStyle, 0, 0, 0, 0, m_Window, nullptr, instance, nullptr);
+
       const std::string currentLanguage = CommonSettings::GetUiLanguage();
       int selectedLanguage = 0;
       int languageIndex = 0;
@@ -2767,30 +2943,46 @@ public:
             reinterpret_cast<LPARAM>(label.c_str())));
         SendMessageW(g_cboLanguage, CB_SETITEMDATA, added,
                      reinterpret_cast<LPARAM>(language.tag));
-        if (currentLanguage == language.tag) selectedLanguage = languageIndex;
+        if (currentLanguage == language.tag)
+          selectedLanguage = languageIndex;
         ++languageIndex;
       }
       SendMessageW(g_cboLanguage, CB_SETCURSEL, selectedLanguage, 0);
 
       if (g_buttonFont) {
-        SendMessageW(g_settingsTitle, WM_SETFONT, (WPARAM)g_aboutSectionFont, TRUE);
+        SendMessageW(g_grpGeneral, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_grpUpdates, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_grpDiagnostics, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_grpPerformance, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkRunOnStartup, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_btnCheckUpdates, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkAutoUpdate, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkEnableLogging, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkEnableDebugging, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkSaveLogToFile, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_btnShowLogsFile, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_btnDeleteLogsFile, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkUseHardwareAcceleration, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_chkDisableWidgetDragging, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_btnClearImageCache, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_btnClearFontCache, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_lblWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_cboWindowsTheme, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_lblLanguage, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_cboLanguage, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       }
+
       RefreshSettingsControls();
       if (Localization::IsRtl()) {
         ApplyLocalizedText();
       }
+    }
+
+    virtual void OnInitialized() override {
+      RECT rc{};
+      GetClientRect(m_Window, &rc);
+      Relayout(rc.right - rc.left, rc.bottom - rc.top);
+      EnsureSettingsGroupsZOrder();
     }
 
     virtual INT_PTR HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override {
@@ -2805,6 +2997,30 @@ public:
         case kControlIdDisableWidgetDragging:
           if (HIWORD(wParam) == BN_CLICKED) {
             OnSettingsControlClicked(LOWORD(wParam));
+            return TRUE;
+          }
+          break;
+        case kControlIdShowLogsFile:
+          if (HIWORD(wParam) == BN_CLICKED) {
+            OnShowLogsFile();
+            return TRUE;
+          }
+          break;
+        case kControlIdDeleteLogsFile:
+          if (HIWORD(wParam) == BN_CLICKED) {
+            OnDeleteLogsFile();
+            return TRUE;
+          }
+          break;
+        case kControlIdClearImageCache:
+          if (HIWORD(wParam) == BN_CLICKED) {
+            OnClearDiskCache(L"--clear-image-cache");
+            return TRUE;
+          }
+          break;
+        case kControlIdClearFontCache:
+          if (HIWORD(wParam) == BN_CLICKED) {
+            OnClearDiskCache(L"--clear-font-cache");
             return TRUE;
           }
           break;
@@ -2879,23 +3095,63 @@ public:
     }
 
     virtual void Relayout(int w, int h) override {
-      const int L = 20;              // left margin
-      const int sw = w - L - 20;    // control width to right margin
-      const int ch = 26;            // standard control height
-      const int bh = 30;            // button height
-      if (g_settingsTitle)              MoveWindow(g_settingsTitle,              L,       16, sw,       20, TRUE);
-      if (g_chkRunOnStartup)            MoveWindow(g_chkRunOnStartup,            L,       50, sw,       ch, TRUE);
-      if (g_btnCheckUpdates)            MoveWindow(g_btnCheckUpdates,            L,       86, 200,      bh, TRUE);
-      if (g_chkAutoUpdate)              MoveWindow(g_chkAutoUpdate,          L + 216,    90, sw - 216, ch, TRUE);
-      if (g_chkEnableLogging)           MoveWindow(g_chkEnableLogging,           L,      134, sw,       ch, TRUE);
-      if (g_chkEnableDebugging)         MoveWindow(g_chkEnableDebugging,         L,      168, sw,       ch, TRUE);
-      if (g_chkSaveLogToFile)           MoveWindow(g_chkSaveLogToFile,           L,      202, sw,       ch, TRUE);
-      if (g_chkUseHardwareAcceleration) MoveWindow(g_chkUseHardwareAcceleration, L,      236, sw,       ch, TRUE);
-      if (g_chkDisableWidgetDragging)   MoveWindow(g_chkDisableWidgetDragging,   L,      270, sw,       ch, TRUE);
-      if (g_lblWindowsTheme)            MoveWindow(g_lblWindowsTheme,            L,      304, 120,      24, TRUE);
-      if (g_cboWindowsTheme)            MoveWindow(g_cboWindowsTheme,        L + 124,  300, 260,     360, TRUE);
-      if (g_lblLanguage)                MoveWindow(g_lblLanguage,                L,      340, 120,      24, TRUE);
-      if (g_cboLanguage)                MoveWindow(g_cboLanguage,            L + 124,  336, 360,     360, TRUE);
+      const int margin = 12;
+      const int gap = 10;
+      const int pad = 14;
+      const int row = 26;
+      const int btnH = 28;
+      const int comboH = 360;
+      const int usable = (std::max)(240, w - margin * 2);
+      const int colW = (usable - gap) / 2;
+      const int leftX = margin;
+      const int rightX = margin + colW + gap;
+      const int topY = 10;
+      const int bottomY = topY + 210 + gap;
+      const int topH = 210;
+      const int bottomH = (std::max)(220, h - bottomY - margin);
+
+      auto place = [](HWND hwnd, int x, int y, int cw, int ch) {
+        if (hwnd)
+          MoveWindow(hwnd, x, y, cw, ch, TRUE);
+      };
+
+      place(g_grpGeneral, leftX, topY, colW, topH);
+      place(g_grpUpdates, rightX, topY, colW, topH);
+      place(g_grpDiagnostics, leftX, bottomY, colW, bottomH);
+      place(g_grpPerformance, rightX, bottomY, colW, bottomH);
+
+      const int gL = leftX + pad;
+      const int gW = colW - pad * 2;
+      const int labelW = (std::min)(100, gW / 3);
+      const int comboW = gW - labelW - 8;
+      place(g_lblLanguage, gL, topY + 28, labelW, 22);
+      place(g_cboLanguage, gL + labelW + 8, topY + 24, comboW, comboH);
+      place(g_lblWindowsTheme, gL, topY + 64, labelW, 22);
+      place(g_cboWindowsTheme, gL + labelW + 8, topY + 60, comboW, comboH);
+      place(g_chkRunOnStartup, gL, topY + 100, gW, row);
+
+      const int uL = rightX + pad;
+      const int uW = colW - pad * 2;
+      place(g_chkAutoUpdate, uL, topY + 28, uW, row);
+      place(g_btnCheckUpdates, uL, topY + 64, (std::min)(200, uW), btnH);
+
+      const int dL = leftX + pad;
+      const int dW = colW - pad * 2;
+      place(g_chkEnableLogging, dL, bottomY + 28, dW, row);
+      place(g_chkEnableDebugging, dL, bottomY + 58, dW, row);
+      place(g_chkSaveLogToFile, dL, bottomY + 88, dW, row);
+      const int logBtnW = (dW - 8) / 2;
+      place(g_btnShowLogsFile, dL, bottomY + 124, logBtnW, btnH);
+      place(g_btnDeleteLogsFile, dL + logBtnW + 8, bottomY + 124, logBtnW, btnH);
+
+      const int pL = rightX + pad;
+      const int pW = colW - pad * 2;
+      place(g_chkUseHardwareAcceleration, pL, bottomY + 28, pW, row);
+      place(g_chkDisableWidgetDragging, pL, bottomY + 58, pW, row);
+      place(g_btnClearImageCache, pL, bottomY + 100, (std::min)(200, pW), btnH);
+      place(g_btnClearFontCache, pL, bottomY + 136, (std::min)(200, pW), btnH);
+
+      EnsureSettingsGroupsZOrder();
     }
   };
 
@@ -3112,10 +3368,14 @@ public:
 
     g_list = g_logsList = g_addonsList = nullptr;
     g_settingsPanel = g_aboutPanel = nullptr;
-    g_settingsTitle = g_chkRunOnStartup = g_btnCheckUpdates = nullptr;
+    g_settingsTitle = nullptr;
+    g_grpGeneral = g_grpUpdates = g_grpDiagnostics = g_grpPerformance = nullptr;
+    g_chkRunOnStartup = g_btnCheckUpdates = nullptr;
     g_chkAutoUpdate = g_chkEnableLogging = g_chkEnableDebugging = nullptr;
-    g_chkSaveLogToFile = g_chkUseHardwareAcceleration =
-        g_chkDisableWidgetDragging = nullptr;
+    g_chkSaveLogToFile = g_btnShowLogsFile = g_btnDeleteLogsFile = nullptr;
+    g_chkUseHardwareAcceleration = g_chkDisableWidgetDragging = nullptr;
+    g_btnClearImageCache = g_btnClearFontCache = nullptr;
+    g_lblWindowsTheme = g_cboWindowsTheme = nullptr;
     g_lblLanguage = g_cboLanguage = nullptr;
     g_aboutLogo = g_aboutAppName = g_aboutVersion = g_aboutCopyright = nullptr;
     g_aboutDivider = g_aboutHomeLabel = g_aboutHomeLink = nullptr;
@@ -3524,15 +3784,52 @@ static void ApplyLocalizedText() {
   SetWindowTextW(g_btnRefresh, Tr("manage.button.refresh", L"Refresh").c_str());
   SetWindowTextW(g_btnRefreshAll, Tr("manage.button.refreshAll", L"Refresh All").c_str());
   SetWindowTextW(g_btnClose, Tr("button.close", L"Close").c_str());
-  SetWindowTextW(g_settingsTitle, Tr("settings.title", L"Manage Settings").c_str());
-  SetWindowTextW(g_chkRunOnStartup, Tr("manage.setting.runOnStartup", L"Run On Startup").c_str());
-  SetWindowTextW(g_btnCheckUpdates, Tr("manage.setting.checkUpdates", L"Check for Updates").c_str());
-  SetWindowTextW(g_chkAutoUpdate, Tr("manage.setting.autoCheckUpdates", L"Automatically check for updates").c_str());
-  SetWindowTextW(g_chkEnableLogging, Tr("manage.setting.enableLogging", L"Enable Logging").c_str());
-  SetWindowTextW(g_chkEnableDebugging, Tr("manage.setting.enableDebugging", L"Enable Debugging").c_str());
-  SetWindowTextW(g_chkSaveLogToFile, Tr("manage.setting.saveLogs", L"Save Logs to File").c_str());
-  SetWindowTextW(g_chkUseHardwareAcceleration, Tr("manage.setting.hardwareAcceleration", L"Use Hardware Acceleration").c_str());
-  SetWindowTextW(g_chkDisableWidgetDragging, Tr("manage.setting.disableWidgetDragging", L"Disable Widget Dragging").c_str());
+  SetWindowTextW(g_grpGeneral,
+                 Tr("manage.setting.group.general", L"General & Appearance").c_str());
+  SetWindowTextW(g_grpUpdates,
+                 Tr("manage.setting.group.updates", L"Updates").c_str());
+  SetWindowTextW(
+      g_grpDiagnostics,
+      Tr("manage.setting.group.diagnostics", L"Diagnostics & Logging").c_str());
+  SetWindowTextW(
+      g_grpPerformance,
+      Tr("manage.setting.group.performance", L"Performance & UI").c_str());
+  SetWindowTextW(g_chkRunOnStartup,
+                 Tr("manage.setting.runOnStartup", L"Run On Startup").c_str());
+  SetWindowTextW(
+      g_btnCheckUpdates,
+      Tr("manage.setting.checkUpdates", L"Check for updates...").c_str());
+  SetWindowTextW(g_chkAutoUpdate,
+                 Tr("manage.setting.autoCheckUpdates",
+                    L"Automatic check for updates")
+                     .c_str());
+  SetWindowTextW(g_chkEnableLogging,
+                 Tr("manage.setting.enableLogging", L"Enable logging").c_str());
+  SetWindowTextW(
+      g_chkEnableDebugging,
+      Tr("manage.setting.enableDebugging", L"Enable Debugging").c_str());
+  SetWindowTextW(g_chkSaveLogToFile,
+                 Tr("manage.setting.saveLogs", L"Save Logs to File").c_str());
+  SetWindowTextW(
+      g_btnShowLogsFile,
+      Tr("manage.setting.showLogsFile", L"Show Logs file").c_str());
+  SetWindowTextW(
+      g_btnDeleteLogsFile,
+      Tr("manage.setting.deleteLogsFile", L"Delete Logs file").c_str());
+  SetWindowTextW(g_chkUseHardwareAcceleration,
+                 Tr("manage.setting.hardwareAcceleration",
+                    L"Use Hardware Acceleration")
+                     .c_str());
+  SetWindowTextW(g_chkDisableWidgetDragging,
+                 Tr("manage.setting.disableWidgetDragging",
+                    L"Disable Widget Dragging")
+                     .c_str());
+  SetWindowTextW(
+      g_btnClearImageCache,
+      Tr("manage.setting.clearImageCache", L"Clear Image Cache").c_str());
+  SetWindowTextW(
+      g_btnClearFontCache,
+      Tr("manage.setting.clearFontCache", L"Clear Font Cache").c_str());
   SetWindowTextW(g_lblWindowsTheme, Tr("settings.theme", L"Theme").c_str());
   SetWindowTextW(g_lblLanguage, Tr("settings.language", L"Language").c_str());
   PopulateWindowsThemeCombo();
@@ -3582,8 +3879,9 @@ static void ApplyThemeToManageWindow(HWND hWnd) {
     }
   }
 
-  // Theme re-applies WS_CLIPSIBLINGS; keep Support Section content visible.
+  // Theme re-applies WS_CLIPSIBLINGS; keep framed content above group boxes.
   EnsureAboutSupportZOrder();
+  EnsureSettingsGroupsZOrder();
 
   RedrawWindow(hWnd, nullptr, nullptr,
                RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
