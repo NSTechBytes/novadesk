@@ -507,10 +507,11 @@ void Dialog::DrawMenuButtonArrow(HWND hWnd, HDC dc)
 	GetClientRect(hWnd, &buttonRect);
 	const UINT dpi = GetDpiForWindow(hWnd);
 	const int arrowOffset = MulDiv(18, (int)dpi, 96);
-	const int arrowTop = MulDiv(4, (int)dpi, 96);
 	const int arrowSize = MulDiv(14, (int)dpi, 96);
-	int arrowX = buttonRect.right - arrowOffset;
-	int arrowY = buttonRect.top + arrowTop;
+	const int arrowX = buttonRect.right - arrowOffset;
+	const int arrowY =
+	    buttonRect.top +
+	    (std::max)(0L, (buttonRect.bottom - buttonRect.top - arrowSize) / 2);
 	RECT arrowRect = { arrowX, arrowY, arrowX + arrowSize, arrowY + arrowSize };
 
 	DWORD drawFlags = DFCS_TRANSPARENT | g_MenuArrowDown | (IsWindowEnabled(hWnd) ? 0 : DFCS_INACTIVE);
@@ -543,13 +544,14 @@ LRESULT CALLBACK Dialog::MenuButtonProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
 	switch (uMsg)
 	{
 	case WM_PAINT:
+		// Light mode: theme does not subclass buttons, so paint the chevron
+		// here. Dark mode draws it from WindowsTheme::DrawButton instead.
 		if (!WindowsTheme::IsUsingDarkMode())
 		{
 			HDC dc = GetDC(hWnd);
 			DrawMenuButtonArrow(hWnd, dc);
 			ReleaseDC(hWnd, dc);
 		}
-
 		break;
 
 	case WM_GETTEXT:

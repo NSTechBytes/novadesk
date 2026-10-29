@@ -10,6 +10,7 @@
 #include "WindowsTheme.h"
 
 #include "CommonSettings.h"
+#include "Dialog.h"
 
 #include <atomic>
 #include <fstream>
@@ -240,6 +241,8 @@ void DrawButton(HWND w, HDC dc, RECT r) {
         pressed || hot ? st.brHotBg : st.brControlBg, &content);
     if (pressed) OffsetRect(&content, 1, 1);
     DrawLabel(w, dc, content, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    // Menu-buttons (Dialog::SetMenuButton) need a chevron after the label.
+    Dialog::DrawMenuButtonArrow(w, dc);
   }
 }
 

@@ -55,6 +55,9 @@ public:
 	static void Initialize(HACCEL accelerator) { c_Accelerator = accelerator; }
 	static bool HandleMessage(MSG& msg);
 	static void DrawMenuButtonArrow(HWND window, HDC dc);
+	static void SetMenuButton(HWND button);
+	static UINT ShowMenuButtonPopupMenu(HMENU menu, HWND button, HWND window,
+	                                    UINT extraFlags = 0);
 
 protected:
 	class Tab : public BaseDialog
@@ -119,9 +122,6 @@ protected:
 	void SelectTab(int index);
 	Tab& GetActiveTab();
 	virtual void ActivateTab();
-
-	static void SetMenuButton(HWND button);
-	static UINT ShowMenuButtonPopupMenu(HMENU menu, HWND button, HWND window, UINT extraFlags = 0);
 
 protected:
 	WINDOWPLACEMENT* m_WindowPlacement;

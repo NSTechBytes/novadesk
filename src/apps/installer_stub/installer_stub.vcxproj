@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -93,6 +93,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\installer_stub.cpp" />
+    <ClCompile Include="..\..\common\Dialog.cpp" />
+    <ClCompile Include="..\..\common\ControlTemplate.cpp" />
     <ClCompile Include="..\..\common\WindowsTheme.cpp" />
     <ClCompile Include="..\..\common\CommonSettings.cpp" />
     <ClCompile Include="..\..\common\DpiUtil.cpp" />

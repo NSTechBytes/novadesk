@@ -94,6 +94,8 @@ static bool g_novadeskRunning = false;
 static HMENU g_trayMenu = nullptr;
 static HWND g_btnRefreshList = nullptr;
 static HWND g_btnClearLogs = nullptr;
+static HWND g_btnLogSeverity = nullptr;
+static HWND g_btnLogOutput = nullptr;
 static HWND g_btnLoad = nullptr;
 static HWND g_btnRefresh = nullptr;
 static HWND g_btnRefreshAll = nullptr;
@@ -158,6 +160,11 @@ struct ManagedLogRow {
 // Newest entries at the front. Survives lazy Logs-tab creation so pipe
 // output captured before the list exists is not discarded.
 static std::deque<ManagedLogRow> g_logRows;
+// Session-only severity filters (Rainmeter-style); all on by default.
+static bool g_logFilterError = true;
+static bool g_logFilterWarning = true;
+static bool g_logFilterInfo = true;
+static bool g_logFilterDebug = true;
 static int g_activeTab = 0;
 static int g_logsMessageColumnWidth = 600;
 static std::unordered_map<std::wstring, std::wstring> g_savedLoadedScripts;
@@ -174,6 +181,8 @@ static HFONT g_aboutBodyFont = nullptr;
 
 static const int kControlIdRefreshList = 101;
 static const int kControlIdClearLogs = 108;
+static const int kControlIdLogSeverity = 109;
+static const int kControlIdLogOutput = 110;
 static const int kControlIdLoad = 102;
 static const int kControlIdRefresh = 104;
 static const int kControlIdRefreshAll = 105;
@@ -199,6 +208,15 @@ static const int kControlIdAboutDonate = 203;
 static const int kLogMenuCopyMessage = 401;
 static const int kLogMenuCopyFullLog = 402;
 static const int kLogMenuCopyAllLogs = 403;
+static const int kLogMenuFilterErrors = 410;
+static const int kLogMenuFilterWarnings = 411;
+static const int kLogMenuFilterInfo = 412;
+static const int kLogMenuFilterDebug = 413;
+static const int kLogMenuVerboseDebugging = 414;
+static const int kLogMenuWriteToFile = 420;
+static const int kLogMenuStopWriting = 421;
+static const int kLogMenuOpenLogFile = 422;
+static const int kLogMenuRemoveLogFile = 423;
 static const UINT kLogAppendMessage = WM_APP + 20;
 static const UINT_PTR kLogsRefreshTimerId = 1;
 static const UINT_PTR kAutoUpdateTimerId = 2;
@@ -354,7 +372,7 @@ enum LogIconIndex : int {
 
 static constexpr int kLogIconSize = 16;
 
-static int LogLevelToIconIndex(const std::wstring &level) {
+static std::wstring NormalizeLogLevel(const std::wstring &level) {
   std::wstring normalized = level;
   while (!normalized.empty() &&
          (normalized.front() == L'[' || normalized.front() == L' '))
@@ -364,7 +382,11 @@ static int LogLevelToIconIndex(const std::wstring &level) {
     normalized.pop_back();
   std::transform(normalized.begin(), normalized.end(), normalized.begin(),
                  ::towupper);
+  return normalized;
+}
 
+static int LogLevelToIconIndex(const std::wstring &level) {
+  const std::wstring normalized = NormalizeLogLevel(level);
   if (normalized == L"DEBUG" || normalized == L"DBG")
     return kLogIconDebug;
   if (normalized == L"WARN" || normalized == L"WARNING")
@@ -374,6 +396,29 @@ static int LogLevelToIconIndex(const std::wstring &level) {
     return kLogIconError;
   // INFO / LOG / unknown → info icon
   return kLogIconInfo;
+}
+
+static bool LogRowPassesFilter(const ManagedLogRow &row) {
+  switch (LogLevelToIconIndex(row.level)) {
+  case kLogIconError:
+    return g_logFilterError;
+  case kLogIconWarning:
+    return g_logFilterWarning;
+  case kLogIconDebug:
+    return g_logFilterDebug;
+  case kLogIconInfo:
+  default:
+    return g_logFilterInfo;
+  }
+}
+
+static int CountVisibleLogRows() {
+  int count = 0;
+  for (const auto &row : g_logRows) {
+    if (LogRowPassesFilter(row))
+      ++count;
+  }
+  return count;
 }
 
 static void DestroyLogsImageList() {
@@ -652,7 +697,6 @@ static void ResendFontsToAllControls() {
   // Main window controls
   setFont(g_tab,            g_buttonFont);
   setFont(g_btnRefreshList, g_buttonFont);
-  setFont(g_btnClearLogs,   g_buttonFont);
   setFont(g_btnLoad,        g_buttonFont);
   setFont(g_btnRefresh,     g_buttonFont);
   setFont(g_btnRefreshAll,  g_buttonFont);
@@ -660,6 +704,9 @@ static void ResendFontsToAllControls() {
   // Widgets tab
   setFont(g_list,           g_buttonFont);
   // Logs tab
+  setFont(g_btnLogSeverity, g_buttonFont);
+  setFont(g_btnLogOutput,   g_buttonFont);
+  setFont(g_btnClearLogs,   g_buttonFont);
   setFont(g_logsList,       g_buttonFont);
   // Addons tab
   setFont(g_addonsList,     g_buttonFont);
@@ -1749,12 +1796,19 @@ static bool RunProcessWait(const std::wstring &exePath,
 
 static void UpdateButtonState();
 static void RefreshLogsView();
+static void RebuildLogsListFromBuffer();
 static void ApplyTabState();
 static void OnToggleLoadSelected();
 static void OnClearLogs();
+static void OnShowLogsFile();
+static void OnDeleteLogsFile();
+static std::wstring GetNovadeskLogFilePath();
+static void UpdateLogFileButtonsEnabled();
 static std::wstring GetListViewText(HWND list, int row, int subItem);
 static bool CopyTextToClipboard(HWND owner, const std::wstring &text);
 static void ShowLogsContextMenu(HWND hWnd, int x, int y);
+static void ShowLogSeverityMenu(HWND owner, HWND button);
+static void ShowLogOutputMenu(HWND owner, HWND button);
 
 static void AutoExpandLogsMessageColumn(const std::wstring &message);
 
@@ -1927,7 +1981,7 @@ static void ShowLogsContextMenu(HWND hWnd, int x, int y) {
 }
 
 static void InsertLogRowIntoList(const ManagedLogRow &row) {
-  if (!g_logsList)
+  if (!g_logsList || !LogRowPassesFilter(row))
     return;
 
   LVITEMW item{};
@@ -2196,12 +2250,8 @@ static void UpdateButtonState() {
   EnableWindow(g_btnRefresh, isLoaded ? TRUE : FALSE);
 }
 
-static void RefreshLogsView() {
+static void RebuildLogsListFromBuffer() {
   if (!g_logsList)
-    return;
-
-  // Already in sync with the in-memory buffer (live AppendLogRow path).
-  if (ListView_GetItemCount(g_logsList) == static_cast<int>(g_logRows.size()))
     return;
 
   SendMessageW(g_logsList, WM_SETREDRAW, FALSE, 0);
@@ -2212,8 +2262,18 @@ static void RefreshLogsView() {
   SendMessageW(g_logsList, WM_SETREDRAW, TRUE, 0);
   RedrawWindow(g_logsList, nullptr, nullptr,
                RDW_ERASE | RDW_FRAME | RDW_INVALIDATE | RDW_ALLCHILDREN);
-  if (!g_logRows.empty())
+  if (ListView_GetItemCount(g_logsList) > 0)
     ListView_EnsureVisible(g_logsList, 0, FALSE);
+}
+
+static void RefreshLogsView() {
+  if (!g_logsList)
+    return;
+
+  // Already in sync with the filtered visible set (live AppendLogRow path).
+  if (ListView_GetItemCount(g_logsList) == CountVisibleLogRows())
+    return;
+  RebuildLogsListFromBuffer();
 }
 
 static void OnClearLogs() {
@@ -2221,6 +2281,59 @@ static void OnClearLogs() {
   g_pendingLogLine.clear();
   if (g_logsList)
     ListView_DeleteAllItems(g_logsList);
+}
+
+static void ShowLogSeverityMenu(HWND owner, HWND button) {
+  HMENU menu = CreatePopupMenu();
+  if (!menu)
+    return;
+  AppendMenuW(menu, MF_STRING | (g_logFilterError ? MF_CHECKED : 0),
+              kLogMenuFilterErrors,
+              Tr("manage.logs.errors", L"Errors").c_str());
+  AppendMenuW(menu, MF_STRING | (g_logFilterWarning ? MF_CHECKED : 0),
+              kLogMenuFilterWarnings,
+              Tr("manage.logs.warnings", L"Warnings").c_str());
+  AppendMenuW(menu, MF_STRING | (g_logFilterInfo ? MF_CHECKED : 0),
+              kLogMenuFilterInfo, Tr("manage.logs.info", L"Info").c_str());
+  AppendMenuW(menu, MF_STRING | (g_logFilterDebug ? MF_CHECKED : 0),
+              kLogMenuFilterDebug, Tr("manage.logs.debug", L"Debug").c_str());
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  const bool verbose = GetNovadeskSettingBool("enableDebugging", false);
+  AppendMenuW(menu, MF_STRING | (verbose ? MF_CHECKED : 0),
+              kLogMenuVerboseDebugging,
+              Tr("manage.logs.verboseDebugging", L"Verbose Debugging").c_str());
+  Dialog::ShowMenuButtonPopupMenu(menu, button, owner);
+  DestroyMenu(menu);
+  if (g_logsList)
+    SetFocus(g_logsList);
+}
+
+static void ShowLogOutputMenu(HWND owner, HWND button) {
+  HMENU menu = CreatePopupMenu();
+  if (!menu)
+    return;
+  const std::wstring path = GetNovadeskLogFilePath();
+  std::error_code ec;
+  const bool fileExists =
+      !path.empty() && std::filesystem::exists(path, ec) && !ec;
+  const bool writing = GetNovadeskSettingBool("saveLogToFile", false);
+
+  AppendMenuW(menu, MF_STRING | (writing ? MF_GRAYED : 0), kLogMenuWriteToFile,
+              Tr("manage.logs.writeToFile", L"Write to File").c_str());
+  AppendMenuW(menu, MF_STRING | ((!writing || !fileExists) ? MF_GRAYED : 0),
+              kLogMenuStopWriting,
+              Tr("manage.logs.stopWriting", L"Stop Writing").c_str());
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING | (fileExists ? 0 : MF_GRAYED),
+              kLogMenuOpenLogFile,
+              Tr("manage.logs.openLogFile", L"Open Log File").c_str());
+  AppendMenuW(menu, MF_STRING | (fileExists ? 0 : MF_GRAYED),
+              kLogMenuRemoveLogFile,
+              Tr("manage.logs.removeLogFile", L"Remove Log File").c_str());
+  Dialog::ShowMenuButtonPopupMenu(menu, button, owner);
+  DestroyMenu(menu);
+  if (g_logsList)
+    SetFocus(g_logsList);
 }
 
 static bool ExecuteNovadeskCommandNoPath(const std::wstring &cmd) {
@@ -2739,13 +2852,35 @@ public:
 
     virtual void Initialize() override {
       m_Initialized = true;
-      RECT rc{};
-      GetClientRect(m_Window, &rc);
+      HINSTANCE instance = GetModuleHandleW(nullptr);
+      const DWORD btnStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON;
+
+      g_btnLogSeverity = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.logs.severity", L"Severity").c_str(), btnStyle, 0, 0, 0, 0,
+          m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdLogSeverity)),
+          instance, nullptr);
+      g_btnLogOutput = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.logs.logOutput", L"Log Output").c_str(), btnStyle, 0, 0, 0,
+          0, m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdLogOutput)),
+          instance, nullptr);
+      g_btnClearLogs = CreateWindowExW(
+          0, L"BUTTON",
+          Tr("manage.logs.clearView", L"Clear View").c_str(), btnStyle, 0, 0, 0,
+          0, m_Window,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdClearLogs)),
+          instance, nullptr);
+      Dialog::SetMenuButton(g_btnLogSeverity);
+      Dialog::SetMenuButton(g_btnLogOutput);
+
       g_logsList = CreateWindowExW(
           0, WC_LISTVIEWW, L"",
-          WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_HSCROLL | WS_CLIPSIBLINGS,
-          0, 0, rc.right, rc.bottom, m_Window, nullptr,
-          GetModuleHandleW(nullptr), nullptr);
+          WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS |
+              WS_HSCROLL | WS_CLIPSIBLINGS,
+          0, 0, 0, 0, m_Window, nullptr, instance, nullptr);
       ListView_SetExtendedListViewStyle(g_logsList,
                                         LVS_EX_FULLROWSELECT |
                                             LVS_EX_DOUBLEBUFFER);
@@ -2754,39 +2889,136 @@ public:
 
       LVCOLUMNW lcol{};
       lcol.mask = LVCF_TEXT | LVCF_WIDTH;
-      // Level first so the icon + type are visible at the start of each row.
-      lcol.pszText = const_cast<wchar_t *>(Tr("manage.column.level", L"Level").c_str());
+      lcol.pszText =
+          const_cast<wchar_t *>(Tr("manage.column.level", L"Level").c_str());
       lcol.cx = 90;
       ListView_InsertColumn(g_logsList, 0, &lcol);
-      lcol.pszText = const_cast<wchar_t *>(Tr("manage.column.time", L"Time").c_str());
+      lcol.pszText =
+          const_cast<wchar_t *>(Tr("manage.column.time", L"Time").c_str());
       lcol.cx = 190;
       ListView_InsertColumn(g_logsList, 1, &lcol);
-      lcol.pszText = const_cast<wchar_t *>(Tr("manage.column.source", L"Source").c_str());
+      lcol.pszText =
+          const_cast<wchar_t *>(Tr("manage.column.source", L"Source").c_str());
       lcol.cx = 120;
       ListView_InsertColumn(g_logsList, 2, &lcol);
-      lcol.pszText = const_cast<wchar_t *>(Tr("manage.column.message", L"Message").c_str());
+      lcol.pszText = const_cast<wchar_t *>(
+          Tr("manage.column.message", L"Message").c_str());
       lcol.cx = g_logsMessageColumnWidth;
       ListView_InsertColumn(g_logsList, 3, &lcol);
 
       if (g_buttonFont) {
+        SendMessageW(g_btnLogSeverity, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_btnLogOutput, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
+        SendMessageW(g_btnClearLogs, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
         SendMessageW(g_logsList, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       }
-      RefreshLogsView();
+
+      RECT page{};
+      GetClientRect(m_Window, &page);
+      Relayout(page.right, page.bottom);
+      RebuildLogsListFromBuffer();
     }
 
     virtual INT_PTR HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override {
       if (uMsg == WM_CONTEXTMENU) {
         if (reinterpret_cast<HWND>(wParam) == g_logsList) {
-          ShowLogsContextMenu(m_Window, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+          ShowLogsContextMenu(m_Window, GET_X_LPARAM(lParam),
+                              GET_Y_LPARAM(lParam));
           return TRUE;
+        }
+      }
+      if (uMsg == WM_COMMAND) {
+        const int id = LOWORD(wParam);
+        switch (id) {
+        case kControlIdLogSeverity:
+          if (HIWORD(wParam) == BN_CLICKED) {
+            ShowLogSeverityMenu(m_Window, reinterpret_cast<HWND>(lParam));
+            return TRUE;
+          }
+          break;
+        case kControlIdLogOutput:
+          if (HIWORD(wParam) == BN_CLICKED) {
+            ShowLogOutputMenu(m_Window, reinterpret_cast<HWND>(lParam));
+            return TRUE;
+          }
+          break;
+        case kControlIdClearLogs:
+          if (HIWORD(wParam) == BN_CLICKED) {
+            OnClearLogs();
+            return TRUE;
+          }
+          break;
+        case kLogMenuFilterErrors:
+          g_logFilterError = !g_logFilterError;
+          RebuildLogsListFromBuffer();
+          return TRUE;
+        case kLogMenuFilterWarnings:
+          g_logFilterWarning = !g_logFilterWarning;
+          RebuildLogsListFromBuffer();
+          return TRUE;
+        case kLogMenuFilterInfo:
+          g_logFilterInfo = !g_logFilterInfo;
+          RebuildLogsListFromBuffer();
+          return TRUE;
+        case kLogMenuFilterDebug:
+          g_logFilterDebug = !g_logFilterDebug;
+          RebuildLogsListFromBuffer();
+          return TRUE;
+        case kLogMenuVerboseDebugging: {
+          const bool next = !GetNovadeskSettingBool("enableDebugging", false);
+          SetNovadeskSettingBool("enableDebugging", next);
+          ExecuteNovadeskCommandNoPath(next ? L"--enable-debugging"
+                                            : L"--disable-debugging");
+          return TRUE;
+        }
+        case kLogMenuWriteToFile:
+          SetNovadeskSettingBool("saveLogToFile", true);
+          ExecuteNovadeskCommandNoPath(L"--enable-save-log-to-file");
+          if (g_chkSaveLogToFile)
+            SendMessageW(g_chkSaveLogToFile, BM_SETCHECK, BST_CHECKED, 0);
+          UpdateLogFileButtonsEnabled();
+          return TRUE;
+        case kLogMenuStopWriting:
+          SetNovadeskSettingBool("saveLogToFile", false);
+          ExecuteNovadeskCommandNoPath(L"--disable-save-log-to-file");
+          if (g_chkSaveLogToFile)
+            SendMessageW(g_chkSaveLogToFile, BM_SETCHECK, BST_UNCHECKED, 0);
+          UpdateLogFileButtonsEnabled();
+          return TRUE;
+        case kLogMenuOpenLogFile:
+          OnShowLogsFile();
+          return TRUE;
+        case kLogMenuRemoveLogFile:
+          OnDeleteLogsFile();
+          return TRUE;
+        default:
+          break;
         }
       }
       return FALSE;
     }
 
     virtual void Relayout(int w, int h) override {
+      const int topPad = 10;
+      const int hPad = 8;
+      const int toolbarH = 30;
+      const int gapBelow = 12;
+      const int gap = 8;
+      const int severityW = 118;
+      const int outputW = 128;
+      const int clearW = 118;
+      const int innerW = (std::max)(0, w - 2 * hPad);
+      if (g_btnLogSeverity)
+        MoveWindow(g_btnLogSeverity, hPad, topPad, severityW, toolbarH, TRUE);
+      if (g_btnLogOutput)
+        MoveWindow(g_btnLogOutput, hPad + severityW + gap, topPad, outputW, toolbarH,
+                   TRUE);
+      if (g_btnClearLogs)
+        MoveWindow(g_btnClearLogs, (std::max)(0, w - hPad - clearW), topPad, clearW,
+                   toolbarH, TRUE);
       if (g_logsList) {
-        MoveWindow(g_logsList, 0, 0, w, h, TRUE);
+        const int listTop = topPad + toolbarH + gapBelow;
+        MoveWindow(g_logsList, hPad, listTop, innerW, (std::max)(0, h - listTop), TRUE);
       }
     }
   };
@@ -3452,7 +3684,8 @@ public:
     if (g_buttonFont) SendMessageW(g_tab, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
     WindowsTheme::ApplyToDialog(m_Window);
 
-    g_list = g_logsList = g_addonsList = nullptr;
+    g_list = g_addonsList = nullptr;
+    g_btnLogSeverity = g_btnLogOutput = g_btnClearLogs = g_logsList = nullptr;
     g_settingsPanel = g_aboutPanel = nullptr;
     g_settingsTitle = nullptr;
     g_grpGeneral = g_grpUpdates = g_grpDiagnostics = g_grpPerformance = nullptr;
@@ -3486,7 +3719,6 @@ public:
     ShowWindow(g_btnLoad, restoredTab == 0 ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefresh, restoredTab == 0 ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefreshAll, restoredTab == 0 ? SW_SHOW : SW_HIDE);
-    ShowWindow(g_btnClearLogs, restoredTab == 1 ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnClose, SW_SHOW);
   }
 
@@ -3535,11 +3767,6 @@ public:
         12, rc.bottom - 44, 120, 30, m_Window,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdRefreshList)),
         GetModuleHandleW(nullptr), nullptr);
-    g_btnClearLogs = CreateWindowW(
-        L"BUTTON", Tr("manage.button.clearLogs", L"Clear Logs").c_str(), WS_CHILD | BS_PUSHBUTTON,
-        12, rc.bottom - 44, 120, 30, m_Window,
-        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdClearLogs)),
-        GetModuleHandleW(nullptr), nullptr);
     g_btnLoad = CreateWindowW(
         L"BUTTON", Tr("manage.button.load", L"Load").c_str(), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         142, rc.bottom - 44, 90, 30, m_Window,
@@ -3564,7 +3791,6 @@ public:
     if (g_buttonFont) {
       SendMessageW(g_tab, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       SendMessageW(g_btnRefreshList, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
-      SendMessageW(g_btnClearLogs, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       SendMessageW(g_btnLoad, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       SendMessageW(g_btnRefresh, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
       SendMessageW(g_btnRefreshAll, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
@@ -3626,7 +3852,6 @@ public:
     }
     if (g_btnRefreshList) {
       MoveWindow(g_btnRefreshList, 12, rc.bottom - 44, 120, 30, TRUE);
-      MoveWindow(g_btnClearLogs,   12, rc.bottom - 44, 120, 30, TRUE);
       MoveWindow(g_btnLoad,       142, rc.bottom - 44,  90, 30, TRUE);
       MoveWindow(g_btnRefresh,    242, rc.bottom - 44,  90, 30, TRUE);
       MoveWindow(g_btnRefreshAll, 342, rc.bottom - 44, 110, 30, TRUE);
@@ -3644,7 +3869,6 @@ public:
     ShowWindow(g_btnLoad, active == 0 ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefresh, active == 0 ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnRefreshAll, active == 0 ? SW_SHOW : SW_HIDE);
-    ShowWindow(g_btnClearLogs, active == 1 ? SW_SHOW : SW_HIDE);
     ShowWindow(g_btnClose, SW_SHOW);
 
     if (active == 0) {
@@ -3696,9 +3920,6 @@ public:
       switch (LOWORD(wParam)) {
       case kControlIdRefreshList:
         RefreshListView();
-        return TRUE;
-      case kControlIdClearLogs:
-        OnClearLogs();
         return TRUE;
       case kControlIdLoad:
         OnToggleLoadSelected();
@@ -3866,7 +4087,12 @@ static void ApplyLocalizedText() {
   if (!g_mainWindow) return;
   SetWindowTextW(g_mainWindow, Tr("app.manage.title", L"Manage Novadesk").c_str());
   SetWindowTextW(g_btnRefreshList, Tr("manage.button.refreshList", L"Refresh List").c_str());
-  SetWindowTextW(g_btnClearLogs, Tr("manage.button.clearLogs", L"Clear Logs").c_str());
+  SetWindowTextW(g_btnLogSeverity,
+                 Tr("manage.logs.severity", L"Severity").c_str());
+  SetWindowTextW(g_btnLogOutput,
+                 Tr("manage.logs.logOutput", L"Log Output").c_str());
+  SetWindowTextW(g_btnClearLogs,
+                 Tr("manage.logs.clearView", L"Clear View").c_str());
   SetWindowTextW(g_btnRefresh, Tr("manage.button.refresh", L"Refresh").c_str());
   SetWindowTextW(g_btnRefreshAll, Tr("manage.button.refreshAll", L"Refresh All").c_str());
   SetWindowTextW(g_btnClose, Tr("button.close", L"Close").c_str());
@@ -3943,7 +4169,6 @@ static void ApplyLocalizedText() {
   ShowWindow(g_btnLoad, g_activeTab == 0 ? SW_SHOW : SW_HIDE);
   ShowWindow(g_btnRefresh, g_activeTab == 0 ? SW_SHOW : SW_HIDE);
   ShowWindow(g_btnRefreshAll, g_activeTab == 0 ? SW_SHOW : SW_HIDE);
-  ShowWindow(g_btnClearLogs, g_activeTab == 1 ? SW_SHOW : SW_HIDE);
   ShowWindow(g_btnClose, SW_SHOW);
 
   DrawMenuBar(g_mainWindow);
