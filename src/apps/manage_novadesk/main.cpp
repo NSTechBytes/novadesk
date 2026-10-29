@@ -228,6 +228,7 @@ static bool HasCommandLineFlag(const wchar_t *flag);
 static bool RequestExistingManageWindowClose();
 static bool RestartManageWindow();
 static void ResendFontsToAllControls();
+static void UpdateManageTabItemSize();
 static void ApplyLocalizedText();
 static void RecreateManagerTabsForLayoutDirection(int activeTab);
 static void PopulateWindowsThemeCombo();
@@ -694,6 +695,46 @@ static void ResendFontsToAllControls() {
   setFont(g_aboutSupportText,  g_aboutBodyFont);
   setFont(g_aboutDonateButton, g_aboutBodyFont);
   setFont(g_aboutBottomNote,   g_aboutSectionFont);
+  UpdateManageTabItemSize();
+}
+
+// TCS_FIXEDWIDTH tabs need a measured width; Portuguese labels like
+// "Configurações" / "Complementos" clip at a hardcoded 100px.
+static void UpdateManageTabItemSize() {
+  if (!g_tab || !IsWindow(g_tab))
+    return;
+  const int count = TabCtrl_GetItemCount(g_tab);
+  if (count <= 0)
+    return;
+
+  int maxTextW = 0;
+  HDC hdc = GetDC(g_tab);
+  if (hdc) {
+    HFONT font =
+        reinterpret_cast<HFONT>(SendMessageW(g_tab, WM_GETFONT, 0, 0));
+    HGDIOBJ old = font ? SelectObject(hdc, font) : nullptr;
+    for (int i = 0; i < count; ++i) {
+      wchar_t text[128]{};
+      TCITEMW item{};
+      item.mask = TCIF_TEXT;
+      item.pszText = text;
+      item.cchTextMax = static_cast<int>(ARRAYSIZE(text));
+      if (!TabCtrl_GetItem(g_tab, i, &item) || !text[0])
+        continue;
+      SIZE size{};
+      GetTextExtentPoint32W(hdc, text, static_cast<int>(wcslen(text)), &size);
+      maxTextW = (std::max)(maxTextW, static_cast<int>(size.cx));
+    }
+    if (old)
+      SelectObject(hdc, old);
+    ReleaseDC(g_tab, hdc);
+  }
+
+  RECT rc{};
+  GetClientRect(g_tab, &rc);
+  const int fitW = (std::max)(80, (static_cast<int>(rc.right) - 8) / count);
+  const int tabW = (std::min)(fitW, (std::max)(100, maxTextW + 24));
+  TabCtrl_SetItemSize(g_tab, tabW, 28);
 }
 
 static void LogLine(const std::wstring &line) {
@@ -3385,7 +3426,6 @@ public:
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdTabs)),
         GetModuleHandleW(nullptr), nullptr);
     m_TabControl = g_tab;
-    TabCtrl_SetItemSize(g_tab, 100, 28);
     if (g_buttonFont) SendMessageW(g_tab, WM_SETFONT, (WPARAM)g_buttonFont, TRUE);
     WindowsTheme::ApplyToDialog(m_Window);
 
@@ -3411,6 +3451,7 @@ public:
     AddTab(kControlIdTabs, m_TabAddons, Tr("tab.addons", L"Addons").c_str());
     AddTab(kControlIdTabs, m_TabSettings, Tr("tab.settings", L"Settings").c_str());
     AddTab(kControlIdTabs, m_TabAbout, Tr("tab.about", L"About").c_str());
+    UpdateManageTabItemSize();
     Relayout();
     const int restoredTab = std::clamp(activeTab, 0, 4);
     SelectTab(restoredTab);
@@ -3466,8 +3507,6 @@ public:
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kControlIdTabs)),
         GetModuleHandleW(nullptr), nullptr);
 
-    TabCtrl_SetItemSize(g_tab, 100, 28);
-
     g_btnRefreshList = CreateWindowW(
         L"BUTTON", Tr("manage.button.refreshList", L"Refresh List").c_str(), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         12, rc.bottom - 44, 120, 30, m_Window,
@@ -3514,6 +3553,7 @@ public:
     AddTab(kControlIdTabs, m_TabAddons, Tr("tab.addons", L"Addons").c_str());
     AddTab(kControlIdTabs, m_TabSettings, Tr("tab.settings", L"Settings").c_str());
     AddTab(kControlIdTabs, m_TabAbout, Tr("tab.about", L"About").c_str());
+    UpdateManageTabItemSize();
 
     Relayout();
 
@@ -3865,6 +3905,7 @@ static void ApplyLocalizedText() {
     item.pszText = const_cast<wchar_t *>(tabs[i].c_str());
     TabCtrl_SetItem(g_tab, i, &item);
   }
+  UpdateManageTabItemSize();
   SetListColumnText(g_list, 0, Tr("manage.column.widget", L"Widget"));
   SetListColumnText(g_list, 1, Tr("manage.column.scriptPath", L"Script Path"));
   SetListColumnText(g_list, 2, Tr("manage.column.status", L"Status"));
