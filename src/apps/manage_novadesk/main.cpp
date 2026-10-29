@@ -3148,8 +3148,31 @@ public:
       const int pW = colW - pad * 2;
       place(g_chkUseHardwareAcceleration, pL, bottomY + 28, pW, row);
       place(g_chkDisableWidgetDragging, pL, bottomY + 58, pW, row);
-      place(g_btnClearImageCache, pL, bottomY + 100, (std::min)(200, pW), btnH);
-      place(g_btnClearFontCache, pL, bottomY + 136, (std::min)(200, pW), btnH);
+      // Size to label text (plus padding), shared width, capped by the group.
+      auto buttonTextWidth = [](HWND hwnd) -> int {
+        if (!hwnd)
+          return 0;
+        wchar_t text[256]{};
+        const int len = GetWindowTextW(hwnd, text, static_cast<int>(ARRAYSIZE(text)));
+        if (len <= 0)
+          return 0;
+        HDC hdc = GetDC(hwnd);
+        if (!hdc)
+          return 0;
+        HFONT font = reinterpret_cast<HFONT>(SendMessageW(hwnd, WM_GETFONT, 0, 0));
+        HGDIOBJ old = font ? SelectObject(hdc, font) : nullptr;
+        SIZE size{};
+        GetTextExtentPoint32W(hdc, text, len, &size);
+        if (old)
+          SelectObject(hdc, old);
+        ReleaseDC(hwnd, hdc);
+        return size.cx + 28; // left/right button chrome
+      };
+      const int cacheBtnW = (std::min)(
+          pW, (std::max)({200, buttonTextWidth(g_btnClearImageCache),
+                          buttonTextWidth(g_btnClearFontCache)}));
+      place(g_btnClearImageCache, pL, bottomY + 100, cacheBtnW, btnH);
+      place(g_btnClearFontCache, pL, bottomY + 136, cacheBtnW, btnH);
 
       EnsureSettingsGroupsZOrder();
     }
