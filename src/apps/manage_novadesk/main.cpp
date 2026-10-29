@@ -2393,6 +2393,26 @@ static void RefreshSettingsControls() {
     if (current != selected)
       SendMessageW(g_cboWindowsTheme, CB_SETCURSEL, selected, 0);
   }
+
+  // Ensure language combo stays synchronized with the saved UI language.
+  if (g_cboLanguage &&
+      !SendMessageW(g_cboLanguage, CB_GETDROPPEDSTATE, 0, 0)) {
+    const std::string currentLang = CommonSettings::GetUiLanguage();
+    const int count = static_cast<int>(SendMessageW(g_cboLanguage, CB_GETCOUNT, 0, 0));
+    for (int i = 0; i < count; ++i) {
+      const char *tag = reinterpret_cast<const char *>(
+          SendMessageW(g_cboLanguage, CB_GETITEMDATA, i, 0));
+      if (tag && currentLang == tag) {
+        const int current = static_cast<int>(
+            SendMessageW(g_cboLanguage, CB_GETCURSEL, 0, 0));
+        if (current != i) {
+          SendMessageW(g_cboLanguage, CB_SETCURSEL, i, 0);
+          SetWindowLongPtrW(g_cboLanguage, GWLP_USERDATA, i);
+        }
+        break;
+      }
+    }
+  }
 }
 
 static void PopulateWindowsThemeCombo() {
@@ -3353,11 +3373,13 @@ public:
                 GetWindowLongPtrW(g_cboWindowsTheme, GWLP_USERDATA));
             if (previous >= 0)
               SendMessageW(g_cboWindowsTheme, CB_SETCURSEL, previous, 0);
+            SetWindowLongPtrW(g_cboWindowsTheme, GWLP_USERDATA, -1);
             return TRUE;
           }
           if (HIWORD(wParam) == CBN_SELENDOK) {
             const int selected = static_cast<int>(
                 SendMessageW(g_cboWindowsTheme, CB_GETCURSEL, 0, 0));
+            SetWindowLongPtrW(g_cboWindowsTheme, GWLP_USERDATA, selected);
             const char *tag = reinterpret_cast<const char *>(
                 SendMessageW(g_cboWindowsTheme, CB_GETITEMDATA, selected, 0));
             if (tag && CommonSettings::SetWindowsTheme(tag)) {
@@ -3380,11 +3402,13 @@ public:
                 GetWindowLongPtrW(g_cboLanguage, GWLP_USERDATA));
             if (previous >= 0)
               SendMessageW(g_cboLanguage, CB_SETCURSEL, previous, 0);
+            SetWindowLongPtrW(g_cboLanguage, GWLP_USERDATA, -1);
             return TRUE;
           }
           if (HIWORD(wParam) == CBN_SELENDOK) {
             const int selected = static_cast<int>(
                 SendMessageW(g_cboLanguage, CB_GETCURSEL, 0, 0));
+            SetWindowLongPtrW(g_cboLanguage, GWLP_USERDATA, selected);
             const char *tag = reinterpret_cast<const char *>(
                 SendMessageW(g_cboLanguage, CB_GETITEMDATA, selected, 0));
             if (tag && CommonSettings::SetUiLanguage(tag)) {
@@ -4229,6 +4253,7 @@ static void ApplyLocalizedText() {
   ShowWindow(g_btnClose, SW_SHOW);
 
   DrawMenuBar(g_mainWindow);
+  RefreshSettingsControls();
   if (DialogManage::Get()) {
     DialogManage::Get()->Relayout();
   }
