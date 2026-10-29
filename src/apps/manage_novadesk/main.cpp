@@ -229,6 +229,7 @@ static bool RequestExistingManageWindowClose();
 static bool RestartManageWindow();
 static void ResendFontsToAllControls();
 static void UpdateManageTabItemSize();
+static void UpdateLogFileButtonsEnabled();
 static void ApplyLocalizedText();
 static void RecreateManagerTabsForLayoutDirection(int activeTab);
 static void PopulateWindowsThemeCombo();
@@ -2249,6 +2250,7 @@ static void RefreshSettingsControls() {
                GetNovadeskSettingBool("saveLogToFile", false) ? BST_CHECKED
                                                               : BST_UNCHECKED,
                0);
+  UpdateLogFileButtonsEnabled();
   SendMessageW(g_chkUseHardwareAcceleration, BM_SETCHECK,
                GetNovadeskSettingBool("useHardwareAcceleration", false)
                    ? BST_CHECKED
@@ -2430,6 +2432,19 @@ static std::wstring GetNovadeskLogFilePath() {
   return (parent / L"logs.log").wstring();
 }
 
+// Rainmeter-style: Show/Delete Logs are enabled only while logs.log exists.
+static void UpdateLogFileButtonsEnabled() {
+  const std::wstring path = GetNovadeskLogFilePath();
+  std::error_code ec;
+  const BOOL enable =
+      (!path.empty() && std::filesystem::exists(path, ec) && !ec) ? TRUE
+                                                                  : FALSE;
+  if (g_btnShowLogsFile)
+    EnableWindow(g_btnShowLogsFile, enable);
+  if (g_btnDeleteLogsFile)
+    EnableWindow(g_btnDeleteLogsFile, enable);
+}
+
 static void EnsureSettingsGroupsZOrder() {
   const HWND groups[] = {g_grpGeneral, g_grpUpdates, g_grpDiagnostics,
                          g_grpPerformance};
@@ -2495,7 +2510,15 @@ static void OnDeleteLogsFile() {
         Tr("manage.setting.deleteLogsFailed", L"Failed to delete log file."),
         Tr("app.manage.title", L"Manage Novadesk"),
         MB_OK | MB_ICONWARNING);
+  } else {
+    // Match Rainmeter: clearing the file turns off "save to file" and
+    // disables Show/Delete until a log file exists again.
+    SetNovadeskSettingBool("saveLogToFile", false);
+    ExecuteNovadeskCommandNoPath(L"--disable-save-log-to-file");
+    if (g_chkSaveLogToFile)
+      SendMessageW(g_chkSaveLogToFile, BM_SETCHECK, BST_UNCHECKED, 0);
   }
+  UpdateLogFileButtonsEnabled();
 }
 
 static void OnClearDiskCache(const wchar_t *cliFlag) {
