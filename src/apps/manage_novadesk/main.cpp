@@ -458,7 +458,7 @@ static HIMAGELIST EnsureLogsImageList() {
   return g_logsImageList;
 }
 
-static const int kAboutLogoSize = 110;
+static const int kAboutLogoSize = 140;
 
 static std::wstring GetAboutVersionText() {
   return Tr("settingspanel.versionPrefix", L"Version ") +
@@ -665,26 +665,26 @@ static void DeleteManageFonts() {
   DeleteOwnedFont(g_buttonFont);
   DeleteOwnedFont(g_aboutTitleFont);
   DeleteOwnedFont(g_aboutSectionFont);
-  g_aboutBodyFont = nullptr; // alias of g_buttonFont, already deleted above
+  DeleteOwnedFont(g_aboutBodyFont);
 }
 
 static void CreateManageFonts(UINT dpi = USER_DEFAULT_SCREEN_DPI) {
   // Delete existing fonts so they are recreated at the new DPI.
-  g_aboutBodyFont = nullptr; // alias of g_buttonFont — clear before deleting buttonFont
   DeleteOwnedFont(g_buttonFont);
   DeleteOwnedFont(g_aboutTitleFont);
   DeleteOwnedFont(g_aboutSectionFont);
+  DeleteOwnedFont(g_aboutBodyFont);
 
   g_buttonFont = FontUtil::CreateSystemFont(dpi);
 
-  // Bold variant used for the "Manage Settings" title.
-  g_aboutSectionFont = FontUtil::CreateSystemFont(dpi, FW_BOLD);
+  // Bold variant used for section headers and button emphasis (~1.3x).
+  g_aboutSectionFont = FontUtil::CreateSystemFont(dpi, FW_BOLD, 130);
 
-  // Larger bold title for the About app name (~1.6x bigger).
-  g_aboutTitleFont = FontUtil::CreateSystemFont(dpi, FW_BOLD, 160);
+  // Large bold hero title for the About app name (~2.2x).
+  g_aboutTitleFont = FontUtil::CreateSystemFont(dpi, FW_BOLD, 220);
 
-  // Body font for About section text — same as regular.
-  g_aboutBodyFont = g_buttonFont;
+  // Dedicated body font for About section text (~1.15x).
+  g_aboutBodyFont = FontUtil::CreateSystemFont(dpi, FW_NORMAL, 115);
 }
 
 // Re-send WM_SETFONT to every control after fonts are recreated at a new DPI.
@@ -738,7 +738,7 @@ static void ResendFontsToAllControls() {
   setFont(g_aboutHomeLink,     g_aboutBodyFont);
   setFont(g_aboutDocsLabel,    g_aboutBodyFont);
   setFont(g_aboutDocsLink,     g_aboutBodyFont);
-  setFont(g_aboutSupportGroup, g_aboutBodyFont);
+  setFont(g_aboutSupportGroup, g_aboutSectionFont);
   setFont(g_aboutSupportTitle, g_aboutSectionFont);
   setFont(g_aboutSupportText,  g_aboutBodyFont);
   setFont(g_aboutDonateButton, g_aboutBodyFont);
@@ -3552,7 +3552,7 @@ public:
         SendMessageW(g_aboutHomeLink, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
         SendMessageW(g_aboutDocsLabel, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
         SendMessageW(g_aboutDocsLink, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
-        SendMessageW(g_aboutSupportGroup, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
+        SendMessageW(g_aboutSupportGroup, WM_SETFONT, (WPARAM)g_aboutSectionFont, TRUE);
         SendMessageW(g_aboutSupportTitle, WM_SETFONT, (WPARAM)g_aboutSectionFont, TRUE);
         SendMessageW(g_aboutSupportText, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
         SendMessageW(g_aboutDonateButton, WM_SETFONT, (WPARAM)g_aboutBodyFont, TRUE);
@@ -3587,38 +3587,82 @@ public:
     }
 
     virtual void Relayout(int w, int h) override {
-      const int margin = 16;
-      const int logoColWidth = 180;
-      const int logoSize = kAboutLogoSize;
+      const int margin = 20;
+      const int bottomNoteH = 26;
+
+      // --- Top section: larger logo + app info ---
+      const int logoSize = kAboutLogoSize; // 140
+      const int logoColWidth = 165;
       const int logoLeft = margin + (logoColWidth - logoSize) / 2;
-      const int infoLeft = margin + logoColWidth + 12;
-      const int infoWidth = w - infoLeft - margin;
+      const int infoLeft = margin + logoColWidth + 16;
+      const int infoWidth = (std::max)(0, w - infoLeft - margin);
+      const int labelW = 75;
+      const int rowH = 25;
 
-      if (g_aboutLogo)      MoveWindow(g_aboutLogo,      logoLeft,           margin,            logoSize,          logoSize, TRUE);
-      if (g_aboutAppName)   MoveWindow(g_aboutAppName,   infoLeft,           margin,            infoWidth,         36,  TRUE);
-      if (g_aboutVersion)   MoveWindow(g_aboutVersion,   infoLeft,           margin + 40,       infoWidth,         22,  TRUE);
-      if (g_aboutCopyright) MoveWindow(g_aboutCopyright, infoLeft,           margin + 66,       infoWidth,         22,  TRUE);
-      if (g_aboutDivider)   MoveWindow(g_aboutDivider,   infoLeft,           margin + 94,       infoWidth,         2,   TRUE);
-      if (g_aboutHomeLabel) MoveWindow(g_aboutHomeLabel, infoLeft,           margin + 106,      70,                22,  TRUE);
-      if (g_aboutHomeLink)  MoveWindow(g_aboutHomeLink,  infoLeft + 74,      margin + 106,      infoWidth - 74,    22,  TRUE);
-      if (g_aboutDocsLabel) MoveWindow(g_aboutDocsLabel, infoLeft,           margin + 134,      70,                22,  TRUE);
-      if (g_aboutDocsLink)  MoveWindow(g_aboutDocsLink,  infoLeft + 74,      margin + 134,      infoWidth - 74,    22,  TRUE);
+      int y = margin + 4;
+      if (g_aboutAppName)   MoveWindow(g_aboutAppName,   infoLeft,              y,  infoWidth,             44,   TRUE);
+      y += 44 + 4;
+      if (g_aboutVersion)   MoveWindow(g_aboutVersion,   infoLeft,              y,  infoWidth,             rowH, TRUE);
+      y += rowH + 4;
+      if (g_aboutCopyright) MoveWindow(g_aboutCopyright, infoLeft,              y,  infoWidth,             rowH, TRUE);
+      y += rowH + 8;
+      if (g_aboutDivider)   MoveWindow(g_aboutDivider,   infoLeft,              y,  infoWidth,             2,    TRUE);
+      y += 2 + 10;
+      if (g_aboutHomeLabel) MoveWindow(g_aboutHomeLabel, infoLeft,              y,  labelW,                rowH, TRUE);
+      if (g_aboutHomeLink)  MoveWindow(g_aboutHomeLink,  infoLeft + labelW + 4, y,  infoWidth - labelW - 4, rowH, TRUE);
+      y += rowH + 6;
+      if (g_aboutDocsLabel) MoveWindow(g_aboutDocsLabel, infoLeft,              y,  labelW,                rowH, TRUE);
+      if (g_aboutDocsLink)  MoveWindow(g_aboutDocsLink,  infoLeft + labelW + 4, y,  infoWidth - labelW - 4, rowH, TRUE);
+      y += rowH;
 
-      const int supportTop         = margin + 180;
-      const int supportHeight      = 150;
-      const int supportLeft        = margin;
-      const int supportWidth       = w - (margin * 2);
-      const int supportButtonWidth = 260;
-      const int supportButtonHeight= 36;
-      const int supportContentLeft = supportLeft + 18;
-      const int supportButtonLeft  = supportLeft + supportWidth - supportButtonWidth - 18;
-      const int supportTextWidth   = supportButtonLeft - supportContentLeft - 16;
+      const int topSectionHeight = y - margin;
+      const int logoTop = margin + (topSectionHeight - logoSize) / 2;
+      if (g_aboutLogo)      MoveWindow(g_aboutLogo,      logoLeft,              (std::max)(margin, logoTop), logoSize, logoSize, TRUE);
 
-      if (g_aboutSupportGroup)  MoveWindow(g_aboutSupportGroup,  supportLeft,         supportTop,              supportWidth,        supportHeight,        TRUE);
-      if (g_aboutSupportTitle)  MoveWindow(g_aboutSupportTitle,  supportContentLeft,  supportTop + 24,         supportTextWidth,    28,                   TRUE);
-      if (g_aboutSupportText)   MoveWindow(g_aboutSupportText,   supportContentLeft,  supportTop + 58,         supportTextWidth,    70,                   TRUE);
-      if (g_aboutDonateButton)  MoveWindow(g_aboutDonateButton,  supportButtonLeft,   supportTop + 56,         supportButtonWidth,  supportButtonHeight,  TRUE);
-      if (g_aboutBottomNote)    MoveWindow(g_aboutBottomNote,    margin,              supportTop + supportHeight + 10, w - margin*2, 22,                   TRUE);
+      // --- Vertical spacing to support section ---
+      const int bottomNoteY = h - margin - bottomNoteH;
+      const int availableMiddle = bottomNoteY - y - 16;
+      // Keep support box height well proportioned (~145px) so it doesn't leave huge empty voids
+      const int supportHeight = std::clamp(availableMiddle - 20, 135, 155);
+      const int supportTop = y + 14 + (std::max)(0, (availableMiddle - supportHeight) / 2);
+
+      // --- Support group box: balanced card layout ---
+      const int supportLeft         = margin;
+      const int supportWidth        = (std::max)(0, w - margin * 2);
+      const int supportPadX         = 24;
+      // Measure button width based on text width with comfortable padding
+      int supportButtonWidth = 240;
+      if (g_aboutDonateButton) {
+        wchar_t btnText[256]{};
+        const int textLen = GetWindowTextW(g_aboutDonateButton, btnText, static_cast<int>(ARRAYSIZE(btnText)));
+        if (textLen > 0) {
+          if (HDC hdc = GetDC(g_aboutDonateButton)) {
+            HFONT font = reinterpret_cast<HFONT>(SendMessageW(g_aboutDonateButton, WM_GETFONT, 0, 0));
+            HGDIOBJ old = font ? SelectObject(hdc, font) : nullptr;
+            SIZE sz{};
+            GetTextExtentPoint32W(hdc, btnText, textLen, &sz);
+            if (old) SelectObject(hdc, old);
+            ReleaseDC(g_aboutDonateButton, hdc);
+            supportButtonWidth = sz.cx + 32; // text width + horizontal padding
+          }
+        }
+      }
+      const int supportButtonHeight = 40;
+      const int supportContentLeft  = supportLeft + supportPadX;
+      const int supportButtonLeft   = supportLeft + supportWidth - supportButtonWidth - supportPadX;
+      const int supportTextWidth    = (std::max)(0, supportButtonLeft - supportContentLeft - 20);
+      const int supportTitleY       = supportTop + 24;
+      const int supportTextY        = supportTitleY + 30;
+      const int supportTextH        = (std::max)(40, supportHeight - 24 - 30 - 12);
+      const int supportButtonY      = supportTop + (supportHeight - supportButtonHeight) / 2 + 4;
+
+      if (g_aboutSupportGroup)  MoveWindow(g_aboutSupportGroup,  supportLeft,         supportTop,     supportWidth,        supportHeight,        TRUE);
+      if (g_aboutSupportTitle)  MoveWindow(g_aboutSupportTitle,  supportContentLeft,  supportTitleY,  supportTextWidth,    28,                   TRUE);
+      if (g_aboutSupportText)   MoveWindow(g_aboutSupportText,   supportContentLeft,  supportTextY,   supportTextWidth,    supportTextH,         TRUE);
+      if (g_aboutDonateButton)  MoveWindow(g_aboutDonateButton,  supportButtonLeft,   supportButtonY, supportButtonWidth,  supportButtonHeight,  TRUE);
+
+      // --- Bottom note: anchored at bottom ---
+      if (g_aboutBottomNote)    MoveWindow(g_aboutBottomNote,    margin,  bottomNoteY, (std::max)(0, w - margin * 2), bottomNoteH, TRUE);
       EnsureAboutSupportZOrder();
     }
   };
