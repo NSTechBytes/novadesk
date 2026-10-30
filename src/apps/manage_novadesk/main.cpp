@@ -247,6 +247,8 @@ static bool RequestExistingManageWindowClose();
 static bool RestartManageWindow();
 static void ResendFontsToAllControls();
 static void UpdateManageTabItemSize();
+static std::wstring GetNovadeskLogFilePath();
+static void EnsureNovadeskLogFileExists();
 static void UpdateLogFileButtonsEnabled();
 static void ApplyLocalizedText();
 static void RecreateManagerTabsForLayoutDirection(int activeTab);
@@ -2316,18 +2318,19 @@ static void ShowLogOutputMenu(HWND owner, HWND button) {
   std::error_code ec;
   const bool fileExists =
       !path.empty() && std::filesystem::exists(path, ec) && !ec;
-  const bool writing = GetNovadeskSettingBool("saveLogToFile", false);
+  const bool loggingEnabled = !GetNovadeskSettingBool("disableLogging", false);
+  const bool writing = loggingEnabled && GetNovadeskSettingBool("saveLogToFile", false);
 
   AppendMenuW(menu, MF_STRING | (writing ? MF_GRAYED : 0), kLogMenuWriteToFile,
               Tr("manage.logs.writeToFile", L"Write to File").c_str());
-  AppendMenuW(menu, MF_STRING | ((!writing || !fileExists) ? MF_GRAYED : 0),
+  AppendMenuW(menu, MF_STRING | (!writing ? MF_GRAYED : 0),
               kLogMenuStopWriting,
               Tr("manage.logs.stopWriting", L"Stop Writing").c_str());
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-  AppendMenuW(menu, MF_STRING | (fileExists ? 0 : MF_GRAYED),
+  AppendMenuW(menu, MF_STRING | ((writing && fileExists) ? 0 : MF_GRAYED),
               kLogMenuOpenLogFile,
               Tr("manage.logs.openLogFile", L"Open Log File").c_str());
-  AppendMenuW(menu, MF_STRING | (fileExists ? 0 : MF_GRAYED),
+  AppendMenuW(menu, MF_STRING | ((writing && fileExists) ? 0 : MF_GRAYED),
               kLogMenuRemoveLogFile,
               Tr("manage.logs.removeLogFile", L"Remove Log File").c_str());
   Dialog::ShowMenuButtonPopupMenu(menu, button, owner);
@@ -2351,18 +2354,23 @@ static void RefreshSettingsControls() {
                IsRunOnStartupEnabled() ? BST_CHECKED : BST_UNCHECKED, 0);
   SendMessageW(g_chkAutoUpdate, BM_SETCHECK,
                g_manageAutoCheckForUpdates ? BST_CHECKED : BST_UNCHECKED, 0);
+  const bool loggingEnabled = !GetNovadeskSettingBool("disableLogging", false);
+  const bool saveLogToFile =
+      loggingEnabled && GetNovadeskSettingBool("saveLogToFile", false);
+  if (saveLogToFile) {
+    EnsureNovadeskLogFileExists();
+  }
   SendMessageW(g_chkEnableLogging, BM_SETCHECK,
-               GetNovadeskSettingBool("disableLogging", false) ? BST_UNCHECKED
-                                                               : BST_CHECKED,
-               0);
+               loggingEnabled ? BST_CHECKED : BST_UNCHECKED, 0);
   SendMessageW(g_chkEnableDebugging, BM_SETCHECK,
                GetNovadeskSettingBool("enableDebugging", false) ? BST_CHECKED
                                                                 : BST_UNCHECKED,
                0);
   SendMessageW(g_chkSaveLogToFile, BM_SETCHECK,
-               GetNovadeskSettingBool("saveLogToFile", false) ? BST_CHECKED
-                                                              : BST_UNCHECKED,
-               0);
+               saveLogToFile ? BST_CHECKED : BST_UNCHECKED, 0);
+  if (g_chkSaveLogToFile) {
+    EnableWindow(g_chkSaveLogToFile, loggingEnabled ? TRUE : FALSE);
+  }
   UpdateLogFileButtonsEnabled();
   SendMessageW(g_chkUseHardwareAcceleration, BM_SETCHECK,
                GetNovadeskSettingBool("useHardwareAcceleration", false)
@@ -2565,17 +2573,40 @@ static std::wstring GetNovadeskLogFilePath() {
   return (parent / L"logs.log").wstring();
 }
 
-// Rainmeter-style: Show/Delete Logs are enabled only while logs.log exists.
+static void EnsureNovadeskLogFileExists() {
+  const std::wstring path = GetNovadeskLogFilePath();
+  if (path.empty())
+    return;
+  std::error_code ec;
+  if (!std::filesystem::exists(path, ec)) {
+    const std::filesystem::path p(path);
+    if (p.has_parent_path()) {
+      std::filesystem::create_directories(p.parent_path(), ec);
+    }
+    std::wofstream f(p, std::ios::out);
+    if (f.is_open()) {
+      f.close();
+    }
+  }
+}
+
+// Show/Delete Logs are enabled when saveLogToFile is enabled, and disabled when disabled.
 static void UpdateLogFileButtonsEnabled() {
+  const bool loggingEnabled = !GetNovadeskSettingBool("disableLogging", false);
+  const bool saveLogToFile =
+      loggingEnabled && GetNovadeskSettingBool("saveLogToFile", false);
   const std::wstring path = GetNovadeskLogFilePath();
   std::error_code ec;
-  const BOOL enable =
-      (!path.empty() && std::filesystem::exists(path, ec) && !ec) ? TRUE
-                                                                  : FALSE;
+  const bool fileExists =
+      (!path.empty() && std::filesystem::exists(path, ec) && !ec);
+
+  const BOOL enable = (saveLogToFile && fileExists) ? TRUE : FALSE;
   if (g_btnShowLogsFile)
     EnableWindow(g_btnShowLogsFile, enable);
   if (g_btnDeleteLogsFile)
     EnableWindow(g_btnDeleteLogsFile, enable);
+  if (g_chkSaveLogToFile)
+    EnableWindow(g_chkSaveLogToFile, loggingEnabled ? TRUE : FALSE);
 }
 
 static void EnsureSettingsGroupsZOrder() {
@@ -2692,6 +2723,13 @@ static void OnSettingsControlClicked(int controlId) {
     SetNovadeskSettingBool("disableLogging", !checked);
     ExecuteNovadeskCommandNoPath(checked ? L"--enable-logging"
                                          : L"--disable-logging");
+    if (!checked) {
+      SetNovadeskSettingBool("saveLogToFile", false);
+      ExecuteNovadeskCommandNoPath(L"--disable-save-log-to-file");
+      if (g_chkSaveLogToFile)
+        SendMessageW(g_chkSaveLogToFile, BM_SETCHECK, BST_UNCHECKED, 0);
+    }
+    UpdateLogFileButtonsEnabled();
     break;
   case kControlIdEnableDebugging:
     SetNovadeskSettingBool("enableDebugging", checked);
@@ -2700,8 +2738,12 @@ static void OnSettingsControlClicked(int controlId) {
     break;
   case kControlIdSaveLogToFile:
     SetNovadeskSettingBool("saveLogToFile", checked);
+    if (checked) {
+      EnsureNovadeskLogFileExists();
+    }
     ExecuteNovadeskCommandNoPath(checked ? L"--enable-save-log-to-file"
                                          : L"--disable-save-log-to-file");
+    UpdateLogFileButtonsEnabled();
     break;
   case kControlIdUseHardwareAcceleration: {
     const bool previous =
@@ -3010,6 +3052,7 @@ public:
         }
         case kLogMenuWriteToFile:
           SetNovadeskSettingBool("saveLogToFile", true);
+          EnsureNovadeskLogFileExists();
           ExecuteNovadeskCommandNoPath(L"--enable-save-log-to-file");
           if (g_chkSaveLogToFile)
             SendMessageW(g_chkSaveLogToFile, BM_SETCHECK, BST_CHECKED, 0);

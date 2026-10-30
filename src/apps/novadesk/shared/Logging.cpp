@@ -181,12 +181,24 @@ void Logging::SetFileLogging(const std::wstring &filePath, bool clearFile) {
   s_LogFilePath = filePath;
   s_FileEnabled = !filePath.empty();
 
-  if (s_FileEnabled && clearFile) {
-    // Truncate the file
-    std::wofstream logFile(std::filesystem::path(s_LogFilePath),
-                           std::ios::trunc);
-    if (logFile.is_open()) {
-      logFile.close();
+  if (s_FileEnabled) {
+    std::error_code ec;
+    const std::filesystem::path logPath(s_LogFilePath);
+    if (clearFile) {
+      // Truncate the file
+      std::wofstream logFile(logPath, std::ios::trunc);
+      if (logFile.is_open()) {
+        logFile.close();
+      }
+    } else if (!std::filesystem::exists(logPath, ec)) {
+      // Create empty log file if it does not exist
+      if (logPath.has_parent_path()) {
+        std::filesystem::create_directories(logPath.parent_path(), ec);
+      }
+      std::wofstream logFile(logPath, std::ios::out);
+      if (logFile.is_open()) {
+        logFile.close();
+      }
     }
   }
 }

@@ -776,9 +776,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
       } else if (command == L"set-save-log-to-file-on") {
         Settings::SetGlobalBool("saveLogToFile", true);
         Settings::ApplyGlobalSettings();
+        Settings::Flush();
       } else if (command == L"set-save-log-to-file-off") {
         Settings::SetGlobalBool("saveLogToFile", false);
         Settings::ApplyGlobalSettings();
+        Settings::Flush();
       } else if (command == L"set-disable-widget-dragging-on") {
         Settings::SetGlobalBool("disableWidgetDragging", true);
         Settings::Flush();
@@ -961,6 +963,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
   }
   if (appliedCliSettings) {
     Settings::ApplyGlobalSettings();
+    Settings::Flush();
   }
   if (!scriptPaths.empty()) {
     std::wstring joined;
