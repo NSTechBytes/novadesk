@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Драггабле",
   "settingspanel.window.keepOnScreen": "Задржи на екрану",
   "settingspanel.window.opacity": "Непрозирност (0 – 100)",
+  "settingspanel.window.posX": "Pozicija X",
+  "settingspanel.window.posY": "Pozicija Y",
   "settingspanel.window.snapEdges": "Снап едгес",
   "settingspanel.window.title": "Подешавања прозора",
   "settingspanel.window.zPosition": "Z-pozicija",

@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Vilkamas",
   "settingspanel.window.keepOnScreen": "Laikykite ekrane",
   "settingspanel.window.opacity": "Nepermatomumas (0–100)",
+  "settingspanel.window.posX": "Padėtis X",
+  "settingspanel.window.posY": "Padėtis Y",
   "settingspanel.window.snapEdges": "Užfiksuokite kraštus",
   "settingspanel.window.title": "Lango nustatymai",
   "settingspanel.window.zPosition": "Z pozicija",

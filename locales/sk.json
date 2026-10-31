@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Preťahovateľné",
   "settingspanel.window.keepOnScreen": "Zostaňte na obrazovke",
   "settingspanel.window.opacity": "Nepriehľadnosť (0 – 100)",
+  "settingspanel.window.posX": "Poloha X",
+  "settingspanel.window.posY": "Poloha Y",
   "settingspanel.window.snapEdges": "Zachyťte okraje",
   "settingspanel.window.title": "Nastavenia okna",
   "settingspanel.window.zPosition": "Pozícia Z",

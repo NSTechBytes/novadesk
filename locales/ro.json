@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Draggable",
   "settingspanel.window.keepOnScreen": "Rămâneți pe ecran",
   "settingspanel.window.opacity": "Opacitate (0 – 100)",
+  "settingspanel.window.posX": "Poziție X",
+  "settingspanel.window.posY": "Poziție Y",
   "settingspanel.window.snapEdges": "Strângeți marginile",
   "settingspanel.window.title": "Setările ferestrei",
   "settingspanel.window.zPosition": "Poziția Z",

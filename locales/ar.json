@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "قابلة للسحب",
   "settingspanel.window.keepOnScreen": "إبقاء على الشاشة",
   "settingspanel.window.opacity": "العتامة (0 – 100)",
+  "settingspanel.window.posX": "الموضع X",
+  "settingspanel.window.posY": "الموضع Y",
   "settingspanel.window.snapEdges": "حواف المفاجئة",
   "settingspanel.window.title": "إعدادات النافذة",
   "settingspanel.window.zPosition": "موضع Z",

@@ -53,7 +53,7 @@ private:
     // Chrome
     CloseButton, TabButton, ExternalLink,
     // Window tab
-    WindowToggle, WindowZPos, WindowOpacity
+    WindowToggle, WindowZPos, WindowOpacity, WindowX, WindowY
   };
 
   struct ControlInfo {

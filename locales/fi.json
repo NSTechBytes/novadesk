@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Vedettävä",
   "settingspanel.window.keepOnScreen": "Pysy näytöllä",
   "settingspanel.window.opacity": "Peittävyys (0–100)",
+  "settingspanel.window.posX": "Sijainti X",
+  "settingspanel.window.posY": "Sijainti Y",
   "settingspanel.window.snapEdges": "Kiinnitä reunat",
   "settingspanel.window.title": "Ikkuna-asetukset",
   "settingspanel.window.zPosition": "Z-sijainti",

@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Ziehbar",
   "settingspanel.window.keepOnScreen": "Bleiben Sie auf dem Bildschirm",
   "settingspanel.window.opacity": "Deckkraft (0 – 100)",
+  "settingspanel.window.posX": "Position X",
+  "settingspanel.window.posY": "Position Y",
   "settingspanel.window.snapEdges": "Schnappkanten",
   "settingspanel.window.title": "Fenstereinstellungen",
   "settingspanel.window.zPosition": "Z-Position",

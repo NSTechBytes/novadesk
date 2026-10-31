@@ -6,7 +6,7 @@
 [CmdletBinding()]
 param()
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $localeDirectory = Join-Path $root 'locales'
 $englishPath = Join-Path $localeDirectory 'en.json'
@@ -50,8 +50,11 @@ foreach ($catalogPath in $catalogs) {
 }
 
 if ($failures.Count) {
-  $failures | ForEach-Object { Write-Error $_ }
+  Write-Host ""
+  Write-Host "Validation failed - $($failures.Count) issue(s) found:" -ForegroundColor Red
+  $failures | ForEach-Object { Write-Host "  [FAIL] $_" -ForegroundColor Yellow }
+  Write-Host ""
   exit 1
 }
 
-Write-Host "Validated $($requiredKeys.Count) strings in $($catalogs.Count) locale catalogs." -ForegroundColor Green
+Write-Host "[OK] Validated $($requiredKeys.Count) strings in $($catalogs.Count) locale catalogs." -ForegroundColor Green

@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Перетаскиваемый",
   "settingspanel.window.keepOnScreen": "Продолжать на экране",
   "settingspanel.window.opacity": "Непрозрачность (0–100)",
+  "settingspanel.window.posX": "Позиция X",
+  "settingspanel.window.posY": "Позиция Y",
   "settingspanel.window.snapEdges": "Привязать края",
   "settingspanel.window.title": "Настройки окна",
   "settingspanel.window.zPosition": "Позиция Z",

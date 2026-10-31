@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Lohistav",
   "settingspanel.window.keepOnScreen": "Hoidke ekraanil",
   "settingspanel.window.opacity": "Läbipaistmatus (0–100)",
+  "settingspanel.window.posX": "Asukoht X",
+  "settingspanel.window.posY": "Asukoht Y",
   "settingspanel.window.snapEdges": "Kinnitage servad",
   "settingspanel.window.title": "Akna sätted",
   "settingspanel.window.zPosition": "Z-asend",

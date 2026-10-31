@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Povlači se",
   "settingspanel.window.keepOnScreen": "Zadrži na ekranu",
   "settingspanel.window.opacity": "Neprozirnost (0 – 100)",
+  "settingspanel.window.posX": "Položaj X",
+  "settingspanel.window.posY": "Položaj Y",
   "settingspanel.window.snapEdges": "Pričvrstite rubove",
   "settingspanel.window.title": "Postavke prozora",
   "settingspanel.window.zPosition": "Položaj Z",

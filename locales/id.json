@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Dapat diseret",
   "settingspanel.window.keepOnScreen": "Tetap di layar",
   "settingspanel.window.opacity": "Opasitas (0 – 100)",
+  "settingspanel.window.posX": "Posisi X",
+  "settingspanel.window.posY": "Posisi Y",
   "settingspanel.window.snapEdges": "Jepret tepinya",
   "settingspanel.window.title": "Pengaturan Jendela",
   "settingspanel.window.zPosition": "Posisi Z",

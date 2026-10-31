@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Плъзгащ се",
   "settingspanel.window.keepOnScreen": "Запази на екрана",
   "settingspanel.window.opacity": "Непрозрачност (0 – 100)",
+  "settingspanel.window.posX": "Позиция X",
+  "settingspanel.window.posY": "Позиция Y",
   "settingspanel.window.snapEdges": "Прилепване на ръбове",
   "settingspanel.window.title": "Настройки на прозореца",
   "settingspanel.window.zPosition": "Z-позиция",

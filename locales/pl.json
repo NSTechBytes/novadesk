@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Przeciągane",
   "settingspanel.window.keepOnScreen": "Zachowaj na ekranie",
   "settingspanel.window.opacity": "Krycie (0 – 100)",
+  "settingspanel.window.posX": "Pozycja X",
+  "settingspanel.window.posY": "Pozycja Y",
   "settingspanel.window.snapEdges": "Zatrzaśnij krawędzie",
   "settingspanel.window.title": "Ustawienia okna",
   "settingspanel.window.zPosition": "Pozycja Z",

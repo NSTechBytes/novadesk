@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "ניתן לגרירה",
   "settingspanel.window.keepOnScreen": "השאר על המסך",
   "settingspanel.window.opacity": "אטימות (0 - 100)",
+  "settingspanel.window.posX": "מיקום X",
+  "settingspanel.window.posY": "מיקום Y",
   "settingspanel.window.snapEdges": "הצמד קצוות",
   "settingspanel.window.title": "הגדרות חלון",
   "settingspanel.window.zPosition": "מיקום Z",

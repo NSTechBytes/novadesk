@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Sleepbaar",
   "settingspanel.window.keepOnScreen": "Blijf op het scherm",
   "settingspanel.window.opacity": "Dekking (0 – 100)",
+  "settingspanel.window.posX": "Positie X",
+  "settingspanel.window.posY": "Positie Y",
   "settingspanel.window.snapEdges": "Snap randen",
   "settingspanel.window.title": "Vensterinstellingen",
   "settingspanel.window.zPosition": "Z-positie",

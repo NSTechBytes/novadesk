@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Velkams",
   "settingspanel.window.keepOnScreen": "Turiet ekrānā",
   "settingspanel.window.opacity": "Necaurredzamība (0–100)",
+  "settingspanel.window.posX": "Pozīcija X",
+  "settingspanel.window.posY": "Pozīcija Y",
   "settingspanel.window.snapEdges": "Nospiediet malas",
   "settingspanel.window.title": "Logu iestatījumi",
   "settingspanel.window.zPosition": "Z pozīcija",

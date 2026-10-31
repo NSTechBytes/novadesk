@@ -823,6 +823,63 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
   m_Controls[CEId(ti, L"", L"hdivider")] = {L"", ControlKind::SelectLabel, ti};
   y += 16;
 
+  const int ctrlX  = kPadX + kCtrlW - kInlineCtrlW;
+  const int rowOff = (kRowH - kCtrlH) / 2;
+
+  // X Position 
+  Txt(panel, L"__win_x_lbl",
+      kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH,
+      Loc("settingspanel.window.posX", L"Position X"), 12, m_Palette.label, 400, false,
+      TEXT_ALIGN_LEFT_CENTER, scrollId);
+  m_Controls[L"__win_x_lbl"] = {L"", ControlKind::SelectLabel, ti};
+  {
+    wchar_t bufX[16]; swprintf_s(bufX, L"%d", opts.x);
+    PropertyParser::InputBoxOptions io;
+    io.id = L"__win_x";
+    io.containerId = scrollId;
+    io.x = ContentX(ctrlX, kInlineCtrlW); io.y = y + rowOff;
+    io.width = kInputDeclaredW; io.height = kCtrlH;
+    io.text = bufX; io.fontSize = 12;
+    io.fontColor = m_Palette.text; io.fontAlpha = 255;
+    io.hasFillColor = true; io.fillColor = m_Palette.controlFill; io.fillAlpha = 255;
+    io.borderWidth = 1.0f; io.borderRadius = 7.0f;
+    io.borderColor = m_Palette.controlBorder; io.borderColorAlpha = 255;
+    io.caretColor = m_Palette.text; io.selectionColor = m_Palette.accent;
+    io.paddingLeft = 10; io.paddingRight = 10;
+    io.textAlign = DirectionalAlign(TEXT_ALIGN_LEFT_CENTER);
+    io.inputType = InputType::Integer;
+    panel->AddInputBox(io);
+    m_Controls[io.id] = {L"__win_x", ControlKind::WindowX, ti};
+  }
+  y += kRowH;
+
+  // Y Position
+  Txt(panel, L"__win_y_lbl",
+      kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH,
+      Loc("settingspanel.window.posY", L"Position Y"), 12, m_Palette.label, 400, false,
+      TEXT_ALIGN_LEFT_CENTER, scrollId);
+  m_Controls[L"__win_y_lbl"] = {L"", ControlKind::SelectLabel, ti};
+  {
+    wchar_t bufY[16]; swprintf_s(bufY, L"%d", opts.y);
+    PropertyParser::InputBoxOptions io;
+    io.id = L"__win_y";
+    io.containerId = scrollId;
+    io.x = ContentX(ctrlX, kInlineCtrlW); io.y = y + rowOff;
+    io.width = kInputDeclaredW; io.height = kCtrlH;
+    io.text = bufY; io.fontSize = 12;
+    io.fontColor = m_Palette.text; io.fontAlpha = 255;
+    io.hasFillColor = true; io.fillColor = m_Palette.controlFill; io.fillAlpha = 255;
+    io.borderWidth = 1.0f; io.borderRadius = 7.0f;
+    io.borderColor = m_Palette.controlBorder; io.borderColorAlpha = 255;
+    io.caretColor = m_Palette.text; io.selectionColor = m_Palette.accent;
+    io.paddingLeft = 10; io.paddingRight = 10;
+    io.textAlign = DirectionalAlign(TEXT_ALIGN_LEFT_CENTER);
+    io.inputType = InputType::Integer;
+    panel->AddInputBox(io);
+    m_Controls[io.id] = {L"__win_y", ControlKind::WindowY, ti};
+  }
+  y += kRowH;
+
   const BoolRow toggleRows[] = {
     { L"__win_draggable",    Loc("settingspanel.window.draggable", L"Draggable").c_str(),       opts.draggable    },
     { L"__win_clickthrough", Loc("settingspanel.window.clickThrough", L"Click-through").c_str(), opts.clickThrough },
@@ -856,9 +913,6 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
     m_Controls[std::wstring(r.id) + L"_sep"] = {L"", ControlKind::SelectLabel, ti};
     y += 8;
   }
-
-  const int ctrlX  = kPadX + kCtrlW - kInlineCtrlW;
-  const int rowOff = (kRowH - kCtrlH) / 2;
 
   Txt(panel, L"__win_zpos_lbl",
       kPadX, y + rowOff + kCtrlH / 2, kInlineLabelW, kCtrlH,
@@ -1184,7 +1238,8 @@ void SettingsPanel::ApplyPaletteToPanel() {
     }
   }
 
-  for (const wchar_t *lid : {L"__win_zpos_lbl", L"__win_opacity_lbl"})
+  for (const wchar_t *lid : {L"__win_zpos_lbl", L"__win_opacity_lbl",
+                              L"__win_x_lbl",   L"__win_y_lbl"})
     if (Element *el = m_Panel->FindElementById(lid))
       if (auto *te = dynamic_cast<TextElement *>(el)) te->SetFontColor(m_Palette.label, 255);
 
@@ -1197,8 +1252,19 @@ void SettingsPanel::ApplyPaletteToPanel() {
       ib->SetSelectionColor(m_Palette.accent, 128);
     }
 
+  for (const wchar_t *iid : {L"__win_x", L"__win_y"})
+    if (Element *el = m_Panel->FindElementById(iid))
+      if (auto *ib = dynamic_cast<InputBoxElement *>(el)) {
+        ib->SetFontColor(m_Palette.text, 255);
+        ib->SetFillColor(m_Palette.controlFill, 255);
+        ib->SetBorderColor(m_Palette.controlBorder, 255);
+        ib->SetCaretColor(m_Palette.text, 255);
+        ib->SetSelectionColor(m_Palette.accent, 128);
+      }
+
   for (auto &[id, info] : m_Controls) {
-    if (info.kind != ControlKind::Input && info.kind != ControlKind::WindowOpacity)
+    if (info.kind != ControlKind::Input && info.kind != ControlKind::WindowOpacity &&
+        info.kind != ControlKind::WindowX && info.kind != ControlKind::WindowY)
       continue;
     Element *el = m_Panel->FindElementById(id);
     if (!el) continue;
@@ -1264,6 +1330,14 @@ void SettingsPanel::UpdateWindowTabVisuals() {
     if (auto *ib = dynamic_cast<InputBoxElement *>(el)) {
       const int pct = static_cast<int>(std::round(opts.windowOpacity / 255.0 * 100.0));
       wchar_t buf[8]; swprintf_s(buf, L"%d", pct); ib->SetText(buf);
+    }
+  if (Element *el = m_Panel->FindElementById(L"__win_x"))
+    if (auto *ib = dynamic_cast<InputBoxElement *>(el)) {
+      wchar_t buf[16]; swprintf_s(buf, L"%d", opts.x); ib->SetText(buf);
+    }
+  if (Element *el = m_Panel->FindElementById(L"__win_y"))
+    if (auto *ib = dynamic_cast<InputBoxElement *>(el)) {
+      wchar_t buf[16]; swprintf_s(buf, L"%d", opts.y); ib->SetText(buf);
     }
   m_Panel->Redraw();
 }
@@ -1558,6 +1632,18 @@ void SettingsPanel::OnInputCommitted(Widget *widget, InputBoxElement *inputBox) 
         const BYTE b = static_cast<BYTE>(std::round(pct / 100.0 * 255.0));
         m_Target->SetWindowOpacity(b);
         Settings::SaveWidget(m_Target->GetOptions().id, m_Target->GetOptions());
+      }
+    } else if (it->second.kind == ControlKind::WindowX) {
+      if (m_Target && Widget::IsValid(m_Target)) {
+        double val = static_cast<double>(m_Target->GetOptions().x);
+        ParseDbl(inputBox->GetText(), val);
+        m_Target->SetWindowPosition(static_cast<int>(val), CW_USEDEFAULT, -1, -1);
+      }
+    } else if (it->second.kind == ControlKind::WindowY) {
+      if (m_Target && Widget::IsValid(m_Target)) {
+        double val = static_cast<double>(m_Target->GetOptions().y);
+        ParseDbl(inputBox->GetText(), val);
+        m_Target->SetWindowPosition(CW_USEDEFAULT, static_cast<int>(val), -1, -1);
       }
     } else if (it->second.kind == ControlKind::Input) {
       if (m_Target && Widget::IsValid(m_Target)) {

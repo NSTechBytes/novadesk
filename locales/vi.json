@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Có thể kéo được",
   "settingspanel.window.keepOnScreen": "Giữ trên màn hình",
   "settingspanel.window.opacity": "Độ mờ (0 – 100)",
+  "settingspanel.window.posX": "Vị trí X",
+  "settingspanel.window.posY": "Vị trí Y",
   "settingspanel.window.snapEdges": "Chụp cạnh",
   "settingspanel.window.title": "Cài đặt cửa sổ",
   "settingspanel.window.zPosition": "Vị trí Z",

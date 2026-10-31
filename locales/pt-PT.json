@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Arrastável",
   "settingspanel.window.keepOnScreen": "Continue na tela",
   "settingspanel.window.opacity": "Opacidade (0 – 100)",
+  "settingspanel.window.posX": "Posição X",
+  "settingspanel.window.posY": "Posição Y",
   "settingspanel.window.snapEdges": "Ajustar bordas",
   "settingspanel.window.title": "Configurações da janela",
   "settingspanel.window.zPosition": "Posição Z",

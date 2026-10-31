@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Можливість перетягування",
   "settingspanel.window.keepOnScreen": "Тримайте на екрані",
   "settingspanel.window.opacity": "Непрозорість (0 – 100)",
+  "settingspanel.window.posX": "Позиція X",
+  "settingspanel.window.posY": "Позиція Y",
   "settingspanel.window.snapEdges": "Зафіксуйте краї",
   "settingspanel.window.title": "Параметри вікна",
   "settingspanel.window.zPosition": "Позиція Z",

@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Σύρσιμο",
   "settingspanel.window.keepOnScreen": "Διατήρηση στην οθόνη",
   "settingspanel.window.opacity": "Αδιαφάνεια (0 – 100)",
+  "settingspanel.window.posX": "Θέση X",
+  "settingspanel.window.posY": "Θέση Y",
   "settingspanel.window.snapEdges": "Κουμπωτά άκρα",
   "settingspanel.window.title": "Ρυθμίσεις παραθύρου",
   "settingspanel.window.zPosition": "Θέση Z",

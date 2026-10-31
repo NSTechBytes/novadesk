@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "可拖动",
   "settingspanel.window.keepOnScreen": "保持在屏幕上",
   "settingspanel.window.opacity": "不透明度 (0 – 100)",
+  "settingspanel.window.posX": "位置 X",
+  "settingspanel.window.posY": "位置 Y",
   "settingspanel.window.snapEdges": "对齐边缘",
   "settingspanel.window.title": "窗口设置",
   "settingspanel.window.zPosition": "Z 轴位置",

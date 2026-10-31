@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Sürüklenebilir",
   "settingspanel.window.keepOnScreen": "Ekranda kal",
   "settingspanel.window.opacity": "Opaklık (0 – 100)",
+  "settingspanel.window.posX": "Konum X",
+  "settingspanel.window.posY": "Konum Y",
   "settingspanel.window.snapEdges": "Kenarları tutturun",
   "settingspanel.window.title": "Pencere Ayarları",
   "settingspanel.window.zPosition": "Z konumu",

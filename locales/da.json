@@ -157,6 +157,8 @@
   "settingspanel.window.draggable": "Trækbar",
   "settingspanel.window.keepOnScreen": "Bliv på skærmen",
   "settingspanel.window.opacity": "Opacitet (0 – 100)",
+  "settingspanel.window.posX": "Position X",
+  "settingspanel.window.posY": "Position Y",
   "settingspanel.window.snapEdges": "Snap kanter",
   "settingspanel.window.title": "Vinduesindstillinger",
   "settingspanel.window.zPosition": "Z-position",
