@@ -924,7 +924,7 @@ void SettingsPanel::BuildWindowTab(Widget *panel, Widget *target,
     dd.containerId = scrollId;
     dd.x = ContentX(ctrlX, kInlineCtrlW); dd.y = y + rowOff;
     dd.width = kInlineCtrlW; dd.height = kCtrlH;
-    dd.popupMinWidth = 150;
+    dd.popupMinWidth = 180;
     for (const auto &label : ZPosLabels()) dd.options.push_back({label, label});
     dd.hasOptions = true; dd.selectedIndex = ZPosToIndex(opts.zPos);
     dd.rightToLeft = IsRtlLayout();
