@@ -38,6 +38,7 @@
 #include "../../common/Localization.h"
 #include "../../common/WindowsTheme.h"
 #include "../../common/ZipUtils.h"
+#include "../../common/StringUtils.h"
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdiplus.lib")
@@ -173,14 +174,7 @@ struct AppState {
 };
 
 std::wstring Utf8ToWide(const std::string &input) {
-  if (input.empty())
-    return {};
-  int size = MultiByteToWideChar(CP_UTF8, 0, input.c_str(), -1, nullptr, 0);
-  if (size <= 0)
-    return L"";
-  std::wstring out(static_cast<size_t>(size - 1), L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, input.c_str(), -1, out.data(), size);
-  return out;
+  return Utils::ToWString(input);
 }
 
 std::wstring ToWide(const fs::path &p) { return p.wstring(); }

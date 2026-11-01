@@ -43,6 +43,7 @@
 #include "../../common/NovadeskPaths.h"
 #include "../../common/CommonSettings.h"
 #include "../../common/Localization.h"
+#include "../../common/StringUtils.h"
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdiplus.lib")
@@ -830,30 +831,11 @@ static std::wstring BytesToWide(const std::string &bytes) {
 }
 
 static std::string WideToUtf8(const std::wstring &wide) {
-  if (wide.empty())
-    return std::string();
-  int needed = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(),
-                                   static_cast<int>(wide.size()), nullptr, 0,
-                                   nullptr, nullptr);
-  if (needed <= 0)
-    return std::string();
-  std::string out(needed, '\0');
-  WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()),
-                      out.data(), needed, nullptr, nullptr);
-  return out;
+  return Utils::ToString(wide);
 }
 
 static std::wstring Utf8ToWide(const std::string &utf8) {
-  if (utf8.empty())
-    return std::wstring();
-  int needed = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(),
-                                   static_cast<int>(utf8.size()), nullptr, 0);
-  if (needed <= 0)
-    return std::wstring();
-  std::wstring out(needed, L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()),
-                      out.data(), needed);
-  return out;
+  return Utils::ToWString(utf8);
 }
 
 static DWORD WINAPI NovadeskLogReaderThreadProc(LPVOID) {

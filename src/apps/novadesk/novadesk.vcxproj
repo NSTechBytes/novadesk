@@ -233,6 +233,7 @@
     <ClCompile Include="..\..\common\AppPaths.cpp" />
     <ClCompile Include="..\..\common\NovadeskPaths.cpp" />
     <ClCompile Include="..\..\common\ZipUtils.cpp" />
+    <ClCompile Include="..\..\common\StringUtils.cpp" />
     <ClCompile Include="..\..\third_party\zlib\adler32.c">
       <AdditionalOptions>/w %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -287,6 +288,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\common\ZipUtils.h" />
+    <ClInclude Include="..\..\common\StringUtils.h" />
     <ClInclude Include="..\..\common\CommonSettings.h" />
     <ClInclude Include="..\..\common\Localization.h" />
     <ClInclude Include="..\..\common\AppPaths.h" />
