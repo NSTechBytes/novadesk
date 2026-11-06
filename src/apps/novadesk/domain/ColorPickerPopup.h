@@ -62,7 +62,7 @@ private:
   void SetRGB(COLORREF color, bool notify = true);
   void SyncEdits();
   void SetHexMode(bool enabled);
-  void Notify();
+  void Notify(bool forceImmediate = false);
   void FlushWidgetRedraw();
   void ShowEyedropperMagnifier(POINT screenPosition);
   void HideEyedropperMagnifier();
@@ -102,6 +102,8 @@ private:
   bool m_eye = false;     ///< Eyedropper active.
   bool m_eyeAwaitingFirstRelease = false;
   bool m_sync = false; ///< Suppresses recursive sync.
+  ULONGLONG m_LastNotifyTime = 0;   ///< Timestamp of last emitted color change.
+  bool m_PendingDragNotify = false; ///< Whether a throttled notification is pending.
 
   float m_SaturationValueHue = -1.0f;         ///< Cached hue for SV bitmap.
   std::vector<DWORD> m_SaturationValuePixels; ///< Cached SV gradient pixels.

@@ -30,6 +30,8 @@ constexpr int MAGNIFIER_SIZE = 124, MAGNIFIER_BORDER = 0,
               MAGNIFIER_SOURCE_SIZE = 15;
 constexpr UINT_PTR EYEDROPPER_TIMER = 1;
 constexpr UINT_PTR SHOW_DESKTOP_TIMER = 2;
+constexpr UINT_PTR DRAG_NOTIFY_TIMER = 3;
+constexpr ULONGLONG DRAG_THROTTLE_INTERVAL_MS = 16; // ~60 FPS frame limiter
 constexpr UINT OUTSIDE_CLICK_MESSAGE = WM_APP + 0x41;
 HHOOK g_OutsideClickHook = nullptr;
 ColorPickerPopup *g_OutsideClickPopup = nullptr;
@@ -292,6 +294,12 @@ void ColorPickerPopup::UpdatePosition() {
 }
 
 void ColorPickerPopup::Close() {
+  if (m_hWnd) {
+    KillTimer(m_hWnd, DRAG_NOTIFY_TIMER);
+    if (!m_Canceled && m_PendingDragNotify) {
+      Notify(true);
+    }
+  }
   if (m_hWnd && !m_Canceled && m_Picker &&
       m_Picker->m_OnCloseCallbackId != -1) {
     wchar_t s[8];
@@ -305,6 +313,7 @@ void ColorPickerPopup::Close() {
   if (m_hWnd) {
     KillTimer(m_hWnd, EYEDROPPER_TIMER);
     KillTimer(m_hWnd, SHOW_DESKTOP_TIMER);
+    KillTimer(m_hWnd, DRAG_NOTIFY_TIMER);
   }
   HideEyedropperMagnifier();
   if (m_hWnd) {
@@ -617,16 +626,42 @@ void ColorPickerPopup::SetHexMode(bool enabled) {
   InvalidateRect(m_hWnd, nullptr, FALSE);
 }
 
-void ColorPickerPopup::Notify() {
-  m_Picker->SetColor(HSV());
+void ColorPickerPopup::Notify(bool forceImmediate) {
+  const COLORREF currentColor = HSV();
+  m_Picker->SetColor(currentColor);
   // UpdateLayeredWindowContent redraws the complete layered widget. Calling
   // it for every mouse-move sample makes the widget visibly flicker, so the
   // swatch is committed once an interaction is complete or the popup closes.
   m_WidgetNeedsRedraw = true;
+
+  const bool isDragging = (m_dragSV || m_dragHue);
+  if (isDragging && !forceImmediate) {
+    const ULONGLONG now = GetTickCount64();
+    if (now - m_LastNotifyTime < DRAG_THROTTLE_INTERVAL_MS) {
+      m_PendingDragNotify = true;
+      if (m_hWnd) {
+        SetTimer(m_hWnd, DRAG_NOTIFY_TIMER,
+                 static_cast<UINT>(DRAG_THROTTLE_INTERVAL_MS - (now - m_LastNotifyTime)),
+                 nullptr);
+      }
+      return;
+    }
+    m_LastNotifyTime = now;
+    m_PendingDragNotify = false;
+    if (m_hWnd) {
+      KillTimer(m_hWnd, DRAG_NOTIFY_TIMER);
+    }
+  } else {
+    m_LastNotifyTime = GetTickCount64();
+    m_PendingDragNotify = false;
+    if (m_hWnd) {
+      KillTimer(m_hWnd, DRAG_NOTIFY_TIMER);
+    }
+  }
+
   if (m_Picker->m_OnChangeCallbackId != -1) {
     wchar_t s[8];
-    COLORREF c = HSV();
-    swprintf_s(s, L"#%02X%02X%02X", GetRValue(c), GetGValue(c), GetBValue(c));
+    swprintf_s(s, L"#%02X%02X%02X", GetRValue(currentColor), GetGValue(currentColor), GetBValue(currentColor));
     JSEngine::CallEventCallbackWithText(m_Picker->m_OnChangeCallbackId,
                                         m_Widget, s);
   } else if (m_Widget && m_Widget->GetInputSink()) {
@@ -1020,6 +1055,13 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l) {
     UpdateEyedropperSample(cursor);
     return 0;
   }
+  if (m == WM_TIMER && w == DRAG_NOTIFY_TIMER) {
+    KillTimer(m_hWnd, DRAG_NOTIFY_TIMER);
+    if (m_PendingDragNotify) {
+      Notify(true);
+    }
+    return 0;
+  }
   if (m == WM_MOUSELEAVE) {
     if (m_FormatHover) {
       m_FormatHover = false;
@@ -1062,7 +1104,15 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l) {
       FlushWidgetRedraw();
       return 0;
     }
+    const bool wasDragging = (m_dragSV || m_dragHue);
     m_dragSV = m_dragHue = false;
+    if (wasDragging) {
+      if (m_hWnd)
+        KillTimer(m_hWnd, DRAG_NOTIFY_TIMER);
+      if (m_PendingDragNotify) {
+        Notify(true);
+      }
+    }
     ReleaseCapture();
     FlushWidgetRedraw();
     return 0;
@@ -1103,6 +1153,9 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l) {
       return 0;
     }
     m_Canceled = true;
+    m_PendingDragNotify = false;
+    if (m_hWnd)
+      KillTimer(m_hWnd, DRAG_NOTIFY_TIMER);
     if (m_Picker && m_Picker->m_OnCancelCallbackId != -1) {
       wchar_t s[8];
       swprintf_s(s, L"#%02X%02X%02X", GetRValue(m_OriginalColor),
@@ -1113,6 +1166,18 @@ LRESULT ColorPickerPopup::Handle(UINT m, WPARAM w, LPARAM l) {
     SetRGB(m_OriginalColor, false);
     m_WidgetNeedsRedraw = true;
     Close();
+    return 0;
+  }
+  if (m == WM_CAPTURECHANGED) {
+    if (m_dragSV || m_dragHue) {
+      m_dragSV = m_dragHue = false;
+      if (m_hWnd)
+        KillTimer(m_hWnd, DRAG_NOTIFY_TIMER);
+      if (m_PendingDragNotify) {
+        Notify(true);
+      }
+      FlushWidgetRedraw();
+    }
     return 0;
   }
   if (m == WM_KILLFOCUS) {
