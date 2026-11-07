@@ -494,17 +494,10 @@ void OptionListPopup::Paint(HDC targetDc) {
                             ? m_OriginalIndices[static_cast<size_t>(index)]
                             : -1;
 
-    if (origIdx == m_OriginalIndex) {
-      HBRUSH highlight = CreateSolidBrush(selectedColor);
-      FillRect(dc, &rowRect, highlight);
-      DeleteObject(highlight);
-    }
-    if (index == m_Highlight && m_MouseActive && origIdx != m_OriginalIndex) {
-      HBRUSH highlight = CreateSolidBrush(hoverColor);
-      FillRect(dc, &rowRect, highlight);
-      DeleteObject(highlight);
-    } else if (index == m_Highlight && !m_MouseActive && origIdx != m_OriginalIndex) {
-      HBRUSH highlight = CreateSolidBrush(selectedColor);
+    // Only the single active row (hovered or keyboard-cursor) gets the highlight background
+    if (index == m_Highlight) {
+      const COLORREF bg = m_MouseActive ? hoverColor : selectedColor;
+      HBRUSH highlight = CreateSolidBrush(bg);
       FillRect(dc, &rowRect, highlight);
       DeleteObject(highlight);
     }
@@ -530,6 +523,14 @@ void OptionListPopup::Paint(HDC targetDc) {
                           : rowTop;
     TextOutW(dc, rtl ? textRight : textLeft, label.empty() ? rowTop : textY,
              label.c_str(), static_cast<int>(label.length()));
+
+    // For non-filtering dropdowns, draw a checkmark icon next to the committed choice
+    if (origIdx == m_OriginalIndex && m_OriginalIndex >= 0 && !m_Host->SupportsFiltering()) {
+      const COLORREF prevCol = SetTextColor(dc, style.checkColor);
+      const wchar_t checkMark[] = L"\x2713";
+      TextOutW(dc, rtl ? (m_Padding + 6) : (textRight - 12), textY, checkMark, 1);
+      SetTextColor(dc, prevCol);
+    }
   }
 
   // Direct2D layer: Scrollbar thumb
