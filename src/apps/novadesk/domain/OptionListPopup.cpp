@@ -29,6 +29,23 @@ constexpr int kTextVerticalPad = 3;
 HHOOK g_OutsideClickHook = nullptr;
 OptionListPopup *g_OutsideClickPopup = nullptr;
 
+void ApplyDarkAndDisableTransitions(HWND hWnd) {
+  HMODULE hDwm = GetModuleHandleW(L"dwmapi.dll");
+  if (!hDwm)
+    hDwm = LoadLibraryW(L"dwmapi.dll");
+  if (hDwm) {
+    auto pfn = reinterpret_cast<HRESULT(WINAPI *)(HWND, DWORD, LPCVOID, DWORD)>(
+        GetProcAddress(hDwm, "DwmSetWindowAttribute"));
+    if (pfn) {
+      BOOL disableTransitions = TRUE;
+      pfn(hWnd, 3 /* DWMWA_TRANSITIONS_FORCEDISABLED */, &disableTransitions, sizeof(disableTransitions));
+      BOOL useDarkMode = TRUE;
+      pfn(hWnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &useDarkMode, sizeof(useDarkMode));
+      pfn(hWnd, 19 /* DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 */, &useDarkMode, sizeof(useDarkMode));
+    }
+  }
+}
+
 int ClampInt(int v, int lo, int hi) {
   return (std::max)(lo, (std::min)(v, hi));
 }
@@ -175,7 +192,8 @@ void OptionListPopup::Show() {
     wc.hInstance = GetModuleHandleW(nullptr);
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wc.lpszClassName = L"NovadeskOptionListPopup";
-    wc.hbrBackground = nullptr;
+    static HBRUSH s_DarkBrush = CreateSolidBrush(RGB(36, 36, 44));
+    wc.hbrBackground = s_DarkBrush;
     atom = RegisterClassW(&wc);
   }
 
@@ -233,7 +251,7 @@ void OptionListPopup::Show() {
   m_hWnd = CreateWindowExW(
       WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE,
       L"NovadeskOptionListPopup", L"",
-      WS_POPUP | WS_BORDER | WS_CLIPCHILDREN, x, y, m_Width, m_Height,
+      WS_POPUP | WS_CLIPCHILDREN, x, y, m_Width, m_Height,
       m_Widget->GetWindow(), nullptr, GetModuleHandleW(nullptr), this);
   if (!m_hWnd) {
     Widget::DecrementDropDownCount();
@@ -244,7 +262,9 @@ void OptionListPopup::Show() {
     return;
   }
 
+  ApplyDarkAndDisableTransitions(m_hWnd);
   SetWindowPos(m_hWnd, HWND_TOPMOST, x, y, m_Width, m_Height, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+  UpdateWindow(m_hWnd);
   InstallOutsideClickHook();
 
   m_ShowDesktopWasActive = System::GetShowDesktop();
@@ -617,6 +637,9 @@ LRESULT OptionListPopup::Handle(UINT msg, WPARAM wParam, LPARAM lParam) {
 
   case WM_ERASEBKGND:
     return 1;
+
+  case WM_NCPAINT:
+    return 0;
 
   case OUTSIDE_CLICK_MESSAGE:
     Close();
