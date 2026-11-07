@@ -34,6 +34,7 @@
 #include "../../render/ElementLayoutBox.h"
 #include "../../render/InputBoxElement.h"
 #include "../../render/ColorPickerElement.h"
+#include "../../render/ComboBoxElement.h"
 #include "../../shared/FileUtils.h"
 #include "../../shared/Logging.h"
 #include "../../shared/PathUtils.h"
@@ -436,6 +437,22 @@ JSValue JsWidgetAddDropDown(JSContext *ctx, JSValueConst thisVal, int argc,
   return JS_UNDEFINED;
 }
 
+JSValue JsWidgetAddComboBox(JSContext *ctx, JSValueConst thisVal, int argc,
+                            JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1 || !JS_IsObject(argv[0]))
+    return ThrowTypeError(ctx, "addComboBox", "expected options object");
+  PropertyParser::ComboBoxOptions options;
+  PropertyParser::ParseComboBoxOptions(
+      ctx, argv[0], options,
+      PathUtils::GetScriptBaseDir(widget->GetOptions().scriptPath,
+                                  JSEngine::GetEntryScriptDir()));
+  widget->AddComboBox(options);
+  return JS_UNDEFINED;
+}
+
 JSValue JsWidgetAddBar(JSContext *ctx, JSValueConst thisVal, int argc,
                        JSValueConst *argv) {
   Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -648,6 +665,8 @@ static JSValue CallAddByType(JSContext *ctx, Widget *widget,
     return JsWidgetAddSlider(ctx, thisVal, 1, argvLocal);
   if (type == L"dropdown")
     return JsWidgetAddDropDown(ctx, thisVal, 1, argvLocal);
+  if (type == L"combobox")
+    return JsWidgetAddComboBox(ctx, thisVal, 1, argvLocal);
   if (type == L"bitmap")
     return JsWidgetAddBitmap(ctx, thisVal, 1, argvLocal);
   if (type == L"rotator")
@@ -1508,6 +1527,24 @@ JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
     if (options.onChangeCallbackId != -1 && dd->GetSelectedIndex() != wasIndex) {
       JSEngine::CallEventCallbackWithText(options.onChangeCallbackId, widget,
                                           dd->SelectedValue());
+    }
+  } else if (auto *combo = dynamic_cast<ComboBoxElement *>(element)) {
+    PropertyParser::ComboBoxOptions options;
+    PropertyParser::PreFillComboBoxOptions(options, combo);
+    PropertyParser::ParseComboBoxOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyComboBoxOptions(combo, options);
+
+    if (JS_IsObject(argv[1])) {
+      JSValue openVal = JS_GetPropertyStr(ctx, argv[1], "isOpen");
+      if (JS_IsUndefined(openVal))
+        openVal = JS_GetPropertyStr(ctx, argv[1], "open");
+      if (!JS_IsUndefined(openVal)) {
+        if (JS_ToBool(ctx, openVal) == 1)
+          widget->OpenComboBox(combo);
+        else if (widget->IsComboBoxOpen(combo))
+          widget->CloseComboBox();
+      }
+      JS_FreeValue(ctx, openVal);
     }
   }
 
@@ -3179,6 +3216,49 @@ JSValue GetElementPropertyValue(JSContext *ctx, Widget *widget,
           ctx, Utils::ToString(ColorUtil::ToRGBAString(
                    sl->m_DisabledThumbColor, sl->m_DisabledThumbAlpha))
                    .c_str());
+    } else if (element->GetType() == ELEMENT_COMBOBOX) {
+    auto *combo = static_cast<ComboBoxElement *>(element);
+    if (prop == "selectedIndex")
+      return JS_NewInt32(ctx, combo->GetSelectedIndex());
+    if (prop == "selectedValue" || prop == "value")
+      return JS_NewString(ctx, Utils::ToString(combo->SelectedValue()).c_str());
+    if (prop == "selectedLabel")
+      return JS_NewString(ctx, Utils::ToString(combo->SelectedLabel()).c_str());
+    if (prop == "text")
+      return JS_NewString(ctx, Utils::ToString(combo->GetText()).c_str());
+    if (prop == "optionCount")
+      return JS_NewInt32(ctx, combo->OptionCount());
+    if (prop == "options") {
+      JSValue arr = JS_NewArray(ctx);
+      const auto &opts = combo->Options();
+      for (uint32_t i = 0; i < static_cast<uint32_t>(opts.size()); ++i) {
+        JSValue item = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, item, "label",
+                          JS_NewString(ctx, Utils::ToString(opts[i].label).c_str()));
+        JS_SetPropertyStr(ctx, item, "value",
+                          JS_NewString(ctx, Utils::ToString(opts[i].value).c_str()));
+        JS_SetPropertyUint32(ctx, arr, i, item);
+      }
+      return arr;
+    }
+    if (prop == "placeholder")
+      return JS_NewString(ctx, Utils::ToString(combo->GetPlaceholder()).c_str());
+    if (prop == "editable")
+      return JS_NewBool(ctx, combo->m_Editable ? 1 : 0);
+    if (prop == "showChevron")
+      return JS_NewBool(ctx, combo->m_ShowChevron ? 1 : 0);
+    if (prop == "openOnType")
+      return JS_NewBool(ctx, combo->m_OpenOnType ? 1 : 0);
+    if (prop == "filterOnType")
+      return JS_NewBool(ctx, combo->m_FilterOnType ? 1 : 0);
+    if (prop == "autoComplete")
+      return JS_NewBool(ctx, combo->m_AutoComplete ? 1 : 0);
+    if (prop == "disabled")
+      return JS_NewBool(ctx, combo->m_Disabled ? 1 : 0);
+    if (prop == "isOpen")
+      return JS_NewBool(ctx, widget->IsComboBoxOpen(combo) ? 1 : 0);
+    if (prop == "focused")
+      return JS_NewBool(ctx, combo->IsFocused() ? 1 : 0);
   } else if (element->GetType() == ELEMENT_DROPDOWN) {
     auto *dd = static_cast<DropDownElement *>(element);
 
@@ -3839,6 +3919,163 @@ JSValue JsWidgetIsDropDownOpen(JSContext *ctx, JSValueConst thisVal, int argc,
   return JS_NewBool(ctx, widget->IsDropDownOpen() ? 1 : 0);
 }
 
+static ComboBoxElement *FindComboBox(JSContext *ctx, Widget *widget,
+                                     JSValueConst idVal) {
+  const char *idUtf8 = JS_ToCString(ctx, idVal);
+  if (!idUtf8)
+    return nullptr;
+  std::wstring id = Utils::ToWString(idUtf8);
+  JS_FreeCString(ctx, idUtf8);
+  return dynamic_cast<ComboBoxElement *>(widget->FindElementById(id));
+}
+
+JSValue JsWidgetSetComboBoxIndex(JSContext *ctx, JSValueConst thisVal, int argc,
+                                 JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 2)
+    return ThrowTypeError(ctx, "setComboBoxIndex", "expected (id, index)");
+  auto *combo = FindComboBox(ctx, widget, argv[0]);
+  if (!combo)
+    return JS_NewBool(ctx, 0);
+  int32_t wanted = -1;
+  if (JS_ToInt32(ctx, &wanted, argv[1]) != 0) {
+    JS_FreeValue(ctx, JS_ThrowTypeError(ctx, "index must be a number"));
+    return JS_EXCEPTION;
+  }
+  combo->SelectOption(wanted);
+  widget->Redraw();
+  if (combo->m_OnChangeCallbackId != -1)
+    JSEngine::CallEventCallbackWithText(combo->m_OnChangeCallbackId, widget,
+                                        combo->SelectedValue());
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetGetComboBoxIndex(JSContext *ctx, JSValueConst thisVal, int argc,
+                                 JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getComboBoxIndex", "expected (id)");
+  auto *combo = FindComboBox(ctx, widget, argv[0]);
+  if (!combo)
+    return JS_UNDEFINED;
+  return JS_NewInt32(ctx, combo->GetSelectedIndex());
+}
+
+JSValue JsWidgetSetComboBoxValue(JSContext *ctx, JSValueConst thisVal, int argc,
+                                 JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 2)
+    return ThrowTypeError(ctx, "setComboBoxValue", "expected (id, value)");
+  auto *combo = FindComboBox(ctx, widget, argv[0]);
+  if (!combo)
+    return JS_NewBool(ctx, 0);
+  const char *valUtf8 = JS_ToCString(ctx, argv[1]);
+  if (!valUtf8)
+    return JS_NewBool(ctx, 0);
+  std::wstring val = Utils::ToWString(valUtf8);
+  JS_FreeCString(ctx, valUtf8);
+  const int idx = combo->IndexForValue(val);
+  if (idx >= 0)
+    combo->SelectOption(idx);
+  else
+    combo->SetText(val);
+  widget->Redraw();
+  if (combo->m_OnChangeCallbackId != -1)
+    JSEngine::CallEventCallbackWithText(combo->m_OnChangeCallbackId, widget,
+                                        combo->SelectedValue());
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetGetComboBoxValue(JSContext *ctx, JSValueConst thisVal, int argc,
+                                 JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getComboBoxValue", "expected (id)");
+  auto *combo = FindComboBox(ctx, widget, argv[0]);
+  if (!combo)
+    return JS_UNDEFINED;
+  return JS_NewString(ctx, Utils::ToString(combo->SelectedValue()).c_str());
+}
+
+JSValue JsWidgetSetComboBoxText(JSContext *ctx, JSValueConst thisVal, int argc,
+                                JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 2)
+    return ThrowTypeError(ctx, "setComboBoxText", "expected (id, text)");
+  auto *combo = FindComboBox(ctx, widget, argv[0]);
+  if (!combo)
+    return JS_NewBool(ctx, 0);
+  const char *tUtf8 = JS_ToCString(ctx, argv[1]);
+  if (!tUtf8)
+    return JS_NewBool(ctx, 0);
+  std::wstring t = Utils::ToWString(tUtf8);
+  JS_FreeCString(ctx, tUtf8);
+  combo->SetText(t);
+  widget->Redraw();
+  if (combo->m_OnTextChangeCallbackId != -1)
+    JSEngine::CallEventCallbackWithText(combo->m_OnTextChangeCallbackId, widget,
+                                        combo->GetText());
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetGetComboBoxText(JSContext *ctx, JSValueConst thisVal, int argc,
+                                JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_UNDEFINED;
+  if (argc < 1)
+    return ThrowTypeError(ctx, "getComboBoxText", "expected (id)");
+  auto *combo = FindComboBox(ctx, widget, argv[0]);
+  if (!combo)
+    return JS_UNDEFINED;
+  return JS_NewString(ctx, Utils::ToString(combo->GetText()).c_str());
+}
+
+JSValue JsWidgetOpenComboBox(JSContext *ctx, JSValueConst thisVal, int argc,
+                             JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc < 1)
+    return ThrowTypeError(ctx, "openComboBox", "expected (id)");
+  auto *combo = FindComboBox(ctx, widget, argv[0]);
+  if (!combo || combo->m_Disabled)
+    return JS_NewBool(ctx, 0);
+  widget->OpenComboBox(combo);
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetCloseComboBox(JSContext *ctx, JSValueConst thisVal, int,
+                              JSValueConst *) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  widget->CloseComboBox();
+  return JS_NewBool(ctx, 1);
+}
+
+JSValue JsWidgetIsComboBoxOpen(JSContext *ctx, JSValueConst thisVal, int argc,
+                               JSValueConst *argv) {
+  Widget *widget = GetAnyWidget(ctx, thisVal);
+  if (!widget)
+    return JS_NewBool(ctx, 0);
+  if (argc >= 1 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
+    auto *combo = FindComboBox(ctx, widget, argv[0]);
+    return JS_NewBool(ctx, widget->IsComboBoxOpen(combo) ? 1 : 0);
+  }
+  return JS_NewBool(ctx, widget->IsComboBoxOpen() ? 1 : 0);
+}
+
 JSValue JsWidgetOpenColorPickerEyedropper(JSContext *ctx, JSValueConst thisVal,
                                           int argc, JSValueConst *argv) {
   Widget *widget = GetAnyWidget(ctx, thisVal);
@@ -4334,6 +4571,7 @@ const JSCFunctionListEntry kWidgetProtoFuncs[] = {
     JS_CFUNC_DEF("addCheckBox", 1, JsWidgetAddCheckBox),
     JS_CFUNC_DEF("addSlider", 1, JsWidgetAddSlider),
     JS_CFUNC_DEF("addDropDown", 1, JsWidgetAddDropDown),
+    JS_CFUNC_DEF("addComboBox", 1, JsWidgetAddComboBox),
     JS_CFUNC_DEF("addBar", 1, JsWidgetAddBar),
     JS_CFUNC_DEF("addLine", 1, JsWidgetAddLine),
     JS_CFUNC_DEF("addHistogram", 1, JsWidgetAddHistogram),
@@ -4389,6 +4627,17 @@ const JSCFunctionListEntry kWidgetProtoFuncs[] = {
     JS_CFUNC_DEF("openDropDown", 1, JsWidgetOpenDropDown),
     JS_CFUNC_DEF("closeDropDown", 0, JsWidgetCloseDropDown),
     JS_CFUNC_DEF("isDropDownOpen", 1, JsWidgetIsDropDownOpen),
+
+    // ComboBox
+    JS_CFUNC_DEF("setComboBoxIndex", 2, JsWidgetSetComboBoxIndex),
+    JS_CFUNC_DEF("getComboBoxIndex", 1, JsWidgetGetComboBoxIndex),
+    JS_CFUNC_DEF("setComboBoxValue", 2, JsWidgetSetComboBoxValue),
+    JS_CFUNC_DEF("getComboBoxValue", 1, JsWidgetGetComboBoxValue),
+    JS_CFUNC_DEF("setComboBoxText", 2, JsWidgetSetComboBoxText),
+    JS_CFUNC_DEF("getComboBoxText", 1, JsWidgetGetComboBoxText),
+    JS_CFUNC_DEF("openComboBox", 1, JsWidgetOpenComboBox),
+    JS_CFUNC_DEF("closeComboBox", 0, JsWidgetCloseComboBox),
+    JS_CFUNC_DEF("isComboBoxOpen", 1, JsWidgetIsComboBoxOpen),
 
     // InputBox
     JS_CFUNC_DEF("focusInputBox", 1, JsWidgetFocusInputBox),

@@ -58,7 +58,11 @@ void ApplyInputTextAlignment(IDWriteTextFormat *format, TextAlignment align) {
 
 InputBoxElement::InputBoxElement(const std::wstring &id, int x, int y,
                                  int width, int height)
-    : Element(ELEMENT_INPUT_BOX, id, x, y, width, height) {
+    : InputBoxElement(ELEMENT_INPUT_BOX, id, x, y, width, height) {}
+
+InputBoxElement::InputBoxElement(ElementType type, const std::wstring &id,
+                                 int x, int y, int width, int height)
+    : Element(type, id, x, y, width, height) {
   // Input fields typically want a solid background and a small corner radius.
   m_MouseEventCursor = true;
   m_MouseEventCursorName = L"text";

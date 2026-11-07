@@ -50,7 +50,7 @@
 #include "SettingsPanel.h"
 #include "InputBoxContextMenuHelper.h"
 #include "ColorPickerPopup.h"
-#include "DropDownPopup.h"
+#include "OptionListPopup.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "InputBoxElement.h"
 #include "../shared/PathUtils.h"
@@ -1824,8 +1824,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
             widget->m_ColorPickerPopup->IsOpen()) {
           widget->m_ColorPickerPopup->UpdatePosition();
         }
-        if (widget->m_DropDownPopup && widget->m_DropDownPopup->IsOpen()) {
-          widget->m_DropDownPopup->UpdatePosition();
+        if (widget->m_OptionListPopup && widget->m_OptionListPopup->IsOpen()) {
+          widget->m_OptionListPopup->UpdatePosition();
         }
         if (widget->m_Tooltip.IsActive()) {
           widget->m_Tooltip.RepositionToCursor();
@@ -1833,8 +1833,8 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
         JSEngine::TriggerWidgetEvent(widget, "move");
       }
       if (sized) {
-        if (widget->m_DropDownPopup && widget->m_DropDownPopup->IsOpen())
-          widget->m_DropDownPopup->UpdatePosition();
+        if (widget->m_OptionListPopup && widget->m_OptionListPopup->IsOpen())
+          widget->m_OptionListPopup->UpdatePosition();
         widget->Redraw();
         JSEngine::TriggerWidgetEvent(widget, "resize");
       }
@@ -2031,6 +2031,31 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
       bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
       bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
 
+      auto *comboInput = dynamic_cast<ComboBoxElement *>(input);
+      if (comboInput) {
+        if (wParam == VK_DOWN || wParam == VK_UP) {
+          if (widget->m_OptionListPopup && widget->m_OptionListPopup->IsOpen()) {
+            int cur = widget->m_OptionListPopup->GetHighlight();
+            int next = (wParam == VK_DOWN) ? cur + 1 : cur - 1;
+            widget->m_OptionListPopup->SetHighlight(next, true);
+            return 0;
+          } else if (wParam == VK_DOWN) {
+            widget->OpenComboBox(comboInput);
+            return 0;
+          }
+        }
+        if (wParam == VK_RETURN && widget->m_OptionListPopup &&
+            widget->m_OptionListPopup->IsOpen()) {
+          widget->m_OptionListPopup->CommitHighlighted();
+          return 0;
+        }
+        if (wParam == VK_ESCAPE && widget->m_OptionListPopup &&
+            widget->m_OptionListPopup->IsOpen()) {
+          widget->CloseComboBox();
+          return 0;
+        }
+      }
+
       if (ctrl && wParam == 'A') {
         input->SelectAll();
         widget->Redraw();
@@ -2139,6 +2164,15 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
       InputBoxElement *input = widget->m_FocusedInputBox;
       auto result = input->HandleChar(ch);
       if (result == InputBoxElement::HandleCharResult::Changed) {
+        if (auto *combo = dynamic_cast<ComboBoxElement *>(input)) {
+          if (widget->m_OptionListPopup && widget->m_OptionListPopup->IsOpen()) {
+            widget->m_OptionListPopup->FilterBy(combo->GetText());
+          } else if (combo->m_OpenOnType) {
+            widget->OpenComboBox(combo);
+            if (widget->m_OptionListPopup)
+              widget->m_OptionListPopup->FilterBy(combo->GetText());
+          }
+        }
         if (input->m_OnTextChangeCallbackId != -1)
           JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId,
                                               widget, input->GetText());
@@ -2620,6 +2654,8 @@ void Widget::ToggleToggleSwitch(ToggleSwitchElement *element) {
     m_InputSink->OnElementMouseUp(this, element, 0, 0);
 }
 
+
+
 void Widget::AddCheckBox(const PropertyParser::CheckBoxOptions &options) {
   if (options.id.empty())
     return;
@@ -2656,6 +2692,8 @@ void Widget::ToggleCheckBox(CheckBoxElement *element) {
   if (m_InputSink)
     m_InputSink->OnElementMouseUp(this, element, 0, 0);
 }
+
+
 
 void Widget::AddSlider(const PropertyParser::SliderOptions &options) {
   if (options.id.empty())
@@ -2737,6 +2775,47 @@ void Widget::NotifyDropDownChange(DropDownElement *element) {
     m_InputSink->OnElementMouseUp(this, element, 0, 0);
 }
 
+void Widget::AddComboBox(const PropertyParser::ComboBoxOptions &options) {
+  if (options.id.empty())
+    return;
+  Element *existing = FindElementById(options.id);
+  auto *existingCombo =
+      existing ? dynamic_cast<ComboBoxElement *>(existing) : nullptr;
+  if (existingCombo) {
+    if (IsComboBoxOpen(existingCombo))
+      CloseComboBox();
+  } else if (IsComboBoxOpen()) {
+    CloseComboBox();
+  }
+  if (existing)
+    RemoveElements(options.id);
+  auto *element = new ComboBoxElement(
+      options.id, options.x, options.y,
+      options.width > 0 ? options.width : 180,
+      options.height > 0 ? options.height : 30);
+  PropertyParser::ApplyComboBoxOptions(element, options);
+  m_Elements.push_back(std::unique_ptr<Element>(element));
+  m_TrackedElements.insert(element);
+  if (!element->GetId().empty())
+    m_ElementIndex[element->GetId()] = element;
+  UpdateContainerForElement(element, options.containerId);
+  Redraw();
+}
+
+void Widget::NotifyComboBoxChange(ComboBoxElement *element) {
+  if (!element)
+    return;
+  const std::wstring value = element->SelectedValue();
+  Redraw();
+  if (element->m_OnChangeCallbackId != -1) {
+    JSEngine::CallEventCallbackWithText(element->m_OnChangeCallbackId, this,
+                                        value);
+    return;
+  }
+  if (m_InputSink)
+    m_InputSink->OnElementMouseUp(this, element, 0, 0);
+}
+
 void Widget::OpenColorPicker(ColorPickerElement *colorPicker) {
   if (!colorPicker)
     return;
@@ -2767,38 +2846,53 @@ bool Widget::IsColorPickerEyedropperActive() const {
   return m_ColorPickerPopup && m_ColorPickerPopup->IsEyedropperActive();
 }
 
-void Widget::OpenDropDown(DropDownElement *dropDown) {
-  if (!dropDown)
+void Widget::OpenOptionList(IOptionListHost *host) {
+  if (!host)
     return;
-  if (m_InputSink)
-    m_InputSink->OnBeforeOpenDropDown(this, dropDown);
-  // Only one popup of either kind may hold the outside-click hook.
+  Element *elem = host->GetElement();
+  if (!elem)
+    return;
+
+  // Only one popup of any kind may hold the outside-click hook.
   CloseColorPicker();
-  DropDownElement *previous =
-      m_DropDownPopup ? m_DropDownPopup->GetDropDownElement() : nullptr;
-  const bool sameOpen = previous == dropDown && IsDropDownOpen(dropDown);
-  // Re-pointing at a different control must repaint the old one out of its
-  // open border colour, so clear it before the new popup takes over.
-  if (!sameOpen && previous && previous != dropDown)
-    previous->m_Open = false;
+  Element *previous =
+      m_OptionListPopup ? m_OptionListPopup->GetElement() : nullptr;
+  const bool sameOpen = previous == elem && IsOptionListOpen(elem);
+  if (!sameOpen && previous) {
+    if (auto *dd = dynamic_cast<DropDownElement *>(previous))
+      dd->m_Open = false;
+    else if (auto *cb = dynamic_cast<ComboBoxElement *>(previous))
+      cb->m_Open = false;
+  }
   if (sameOpen)
     return;
-  if (m_DropDownPopup)
-    m_DropDownPopup->Close();
-  m_DropDownPopup = std::make_unique<DropDownPopup>(this, dropDown);
-  dropDown->m_Open = true;
+  if (m_OptionListPopup)
+    m_OptionListPopup->Close();
+
+  m_OptionListPopup = std::make_unique<OptionListPopup>(this, host);
+  if (auto *dd = dynamic_cast<DropDownElement *>(elem))
+    dd->m_Open = true;
+  else if (auto *cb = dynamic_cast<ComboBoxElement *>(elem))
+    cb->m_Open = true;
+
   Redraw();
-  m_DropDownPopup->Show();
+  m_OptionListPopup->Show();
 }
 
-void Widget::CloseDropDown() {
-  if (m_DropDownPopup) {
-    if (DropDownElement *target = m_DropDownPopup->GetDropDownElement()) {
-      target->m_Open = false;
-      target->m_Hovered = false;
+void Widget::CloseOptionList() {
+  if (m_OptionListPopup) {
+    if (Element *target = m_OptionListPopup->GetElement()) {
+      if (auto *dd = dynamic_cast<DropDownElement *>(target)) {
+        dd->m_Open = false;
+        dd->m_Hovered = false;
+      } else if (auto *cb = dynamic_cast<ComboBoxElement *>(target)) {
+        cb->m_Open = false;
+        cb->m_Hovered = false;
+        cb->m_HoveredChevron = false;
+      }
     }
-    m_DropDownPopup->Close(); // Close() handles Redraw() internally
-    m_DropDownPopup.reset();
+    m_OptionListPopup->Close();
+    m_OptionListPopup.reset();
     SetCursor(LoadCursor(nullptr, IDC_ARROW));
     if (m_hWnd)
       PostMessage(m_hWnd, WM_SETCURSOR, (WPARAM)m_hWnd,
@@ -2806,22 +2900,48 @@ void Widget::CloseDropDown() {
   }
 }
 
-bool Widget::IsDropDownOpen(const DropDownElement *dropDown) const {
-  if (!m_DropDownPopup || !m_DropDownPopup->IsOpen())
+bool Widget::IsOptionListOpen(const Element *element) const {
+  if (!m_OptionListPopup || !m_OptionListPopup->IsOpen())
     return false;
-  if (dropDown)
-    return m_DropDownPopup->GetDropDownElement() == dropDown;
+  if (element)
+    return m_OptionListPopup->GetElement() == element;
   return true;
 }
 
+void Widget::OpenDropDown(DropDownElement *dropDown) {
+  if (!dropDown || dropDown->m_Disabled)
+    return;
+  OpenOptionList(dropDown);
+}
+
+void Widget::CloseDropDown() {
+  CloseOptionList();
+}
+
+bool Widget::IsDropDownOpen(const DropDownElement *dropDown) const {
+  return IsOptionListOpen(dropDown);
+}
+
 void Widget::SyncDropDownScrollTop(const DropDownElement *dropDown, int index) {
-  if (!m_DropDownPopup || !m_DropDownPopup->IsOpen())
+  if (!m_OptionListPopup || !m_OptionListPopup->IsOpen())
     return;
-  if (dropDown && m_DropDownPopup->GetDropDownElement() != dropDown)
+  if (dropDown && m_OptionListPopup->GetElement() != dropDown)
     return;
-  // Scroll without disturbing the highlight: a scripted set must not look like
-  // the user moved the keyboard cursor.
-  m_DropDownPopup->ScrollIntoView(index);
+  m_OptionListPopup->ScrollIntoView(index);
+}
+
+void Widget::OpenComboBox(ComboBoxElement *comboBox) {
+  if (!comboBox || comboBox->m_Disabled)
+    return;
+  OpenOptionList(comboBox);
+}
+
+void Widget::CloseComboBox() {
+  CloseOptionList();
+}
+
+bool Widget::IsComboBoxOpen(const ComboBoxElement *comboBox) const {
+  return IsOptionListOpen(comboBox);
 }
 
 void Widget::OpenColorPickerEyedropper(ColorPickerElement *colorPicker) {
@@ -3529,6 +3649,16 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx,
     // what it painted.
     if (IsDropDownOpen(dropDown) && dropDown->OptionCount() != optionCountBefore)
       CloseDropDown();
+    UpdateContainerForElement(element, parsed.containerId);
+  } else if (element->GetType() == ELEMENT_COMBOBOX) {
+    ComboBoxElement *combo = static_cast<ComboBoxElement *>(element);
+    const int optionCountBefore = combo->OptionCount();
+    PropertyParser::ComboBoxOptions parsed;
+    PropertyParser::PreFillComboBoxOptions(parsed, combo);
+    PropertyParser::ParseComboBoxOptions(ctx, options, parsed, baseDir);
+    PropertyParser::ApplyComboBoxOptions(combo, parsed);
+    if (IsComboBoxOpen(combo) && combo->OptionCount() != optionCountBefore)
+      CloseComboBox();
     UpdateContainerForElement(element, parsed.containerId);
   }
 }
@@ -4821,6 +4951,18 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             needRedraw = true;
           }
         }
+        if (auto *combo = dynamic_cast<ComboBoxElement *>(elem.get())) {
+          const bool hovered = (combo == checkedHovered);
+          const bool open = IsComboBoxOpen(combo);
+          const bool hoveredChevron = hovered && combo->IsPointInChevron(x, y);
+          if (combo->m_Hovered != hovered || combo->m_Open != open ||
+              combo->m_HoveredChevron != hoveredChevron) {
+            combo->m_Hovered = hovered;
+            combo->m_Open = open;
+            combo->m_HoveredChevron = hoveredChevron;
+            needRedraw = true;
+          }
+        }
       }
     }
 
@@ -5355,42 +5497,69 @@ bool Widget::HandleMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         }
       }
 
-      // Input box focus + caret placement on click.
-      InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(hitElement);
-      if (inputElem) {
-        // Mouse focus supplies the exact caret position below. Do not first
-        // place a prefilled right-aligned input at its end, because that
-        // produces a visible right-to-left caret jump before HandleMouseDown.
-        FocusInputBox(inputElem, false, false);
-
-        // Focus/blur handlers can synchronously remove the clicked element or
-        // focus a different input.  Only use the pointer if it remains owned
-        // by this widget and is still the active input.
-        const auto inputElement = static_cast<Element *>(inputElem);
-        const bool inputStillFocused =
-            m_FocusedInputBox == inputElem &&
-            std::find_if(m_Elements.begin(), m_Elements.end(),
-                         [&](const auto &element) {
-                           return element.get() == inputElement;
-                         }) != m_Elements.end();
-        if (inputStillFocused) {
-          bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-          inputElem->HandleMouseDown(x, y, shift);
-          SetFocus();
-          SetCapture(m_hWnd);
-        }
-        handled = true;
-        needRedraw = true;
-      } else {
-        // Clicked outside any input box: blur the focused one.
-        if (m_FocusedInputBox) {
-          BlurInputBox();
+      // Input box / combo box focus + caret placement or popup toggle on click.
+      ComboBoxElement *comboElem = dynamic_cast<ComboBoxElement *>(hitElement);
+      if (comboElem) {
+        if (comboElem->m_Disabled) {
+          handled = true;
           needRedraw = true;
+        } else if (comboElem->IsPointInChevron(x, y) || !comboElem->m_Editable) {
+          if (IsComboBoxOpen(comboElem)) {
+            CloseComboBox();
+          } else {
+            OpenComboBox(comboElem);
+          }
+          handled = true;
+          needRedraw = true;
+        } else {
+          FocusInputBox(comboElem, false, false);
+          const auto inputElement = static_cast<Element *>(comboElem);
+          const bool inputStillFocused =
+              m_FocusedInputBox == comboElem &&
+              std::find_if(m_Elements.begin(), m_Elements.end(),
+                           [&](const auto &element) {
+                             return element.get() == inputElement;
+                           }) != m_Elements.end();
+          if (inputStillFocused) {
+            bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+            comboElem->HandleMouseDown(x, y, shift);
+            SetFocus();
+            SetCapture(m_hWnd);
+          }
+          handled = true;
+          needRedraw = true;
+        }
+      } else {
+        InputBoxElement *inputElem = dynamic_cast<InputBoxElement *>(hitElement);
+        if (inputElem) {
+          FocusInputBox(inputElem, false, false);
+          const auto inputElement = static_cast<Element *>(inputElem);
+          const bool inputStillFocused =
+              m_FocusedInputBox == inputElem &&
+              std::find_if(m_Elements.begin(), m_Elements.end(),
+                           [&](const auto &element) {
+                             return element.get() == inputElement;
+                           }) != m_Elements.end();
+          if (inputStillFocused) {
+            bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+            inputElem->HandleMouseDown(x, y, shift);
+            SetFocus();
+            SetCapture(m_hWnd);
+          }
+          handled = true;
+          needRedraw = true;
+        } else {
+          // Clicked outside any input box: blur the focused one.
+          if (m_FocusedInputBox) {
+            BlurInputBox();
+            needRedraw = true;
+          }
         }
       }
 
       Element *dragTarget = actionElement ? actionElement : hitElement;
-      if (dragTarget && dynamic_cast<DropDownElement *>(dragTarget))
+      if (dragTarget && (dynamic_cast<DropDownElement *>(dragTarget) ||
+                         dynamic_cast<ComboBoxElement *>(dragTarget)))
         dragTarget = nullptr;
       if (!m_SliderDragElement && dragTarget && dragTarget->HasDragAction()) {
         m_DragElement = dragTarget;

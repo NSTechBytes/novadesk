@@ -54,7 +54,7 @@
     <ClCompile Include="domain\ColorPickerPopup.cpp">
       <Filter>domain</Filter>
     </ClCompile>
-    <ClCompile Include="domain\DropDownPopup.cpp">
+    <ClCompile Include="domain\OptionListPopup.cpp">
       <Filter>domain</Filter>
     </ClCompile>
     <ClCompile Include="domain\Novadesk.cpp">
@@ -186,6 +186,9 @@
     <ClCompile Include="render\DropDownElement.cpp">
       <Filter>render</Filter>
     </ClCompile>
+    <ClCompile Include="render\ComboBoxElement.cpp">
+      <Filter>render</Filter>
+    </ClCompile>
     <ClCompile Include="render\Tooltip.cpp">
       <Filter>render</Filter>
     </ClCompile>
@@ -253,6 +256,9 @@
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
     <ClCompile Include="scripting\quickjs\parser\PropertyParserDropDown.cpp">
+      <Filter>scripting\quickjs\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="scripting\quickjs\parser\PropertyParserComboBox.cpp">
       <Filter>scripting\quickjs\parser</Filter>
     </ClCompile>
     <ClCompile Include="scripting\quickjs\parser\PropertyParserWidgetWindow.cpp">
@@ -353,8 +359,11 @@
     <ClInclude Include="domain\ColorPickerPopup.h">
       <Filter>domain</Filter>
     </ClInclude>
-    <ClInclude Include="domain\DropDownPopup.h">
+    <ClInclude Include="domain\OptionListPopup.h">
       <Filter>domain</Filter>
+    </ClInclude>
+    <ClInclude Include="render\OptionListHost.h">
+      <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="domain\Novadesk.h">
       <Filter>domain</Filter>
@@ -486,6 +495,9 @@
       <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="render\DropDownElement.h">
+      <Filter>render</Filter>
+    </ClInclude>
+    <ClInclude Include="render\ComboBoxElement.h">
       <Filter>render</Filter>
     </ClInclude>
     <ClInclude Include="render\Tooltip.h">

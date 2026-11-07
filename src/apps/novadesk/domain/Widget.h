@@ -41,6 +41,7 @@
 #include "../render/CheckBoxElement.h"
 #include "../render/SliderElement.h"
 #include "../render/DropDownElement.h"
+#include "../render/ComboBoxElement.h"
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -51,7 +52,8 @@ class WidgetLayoutHelper;
 class ScrollbarRenderer;
 class WidgetDropTarget;
 class ColorPickerPopup;
-class DropDownPopup;
+class OptionListPopup;
+class IOptionListHost;
 
 namespace PropertyParser {
 struct ImageOptions;
@@ -71,6 +73,7 @@ struct ToggleSwitchOptions;
 struct CheckBoxOptions;
 struct SliderOptions;
 struct DropDownOptions;
+struct ComboBoxOptions;
 } // namespace PropertyParser
 
 #include "MenuItem.h"
@@ -533,6 +536,10 @@ public:
   ///        value, falling back to the settings sink when no callback is
   ///        registered.
   void NotifyDropDownChange(DropDownElement *element);
+  /// @brief Adds a combo box element to the widget.
+  void AddComboBox(const PropertyParser::ComboBoxOptions &options);
+  /// @brief Fires a combo box's onChange callback with the selected value.
+  void NotifyComboBoxChange(ComboBoxElement *element);
 
   /// @brief Applies property changes to a specific element by ID.
   void SetElementProperties(const std::wstring &id, JSContext *ctx,
@@ -589,6 +596,13 @@ public:
   /// @brief Activates the eyedropper tool for color picking.
   void OpenColorPickerEyedropper(ColorPickerElement *colorPicker = nullptr);
 
+  /// @brief Opens the option list popup for the specified host.
+  void OpenOptionList(IOptionListHost *host);
+  /// @brief Closes the currently open option list popup.
+  void CloseOptionList();
+  /// @return True if an option list is open (optionally for a specific element).
+  bool IsOptionListOpen(const Element *element = nullptr) const;
+
   /// @brief Opens the drop-down popup for the specified element.
   void OpenDropDown(DropDownElement *dropDown);
   /// @brief Closes the currently open drop-down popup.
@@ -597,6 +611,12 @@ public:
   bool IsDropDownOpen(const DropDownElement *dropDown = nullptr) const;
   /// @brief Scrolls an open menu so this row is visible, cursor untouched.
   void SyncDropDownScrollTop(const DropDownElement *dropDown, int index);
+  /// @brief Opens the combo box popup for the specified element.
+  void OpenComboBox(ComboBoxElement *comboBox);
+  /// @brief Closes the currently open combo box popup.
+  void CloseComboBox();
+  /// @return True if a combo box is open (optionally for a specific element).
+  bool IsComboBoxOpen(const ComboBoxElement *comboBox = nullptr) const;
   /// @brief Called by DropDownPopup after a commit so the next WM_LBUTTONUP
   ///        delivered to the widget window does not re-open a popup.
   void SetSuppressNextDropDownOpen(bool value) {
@@ -914,7 +934,7 @@ private:
   // Input box focus state
   InputBoxElement *m_FocusedInputBox = nullptr;
   std::unique_ptr<ColorPickerPopup> m_ColorPickerPopup;
-  std::unique_ptr<DropDownPopup> m_DropDownPopup;
+  std::unique_ptr<OptionListPopup> m_OptionListPopup;
   Microsoft::WRL::ComPtr<WidgetDropTarget> m_DropTarget;
   bool m_OleInitialized = false;
 

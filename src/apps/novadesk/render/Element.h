@@ -47,7 +47,8 @@ enum ElementType {
   ELEMENT_TOGGLE_SWITCH, ///< On/off switch element.
   ELEMENT_CHECK_BOX,     ///< Check box element (tri-state).
   ELEMENT_SLIDER,      ///< Draggable slider element.
-  ELEMENT_DROPDOWN     ///< Drop-down selector with a separate popup window.
+  ELEMENT_DROPDOWN,    ///< Drop-down selector with a separate popup window.
+  ELEMENT_COMBOBOX     ///< Editable text input combined with a drop-down options popup.
 };
 
 /**

@@ -600,6 +600,85 @@ struct DropDownOptions : public ElementOptions {
   int onCancelCallbackId = -1;
 };
 
+/// Combo box element options.
+struct ComboBoxOptions : public ElementOptions {
+  std::wstring text;
+  std::wstring value;
+  bool hasValue = false;
+  std::wstring placeholder;
+  std::vector<DropDownOption> options;
+  bool hasOptions = false;
+  int selectedIndex = -1;
+
+  bool editable = true;
+  bool showChevron = true;
+  bool openOnType = false;
+  bool filterOnType = false;
+  bool autoComplete = false;
+  bool disabled = false;
+  bool rightToLeft = false;
+
+  COLORREF backgroundColor = RGB(45, 45, 54);
+  BYTE backgroundAlpha = 255;
+  float borderWidth = 1.0f;
+  COLORREF borderColor = RGB(63, 63, 70);
+  BYTE borderAlpha = 255;
+  float borderRadius = 6.0f;
+  float paddingLeft = 10.0f;
+  float paddingRight = 6.0f;
+
+  COLORREF chevronColor = RGB(200, 200, 208);
+  BYTE chevronAlpha = 255;
+  COLORREF chevronHoverColor = RGB(255, 255, 255);
+  BYTE chevronHoverAlpha = 255;
+  float chevronSize = 5.0f;
+  float chevronAreaWidth = 26.0f;
+  float chevronGap = 4.0f;
+
+  std::wstring fontFace = L"Segoe UI";
+  int fontSize = 13;
+  int fontWeight = 400;
+  COLORREF fontColor = RGB(228, 228, 231);
+  BYTE fontAlpha = 255;
+  COLORREF placeholderColor = RGB(140, 140, 150);
+  BYTE placeholderAlpha = 255;
+
+  COLORREF hoverBorderColor = RGB(90, 90, 104);
+  BYTE hoverBorderAlpha = 255;
+  COLORREF openBorderColor = RGB(59, 130, 246);
+  BYTE openBorderAlpha = 255;
+  COLORREF borderFocusColor = RGB(59, 130, 246);
+  BYTE borderFocusAlpha = 255;
+  COLORREF disabledBackgroundColor = RGB(40, 40, 48);
+  BYTE disabledBackgroundAlpha = 255;
+  COLORREF disabledBorderColor = RGB(60, 60, 68);
+  BYTE disabledBorderAlpha = 255;
+  COLORREF disabledTextColor = RGB(115, 115, 125);
+  BYTE disabledTextAlpha = 255;
+
+  COLORREF popupBackground = RGB(36, 36, 44);
+  BYTE popupBackgroundAlpha = 255;
+  COLORREF popupBorderColor = RGB(63, 63, 70);
+  BYTE popupBorderAlpha = 255;
+  COLORREF popupHoverColor = RGB(52, 52, 64);
+  BYTE popupHoverAlpha = 255;
+  COLORREF popupSelectedColor = RGB(59, 130, 246);
+  BYTE popupSelectedAlpha = 255;
+  COLORREF popupTextColor = RGB(228, 228, 231);
+  BYTE popupTextAlpha = 255;
+  int popupItemHeight = 28;
+  int popupMaxVisibleItems = 8;
+  int popupPadding = 4;
+  int popupMinWidth = 0;
+
+  int onChangeCallbackId = -1;
+  int onSelectCallbackId = -1;
+  int onTextChangeCallbackId = -1;
+  int onOpenCallbackId = -1;
+  int onCloseCallbackId = -1;
+  int onEnterCallbackId = -1;
+};
+
 /// Bar gauge element options.
 struct BarOptions : public ElementOptions {
   float value = 0.0f;

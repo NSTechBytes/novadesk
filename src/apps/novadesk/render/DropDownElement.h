@@ -8,20 +8,10 @@
 #pragma once
 
 #include "Element.h"
+#include "OptionListHost.h"
 
 #include <string>
 #include <vector>
-
-/**
- * @brief One entry in a drop-down list.
- *
- * @note label is what the user reads, value is what onChange reports. Authoring
- *       an option as a plain string makes both fields equal.
- */
-struct DropDownOption {
-  std::wstring label; ///< Text shown in the box and the popup row.
-  std::wstring value; ///< Payload delivered to onChange.
-};
 
 /**
  * @brief Select-style control whose option list opens in its own window.
@@ -35,7 +25,7 @@ struct DropDownOption {
  *       commits changes through Widget::NotifyDropDownChange. This class only
  *       holds the value model and styling.
  */
-class DropDownElement : public Element {
+class DropDownElement : public Element, public IOptionListHost {
 public:
   /**
    * @brief Constructs a drop-down element.
@@ -70,7 +60,7 @@ public:
   void SetSelectedIndex(int index);
 
   /// @return Current index, or -1 when nothing is selected.
-  int GetSelectedIndex() const { return m_SelectedIndex; }
+  virtual int GetSelectedIndex() const override { return m_SelectedIndex; }
 
   /// @return The selected option's value, or an empty string when unselected.
   std::wstring SelectedValue() const;
@@ -195,4 +185,50 @@ public:
   void Render(ID2D1DeviceContext *context) override;
   int GetAutoWidth() override { return 160; }
   int GetAutoHeight() override { return 28; }
+  // ============================================================================
+  // IOptionListHost Implementation
+  // ============================================================================
+  virtual Element *GetElement() override { return this; }
+  virtual const std::vector<DropDownOption> &GetOptions() const override { return m_Options; }
+  virtual OptionListStyle GetOptionListStyle() const override {
+    OptionListStyle s;
+    s.background = m_PopupBackground;
+    s.backgroundAlpha = m_PopupBackgroundAlpha;
+    s.borderColor = m_PopupBorderColor;
+    s.borderAlpha = m_PopupBorderAlpha;
+    s.hoverColor = m_PopupHoverColor;
+    s.hoverAlpha = m_PopupHoverAlpha;
+    s.selectedColor = m_PopupSelectedColor;
+    s.selectedAlpha = m_PopupSelectedAlpha;
+    s.textColor = m_PopupTextColor;
+    s.textAlpha = m_PopupTextAlpha;
+    s.checkColor = m_PopupCheckColor;
+    s.checkAlpha = m_PopupCheckAlpha;
+    s.itemHeight = m_PopupItemHeight;
+    s.maxVisibleItems = m_PopupMaxVisibleItems;
+    s.padding = m_PopupPadding;
+    s.minWidth = m_PopupMinWidth;
+    s.rightToLeft = m_RightToLeft;
+    s.fontFace = m_FontFace;
+    s.fontSize = m_FontSize;
+    s.fontWeight = m_FontWeight;
+    return s;
+  }
+  virtual void OnOptionCommitted(int originalIndex) override {
+    SetSelectedIndex(originalIndex);
+  }
+  virtual void OnOptionHighlighted(int originalIndex) override {
+    SetSelectedIndex(originalIndex);
+  }
+  virtual void OnOptionCancelled(int escapeIndex) override {
+    SetSelectedIndex(escapeIndex);
+  }
+  virtual void OnPopupClosed() override {
+    m_Open = false;
+  }
+  virtual bool ShouldPreviewOnHighlight() const override { return true; }
+  virtual bool SupportsFiltering() const override { return false; }
+  virtual int GetOnOpenCallbackId() const override { return m_OnOpenCallbackId; }
+  virtual int GetOnCloseCallbackId() const override { return m_OnCloseCallbackId; }
+
 };

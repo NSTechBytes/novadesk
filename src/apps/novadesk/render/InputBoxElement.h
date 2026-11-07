@@ -51,6 +51,12 @@ public:
   InputBoxElement(const std::wstring &id, int x, int y, int width, int height);
   virtual ~InputBoxElement() {}
 
+protected:
+  InputBoxElement(ElementType type, const std::wstring &id, int x, int y,
+                  int width, int height);
+
+public:
+
   virtual void Render(ID2D1DeviceContext *context) override;
   virtual int GetAutoWidth() override;
   virtual int GetAutoHeight() override;
@@ -293,11 +299,11 @@ public:
   int m_OnBlurCallbackId = -1;         ///< Input lost focus.
   int m_OnInvalidInputCallbackId = -1; ///< Typed char rejected by inputType.
 
-private:
+protected:
   Microsoft::WRL::ComPtr<IDWriteTextLayout>
   CreateTextLayout(ID2D1DeviceContext *context, const std::wstring &text,
                    float layoutW, float layoutH) const;
-  D2D1_RECT_F GetContentRect() const;
+  virtual D2D1_RECT_F GetContentRect() const;
   float CaretIndexToX(UINT32 index) const;
   void CaretIndexToXY(UINT32 index, float &outX, float &outY,
                       float &outH) const;

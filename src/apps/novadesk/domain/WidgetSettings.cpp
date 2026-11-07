@@ -8,6 +8,7 @@
 #include "WidgetSettings.h"
 
 #include "Widget.h"
+#include "../render/ComboBoxElement.h"
 #include "../scripting/quickjs/engine/JSEngine.h"
 #include "../scripting/quickjs/parser/PropertyParser.h"
 #include "../shared/ColorUtil.h"
@@ -165,6 +166,23 @@ bool ApplySettingToWidget(Widget *widget, const WidgetSetting &setting,
       return false;
     dropDown->SetSelectedIndex(static_cast<int>(std::lround(d)));
     SyncOpenMenu(widget, dropDown->GetSelectedIndex(), before);
+    return true;
+  }
+
+  if (element->GetType() == ELEMENT_COMBOBOX &&
+      (prop == L"selected" || prop == L"value" || prop == L"text")) {
+    ComboBoxElement *combo = static_cast<ComboBoxElement *>(element);
+    const int byValue = combo->IndexForValue(value);
+    if (byValue >= 0) {
+      combo->SelectOption(byValue);
+      return true;
+    }
+    const int byLabel = combo->IndexForLabel(value);
+    if (byLabel >= 0) {
+      combo->SelectOption(byLabel);
+      return true;
+    }
+    combo->SetText(value);
     return true;
   }
 
