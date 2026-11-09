@@ -2083,6 +2083,15 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
         std::wstring clip;
         if (novadesk::shared::system::ClipboardGetText(clip)) {
           input->ReplaceSelection(clip);
+          if (auto *combo = dynamic_cast<ComboBoxElement *>(input)) {
+            if (widget->m_OptionListPopup && widget->m_OptionListPopup->IsOpen()) {
+              widget->m_OptionListPopup->FilterBy(combo->GetText());
+            } else if (combo->m_OpenOnType) {
+              widget->OpenComboBox(combo);
+              if (widget->m_OptionListPopup)
+                widget->m_OptionListPopup->FilterBy(combo->GetText());
+            }
+          }
           if (input->m_OnTextChangeCallbackId != -1)
             JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId,
                                                 widget, input->GetText());
@@ -2119,9 +2128,20 @@ LRESULT CALLBACK Widget::WndProc(HWND hWnd, UINT message, WPARAM wParam,
       }
 
       bool changed = input->HandleKeyDown(wParam, shift, ctrl);
-      if (changed && input->m_OnTextChangeCallbackId != -1)
-        JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId,
-                                            widget, input->GetText());
+      if (changed) {
+        if (auto *combo = dynamic_cast<ComboBoxElement *>(input)) {
+          if (widget->m_OptionListPopup && widget->m_OptionListPopup->IsOpen()) {
+            widget->m_OptionListPopup->FilterBy(combo->GetText());
+          } else if (combo->m_OpenOnType) {
+            widget->OpenComboBox(combo);
+            if (widget->m_OptionListPopup)
+              widget->m_OptionListPopup->FilterBy(combo->GetText());
+          }
+        }
+        if (input->m_OnTextChangeCallbackId != -1)
+          JSEngine::CallEventCallbackWithText(input->m_OnTextChangeCallbackId,
+                                              widget, input->GetText());
+      }
       widget->Redraw();
       return 0;
     }
@@ -2807,6 +2827,10 @@ void Widget::NotifyComboBoxChange(ComboBoxElement *element) {
     return;
   const std::wstring value = element->SelectedValue();
   Redraw();
+  if (element->m_OnSelectCallbackId != -1) {
+    JSEngine::CallEventCallbackWithText(element->m_OnSelectCallbackId, this,
+                                        value);
+  }
   if (element->m_OnChangeCallbackId != -1) {
     JSEngine::CallEventCallbackWithText(element->m_OnChangeCallbackId, this,
                                         value);
@@ -2864,8 +2888,12 @@ void Widget::OpenOptionList(IOptionListHost *host) {
     else if (auto *cb = dynamic_cast<ComboBoxElement *>(previous))
       cb->m_Open = false;
   }
-  if (sameOpen)
+  if (sameOpen) {
+    if (m_OptionListPopup) {
+      m_OptionListPopup->ReloadOptions();
+    }
     return;
+  }
   if (m_OptionListPopup)
     m_OptionListPopup->Close();
 
@@ -2898,6 +2926,14 @@ void Widget::CloseOptionList() {
       PostMessage(m_hWnd, WM_SETCURSOR, (WPARAM)m_hWnd,
                   MAKELPARAM(HTCLIENT, WM_MOUSEMOVE));
   }
+}
+
+void Widget::RefreshOptionList(IOptionListHost *host) {
+  if (!m_OptionListPopup || !m_OptionListPopup->IsOpen())
+    return;
+  if (host && m_OptionListPopup->GetElement() != host->GetElement())
+    return;
+  m_OptionListPopup->ReloadOptions();
 }
 
 bool Widget::IsOptionListOpen(const Element *element) const {
@@ -3640,25 +3676,21 @@ void Widget::ApplyParsedPropertiesToElement(Element *element, JSContext *ctx,
     UpdateContainerForElement(element, parsed.containerId);
   } else if (element->GetType() == ELEMENT_DROPDOWN) {
     DropDownElement *dropDown = static_cast<DropDownElement *>(element);
-    const int optionCountBefore = dropDown->OptionCount();
     PropertyParser::DropDownOptions parsed;
     PropertyParser::PreFillDropDownOptions(parsed, dropDown);
     PropertyParser::ParseDropDownOptions(ctx, options, parsed, baseDir);
     PropertyParser::ApplyDropDownOptions(dropDown, parsed);
-    // A popup whose list just changed shape can no longer be trusted to match
-    // what it painted.
-    if (IsDropDownOpen(dropDown) && dropDown->OptionCount() != optionCountBefore)
-      CloseDropDown();
+    if (IsDropDownOpen(dropDown))
+      RefreshOptionList(dropDown);
     UpdateContainerForElement(element, parsed.containerId);
   } else if (element->GetType() == ELEMENT_COMBOBOX) {
     ComboBoxElement *combo = static_cast<ComboBoxElement *>(element);
-    const int optionCountBefore = combo->OptionCount();
     PropertyParser::ComboBoxOptions parsed;
     PropertyParser::PreFillComboBoxOptions(parsed, combo);
     PropertyParser::ParseComboBoxOptions(ctx, options, parsed, baseDir);
     PropertyParser::ApplyComboBoxOptions(combo, parsed);
-    if (IsComboBoxOpen(combo) && combo->OptionCount() != optionCountBefore)
-      CloseComboBox();
+    if (IsComboBoxOpen(combo))
+      RefreshOptionList(combo);
     UpdateContainerForElement(element, parsed.containerId);
   }
 }

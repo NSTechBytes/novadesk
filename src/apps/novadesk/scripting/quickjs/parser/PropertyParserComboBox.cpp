@@ -283,8 +283,8 @@ void PreFillComboBoxOptions(ComboBoxOptions &o, ComboBoxElement *e) {
   o.hasOptions = true;
   o.text = e->GetText();
   o.value = e->SelectedValue();
-  o.hasValue = true;
-  o.selectedIndex = e->GetSelectedIndex();
+  o.hasValue = false;
+  o.selectedIndex = -1;
   o.placeholder = e->GetPlaceholder();
 
   o.editable = e->m_Editable;

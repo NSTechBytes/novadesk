@@ -1318,6 +1318,28 @@ JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
     PropertyParser::PreFillAreaGraphOptions(options, graph);
     PropertyParser::ParseAreaGraphOptions(ctx, argv[1], options, baseDir);
     PropertyParser::ApplyAreaGraphOptions(graph, options);
+  } else if (auto *combo = dynamic_cast<ComboBoxElement *>(element)) {
+    PropertyParser::ComboBoxOptions options;
+    PropertyParser::PreFillComboBoxOptions(options, combo);
+    PropertyParser::ParseComboBoxOptions(ctx, argv[1], options, baseDir);
+    PropertyParser::ApplyComboBoxOptions(combo, options);
+
+    if (options.hasOptions && widget->IsComboBoxOpen(combo)) {
+      widget->RefreshOptionList(combo);
+    }
+
+    if (JS_IsObject(argv[1])) {
+      JSValue openVal = JS_GetPropertyStr(ctx, argv[1], "isOpen");
+      if (JS_IsUndefined(openVal))
+        openVal = JS_GetPropertyStr(ctx, argv[1], "open");
+      if (!JS_IsUndefined(openVal)) {
+        if (JS_ToBool(ctx, openVal) == 1)
+          widget->OpenComboBox(combo);
+        else if (widget->IsComboBoxOpen(combo))
+          widget->CloseComboBox();
+      }
+      JS_FreeValue(ctx, openVal);
+    }
   } else if (auto *input = dynamic_cast<InputBoxElement *>(element)) {
     PropertyParser::InputBoxOptions options;
     PropertyParser::PreFillInputBoxOptions(options, input);
@@ -1509,6 +1531,10 @@ JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
       widget->SyncDropDownScrollTop(dd, wanted);
     }
 
+    if (options.hasOptions && widget->IsDropDownOpen(dd)) {
+      widget->RefreshOptionList(dd);
+    }
+
     if (JS_IsObject(argv[1])) {
       JSValue openVal = JS_GetPropertyStr(ctx, argv[1], "isOpen");
       if (JS_IsUndefined(openVal))
@@ -1527,24 +1553,6 @@ JSValue JsWidgetSetElementProperties(JSContext *ctx, JSValueConst thisVal,
     if (options.onChangeCallbackId != -1 && dd->GetSelectedIndex() != wasIndex) {
       JSEngine::CallEventCallbackWithText(options.onChangeCallbackId, widget,
                                           dd->SelectedValue());
-    }
-  } else if (auto *combo = dynamic_cast<ComboBoxElement *>(element)) {
-    PropertyParser::ComboBoxOptions options;
-    PropertyParser::PreFillComboBoxOptions(options, combo);
-    PropertyParser::ParseComboBoxOptions(ctx, argv[1], options, baseDir);
-    PropertyParser::ApplyComboBoxOptions(combo, options);
-
-    if (JS_IsObject(argv[1])) {
-      JSValue openVal = JS_GetPropertyStr(ctx, argv[1], "isOpen");
-      if (JS_IsUndefined(openVal))
-        openVal = JS_GetPropertyStr(ctx, argv[1], "open");
-      if (!JS_IsUndefined(openVal)) {
-        if (JS_ToBool(ctx, openVal) == 1)
-          widget->OpenComboBox(combo);
-        else if (widget->IsComboBoxOpen(combo))
-          widget->CloseComboBox();
-      }
-      JS_FreeValue(ctx, openVal);
     }
   }
 

@@ -109,6 +109,12 @@ void OptionListPopup::FlushWidgetRedraw() {
   }
 }
 
+void OptionListPopup::ReloadOptions(const std::wstring &query) {
+  if (!m_Host || !ElementStillValid())
+    return;
+  FilterBy(query.empty() ? (m_CurrentFilter.empty() ? m_Host->GetInitialFilter() : m_CurrentFilter) : query);
+}
+
 void OptionListPopup::FilterBy(const std::wstring &query) {
   if (!m_Host || !ElementStillValid())
     return;

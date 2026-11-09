@@ -38,6 +38,9 @@ public:
   /// Updates position and size when the owning widget moves or resizes.
   void UpdatePosition();
 
+  /// Reloads options from host, reapplying filtering and updating the popup window.
+  void ReloadOptions(const std::wstring &query = L"");
+
   /// Filters displayed options according to query string (case-insensitive).
   void FilterBy(const std::wstring &query);
 

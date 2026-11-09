@@ -600,6 +600,8 @@ public:
   void OpenOptionList(IOptionListHost *host);
   /// @brief Closes the currently open option list popup.
   void CloseOptionList();
+  /// @brief Refreshes the currently open option list popup if open for host (or any if null).
+  void RefreshOptionList(IOptionListHost *host = nullptr);
   /// @return True if an option list is open (optionally for a specific element).
   bool IsOptionListOpen(const Element *element = nullptr) const;
 
@@ -607,6 +609,8 @@ public:
   void OpenDropDown(DropDownElement *dropDown);
   /// @brief Closes the currently open drop-down popup.
   void CloseDropDown();
+  /// @brief Refreshes the open drop-down popup options.
+  void RefreshDropDown(DropDownElement *dropDown = nullptr) { RefreshOptionList(dropDown); }
   /// @return True if a drop-down is open (optionally for a specific element).
   bool IsDropDownOpen(const DropDownElement *dropDown = nullptr) const;
   /// @brief Scrolls an open menu so this row is visible, cursor untouched.
@@ -615,6 +619,8 @@ public:
   void OpenComboBox(ComboBoxElement *comboBox);
   /// @brief Closes the currently open combo box popup.
   void CloseComboBox();
+  /// @brief Refreshes the open combo box popup options.
+  void RefreshComboBox(ComboBoxElement *comboBox = nullptr) { RefreshOptionList(comboBox); }
   /// @return True if a combo box is open (optionally for a specific element).
   bool IsComboBoxOpen(const ComboBoxElement *comboBox = nullptr) const;
   /// @brief Called by DropDownPopup after a commit so the next WM_LBUTTONUP
