@@ -148,6 +148,19 @@ void ClipSiblings(HWND window, HDC dc) {
   }
 }
 
+void ClipChildren(HWND parent, HDC dc) {
+  for (HWND child = GetWindow(parent, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT)) {
+    if (!IsWindowVisible(child)) continue;
+    if (HasClass(child, WC_STATIC)) continue;
+    if (HasClass(child, WC_BUTTON) && (GetWindowLongPtrW(child, GWL_STYLE) & BS_TYPEMASK) == BS_GROUPBOX) continue;
+
+    RECT rect;
+    GetWindowRect(child, &rect);
+    MapWindowPoints(nullptr, parent, (POINT*)&rect, 2);
+    ExcludeClipRect(dc, rect.left, rect.top, rect.right, rect.bottom);
+  }
+}
+
 bool IsHot(HWND w, const RECT& r) {
   POINT pt; GetCursorPos(&pt); ScreenToClient(w, &pt);
   return PtInRect(&r, pt) != FALSE;
@@ -631,6 +644,22 @@ LRESULT CALLBACK ParentWindowProc(HWND w, UINT msg, WPARAM wp, LPARAM lp, UINT_P
     if (!GetClipBox(dc, &r)) GetClientRect(w, &r);
     FillRect(dc, &r, GetSurfaceBrush(w));
     return TRUE;
+  }
+  if (msg == WM_PAINT) {
+    PAINTSTRUCT ps;
+    HDC dc = BeginPaint(w, &ps);
+    ClipChildren(w, dc);
+    FillRect(dc, &ps.rcPaint, GetSurfaceBrush(w));
+    EndPaint(w, &ps);
+    return 0;
+  }
+  if (msg == WM_PRINTCLIENT) {
+    HDC dc = (HDC)wp;
+    RECT r;
+    GetClientRect(w, &r);
+    ClipChildren(w, dc);
+    FillRect(dc, &r, GetSurfaceBrush(w));
+    return 0;
   }
   if (msg >= WM_CTLCOLORMSGBOX && msg <= WM_CTLCOLORSTATIC) return ControlColor(msg, wp, lp);
   return DefSubclassProc(w, msg, wp, lp);
